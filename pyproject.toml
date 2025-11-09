@@ -1,0 +1,31 @@
+[project]
+name = "sailzen"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "python-dotenv>=1.0.0",
+  "fastapi>=0.121.0",
+  "psycopg2-binary>=2.9.11",
+  "pydantic>=2.12.3",
+  "pydantic-settings>=2.0.0",
+  "pytest>=8.4.2",
+  "requests>=2.32.5",
+  "sqlalchemy>=2.0.44",
+  "tqdm>=4.67.1",
+  "uvicorn[standard]>=0.38.0",
+  "httpx>=0.28.1",
+]
+
+
+[tool.ruff]
+lint.ignore = ["ALL"]
+lint.select = [
+  "S307", # suspicious-eval-usage
+  "S102", # exec
+  "T",    # print-usage
+  "W",    # warnings
+  "F",    # Pyflakes rules
+]
+exclude = ["*.ipynb"]
