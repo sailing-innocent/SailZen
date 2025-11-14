@@ -75,6 +75,7 @@ function applyPackageJsonPatch(isPreRelease: boolean) {
 
     fs.writeFileSync(packagejsonPath, JSON.stringify(patchedPackageJson));
 }
+
 async function main() {
     if (!isDev) {
         applyPackageJsonPatch(isPreRelease);
@@ -105,6 +106,7 @@ async function main() {
                 console.log('[watch] build finished');
             }, 100);
         };
+        
         watcher.subscribe(REPO_ROOT, (err, events) => {
             for (const event of events) {
                 console.log(`File change detected: ${event.path}`);

@@ -13,6 +13,7 @@ temp/
 .vscode-test-web/
 node_modules/
 dist/
+out/
 
 # created by simulation
 .simulation
