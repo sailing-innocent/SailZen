@@ -1,0 +1,103 @@
+{
+  "name": "sailzen",
+  "displayName": "SailZen",
+  "version": "0.0.1",
+  "description": "Local-first creative writing editor with AI assistance and automatic sync",
+  "license": "MIT",
+  "main": "./dist/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sailing-innocent/SailZen"
+  },
+  "scripts": {
+    "build": "tsx .esbuild.ts",
+    "compile": "tsx .esbuild.ts --dev",
+    "test": "tsx script/test.ts",
+    "package": "vsce package"
+  },
+  "keywords": [
+    "writing",
+    "creative writing",
+    "ai",
+    "llm",
+    "markdown",
+    "sync",
+    "collaboration",
+    "novel",
+    "storytelling"
+  ],
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=18.0.0"
+  },
+  "author": "@sailinno",
+  "packageManager": "pnpm@10.22.0",
+  "devDependencies": {
+    "@parcel/watcher": "^2.5.1",
+    "@stylistic/eslint-plugin": "^5.5.0",
+    "@types/node": "^24.10.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "@typescript-eslint/typescript-estree": "^8.46.4",
+    "@vscode/vsce": "^3.7.0",
+    "esbuild": "^0.27.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-header": "^3.1.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsdoc": "^61.2.1",
+    "eslint-plugin-no-only-tests": "^3.3.0",
+    "glob": "^11.0.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.4"
+  },
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "SailZen",
+      "properties": {
+        "sailzen.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8000/api/v1",
+          "description": "SailZen backend base URL"
+        },
+        "sailzen.autoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync changes to server"
+        },
+        "sailzen.syncInterval": {
+          "type": "number",
+          "default": 30,
+          "description": "Auto-sync interval in seconds"
+        },
+        "sailzen.conflictStrategy": {
+          "type": "string",
+          "default": "prompt",
+          "enum": [
+            "prompt",
+            "useLocal",
+            "useRemote"
+          ],
+          "enumDescriptions": [
+            "Ask what to do for each conflict",
+            "Always use local version",
+            "Always use remote version"
+          ],
+          "description": "Strategy for resolving sync conflicts"
+        },
+        "sailzen.syncDebounceDelay": {
+          "type": "number",
+          "default": 5000,
+          "description": "Debounce delay in milliseconds before syncing file changes"
+        }
+      }
+    },
+    "views": {},
+    "commands": [
+      {
+        "command": "sailzen.initVault",
+        "title": "SailZen: Initialize Vault"
+      }
+    ]
+  }
+}
