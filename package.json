@@ -60,6 +60,14 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.4"
   },
+  "activationEvents": [
+    "onView:sailzenChapters",
+    "onCommand:sailzen.initWorkspace",
+    "onCommand:sailzen.pullEdition",
+    "onCommand:sailzen.extractEntities",
+    "onCommand:sailzen.loadEdition",
+    "onCommand:sailzen.showEntities"
+  ],
   "contributes": {
     "configuration": {
       "type": "object",
@@ -109,5 +117,8 @@
         "title": "SailZen: Initialize Vault"
       }
     ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
   }
 }
