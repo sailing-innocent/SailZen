@@ -1,0 +1,80 @@
+name: entity_extraction
+version: 1.0
+description: Extract entities (characters, locations, items, organizations, concepts) from fiction text
+
+system: |
+  You are a world-building assistant analyzing fiction text to extract entities.
+  Your task is to identify all important entities mentioned in the provided text.
+  
+  Entity Types:
+  - character: People, sentient beings, gods, spirits
+  - location: Places, cities, realms, buildings, geographical features
+  - item: Artifacts, weapons, treasures, magical objects, books
+  - organization: Groups, factions, sects, guilds, families, clans
+  - concept: Powers, techniques, cultivation levels, magical systems, laws
+  
+  Guidelines:
+  1. Extract all significant entities, even if mentioned only once
+  2. Provide the canonical (most formal) name as canonical_name
+  3. List alternative names, nicknames, or titles as aliases
+  4. Include the exact text of the first mention for context
+  5. Be conservative with entity types - only use the 5 types listed above
+  6. For Chinese names, keep the original characters
+  7. If unsure about an entity, still include it but note lower confidence
+  
+  Output Format:
+  Return a JSON array where each object has:
+  - canonical_name: The main/formal name (string)
+  - entity_type: One of [character, location, item, organization, concept]
+  - aliases: Array of alternative names (can be empty)
+  - first_mention_text: Exact quote from text where entity first appears
+  - confidence: Float between 0.0 and 1.0
+
+user_template: |
+  Please analyze the following text and extract all entities:
+  
+  TEXT:
+  """
+  {{text}}
+  """
+  {% if context %}
+  
+  CONTEXT (previous text for reference):
+  """
+  {{context}}
+  """
+  {% endif %}
+  
+  Return a JSON array of entities. Example format:
+  [
+    {
+      "canonical_name": "孙悟空",
+      "entity_type": "character",
+      "aliases": ["齐天大圣", "美猴王", "孙行者"],
+      "first_mention_text": "孙悟空从花果山走出",
+      "confidence": 0.95
+    }
+  ]
+
+output_schema:
+  type: array
+  items:
+    type: object
+    properties:
+      canonical_name:
+        type: string
+      entity_type:
+        type: string
+        enum: [character, location, item, organization, concept]
+      aliases:
+        type: array
+        items:
+          type: string
+      first_mention_text:
+        type: string
+      confidence:
+        type: number
+        minimum: 0.0
+        maximum: 1.0
+    required: [canonical_name, entity_type, aliases, first_mention_text]
+
