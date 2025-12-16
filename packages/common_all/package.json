@@ -1,0 +1,26 @@
+{
+  "name": "@saili/common-all",
+  "version": "0.1.0",
+  "description": "common-all Definition",
+  "license": "MIT",
+  "keywords": [
+    "common"
+  ],
+  "files": [
+    "lib"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+  },
+  "dependencies": {
+  },
+  "devDependencies": {
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,14 @@
+{
+    "name": "sail-zen-vscode",
+    "private": true,
+    "displayName": "SailZen VSCode Extension",
+    "description": "Sailing-Innocent's vscode extension based on Dendron",
+	"engines": {
+		"vscode": "^1.90.0",
+		"node": ">=18.0.0"
+	},
+    "icon": "resources/icon.png",
+	"main": "./dist/extension.js",
+	"dependencies": {
+	}
+}

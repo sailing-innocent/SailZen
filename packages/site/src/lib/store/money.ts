@@ -1,0 +1,172 @@
+/**
+ * @file money.ts
+ * @brief The Store for Money Accounts
+ * @author sailing-innocent
+ * @date 2024-12-26
+ */
+
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { type AccountData, type AccountOption, type TransactionData, type TransactionCreateProps } from '@lib/data/money'
+
+import {
+  api_get_accounts,
+  api_create_account,
+  api_update_account_balance,
+  api_recalc_account_balance,
+  api_fix_account_balance,
+  api_get_transactions,
+  api_create_transaction,
+  api_delete_transaction,
+  api_update_transaction,
+} from '@lib/api/money'
+
+export interface AccountsState {
+  accounts: AccountData[]
+  isLoading: boolean
+  getOptions: () => AccountOption[]
+  fetchAccounts: () => void
+  updateAccount: (id: number, refresh: boolean) => void
+  fixAccount: (id: number, newBalance: string) => void
+  createAccount: (name: string) => void
+}
+
+export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<AccountsState>((set) => ({
+  accounts: [],
+  isLoading: false,
+  getOptions: (): AccountOption[] => {
+    const accounts = useAccountsStore.getState().accounts
+    const options = accounts.map((account: AccountData) => {
+      return {
+        id: account.id,
+        name: account.name,
+      }
+    })
+    options.unshift({ id: -1, name: 'other' })
+    return options
+  },
+  fetchAccounts: async () => {
+    set({ isLoading: true })
+    try {
+      const accounts = await api_get_accounts()
+      // sort by balance descending
+      accounts.sort((a: AccountData, b: AccountData) => parseFloat(b.balance) - parseFloat(a.balance))
+      // set the state with fetched accounts
+      set({ accounts: accounts, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+  updateAccount: async (id: number, refresh: boolean) => {
+    const update_func = refresh ? api_recalc_account_balance : api_update_account_balance
+    const new_account = await update_func(id)
+    set((state: AccountsState): AccountsState => {
+      const index = state.accounts.findIndex((account: AccountData) => account.id === new_account.id)
+      const newState: AccountsState = {
+        ...state,
+        accounts: [...state.accounts],
+      }
+      if (index !== -1) {
+        newState.accounts[index] = new_account
+        return newState // trigger re-render
+      } else {
+        console.log('Account not found')
+        return state
+      }
+    })
+  },
+  fixAccount: async (id: number, newBalance: string) => {
+    const new_account = await api_fix_account_balance(id, newBalance)
+    set((state: AccountsState): AccountsState => {
+      const index = state.accounts.findIndex((account: AccountData) => account.id === new_account.id)
+      const newState: AccountsState = {
+        ...state,
+        accounts: [...state.accounts],
+      }
+      if (index !== -1) {
+        newState.accounts[index] = new_account
+        return newState // trigger re-render
+      } else {
+        console.log('Account not found')
+        return state
+      }
+    })
+  },
+  createAccount: async (name: string) => {
+    const new_account = await api_create_account({ name: name })
+    set((state: AccountsState): AccountsState => {
+      return {
+        ...state,
+        accounts: [...state.accounts, new_account],
+      }
+    })
+  },
+}))
+
+export interface TransactionsState {
+  transactions: TransactionData[]
+  isLoading: boolean
+  fetchTransactions: (N: number) => Promise<TransactionData[]>
+  createTransaction: (transaction: TransactionCreateProps) => Promise<TransactionData>
+  updateTransaction: (id: number, transaction: TransactionCreateProps) => Promise<TransactionData>
+  deleteTransaction: (id: number) => Promise<boolean>
+  getSupportedTags: () => string[]
+}
+
+export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = create<TransactionsState>((set) => ({
+  transactions: [],
+  isLoading: false,
+  fetchTransactions: async (N: number): Promise<TransactionData[]> => {
+    set({ isLoading: true })
+    try {
+      const transactions = await api_get_transactions(N)
+      set({ transactions: transactions, isLoading: false })
+      return transactions
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+  createTransaction: async (transaction: TransactionCreateProps): Promise<TransactionData> => {
+    const new_transaction = await api_create_transaction(transaction)
+    set((state: TransactionsState): TransactionsState => {
+      return {
+        ...state,
+        transactions: [...state.transactions, new_transaction],
+      }
+    })
+    return new_transaction
+  },
+  updateTransaction: async (id: number, transaction: TransactionCreateProps): Promise<TransactionData> => {
+    const updated_transaction = await api_update_transaction(id, transaction)
+    set((state: TransactionsState): TransactionsState => {
+      const index = state.transactions.findIndex((t: TransactionData) => t.id === updated_transaction.id)
+      const newState: TransactionsState = {
+        ...state,
+        transactions: [...state.transactions],
+      }
+      if (index !== -1) {
+        newState.transactions[index] = updated_transaction
+        return newState // trigger re-render
+      } else {
+        console.log('Transaction not found')
+        return state
+      }
+    })
+    return updated_transaction
+  },
+  deleteTransaction: async (id: number): Promise<boolean> => {
+    const response = await api_delete_transaction(id)
+    set((state: TransactionsState): TransactionsState => {
+      const newState: TransactionsState = {
+        ...state,
+        transactions: state.transactions.filter((t: TransactionData) => t.id !== id),
+      }
+      return newState // trigger re-render
+    })
+    return response.status === 'success'
+  },
+  getSupportedTags: (): string[] => {
+    return ['零食', '交通', '日用消耗', '大宗电器', '娱乐休闲', '人际交往', '医药健康', '衣物', '大宗收支']
+  },
+}))
