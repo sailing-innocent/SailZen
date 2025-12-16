@@ -14,7 +14,7 @@ import pytest
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from utils.env import read_env
+from sail_server.utils.env import read_env
 
 read_env("dev")  # use dev environment for testing
 
@@ -26,6 +26,6 @@ def db():
     This function should be replaced with the actual database function used in your application.
     """
 
-    from internal.db import g_db_func
+    from sail_server.db import g_db_func
 
     return next(g_db_func())

@@ -11,8 +11,8 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
 
-from internal.data.history import HistoryEventData
-from internal.model.history import (
+from sail_server.data.history import HistoryEventData
+from sail_server.model.history import (
     create_event_impl,
     get_event_impl,
     get_events_impl,

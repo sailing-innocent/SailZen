@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from internal.data.health import Weight, WeightData
+from sail_server.data.health import Weight, WeightData
 from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy import func, cast, Float

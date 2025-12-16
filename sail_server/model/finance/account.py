@@ -5,13 +5,13 @@
 # @date 2025-05-22
 # @version 1.0
 # ---------------------------------
-from internal.data.finance import (
+from sail_server.data.finance import (
     Account,
     AccountData,
     TransactionState,
     TransactionData,
 )
-from utils.money import Money
+from sail_server.utils.money import Money
 import logging
 from datetime import datetime
 

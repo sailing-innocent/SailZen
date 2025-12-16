@@ -11,8 +11,8 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request, Response
 from litestar.exceptions import NotFoundException
 
-from internal.data.project import ProjectData, MissionData
-from internal.model.project import (
+from sail_server.data.project import ProjectData, MissionData
+from sail_server.model.project import (
     create_project_impl,
     get_project_impl,
     get_projects_impl,

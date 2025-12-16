@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from internal.data.history import HistoryEvent, HistoryEventData
+from sail_server.data.history import HistoryEvent, HistoryEventData
 from datetime import datetime
 from typing import Optional, List
 

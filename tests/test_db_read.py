@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from internal.model.health import read_weights_impl
+from sail_server.model.health import read_weights_impl
 
 
 def test_db_read(db):

@@ -2,8 +2,8 @@ from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, TIMESTAM
 from sqlalchemy.dialects.postgresql import JSONB
 from .orm import ORMBase
 from sqlalchemy.orm import relationship
-from utils.time_utils import QuarterBiWeekTime
-from utils.money import Money
+from sail_server.utils.time_utils import QuarterBiWeekTime
+from sail_server.utils.money import Money
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, date
 import json 

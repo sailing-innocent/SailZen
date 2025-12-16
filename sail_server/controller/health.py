@@ -10,8 +10,8 @@ from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 
-from internal.data.health import WeightData
-from internal.model.health import (
+from sail_server.data.health import WeightData
+from sail_server.model.health import (
     read_weight_impl,
     read_weights_impl,
     read_weights_avg_impl,

@@ -11,11 +11,11 @@ from .orm import ORMBase
 from sqlalchemy.orm import relationship
 import time
 
-from utils.state import StateBits
+from sail_server.utils.state import StateBits
 from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from utils.money import Money
+from sail_server.utils.money import Money
 from typing import List, Iterator
 
 __all__ = [

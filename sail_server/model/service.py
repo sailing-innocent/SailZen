@@ -1,4 +1,4 @@
-from internal.data.life import (
+from sail_server.data.life import (
     ServiceAccount,
 )
 from pydantic import BaseModel

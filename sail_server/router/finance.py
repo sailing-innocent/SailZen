@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-# @file history.py
-# @brief History Events Router
+# @file finance.py
+# @brief Finance Router
 # @author sailing-innocent
-# @date 2025-10-12
+# @date 2025-05-22
 # @version 1.0
 # ---------------------------------
 
 from litestar import Router
 from litestar.di import Provide
-from internal.controller.history import HistoryEventController
-from internal.db import get_db_dependency
+from sail_server.controller.finance import AccountController, TransactionController
+from sail_server.db import get_db_dependency
 
 
 router = Router(
-    path="/history",
+    path="/finance",
     dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
-        HistoryEventController,
+        AccountController,
+        TransactionController,
     ],
 )
-

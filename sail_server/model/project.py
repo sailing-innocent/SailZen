@@ -7,7 +7,7 @@
 # ---------------------------------
 
 from pydantic import BaseModel
-from internal.data.project import (
+from sail_server.data.project import (
     Project,
     ProjectState,
     ProjectData,
@@ -16,7 +16,7 @@ from internal.data.project import (
     MissionData,
 )
 from datetime import datetime
-from utils.time_utils import QuarterBiWeekTime
+from sail_server.utils.time_utils import QuarterBiWeekTime
 
 
 def clean_all_impl(db):

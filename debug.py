@@ -5,13 +5,13 @@
 # @date 2025-04-21
 # @version 1.0
 # ---------------------------------
-from utils.env import read_env
+from sail_server.utils.env import read_env
 
 read_env("debug")  # use debug environment for testing
 import os
 import argparse
 
-from internal.db import g_db_func
+from sail_server.db import g_db_func
 from task.db._dispatcher import DBTaskDispatcher
 import logging
 

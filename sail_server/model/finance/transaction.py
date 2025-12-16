@@ -1,4 +1,4 @@
-from internal.data.finance import (
+from sail_server.data.finance import (
     Account,
     Transaction,
     AccountState,
@@ -6,9 +6,9 @@ from internal.data.finance import (
     AccountData,
     TransactionState,
 )
-from internal.data.finance import _acc, _acc_inv, _htime, _htime_inv
+from sail_server.data.finance import _acc, _acc_inv, _htime, _htime_inv
 
-from utils.money import Money
+from sail_server.utils.money import Money
 from datetime import datetime
 
 import time
@@ -223,7 +223,7 @@ def update_transaction_impl(
     state = TransactionState(transaction.state)
 
     # update state valid
-    from internal.model.finance.account import update_account_balance_impl
+    from sail_server.model.finance.account import update_account_balance_impl
 
     if state.is_from_acc_valid():
         if not state.is_from_acc_updated():

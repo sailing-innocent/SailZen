@@ -10,7 +10,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, TIMESTAM
 from sqlalchemy.dialects.postgresql import JSONB
 from .orm import ORMBase
 from sqlalchemy.orm import relationship
-from utils.time_utils import QuarterBiWeekTime
+from sail_server.utils.time_utils import QuarterBiWeekTime
 from dataclasses import dataclass, field
 
 

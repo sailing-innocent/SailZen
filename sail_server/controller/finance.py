@@ -12,8 +12,8 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
 
-from internal.data.finance import AccountData, TransactionData
-from internal.model.finance.account import (
+from sail_server.data.finance import AccountData, TransactionData
+from sail_server.model.finance.account import (
     read_account_impl,
     read_accounts_impl,
     create_account_impl,
@@ -23,7 +23,7 @@ from internal.model.finance.account import (
     delete_account_impl,
 )
 
-from internal.model.finance.transaction import (
+from sail_server.model.finance.transaction import (
     read_transaction_impl,
     read_transactions_impl,
     create_transaction_impl,

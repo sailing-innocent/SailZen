@@ -13,6 +13,7 @@ import hashlib
 import time
 from typing import Any
 from datetime import datetime
+
 from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect
 from litestar.openapi import OpenAPIConfig
@@ -26,11 +27,11 @@ logging.basicConfig(
 logger = logging.getLogger("sail_server")
 from litestar.logging import LoggingConfig
 
+from sail_server.utils.env import read_env
 
-from utils.env import read_env
 import argparse
 
-from internal.exception_handlers import exception_handlers
+from sail_server.exception_handlers import exception_handlers
 from litestar.static_files import create_static_files_router
 
 
@@ -40,6 +41,7 @@ class SailServer:
         self.port = port
         self.app = None
         self.router = None
+        
         self.api_endpoint = os.environ.get("API_ENDPOINT", "/api")
         self.site_dist = os.environ.get("SITE_DIST", "site_dist")
         self.page_alias = [
@@ -109,10 +111,10 @@ class SailServer:
                 ),
             ],
         )
-        from internal.router.health import router as health_router
-        from internal.router.finance import router as finance_router
-        from internal.router.project import router as project_router
-        from internal.router.history import router as history_router
+        from sail_server.router.health import router as health_router
+        from sail_server.router.finance import router as finance_router
+        from sail_server.router.project import router as project_router
+        from sail_server.router.history import router as history_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -269,6 +271,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sail Server")
     parser.add_argument("--dev", action="store_true", help="Run in development mode")
     args = parser.parse_args()
+
     if args.dev:
         read_env("dev")
     else:

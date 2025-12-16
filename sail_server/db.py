@@ -13,14 +13,14 @@ from sqlalchemy import MetaData
 from typing import Generator
 import functools
 
-from internal.data.orm import ORMBase
+from sail_server.data.orm import ORMBase
 
 # import all ORM models
-import internal.data.health
-import internal.data.finance
-import internal.data.life
-import internal.data.project
-import internal.data.history
+import sail_server.data.health
+import sail_server.data.finance
+import sail_server.data.life
+import sail_server.data.project
+import sail_server.data.history
 import os
 
 __all__ = ["Database", "g_db_func", "db_session"]
