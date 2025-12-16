@@ -1,0 +1,48 @@
+[project]
+name = "sailserver"
+version = "0.2.0"
+description = "My Personal SailServer for daily management"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dotenv>=0.9.9",
+    "litestar>=2.15.2",
+    "matplotlib>=3.10.3",
+    "nanoid>=2.0.0",
+    "numpy>=2.2.5",
+    "pillow>=11.2.1",
+    "psycopg2>=2.9.10",
+    "pydantic>=2.11.3",
+    "pytest>=8.3.5",
+    "requests>=2.32.3",
+    "scikit-learn>=1.6.1",
+    "scipy>=1.15.3",
+    "sqlalchemy>=2.0.40",
+    "tqdm>=4.67.1",
+    "uvicorn>=0.34.2",
+]
+
+[[tool.uv.index]]
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+
+[tool.pytest.ini_options]
+python_paths=[
+    "."
+]
+testpaths = [
+    "tests",
+]
+addopts = [
+    "--tb=short",
+    "--disable-warnings",
+    "-p no:warnings",
+    "-p no:cacheprovider",
+]
+markers = [
+    "asyncio: mark test as asyncio",
+    "server: mark test as server",
+    "current: mark test as current",
+    "app: mark test as app",
+]
