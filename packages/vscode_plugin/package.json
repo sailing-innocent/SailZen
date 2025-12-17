@@ -54,8 +54,8 @@
 		"keybindings": []
 	},
 	"scripts": {
-		"compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs",
-		"watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs --watch",
+		"compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs --sourcemap",
+		"watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs --sourcemap --watch",
 		"package": "vsce package"
 	},
 	"devDependencies": {
