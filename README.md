@@ -12,6 +12,9 @@
 
 The plugin uses `better-sqlite3` for local database management. This is a native module that needs to be compiled for your platform.
 
+debugging: press `F5` in vscode, will automatically compile and watch
+
+build
 
 **Windows:**
 ```bash
