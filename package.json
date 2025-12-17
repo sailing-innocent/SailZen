@@ -1,4 +1,7 @@
 {
     "name": "@saili/sailzen",
-    "private": true
+    "private": true,
+    "scripts": {
+        "build-site": "pnpm -r --filter=sail-site run build"
+    }
 }
