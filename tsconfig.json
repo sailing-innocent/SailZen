@@ -1,0 +1,35 @@
+{
+    "extends": "./tsconfig.build.json",
+    "compilerOptions": {
+        "baseUrl": ".",
+        "strict": true,
+        "noImplicitAny": true,
+        "paths": {
+            //"@saili/*": ["packages/*/src"],
+            "@saili/api-server": [
+                "packages/api-server/src"
+            ],
+            "@saili/common-all": [
+                "packages/common-all/src"
+            ],
+            "@saili/unified": [
+                "packages/unified/src"
+            ],
+            "@saili/common-server": [
+                "packages/common-server/src"
+            ],
+            "@saili/common-test-utils": [
+                "packages/common-test-utils/src"
+            ],
+            "@saili/dendron-cli": [
+                "packages/dendron-cli/src"
+            ],
+            "@saili/engine-server": [
+                "packages/engine-server/src"
+            ],
+            "sail-dendron": [
+                "packages/plugin-core/src"
+            ],
+        }
+    }
+}

@@ -1,0 +1,79 @@
+{
+  "name": "@saili/common-all",
+  "version": "0.126.0",
+  "description": "common-all",
+  "license": "Apache 2.0",
+  "repository": {
+    "type": "git",
+    "url": "ssh://git@github.com/dendronhq/dendron.git",
+    "directory": "packages/common-all"
+  },
+  "author": {
+    "name": "Kevin Lin",
+    "email": "kevin@thence.io",
+    "url": "https://kevinslin.com"
+  },
+  "keywords": [
+    "common"
+  ],
+  "files": [
+    "lib"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "clean": "rimraf lib && rimraf coverage",
+    "format": "echo nop",
+    "test": "jest",
+    "lint": "echo stub",
+    "prepublishOnly": "yarn build",
+    "prebuild": "yarn clean && yarn format && yarn lint && echo Using TypeScript && tsc --version",
+    "build": "yarn compile",
+    "buildCI": "yarn compile",
+    "compile": "tsc -p tsconfig.build.json ",
+    "watch": "yarn compile --watch"
+  },
+  "dependencies": {
+    "@swc/helpers": "^0.5.17",
+    "axios": "^1.13.2",
+    "dropbox": "^10.34.0",
+    "fast-levenshtein": "^3.0.0",
+    "fuse.js": "^7.1.0",
+    "github-slugger": "^2.0.0",
+    "gray-matter": "^4.0.3",
+    "http-status-codes": "^2.3.0",
+    "js-yaml": "^4.1.1",
+    "lodash": "catalog:",
+    "luxon": "^3.7.2",
+    "minimatch": "10.1.1",
+    "nanoid": "^5.1.6",
+    "neverthrow": "^8.2.0",
+    "normalize-path": "^3.0.0",
+    "qs": "^6.14.0",
+    "semver": "^7.7.3",
+    "spark-md5": "^3.0.2",
+    "title": "^4.0.1",
+    "vscode-uri": "^3.1.0",
+    "zod": "4.2.1",
+    "zod-validation-error": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/fast-levenshtein": "^0.0.4",
+    "@types/js-yaml": "^4.0.9",
+    "@types/lodash": "catalog:",
+    "@types/nanoid-dictionary": "^4.2.3",
+    "@types/node": "catalog:",
+    "@types/normalize-path": "^3.0.2",
+    "@types/semver": "^7.7.1",
+    "@types/unist": "^3.0.3",
+    "jest": "catalog:",
+    "rimraf": "^6.1.2",
+    "ts-jest": "catalog:"
+  },
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

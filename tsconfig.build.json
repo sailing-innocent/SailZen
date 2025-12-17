@@ -1,0 +1,38 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES2024",
+        "lib": [
+            "ES2024"
+        ],
+        "sourceMap": true,
+        "inlineSources": true, // Added
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "strict": true,
+        "declaration": true,
+        "types": [
+            "node",
+            "jest"
+        ],
+        "outDir": "out",
+        // --- checks
+        "noUnusedLocals": false,
+        "noUnusedParameters": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        // --- language features
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "skipLibCheck": true
+    },
+    "compileOnSave": true,
+    "exclude": [
+        "node_modules",
+        "lib",
+        "local",
+        ".vscode-test",
+        "out"
+    ]
+}
