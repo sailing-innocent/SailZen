@@ -27,7 +27,6 @@
     "@reduxjs/toolkit": "^2.11.2",
     "@saili/common-all": "workspace:^",
     "lodash": "catalog:",
-    "querystring": "^0.2.1",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-redux": "^9.2.0",

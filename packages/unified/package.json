@@ -1,0 +1,45 @@
+{
+  "name": "@saili/unified",
+  "version": "0.1.0",
+  "description": "Unified parser utilities for Dendron",
+  "license": "MIT",
+  "keywords": [
+    "common"
+  ],
+  "files": [
+    "lib"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "clean": "rimraf lib && rimraf coverage",
+    "prepublishOnly": "yarn build",
+    "prebuild": "yarn clean",
+    "build": "yarn compile",
+    "test": "jest",
+    "buildCI": "yarn compile",
+    "compile": "tsc -p tsconfig.build.json",
+    "watch": "yarn compile --watch"
+  },
+  "dependencies": {
+    "@saili/common-all": "workspace:^",
+    "unified": "^11.0.5",
+    "unified-engine": "^11.2.2",
+    "unist-util-select": "^5.1.0",
+    "unist-util-visit": "^5.0.0",
+    "vscode-uri": "3.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/unist": "^3.0.3",
+    "jest": "^30.2.0",
+    "rimraf": "^6.1.2",
+    "ts-jest": "^29.4.6"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

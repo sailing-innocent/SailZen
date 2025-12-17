@@ -1,8 +1,0 @@
-{
-    "name": "@saili/engine-server",
-    "version": "0.1.0",
-    "dependencies": {
-        "@saili/common-all": "workspace:*",
-        "better-sqlite3": "catalog:"
-    }
-}
