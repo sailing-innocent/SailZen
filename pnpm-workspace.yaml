@@ -2,15 +2,18 @@ packages:
   - packages/*
 
 catalog:
+  '@types/lodash': ^4.17.21
+  '@types/node': ^24.10.4
   better-sqlite3: ^12.5.0
   esbuild: ^0.27.1
-  typescript: ^5.8.3
-  typescript-eslint: ^8.39.0
-  lodash: ^4.17.21
-  "@types/lodash": ^4.17.21
-  "@types/node": ^24.10.4
   jest: ^30.2.0
+  lodash: ^4.17.21
   ts-jest: ^29.4.6
+  typescript: ^5.9.3
+  typescript-eslint: ^8.50.0
+  react: ^19.2.3
+  react-dom: ^19.2.3
+  "@types/react": ^19.2.7
 
 onlyBuiltDependencies:
   - '@vscode/vsce-sign'

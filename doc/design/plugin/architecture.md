@@ -9,3 +9,8 @@ Common All
 - HierarchyConfig
 - WorkspaceSettings
 
+Common Asset
+
+Common Frontend
+
+Common Server
