@@ -2,6 +2,7 @@
     "name": "@saili/sailzen",
     "private": true,
     "scripts": {
+        "install-site": "pnpm install --filter=sail-site",
         "build-site": "pnpm -r --filter=sail-site run build"
     }
 }

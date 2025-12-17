@@ -3,8 +3,13 @@ packages:
 
 catalog:
   better-sqlite3: ^12.5.0
+  esbuild: ^0.27.1
+  typescript: ^5.8.3
+  typescript-eslint: ^8.39.0
 
 onlyBuiltDependencies:
+  - '@vscode/vsce-sign'
   - better-sqlite3
   - esbuild
+  - keytar
   - unrs-resolver

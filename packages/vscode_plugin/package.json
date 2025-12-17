@@ -1,14 +1,65 @@
 {
-    "name": "sail-zen-vscode",
-    "private": true,
-    "displayName": "SailZen VSCode Extension",
-    "description": "Sailing-Innocent's vscode extension based on Dendron",
+	"name": "sail-zen-vscode",
+	"private": false,
+	"license": "MIT",
+	"displayName": "SailZen",
+	"description": "Sailing-Innocent's vscode extension based on Dendron",
+	"version": "0.1.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/sailzen/sailzen"
+	},
 	"engines": {
 		"vscode": "^1.90.0",
 		"node": ">=18.0.0"
 	},
-    "icon": "resources/icon.png",
+	"categories": [
+		"Other"
+	],
+	"icon": "resources/icon.png",
 	"main": "./dist/extension.js",
-	"dependencies": {
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"contributes": {
+		"languages": [
+			{
+				"id": "markdown",
+				"extensions": [
+					".md"
+				],
+				"aliases": [
+					"markdown"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"viewsWelcome": [],
+		"viewsContainers": {},
+		"views": {},
+		"categories": [
+			"Other"
+		],
+		"commands": [
+			{
+				"command": "sailzen.SayHello",
+				"title": "SailZen Say Hello"
+			}
+		],
+		"menus": {},
+		"configuration": {
+			"title": "dendron",
+			"properties": {}
+		},
+		"keybindings": []
+	},
+	"scripts": {
+		"compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs",
+		"watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs --watch",
+		"package": "vsce package"
+	},
+	"devDependencies": {
+		"@vscode/vsce": "^3.7.1",
+		"esbuild": "catalog:"
 	}
 }
