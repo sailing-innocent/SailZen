@@ -21,6 +21,7 @@ ignoredBuiltDependencies:
   - sqlite3
 
 onlyBuiltDependencies:
+  - '@prisma/client'
   - '@prisma/engines'
   - '@vscode/vsce-sign'
   - better-sqlite3
