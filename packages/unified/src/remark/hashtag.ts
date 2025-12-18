@@ -10,15 +10,10 @@ import type { Plugin, Processor } from "unified";
 import { SiteUtils } from "../SiteUtils";
 import { DendronASTDest, DendronASTTypes, HashTag } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
+import { PUNCTUATION_MARKS } from "./constants";
 
-/** All sorts of punctuation marks and quotation marks from different languages. Please add any that may be missing.
- *
- * Be warned that this excludes period (.) as it has a special meaning in Dendron. Make sure to handle it appropriately depending on the context.
- *
- * Mind that this may have non regex-safe characters, run it through `_.escapeRegExp` if needed.
- */
-export const PUNCTUATION_MARKS =
-  ",;:'\"<>()?!`~«‹»›„“‟”’❝❞❮❯⹂〝〞〟＂‚‘‛❛❜❟［］【】…‥「」『』·؟،।॥‽⸘¡¿⁈⁉";
+// Re-export for backwards compatibility
+export { PUNCTUATION_MARKS } from "./constants";
 
 /** Can't start with a number or period */
 const GOOD_FIRST_CHARACTER = `[^0-9#@|\\[\\]\\s.${PUNCTUATION_MARKS}]`;

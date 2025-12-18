@@ -1,4 +1,4 @@
-import { Logger, createLogger, createDisposableLogger, logAndThrow } from "./logger.js";
+import { Logger, createLogger, createDisposableLogger, logAndThrow } from "../logger.js";
 
 describe("Logger", () => {
   describe("Logger class", () => {

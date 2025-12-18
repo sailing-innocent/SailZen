@@ -7,7 +7,7 @@ import {
   uniqueOutermostFolders,
   tmpDir,
   fileExists,
-} from "./filesv2.js";
+} from "../filesv2.js";
 
 describe("filesv2", () => {
   let tempDir: string;

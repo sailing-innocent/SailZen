@@ -14,7 +14,7 @@ import type { Plugin, Processor } from "unified";
 import { SiteUtils } from "../SiteUtils";
 import { DendronASTDest, DendronASTTypes, HashTag } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
-import { PUNCTUATION_MARKS } from "./hashtag";
+import { PUNCTUATION_MARKS } from "./constants";
 
 /** Can have period in the middle */
 const GOOD_MIDDLE_CHARACTER = `[^#@|\\[\\]\\s${PUNCTUATION_MARKS}]`;

@@ -1,4 +1,4 @@
-import { getOS, getDurationMilliseconds } from "./system.js";
+import { getOS, getDurationMilliseconds } from "../system.js";
 import process from "process";
 
 describe("system", () => {

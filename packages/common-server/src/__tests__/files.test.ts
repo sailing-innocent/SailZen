@@ -14,7 +14,7 @@ import {
   deleteFile,
   readString,
   readJson,
-} from "./files.js";
+} from "../files.js";
 
 describe("files", () => {
   let tempDir: string;

@@ -45,3 +45,4 @@ export {
 export type { Image, Link } from "mdast";
 export { makeImageUrlFullPath } from "./dendronPreview";
 export * from "./backlinksHover";
+export { abbrPlugin, AbbrOpts } from "./abbr";

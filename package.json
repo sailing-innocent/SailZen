@@ -6,6 +6,11 @@
         "build-site": "pnpm -r --filter=sail-site run build",
         "install-plugin": "pnpm install --filter=sail-zen-vscode",
         "build-plugin": "pnpm -r --filter=sail-zen-vscode run build",
-        "package-plugin": "pnpm -r --filter=sail-zen-vscode run package"
+        "package-plugin": "pnpm -r --filter=sail-zen-vscode run package",
+        "test": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test",
+        "test:common-all": "pnpm --filter=\"./packages/common-all\" run test",
+        "test:common-server": "pnpm --filter=\"./packages/common-server\" run test",
+        "test:unified": "pnpm --filter=\"./packages/unified\" run test",
+        "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage"
     }
 }

@@ -1,3 +1,29 @@
 {
   "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2024",
+    "lib": [
+      "ES2024"
+    ],
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "declaration": true,
+    "types": [
+      "node",
+      "jest"
+    ],
+    // --- checks
+    "noUnusedLocals": false,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    // --- language features
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  }
 }

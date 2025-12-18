@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { tmpdir } from "os";
-import { NodeJSUtils, WebViewCommonUtils } from "./etc.js";
+import { NodeJSUtils, WebViewCommonUtils } from "../etc.js";
 
 describe("etc", () => {
   let tempDir: string;

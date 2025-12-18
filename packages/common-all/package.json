@@ -30,8 +30,10 @@
     }
   },
   "scripts": {
-    "clean": "rimraf lib",
+    "clean": "rimraf lib && rimraf coverage",
     "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "compile": "tsc -p tsconfig.build.json",
     "watch": "pnpm compile --watch"
   },
@@ -61,7 +63,7 @@
   },
   "devDependencies": {
     "@types/fast-levenshtein": "^0.0.4",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "catalog:",
     "@types/js-yaml": "^4.0.9",
     "@types/lodash": "catalog:",
     "@types/luxon": "^3.4.2",
@@ -72,12 +74,12 @@
     "@types/spark-md5": "^3.0.5",
     "@types/unist": "^3.0.3",
     "cross-env": "^10.1.0",
-    "jest": "catalog:",
     "rimraf": "^6.1.2",
+    "jest": "catalog:",
     "ts-jest": "catalog:"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0"
   },
   "publishConfig": {
     "access": "public"

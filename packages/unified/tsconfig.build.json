@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.build.json",
   "compilerOptions": {
-    "outDir": "lib",
-    "rootDir": "src",
-    "skipLibCheck": true,
     "module": "ESNext",
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "outDir": "lib",
+    "rootDir": "src"
   },
   "include": [
     "src/**/*"
@@ -13,6 +12,8 @@
   "exclude": [
     "node_modules",
     "**/*-spec.ts",
+    "**/*.test.ts",
+    "**/__tests__/**/*",
     "**/*.d.ts"
   ]
 }

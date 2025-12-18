@@ -17,7 +17,7 @@ import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import rehypeMermaid from "rehype-mermaid";
 import { remark } from "remark";
-import abbrPlugin from "remark-abbr";
+import { abbrPlugin } from "./remark/abbr";
 import remarkGfm from "remark-gfm";
 import frontmatterPlugin from "remark-frontmatter";
 import remarkParse from "remark-parse";
