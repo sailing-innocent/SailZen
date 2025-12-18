@@ -23,7 +23,7 @@ import {
   ZDocTag,
   WikiLinkNoteV4,
 } from "@saili/unified";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import _ from "lodash";
 import vscode, {
   Position,

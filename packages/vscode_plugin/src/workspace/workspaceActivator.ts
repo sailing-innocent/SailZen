@@ -1,6 +1,5 @@
 import "reflect-metadata";
 import { SubProcessExitType } from "@saili/api-server";
-import * as Sentry from "@sentry/node";
 import {
   CONSTANTS,
   DendronError,
@@ -142,7 +141,7 @@ function analyzeWorkspace({ wsService }: { wsService: WorkspaceService }) {
       });
     })
     .catch((err) => {
-      Sentry.captureException(err);
+      Logger.warn({ ctx: "workspaceActivator", msg: "Failed to get all repos num contributors", err });
     });
   trackTopLevelRepoFound({ wsService });
 }
@@ -586,7 +585,7 @@ export class WorkspaceActivator {
       activatedSuccess: !!reloadSuccess,
       ext,
     }).catch((error) => {
-      Sentry.captureException(error);
+      Logger.warn({ ctx: "workspaceActivator", msg: "Failed to track duration", error });
     });
 
     analyzeWorkspace({ wsService });

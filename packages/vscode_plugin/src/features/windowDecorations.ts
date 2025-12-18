@@ -25,8 +25,8 @@ import {
   NoteRefDecorator,
   NoteRefUtils,
 } from "@saili/unified";
-import * as Sentry from "@sentry/node";
 import _ from "lodash";
+import { Logger } from "../logger";
 import {
   DecorationOptions,
   DecorationRangeBehavior,
@@ -424,7 +424,7 @@ export async function updateDecorations(editor: TextEditor): Promise<{
       allWarnings,
     };
   } catch (err) {
-    Sentry.captureException(err);
+    Logger.error({ ctx: "windowDecorations", error: err as any });
     throw err;
   }
 }

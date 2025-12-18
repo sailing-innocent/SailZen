@@ -6,7 +6,6 @@ import {
   VaultUtils,
 } from "@saili/common-all";
 import { DConfig, findNonNoteFile } from "@saili/common-server";
-import * as Sentry from "@sentry/node";
 import vscode, { Location, Position, Uri } from "vscode";
 import { findAnchorPos, GotoNoteCommand } from "../commands/GotoNote";
 import { TargetKind } from "../commands/GoToNoteInterface";
@@ -124,7 +123,7 @@ export default class DefinitionProvider implements vscode.DefinitionProvider {
         else return this.provideForNewNote(refAtPos);
       }
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "DefinitionProvider", error: error as any });
       throw error;
     }
   }

@@ -15,7 +15,7 @@ import {
 import { MDUtilsV5 } from "@saili/unified";
 import _ from "lodash";
 import { inject, injectable } from "tsyringe";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import * as vscode from "vscode";
 import {
   Disposable,

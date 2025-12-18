@@ -30,7 +30,6 @@ import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
 import { GOOGLE_OAUTH_ID, GOOGLE_OAUTH_SECRET } from "../types/global";
 import { AnalyticsUtils, sentryReportingCallback } from "../utils/analytics";
-import * as Sentry from "@sentry/node";
 import { MarkdownUtils } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { URI, Utils } from "vscode-uri";
@@ -470,7 +469,7 @@ export class ExtensionUtils {
       }
     } catch (error) {
       // something went wrong don't track extension detail
-      Sentry.captureException(error);
+      Logger.warn({ ctx: "ExtensionUtils", msg: "Failed to track extension detail", error });
     }
 
     // NOTE: this will not be accurate in dev mode
@@ -543,8 +542,8 @@ export class ExtensionUtils {
         ageOfCodeInstallInWeeks,
       };
     } catch (error: any) {
-      // something went wrong. don't track. Send to sentry silently.
-      Sentry.captureException(error);
+      // something went wrong. don't track.
+      Logger.warn({ ctx: "ExtensionUtils", msg: "getCodeFolderCreated error", error });
       return {};
     }
   }

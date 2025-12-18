@@ -12,7 +12,6 @@ import {
 import { file2Note, vault2Path } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import { RemarkUtils } from "@saili/unified";
-import * as Sentry from "@sentry/node";
 import fs from "fs";
 import _ from "lodash";
 import path from "path";
@@ -231,7 +230,7 @@ export class WorkspaceWatcher {
       Logger.debug({ ...ctx, state: "exit" });
       return;
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "WorkspaceWatcher", error: error as any });
       throw error;
     }
   }
@@ -249,7 +248,7 @@ export class WorkspaceWatcher {
       );
       DoctorUtils.validateFilenameFromDocumentAndPromptIfNecessary(document);
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "WorkspaceWatcher", error: error as any });
       throw error;
     }
   }
@@ -292,7 +291,7 @@ export class WorkspaceWatcher {
         return { changes: [] };
       }
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "WorkspaceWatcher", error: error as any });
       throw error;
     }
   }
@@ -481,7 +480,7 @@ export class WorkspaceWatcher {
       const updateNoteReferences = engine.renameNote(opts);
       args.waitUntil(updateNoteReferences);
     } catch (error: any) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "WorkspaceWatcher", error });
       throw error;
     }
   }
@@ -529,7 +528,7 @@ export class WorkspaceWatcher {
       newNote.title = NoteUtils.genTitle(fname);
       await engine.writeNote(newNote);
     } catch (error: any) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "WorkspaceWatcher", error });
       throw error;
     }
   }

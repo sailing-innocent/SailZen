@@ -11,7 +11,6 @@ import {
 } from "@saili/common-all";
 import { SegmentClient, SegmentUtils } from "@saili/common-server";
 import { MetadataService } from "@saili/engine-server";
-import * as Sentry from "@sentry/node";
 import _ from "lodash";
 import { Duration } from "luxon";
 import * as vscode from "vscode";
@@ -286,9 +285,8 @@ export class AnalyticsUtils {
 }
 
 /**
- * Wraps a callback function with a try/catch block.  In the catch, any
- * exceptions that were encountered will be uploaded to Sentry and then
- * rethrown.
+ * Wraps a callback function with a try/catch block. In the catch, any
+ * exceptions that were encountered will be logged and then rethrown.
  *
  * Warning! This function will cause the callback function to lose its `this` value.
  * If you are passing a method to this function, you must bind the `this` value:
@@ -311,7 +309,7 @@ export function sentryReportingCallback<A extends any[], R>(
     try {
       return callback(...args);
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "sentryReportingCallback", error: error as any });
       throw error;
     }
   };

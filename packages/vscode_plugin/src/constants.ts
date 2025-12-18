@@ -1262,8 +1262,6 @@ export const gdocRequiredScopes = [
   "https://www.googleapis.com/auth/drive",
 ];
 
-export const Oauth2Pods = ["dendron.gdoc"];
-
 export const INCOMPATIBLE_EXTENSIONS = [
   "yzhang.markdown-all-in-one",
   "fantasy.markdown-all-in-one-for-web",

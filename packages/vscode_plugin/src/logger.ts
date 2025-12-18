@@ -3,10 +3,7 @@ import {
   IDendronError,
   setEnv,
 } from "@saili/common-all";
-import { createDisposableLogger } from "@saili/common-server";
-import * as Sentry from "@sentry/node";
-
-import { LogLvl } from '@saili/common-server';
+import { createDisposableLogger, LogLvl } from "@saili/common-server";
 import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
@@ -131,7 +128,6 @@ export class Logger {
 
   /** Log an error.
    *
-   * If an `error` is attached to log payload, the error is also sent to Sentry.
    * This should be used for internal Dendron errors that we can fix, or for
    * problems we assume should never happen.
    *
@@ -141,38 +137,14 @@ export class Logger {
    * If the error is unexpected, but also not something we could fix (i.e. the
    * user misconfigured something), you'll probably want to use
    * {@link Logger.warn} instead. That way we can debug the issue in a bug
-   * report by looking at the logs, but it doesn't clog up Sentry.
+   * report by looking at the logs.
    */
   static error(payload: LogPayload) {
     Logger.log(payload, "error");
-
-    if (payload.error) {
-      // if we log an error, also report it to sentry ^sf0k4z8hnvjo
-      Sentry.captureException(payload.error, {
-        extra: {
-          ctx: payload.ctx,
-          name: payload.error.name,
-          message: payload.error.message,
-          payload: payload.error.payload,
-          severity: payload.error.severity?.toString(),
-          code: payload.error.code,
-          status: payload.error.status,
-        },
-      });
-    } else {
-      const cleanMsg = payload.msg || customStringify(payload);
-      Sentry.captureMessage(cleanMsg, { extra: { ctx: payload.ctx } });
-    }
   }
 
   static info(payload: any, show?: boolean): void {
     Logger.log(payload, "info", { show });
-
-    Sentry.addBreadcrumb({
-      category: "plugin",
-      message: customStringify(payload),
-      level: "info",
-    });
   }
 
   static debug(payload: any) {

@@ -1,6 +1,6 @@
 import { RemarkUtils } from "@saili/unified";
-import * as Sentry from "@sentry/node";
 import _ from "lodash";
+import { Logger } from "../logger";
 import vscode, { FoldingRangeKind } from "vscode";
 import { VSCodeUtils } from "../vsCodeUtils";
 
@@ -30,7 +30,7 @@ export default class FrontmatterFoldingRangeProvider
       if (_.isUndefined(range)) return [];
       return [range];
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "FrontmatterFoldingRangeProvider", error: error as any });
       throw error;
     }
   }

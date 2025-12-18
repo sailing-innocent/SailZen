@@ -19,7 +19,6 @@ import {
   WorkspaceService,
   WorkspaceUtils,
 } from "@saili/engine-server";
-import * as Sentry from "@sentry/node";
 import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
@@ -309,12 +308,11 @@ export class DendronExtension implements IDendronExtension {
     } catch (err: any) {
       // If no workspace implementation is available, then workspace is not active
       if (err?.payload === NO_WORKSPACE_IMPLEMENTATION) return false;
-      // Otherwise, that's an unexpected error and we should capture that
+      // Otherwise, that's an unexpected error
       const error =
         err instanceof DendronError
           ? err
           : new DendronError({ message: ctx, payload: err });
-      Sentry.captureException(error);
       Logger.error({ ctx, msg: "Failed to check WS active", error });
       return false;
     }

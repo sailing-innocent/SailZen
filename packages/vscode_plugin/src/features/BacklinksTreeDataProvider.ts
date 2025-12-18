@@ -12,7 +12,6 @@ import {
 import { DConfig } from "@saili/common-server";
 import { MetadataService } from "@saili/engine-server";
 import { MDUtilsV5 } from "@saili/unified";
-import * as Sentry from "@sentry/node";
 import fs from "fs";
 import _, { Dictionary } from "lodash";
 import path from "path";
@@ -125,7 +124,7 @@ export default class BacklinksTreeDataProvider
     try {
       return element;
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "BacklinksTreeDataProvider", error: error as any });
       throw error;
     }
   }
@@ -138,7 +137,7 @@ export default class BacklinksTreeDataProvider
         return undefined;
       }
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "BacklinksTreeDataProvider", error: error as any });
       throw error;
     }
   }
@@ -174,7 +173,7 @@ export default class BacklinksTreeDataProvider
         );
       }
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "BacklinksTreeDataProvider", error: error as any });
       throw error;
     }
   }

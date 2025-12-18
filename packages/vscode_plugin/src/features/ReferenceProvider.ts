@@ -1,6 +1,6 @@
 import { getSlugger } from "@saili/common-all";
-import * as Sentry from "@sentry/node";
 import _ from "lodash";
+import { Logger } from "../logger";
 import vscode from "vscode";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { EditorUtils } from "../utils/EditorUtils";
@@ -55,7 +55,7 @@ export default class ReferenceProvider implements vscode.ReferenceProvider {
         ? (await findReferences(refAtPos.ref)).map(({ location }) => location)
         : [];
     } catch (error) {
-      Sentry.captureException(error);
+      Logger.error({ ctx: "ReferenceProvider", error: error as any });
       throw error;
     }
   }

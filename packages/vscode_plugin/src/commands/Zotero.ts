@@ -5,7 +5,6 @@
  * @date 2025-06-03
  */
 
-import requestPromise from 'request-promise';
 import * as vscode from 'vscode';
 import { Logger } from '../logger';
 
@@ -13,9 +12,8 @@ export async function showZoteroPicker(): Promise<void> {
   try {
     // const url = "http://127.0.0.1:23119/better-bibtex/cayw?format=pandoc"
     const url = "http://127.0.0.1:23119/better-bibtex/cayw?format=translate&translator=csljson"
-    const result: any = await requestPromise(String(url));
-    // json parse result
-
+    const response = await fetch(url);
+    const result = await response.text();
 
     if (result) {
       const parsedResult = JSON.parse(result);
@@ -91,26 +89,22 @@ async function openPDFZotero(): Promise<void> {
 
   console.log(`Opening ${citeKey} in Zotero`);
 
-  const options = {
-    method: 'POST',
-    uri: 'http://localhost:23119/better-bibtex/json-rpc',
-    body: {
-      'jsonrpc': '2.0',
-      'method': 'item.attachments',
-      'params': [citeKey]
-    },
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'User-Agent': 'Request-Promise'
-    },
-    json: true // Automatically parses the JSON string in the response
-  };
-
   let uri = vscode.Uri.parse(`zotero://select/items/bbt:${citeKey}`);
 
   try {
-    const repos: any = await requestPromise(options);
+    const response = await fetch('http://localhost:23119/better-bibtex/json-rpc', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        'jsonrpc': '2.0',
+        'method': 'item.attachments',
+        'params': [citeKey]
+      }),
+    });
+    const repos: any = await response.json();
     console.log(repos['result']);
     console.log('User has %d repos', repos['result'].length);
     for (const elt of repos['result']) {

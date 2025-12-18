@@ -34,7 +34,7 @@ import {
 } from "@saili/unified";
 import _ from "lodash";
 import path from "path";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import { Disposable, Location } from "vscode";
 import {
   ILookupControllerV3,
