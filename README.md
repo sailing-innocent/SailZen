@@ -150,15 +150,15 @@ pnpm build-plugin
 pnpm build:common-server
 
 
-| Command | Description |
-|---------|-------------|
-| `pnpm install` | Install all dependencies |
-| `pnpm plugin:dev` | Start development mode with watch |
-| `pnpm plugin:build` | Full production build |
-| `pnpm plugin:package` | Create VSIX package |
-| `pnpm views:build` | Build React UI components only |
-| `pnpm views:copy` | Copy UI assets to plugin |
-| `pnpm test` | Run all tests |
+| Command               | Description                       |
+| --------------------- | --------------------------------- |
+| `pnpm install`        | Install all dependencies          |
+| `pnpm plugin:dev`     | Start development mode with watch |
+| `pnpm plugin:build`   | Full production build             |
+| `pnpm plugin:package` | Create VSIX package               |
+| `pnpm views:build`    | Build React UI components only    |
+| `pnpm views:copy`     | Copy UI assets to plugin          |
+| `pnpm test`           | Run all tests                     |
 
 ### Troubleshooting
 
