@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dendron Plugin Views - Development</title>
+    <style>
+      /* VSCode-like CSS variables for development */
+      :root {
+        --vscode-editor-foreground: #d4d4d4;
+        --vscode-editor-background: #1e1e1e;
+        --vscode-textLink-foreground: #3794ff;
+        --vscode-button-background: #0e639c;
+        --vscode-button-foreground: #ffffff;
+        --vscode-input-background: #3c3c3c;
+        --vscode-input-foreground: #cccccc;
+        --vscode-input-border: #3c3c3c;
+      }
+
+      /* Light theme variables */
+      .vscode-light {
+        --vscode-editor-foreground: #333333;
+        --vscode-editor-background: #ffffff;
+        --vscode-textLink-foreground: #006ab1;
+        --vscode-button-background: #007acc;
+        --vscode-button-foreground: #ffffff;
+        --vscode-input-background: #ffffff;
+        --vscode-input-foreground: #333333;
+        --vscode-input-border: #cecece;
+      }
+
+      body,
+      h1,
+      h2,
+      h3,
+      h4 {
+        color: var(--vscode-editor-foreground);
+      }
+
+      .main-content ul {
+        list-style: unset;
+        list-style-type: disc;
+      }
+
+      body {
+        background-color: var(--vscode-editor-background);
+        margin: 0;
+        padding: 0;
+      }
+
+      a,
+      a:hover,
+      a:active {
+        color: var(--vscode-textLink-foreground);
+      }
+
+      /* Development toolbar */
+      .dev-toolbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #333;
+        padding: 8px 16px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        z-index: 9999;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        color: #fff;
+        border-bottom: 1px solid #555;
+      }
+
+      .dev-toolbar button {
+        background: var(--vscode-button-background);
+        color: var(--vscode-button-foreground);
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .dev-toolbar button:hover {
+        opacity: 0.9;
+      }
+
+      .dev-toolbar select {
+        background: var(--vscode-input-background);
+        color: var(--vscode-input-foreground);
+        border: 1px solid var(--vscode-input-border);
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      /* Add padding for toolbar */
+      #main-content-wrap {
+        padding-top: 48px;
+      }
+    </style>
+  </head>
+
+  <body class="vscode-dark" data-theme-override="dark">
+    <!-- Development Toolbar -->
+    <div class="dev-toolbar">
+      <span>🛠 Dev Mode</span>
+      <label>
+        Component:
+        <select id="component-select">
+          <option value="DendronNotePreview">Note Preview</option>
+          <option value="DendronCalendarPanel">Calendar Panel</option>
+        </select>
+      </label>
+      <label>
+        Theme:
+        <select id="theme-select">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <button onclick="location.reload()">Refresh</button>
+    </div>
+
+    <div id="main-content-wrap" class="main-content-wrap">
+      <div id="main-content" class="main-content">
+        <div
+          id="root"
+          data-url="http://localhost:3005"
+          data-ws="E:\ws\repos\SailDendron\test-workspace"
+          data-browser="true"
+          data-mock="true"
+          data-name="DendronNotePreview"
+        ></div>
+      </div>
+    </div>
+
+    <script>
+      // Development toolbar functionality
+      document.getElementById("component-select").addEventListener("change", function (e) {
+        document.getElementById("root").setAttribute("data-name", e.target.value);
+        location.reload();
+      });
+
+      document.getElementById("theme-select").addEventListener("change", function (e) {
+        const body = document.body;
+        if (e.target.value === "light") {
+          body.className = "vscode-light";
+          body.setAttribute("data-theme-override", "light");
+        } else {
+          body.className = "vscode-dark";
+          body.setAttribute("data-theme-override", "dark");
+        }
+        // Trigger theme change
+        window.currentTheme = e.target.value;
+      });
+
+      // Initialize component selector from URL hash or data attribute
+      const root = document.getElementById("root");
+      const hash = window.location.hash.slice(1);
+      if (hash) {
+        root.setAttribute("data-name", hash);
+        document.getElementById("component-select").value = hash;
+      }
+
+      // Mock window.vscode for development
+      window.vscode = {
+        postMessage: function (msg) {
+          console.log("[Mock VSCode] Message sent:", msg);
+        },
+      };
+    </script>
+
+    <script type="module" src="/src/dev.tsx"></script>
+  </body>
+</html>

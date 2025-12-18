@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "scripts": {
     "start": "vite",
+    "dev": "vite --open dev.html",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "copy-to-plugin": "node scripts/copyToPlugin.js"
   },
   "dependencies": {
     "@aws-amplify/core": "^6.15.0",
     "@reduxjs/toolkit": "^2.11.2",
     "@saili/common-all": "workspace:^",
-    "@saili/common-server": "workspace:^",
     "antd": "^6.1.1",
     "dayjs": "^1.11.19",
     "lodash": "^4.17.21",

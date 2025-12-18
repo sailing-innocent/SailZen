@@ -11,6 +11,14 @@
         "test:common-all": "pnpm --filter=\"./packages/common-all\" run test",
         "test:common-server": "pnpm --filter=\"./packages/common-server\" run test",
         "test:unified": "pnpm --filter=\"./packages/unified\" run test",
-        "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage"
+        "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage",
+        
+        "views:dev": "pnpm --filter=@saili/dendron-plugin-views run dev",
+        "views:build": "pnpm --filter=@saili/dendron-plugin-views run build",
+        "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
+        
+        "plugin:build": "pnpm views:build && pnpm views:copy && pnpm build-plugin",
+        "plugin:package": "pnpm plugin:build && pnpm package-plugin",
+        "plugin:dev": "pnpm views:build && pnpm views:copy && pnpm -r --filter=sail-zen-vscode run watch"
     }
 }

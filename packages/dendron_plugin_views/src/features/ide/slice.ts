@@ -53,7 +53,7 @@ const INITIAL_STATE: InitialState = {
   previewHTML: "",
 };
 
-export { InitialState as IDEState };
+export type { InitialState as IDEState };
 
 export const ideSlice = createSlice({
   name: "ide",

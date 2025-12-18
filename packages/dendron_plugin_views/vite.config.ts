@@ -7,19 +7,44 @@ export default defineConfig({
   plugins: [
     react(),
     nodePolyfills({
-      // Whether to polyfill `node:` protocol imports.
-      protocolImports: true,
-      // Use globals to avoid import resolution issues
+      // Only include necessary polyfills
+      include: ['events', 'buffer', 'util', 'stream', 'path'],
+      // Don't use shims for process - define it globally instead
       globals: {
-        process: true,
+        process: false,  // Disable process shim
+        Buffer: true,
       },
     }),
   ],
+  define: {
+    // Define process globally to avoid shim issues
+    'process.env': {},
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.browser': true,
+  },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
-    alias: {
-      // Fix for vite-plugin-node-polyfills shim imports - map to process package
-      'vite-plugin-node-polyfills/shims/process': 'process',
+  },
+  // Optimize dependencies to handle CommonJS/ESM compatibility
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-redux',
+      '@reduxjs/toolkit',
+      'redux-logger',
+      'antd',
+      'lodash',
+      'dayjs',
+      'mermaid',
+      '@saili/common-all',
+    ],
+    // Exclude server-only packages that have Node.js dependencies
+    exclude: ['@saili/common-server'],
+    // Force re-optimization when workspace dependencies change
+    force: true,
+    esbuildOptions: {
+      keepNames: true,
     },
   },
   server: {
@@ -30,13 +55,17 @@ export default defineConfig({
   build: {
     outDir: 'build',
     sourcemap: true,
+    // Ensure CSS is extracted to a single file
+    cssCodeSplit: false,
     rollupOptions: {
       output: {
+        // Fixed output names for vscode_plugin integration
         entryFileNames: 'static/js/index.bundle.js',
         chunkFileNames: 'static/js/[name]-[hash].js',
+        // Use fixed CSS name: index.styles.css (required by vscode_plugin)
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {
-            return 'static/css/[name]-[hash][extname]';
+            return 'static/css/index.styles.css';
           }
           return 'static/[ext]/[name]-[hash][extname]';
         },
@@ -44,5 +73,5 @@ export default defineConfig({
     },
   },
   publicDir: 'public',
-  base: '/',
+  base: './',  // Use relative paths for VSCode webview compatibility
 });

@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { useEffect } from "react";
 import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
-import { engineSliceUtils } from ".";
+import * as engineSliceUtils from "./utils";
 import { createLogger } from "../../utils/logger";
 import { EngineState, InitNoteOpts, initNotes, syncConfig } from "./slice";
 import { AppDispatch, RootState } from "./store";

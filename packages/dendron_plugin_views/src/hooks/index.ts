@@ -4,7 +4,7 @@ import { engineHooks } from "../features/engine";
 import { engineSlice } from "../features/engine";
 import { Mermaid } from "mermaid";
 import React from "react";
-import { DendronProps, WorkspaceProps } from "../types";
+import { DendronProps, WorkspaceProps } from "../types/index";
 
 export const useCurrentTheme = () => {
   const [currentTheme, setCurrentTheme] = React.useState<"light" | "dark">(

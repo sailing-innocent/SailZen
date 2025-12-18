@@ -340,9 +340,6 @@ importers:
       '@saili/common-all':
         specifier: workspace:^
         version: link:../common-all
-      '@saili/common-server':
-        specifier: workspace:^
-        version: link:../common-server
       antd:
         specifier: ^6.1.1
         version: 6.1.1(date-fns@4.1.0)(luxon@3.7.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

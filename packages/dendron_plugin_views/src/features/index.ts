@@ -1,21 +1,21 @@
 import { getStage } from "@saili/common-all";
 import { engineSlice } from "./engine/slice";
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, Middleware } from "@reduxjs/toolkit";
 import { ideSlice } from "./ide/slice";
+// Import redux-logger statically (only used in dev mode)
+import { createLogger } from "redux-logger";
 
 export * from "./engine";
 export * from "./ide";
 
-const middleware: any[] = [];
+const middleware: Middleware[] = [];
 
-if (getStage() === `dev`) {
-  const { createLogger } = require(`redux-logger`);
-
+// Only add logger in development mode
+if (getStage() === "dev") {
   const logger = createLogger({
     collapsed: true,
   });
-
-  middleware.push(logger);
+  middleware.push(logger as Middleware);
 }
 
 const engine = engineSlice.reducer;
@@ -33,7 +33,7 @@ const store = configureStore({
 });
 
 export { store as combinedStore };
-type RootState = ReturnType<typeof store.getState>;
-type AppDispatch = typeof store.dispatch;
-export { RootState as CombinedRootState };
-export { AppDispatch as CombinedDispatch };
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+export type { RootState as CombinedRootState };
+export type { AppDispatch as CombinedDispatch };

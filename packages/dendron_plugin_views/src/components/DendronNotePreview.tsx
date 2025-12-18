@@ -1,11 +1,12 @@
-import React, { useCallback, useState } from "react";
+import React from "react";
 import {
   DMessageSource,
   FOOTNOTE_DEF_CLASS,
   FOOTNOTE_REF_CLASS,
   NoteViewMessageEnum,
 } from "@saili/common-all";
-import { createLogger, DendronNote } from "../index";
+import { createLogger } from "../utils/logger";
+import { DendronNote } from "./DendronNote";
 import { useCurrentTheme, useMermaid, useRenderedNoteBody } from "../hooks";
 import { DendronProps, DendronComponent } from "../types";
 

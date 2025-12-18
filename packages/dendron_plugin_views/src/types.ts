@@ -35,3 +35,6 @@ export type WorkspaceProps = {
    */
   browser?: boolean;
 };
+
+// Re-export types from types/index.tsx for backward compatibility
+export type { DendronComponent, DendronProps } from "./types/index";
