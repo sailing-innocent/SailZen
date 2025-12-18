@@ -1,0 +1,11 @@
+version: 1
+imports: []
+schemas:
+  - id: dendron
+    children:
+      - pattern: ref
+        children:
+          - pattern: template-all-vars
+            template: template.all-vars
+    title: dendron
+    parent: root

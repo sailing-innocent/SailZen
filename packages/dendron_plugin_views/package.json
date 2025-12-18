@@ -1,0 +1,38 @@
+{
+  "name": "@saili/dendron-plugin-views",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aws-amplify/core": "^6.15.0",
+    "@reduxjs/toolkit": "^2.11.2",
+    "@saili/common-all": "workspace:^",
+    "@saili/common-server": "workspace:^",
+    "antd": "^6.1.1",
+    "dayjs": "^1.11.19",
+    "lodash": "^4.17.21",
+    "mermaid": "^11.12.2",
+    "process": "^0.11.10",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-redux": "^9.2.0",
+    "redux-logger": "^3.0.6",
+    "web-vitals": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/antd": "^1.0.4",
+    "@types/lodash": "^4.17.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/redux-logger": "^3.0.13",
+    "@vitejs/plugin-react": "^5.1.2",
+    "sass": "^1.97.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0",
+    "vite-plugin-node-polyfills": "^0.24.0"
+  }
+}

@@ -1,0 +1,18 @@
+version: 1
+imports: [person]
+schemas:
+  - id: book
+    children:
+      - characters
+    namespace: true
+    title: book
+    parent: root
+    template:
+      id: templates.book
+      type: note
+  - id: characters
+    children:
+      - person.public_persona
+    template:
+      id: templates.book.characters
+      type: note

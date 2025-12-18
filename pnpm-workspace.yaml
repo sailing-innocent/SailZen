@@ -21,6 +21,7 @@ ignoredBuiltDependencies:
   - sqlite3
 
 onlyBuiltDependencies:
+  - '@parcel/watcher'
   - '@prisma/client'
   - '@prisma/engines'
   - '@vscode/vsce-sign'
