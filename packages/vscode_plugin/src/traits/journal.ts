@@ -46,6 +46,8 @@ export class JournalNote implements NoteTrait {
     return {
       setTitle(opts: OnCreateContext): string {
         const journalConfig = ConfigUtils.getJournal(config);
+        // Use journalConfig.dailyDomain ('daily')
+        // because fname is 'journal.daily.2025.12.24', we need to find date after 'daily'
         const journalName = journalConfig.dailyDomain;
         const title = NoteUtils.genJournalNoteTitle({
           fname: opts.currentNoteName!,

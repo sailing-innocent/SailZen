@@ -136,8 +136,8 @@ const DendronCalendarPanel: DendronComponent = (props: DendronProps) => {
   >(
     (date, info) => {
       const dateKey = getDateKey(date, info.source);
-      // fname format: dailyDomain.journalName.dateKey (e.g., daily.journal.2025.12.23)
-      const fname = `${journalDailyDomain}.${journalName}.${dateKey}`;
+      // fname format: journalName.dailyDomain.dateKey (e.g., journal.daily.2025.12.23)
+      const fname = `${journalName}.${journalDailyDomain}.${dateKey}`;
       postVSCodeMessage({
         type: CalendarViewMessageType.onSelect,
         data: {
