@@ -1,0 +1,3 @@
+LOG_NAME: api-server
+LOG_DST: ../../logs/api-server.log
+LOG_LVL: DEBUG
