@@ -1,5 +1,11 @@
 import fs from "fs-extra";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 import { findUpTo } from "./filesv2";
+
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export class NodeJSUtils {
   static getVersionFromPkg(): string | undefined {

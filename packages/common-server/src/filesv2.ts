@@ -614,7 +614,7 @@ export class FileExtensionUtils {
   private static ensureTextExtensions() {
     if (this.textExtensions === undefined) {
       this.textExtensions = new Set(
-        textextensionslist.map((extension) => extension.toLowerCase())
+        textextensionslist.map((extension: string) => extension.toLowerCase())
       );
     }
   }

@@ -9,25 +9,33 @@
   "files": [
     "lib"
   ],
-  "main": "lib/index.js",
-  "type": "commonjs",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "type": "module",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
   "scripts": {
     "clean": "rimraf lib && rimraf coverage",
     "format": "echo nop",
     "lint": "echo stub",
-    "prepublishOnly": "yarn build",
-    "prebuild": "yarn clean && yarn format && yarn lint && echo Using TypeScript && tsc --version",
-    "build": "yarn compile",
-    "buildCI": "yarn compile",
+    "prepublishOnly": "pnpm build",
+    "prebuild": "pnpm clean && pnpm format && pnpm lint && echo Using TypeScript && tsc --version",
+    "build": "pnpm compile",
+    "buildCI": "pnpm compile",
     "compile": "tsc -p tsconfig.build.json ",
-    "coverage": "echo nop",
-    "watch": "yarn compile --watch"
+    "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "coverage": "pnpm test:coverage",
+    "watch": "pnpm compile --watch"
   },
   "dependencies": {
     "@saili/common-all": "workspace:^",
-    "@sentry/integrations": "7.114.0",
-    "@sentry/node": "10.31.0",
     "ajv": "^8.17.1",
     "ajv-errors": "^3.0.0",
     "analytics-node": "^6.2.0",
@@ -52,18 +60,22 @@
     "@types/analytics-node": "^3.1.14",
     "@types/express": "^5.0.6",
     "@types/fs-extra": "^11.0.4",
+    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/lodash": "catalog:",
     "@types/node": "catalog:",
     "@types/spark-md5": "^3.0.5",
     "@types/tmp": "^0.2.6",
+    "cross-env": "^10.1.0",
+    "jest": "catalog:",
     "rimraf": "^6.1.2",
+    "ts-jest": "catalog:",
     "ts-node": "^10.9.2"
   },
   "publishConfig": {
     "access": "public"
   },
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=18.0.0"
   }
 }

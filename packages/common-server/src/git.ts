@@ -307,8 +307,8 @@ export class GitUtils {
   ): Promise<{ stdout: string; stderr: string }> {
     const [git, ...args] = cmd.split(" ");
 
-    const { default: execa } = await import("execa");
-    return execa.execa(git, args, { cwd: uri });
+    const { execa } = await import("execa");
+    return execa(git, args, { cwd: uri });
   }
 
   /** Add a file or folder to the gitignore, avoiding creating exact duplicate lines.

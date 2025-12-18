@@ -15,17 +15,20 @@ import {
   VSCodeEvents,
   WorkspaceEvents,
 } from "@saili/common-all";
+
 import {
   getDurationMilliseconds,
   getOS,
   initializeSentry,
   SegmentClient,
 } from "@saili/common-server";
+
 import {
   HistoryService,
   MetadataService,
   WorkspaceUtils,
 } from "@saili/engine-server";
+
 import * as Sentry from "@sentry/node";
 import fs from "fs-extra";
 import _ from "lodash";
@@ -33,6 +36,7 @@ import os from "os";
 import path from "path";
 import semver from "semver";
 import * as vscode from "vscode";
+
 import { ALL_COMMANDS } from "./commands";
 import { ConfigureWithUICommand } from "./commands/ConfigureWithUICommand";
 import { GotoNoteCommand } from "./commands/GotoNote";
@@ -88,7 +92,7 @@ const MARKDOWN_WORD_PATTERN = new RegExp("([\\w\\.]+)");
 export function activate(
   context: vscode.ExtensionContext
 ): vscode.ExtensionContext {
-  
+
   // Zotero Feature
   z_activate(context);
 
@@ -509,11 +513,10 @@ async function showWelcomeOrWhatsNew({
     case InstallStatus.INITIAL_INSTALL: {
       Logger.info({
         ctx,
-        msg: `extension, ${
-          isSecondaryInstall
-            ? "initial install"
-            : "secondary install on new vscode instance"
-        }`,
+        msg: `extension, ${isSecondaryInstall
+          ? "initial install"
+          : "secondary install on new vscode instance"
+          }`,
       });
 
       // Explicitly set the tutorial split test group in the Install event as
