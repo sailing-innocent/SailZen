@@ -134,7 +134,21 @@ SailZen/
 └── assets/                 # Test workspace and assets
 ```
 
+
+
 ### Key Build Commands
+
+依赖构建
+# 直接使用脚本
+node scripts/build-with-deps.js @saili/engine-server
+node scripts/build-with-deps.js @saili/engine-server buildCI
+node scripts/build-with-deps.js sail-zen-vscode build
+
+# 使用 package.json 中的命令
+pnpm build-engine-server
+pnpm build-plugin
+pnpm build:common-server
+
 
 | Command | Description |
 |---------|-------------|

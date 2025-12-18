@@ -26,7 +26,6 @@ import path from "path";
 import tmp, { DirResult, dirSync } from "tmp";
 import { resolvePath } from "./files";
 import { SchemaParserV2 } from "./parser";
-import textextensionslist from "textextensions";
 
 /** Dendron should ignore any of these folders when watching or searching folders.
  *
@@ -614,7 +613,7 @@ export class FileExtensionUtils {
   private static ensureTextExtensions() {
     if (this.textExtensions === undefined) {
       this.textExtensions = new Set(
-        textextensionslist.map((extension: string) => extension.toLowerCase())
+        ["md", "txt"]
       );
     }
   }

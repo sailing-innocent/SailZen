@@ -8,7 +8,7 @@ import { ConfigureCommand } from "./ConfigureCommand";
 import { ConfigureLocalOverride } from "./ConfigureLocalOverride";
 import { ConfigureGraphStylesCommand } from "./ConfigureGraphStyles";
 import { ConfigureNoteTraitsCommand } from "./ConfigureNoteTraitsCommand";
-import { ContributeCommand } from "./Contribute";
+
 import { ConvertCandidateLinkCommand } from "./ConvertCandidateLink";
 import { ConvertLinkCommand } from "./ConvertLink";
 import { CopyNoteLinkCommand } from "./CopyNoteLink";
@@ -90,7 +90,6 @@ const ALL_COMMANDS = [
   ConfigureCommand,
   ConfigureLocalOverride,
   ConfigureGraphStylesCommand,
-  ContributeCommand,
   CopyNoteLinkCommand,
   CopyNoteRefCommand,
   CopyNoteURLCommand,

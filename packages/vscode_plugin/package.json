@@ -224,10 +224,6 @@
         "title": "Dendron: Browse Note"
       },
       {
-        "command": "dendron.contributeToCause",
-        "title": "Dendron: Contribute"
-      },
-      {
         "command": "dendron.goto",
         "title": "Dendron: Go to"
       },

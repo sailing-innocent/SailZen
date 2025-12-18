@@ -26,16 +26,15 @@ import { BasicCommand } from "./base";
 type CommandOpts = {};
 type CommandOutput =
   | {
-      link: string;
-      type: string;
-      anchorType?: string;
-    }
+    link: string;
+    type: string;
+    anchorType?: string;
+  }
   | undefined;
 
 export class CopyNoteLinkCommand
   extends BasicCommand<CommandOpts, CommandOutput>
-  implements Disposable
-{
+  implements Disposable {
   static requireActiveWorkspace: boolean = true;
   key = DENDRON_COMMANDS.COPY_NOTE_LINK.key;
   private extension: IDendronExtension;
@@ -147,6 +146,17 @@ export class CopyNoteLinkCommand
   }
 
   private async createNoteLink(editor: TextEditor, note: NotePropsMeta) {
+    // Validate note has required properties before using it
+    if (!note || !note.id || !note.fname || !note.vault) {
+      throw new Error(
+        `Invalid note provided to createNoteLink: ${JSON.stringify({
+          hasNote: !!note,
+          hasId: !!note?.id,
+          hasFname: !!note?.fname,
+          hasVault: !!note?.vault,
+        })}`
+      );
+    }
     const engine = this.extension.getEngine();
     const { selection } = VSCodeUtils.getSelection();
     const { startAnchor: anchor } = await EditorUtils.getSelectionAnchors({
@@ -165,18 +175,14 @@ export class CopyNoteLinkCommand
         anchor: _.isUndefined(anchor)
           ? undefined
           : {
-              value: anchor,
-              type: isBlockAnchor(anchor) ? "blockAnchor" : "header",
-            },
+            value: anchor,
+            type: isBlockAnchor(anchor) ? "blockAnchor" : "header",
+          },
         useVaultPrefix: DendronClientUtilsV2.shouldUseVaultPrefix(engine),
         alias: { mode: aliasMode },
       }),
       anchor,
     };
-  }
-
-  addAnalyticsPayload(_opts: CommandOpts, resp: CommandOutput) {
-    return { type: resp?.type, anchorType: resp?.anchorType };
   }
 
   private anchorType(anchor?: string) {
@@ -191,6 +197,7 @@ export class CopyNoteLinkCommand
     const fname = NoteUtils.uri2Fname(editor.document.uri);
     const engine = this.extension.getEngine();
     const vault = PickerUtilsV2.getVaultForOpenEditor();
+
 
     if (editor.document.isDirty) {
       this._onEngineNoteStateChangedDisposable = this.extension
@@ -218,9 +225,18 @@ export class CopyNoteLinkCommand
       // Do nothing as engine may still not be up-to-date
       return;
     } else {
-      const note: NotePropsMeta | undefined = (
-        await engine.findNotesMeta({ fname, vault })
-      )[0];
+
+      const notes = await engine.findNotesMeta({ fname, vault });
+      const note: NotePropsMeta | undefined = notes?.[0];
+      // Validate that note has required properties (id, fname, vault)
+      if (note && (!note.id || !note.fname || !note.vault)) {
+        this.L.error({
+          msg: "findNotesMeta returned incomplete note",
+          note: { id: note.id, fname: note.fname, vault: note.vault },
+        });
+        // Treat incomplete note as undefined to fall back to non-note file link
+        return this.executeCopyNoteLink(undefined, editor);
+      }
       return this.executeCopyNoteLink(note, editor);
     }
   }

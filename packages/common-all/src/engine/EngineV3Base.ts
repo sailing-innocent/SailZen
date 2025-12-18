@@ -413,9 +413,9 @@ export abstract class EngineV3Base implements ReducedDEngine {
     if (maybeBacklink) {
       const maybeVault = link.to?.vaultName
         ? VaultUtils.getVaultByName({
-            vname: link.to?.vaultName,
-            vaults: this.vaults,
-          })
+          vname: link.to?.vaultName,
+          vaults: this.vaults,
+        })
         : undefined;
       const notes = await this.noteStore.find({
         fname: link.to.fname,
@@ -452,9 +452,9 @@ export abstract class EngineV3Base implements ReducedDEngine {
     if (maybeBacklink) {
       const maybeVault = link.to?.vaultName
         ? VaultUtils.getVaultByName({
-            vname: link.to?.vaultName,
-            vaults: this.vaults,
-          })
+          vname: link.to?.vaultName,
+          vaults: this.vaults,
+        })
         : undefined;
       const notes = await this.noteStore.find({
         fname: link.to.fname,

@@ -1,11 +1,10 @@
 import { DendronError, getStage, isTSError } from "@saili/common-all";
-import { DLogger, getDurationMilliseconds } from "@saili/common-server";
+import { DLogger } from "@saili/common-server";
 import _ from "lodash";
 import { window } from "vscode";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
-import { AnalyticsUtils } from "../utils/analytics";
 
 export type CodeCommandConstructor = {
   new (extension: IDendronExtension): CodeCommandInstance;
@@ -14,10 +13,6 @@ export type CodeCommandConstructor = {
 export type CodeCommandInstance = {
   key: string;
   run: (opts?: any) => Promise<void>;
-};
-
-export type AnalyticProps = {
-  props?: any;
 };
 
 /** Anything other than `undefined` is an error and will stop the command. "cancel" will stop the command without displaying an error. */
@@ -47,8 +42,6 @@ export abstract class BaseCommand<
     this.L = Logger;
   }
 
-  addAnalyticsPayload?(opts?: TOpts, out?: TOut): any;
-
   static showInput = window.showInputBox;
 
   /**
@@ -57,7 +50,6 @@ export abstract class BaseCommand<
   static requireActiveWorkspace = false;
 
   abstract key: string;
-  skipAnalytics?: boolean;
 
   async gatherInputs(_opts?: TRunOpts): Promise<TGatherOutput | undefined> {
     return {} as any;
@@ -142,20 +134,6 @@ export abstract class BaseCommand<
         throw error;
       }
       return;
-    } finally {
-      const payload = this.addAnalyticsPayload
-        ? await this.addAnalyticsPayload(opts, resp)
-        : {};
-      const sanityCheckResults = sanityCheckResp
-        ? { sanityCheck: sanityCheckResp }
-        : {};
-      if (!this.skipAnalytics)
-        AnalyticsUtils.track(this.key, {
-          duration: getDurationMilliseconds(start),
-          error: isError,
-          ...payload,
-          ...sanityCheckResults,
-        });
     }
   }
 }

@@ -30,7 +30,6 @@ import { ProceedCancel, QuickPickUtil } from "../utils/quickPick";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderV3Interface";
-import { ProxyMetricUtils } from "../utils/ProxyMetricUtils";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { AutoCompleter } from "../utils/autoCompleter";
