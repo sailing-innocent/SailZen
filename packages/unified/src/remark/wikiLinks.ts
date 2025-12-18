@@ -9,8 +9,9 @@ import {
   VaultUtils,
 } from "@saili/common-all";
 import _ from "lodash";
-import { Eat } from "remark-parse";
-import Unified, { Plugin } from "unified";
+// @ts-ignore - Eat type is not exported from remark-parse
+type Eat = any;
+import type { Plugin, Processor } from "unified";
 import {
   DendronASTDest,
   DendronASTTypes,
@@ -57,7 +58,7 @@ function normalizeSpaces(link: string) {
 }
 
 const plugin: Plugin<[CompilerOpts?]> = function (
-  this: Unified.Processor,
+  this: Processor,
   opts?: PluginOpts
 ) {
   attachParser(this);
@@ -66,12 +67,13 @@ const plugin: Plugin<[CompilerOpts?]> = function (
   }
 };
 
-function attachCompiler(proc: Unified.Processor, opts?: CompilerOpts) {
+function attachCompiler(proc: Processor, opts?: CompilerOpts) {
+  const Compiler = proc.Compiler;
+  if (!Compiler) return;
   const copts = _.defaults(opts || {}, {
     convertObsidianLinks: false,
     useId: false,
   });
-  const Compiler = proc.Compiler;
   const visitors = Compiler.prototype.visitors;
   if (visitors) {
     visitors.wikiLink = function (node: WikiLinkNoteV4) {
@@ -186,7 +188,7 @@ function attachCompiler(proc: Unified.Processor, opts?: CompilerOpts) {
   }
 }
 
-function attachParser(proc: Unified.Processor) {
+function attachParser(proc: Processor) {
   function locator(value: string, fromIndex: number) {
     return value.indexOf("[", fromIndex);
   }
@@ -244,6 +246,7 @@ function attachParser(proc: Unified.Processor) {
   inlineTokenizer.locator = locator;
 
   const Parser = proc.Parser;
+  if (!Parser) return;
   const inlineTokenizers = Parser.prototype.inlineTokenizers;
   const inlineMethods = Parser.prototype.inlineMethods;
   inlineTokenizers.wikiLink = inlineTokenizer;

@@ -1,7 +1,7 @@
 import { HTML, Paragraph } from "mdast";
-import Unified, { Transformer } from "unified";
-import { Node, Position } from "unist";
-import visit from "unist-util-visit";
+import type { Transformer, Processor } from "unified";
+import { Node, Parent, Position } from "unist";
+import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
 import { DendronASTTypes } from "../types";
 import { RemarkUtils } from "./utils";
@@ -36,7 +36,7 @@ export type BacklinkOpts = {
  * @returns
  */
 export function backlinksHover(
-  this: Unified.Processor,
+  this: Processor,
   _opts?: BacklinkOpts
 ): Transformer {
   function transformer(tree: Node, _file: VFile) {
@@ -75,7 +75,7 @@ export function backlinksHover(
     // backlink to highlight it and to change its node type so that it appears
     // in its text form to the user (we don't want to convert a noteref backlink
     // into its reffed contents for example)
-    visit(tree, (node, index, parent) => {
+    visit(tree, (node: Node, index: number | undefined, parent: Node | undefined) => {
       if (!node.position) {
         return;
       }
@@ -86,7 +86,7 @@ export function backlinksHover(
         node.position.start.line > upperLineLimit
       ) {
         if (parent) {
-          parent.children.splice(index, 1);
+          (parent as Parent).children.splice(index!, 1);
           return index;
         }
       }

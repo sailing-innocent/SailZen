@@ -18,10 +18,10 @@ import {
 import _ from "lodash";
 import type { Image, Link, Root } from "mdast";
 import { paragraph, text } from "mdast-builder";
-import Unified, { Processor, Transformer } from "unified";
+import type { Processor, Transformer } from "unified";
 import { Node, Parent } from "unist";
-import u from "unist-builder";
-import visitParents from "unist-util-visit-parents";
+import { u } from "unist-builder";
+import { visitParents } from "unist-util-visit-parents";
 import { VFile } from "vfile";
 import { SiteUtils } from "../SiteUtils";
 import {
@@ -188,7 +188,7 @@ function shouldInsertTitle({ proc }: { proc: Processor }) {
   return insertTitle;
 }
 
-function plugin(this: Unified.Processor, opts?: PluginOpts): Transformer {
+function plugin(this: Processor, opts?: PluginOpts): Transformer {
   const proc = this;
   const { vault, vaults, wsRoot } = MDUtilsV5.getProcData(proc);
   const pOpts = MDUtilsV5.getProcOpts(proc);
@@ -228,11 +228,11 @@ function plugin(this: Unified.Processor, opts?: PluginOpts): Transformer {
         root.children.splice(
           idx,
           0,
-          u(DendronASTTypes.HEADING, { depth: 1 }, [u("text", note.title)])
+          u(DendronASTTypes.HEADING, { depth: 1 as const }, [u("text", note.title)]) as any
         );
       }
     }
-    visitParents(tree, (node, ancestors) => {
+    visitParents(tree, (node: Node, ancestors: Node[]) => {
       const parent = _.last(ancestors);
       if (_.isUndefined(parent) || !RemarkUtils.isParent(parent)) return; // root node
       if (node.type === DendronASTTypes.HASHTAG) {
@@ -537,7 +537,7 @@ function plugin(this: Unified.Processor, opts?: PluginOpts): Transformer {
           const targetIndex = _.indexOf(grandParent.children, target);
           const targetWrapper = paragraph([
             anchorHTML,
-            grandParent.children[targetIndex],
+            grandParent.children[targetIndex] as any,
           ]);
           grandParent.children.splice(targetIndex, 1, targetWrapper);
         }

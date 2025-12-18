@@ -16,7 +16,7 @@ import raw from "rehype-raw";
 import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import rehypeMermaid from "rehype-mermaid";
-import remark from "remark";
+import { remark } from "remark";
 import abbrPlugin from "remark-abbr";
 import remarkGfm from "remark-gfm";
 import frontmatterPlugin from "remark-frontmatter";
@@ -46,7 +46,7 @@ export class MDUtilsV5Web {
   public static procRehypeWeb(
     data: Omit<ProcDataFullOptsV5, "dest">,
     opts?: { flavor?: ProcFlavor }
-  ): Processor<remark.PartialRemarkOptions> {
+  ): Processor<any> {
     const proc = this._procRehype(
       { mode: ProcMode.FULL, parseOnly: false, flavor: opts?.flavor },
       data
@@ -63,11 +63,11 @@ export class MDUtilsV5Web {
   ) {
     const errors: DendronError[] = [];
     opts = _.defaults(opts, { flavor: ProcFlavor.REGULAR });
-    let proc = remark()
+    let proc = (remark() as any)
       .use(remarkParse, { gfm: true })
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
-      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } })
+      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } } as any)
       // .use(noteRefsV2) TODO: Add in note ref functionalit
       .use(blockAnchors)
       .use(hashtags)
@@ -77,10 +77,10 @@ export class MDUtilsV5Web {
       .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
       .use(wikiLinks)
-      .data("errors", errors);
+      .data("errors" as any, errors) as any;
 
     // set options and do validation
-    proc = MDUtilsV5.setProcOpts(proc, opts);
+    proc = MDUtilsV5.setProcOpts(proc as any, opts) as any;
 
     switch (opts.mode) {
       case ProcMode.FULL:
@@ -95,10 +95,10 @@ export class MDUtilsV5Web {
           const note = data.noteToRender;
 
           if (!_.isUndefined(note)) {
-            proc = proc.data("fm", MDUtilsV5.getFM({ note }));
+            proc = proc.data("fm" as any, MDUtilsV5.getFM({ note }));
           }
 
-          MDUtilsV5.setProcData(proc, data);
+          MDUtilsV5.setProcData(proc as any, data);
 
           // NOTE: order matters. this needs to appear before `dendronPub`
           if (data.dest === DendronASTDest.HTML) {
@@ -107,7 +107,7 @@ export class MDUtilsV5Web {
               _.isUndefined(data.wikiLinksOpts?.convertLinks) ||
               data.wikiLinksOpts?.convertLinks
             ) {
-              proc = proc.use(hierarchies).use(backlinks);
+              proc = proc.use(hierarchies).use(backlinks) as any;
             }
           }
           // Add flavor specific plugins. These need to come before `dendronPub`
@@ -122,7 +122,7 @@ export class MDUtilsV5Web {
             opts.flavor === ProcFlavor.HOVER_PREVIEW ||
             opts.flavor === ProcFlavor.BACKLINKS_PANEL_HOVER
           ) {
-            proc = proc.use(dendronHoverPreview);
+            proc = proc.use(dendronHoverPreview) as any;
           }
           // add additional plugins
           // TODO: Add back note ref functionality:
@@ -149,7 +149,7 @@ export class MDUtilsV5Web {
             insertTitle,
             transformNoPublish: opts.flavor === ProcFlavor.PUBLISHING,
             ...data.publishOpts,
-          });
+          }) as any;
 
           // const shouldApplyPublishRules =
           //   MDUtilsV5.shouldApplyPublishingRules(proc);
@@ -161,7 +161,7 @@ export class MDUtilsV5Web {
           //   proc = proc.use(mermaid, { simple: true });
           // }
 
-          proc = proc.use(math);
+          proc = proc.use(math) as any;
 
           // Add remaining flavor specific plugins
           if (opts.flavor === ProcFlavor.PUBLISHING) {
@@ -199,12 +199,12 @@ export class MDUtilsV5Web {
       .use(rehypePrism, { ignoreMissing: true })
       .use(rehypeMermaid, { strategy: "pre-mermaid" })
       .use(raw)
-      .use(slug);
+      .use(slug) as any;
 
     // apply plugins enabled by config
     // const config = data?.engine?.config as IntermediateDendronConfig;
     const shouldApplyPublishRules =
-      MDUtilsV5.shouldApplyPublishingRules(pRehype);
+      MDUtilsV5.shouldApplyPublishingRules(pRehype as any);
 
     // if (ConfigUtils.getEnableKatex(config, shouldApplyPublishRules)) {
     //   pRehype = pRehype.use(katex);

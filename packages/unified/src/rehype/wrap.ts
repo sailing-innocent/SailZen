@@ -1,6 +1,6 @@
 import type { Processor, Plugin } from "unified";
-import visit from "unist-util-visit";
-import type { Node } from "unist";
+import { visit } from "unist-util-visit";
+import type { Node, Parent } from "unist";
 // @ts-ignore
 import type { HastNode } from "hast-util-select";
 // @ts-ignore
@@ -19,7 +19,7 @@ const plugin: Plugin<[PluginOpts]> = function plugin(this: Processor, opts) {
     const root = tree as HastNode;
     for (const match of selectAll(opts.selector, root)) {
       const wrapper = parseSelector(opts.wrapper);
-      visit(tree, match, (node, i, parent) => {
+      visit(tree, match, (node: Node, i: number, parent: Parent | undefined) => {
         wrapper.children = [node];
         if (parent) {
           parent.children[i] = wrapper;

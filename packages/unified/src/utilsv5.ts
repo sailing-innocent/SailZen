@@ -25,7 +25,7 @@ import raw from "rehype-raw";
 import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
 import rehypeMermaid from "rehype-mermaid";
-import remark from "remark";
+import { remark } from "remark";
 import abbrPlugin from "remark-abbr";
 import remarkGfm from "remark-gfm";
 import frontmatterPlugin from "remark-frontmatter";
@@ -211,13 +211,13 @@ export class MDUtilsV5 {
   }
 
   static getProcOpts(proc: Processor): ProcOptsV5 {
-    const _data = proc.data("dendronProcOptsv5") as ProcOptsV5;
-    return _data || {};
+    const _data = (proc.data("dendronProcOptsv5" as any) as ProcOptsV5 | undefined);
+    return (_data || {}) as ProcOptsV5;
   }
 
   static getProcData(proc: Processor): ProcDataFullV5 {
-    const _data = proc.data("dendronProcDatav5") as ProcDataFullV5;
-    return _data || {};
+    const _data = (proc.data("dendronProcDatav5" as any) as ProcDataFullV5 | undefined);
+    return (_data || {}) as ProcDataFullV5;
   }
 
   static setNoteRefLvl(proc: Processor, lvl: number) {
@@ -225,13 +225,13 @@ export class MDUtilsV5 {
   }
 
   static setProcData(proc: Processor, opts: Partial<ProcDataFullV5>) {
-    const _data = proc.data("dendronProcDatav5") as ProcDataFullV5;
-    return proc.data("dendronProcDatav5", { ..._data, ...opts });
+    const _data = (proc.data("dendronProcDatav5" as any) as ProcDataFullV5 | undefined) || {};
+    return proc.data("dendronProcDatav5" as any, { ..._data, ...opts });
   }
 
   static setProcOpts(proc: Processor, opts: ProcOptsV5) {
-    const _data = proc.data("dendronProcOptsv5") as ProcOptsV5;
-    return proc.data("dendronProcOptsv5", { ..._data, ...opts });
+    const _data = (proc.data("dendronProcOptsv5" as any) as ProcOptsV5 | undefined) || {};
+    return proc.data("dendronProcOptsv5" as any, { ..._data, ...opts });
   }
 
   static isV5Active(proc: Processor) {
@@ -267,11 +267,11 @@ export class MDUtilsV5 {
   ) {
     const errors: DendronError[] = [];
     opts = _.defaults(opts, { flavor: ProcFlavor.REGULAR });
-    let proc = remark()
+    let proc = (remark() as any)
       .use(remarkParse, { gfm: true })
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
-      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } })
+      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } } as any)
       .use(noteRefsV2)
       .use(blockAnchors)
       .use(hashtags)
@@ -280,7 +280,7 @@ export class MDUtilsV5 {
       .use(remarkGfm)
       .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
-      .data("errors", errors);
+      .data("errors" as any, errors) as any;
 
     //do not convert wikilinks if convertLinks set to false. Used by gdoc export pod. It uses HTMLPublish pod to do the md-->html conversion
     if (
@@ -291,7 +291,7 @@ export class MDUtilsV5 {
     }
 
     // set options and do validation
-    proc = this.setProcOpts(proc, opts);
+    proc = this.setProcOpts(proc as any, opts) as any;
 
     switch (opts.mode) {
       case ProcMode.FULL:
@@ -315,10 +315,10 @@ export class MDUtilsV5 {
           const note = data.noteToRender;
 
           if (!_.isUndefined(note)) {
-            proc = proc.data("fm", this.getFM({ note }));
+            proc = proc.data("fm" as any, this.getFM({ note }));
           }
 
-          this.setProcData(proc, data as ProcDataFullV5);
+          this.setProcData(proc as any, data as ProcDataFullV5);
 
           // NOTE: order matters. this needs to appear before `dendronPub`
           if (data.dest === DendronASTDest.HTML) {
@@ -327,7 +327,7 @@ export class MDUtilsV5 {
               _.isUndefined(data.wikiLinksOpts?.convertLinks) ||
               data.wikiLinksOpts?.convertLinks
             ) {
-              proc = proc.use(hierarchies).use(backlinks);
+              proc = proc.use(hierarchies).use(backlinks) as any;
             }
           }
           // Add flavor specific plugins. These need to come before `dendronPub`
@@ -342,7 +342,7 @@ export class MDUtilsV5 {
             opts.flavor === ProcFlavor.HOVER_PREVIEW ||
             opts.flavor === ProcFlavor.BACKLINKS_PANEL_HOVER
           ) {
-            proc = proc.use(dendronHoverPreview);
+            proc = proc.use(dendronHoverPreview) as any;
           }
           // add additional plugins
           const isNoteRef = !_.isUndefined((data as ProcDataFullV5).noteRefLvl);
@@ -351,7 +351,7 @@ export class MDUtilsV5 {
             insertTitle = false;
           } else {
             const shouldApplyPublishRules =
-              MDUtilsV5.shouldApplyPublishingRules(proc);
+              MDUtilsV5.shouldApplyPublishingRules(proc as any);
             insertTitle = ConfigUtils.getEnableFMTitle(
               data.config,
               shouldApplyPublishRules
@@ -365,13 +365,13 @@ export class MDUtilsV5 {
             insertTitle,
             transformNoPublish: opts.flavor === ProcFlavor.PUBLISHING,
             ...data.publishOpts,
-          });
+          }) as any;
 
           const shouldApplyPublishRules =
-            MDUtilsV5.shouldApplyPublishingRules(proc);
+            MDUtilsV5.shouldApplyPublishingRules(proc as any);
 
           if (ConfigUtils.getEnableKatex(config, shouldApplyPublishRules)) {
-            proc = proc.use(math);
+            proc = proc.use(math) as any;
           }
           // Add remaining flavor specific plugins
           if (opts.flavor === ProcFlavor.PUBLISHING) {
@@ -397,12 +397,12 @@ export class MDUtilsV5 {
         }
 
         // backwards compatibility, default to v4 values
-        this.setProcData(proc, data as ProcDataFullV5);
+        this.setProcData(proc as any, data as ProcDataFullV5);
 
         // add additional plugins
         const config = data.config as DendronConfig;
         const shouldApplyPublishRules =
-          MDUtilsV5.shouldApplyPublishingRules(proc);
+          MDUtilsV5.shouldApplyPublishingRules(proc as any);
 
         if (ConfigUtils.getEnableKatex(config, shouldApplyPublishRules)) {
           proc = proc.use(math);
@@ -431,7 +431,7 @@ export class MDUtilsV5 {
       .use(rehypeMermaid, { strategy: "pre-mermaid" })
       .use(wrap, { selector: "table", wrapper: "div.table-responsive" })
       .use(raw)
-      .use(slug);
+      .use(slug) as any;
 
     // apply plugins enabled by config
     const shouldApplyPublishRules =
@@ -439,7 +439,7 @@ export class MDUtilsV5 {
 
     const { insideNoteRef } = data;
     if (ConfigUtils.getEnableKatex(data.config, shouldApplyPublishRules)) {
-      pRehype = pRehype.use(katex);
+      pRehype = pRehype.use(katex) as any;
     }
     // apply publishing specific things, don't use anchor headings in note refs
     if (shouldApplyPublishRules && !insideNoteRef) {

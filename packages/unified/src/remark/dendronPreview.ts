@@ -1,9 +1,9 @@
 import { vault2Path } from "@saili/common-all";
 import _ from "lodash";
 import { Image, Link, Text } from "mdast";
-import Unified, { Transformer } from "unified";
-import { Node } from "unist";
-import visit from "unist-util-visit";
+import type { Transformer, Processor } from "unified";
+import { Node, Parent } from "unist";
+import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
 import { AnchorUtils, RemarkUtils } from ".";
 import { DendronASTTypes, HashTag, ZDocTag, WikiLinkNoteV4 } from "../types";
@@ -17,7 +17,7 @@ export function makeImageUrlFullPath({
   proc,
   node,
 }: {
-  proc: Unified.Processor;
+  proc: Processor;
   node: Image;
 }) {
   // ignore web images
@@ -40,7 +40,7 @@ function modifyWikilinkValueToCommandUri({
   proc,
   node,
 }: {
-  proc: Unified.Processor;
+  proc: Processor;
   node: WikiLinkNoteV4;
 }) {
   const { vault } = MDUtilsV5.getProcData(proc);
@@ -67,7 +67,7 @@ function modifyTagValueToCommandUri({
   proc,
   node,
 }: {
-  proc: Unified.Processor;
+  proc: Processor;
   node: ZDocTag | HashTag;
 }) {
   const { vault } = MDUtilsV5.getProcData(proc);
@@ -94,7 +94,7 @@ function modifyTagValueToCommandUri({
 }
 
 export function dendronHoverPreview(
-  this: Unified.Processor,
+  this: Processor,
   _opts?: PluginOpts
 ): Transformer {
   const proc = this;
@@ -109,11 +109,11 @@ export function dendronHoverPreview(
         DendronASTTypes.ZDOCTAG,
         DendronASTTypes.HASHTAG,
       ],
-      (node, index, parent) => {
+      (node: Node, index: number | undefined, parent: Node | undefined) => {
         // Remove the frontmatter because it will break the output
         if (RemarkUtils.isFrontmatter(node) && parent) {
           // Remove this node
-          parent.children.splice(index, 1);
+          (parent as Parent).children.splice(index!, 1);
           // Since this removes the frontmatter node, the next node to visit is at the same index.
           return index;
         }

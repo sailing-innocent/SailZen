@@ -14,7 +14,7 @@ import {
 } from "@saili/common-all";
 import _ from "lodash";
 import { Data, Node } from "unist";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import {
   DendronASTTypes,
   HashTag,
@@ -107,11 +107,11 @@ async function getBacklinkDependencies(
  * @param ast the syntax tree to look for dependencies
  * @returns an array of fname-vault? combinations that this tree depends on.
  */
-function getNoteDependencies(ast: Node<Data>): DNodeCompositeKey[] {
+function getNoteDependencies(ast: Node): DNodeCompositeKey[] {
   const renderDependencies: DNodeCompositeKey[] = [];
 
   visit(
-    ast,
+    ast as any,
     [DendronASTTypes.WIKI_LINK],
     (wikilink: WikiLinkNoteV4, _index) => {
       renderDependencies.push({
@@ -121,13 +121,13 @@ function getNoteDependencies(ast: Node<Data>): DNodeCompositeKey[] {
     }
   );
 
-  visit(ast, [DendronASTTypes.HASHTAG], (hashtag: HashTag, _index) => {
+  visit(ast as any, [DendronASTTypes.HASHTAG], (hashtag: HashTag, _index) => {
     renderDependencies.push({
       fname: hashtag.fname,
     });
   });
 
-  visit(ast, [DendronASTTypes.ZDOCTAG], (noteRef: ZDocTag, _index) => {
+  visit(ast as any, [DendronASTTypes.ZDOCTAG], (noteRef: ZDocTag, _index) => {
     renderDependencies.push({
       fname: noteRef.fname,
     });
@@ -144,14 +144,14 @@ function getNoteDependencies(ast: Node<Data>): DNodeCompositeKey[] {
  * @returns an array of fname-vault? combinations that this tree depends on.
  */
 async function getRecursiveNoteDependencies(
-  ast: Node<Data>,
+  ast: Node,
   engine: ReducedDEngine
 ): Promise<DNodeCompositeKey[]> {
   const renderDependencies: DNodeCompositeKey[] = [];
   const wildCards: { fname: string; vaultName?: string }[] = [];
 
   visit(
-    ast,
+    ast as any,
     [DendronASTTypes.REF_LINK_V2],
     (noteRef: NoteRefNoteV4, _index) => {
       if (noteRef.data.link.from.fname.endsWith("*")) {

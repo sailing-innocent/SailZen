@@ -1,7 +1,8 @@
 import _ from "lodash";
 import { DendronError } from "@saili/common-all";
-import { Eat } from "remark-parse";
-import Unified, { Plugin } from "unified";
+// @ts-ignore - Eat type is not exported from remark-parse
+type Eat = any;
+import type { Plugin, Processor } from "unified";
 import { DendronASTDest, DendronASTTypes, ExtendedImage } from "../types";
 import { Element } from "hast";
 import { html } from "mdast-builder";
@@ -27,7 +28,7 @@ export const matchExtendedImage = (
 type PluginOpts = {};
 
 const plugin: Plugin<[PluginOpts?]> = function (
-  this: Unified.Processor,
+  this: Processor,
   opts?: PluginOpts
 ) {
   attachParser(this);
@@ -36,7 +37,7 @@ const plugin: Plugin<[PluginOpts?]> = function (
   }
 };
 
-function attachParser(proc: Unified.Processor) {
+function attachParser(proc: Processor) {
   function locator(value: string, fromIndex: number) {
     return value.indexOf("!", fromIndex);
   }
@@ -66,14 +67,16 @@ function attachParser(proc: Unified.Processor) {
   inlineTokenizer.locator = locator;
 
   const Parser = proc.Parser;
+  if (!Parser) return;
   const inlineTokenizers = Parser.prototype.inlineTokenizers;
   const inlineMethods = Parser.prototype.inlineMethods;
   inlineTokenizers.extendedImage = inlineTokenizer;
   inlineMethods.splice(inlineMethods.indexOf("link"), 0, "extendedImage");
 }
 
-function attachCompiler(proc: Unified.Processor, _opts?: PluginOpts) {
+function attachCompiler(proc: Processor, _opts?: PluginOpts) {
   const Compiler = proc.Compiler;
+  if (!Compiler) return;
   const visitors = Compiler.prototype.visitors;
 
   if (visitors) {
@@ -134,7 +137,7 @@ export function extendedImage2htmlRaw(node: ExtendedImage, _opts?: PluginOpts) {
   return `<img ${nodePropsList.join(" ")} style="${stylesList.join("")}">`;
 }
 
-export function extendedImage2html(node: ExtendedImage, opts?: PluginOpts) {
+export function extendedImage2html(node: ExtendedImage, opts?: PluginOpts): ReturnType<typeof html> {
   return html(extendedImage2htmlRaw(node, opts));
 }
 

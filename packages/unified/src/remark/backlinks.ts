@@ -2,16 +2,16 @@ import { ConfigUtils, NoteDictsUtils, VaultUtils } from "@saili/common-all";
 import _ from "lodash";
 import { Content, Root } from "mdast";
 import { list, listItem, paragraph } from "mdast-builder";
-import Unified, { Plugin } from "unified";
+import type { Plugin, Processor } from "unified";
 import { Node } from "unist";
-import u from "unist-builder";
+import { u } from "unist-builder";
 import { SiteUtils } from "../SiteUtils";
 import { DendronASTDest, DendronASTTypes, WikiLinkNoteV4 } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
 
 // Plugin that adds backlinks at the end of each page if they exist
 // eslint-disable-next-line func-names
-const plugin: Plugin = function (this: Unified.Processor) {
+const plugin: Plugin = function (this: Processor) {
   const proc = this;
   function transformer(tree: Node): void {
     const root = tree as Root;
@@ -129,7 +129,7 @@ const plugin: Plugin = function (this: Unified.Processor) {
                   vaultName: mdLink.from.vaultName!,
                 },
                 children: [],
-              } as WikiLinkNoteV4)
+              } as WikiLinkNoteV4 as any)
             );
           })
         ) as Content

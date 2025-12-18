@@ -35,6 +35,7 @@
     "js-yaml": "^4.1.1",
     "lodash": "catalog:",
     "mdast-builder": "^1.1.1",
+    "mdast-util-to-string": "^3.2.0",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-katex": "^7.0.1",
     "rehype-mermaid": "^3.0.0",
@@ -56,7 +57,8 @@
     "unist-util-visit": "^5.0.0",
     "unist-util-visit-parents": "^6.0.2",
     "vfile": "^6.0.3",
-    "vscode-uri": "^3.1.0"
+    "vscode-uri": "^3.1.0",
+    "yaml-unist-parser": "^3.1.0"
   },
   "devDependencies": {
     "@types/hast": "^3.0.4",
@@ -65,6 +67,7 @@
     "@types/lodash": "catalog:",
     "@types/mdast": "^4.0.4",
     "@types/node": "catalog:",
+    "@types/remark-abbr": "^1.4.4",
     "@types/unist": "^3.0.3",
     "cross-env": "^10.1.0",
     "jest": "catalog:",

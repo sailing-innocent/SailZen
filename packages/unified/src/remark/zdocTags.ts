@@ -8,8 +8,9 @@ import {
   ZDOCS_TAG_SUFFIX_REGEX
 } from "@saili/common-all";
 import { Element } from "hast";
-import { Eat } from "remark-parse";
-import Unified, { Plugin } from "unified";
+// @ts-ignore - Eat type is not exported from remark-parse
+type Eat = any;
+import type { Plugin, Processor } from "unified";
 import { SiteUtils } from "../SiteUtils";
 import { DendronASTDest, DendronASTTypes, HashTag } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
@@ -56,7 +57,7 @@ export class ZDocTagUtils {
 type PluginOpts = {};
 
 const plugin: Plugin<[PluginOpts?]> = function plugin(
-  this: Unified.Processor,
+  this: Processor,
   opts?: PluginOpts
 ) {
   attachParser(this);
@@ -65,7 +66,7 @@ const plugin: Plugin<[PluginOpts?]> = function plugin(
   }
 };
 
-function attachParser(proc: Unified.Processor) {
+function attachParser(proc: Processor) {
   function locator(value: string, fromIndex: number) {
     // Do not locate a symbol if the previous character is non-whitespace.
     // Unified cals tokenizer starting at the index we return here,
@@ -104,14 +105,16 @@ function attachParser(proc: Unified.Processor) {
   inlineTokenizer.locator = locator;
 
   const Parser = proc.Parser;
+  if (!Parser) return;
   const inlineTokenizers = Parser.prototype.inlineTokenizers;
   const inlineMethods = Parser.prototype.inlineMethods;
   inlineTokenizers.users = inlineTokenizer;
   inlineMethods.splice(inlineMethods.indexOf("link"), 0, ZDOCS_HIERARCHY_BASE);
 }
 
-function attachCompiler(proc: Unified.Processor, _opts?: PluginOpts) {
+function attachCompiler(proc: Processor, _opts?: PluginOpts) {
   const Compiler = proc.Compiler;
+  if (!Compiler) return;
   const visitors = Compiler.prototype.visitors;
 
   if (visitors) {

@@ -23,8 +23,9 @@ import {
 import _ from "lodash";
 import { Heading } from "mdast";
 import { html, paragraph, root } from "mdast-builder";
-import { Eat } from "remark-parse";
-import Unified, { Plugin, Processor } from "unified";
+// @ts-ignore - Eat type is not exported from remark-parse
+type Eat = any;
+import type { Plugin, Processor } from "unified";
 import { Data, Node, Parent } from "unist";
 import { MdastUtils } from "..";
 import { RemarkUtils } from "../remark";
@@ -52,7 +53,7 @@ type CompilerOpts = {
 
 type ConvertNoteRefOpts = {
   link: DNoteRefLink;
-  proc: Unified.Processor;
+  proc: Processor;
   compilerOpts: CompilerOpts;
 };
 
@@ -157,7 +158,7 @@ function shouldRenderPretty({ proc }: { proc: Processor }): boolean {
   return prettyRefs;
 }
 
-const plugin: Plugin = function (this: Unified.Processor, opts?: PluginOpts) {
+const plugin: Plugin = function (this: Processor, opts?: PluginOpts) {
   const procOptsV5 = MDUtilsV5.getProcOpts(this);
 
   attachParser(this);
@@ -166,7 +167,7 @@ const plugin: Plugin = function (this: Unified.Processor, opts?: PluginOpts) {
   }
 };
 
-function attachParser(proc: Unified.Processor) {
+function attachParser(proc: Processor) {
   function locator(value: string, fromIndex: number) {
     return value.indexOf("![[", fromIndex);
   }
@@ -209,6 +210,7 @@ function attachParser(proc: Unified.Processor) {
   inlineTokenizerV5.locator = locator;
 
   const Parser = proc.Parser;
+  if (!Parser) return;
   const inlineTokenizers = Parser.prototype.inlineTokenizers;
   const inlineMethods = Parser.prototype.inlineMethods;
 
@@ -217,8 +219,9 @@ function attachParser(proc: Unified.Processor) {
   return Parser;
 }
 
-function attachCompiler(proc: Unified.Processor, _opts?: CompilerOpts) {
+function attachCompiler(proc: Processor, _opts?: CompilerOpts) {
   const Compiler = proc.Compiler;
+  if (!Compiler) return;
   const visitors = Compiler.prototype.visitors;
   const { dest } = MDUtilsV5.getProcData(proc);
 
@@ -259,7 +262,7 @@ export function convertNoteRefToHAST(
     ref: DNoteLoc,
     note: NoteProps,
     fname: string
-  ): Parent<Node<any>, any> {
+  ): Parent {
     try {
       if (
         shouldApplyPublishRules &&
@@ -359,7 +362,7 @@ export function convertNoteRefToHAST(
 
         return prettyHAST;
       } else {
-        return paragraph(noteRefMDAST);
+        return paragraph(noteRefMDAST as any);
       }
     } catch (err) {
       const msg = `Error rendering note reference for ${note?.fname}`;
@@ -760,9 +763,9 @@ function convertNoteRefToMDAST(
       config,
     },
     MDUtilsV5.getProcOpts(proc)
-  );
+  ) as any;
 
-  noteRefProc = noteRefProc.data("fm", MDUtilsV5.getFM({ note }));
+  noteRefProc = noteRefProc.data("fm" as any, MDUtilsV5.getFM({ note }));
   MDUtilsV5.setNoteRefLvl(noteRefProc, refLvl);
 
   const bodyAST: DendronASTNode = noteRefProc.parse(
@@ -790,11 +793,11 @@ function convertNoteRefToMDAST(
       bodyAST.children.slice(
         (start ? start.index : 0) + anchorStartOffset,
         end ? end.index + 1 : undefined
-      )
+      ) as any
     );
     // Add all footnote definitions back. We might be adding duplicates if the definition was already in range, but rendering handles this correctly.
     // We also might be adding definitions that weren't used in this range, but rendering will simply ignore those.
-    out.children.push(...footnotes);
+    out.children.push(...(footnotes as any));
 
     const data = noteRefProc.runSync(out) as Parent;
     return {
@@ -988,7 +991,7 @@ const genRefAsIFrame = ({
   content: Parent;
   title: string;
   config: DendronConfig;
-  prettyHAST: Parent<Node<Data>, Data>;
+  prettyHAST: Parent;
 }) => {
   const refId = getRefId({ id: noteId, link });
   // cache it for later generation?
@@ -1032,7 +1035,7 @@ function renderPrettyHAST(opts: {
   content: Parent;
   title: string;
   link?: string;
-}): Parent<Node<Data>, Data> {
+}): Parent {
   const { content, title } = opts;
   let { link } = opts;
   link = fixLinkIfRoot(link);
@@ -1050,7 +1053,7 @@ ${linkLine}
 <div class="portal-parent-fader-top"></div>
 <div class="portal-parent-fader-bottom"></div>`;
   const bottom = `\n</div></div>`;
-  return paragraph([html(top)].concat([content]).concat([html(bottom)]));
+  return paragraph([html(top)].concat([content as any]).concat([html(bottom)]));
 }
 
 export { plugin as noteRefsV2 };

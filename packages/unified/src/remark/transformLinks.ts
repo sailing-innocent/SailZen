@@ -1,7 +1,7 @@
 import { DNoteLoc } from "@saili/common-all";
-import Unified, { Transformer } from "unified";
+import type { Transformer, Processor } from "unified";
 import { Node } from "unist";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
 import { DendronASTTypes, NoteRefNoteV4, WikiLinkNoteV4 } from "../types";
 
@@ -13,11 +13,11 @@ type PluginOpts = {
 /**
  * Used from renaming wikilinks
  */
-function plugin(this: Unified.Processor, opts: PluginOpts): Transformer {
+function plugin(this: Processor, opts: PluginOpts): Transformer {
   // @ts-ignore
   const proc = this;
   function transformer(tree: Node, _file: VFile) {
-    visit(tree, (node, _idx, _parent) => {
+    visit(tree, (node: Node, _idx: number | undefined, _parent: Node | undefined) => {
       if (node.type === DendronASTTypes.WIKI_LINK) {
         let cnode = node as WikiLinkNoteV4;
         if (cnode.value.toLowerCase() === opts.from.fname.toLowerCase()) {

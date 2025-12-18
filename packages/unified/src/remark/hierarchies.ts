@@ -7,10 +7,10 @@ import {
 import _ from "lodash";
 import { Content, FootnoteDefinition, FootnoteReference, Root } from "mdast";
 import { heading, html, list, listItem, paragraph, text } from "mdast-builder";
-import Unified, { Plugin } from "unified";
-import { Node } from "unist";
-import u from "unist-builder";
-import visit from "unist-util-visit";
+import type { Plugin, Processor } from "unified";
+import { Node, Parent } from "unist";
+import { u } from "unist-builder";
+import { visit } from "unist-util-visit";
 import { HierarchyUtils } from "../HierarchyUtils";
 import { DendronASTDest, DendronASTTypes, WikiLinkNoteV4 } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
@@ -56,13 +56,13 @@ function footnoteDef2html(definition: FootnoteDefinition) {
     html(
       `<span id="${FOOTNOTE_DEF_ID_PREFIX}${definition.identifier}" style="width: 0; height: 0;"></span>`
     ),
-    ...definition.children,
+    ...(definition.children as any),
   ]);
 }
 
 /** Adds the "Children", "Tags", and "Footnotes" items to the end of the note. Also renders footnotes. */
 // eslint-disable-next-line func-names
-const plugin: Plugin = function (this: Unified.Processor, _opts?: PluginOpts) {
+const plugin: Plugin = function (this: Processor, _opts?: PluginOpts) {
   const proc = this;
   const { config } = MDUtilsV5.getProcData(this);
   let hierarchyDisplayTitle =
@@ -114,9 +114,9 @@ const plugin: Plugin = function (this: Unified.Processor, _opts?: PluginOpts) {
       visit(
         root,
         [DendronASTTypes.FOOTNOTE_REFERENCE],
-        (reference: FootnoteReference, index, parent) => {
+        (reference: any, index: number | undefined, parent: Parent | undefined) => {
           const definition = footnotes.get(reference.identifier);
-          if (definition && parent) {
+          if (definition && parent && index !== undefined) {
             parent.children[index] = footnote2html(reference);
             usedFootnotes.add(definition);
           }
@@ -129,7 +129,7 @@ const plugin: Plugin = function (this: Unified.Processor, _opts?: PluginOpts) {
         for (const definition of usedFootnotes) {
           footnoteItems.push(listItem(footnoteDef2html(definition)));
         }
-        root.children.push(list("ordered", footnoteItems) as Content);
+        root.children.push(list("ordered", footnoteItems as any) as Content);
       }
     }
 
@@ -173,7 +173,7 @@ const plugin: Plugin = function (this: Unified.Processor, _opts?: PluginOpts) {
           _.map(tags, (tag) =>
             listItem(
               paragraph(
-                frontmatterTag2WikiLinkNoteV4(tag, enableHashesForFMTags)
+                frontmatterTag2WikiLinkNoteV4(tag, enableHashesForFMTags) as any
               )
             )
           ),
@@ -227,7 +227,7 @@ const plugin: Plugin = function (this: Unified.Processor, _opts?: PluginOpts) {
                     vaultName: VaultUtils.getName(note.vault),
                   },
                   children: [],
-                } as WikiLinkNoteV4)
+                } as WikiLinkNoteV4 as any)
               );
             })
           ) as Content

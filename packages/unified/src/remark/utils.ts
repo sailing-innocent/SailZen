@@ -67,7 +67,7 @@ import * as mdastBuilder from "mdast-builder";
 import { Processor } from "unified";
 import { Node, Parent } from "unist";
 import { selectAll } from "unist-util-select";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
 import { SiteUtils } from "../SiteUtils";
 import {
@@ -86,7 +86,7 @@ import {
 } from "../types";
 import { MDUtilsV5, ProcFlavor, ProcMode } from "../utilsv5";
 import { getFrontmatterTags, parseFrontmatter } from "../yaml";
-import toString from "mdast-util-to-string";
+import { toString } from "mdast-util-to-string";
 
 export { select, selectAll } from "unist-util-select";
 export { mdastBuilder };
@@ -94,9 +94,9 @@ export { visit };
 export { LINK_CONTENTS, LINK_NAME, ALIAS_NAME };
 
 export function addError(proc: Processor, err: DendronError) {
-  const errors = proc.data("errors") as DendronError[];
+  const errors = (proc.data("errors" as any) as DendronError[] | undefined) || [];
   errors.push(err);
-  // no need to put errors back into proc, it's a mutable array
+  proc.data("errors" as any, errors);
 }
 
 export function getNoteOrError(
@@ -191,7 +191,7 @@ const getLinks = ({
 }) => {
   const wikiLinks: WikiLinkNoteV4[] = [];
   const noteRefs: NoteRefNoteV4[] = [];
-  visit(ast, (node) => {
+  visit(ast, (node: Node) => {
     switch (node.type) {
       case DendronASTTypes.WIKI_LINK:
         wikiLinks.push(node as WikiLinkNoteV4);
@@ -308,9 +308,9 @@ const getLinkCandidates = async ({
   engine: ReducedDEngine;
 }) => {
   const textNodes: Text[] = [];
-  visit(
-    ast,
-    [DendronASTTypes.TEXT],
+  (visit as any)(
+    ast as any,
+    [DendronASTTypes.TEXT] as any,
     (node: Text, _index: number, parent: Parent | undefined) => {
       if (parent?.type === "paragraph" || parent?.type === "tableCell") {
         textNodes.push(node);
@@ -387,9 +387,9 @@ const getLinkCandidatesSync = ({
   noteDicts: NoteDicts;
 }) => {
   const textNodes: Text[] = [];
-  visit(
-    ast,
-    [DendronASTTypes.TEXT],
+  (visit as any)(
+    ast as any,
+    [DendronASTTypes.TEXT] as any,
     (node: Text, _index: number, parent: Parent | undefined) => {
       if (parent?.type === "paragraph" || parent?.type === "tableCell") {
         textNodes.push(node);
@@ -1037,7 +1037,7 @@ export class AnchorUtils {
    */
   static headerText(header: Heading): string {
     const headerText: string[] = [];
-    visit(header, (node) => {
+    visit(header, (node: Node) => {
       switch (node.type) {
         case DendronASTTypes.TEXT:
           headerText.push((node as Text).value);
@@ -1076,7 +1076,7 @@ export class AnchorUtils {
         DendronASTTypes.HASHTAG,
         DendronASTTypes.BLOCK_ANCHOR,
       ],
-      (node) => {
+      (node: Node) => {
         if (node.type === DendronASTTypes.BLOCK_ANCHOR && end) {
           // Preserve whitespace after the header, for example `# foo ^bar`, where
           // `^bar` must be separated with a space since it's not part of the header
@@ -1223,7 +1223,7 @@ export class RemarkUtils {
     );
     const parsed = proc.parse(fileText);
     let out: Position | undefined;
-    visit(parsed, ["yaml"], (node) => {
+    visit(parsed, ["yaml"], (node: Node) => {
       if (_.isUndefined(node.position)) return false; // should never happen
       out = node.position;
       return false;
@@ -1571,9 +1571,9 @@ export class RemarkUtils {
     if (!RemarkUtils.isParent(tree)) {
       return [];
     }
-    visit(tree, (node, _index) => {
+    visit(tree, (node: Node, _index: number | undefined) => {
       // we are still before the start index
-      if (_index <= startHeaderIndex && !stopAtFirstHeader) {
+      if (_index !== undefined && _index <= startHeaderIndex && !stopAtFirstHeader) {
         return;
       }
       if (nextHeaderIndex) {
@@ -1656,13 +1656,13 @@ export class RemarkUtils {
       // Extract list items out of lists. We also extract them from nested lists,
       // because block anchors can't refer to nested lists, only items inside of them
       if (node.type === DendronASTTypes.LIST) {
-        visit(node, [DendronASTTypes.LIST_ITEM], (listItem: ListItem) => {
+        visit(node as any, [DendronASTTypes.LIST_ITEM], (listItem: ListItem) => {
           // The list item might have a block anchor inside of it.
           let anchor: DNoteAnchorPositioned | undefined;
           visit(
             listItem,
             [DendronASTTypes.BLOCK_ANCHOR, DendronASTTypes.LIST],
-            (inListItem) => {
+            (inListItem: Node) => {
               // Except if we hit a nested list, because then the block anchor refers to the item in the nested list
               if (inListItem.type === DendronASTTypes.LIST) return "skip";
               [, anchor] =
@@ -1675,7 +1675,7 @@ export class RemarkUtils {
           );
 
           blocks.push({
-            text: proc.stringify(listItem),
+            text: proc.stringify(listItem as any),
             anchor,
             // position can only be undefined for generated nodes, not for parsed ones
             position: listItem.position!,
@@ -1693,7 +1693,7 @@ export class RemarkUtils {
       } else if (node.type !== DendronASTTypes.LIST) {
         // Other nodes might have block anchors inside them
         // Except lists, because anchors inside lists only refer to specific list items
-        visit(node, [DendronASTTypes.BLOCK_ANCHOR], (child) => {
+        visit(node, [DendronASTTypes.BLOCK_ANCHOR], (child: Node) => {
           [, anchor] =
             AnchorUtils.anchorNode2anchor(child as BlockAnchor, slugger) || [];
         });
@@ -1701,7 +1701,7 @@ export class RemarkUtils {
 
       // extract the block
       blocks.push({
-        text: proc.stringify(node),
+        text: proc.stringify(node as any),
         anchor,
         // position can only be undefined for generated nodes, not for parsed ones
         position: node.position!,
@@ -1729,7 +1729,7 @@ export class RemarkUtils {
       {},
       { dest: DendronASTDest.MD_DENDRON }
     ).parse(body);
-    visit(noteAST, [DendronASTTypes.FRONTMATTER], (frontmatter: YAML) => {
+    visit(noteAST as any, [DendronASTTypes.FRONTMATTER], (frontmatter: YAML) => {
       parsed = parseFrontmatter(frontmatter);
       return false; // stop traversing, there is only one frontmatter
     });

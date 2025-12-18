@@ -34,7 +34,7 @@ import {
   warnMissingFrontmatter,
 } from "./diagnostics";
 import _ from "lodash";
-import visit from "unist-util-visit";
+import { visit } from "unist-util-visit";
 import { MdastUtils } from "..";
 
 /** Dispatches the correct decorator based on the type of AST node. */
@@ -134,7 +134,7 @@ export async function runAllDecorators(
   // Check for frontmatter diagnostics. Diagnostics always run on the whole note because they need to be active even when they are not visible.
   let frontmatter: FrontmatterContent | undefined;
   const fullTree = proc.parse(opts.text);
-  visit(fullTree, ["yaml"], (node: FrontmatterContent) => {
+  visit(fullTree as any, ["yaml"], (node: FrontmatterContent) => {
     frontmatter = node;
     return false; // stop iterating
   });

@@ -1,7 +1,8 @@
 import _ from "lodash";
 import { DendronError } from "@saili/common-all";
-import { Eat } from "remark-parse";
-import Unified, { Plugin } from "unified";
+// @ts-ignore - Eat type is not exported from remark-parse
+type Eat = any;
+import type { Plugin, Processor } from "unified";
 import { BlockAnchor, DendronASTDest } from "../types";
 import { Element } from "hast";
 import { html } from "mdast-builder";
@@ -36,7 +37,7 @@ type PluginOpts = {
 };
 
 const plugin: Plugin<[PluginOpts?]> = function (
-  this: Unified.Processor,
+  this: Processor,
   opts?: PluginOpts
 ) {
   attachParser(this);
@@ -45,7 +46,7 @@ const plugin: Plugin<[PluginOpts?]> = function (
   }
 };
 
-function attachParser(proc: Unified.Processor) {
+function attachParser(proc: Processor) {
   function locator(value: string, fromIndex: number) {
     return value.indexOf("^", fromIndex);
   }
@@ -65,14 +66,16 @@ function attachParser(proc: Unified.Processor) {
   inlineTokenizer.locator = locator;
 
   const Parser = proc.Parser;
+  if (!Parser) return;
   const inlineTokenizers = Parser.prototype.inlineTokenizers;
   const inlineMethods = Parser.prototype.inlineMethods;
   inlineTokenizers.blockAnchor = inlineTokenizer;
   inlineMethods.splice(inlineMethods.indexOf("link"), 0, "blockAnchor");
 }
 
-function attachCompiler(proc: Unified.Processor, _opts?: PluginOpts) {
+function attachCompiler(proc: Processor, _opts?: PluginOpts) {
   const Compiler = proc.Compiler;
+  if (!Compiler) return;
   const visitors = Compiler.prototype.visitors;
 
   if (visitors) {
@@ -102,7 +105,7 @@ export function blockAnchor2htmlRaw(node: BlockAnchor, _opts?: PluginOpts) {
   );
 }
 
-export function blockAnchor2html(node: BlockAnchor, opts?: PluginOpts) {
+export function blockAnchor2html(node: BlockAnchor, opts?: PluginOpts): ReturnType<typeof html> {
   return html(blockAnchor2htmlRaw(node, opts));
 }
 
