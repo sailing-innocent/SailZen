@@ -135,9 +135,27 @@
     </div>
 
     <script>
+      // Initialize component from URL hash BEFORE page renders
+      const root = document.getElementById("root");
+      const hash = window.location.hash.slice(1);
+      const validComponents = ["DendronNotePreview", "DendronCalendarPanel"];
+      
+      // Set component from hash if valid
+      if (hash && validComponents.includes(hash)) {
+        root.setAttribute("data-name", hash);
+        document.getElementById("component-select").value = hash;
+      } else {
+        // Set hash from default data-name
+        const defaultName = root.getAttribute("data-name");
+        if (defaultName) {
+          window.location.hash = defaultName;
+        }
+      }
+
       // Development toolbar functionality
       document.getElementById("component-select").addEventListener("change", function (e) {
-        document.getElementById("root").setAttribute("data-name", e.target.value);
+        // Update URL hash and reload - hash will persist across reload
+        window.location.hash = e.target.value;
         location.reload();
       });
 
@@ -153,14 +171,6 @@
         // Trigger theme change
         window.currentTheme = e.target.value;
       });
-
-      // Initialize component selector from URL hash or data attribute
-      const root = document.getElementById("root");
-      const hash = window.location.hash.slice(1);
-      if (hash) {
-        root.setAttribute("data-name", hash);
-        document.getElementById("component-select").value = hash;
-      }
 
       // Mock window.vscode for development
       window.vscode = {
