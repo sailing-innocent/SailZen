@@ -59,6 +59,12 @@
 		"watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --format=cjs --sourcemap --watch",
 		"package": "vsce package"
 	},
+	"dependencies": {
+		"@saili/api-server": "workspace:",
+		"@saili/common-all": "workspace:",
+		"@saili/common-server": "workspace:",
+		"@saili/engine-server": "workspace:"
+	},
 	"devDependencies": {
 		"@vscode/vsce": "^3.7.1",
 		"esbuild": "catalog:"
