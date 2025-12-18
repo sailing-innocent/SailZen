@@ -20,7 +20,7 @@ import { vault2Path } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import _, { orderBy } from "lodash";
 import path from "path";
-import stringSimilarity from "string-similarity";
+import { compareTwoStrings } from "../../utils/strings";
 import { QuickPickItem, TextEditor, Uri, ViewColumn, window } from "vscode";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
@@ -822,7 +822,7 @@ export function sortBySimilarity(candidates: NoteProps[], query: string) {
       // to have the similarity score cached and then sort using cached value.
       .map((cand) => ({
         cand,
-        similarityScore: stringSimilarity.compareTwoStrings(cand.fname, query),
+        similarityScore: compareTwoStrings(cand.fname, query),
       }))
       .sort((a, b) => b.similarityScore - a.similarityScore)
       .map((v) => v.cand)
