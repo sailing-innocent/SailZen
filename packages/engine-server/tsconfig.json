@@ -1,8 +1,4 @@
 {
   "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    // "paths": {
-    //   "@saili/common-server": ["node_modules/@saili/common-server"]
-    // }
-  }
+  "compilerOptions": {}
 }

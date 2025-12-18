@@ -21,10 +21,12 @@ ignoredBuiltDependencies:
   - sqlite3
 
 onlyBuiltDependencies:
+  - '@prisma/engines'
   - '@vscode/vsce-sign'
   - better-sqlite3
   - esbuild
   - keytar
   - nx
+  - prisma
   - sqlite3
   - unrs-resolver

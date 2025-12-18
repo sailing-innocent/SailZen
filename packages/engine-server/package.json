@@ -1,6 +1,7 @@
 {
   "name": "@saili/engine-server",
   "version": "0.1.0",
+  "type": "module",
   "description": "dendron-engine",
   "license": "MIT",
   "keywords": [
@@ -9,25 +10,33 @@
   "files": [
     "lib"
   ],
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
   "scripts": {
     "clean": "rimraf lib && rimraf coverage && rimraf src/drivers/generated-prisma-client",
-    "format": "echo nop",
-    "lint": "echo stub",
-    "buildPrismaClient": "yarn prisma generate && node copyPrismaClient.js",
-    "prepublishOnly": "yarn build",
-    "prebuild": "yarn clean && yarn format && yarn lint && echo Using TypeScript && tsc --version",
-    "build": "yarn compile && yarn buildPrismaClient",
-    "buildCI": "yarn compile && yarn buildPrismaClient",
-    "compile": "tsc -p tsconfig.build.json ",
-    "watch": "yarn compile --watch"
+    "prisma:generate": "prisma generate",
+    "prisma:postinstall": "ts-node --esm --transpile-only scripts/build-prisma.ts",
+    "buildPrismaClient": "pnpm prisma:generate && pnpm prisma:postinstall",
+    "prepublishOnly": "pnpm build",
+    "prebuild": "pnpm clean && pnpm format && pnpm lint && echo Using TypeScript && tsc --version",
+    "build": "pnpm compile && pnpm buildPrismaClient",
+    "buildCI": "pnpm compile && pnpm buildPrismaClient",
+    "compile": "tsc -p tsconfig.build.json",
+    "watch": "pnpm compile --watch"
   },
   "dependencies": {
     "@babel/preset-typescript": "7.28.5",
     "@babel/types": "7.28.5",
     "@jcoreio/async-throttle": "^1.7.0",
     "@mapbox/rehype-prism": "^0.9.0",
+    "@prisma/client": "6.19.1",
     "@saili/common-all": "workspace:^",
     "@saili/common-server": "workspace:^",
     "@saili/unified": "workspace:^",
@@ -37,6 +46,7 @@
     "chalk": "^5.6.2",
     "chokidar": "^5.0.0",
     "cross-path-sort": "^1.0.0",
+    "diff2html": "^3.4.52",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jest": "^29.5.0",
@@ -47,12 +57,15 @@
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
     "jest": "catalog:",
+    "js-yaml": "^4.1.1",
     "klaw": "^4.1.0",
     "lodash": "catalog:",
     "lru-cache": "^11.2.4",
+    "luxon": "^3.7.2",
     "madge": "^8.0.0",
     "prettier": "^3.7.4",
     "qs": "^6.14.0",
+    "semver": "^7.7.3",
     "spark-md5": "^3.0.2",
     "stream": "^0.0.3",
     "through2": "^4.0.2",
@@ -66,19 +79,24 @@
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
+    "@types/js-yaml": "^4.0.9",
     "@types/klaw": "^3.0.7",
     "@types/lodash": "catalog:",
+    "@types/luxon": "^3.4.2",
     "@types/mdast": "^4.0.4",
     "@types/node": "25.0.3",
+    "@types/semver": "^7.7.1",
     "@types/spark-md5": "^3.0.5",
     "@types/through2": "^2.0.41",
     "@types/unist": "^3.0.3",
+    "@types/vscode": "^1.90.0",
     "cross-env": "^10.1.0",
+    "prisma": "^6.0.0",
     "rimraf": "^6.1.2",
     "ts-node": "^10.9.2"
   },
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=18.0.0"
   },
   "publishConfig": {
     "access": "public"

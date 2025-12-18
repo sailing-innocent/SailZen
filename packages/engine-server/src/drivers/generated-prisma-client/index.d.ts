@@ -3,78 +3,35 @@
  * Client
 **/
 
-import * as runtime from './runtime/library';
+import * as runtime from './runtime/library.js';
 import $Types = runtime.Types // general types
 import $Public = runtime.Types.Public
 import $Utils = runtime.Types.Utils
 import $Extensions = runtime.Types.Extensions
+import $Result = runtime.Types.Result
 
 export type PrismaPromise<T> = $Public.PrismaPromise<T>
 
-
-export type NotePayload<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-  name: "Note"
-  objects: {
-    vault: DVaultPayload<ExtArgs>
-  }
-  scalars: $Extensions.GetResult<{
-    id: string
-    fname: string | null
-    title: string | null
-    updated: number | null
-    created: number | null
-    stub: boolean | null
-    dVaultId: number
-  }, ExtArgs["result"]["note"]>
-  composites: {}
-}
 
 /**
  * Model Note
  * 
  */
-export type Note = runtime.Types.DefaultSelection<NotePayload>
-export type DVaultPayload<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-  name: "DVault"
-  objects: {
-    workspace: WorkspacePayload<ExtArgs>
-    Note: NotePayload<ExtArgs>[]
-  }
-  scalars: $Extensions.GetResult<{
-    id: number
-    name: string | null
-    fsPath: string
-    wsRoot: string
-  }, ExtArgs["result"]["dVault"]>
-  composites: {}
-}
-
+export type Note = $Result.DefaultSelection<Prisma.$NotePayload>
 /**
  * Model DVault
  * 
  */
-export type DVault = runtime.Types.DefaultSelection<DVaultPayload>
-export type WorkspacePayload<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-  name: "Workspace"
-  objects: {
-    vaults: DVaultPayload<ExtArgs>[]
-  }
-  scalars: $Extensions.GetResult<{
-    wsRoot: string
-    prismaSchemaVersion: number
-  }, ExtArgs["result"]["workspace"]>
-  composites: {}
-}
-
+export type DVault = $Result.DefaultSelection<Prisma.$DVaultPayload>
 /**
  * Model Workspace
  * 
  */
-export type Workspace = runtime.Types.DefaultSelection<WorkspacePayload>
+export type Workspace = $Result.DefaultSelection<Prisma.$WorkspacePayload>
 
 /**
  * ##  Prisma Client ʲˢ
- * 
+ *
  * Type-safe database client for TypeScript & Node.js
  * @example
  * ```
@@ -83,22 +40,19 @@ export type Workspace = runtime.Types.DefaultSelection<WorkspacePayload>
  * const notes = await prisma.note.findMany()
  * ```
  *
- * 
+ *
  * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
  */
 export class PrismaClient<
-  T extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions,
-  U = 'log' extends keyof T ? T['log'] extends Array<Prisma.LogLevel | Prisma.LogDefinition> ? Prisma.GetEvents<T['log']> : never : never,
-  GlobalReject extends Prisma.RejectOnNotFound | Prisma.RejectPerOperation | false | undefined = 'rejectOnNotFound' extends keyof T
-    ? T['rejectOnNotFound']
-    : false,
-  ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs
+  ClientOptions extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions,
+  const U = 'log' extends keyof ClientOptions ? ClientOptions['log'] extends Array<Prisma.LogLevel | Prisma.LogDefinition> ? Prisma.GetEvents<ClientOptions['log']> : never : never,
+  ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs
 > {
   [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['other'] }
 
     /**
    * ##  Prisma Client ʲˢ
-   * 
+   *
    * Type-safe database client for TypeScript & Node.js
    * @example
    * ```
@@ -107,29 +61,22 @@ export class PrismaClient<
    * const notes = await prisma.note.findMany()
    * ```
    *
-   * 
+   *
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
    */
 
-  constructor(optionsArg ?: Prisma.Subset<T, Prisma.PrismaClientOptions>);
-  $on<V extends (U | 'beforeExit')>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : V extends 'beforeExit' ? () => Promise<void> : Prisma.LogEvent) => void): void;
+  constructor(optionsArg ?: Prisma.Subset<ClientOptions, Prisma.PrismaClientOptions>);
+  $on<V extends U>(eventType: V, callback: (event: V extends 'query' ? Prisma.QueryEvent : Prisma.LogEvent) => void): PrismaClient;
 
   /**
    * Connect with the database
    */
-  $connect(): Promise<void>;
+  $connect(): $Utils.JsPromise<void>;
 
   /**
    * Disconnect from the database
    */
-  $disconnect(): Promise<void>;
-
-  /**
-   * Add a middleware
-   * @deprecated since 4.16.0. For new code, prefer client extensions instead.
-   * @see https://pris.ly/d/extensions
-   */
-  $use(cb: Prisma.Middleware): void
+  $disconnect(): $Utils.JsPromise<void>;
 
 /**
    * Executes a prepared raw query and returns the number of affected rows.
@@ -137,7 +84,7 @@ export class PrismaClient<
    * ```
    * const result = await prisma.$executeRaw`UPDATE User SET cool = ${true} WHERE email = ${'user@email.com'};`
    * ```
-   * 
+   *
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
    */
   $executeRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<number>;
@@ -149,7 +96,7 @@ export class PrismaClient<
    * ```
    * const result = await prisma.$executeRawUnsafe('UPDATE User SET cool = $1 WHERE email = $2 ;', true, 'user@email.com')
    * ```
-   * 
+   *
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
    */
   $executeRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<number>;
@@ -160,7 +107,7 @@ export class PrismaClient<
    * ```
    * const result = await prisma.$queryRaw`SELECT * FROM User WHERE id = ${1} OR email = ${'user@email.com'};`
    * ```
-   * 
+   *
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
    */
   $queryRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<T>;
@@ -172,10 +119,11 @@ export class PrismaClient<
    * ```
    * const result = await prisma.$queryRawUnsafe('SELECT * FROM User WHERE id = $1 OR email = $2;', 1, 'user@email.com')
    * ```
-   * 
+   *
    * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
    */
   $queryRawUnsafe<T = unknown>(query: string, ...values: any[]): Prisma.PrismaPromise<T>;
+
 
   /**
    * Allows the running of a sequence of read/write operations that are guaranteed to either succeed or fail as a whole.
@@ -190,12 +138,14 @@ export class PrismaClient<
    * 
    * Read more in our [docs](https://www.prisma.io/docs/concepts/components/prisma-client/transactions).
    */
-  $transaction<P extends Prisma.PrismaPromise<any>[]>(arg: [...P], options?: { isolationLevel?: Prisma.TransactionIsolationLevel }): Promise<runtime.Types.Utils.UnwrapTuple<P>>
+  $transaction<P extends Prisma.PrismaPromise<any>[]>(arg: [...P], options?: { isolationLevel?: Prisma.TransactionIsolationLevel }): $Utils.JsPromise<runtime.Types.Utils.UnwrapTuple<P>>
 
-  $transaction<R>(fn: (prisma: Omit<PrismaClient, runtime.ITXClientDenyList>) => Promise<R>, options?: { maxWait?: number, timeout?: number, isolationLevel?: Prisma.TransactionIsolationLevel }): Promise<R>
+  $transaction<R>(fn: (prisma: Omit<PrismaClient, runtime.ITXClientDenyList>) => $Utils.JsPromise<R>, options?: { maxWait?: number, timeout?: number, isolationLevel?: Prisma.TransactionIsolationLevel }): $Utils.JsPromise<R>
 
 
-  $extends: $Extensions.ExtendsHook<'extends', Prisma.TypeMapCb, ExtArgs>
+  $extends: $Extensions.ExtendsHook<"extends", Prisma.TypeMapCb<ClientOptions>, ExtArgs, $Utils.Call<Prisma.TypeMapCb<ClientOptions>, {
+    extArgs: ExtArgs
+  }>>
 
       /**
    * `prisma.note`: Exposes CRUD operations for the **Note** model.
@@ -205,7 +155,7 @@ export class PrismaClient<
     * const notes = await prisma.note.findMany()
     * ```
     */
-  get note(): Prisma.NoteDelegate<GlobalReject, ExtArgs>;
+  get note(): Prisma.NoteDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.dVault`: Exposes CRUD operations for the **DVault** model.
@@ -215,7 +165,7 @@ export class PrismaClient<
     * const dVaults = await prisma.dVault.findMany()
     * ```
     */
-  get dVault(): Prisma.DVaultDelegate<GlobalReject, ExtArgs>;
+  get dVault(): Prisma.DVaultDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.workspace`: Exposes CRUD operations for the **Workspace** model.
@@ -225,7 +175,7 @@ export class PrismaClient<
     * const workspaces = await prisma.workspace.findMany()
     * ```
     */
-  get workspace(): Prisma.WorkspaceDelegate<GlobalReject, ExtArgs>;
+  get workspace(): Prisma.WorkspaceDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -246,7 +196,6 @@ export namespace Prisma {
   export import PrismaClientRustPanicError = runtime.PrismaClientRustPanicError
   export import PrismaClientInitializationError = runtime.PrismaClientInitializationError
   export import PrismaClientValidationError = runtime.PrismaClientValidationError
-  export import NotFoundError = runtime.NotFoundError
 
   /**
    * Re-export of sql-template-tag
@@ -257,6 +206,8 @@ export namespace Prisma {
   export import raw = runtime.raw
   export import Sql = runtime.Sql
 
+
+
   /**
    * Decimal.js
    */
@@ -265,7 +216,7 @@ export namespace Prisma {
   export type DecimalJsLike = runtime.DecimalJsLike
 
   /**
-   * Metrics 
+   * Metrics
    */
   export type Metrics = runtime.Metrics
   export type Metric<T> = runtime.Metric<T>
@@ -275,84 +226,47 @@ export namespace Prisma {
   /**
   * Extensions
   */
-  export type Extension = $Extensions.UserArgs
+  export import Extension = $Extensions.UserArgs
   export import getExtensionContext = runtime.Extensions.getExtensionContext
-  export type Args<T, F extends $Public.Operation> = $Public.Args<T, F>
-  export type Payload<T, F extends $Public.Operation> = $Public.Payload<T, F>
-  export type Result<T, A, F extends $Public.Operation> = $Public.Result<T, A, F>
-  export type Exact<T, W> = $Public.Exact<T, W>
+  export import Args = $Public.Args
+  export import Payload = $Public.Payload
+  export import Result = $Public.Result
+  export import Exact = $Public.Exact
 
   /**
-   * Prisma Client JS version: 4.16.2
-   * Query Engine version: 4bc8b6e1b66cb932731fb1bdbbc550d1e010de81
+   * Prisma Client JS version: 6.19.1
+   * Query Engine version: c2990dca591cba766e3b7ef5d9e8a84796e47ab7
    */
   export type PrismaVersion = {
     client: string
   }
 
-  export const prismaVersion: PrismaVersion 
+  export const prismaVersion: PrismaVersion
 
   /**
    * Utility Types
    */
 
-  /**
-   * From https://github.com/sindresorhus/type-fest/
-   * Matches a JSON object.
-   * This type can be useful to enforce some input to be JSON-compatible or as a super-type to be extended from. 
-   */
-  export type JsonObject = {[Key in string]?: JsonValue}
 
-  /**
-   * From https://github.com/sindresorhus/type-fest/
-   * Matches a JSON array.
-   */
-  export interface JsonArray extends Array<JsonValue> {}
-
-  /**
-   * From https://github.com/sindresorhus/type-fest/
-   * Matches any valid JSON value.
-   */
-  export type JsonValue = string | number | boolean | JsonObject | JsonArray | null
-
-  /**
-   * Matches a JSON object.
-   * Unlike `JsonObject`, this type allows undefined and read-only properties.
-   */
-  export type InputJsonObject = {readonly [Key in string]?: InputJsonValue | null}
-
-  /**
-   * Matches a JSON array.
-   * Unlike `JsonArray`, readonly arrays are assignable to this type.
-   */
-  export interface InputJsonArray extends ReadonlyArray<InputJsonValue | null> {}
-
-  /**
-   * Matches any valid value that can be used as an input for operations like
-   * create and update as the value of a JSON field. Unlike `JsonValue`, this
-   * type allows read-only arrays and read-only object properties and disallows
-   * `null` at the top level.
-   *
-   * `null` cannot be used as the value of a JSON field because its meaning
-   * would be ambiguous. Use `Prisma.JsonNull` to store the JSON null value or
-   * `Prisma.DbNull` to clear the JSON value and set the field to the database
-   * NULL value instead.
-   *
-   * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-by-null-values
-   */
-  export type InputJsonValue = string | number | boolean | InputJsonObject | InputJsonArray
+  export import Bytes = runtime.Bytes
+  export import JsonObject = runtime.JsonObject
+  export import JsonArray = runtime.JsonArray
+  export import JsonValue = runtime.JsonValue
+  export import InputJsonObject = runtime.InputJsonObject
+  export import InputJsonArray = runtime.InputJsonArray
+  export import InputJsonValue = runtime.InputJsonValue
 
   /**
    * Types of the values used to represent different kinds of `null` values when working with JSON fields.
-   * 
+   *
    * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
    */
   namespace NullTypes {
     /**
     * Type of `Prisma.DbNull`.
-    * 
+    *
     * You cannot use other instances of this class. Please use the `Prisma.DbNull` value.
-    * 
+    *
     * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
     */
     class DbNull {
@@ -362,9 +276,9 @@ export namespace Prisma {
 
     /**
     * Type of `Prisma.JsonNull`.
-    * 
+    *
     * You cannot use other instances of this class. Please use the `Prisma.JsonNull` value.
-    * 
+    *
     * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
     */
     class JsonNull {
@@ -374,9 +288,9 @@ export namespace Prisma {
 
     /**
     * Type of `Prisma.AnyNull`.
-    * 
+    *
     * You cannot use other instances of this class. Please use the `Prisma.AnyNull` value.
-    * 
+    *
     * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
     */
     class AnyNull {
@@ -387,21 +301,21 @@ export namespace Prisma {
 
   /**
    * Helper for filtering JSON entries that have `null` on the database (empty on the db)
-   * 
+   *
    * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
    */
   export const DbNull: NullTypes.DbNull
 
   /**
    * Helper for filtering JSON entries that have JSON `null` values (not empty on the db)
-   * 
+   *
    * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
    */
   export const JsonNull: NullTypes.JsonNull
 
   /**
    * Helper for filtering JSON entries that are `Prisma.DbNull` or `Prisma.JsonNull`
-   * 
+   *
    * @see https://www.prisma.io/docs/concepts/components/prisma-client/working-with-fields/working-with-json-fields#filtering-on-a-json-field
    */
   export const AnyNull: NullTypes.AnyNull
@@ -410,19 +324,11 @@ export namespace Prisma {
     select: any
     include: any
   }
-  type HasSelect = {
+
+  type SelectAndOmit = {
     select: any
+    omit: any
   }
-  type HasInclude = {
-    include: any
-  }
-  type CheckSelect<T, S, U> = T extends SelectAndInclude
-    ? 'Please either choose `select` or `include`'
-    : T extends HasSelect
-    ? U
-    : T extends HasInclude
-    ? U
-    : S
 
   /**
    * Get the type of the value, that the Promise holds.
@@ -432,7 +338,7 @@ export namespace Prisma {
   /**
    * Get the return type of a function which returns a Promise.
    */
-  export type PromiseReturnType<T extends (...args: any) => Promise<any>> = PromiseType<ReturnType<T>>
+  export type PromiseReturnType<T extends (...args: any) => $Utils.JsPromise<any>> = PromiseType<ReturnType<T>>
 
   /**
    * From T, pick a set of properties whose keys are in the union K
@@ -472,7 +378,9 @@ export namespace Prisma {
   } &
     (T extends SelectAndInclude
       ? 'Please either choose `select` or `include`.'
-      : {})
+      : T extends SelectAndOmit
+        ? 'Please either choose `select` or `omit`.'
+        : {})
 
   /**
    * Subset + Intersection
@@ -595,7 +503,7 @@ export namespace Prisma {
   type AtLeast<O extends object, K extends string> = NoExpand<
     O extends unknown
     ? | (K extends keyof O ? { [P in K]: O[P] } & O : O)
-      | {[P in keyof O as P extends K ? K : never]-?: O[P]} & O
+      | {[P in keyof O as P extends K ? P : never]-?: O[P]} & O
     : never>;
 
   type _Strict<U, _U = U> = U extends unknown ? U & OptionalFlat<_Record<Exclude<Keys<_U>, keyof U>, never>> : never;
@@ -693,9 +601,9 @@ export namespace Prisma {
   type MaybeTupleToUnion<T> = T extends any[] ? TupleToUnion<T> : T
 
   /**
-   * Like `Pick`, but with an array
+   * Like `Pick`, but additionally can also accept an array of keys
    */
-  type PickArray<T, K extends Array<keyof T>> = Prisma__Pick<T, TupleToUnion<K>>
+  type PickEnumerable<T, K extends Enumerable<keyof T> | keyof T> = Prisma__Pick<T, MaybeTupleToUnion<K>>
 
   /**
    * Exclude all keys with underscores
@@ -721,196 +629,237 @@ export namespace Prisma {
     db?: Datasource
   }
 
-
-  interface TypeMapCb extends $Utils.Fn<{extArgs: $Extensions.Args}, $Utils.Record<string, any>> {
-    returns: Prisma.TypeMap<this['params']['extArgs']>
+  interface TypeMapCb<ClientOptions = {}> extends $Utils.Fn<{extArgs: $Extensions.InternalArgs }, $Utils.Record<string, any>> {
+    returns: Prisma.TypeMap<this['params']['extArgs'], ClientOptions extends { omit: infer OmitOptions } ? OmitOptions : {}>
   }
 
-  export type TypeMap<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> = {
+    globalOmitOptions: {
+      omit: GlobalOmitOptions
+    }
     meta: {
-      modelProps: 'note' | 'dVault' | 'workspace'
+      modelProps: "note" | "dVault" | "workspace"
       txIsolationLevel: Prisma.TransactionIsolationLevel
-    },
+    }
     model: {
       Note: {
-        payload: NotePayload<ExtArgs>
+        payload: Prisma.$NotePayload<ExtArgs>
+        fields: Prisma.NoteFieldRefs
         operations: {
           findUnique: {
-            args: Prisma.NoteFindUniqueArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload> | null
+            args: Prisma.NoteFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload> | null
           }
           findUniqueOrThrow: {
-            args: Prisma.NoteFindUniqueOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
           }
           findFirst: {
-            args: Prisma.NoteFindFirstArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload> | null
+            args: Prisma.NoteFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload> | null
           }
           findFirstOrThrow: {
-            args: Prisma.NoteFindFirstOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
           }
           findMany: {
-            args: Prisma.NoteFindManyArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>[]
+            args: Prisma.NoteFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>[]
           }
           create: {
-            args: Prisma.NoteCreateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
+          }
+          createMany: {
+            args: Prisma.NoteCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.NoteCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>[]
           }
           delete: {
-            args: Prisma.NoteDeleteArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
           }
           update: {
-            args: Prisma.NoteUpdateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
           }
           deleteMany: {
-            args: Prisma.NoteDeleteManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.NoteDeleteManyArgs<ExtArgs>
+            result: BatchPayload
           }
           updateMany: {
-            args: Prisma.NoteUpdateManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.NoteUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.NoteUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>[]
           }
           upsert: {
-            args: Prisma.NoteUpsertArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<NotePayload>
+            args: Prisma.NoteUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$NotePayload>
           }
           aggregate: {
-            args: Prisma.NoteAggregateArgs<ExtArgs>,
+            args: Prisma.NoteAggregateArgs<ExtArgs>
             result: $Utils.Optional<AggregateNote>
           }
           groupBy: {
-            args: Prisma.NoteGroupByArgs<ExtArgs>,
+            args: Prisma.NoteGroupByArgs<ExtArgs>
             result: $Utils.Optional<NoteGroupByOutputType>[]
           }
           count: {
-            args: Prisma.NoteCountArgs<ExtArgs>,
+            args: Prisma.NoteCountArgs<ExtArgs>
             result: $Utils.Optional<NoteCountAggregateOutputType> | number
           }
         }
       }
       DVault: {
-        payload: DVaultPayload<ExtArgs>
+        payload: Prisma.$DVaultPayload<ExtArgs>
+        fields: Prisma.DVaultFieldRefs
         operations: {
           findUnique: {
-            args: Prisma.DVaultFindUniqueArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload> | null
+            args: Prisma.DVaultFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload> | null
           }
           findUniqueOrThrow: {
-            args: Prisma.DVaultFindUniqueOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
           }
           findFirst: {
-            args: Prisma.DVaultFindFirstArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload> | null
+            args: Prisma.DVaultFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload> | null
           }
           findFirstOrThrow: {
-            args: Prisma.DVaultFindFirstOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
           }
           findMany: {
-            args: Prisma.DVaultFindManyArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>[]
+            args: Prisma.DVaultFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>[]
           }
           create: {
-            args: Prisma.DVaultCreateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
+          }
+          createMany: {
+            args: Prisma.DVaultCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.DVaultCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>[]
           }
           delete: {
-            args: Prisma.DVaultDeleteArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
           }
           update: {
-            args: Prisma.DVaultUpdateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
           }
           deleteMany: {
-            args: Prisma.DVaultDeleteManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.DVaultDeleteManyArgs<ExtArgs>
+            result: BatchPayload
           }
           updateMany: {
-            args: Prisma.DVaultUpdateManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.DVaultUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.DVaultUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>[]
           }
           upsert: {
-            args: Prisma.DVaultUpsertArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<DVaultPayload>
+            args: Prisma.DVaultUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DVaultPayload>
           }
           aggregate: {
-            args: Prisma.DVaultAggregateArgs<ExtArgs>,
+            args: Prisma.DVaultAggregateArgs<ExtArgs>
             result: $Utils.Optional<AggregateDVault>
           }
           groupBy: {
-            args: Prisma.DVaultGroupByArgs<ExtArgs>,
+            args: Prisma.DVaultGroupByArgs<ExtArgs>
             result: $Utils.Optional<DVaultGroupByOutputType>[]
           }
           count: {
-            args: Prisma.DVaultCountArgs<ExtArgs>,
+            args: Prisma.DVaultCountArgs<ExtArgs>
             result: $Utils.Optional<DVaultCountAggregateOutputType> | number
           }
         }
       }
       Workspace: {
-        payload: WorkspacePayload<ExtArgs>
+        payload: Prisma.$WorkspacePayload<ExtArgs>
+        fields: Prisma.WorkspaceFieldRefs
         operations: {
           findUnique: {
-            args: Prisma.WorkspaceFindUniqueArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload> | null
+            args: Prisma.WorkspaceFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload> | null
           }
           findUniqueOrThrow: {
-            args: Prisma.WorkspaceFindUniqueOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
           }
           findFirst: {
-            args: Prisma.WorkspaceFindFirstArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload> | null
+            args: Prisma.WorkspaceFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload> | null
           }
           findFirstOrThrow: {
-            args: Prisma.WorkspaceFindFirstOrThrowArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
           }
           findMany: {
-            args: Prisma.WorkspaceFindManyArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>[]
+            args: Prisma.WorkspaceFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>[]
           }
           create: {
-            args: Prisma.WorkspaceCreateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
+          }
+          createMany: {
+            args: Prisma.WorkspaceCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.WorkspaceCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>[]
           }
           delete: {
-            args: Prisma.WorkspaceDeleteArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
           }
           update: {
-            args: Prisma.WorkspaceUpdateArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
           }
           deleteMany: {
-            args: Prisma.WorkspaceDeleteManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.WorkspaceDeleteManyArgs<ExtArgs>
+            result: BatchPayload
           }
           updateMany: {
-            args: Prisma.WorkspaceUpdateManyArgs<ExtArgs>,
-            result: Prisma.BatchPayload
+            args: Prisma.WorkspaceUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.WorkspaceUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>[]
           }
           upsert: {
-            args: Prisma.WorkspaceUpsertArgs<ExtArgs>,
-            result: $Utils.PayloadToResult<WorkspacePayload>
+            args: Prisma.WorkspaceUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$WorkspacePayload>
           }
           aggregate: {
-            args: Prisma.WorkspaceAggregateArgs<ExtArgs>,
+            args: Prisma.WorkspaceAggregateArgs<ExtArgs>
             result: $Utils.Optional<AggregateWorkspace>
           }
           groupBy: {
-            args: Prisma.WorkspaceGroupByArgs<ExtArgs>,
+            args: Prisma.WorkspaceGroupByArgs<ExtArgs>
             result: $Utils.Optional<WorkspaceGroupByOutputType>[]
           }
           count: {
-            args: Prisma.WorkspaceCountArgs<ExtArgs>,
+            args: Prisma.WorkspaceCountArgs<ExtArgs>
             result: $Utils.Optional<WorkspaceCountAggregateOutputType> | number
           }
         }
@@ -920,15 +869,11 @@ export namespace Prisma {
     other: {
       payload: any
       operations: {
-        $executeRawUnsafe: {
-          args: [query: string, ...values: any[]],
-          result: any
-        }
         $executeRaw: {
           args: [query: TemplateStringsArray | Prisma.Sql, ...values: any[]],
           result: any
         }
-        $queryRawUnsafe: {
+        $executeRawUnsafe: {
           args: [query: string, ...values: any[]],
           result: any
         }
@@ -936,77 +881,88 @@ export namespace Prisma {
           args: [query: TemplateStringsArray | Prisma.Sql, ...values: any[]],
           result: any
         }
+        $queryRawUnsafe: {
+          args: [query: string, ...values: any[]],
+          result: any
+        }
       }
     }
   }
-  export const defineExtension: $Extensions.ExtendsHook<'define', Prisma.TypeMapCb, $Extensions.DefaultArgs>
+  export const defineExtension: $Extensions.ExtendsHook<"define", Prisma.TypeMapCb, $Extensions.DefaultArgs>
   export type DefaultPrismaClient = PrismaClient
-  export type RejectOnNotFound = boolean | ((error: Error) => Error)
-  export type RejectPerModel = { [P in ModelName]?: RejectOnNotFound }
-  export type RejectPerOperation =  { [P in "findUnique" | "findFirst"]?: RejectPerModel | RejectOnNotFound } 
-  type IsReject<T> = T extends true ? True : T extends (err: Error) => Error ? True : False
-  export type HasReject<
-    GlobalRejectSettings extends Prisma.PrismaClientOptions['rejectOnNotFound'],
-    LocalRejectSettings,
-    Action extends PrismaAction,
-    Model extends ModelName
-  > = LocalRejectSettings extends RejectOnNotFound
-    ? IsReject<LocalRejectSettings>
-    : GlobalRejectSettings extends RejectPerOperation
-    ? Action extends keyof GlobalRejectSettings
-      ? GlobalRejectSettings[Action] extends RejectOnNotFound
-        ? IsReject<GlobalRejectSettings[Action]>
-        : GlobalRejectSettings[Action] extends RejectPerModel
-        ? Model extends keyof GlobalRejectSettings[Action]
-          ? IsReject<GlobalRejectSettings[Action][Model]>
-          : False
-        : False
-      : False
-    : IsReject<GlobalRejectSettings>
   export type ErrorFormat = 'pretty' | 'colorless' | 'minimal'
-
   export interface PrismaClientOptions {
-    /**
-     * Configure findUnique/findFirst to throw an error if the query returns null. 
-     * @deprecated since 4.0.0. Use `findUniqueOrThrow`/`findFirstOrThrow` methods instead.
-     * @example
-     * ```
-     * // Reject on both findUnique/findFirst
-     * rejectOnNotFound: true
-     * // Reject only on findFirst with a custom error
-     * rejectOnNotFound: { findFirst: (err) => new Error("Custom Error")}
-     * // Reject on user.findUnique with a custom error
-     * rejectOnNotFound: { findUnique: {User: (err) => new Error("User not found")}}
-     * ```
-     */
-    rejectOnNotFound?: RejectOnNotFound | RejectPerOperation
     /**
      * Overwrites the datasource url from your schema.prisma file
      */
     datasources?: Datasources
-
+    /**
+     * Overwrites the datasource url from your schema.prisma file
+     */
+    datasourceUrl?: string
     /**
      * @default "colorless"
      */
     errorFormat?: ErrorFormat
-
     /**
      * @example
      * ```
-     * // Defaults to stdout
+     * // Shorthand for `emit: 'stdout'`
      * log: ['query', 'info', 'warn', 'error']
      * 
-     * // Emit as events
+     * // Emit as events only
      * log: [
+     *   { emit: 'event', level: 'query' },
+     *   { emit: 'event', level: 'info' },
+     *   { emit: 'event', level: 'warn' }
+     *   { emit: 'event', level: 'error' }
+     * ]
+     * 
+     * / Emit as events and log to stdout
+     * og: [
      *  { emit: 'stdout', level: 'query' },
      *  { emit: 'stdout', level: 'info' },
      *  { emit: 'stdout', level: 'warn' }
      *  { emit: 'stdout', level: 'error' }
-     * ]
+     * 
      * ```
      * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/logging#the-log-option).
      */
-    log?: Array<LogLevel | LogDefinition>
+    log?: (LogLevel | LogDefinition)[]
+    /**
+     * The default values for transactionOptions
+     * maxWait ?= 2000
+     * timeout ?= 5000
+     */
+    transactionOptions?: {
+      maxWait?: number
+      timeout?: number
+      isolationLevel?: Prisma.TransactionIsolationLevel
+    }
+    /**
+     * Instance of a Driver Adapter, e.g., like one provided by `@prisma/adapter-planetscale`
+     */
+    adapter?: runtime.SqlDriverAdapterFactory | null
+    /**
+     * Global configuration for omitting model fields by default.
+     * 
+     * @example
+     * ```
+     * const prisma = new PrismaClient({
+     *   omit: {
+     *     user: {
+     *       password: true
+     *     }
+     *   }
+     * })
+     * ```
+     */
+    omit?: Prisma.GlobalOmitConfig
+  }
+  export type GlobalOmitConfig = {
+    note?: NoteOmit
+    dVault?: DVaultOmit
+    workspace?: WorkspaceOmit
   }
 
   /* Types for Logging */
@@ -1016,10 +972,15 @@ export namespace Prisma {
     emit: 'stdout' | 'event'
   }
 
-  export type GetLogType<T extends LogLevel | LogDefinition> = T extends LogDefinition ? T['emit'] extends 'event' ? T['level'] : never : never
-  export type GetEvents<T extends any> = T extends Array<LogLevel | LogDefinition> ?
-    GetLogType<T[0]> | GetLogType<T[1]> | GetLogType<T[2]> | GetLogType<T[3]>
-    : never
+  export type CheckIsLogLevel<T> = T extends LogLevel ? T : never;
+
+  export type GetLogType<T> = CheckIsLogLevel<
+    T extends LogDefinition ? T['level'] : T
+  >;
+
+  export type GetEvents<T extends any[]> = T extends Array<LogLevel | LogDefinition>
+    ? GetLogType<T[number]>
+    : never;
 
   export type QueryEvent = {
     timestamp: Date
@@ -1039,12 +1000,16 @@ export namespace Prisma {
 
   export type PrismaAction =
     | 'findUnique'
+    | 'findUniqueOrThrow'
     | 'findMany'
     | 'findFirst'
+    | 'findFirstOrThrow'
     | 'create'
     | 'createMany'
+    | 'createManyAndReturn'
     | 'update'
     | 'updateMany'
+    | 'updateManyAndReturn'
     | 'upsert'
     | 'delete'
     | 'deleteMany'
@@ -1054,25 +1019,7 @@ export namespace Prisma {
     | 'count'
     | 'runCommandRaw'
     | 'findRaw'
-
-  /**
-   * These options are being passed into the middleware as "params"
-   */
-  export type MiddlewareParams = {
-    model?: ModelName
-    action: PrismaAction
-    args: any
-    dataPath: string[]
-    runInTransaction: boolean
-  }
-
-  /**
-   * The `T` type makes sure, that the `return proceed` is not forgotten in the middleware implementation
-   */
-  export type Middleware<T = any> = (
-    params: MiddlewareParams,
-    next: (params: MiddlewareParams) => Promise<T>,
-  ) => Promise<T>
+    | 'groupBy'
 
   // tested in getLogLevel.test.ts
   export function getLogLevel(log: Array<LogLevel | LogDefinition>): LogLevel | undefined;
@@ -1095,70 +1042,62 @@ export namespace Prisma {
    * Count Type DVaultCountOutputType
    */
 
-
   export type DVaultCountOutputType = {
     Note: number
   }
 
-  export type DVaultCountOutputTypeSelect<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     Note?: boolean | DVaultCountOutputTypeCountNoteArgs
   }
 
   // Custom InputTypes
-
   /**
    * DVaultCountOutputType without action
    */
-  export type DVaultCountOutputTypeArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVaultCountOutputType
      */
     select?: DVaultCountOutputTypeSelect<ExtArgs> | null
   }
 
-
   /**
    * DVaultCountOutputType without action
    */
-  export type DVaultCountOutputTypeCountNoteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultCountOutputTypeCountNoteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: NoteWhereInput
   }
-
 
 
   /**
    * Count Type WorkspaceCountOutputType
    */
 
-
   export type WorkspaceCountOutputType = {
     vaults: number
   }
 
-  export type WorkspaceCountOutputTypeSelect<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     vaults?: boolean | WorkspaceCountOutputTypeCountVaultsArgs
   }
 
   // Custom InputTypes
-
   /**
    * WorkspaceCountOutputType without action
    */
-  export type WorkspaceCountOutputTypeArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the WorkspaceCountOutputType
      */
     select?: WorkspaceCountOutputTypeSelect<ExtArgs> | null
   }
 
-
   /**
    * WorkspaceCountOutputType without action
    */
-  export type WorkspaceCountOutputTypeCountVaultsArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceCountOutputTypeCountVaultsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: DVaultWhereInput
   }
-
 
 
   /**
@@ -1168,7 +1107,6 @@ export namespace Prisma {
   /**
    * Model Note
    */
-
 
   export type AggregateNote = {
     _count: NoteCountAggregateOutputType | null
@@ -1265,7 +1203,7 @@ export namespace Prisma {
     _all?: true
   }
 
-  export type NoteAggregateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which Note to aggregate.
      */
@@ -1275,7 +1213,7 @@ export namespace Prisma {
      * 
      * Determine the order of Notes to fetch.
      */
-    orderBy?: Enumerable<NoteOrderByWithRelationInput>
+    orderBy?: NoteOrderByWithRelationInput | NoteOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -1337,10 +1275,10 @@ export namespace Prisma {
 
 
 
-  export type NoteGroupByArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: NoteWhereInput
-    orderBy?: Enumerable<NoteOrderByWithAggregationInput>
-    by: NoteScalarFieldEnum[]
+    orderBy?: NoteOrderByWithAggregationInput | NoteOrderByWithAggregationInput[]
+    by: NoteScalarFieldEnum[] | NoteScalarFieldEnum
     having?: NoteScalarWhereWithAggregatesInput
     take?: number
     skip?: number
@@ -1350,7 +1288,6 @@ export namespace Prisma {
     _min?: NoteMinAggregateInputType
     _max?: NoteMaxAggregateInputType
   }
-
 
   export type NoteGroupByOutputType = {
     id: string
@@ -1369,7 +1306,7 @@ export namespace Prisma {
 
   type GetNoteGroupByPayload<T extends NoteGroupByArgs> = Prisma.PrismaPromise<
     Array<
-      PickArray<NoteGroupByOutputType, T['by']> &
+      PickEnumerable<NoteGroupByOutputType, T['by']> &
         {
           [P in ((keyof T) & (keyof NoteGroupByOutputType))]: P extends '_count'
             ? T[P] extends boolean
@@ -1381,7 +1318,7 @@ export namespace Prisma {
     >
 
 
-  export type NoteSelect<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type NoteSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     fname?: boolean
     title?: boolean
@@ -1389,7 +1326,29 @@ export namespace Prisma {
     created?: boolean
     stub?: boolean
     dVaultId?: boolean
-    vault?: boolean | DVaultArgs<ExtArgs>
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["note"]>
+
+  export type NoteSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    fname?: boolean
+    title?: boolean
+    updated?: boolean
+    created?: boolean
+    stub?: boolean
+    dVaultId?: boolean
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["note"]>
+
+  export type NoteSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    fname?: boolean
+    title?: boolean
+    updated?: boolean
+    created?: boolean
+    stub?: boolean
+    dVaultId?: boolean
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["note"]>
 
   export type NoteSelectScalar = {
@@ -1402,19 +1361,42 @@ export namespace Prisma {
     dVaultId?: boolean
   }
 
-  export type NoteInclude<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-    vault?: boolean | DVaultArgs<ExtArgs>
+  export type NoteOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "fname" | "title" | "updated" | "created" | "stub" | "dVaultId", ExtArgs["result"]["note"]>
+  export type NoteInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
+  }
+  export type NoteIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
+  }
+  export type NoteIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vault?: boolean | DVaultDefaultArgs<ExtArgs>
   }
 
+  export type $NotePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Note"
+    objects: {
+      vault: Prisma.$DVaultPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      fname: string | null
+      title: string | null
+      updated: number | null
+      created: number | null
+      stub: boolean | null
+      dVaultId: number
+    }, ExtArgs["result"]["note"]>
+    composites: {}
+  }
 
-  type NoteGetPayload<S extends boolean | null | undefined | NoteArgs> = $Types.GetResult<NotePayload, S>
+  type NoteGetPayload<S extends boolean | null | undefined | NoteDefaultArgs> = $Result.GetResult<Prisma.$NotePayload, S>
 
-  type NoteCountArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = 
-    Omit<NoteFindManyArgs, 'select' | 'include'> & {
+  type NoteCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<NoteFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
       select?: NoteCountAggregateInputType | true
     }
 
-  export interface NoteDelegate<GlobalRejectSettings extends Prisma.RejectOnNotFound | Prisma.RejectPerOperation | false | undefined, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> {
+  export interface NoteDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
     [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Note'], meta: { name: 'Note' } }
     /**
      * Find zero or one Note that matches the filter.
@@ -1426,14 +1408,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUnique<T extends NoteFindUniqueArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args: SelectSubset<T, NoteFindUniqueArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findUnique', 'Note'> extends True ? Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findUnique', never>, never, ExtArgs> : Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findUnique', never> | null, null, ExtArgs>
+     */
+    findUnique<T extends NoteFindUniqueArgs>(args: SelectSubset<T, NoteFindUniqueArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find one Note that matches the filter or throw an error  with `error.code='P2025'` 
-     *     if no matches were found.
+     * Find one Note that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
      * @param {NoteFindUniqueOrThrowArgs} args - Arguments to find a Note
      * @example
      * // Get one Note
@@ -1442,10 +1422,8 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUniqueOrThrow<T extends NoteFindUniqueOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, NoteFindUniqueOrThrowArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findUniqueOrThrow', never>, never, ExtArgs>
+     */
+    findUniqueOrThrow<T extends NoteFindUniqueOrThrowArgs>(args: SelectSubset<T, NoteFindUniqueOrThrowArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first Note that matches the filter.
@@ -1459,14 +1437,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirst<T extends NoteFindFirstArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args?: SelectSubset<T, NoteFindFirstArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findFirst', 'Note'> extends True ? Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findFirst', never>, never, ExtArgs> : Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findFirst', never> | null, null, ExtArgs>
+     */
+    findFirst<T extends NoteFindFirstArgs>(args?: SelectSubset<T, NoteFindFirstArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first Note that matches the filter or
-     * throw `NotFoundError` if no matches were found.
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
      * @param {NoteFindFirstOrThrowArgs} args - Arguments to find a Note
@@ -1477,16 +1453,14 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirstOrThrow<T extends NoteFindFirstOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, NoteFindFirstOrThrowArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'findFirstOrThrow', never>, never, ExtArgs>
+     */
+    findFirstOrThrow<T extends NoteFindFirstOrThrowArgs>(args?: SelectSubset<T, NoteFindFirstOrThrowArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find zero or more Notes that matches the filter.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {NoteFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @param {NoteFindManyArgs} args - Arguments to filter and select certain fields only.
      * @example
      * // Get all Notes
      * const notes = await prisma.note.findMany()
@@ -1497,10 +1471,8 @@ export namespace Prisma {
      * // Only select the `id`
      * const noteWithIdOnly = await prisma.note.findMany({ select: { id: true } })
      * 
-    **/
-    findMany<T extends NoteFindManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, NoteFindManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<$Types.GetResult<NotePayload<ExtArgs>, T, 'findMany', never>>
+     */
+    findMany<T extends NoteFindManyArgs>(args?: SelectSubset<T, NoteFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
 
     /**
      * Create a Note.
@@ -1513,10 +1485,46 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    create<T extends NoteCreateArgs<ExtArgs>>(
-      args: SelectSubset<T, NoteCreateArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'create', never>, never, ExtArgs>
+     */
+    create<T extends NoteCreateArgs>(args: SelectSubset<T, NoteCreateArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Notes.
+     * @param {NoteCreateManyArgs} args - Arguments to create many Notes.
+     * @example
+     * // Create many Notes
+     * const note = await prisma.note.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends NoteCreateManyArgs>(args?: SelectSubset<T, NoteCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Notes and returns the data saved in the database.
+     * @param {NoteCreateManyAndReturnArgs} args - Arguments to create many Notes.
+     * @example
+     * // Create many Notes
+     * const note = await prisma.note.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Notes and only return the `id`
+     * const noteWithIdOnly = await prisma.note.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends NoteCreateManyAndReturnArgs>(args?: SelectSubset<T, NoteCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Delete a Note.
@@ -1529,10 +1537,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    delete<T extends NoteDeleteArgs<ExtArgs>>(
-      args: SelectSubset<T, NoteDeleteArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'delete', never>, never, ExtArgs>
+     */
+    delete<T extends NoteDeleteArgs>(args: SelectSubset<T, NoteDeleteArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Update one Note.
@@ -1548,10 +1554,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    update<T extends NoteUpdateArgs<ExtArgs>>(
-      args: SelectSubset<T, NoteUpdateArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'update', never>, never, ExtArgs>
+     */
+    update<T extends NoteUpdateArgs>(args: SelectSubset<T, NoteUpdateArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Delete zero or more Notes.
@@ -1564,10 +1568,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    deleteMany<T extends NoteDeleteManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, NoteDeleteManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    deleteMany<T extends NoteDeleteManyArgs>(args?: SelectSubset<T, NoteDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
      * Update zero or more Notes.
@@ -1585,10 +1587,38 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    updateMany<T extends NoteUpdateManyArgs<ExtArgs>>(
-      args: SelectSubset<T, NoteUpdateManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    updateMany<T extends NoteUpdateManyArgs>(args: SelectSubset<T, NoteUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Notes and returns the data updated in the database.
+     * @param {NoteUpdateManyAndReturnArgs} args - Arguments to update many Notes.
+     * @example
+     * // Update many Notes
+     * const note = await prisma.note.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Notes and only return the `id`
+     * const noteWithIdOnly = await prisma.note.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends NoteUpdateManyAndReturnArgs>(args: SelectSubset<T, NoteUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Create or update one Note.
@@ -1606,10 +1636,9 @@ export namespace Prisma {
      *     // ... the filter for the Note we want to update
      *   }
      * })
-    **/
-    upsert<T extends NoteUpsertArgs<ExtArgs>>(
-      args: SelectSubset<T, NoteUpsertArgs<ExtArgs>>
-    ): Prisma__NoteClient<$Types.GetResult<NotePayload<ExtArgs>, T, 'upsert', never>, never, ExtArgs>
+     */
+    upsert<T extends NoteUpsertArgs>(args: SelectSubset<T, NoteUpsertArgs<ExtArgs>>): Prisma__NoteClient<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
 
     /**
      * Count the number of Notes.
@@ -1688,7 +1717,7 @@ export namespace Prisma {
         ? { orderBy: NoteGroupByArgs['orderBy'] }
         : { orderBy?: NoteGroupByArgs['orderBy'] },
       OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
-      ByFields extends TupleToUnion<T['by']>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
       ByValid extends Has<ByFields, OrderFields>,
       HavingFields extends GetHavingFields<T['having']>,
       HavingValid extends Has<ByFields, HavingFields>,
@@ -1736,7 +1765,10 @@ export namespace Prisma {
             : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
         }[OrderFields]
     >(args: SubsetIntersection<T, NoteGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetNoteGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
-
+  /**
+   * Fields of the Note model
+   */
+  readonly fields: NoteFieldRefs;
   }
 
   /**
@@ -1745,60 +1777,63 @@ export namespace Prisma {
    * Because we want to prevent naming conflicts as mentioned in
    * https://github.com/prisma/prisma-client-js/issues/707
    */
-  export class Prisma__NoteClient<T, Null = never, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> implements Prisma.PrismaPromise<T> {
-    private readonly _dmmf;
-    private readonly _queryType;
-    private readonly _rootField;
-    private readonly _clientMethod;
-    private readonly _args;
-    private readonly _dataPath;
-    private readonly _errorFormat;
-    private readonly _measurePerformance?;
-    private _isList;
-    private _callsite;
-    private _requestPromise?;
-    readonly [Symbol.toStringTag]: 'PrismaPromise';
-    constructor(_dmmf: runtime.DMMFClass, _queryType: 'query' | 'mutation', _rootField: string, _clientMethod: string, _args: any, _dataPath: string[], _errorFormat: ErrorFormat, _measurePerformance?: boolean | undefined, _isList?: boolean);
-
-    vault<T extends DVaultArgs<ExtArgs> = {}>(args?: Subset<T, DVaultArgs<ExtArgs>>): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findUnique', never> | Null, never, ExtArgs>;
-
-    private get _document();
+  export interface Prisma__NoteClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    vault<T extends DVaultDefaultArgs<ExtArgs> = {}>(args?: Subset<T, DVaultDefaultArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of which ever callback is executed.
      */
-    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2>;
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
     /**
      * Attaches a callback for only the rejection of the Promise.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of the callback.
      */
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult>;
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
     /**
      * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
      * resolved value cannot be modified from the callback.
      * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
      * @returns A Promise for the completion of the callback.
      */
-    finally(onfinally?: (() => void) | undefined | null): Promise<T>;
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
   }
 
 
 
-  // Custom InputTypes
 
   /**
-   * Note base type for findUnique actions
+   * Fields of the Note model
    */
-  export type NoteFindUniqueArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  interface NoteFieldRefs {
+    readonly id: FieldRef<"Note", 'String'>
+    readonly fname: FieldRef<"Note", 'String'>
+    readonly title: FieldRef<"Note", 'String'>
+    readonly updated: FieldRef<"Note", 'Int'>
+    readonly created: FieldRef<"Note", 'Int'>
+    readonly stub: FieldRef<"Note", 'Boolean'>
+    readonly dVaultId: FieldRef<"Note", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Note findUnique
+   */
+  export type NoteFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -1806,108 +1841,43 @@ export namespace Prisma {
      */
     where: NoteWhereUniqueInput
   }
-
-  /**
-   * Note findUnique
-   */
-  export interface NoteFindUniqueArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends NoteFindUniqueArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findUniqueOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
 
   /**
    * Note findUniqueOrThrow
    */
-  export type NoteFindUniqueOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
      * Filter, which Note to fetch.
      */
     where: NoteWhereUniqueInput
-  }
-
-
-  /**
-   * Note base type for findFirst actions
-   */
-  export type NoteFindFirstArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the Note
-     */
-    select?: NoteSelect<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well.
-     */
-    include?: NoteInclude<ExtArgs> | null
-    /**
-     * Filter, which Note to fetch.
-     */
-    where?: NoteWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of Notes to fetch.
-     */
-    orderBy?: Enumerable<NoteOrderByWithRelationInput>
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for Notes.
-     */
-    cursor?: NoteWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` Notes from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` Notes.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of Notes.
-     */
-    distinct?: Enumerable<NoteScalarFieldEnum>
   }
 
   /**
    * Note findFirst
    */
-  export interface NoteFindFirstArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends NoteFindFirstArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findFirstOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
-
-  /**
-   * Note findFirstOrThrow
-   */
-  export type NoteFindFirstOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -1919,7 +1889,7 @@ export namespace Prisma {
      * 
      * Determine the order of Notes to fetch.
      */
-    orderBy?: Enumerable<NoteOrderByWithRelationInput>
+    orderBy?: NoteOrderByWithRelationInput | NoteOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -1943,20 +1913,75 @@ export namespace Prisma {
      * 
      * Filter by unique combinations of Notes.
      */
-    distinct?: Enumerable<NoteScalarFieldEnum>
+    distinct?: NoteScalarFieldEnum | NoteScalarFieldEnum[]
   }
 
-
   /**
-   * Note findMany
+   * Note findFirstOrThrow
    */
-  export type NoteFindManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NoteInclude<ExtArgs> | null
+    /**
+     * Filter, which Note to fetch.
+     */
+    where?: NoteWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Notes to fetch.
+     */
+    orderBy?: NoteOrderByWithRelationInput | NoteOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Notes.
+     */
+    cursor?: NoteWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Notes from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Notes.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Notes.
+     */
+    distinct?: NoteScalarFieldEnum | NoteScalarFieldEnum[]
+  }
+
+  /**
+   * Note findMany
+   */
+  export type NoteFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Note
+     */
+    select?: NoteSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -1968,7 +1993,7 @@ export namespace Prisma {
      * 
      * Determine the order of Notes to fetch.
      */
-    orderBy?: Enumerable<NoteOrderByWithRelationInput>
+    orderBy?: NoteOrderByWithRelationInput | NoteOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -1987,20 +2012,23 @@ export namespace Prisma {
      * Skip the first `n` Notes.
      */
     skip?: number
-    distinct?: Enumerable<NoteScalarFieldEnum>
+    distinct?: NoteScalarFieldEnum | NoteScalarFieldEnum[]
   }
-
 
   /**
    * Note create
    */
-  export type NoteCreateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -2009,17 +2037,52 @@ export namespace Prisma {
     data: XOR<NoteCreateInput, NoteUncheckedCreateInput>
   }
 
+  /**
+   * Note createMany
+   */
+  export type NoteCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Notes.
+     */
+    data: NoteCreateManyInput | NoteCreateManyInput[]
+  }
+
+  /**
+   * Note createManyAndReturn
+   */
+  export type NoteCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Note
+     */
+    select?: NoteSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * The data used to create many Notes.
+     */
+    data: NoteCreateManyInput | NoteCreateManyInput[]
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NoteIncludeCreateManyAndReturn<ExtArgs> | null
+  }
 
   /**
    * Note update
    */
-  export type NoteUpdateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -2032,11 +2095,10 @@ export namespace Prisma {
     where: NoteWhereUniqueInput
   }
 
-
   /**
    * Note updateMany
    */
-  export type NoteUpdateManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * The data used to update Notes.
      */
@@ -2045,19 +2107,56 @@ export namespace Prisma {
      * Filter which Notes to update
      */
     where?: NoteWhereInput
+    /**
+     * Limit how many Notes to update.
+     */
+    limit?: number
   }
 
+  /**
+   * Note updateManyAndReturn
+   */
+  export type NoteUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Note
+     */
+    select?: NoteSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * The data used to update Notes.
+     */
+    data: XOR<NoteUpdateManyMutationInput, NoteUncheckedUpdateManyInput>
+    /**
+     * Filter which Notes to update
+     */
+    where?: NoteWhereInput
+    /**
+     * Limit how many Notes to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: NoteIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
 
   /**
    * Note upsert
    */
-  export type NoteUpsertArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -2074,17 +2173,20 @@ export namespace Prisma {
     update: XOR<NoteUpdateInput, NoteUncheckedUpdateInput>
   }
 
-
   /**
    * Note delete
    */
-  export type NoteDeleteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     /**
@@ -2093,38 +2195,42 @@ export namespace Prisma {
     where: NoteWhereUniqueInput
   }
 
-
   /**
    * Note deleteMany
    */
-  export type NoteDeleteManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which Notes to delete
      */
     where?: NoteWhereInput
+    /**
+     * Limit how many Notes to delete.
+     */
+    limit?: number
   }
-
 
   /**
    * Note without action
    */
-  export type NoteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type NoteDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
   }
 
 
-
   /**
    * Model DVault
    */
-
 
   export type AggregateDVault = {
     _count: DVaultCountAggregateOutputType | null
@@ -2195,7 +2301,7 @@ export namespace Prisma {
     _all?: true
   }
 
-  export type DVaultAggregateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which DVault to aggregate.
      */
@@ -2205,7 +2311,7 @@ export namespace Prisma {
      * 
      * Determine the order of DVaults to fetch.
      */
-    orderBy?: Enumerable<DVaultOrderByWithRelationInput>
+    orderBy?: DVaultOrderByWithRelationInput | DVaultOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -2267,10 +2373,10 @@ export namespace Prisma {
 
 
 
-  export type DVaultGroupByArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: DVaultWhereInput
-    orderBy?: Enumerable<DVaultOrderByWithAggregationInput>
-    by: DVaultScalarFieldEnum[]
+    orderBy?: DVaultOrderByWithAggregationInput | DVaultOrderByWithAggregationInput[]
+    by: DVaultScalarFieldEnum[] | DVaultScalarFieldEnum
     having?: DVaultScalarWhereWithAggregatesInput
     take?: number
     skip?: number
@@ -2280,7 +2386,6 @@ export namespace Prisma {
     _min?: DVaultMinAggregateInputType
     _max?: DVaultMaxAggregateInputType
   }
-
 
   export type DVaultGroupByOutputType = {
     id: number
@@ -2296,7 +2401,7 @@ export namespace Prisma {
 
   type GetDVaultGroupByPayload<T extends DVaultGroupByArgs> = Prisma.PrismaPromise<
     Array<
-      PickArray<DVaultGroupByOutputType, T['by']> &
+      PickEnumerable<DVaultGroupByOutputType, T['by']> &
         {
           [P in ((keyof T) & (keyof DVaultGroupByOutputType))]: P extends '_count'
             ? T[P] extends boolean
@@ -2308,14 +2413,30 @@ export namespace Prisma {
     >
 
 
-  export type DVaultSelect<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type DVaultSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     name?: boolean
     fsPath?: boolean
     wsRoot?: boolean
-    workspace?: boolean | WorkspaceArgs<ExtArgs>
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
     Note?: boolean | DVault$NoteArgs<ExtArgs>
-    _count?: boolean | DVaultCountOutputTypeArgs<ExtArgs>
+    _count?: boolean | DVaultCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["dVault"]>
+
+  export type DVaultSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    fsPath?: boolean
+    wsRoot?: boolean
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["dVault"]>
+
+  export type DVaultSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    fsPath?: boolean
+    wsRoot?: boolean
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["dVault"]>
 
   export type DVaultSelectScalar = {
@@ -2325,21 +2446,42 @@ export namespace Prisma {
     wsRoot?: boolean
   }
 
-  export type DVaultInclude<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-    workspace?: boolean | WorkspaceArgs<ExtArgs>
+  export type DVaultOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "fsPath" | "wsRoot", ExtArgs["result"]["dVault"]>
+  export type DVaultInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
     Note?: boolean | DVault$NoteArgs<ExtArgs>
-    _count?: boolean | DVaultCountOutputTypeArgs<ExtArgs>
+    _count?: boolean | DVaultCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type DVaultIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
+  }
+  export type DVaultIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    workspace?: boolean | WorkspaceDefaultArgs<ExtArgs>
   }
 
+  export type $DVaultPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "DVault"
+    objects: {
+      workspace: Prisma.$WorkspacePayload<ExtArgs>
+      Note: Prisma.$NotePayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: number
+      name: string | null
+      fsPath: string
+      wsRoot: string
+    }, ExtArgs["result"]["dVault"]>
+    composites: {}
+  }
 
-  type DVaultGetPayload<S extends boolean | null | undefined | DVaultArgs> = $Types.GetResult<DVaultPayload, S>
+  type DVaultGetPayload<S extends boolean | null | undefined | DVaultDefaultArgs> = $Result.GetResult<Prisma.$DVaultPayload, S>
 
-  type DVaultCountArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = 
-    Omit<DVaultFindManyArgs, 'select' | 'include'> & {
+  type DVaultCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<DVaultFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
       select?: DVaultCountAggregateInputType | true
     }
 
-  export interface DVaultDelegate<GlobalRejectSettings extends Prisma.RejectOnNotFound | Prisma.RejectPerOperation | false | undefined, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> {
+  export interface DVaultDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
     [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['DVault'], meta: { name: 'DVault' } }
     /**
      * Find zero or one DVault that matches the filter.
@@ -2351,14 +2493,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUnique<T extends DVaultFindUniqueArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args: SelectSubset<T, DVaultFindUniqueArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findUnique', 'DVault'> extends True ? Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findUnique', never>, never, ExtArgs> : Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findUnique', never> | null, null, ExtArgs>
+     */
+    findUnique<T extends DVaultFindUniqueArgs>(args: SelectSubset<T, DVaultFindUniqueArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find one DVault that matches the filter or throw an error  with `error.code='P2025'` 
-     *     if no matches were found.
+     * Find one DVault that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
      * @param {DVaultFindUniqueOrThrowArgs} args - Arguments to find a DVault
      * @example
      * // Get one DVault
@@ -2367,10 +2507,8 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUniqueOrThrow<T extends DVaultFindUniqueOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, DVaultFindUniqueOrThrowArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findUniqueOrThrow', never>, never, ExtArgs>
+     */
+    findUniqueOrThrow<T extends DVaultFindUniqueOrThrowArgs>(args: SelectSubset<T, DVaultFindUniqueOrThrowArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first DVault that matches the filter.
@@ -2384,14 +2522,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirst<T extends DVaultFindFirstArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args?: SelectSubset<T, DVaultFindFirstArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findFirst', 'DVault'> extends True ? Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findFirst', never>, never, ExtArgs> : Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findFirst', never> | null, null, ExtArgs>
+     */
+    findFirst<T extends DVaultFindFirstArgs>(args?: SelectSubset<T, DVaultFindFirstArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first DVault that matches the filter or
-     * throw `NotFoundError` if no matches were found.
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
      * @param {DVaultFindFirstOrThrowArgs} args - Arguments to find a DVault
@@ -2402,16 +2538,14 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirstOrThrow<T extends DVaultFindFirstOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, DVaultFindFirstOrThrowArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findFirstOrThrow', never>, never, ExtArgs>
+     */
+    findFirstOrThrow<T extends DVaultFindFirstOrThrowArgs>(args?: SelectSubset<T, DVaultFindFirstOrThrowArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find zero or more DVaults that matches the filter.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {DVaultFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @param {DVaultFindManyArgs} args - Arguments to filter and select certain fields only.
      * @example
      * // Get all DVaults
      * const dVaults = await prisma.dVault.findMany()
@@ -2422,10 +2556,8 @@ export namespace Prisma {
      * // Only select the `id`
      * const dVaultWithIdOnly = await prisma.dVault.findMany({ select: { id: true } })
      * 
-    **/
-    findMany<T extends DVaultFindManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, DVaultFindManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findMany', never>>
+     */
+    findMany<T extends DVaultFindManyArgs>(args?: SelectSubset<T, DVaultFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
 
     /**
      * Create a DVault.
@@ -2438,10 +2570,46 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    create<T extends DVaultCreateArgs<ExtArgs>>(
-      args: SelectSubset<T, DVaultCreateArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'create', never>, never, ExtArgs>
+     */
+    create<T extends DVaultCreateArgs>(args: SelectSubset<T, DVaultCreateArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many DVaults.
+     * @param {DVaultCreateManyArgs} args - Arguments to create many DVaults.
+     * @example
+     * // Create many DVaults
+     * const dVault = await prisma.dVault.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends DVaultCreateManyArgs>(args?: SelectSubset<T, DVaultCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many DVaults and returns the data saved in the database.
+     * @param {DVaultCreateManyAndReturnArgs} args - Arguments to create many DVaults.
+     * @example
+     * // Create many DVaults
+     * const dVault = await prisma.dVault.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many DVaults and only return the `id`
+     * const dVaultWithIdOnly = await prisma.dVault.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends DVaultCreateManyAndReturnArgs>(args?: SelectSubset<T, DVaultCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Delete a DVault.
@@ -2454,10 +2622,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    delete<T extends DVaultDeleteArgs<ExtArgs>>(
-      args: SelectSubset<T, DVaultDeleteArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'delete', never>, never, ExtArgs>
+     */
+    delete<T extends DVaultDeleteArgs>(args: SelectSubset<T, DVaultDeleteArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Update one DVault.
@@ -2473,10 +2639,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    update<T extends DVaultUpdateArgs<ExtArgs>>(
-      args: SelectSubset<T, DVaultUpdateArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'update', never>, never, ExtArgs>
+     */
+    update<T extends DVaultUpdateArgs>(args: SelectSubset<T, DVaultUpdateArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Delete zero or more DVaults.
@@ -2489,10 +2653,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    deleteMany<T extends DVaultDeleteManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, DVaultDeleteManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    deleteMany<T extends DVaultDeleteManyArgs>(args?: SelectSubset<T, DVaultDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
      * Update zero or more DVaults.
@@ -2510,10 +2672,38 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    updateMany<T extends DVaultUpdateManyArgs<ExtArgs>>(
-      args: SelectSubset<T, DVaultUpdateManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    updateMany<T extends DVaultUpdateManyArgs>(args: SelectSubset<T, DVaultUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DVaults and returns the data updated in the database.
+     * @param {DVaultUpdateManyAndReturnArgs} args - Arguments to update many DVaults.
+     * @example
+     * // Update many DVaults
+     * const dVault = await prisma.dVault.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more DVaults and only return the `id`
+     * const dVaultWithIdOnly = await prisma.dVault.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends DVaultUpdateManyAndReturnArgs>(args: SelectSubset<T, DVaultUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Create or update one DVault.
@@ -2531,10 +2721,9 @@ export namespace Prisma {
      *     // ... the filter for the DVault we want to update
      *   }
      * })
-    **/
-    upsert<T extends DVaultUpsertArgs<ExtArgs>>(
-      args: SelectSubset<T, DVaultUpsertArgs<ExtArgs>>
-    ): Prisma__DVaultClient<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'upsert', never>, never, ExtArgs>
+     */
+    upsert<T extends DVaultUpsertArgs>(args: SelectSubset<T, DVaultUpsertArgs<ExtArgs>>): Prisma__DVaultClient<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
 
     /**
      * Count the number of DVaults.
@@ -2613,7 +2802,7 @@ export namespace Prisma {
         ? { orderBy: DVaultGroupByArgs['orderBy'] }
         : { orderBy?: DVaultGroupByArgs['orderBy'] },
       OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
-      ByFields extends TupleToUnion<T['by']>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
       ByValid extends Has<ByFields, OrderFields>,
       HavingFields extends GetHavingFields<T['having']>,
       HavingValid extends Has<ByFields, HavingFields>,
@@ -2661,7 +2850,10 @@ export namespace Prisma {
             : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
         }[OrderFields]
     >(args: SubsetIntersection<T, DVaultGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetDVaultGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
-
+  /**
+   * Fields of the DVault model
+   */
+  readonly fields: DVaultFieldRefs;
   }
 
   /**
@@ -2670,62 +2862,61 @@ export namespace Prisma {
    * Because we want to prevent naming conflicts as mentioned in
    * https://github.com/prisma/prisma-client-js/issues/707
    */
-  export class Prisma__DVaultClient<T, Null = never, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> implements Prisma.PrismaPromise<T> {
-    private readonly _dmmf;
-    private readonly _queryType;
-    private readonly _rootField;
-    private readonly _clientMethod;
-    private readonly _args;
-    private readonly _dataPath;
-    private readonly _errorFormat;
-    private readonly _measurePerformance?;
-    private _isList;
-    private _callsite;
-    private _requestPromise?;
-    readonly [Symbol.toStringTag]: 'PrismaPromise';
-    constructor(_dmmf: runtime.DMMFClass, _queryType: 'query' | 'mutation', _rootField: string, _clientMethod: string, _args: any, _dataPath: string[], _errorFormat: ErrorFormat, _measurePerformance?: boolean | undefined, _isList?: boolean);
-
-    workspace<T extends WorkspaceArgs<ExtArgs> = {}>(args?: Subset<T, WorkspaceArgs<ExtArgs>>): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findUnique', never> | Null, never, ExtArgs>;
-
-    Note<T extends DVault$NoteArgs<ExtArgs> = {}>(args?: Subset<T, DVault$NoteArgs<ExtArgs>>): Prisma.PrismaPromise<$Types.GetResult<NotePayload<ExtArgs>, T, 'findMany', never>| Null>;
-
-    private get _document();
+  export interface Prisma__DVaultClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    workspace<T extends WorkspaceDefaultArgs<ExtArgs> = {}>(args?: Subset<T, WorkspaceDefaultArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    Note<T extends DVault$NoteArgs<ExtArgs> = {}>(args?: Subset<T, DVault$NoteArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of which ever callback is executed.
      */
-    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2>;
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
     /**
      * Attaches a callback for only the rejection of the Promise.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of the callback.
      */
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult>;
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
     /**
      * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
      * resolved value cannot be modified from the callback.
      * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
      * @returns A Promise for the completion of the callback.
      */
-    finally(onfinally?: (() => void) | undefined | null): Promise<T>;
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
   }
 
 
 
-  // Custom InputTypes
 
   /**
-   * DVault base type for findUnique actions
+   * Fields of the DVault model
    */
-  export type DVaultFindUniqueArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  interface DVaultFieldRefs {
+    readonly id: FieldRef<"DVault", 'Int'>
+    readonly name: FieldRef<"DVault", 'String'>
+    readonly fsPath: FieldRef<"DVault", 'String'>
+    readonly wsRoot: FieldRef<"DVault", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * DVault findUnique
+   */
+  export type DVaultFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -2733,108 +2924,43 @@ export namespace Prisma {
      */
     where: DVaultWhereUniqueInput
   }
-
-  /**
-   * DVault findUnique
-   */
-  export interface DVaultFindUniqueArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends DVaultFindUniqueArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findUniqueOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
 
   /**
    * DVault findUniqueOrThrow
    */
-  export type DVaultFindUniqueOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
      * Filter, which DVault to fetch.
      */
     where: DVaultWhereUniqueInput
-  }
-
-
-  /**
-   * DVault base type for findFirst actions
-   */
-  export type DVaultFindFirstArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the DVault
-     */
-    select?: DVaultSelect<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well.
-     */
-    include?: DVaultInclude<ExtArgs> | null
-    /**
-     * Filter, which DVault to fetch.
-     */
-    where?: DVaultWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of DVaults to fetch.
-     */
-    orderBy?: Enumerable<DVaultOrderByWithRelationInput>
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for DVaults.
-     */
-    cursor?: DVaultWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` DVaults from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` DVaults.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of DVaults.
-     */
-    distinct?: Enumerable<DVaultScalarFieldEnum>
   }
 
   /**
    * DVault findFirst
    */
-  export interface DVaultFindFirstArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends DVaultFindFirstArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findFirstOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
-
-  /**
-   * DVault findFirstOrThrow
-   */
-  export type DVaultFindFirstOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -2846,7 +2972,7 @@ export namespace Prisma {
      * 
      * Determine the order of DVaults to fetch.
      */
-    orderBy?: Enumerable<DVaultOrderByWithRelationInput>
+    orderBy?: DVaultOrderByWithRelationInput | DVaultOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -2870,20 +2996,75 @@ export namespace Prisma {
      * 
      * Filter by unique combinations of DVaults.
      */
-    distinct?: Enumerable<DVaultScalarFieldEnum>
+    distinct?: DVaultScalarFieldEnum | DVaultScalarFieldEnum[]
   }
 
-
   /**
-   * DVault findMany
+   * DVault findFirstOrThrow
    */
-  export type DVaultFindManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DVaultInclude<ExtArgs> | null
+    /**
+     * Filter, which DVault to fetch.
+     */
+    where?: DVaultWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DVaults to fetch.
+     */
+    orderBy?: DVaultOrderByWithRelationInput | DVaultOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for DVaults.
+     */
+    cursor?: DVaultWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DVaults from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DVaults.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DVaults.
+     */
+    distinct?: DVaultScalarFieldEnum | DVaultScalarFieldEnum[]
+  }
+
+  /**
+   * DVault findMany
+   */
+  export type DVaultFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DVault
+     */
+    select?: DVaultSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -2895,7 +3076,7 @@ export namespace Prisma {
      * 
      * Determine the order of DVaults to fetch.
      */
-    orderBy?: Enumerable<DVaultOrderByWithRelationInput>
+    orderBy?: DVaultOrderByWithRelationInput | DVaultOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -2914,20 +3095,23 @@ export namespace Prisma {
      * Skip the first `n` DVaults.
      */
     skip?: number
-    distinct?: Enumerable<DVaultScalarFieldEnum>
+    distinct?: DVaultScalarFieldEnum | DVaultScalarFieldEnum[]
   }
-
 
   /**
    * DVault create
    */
-  export type DVaultCreateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -2936,17 +3120,52 @@ export namespace Prisma {
     data: XOR<DVaultCreateInput, DVaultUncheckedCreateInput>
   }
 
+  /**
+   * DVault createMany
+   */
+  export type DVaultCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many DVaults.
+     */
+    data: DVaultCreateManyInput | DVaultCreateManyInput[]
+  }
+
+  /**
+   * DVault createManyAndReturn
+   */
+  export type DVaultCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DVault
+     */
+    select?: DVaultSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * The data used to create many DVaults.
+     */
+    data: DVaultCreateManyInput | DVaultCreateManyInput[]
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DVaultIncludeCreateManyAndReturn<ExtArgs> | null
+  }
 
   /**
    * DVault update
    */
-  export type DVaultUpdateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -2959,11 +3178,10 @@ export namespace Prisma {
     where: DVaultWhereUniqueInput
   }
 
-
   /**
    * DVault updateMany
    */
-  export type DVaultUpdateManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * The data used to update DVaults.
      */
@@ -2972,19 +3190,56 @@ export namespace Prisma {
      * Filter which DVaults to update
      */
     where?: DVaultWhereInput
+    /**
+     * Limit how many DVaults to update.
+     */
+    limit?: number
   }
 
+  /**
+   * DVault updateManyAndReturn
+   */
+  export type DVaultUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DVault
+     */
+    select?: DVaultSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * The data used to update DVaults.
+     */
+    data: XOR<DVaultUpdateManyMutationInput, DVaultUncheckedUpdateManyInput>
+    /**
+     * Filter which DVaults to update
+     */
+    where?: DVaultWhereInput
+    /**
+     * Limit how many DVaults to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DVaultIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
 
   /**
    * DVault upsert
    */
-  export type DVaultUpsertArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -3001,17 +3256,20 @@ export namespace Prisma {
     update: XOR<DVaultUpdateInput, DVaultUncheckedUpdateInput>
   }
 
-
   /**
    * DVault delete
    */
-  export type DVaultDeleteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     /**
@@ -3020,59 +3278,66 @@ export namespace Prisma {
     where: DVaultWhereUniqueInput
   }
 
-
   /**
    * DVault deleteMany
    */
-  export type DVaultDeleteManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which DVaults to delete
      */
     where?: DVaultWhereInput
+    /**
+     * Limit how many DVaults to delete.
+     */
+    limit?: number
   }
-
 
   /**
    * DVault.Note
    */
-  export type DVault$NoteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVault$NoteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Note
      */
     select?: NoteSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Note
+     */
+    omit?: NoteOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: NoteInclude<ExtArgs> | null
     where?: NoteWhereInput
-    orderBy?: Enumerable<NoteOrderByWithRelationInput>
+    orderBy?: NoteOrderByWithRelationInput | NoteOrderByWithRelationInput[]
     cursor?: NoteWhereUniqueInput
     take?: number
     skip?: number
-    distinct?: Enumerable<NoteScalarFieldEnum>
+    distinct?: NoteScalarFieldEnum | NoteScalarFieldEnum[]
   }
-
 
   /**
    * DVault without action
    */
-  export type DVaultArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type DVaultDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
   }
 
 
-
   /**
    * Model Workspace
    */
-
 
   export type AggregateWorkspace = {
     _count: WorkspaceCountAggregateOutputType | null
@@ -3131,7 +3396,7 @@ export namespace Prisma {
     _all?: true
   }
 
-  export type WorkspaceAggregateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which Workspace to aggregate.
      */
@@ -3141,7 +3406,7 @@ export namespace Prisma {
      * 
      * Determine the order of Workspaces to fetch.
      */
-    orderBy?: Enumerable<WorkspaceOrderByWithRelationInput>
+    orderBy?: WorkspaceOrderByWithRelationInput | WorkspaceOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -3203,10 +3468,10 @@ export namespace Prisma {
 
 
 
-  export type WorkspaceGroupByArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: WorkspaceWhereInput
-    orderBy?: Enumerable<WorkspaceOrderByWithAggregationInput>
-    by: WorkspaceScalarFieldEnum[]
+    orderBy?: WorkspaceOrderByWithAggregationInput | WorkspaceOrderByWithAggregationInput[]
+    by: WorkspaceScalarFieldEnum[] | WorkspaceScalarFieldEnum
     having?: WorkspaceScalarWhereWithAggregatesInput
     take?: number
     skip?: number
@@ -3216,7 +3481,6 @@ export namespace Prisma {
     _min?: WorkspaceMinAggregateInputType
     _max?: WorkspaceMaxAggregateInputType
   }
-
 
   export type WorkspaceGroupByOutputType = {
     wsRoot: string
@@ -3230,7 +3494,7 @@ export namespace Prisma {
 
   type GetWorkspaceGroupByPayload<T extends WorkspaceGroupByArgs> = Prisma.PrismaPromise<
     Array<
-      PickArray<WorkspaceGroupByOutputType, T['by']> &
+      PickEnumerable<WorkspaceGroupByOutputType, T['by']> &
         {
           [P in ((keyof T) & (keyof WorkspaceGroupByOutputType))]: P extends '_count'
             ? T[P] extends boolean
@@ -3242,11 +3506,21 @@ export namespace Prisma {
     >
 
 
-  export type WorkspaceSelect<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+  export type WorkspaceSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     wsRoot?: boolean
     prismaSchemaVersion?: boolean
     vaults?: boolean | Workspace$vaultsArgs<ExtArgs>
-    _count?: boolean | WorkspaceCountOutputTypeArgs<ExtArgs>
+    _count?: boolean | WorkspaceCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["workspace"]>
+
+  export type WorkspaceSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    wsRoot?: boolean
+    prismaSchemaVersion?: boolean
+  }, ExtArgs["result"]["workspace"]>
+
+  export type WorkspaceSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    wsRoot?: boolean
+    prismaSchemaVersion?: boolean
   }, ExtArgs["result"]["workspace"]>
 
   export type WorkspaceSelectScalar = {
@@ -3254,20 +3528,34 @@ export namespace Prisma {
     prismaSchemaVersion?: boolean
   }
 
-  export type WorkspaceInclude<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"wsRoot" | "prismaSchemaVersion", ExtArgs["result"]["workspace"]>
+  export type WorkspaceInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     vaults?: boolean | Workspace$vaultsArgs<ExtArgs>
-    _count?: boolean | WorkspaceCountOutputTypeArgs<ExtArgs>
+    _count?: boolean | WorkspaceCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type WorkspaceIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type WorkspaceIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $WorkspacePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Workspace"
+    objects: {
+      vaults: Prisma.$DVaultPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      wsRoot: string
+      prismaSchemaVersion: number
+    }, ExtArgs["result"]["workspace"]>
+    composites: {}
   }
 
+  type WorkspaceGetPayload<S extends boolean | null | undefined | WorkspaceDefaultArgs> = $Result.GetResult<Prisma.$WorkspacePayload, S>
 
-  type WorkspaceGetPayload<S extends boolean | null | undefined | WorkspaceArgs> = $Types.GetResult<WorkspacePayload, S>
-
-  type WorkspaceCountArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = 
-    Omit<WorkspaceFindManyArgs, 'select' | 'include'> & {
+  type WorkspaceCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<WorkspaceFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
       select?: WorkspaceCountAggregateInputType | true
     }
 
-  export interface WorkspaceDelegate<GlobalRejectSettings extends Prisma.RejectOnNotFound | Prisma.RejectPerOperation | false | undefined, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> {
+  export interface WorkspaceDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
     [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Workspace'], meta: { name: 'Workspace' } }
     /**
      * Find zero or one Workspace that matches the filter.
@@ -3279,14 +3567,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUnique<T extends WorkspaceFindUniqueArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args: SelectSubset<T, WorkspaceFindUniqueArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findUnique', 'Workspace'> extends True ? Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findUnique', never>, never, ExtArgs> : Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findUnique', never> | null, null, ExtArgs>
+     */
+    findUnique<T extends WorkspaceFindUniqueArgs>(args: SelectSubset<T, WorkspaceFindUniqueArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
-     * Find one Workspace that matches the filter or throw an error  with `error.code='P2025'` 
-     *     if no matches were found.
+     * Find one Workspace that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
      * @param {WorkspaceFindUniqueOrThrowArgs} args - Arguments to find a Workspace
      * @example
      * // Get one Workspace
@@ -3295,10 +3581,8 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findUniqueOrThrow<T extends WorkspaceFindUniqueOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, WorkspaceFindUniqueOrThrowArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findUniqueOrThrow', never>, never, ExtArgs>
+     */
+    findUniqueOrThrow<T extends WorkspaceFindUniqueOrThrowArgs>(args: SelectSubset<T, WorkspaceFindUniqueOrThrowArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first Workspace that matches the filter.
@@ -3312,14 +3596,12 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirst<T extends WorkspaceFindFirstArgs<ExtArgs>, LocalRejectSettings = T["rejectOnNotFound"] extends RejectOnNotFound ? T['rejectOnNotFound'] : undefined>(
-      args?: SelectSubset<T, WorkspaceFindFirstArgs<ExtArgs>>
-    ): HasReject<GlobalRejectSettings, LocalRejectSettings, 'findFirst', 'Workspace'> extends True ? Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findFirst', never>, never, ExtArgs> : Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findFirst', never> | null, null, ExtArgs>
+     */
+    findFirst<T extends WorkspaceFindFirstArgs>(args?: SelectSubset<T, WorkspaceFindFirstArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find the first Workspace that matches the filter or
-     * throw `NotFoundError` if no matches were found.
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
      * @param {WorkspaceFindFirstOrThrowArgs} args - Arguments to find a Workspace
@@ -3330,16 +3612,14 @@ export namespace Prisma {
      *     // ... provide filter here
      *   }
      * })
-    **/
-    findFirstOrThrow<T extends WorkspaceFindFirstOrThrowArgs<ExtArgs>>(
-      args?: SelectSubset<T, WorkspaceFindFirstOrThrowArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findFirstOrThrow', never>, never, ExtArgs>
+     */
+    findFirstOrThrow<T extends WorkspaceFindFirstOrThrowArgs>(args?: SelectSubset<T, WorkspaceFindFirstOrThrowArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Find zero or more Workspaces that matches the filter.
      * Note, that providing `undefined` is treated as the value not being there.
      * Read more here: https://pris.ly/d/null-undefined
-     * @param {WorkspaceFindManyArgs=} args - Arguments to filter and select certain fields only.
+     * @param {WorkspaceFindManyArgs} args - Arguments to filter and select certain fields only.
      * @example
      * // Get all Workspaces
      * const workspaces = await prisma.workspace.findMany()
@@ -3350,10 +3630,8 @@ export namespace Prisma {
      * // Only select the `wsRoot`
      * const workspaceWithWsRootOnly = await prisma.workspace.findMany({ select: { wsRoot: true } })
      * 
-    **/
-    findMany<T extends WorkspaceFindManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, WorkspaceFindManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'findMany', never>>
+     */
+    findMany<T extends WorkspaceFindManyArgs>(args?: SelectSubset<T, WorkspaceFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
 
     /**
      * Create a Workspace.
@@ -3366,10 +3644,46 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    create<T extends WorkspaceCreateArgs<ExtArgs>>(
-      args: SelectSubset<T, WorkspaceCreateArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'create', never>, never, ExtArgs>
+     */
+    create<T extends WorkspaceCreateArgs>(args: SelectSubset<T, WorkspaceCreateArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Workspaces.
+     * @param {WorkspaceCreateManyArgs} args - Arguments to create many Workspaces.
+     * @example
+     * // Create many Workspaces
+     * const workspace = await prisma.workspace.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends WorkspaceCreateManyArgs>(args?: SelectSubset<T, WorkspaceCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Workspaces and returns the data saved in the database.
+     * @param {WorkspaceCreateManyAndReturnArgs} args - Arguments to create many Workspaces.
+     * @example
+     * // Create many Workspaces
+     * const workspace = await prisma.workspace.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Workspaces and only return the `wsRoot`
+     * const workspaceWithWsRootOnly = await prisma.workspace.createManyAndReturn({
+     *   select: { wsRoot: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends WorkspaceCreateManyAndReturnArgs>(args?: SelectSubset<T, WorkspaceCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Delete a Workspace.
@@ -3382,10 +3696,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    delete<T extends WorkspaceDeleteArgs<ExtArgs>>(
-      args: SelectSubset<T, WorkspaceDeleteArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'delete', never>, never, ExtArgs>
+     */
+    delete<T extends WorkspaceDeleteArgs>(args: SelectSubset<T, WorkspaceDeleteArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Update one Workspace.
@@ -3401,10 +3713,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    update<T extends WorkspaceUpdateArgs<ExtArgs>>(
-      args: SelectSubset<T, WorkspaceUpdateArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'update', never>, never, ExtArgs>
+     */
+    update<T extends WorkspaceUpdateArgs>(args: SelectSubset<T, WorkspaceUpdateArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
 
     /**
      * Delete zero or more Workspaces.
@@ -3417,10 +3727,8 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    deleteMany<T extends WorkspaceDeleteManyArgs<ExtArgs>>(
-      args?: SelectSubset<T, WorkspaceDeleteManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    deleteMany<T extends WorkspaceDeleteManyArgs>(args?: SelectSubset<T, WorkspaceDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
 
     /**
      * Update zero or more Workspaces.
@@ -3438,10 +3746,38 @@ export namespace Prisma {
      *   }
      * })
      * 
-    **/
-    updateMany<T extends WorkspaceUpdateManyArgs<ExtArgs>>(
-      args: SelectSubset<T, WorkspaceUpdateManyArgs<ExtArgs>>
-    ): Prisma.PrismaPromise<BatchPayload>
+     */
+    updateMany<T extends WorkspaceUpdateManyArgs>(args: SelectSubset<T, WorkspaceUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Workspaces and returns the data updated in the database.
+     * @param {WorkspaceUpdateManyAndReturnArgs} args - Arguments to update many Workspaces.
+     * @example
+     * // Update many Workspaces
+     * const workspace = await prisma.workspace.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Workspaces and only return the `wsRoot`
+     * const workspaceWithWsRootOnly = await prisma.workspace.updateManyAndReturn({
+     *   select: { wsRoot: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends WorkspaceUpdateManyAndReturnArgs>(args: SelectSubset<T, WorkspaceUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
 
     /**
      * Create or update one Workspace.
@@ -3459,10 +3795,9 @@ export namespace Prisma {
      *     // ... the filter for the Workspace we want to update
      *   }
      * })
-    **/
-    upsert<T extends WorkspaceUpsertArgs<ExtArgs>>(
-      args: SelectSubset<T, WorkspaceUpsertArgs<ExtArgs>>
-    ): Prisma__WorkspaceClient<$Types.GetResult<WorkspacePayload<ExtArgs>, T, 'upsert', never>, never, ExtArgs>
+     */
+    upsert<T extends WorkspaceUpsertArgs>(args: SelectSubset<T, WorkspaceUpsertArgs<ExtArgs>>): Prisma__WorkspaceClient<$Result.GetResult<Prisma.$WorkspacePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
 
     /**
      * Count the number of Workspaces.
@@ -3541,7 +3876,7 @@ export namespace Prisma {
         ? { orderBy: WorkspaceGroupByArgs['orderBy'] }
         : { orderBy?: WorkspaceGroupByArgs['orderBy'] },
       OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
-      ByFields extends TupleToUnion<T['by']>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
       ByValid extends Has<ByFields, OrderFields>,
       HavingFields extends GetHavingFields<T['having']>,
       HavingValid extends Has<ByFields, HavingFields>,
@@ -3589,7 +3924,10 @@ export namespace Prisma {
             : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
         }[OrderFields]
     >(args: SubsetIntersection<T, WorkspaceGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetWorkspaceGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
-
+  /**
+   * Fields of the Workspace model
+   */
+  readonly fields: WorkspaceFieldRefs;
   }
 
   /**
@@ -3598,60 +3936,58 @@ export namespace Prisma {
    * Because we want to prevent naming conflicts as mentioned in
    * https://github.com/prisma/prisma-client-js/issues/707
    */
-  export class Prisma__WorkspaceClient<T, Null = never, ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> implements Prisma.PrismaPromise<T> {
-    private readonly _dmmf;
-    private readonly _queryType;
-    private readonly _rootField;
-    private readonly _clientMethod;
-    private readonly _args;
-    private readonly _dataPath;
-    private readonly _errorFormat;
-    private readonly _measurePerformance?;
-    private _isList;
-    private _callsite;
-    private _requestPromise?;
-    readonly [Symbol.toStringTag]: 'PrismaPromise';
-    constructor(_dmmf: runtime.DMMFClass, _queryType: 'query' | 'mutation', _rootField: string, _clientMethod: string, _args: any, _dataPath: string[], _errorFormat: ErrorFormat, _measurePerformance?: boolean | undefined, _isList?: boolean);
-
-    vaults<T extends Workspace$vaultsArgs<ExtArgs> = {}>(args?: Subset<T, Workspace$vaultsArgs<ExtArgs>>): Prisma.PrismaPromise<$Types.GetResult<DVaultPayload<ExtArgs>, T, 'findMany', never>| Null>;
-
-    private get _document();
+  export interface Prisma__WorkspaceClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    vaults<T extends Workspace$vaultsArgs<ExtArgs> = {}>(args?: Subset<T, Workspace$vaultsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DVaultPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of which ever callback is executed.
      */
-    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2>;
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
     /**
      * Attaches a callback for only the rejection of the Promise.
      * @param onrejected The callback to execute when the Promise is rejected.
      * @returns A Promise for the completion of the callback.
      */
-    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult>;
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
     /**
      * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
      * resolved value cannot be modified from the callback.
      * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
      * @returns A Promise for the completion of the callback.
      */
-    finally(onfinally?: (() => void) | undefined | null): Promise<T>;
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
   }
 
 
 
-  // Custom InputTypes
 
   /**
-   * Workspace base type for findUnique actions
+   * Fields of the Workspace model
    */
-  export type WorkspaceFindUniqueArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  interface WorkspaceFieldRefs {
+    readonly wsRoot: FieldRef<"Workspace", 'String'>
+    readonly prismaSchemaVersion: FieldRef<"Workspace", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Workspace findUnique
+   */
+  export type WorkspaceFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3659,108 +3995,43 @@ export namespace Prisma {
      */
     where: WorkspaceWhereUniqueInput
   }
-
-  /**
-   * Workspace findUnique
-   */
-  export interface WorkspaceFindUniqueArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends WorkspaceFindUniqueArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findUniqueOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
 
   /**
    * Workspace findUniqueOrThrow
    */
-  export type WorkspaceFindUniqueOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
      * Filter, which Workspace to fetch.
      */
     where: WorkspaceWhereUniqueInput
-  }
-
-
-  /**
-   * Workspace base type for findFirst actions
-   */
-  export type WorkspaceFindFirstArgsBase<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
-    /**
-     * Select specific fields to fetch from the Workspace
-     */
-    select?: WorkspaceSelect<ExtArgs> | null
-    /**
-     * Choose, which related nodes to fetch as well.
-     */
-    include?: WorkspaceInclude<ExtArgs> | null
-    /**
-     * Filter, which Workspace to fetch.
-     */
-    where?: WorkspaceWhereInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
-     * 
-     * Determine the order of Workspaces to fetch.
-     */
-    orderBy?: Enumerable<WorkspaceOrderByWithRelationInput>
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
-     * 
-     * Sets the position for searching for Workspaces.
-     */
-    cursor?: WorkspaceWhereUniqueInput
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Take `±n` Workspaces from the position of the cursor.
-     */
-    take?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
-     * 
-     * Skip the first `n` Workspaces.
-     */
-    skip?: number
-    /**
-     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
-     * 
-     * Filter by unique combinations of Workspaces.
-     */
-    distinct?: Enumerable<WorkspaceScalarFieldEnum>
   }
 
   /**
    * Workspace findFirst
    */
-  export interface WorkspaceFindFirstArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> extends WorkspaceFindFirstArgsBase<ExtArgs> {
-   /**
-    * Throw an Error if query returns no results
-    * @deprecated since 4.0.0: use `findFirstOrThrow` method instead
-    */
-    rejectOnNotFound?: RejectOnNotFound
-  }
-      
-
-  /**
-   * Workspace findFirstOrThrow
-   */
-  export type WorkspaceFindFirstOrThrowArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3772,7 +4043,7 @@ export namespace Prisma {
      * 
      * Determine the order of Workspaces to fetch.
      */
-    orderBy?: Enumerable<WorkspaceOrderByWithRelationInput>
+    orderBy?: WorkspaceOrderByWithRelationInput | WorkspaceOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -3796,20 +4067,75 @@ export namespace Prisma {
      * 
      * Filter by unique combinations of Workspaces.
      */
-    distinct?: Enumerable<WorkspaceScalarFieldEnum>
+    distinct?: WorkspaceScalarFieldEnum | WorkspaceScalarFieldEnum[]
   }
 
-
   /**
-   * Workspace findMany
+   * Workspace findFirstOrThrow
    */
-  export type WorkspaceFindManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: WorkspaceInclude<ExtArgs> | null
+    /**
+     * Filter, which Workspace to fetch.
+     */
+    where?: WorkspaceWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Workspaces to fetch.
+     */
+    orderBy?: WorkspaceOrderByWithRelationInput | WorkspaceOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Workspaces.
+     */
+    cursor?: WorkspaceWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Workspaces from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Workspaces.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Workspaces.
+     */
+    distinct?: WorkspaceScalarFieldEnum | WorkspaceScalarFieldEnum[]
+  }
+
+  /**
+   * Workspace findMany
+   */
+  export type WorkspaceFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Workspace
+     */
+    select?: WorkspaceSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3821,7 +4147,7 @@ export namespace Prisma {
      * 
      * Determine the order of Workspaces to fetch.
      */
-    orderBy?: Enumerable<WorkspaceOrderByWithRelationInput>
+    orderBy?: WorkspaceOrderByWithRelationInput | WorkspaceOrderByWithRelationInput[]
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
      * 
@@ -3840,20 +4166,23 @@ export namespace Prisma {
      * Skip the first `n` Workspaces.
      */
     skip?: number
-    distinct?: Enumerable<WorkspaceScalarFieldEnum>
+    distinct?: WorkspaceScalarFieldEnum | WorkspaceScalarFieldEnum[]
   }
-
 
   /**
    * Workspace create
    */
-  export type WorkspaceCreateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3862,17 +4191,48 @@ export namespace Prisma {
     data: XOR<WorkspaceCreateInput, WorkspaceUncheckedCreateInput>
   }
 
+  /**
+   * Workspace createMany
+   */
+  export type WorkspaceCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Workspaces.
+     */
+    data: WorkspaceCreateManyInput | WorkspaceCreateManyInput[]
+  }
+
+  /**
+   * Workspace createManyAndReturn
+   */
+  export type WorkspaceCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Workspace
+     */
+    select?: WorkspaceSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * The data used to create many Workspaces.
+     */
+    data: WorkspaceCreateManyInput | WorkspaceCreateManyInput[]
+  }
 
   /**
    * Workspace update
    */
-  export type WorkspaceUpdateArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3885,11 +4245,10 @@ export namespace Prisma {
     where: WorkspaceWhereUniqueInput
   }
 
-
   /**
    * Workspace updateMany
    */
-  export type WorkspaceUpdateManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * The data used to update Workspaces.
      */
@@ -3898,19 +4257,52 @@ export namespace Prisma {
      * Filter which Workspaces to update
      */
     where?: WorkspaceWhereInput
+    /**
+     * Limit how many Workspaces to update.
+     */
+    limit?: number
   }
 
+  /**
+   * Workspace updateManyAndReturn
+   */
+  export type WorkspaceUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Workspace
+     */
+    select?: WorkspaceSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * The data used to update Workspaces.
+     */
+    data: XOR<WorkspaceUpdateManyMutationInput, WorkspaceUncheckedUpdateManyInput>
+    /**
+     * Filter which Workspaces to update
+     */
+    where?: WorkspaceWhereInput
+    /**
+     * Limit how many Workspaces to update.
+     */
+    limit?: number
+  }
 
   /**
    * Workspace upsert
    */
-  export type WorkspaceUpsertArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3927,17 +4319,20 @@ export namespace Prisma {
     update: XOR<WorkspaceUpdateInput, WorkspaceUncheckedUpdateInput>
   }
 
-
   /**
    * Workspace delete
    */
-  export type WorkspaceDeleteArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
     /**
@@ -3946,53 +4341,61 @@ export namespace Prisma {
     where: WorkspaceWhereUniqueInput
   }
 
-
   /**
    * Workspace deleteMany
    */
-  export type WorkspaceDeleteManyArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Filter which Workspaces to delete
      */
     where?: WorkspaceWhereInput
+    /**
+     * Limit how many Workspaces to delete.
+     */
+    limit?: number
   }
-
 
   /**
    * Workspace.vaults
    */
-  export type Workspace$vaultsArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type Workspace$vaultsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the DVault
      */
     select?: DVaultSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the DVault
+     */
+    omit?: DVaultOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: DVaultInclude<ExtArgs> | null
     where?: DVaultWhereInput
-    orderBy?: Enumerable<DVaultOrderByWithRelationInput>
+    orderBy?: DVaultOrderByWithRelationInput | DVaultOrderByWithRelationInput[]
     cursor?: DVaultWhereUniqueInput
     take?: number
     skip?: number
-    distinct?: Enumerable<DVaultScalarFieldEnum>
+    distinct?: DVaultScalarFieldEnum | DVaultScalarFieldEnum[]
   }
-
 
   /**
    * Workspace without action
    */
-  export type WorkspaceArgs<ExtArgs extends $Extensions.Args = $Extensions.DefaultArgs> = {
+  export type WorkspaceDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     /**
      * Select specific fields to fetch from the Workspace
      */
     select?: WorkspaceSelect<ExtArgs> | null
     /**
-     * Choose, which related nodes to fetch as well.
+     * Omit specific fields from the Workspace
+     */
+    omit?: WorkspaceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
      */
     include?: WorkspaceInclude<ExtArgs> | null
   }
-
 
 
   /**
@@ -4054,22 +4457,53 @@ export namespace Prisma {
 
 
   /**
+   * Field references
+   */
+
+
+  /**
+   * Reference to a field of type 'String'
+   */
+  export type StringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String'>
+    
+
+
+  /**
+   * Reference to a field of type 'Int'
+   */
+  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+  /**
+   * Reference to a field of type 'Boolean'
+   */
+  export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+  /**
+   * Reference to a field of type 'Float'
+   */
+  export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+  /**
    * Deep Input Types
    */
 
 
   export type NoteWhereInput = {
-    AND?: Enumerable<NoteWhereInput>
-    OR?: Enumerable<NoteWhereInput>
-    NOT?: Enumerable<NoteWhereInput>
-    id?: StringFilter | string
-    fname?: StringNullableFilter | string | null
-    title?: StringNullableFilter | string | null
-    updated?: IntNullableFilter | number | null
-    created?: IntNullableFilter | number | null
-    stub?: BoolNullableFilter | boolean | null
-    dVaultId?: IntFilter | number
-    vault?: XOR<DVaultRelationFilter, DVaultWhereInput>
+    AND?: NoteWhereInput | NoteWhereInput[]
+    OR?: NoteWhereInput[]
+    NOT?: NoteWhereInput | NoteWhereInput[]
+    id?: StringFilter<"Note"> | string
+    fname?: StringNullableFilter<"Note"> | string | null
+    title?: StringNullableFilter<"Note"> | string | null
+    updated?: IntNullableFilter<"Note"> | number | null
+    created?: IntNullableFilter<"Note"> | number | null
+    stub?: BoolNullableFilter<"Note"> | boolean | null
+    dVaultId?: IntFilter<"Note"> | number
+    vault?: XOR<DVaultScalarRelationFilter, DVaultWhereInput>
   }
 
   export type NoteOrderByWithRelationInput = {
@@ -4083,9 +4517,19 @@ export namespace Prisma {
     vault?: DVaultOrderByWithRelationInput
   }
 
-  export type NoteWhereUniqueInput = {
+  export type NoteWhereUniqueInput = Prisma.AtLeast<{
     id?: string
-  }
+    AND?: NoteWhereInput | NoteWhereInput[]
+    OR?: NoteWhereInput[]
+    NOT?: NoteWhereInput | NoteWhereInput[]
+    fname?: StringNullableFilter<"Note"> | string | null
+    title?: StringNullableFilter<"Note"> | string | null
+    updated?: IntNullableFilter<"Note"> | number | null
+    created?: IntNullableFilter<"Note"> | number | null
+    stub?: BoolNullableFilter<"Note"> | boolean | null
+    dVaultId?: IntFilter<"Note"> | number
+    vault?: XOR<DVaultScalarRelationFilter, DVaultWhereInput>
+  }, "id">
 
   export type NoteOrderByWithAggregationInput = {
     id?: SortOrder
@@ -4103,27 +4547,27 @@ export namespace Prisma {
   }
 
   export type NoteScalarWhereWithAggregatesInput = {
-    AND?: Enumerable<NoteScalarWhereWithAggregatesInput>
-    OR?: Enumerable<NoteScalarWhereWithAggregatesInput>
-    NOT?: Enumerable<NoteScalarWhereWithAggregatesInput>
-    id?: StringWithAggregatesFilter | string
-    fname?: StringNullableWithAggregatesFilter | string | null
-    title?: StringNullableWithAggregatesFilter | string | null
-    updated?: IntNullableWithAggregatesFilter | number | null
-    created?: IntNullableWithAggregatesFilter | number | null
-    stub?: BoolNullableWithAggregatesFilter | boolean | null
-    dVaultId?: IntWithAggregatesFilter | number
+    AND?: NoteScalarWhereWithAggregatesInput | NoteScalarWhereWithAggregatesInput[]
+    OR?: NoteScalarWhereWithAggregatesInput[]
+    NOT?: NoteScalarWhereWithAggregatesInput | NoteScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Note"> | string
+    fname?: StringNullableWithAggregatesFilter<"Note"> | string | null
+    title?: StringNullableWithAggregatesFilter<"Note"> | string | null
+    updated?: IntNullableWithAggregatesFilter<"Note"> | number | null
+    created?: IntNullableWithAggregatesFilter<"Note"> | number | null
+    stub?: BoolNullableWithAggregatesFilter<"Note"> | boolean | null
+    dVaultId?: IntWithAggregatesFilter<"Note"> | number
   }
 
   export type DVaultWhereInput = {
-    AND?: Enumerable<DVaultWhereInput>
-    OR?: Enumerable<DVaultWhereInput>
-    NOT?: Enumerable<DVaultWhereInput>
-    id?: IntFilter | number
-    name?: StringNullableFilter | string | null
-    fsPath?: StringFilter | string
-    wsRoot?: StringFilter | string
-    workspace?: XOR<WorkspaceRelationFilter, WorkspaceWhereInput>
+    AND?: DVaultWhereInput | DVaultWhereInput[]
+    OR?: DVaultWhereInput[]
+    NOT?: DVaultWhereInput | DVaultWhereInput[]
+    id?: IntFilter<"DVault"> | number
+    name?: StringNullableFilter<"DVault"> | string | null
+    fsPath?: StringFilter<"DVault"> | string
+    wsRoot?: StringFilter<"DVault"> | string
+    workspace?: XOR<WorkspaceScalarRelationFilter, WorkspaceWhereInput>
     Note?: NoteListRelationFilter
   }
 
@@ -4136,11 +4580,18 @@ export namespace Prisma {
     Note?: NoteOrderByRelationAggregateInput
   }
 
-  export type DVaultWhereUniqueInput = {
+  export type DVaultWhereUniqueInput = Prisma.AtLeast<{
     id?: number
     name?: string
     wsRoot_fsPath?: DVaultWsRootFsPathCompoundUniqueInput
-  }
+    AND?: DVaultWhereInput | DVaultWhereInput[]
+    OR?: DVaultWhereInput[]
+    NOT?: DVaultWhereInput | DVaultWhereInput[]
+    fsPath?: StringFilter<"DVault"> | string
+    wsRoot?: StringFilter<"DVault"> | string
+    workspace?: XOR<WorkspaceScalarRelationFilter, WorkspaceWhereInput>
+    Note?: NoteListRelationFilter
+  }, "id" | "name" | "wsRoot_fsPath">
 
   export type DVaultOrderByWithAggregationInput = {
     id?: SortOrder
@@ -4155,21 +4606,21 @@ export namespace Prisma {
   }
 
   export type DVaultScalarWhereWithAggregatesInput = {
-    AND?: Enumerable<DVaultScalarWhereWithAggregatesInput>
-    OR?: Enumerable<DVaultScalarWhereWithAggregatesInput>
-    NOT?: Enumerable<DVaultScalarWhereWithAggregatesInput>
-    id?: IntWithAggregatesFilter | number
-    name?: StringNullableWithAggregatesFilter | string | null
-    fsPath?: StringWithAggregatesFilter | string
-    wsRoot?: StringWithAggregatesFilter | string
+    AND?: DVaultScalarWhereWithAggregatesInput | DVaultScalarWhereWithAggregatesInput[]
+    OR?: DVaultScalarWhereWithAggregatesInput[]
+    NOT?: DVaultScalarWhereWithAggregatesInput | DVaultScalarWhereWithAggregatesInput[]
+    id?: IntWithAggregatesFilter<"DVault"> | number
+    name?: StringNullableWithAggregatesFilter<"DVault"> | string | null
+    fsPath?: StringWithAggregatesFilter<"DVault"> | string
+    wsRoot?: StringWithAggregatesFilter<"DVault"> | string
   }
 
   export type WorkspaceWhereInput = {
-    AND?: Enumerable<WorkspaceWhereInput>
-    OR?: Enumerable<WorkspaceWhereInput>
-    NOT?: Enumerable<WorkspaceWhereInput>
-    wsRoot?: StringFilter | string
-    prismaSchemaVersion?: IntFilter | number
+    AND?: WorkspaceWhereInput | WorkspaceWhereInput[]
+    OR?: WorkspaceWhereInput[]
+    NOT?: WorkspaceWhereInput | WorkspaceWhereInput[]
+    wsRoot?: StringFilter<"Workspace"> | string
+    prismaSchemaVersion?: IntFilter<"Workspace"> | number
     vaults?: DVaultListRelationFilter
   }
 
@@ -4179,9 +4630,14 @@ export namespace Prisma {
     vaults?: DVaultOrderByRelationAggregateInput
   }
 
-  export type WorkspaceWhereUniqueInput = {
+  export type WorkspaceWhereUniqueInput = Prisma.AtLeast<{
     wsRoot?: string
-  }
+    AND?: WorkspaceWhereInput | WorkspaceWhereInput[]
+    OR?: WorkspaceWhereInput[]
+    NOT?: WorkspaceWhereInput | WorkspaceWhereInput[]
+    prismaSchemaVersion?: IntFilter<"Workspace"> | number
+    vaults?: DVaultListRelationFilter
+  }, "wsRoot" | "wsRoot">
 
   export type WorkspaceOrderByWithAggregationInput = {
     wsRoot?: SortOrder
@@ -4194,11 +4650,11 @@ export namespace Prisma {
   }
 
   export type WorkspaceScalarWhereWithAggregatesInput = {
-    AND?: Enumerable<WorkspaceScalarWhereWithAggregatesInput>
-    OR?: Enumerable<WorkspaceScalarWhereWithAggregatesInput>
-    NOT?: Enumerable<WorkspaceScalarWhereWithAggregatesInput>
-    wsRoot?: StringWithAggregatesFilter | string
-    prismaSchemaVersion?: IntWithAggregatesFilter | number
+    AND?: WorkspaceScalarWhereWithAggregatesInput | WorkspaceScalarWhereWithAggregatesInput[]
+    OR?: WorkspaceScalarWhereWithAggregatesInput[]
+    NOT?: WorkspaceScalarWhereWithAggregatesInput | WorkspaceScalarWhereWithAggregatesInput[]
+    wsRoot?: StringWithAggregatesFilter<"Workspace"> | string
+    prismaSchemaVersion?: IntWithAggregatesFilter<"Workspace"> | number
   }
 
   export type NoteCreateInput = {
@@ -4239,6 +4695,16 @@ export namespace Prisma {
     created?: NullableIntFieldUpdateOperationsInput | number | null
     stub?: NullableBoolFieldUpdateOperationsInput | boolean | null
     dVaultId?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type NoteCreateManyInput = {
+    id: string
+    fname?: string | null
+    title?: string | null
+    updated?: number | null
+    created?: number | null
+    stub?: boolean | null
+    dVaultId: number
   }
 
   export type NoteUpdateManyMutationInput = {
@@ -4290,6 +4756,13 @@ export namespace Prisma {
     Note?: NoteUncheckedUpdateManyWithoutVaultNestedInput
   }
 
+  export type DVaultCreateManyInput = {
+    id?: number
+    name?: string | null
+    fsPath: string
+    wsRoot: string
+  }
+
   export type DVaultUpdateManyMutationInput = {
     name?: NullableStringFieldUpdateOperationsInput | string | null
     fsPath?: StringFieldUpdateOperationsInput | string
@@ -4326,6 +4799,11 @@ export namespace Prisma {
     vaults?: DVaultUncheckedUpdateManyWithoutWorkspaceNestedInput
   }
 
+  export type WorkspaceCreateManyInput = {
+    wsRoot: string
+    prismaSchemaVersion: number
+  }
+
   export type WorkspaceUpdateManyMutationInput = {
     wsRoot?: StringFieldUpdateOperationsInput | string
     prismaSchemaVersion?: IntFieldUpdateOperationsInput | number
@@ -4336,64 +4814,64 @@ export namespace Prisma {
     prismaSchemaVersion?: IntFieldUpdateOperationsInput | number
   }
 
-  export type StringFilter = {
-    equals?: string
-    in?: Enumerable<string> | string
-    notIn?: Enumerable<string> | string
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringFilter | string
+  export type StringFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel>
+    in?: string[]
+    notIn?: string[]
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringFilter<$PrismaModel> | string
   }
 
-  export type StringNullableFilter = {
-    equals?: string | null
-    in?: Enumerable<string> | string | null
-    notIn?: Enumerable<string> | string | null
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringNullableFilter | string | null
+  export type StringNullableFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
-  export type IntNullableFilter = {
-    equals?: number | null
-    in?: Enumerable<number> | number | null
-    notIn?: Enumerable<number> | number | null
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntNullableFilter | number | null
+  export type IntNullableFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableFilter<$PrismaModel> | number | null
   }
 
-  export type BoolNullableFilter = {
-    equals?: boolean | null
-    not?: NestedBoolNullableFilter | boolean | null
+  export type BoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
   }
 
-  export type IntFilter = {
-    equals?: number
-    in?: Enumerable<number> | number
-    notIn?: Enumerable<number> | number
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntFilter | number
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[]
+    notIn?: number[]
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
-  export type DVaultRelationFilter = {
-    is?: DVaultWhereInput | null
-    isNot?: DVaultWhereInput | null
+  export type DVaultScalarRelationFilter = {
+    is?: DVaultWhereInput
+    isNot?: DVaultWhereInput
   }
 
   export type SortOrderInput = {
@@ -4443,83 +4921,83 @@ export namespace Prisma {
     dVaultId?: SortOrder
   }
 
-  export type StringWithAggregatesFilter = {
-    equals?: string
-    in?: Enumerable<string> | string
-    notIn?: Enumerable<string> | string
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringWithAggregatesFilter | string
-    _count?: NestedIntFilter
-    _min?: NestedStringFilter
-    _max?: NestedStringFilter
+  export type StringWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel>
+    in?: string[]
+    notIn?: string[]
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringWithAggregatesFilter<$PrismaModel> | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedStringFilter<$PrismaModel>
+    _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type StringNullableWithAggregatesFilter = {
-    equals?: string | null
-    in?: Enumerable<string> | string | null
-    notIn?: Enumerable<string> | string | null
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringNullableWithAggregatesFilter | string | null
-    _count?: NestedIntNullableFilter
-    _min?: NestedStringNullableFilter
-    _max?: NestedStringNullableFilter
+  export type StringNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedStringNullableFilter<$PrismaModel>
+    _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
-  export type IntNullableWithAggregatesFilter = {
-    equals?: number | null
-    in?: Enumerable<number> | number | null
-    notIn?: Enumerable<number> | number | null
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntNullableWithAggregatesFilter | number | null
-    _count?: NestedIntNullableFilter
-    _avg?: NestedFloatNullableFilter
-    _sum?: NestedIntNullableFilter
-    _min?: NestedIntNullableFilter
-    _max?: NestedIntNullableFilter
+  export type IntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
   }
 
-  export type BoolNullableWithAggregatesFilter = {
-    equals?: boolean | null
-    not?: NestedBoolNullableWithAggregatesFilter | boolean | null
-    _count?: NestedIntNullableFilter
-    _min?: NestedBoolNullableFilter
-    _max?: NestedBoolNullableFilter
+  export type BoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
   }
 
-  export type IntWithAggregatesFilter = {
-    equals?: number
-    in?: Enumerable<number> | number
-    notIn?: Enumerable<number> | number
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntWithAggregatesFilter | number
-    _count?: NestedIntFilter
-    _avg?: NestedFloatFilter
-    _sum?: NestedIntFilter
-    _min?: NestedIntFilter
-    _max?: NestedIntFilter
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[]
+    notIn?: number[]
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
-  export type WorkspaceRelationFilter = {
-    is?: WorkspaceWhereInput | null
-    isNot?: WorkspaceWhereInput | null
+  export type WorkspaceScalarRelationFilter = {
+    is?: WorkspaceWhereInput
+    isNot?: WorkspaceWhereInput
   }
 
   export type NoteListRelationFilter = {
@@ -4630,7 +5108,7 @@ export namespace Prisma {
     connectOrCreate?: DVaultCreateOrConnectWithoutNoteInput
     upsert?: DVaultUpsertWithoutNoteInput
     connect?: DVaultWhereUniqueInput
-    update?: XOR<DVaultUpdateWithoutNoteInput, DVaultUncheckedUpdateWithoutNoteInput>
+    update?: XOR<XOR<DVaultUpdateToOneWithWhereWithoutNoteInput, DVaultUpdateWithoutNoteInput>, DVaultUncheckedUpdateWithoutNoteInput>
   }
 
   export type IntFieldUpdateOperationsInput = {
@@ -4648,15 +5126,17 @@ export namespace Prisma {
   }
 
   export type NoteCreateNestedManyWithoutVaultInput = {
-    create?: XOR<Enumerable<NoteCreateWithoutVaultInput>, Enumerable<NoteUncheckedCreateWithoutVaultInput>>
-    connectOrCreate?: Enumerable<NoteCreateOrConnectWithoutVaultInput>
-    connect?: Enumerable<NoteWhereUniqueInput>
+    create?: XOR<NoteCreateWithoutVaultInput, NoteUncheckedCreateWithoutVaultInput> | NoteCreateWithoutVaultInput[] | NoteUncheckedCreateWithoutVaultInput[]
+    connectOrCreate?: NoteCreateOrConnectWithoutVaultInput | NoteCreateOrConnectWithoutVaultInput[]
+    createMany?: NoteCreateManyVaultInputEnvelope
+    connect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
   }
 
   export type NoteUncheckedCreateNestedManyWithoutVaultInput = {
-    create?: XOR<Enumerable<NoteCreateWithoutVaultInput>, Enumerable<NoteUncheckedCreateWithoutVaultInput>>
-    connectOrCreate?: Enumerable<NoteCreateOrConnectWithoutVaultInput>
-    connect?: Enumerable<NoteWhereUniqueInput>
+    create?: XOR<NoteCreateWithoutVaultInput, NoteUncheckedCreateWithoutVaultInput> | NoteCreateWithoutVaultInput[] | NoteUncheckedCreateWithoutVaultInput[]
+    connectOrCreate?: NoteCreateOrConnectWithoutVaultInput | NoteCreateOrConnectWithoutVaultInput[]
+    createMany?: NoteCreateManyVaultInputEnvelope
+    connect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
   }
 
   export type WorkspaceUpdateOneRequiredWithoutVaultsNestedInput = {
@@ -4664,222 +5144,228 @@ export namespace Prisma {
     connectOrCreate?: WorkspaceCreateOrConnectWithoutVaultsInput
     upsert?: WorkspaceUpsertWithoutVaultsInput
     connect?: WorkspaceWhereUniqueInput
-    update?: XOR<WorkspaceUpdateWithoutVaultsInput, WorkspaceUncheckedUpdateWithoutVaultsInput>
+    update?: XOR<XOR<WorkspaceUpdateToOneWithWhereWithoutVaultsInput, WorkspaceUpdateWithoutVaultsInput>, WorkspaceUncheckedUpdateWithoutVaultsInput>
   }
 
   export type NoteUpdateManyWithoutVaultNestedInput = {
-    create?: XOR<Enumerable<NoteCreateWithoutVaultInput>, Enumerable<NoteUncheckedCreateWithoutVaultInput>>
-    connectOrCreate?: Enumerable<NoteCreateOrConnectWithoutVaultInput>
-    upsert?: Enumerable<NoteUpsertWithWhereUniqueWithoutVaultInput>
-    set?: Enumerable<NoteWhereUniqueInput>
-    disconnect?: Enumerable<NoteWhereUniqueInput>
-    delete?: Enumerable<NoteWhereUniqueInput>
-    connect?: Enumerable<NoteWhereUniqueInput>
-    update?: Enumerable<NoteUpdateWithWhereUniqueWithoutVaultInput>
-    updateMany?: Enumerable<NoteUpdateManyWithWhereWithoutVaultInput>
-    deleteMany?: Enumerable<NoteScalarWhereInput>
+    create?: XOR<NoteCreateWithoutVaultInput, NoteUncheckedCreateWithoutVaultInput> | NoteCreateWithoutVaultInput[] | NoteUncheckedCreateWithoutVaultInput[]
+    connectOrCreate?: NoteCreateOrConnectWithoutVaultInput | NoteCreateOrConnectWithoutVaultInput[]
+    upsert?: NoteUpsertWithWhereUniqueWithoutVaultInput | NoteUpsertWithWhereUniqueWithoutVaultInput[]
+    createMany?: NoteCreateManyVaultInputEnvelope
+    set?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    disconnect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    delete?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    connect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    update?: NoteUpdateWithWhereUniqueWithoutVaultInput | NoteUpdateWithWhereUniqueWithoutVaultInput[]
+    updateMany?: NoteUpdateManyWithWhereWithoutVaultInput | NoteUpdateManyWithWhereWithoutVaultInput[]
+    deleteMany?: NoteScalarWhereInput | NoteScalarWhereInput[]
   }
 
   export type NoteUncheckedUpdateManyWithoutVaultNestedInput = {
-    create?: XOR<Enumerable<NoteCreateWithoutVaultInput>, Enumerable<NoteUncheckedCreateWithoutVaultInput>>
-    connectOrCreate?: Enumerable<NoteCreateOrConnectWithoutVaultInput>
-    upsert?: Enumerable<NoteUpsertWithWhereUniqueWithoutVaultInput>
-    set?: Enumerable<NoteWhereUniqueInput>
-    disconnect?: Enumerable<NoteWhereUniqueInput>
-    delete?: Enumerable<NoteWhereUniqueInput>
-    connect?: Enumerable<NoteWhereUniqueInput>
-    update?: Enumerable<NoteUpdateWithWhereUniqueWithoutVaultInput>
-    updateMany?: Enumerable<NoteUpdateManyWithWhereWithoutVaultInput>
-    deleteMany?: Enumerable<NoteScalarWhereInput>
+    create?: XOR<NoteCreateWithoutVaultInput, NoteUncheckedCreateWithoutVaultInput> | NoteCreateWithoutVaultInput[] | NoteUncheckedCreateWithoutVaultInput[]
+    connectOrCreate?: NoteCreateOrConnectWithoutVaultInput | NoteCreateOrConnectWithoutVaultInput[]
+    upsert?: NoteUpsertWithWhereUniqueWithoutVaultInput | NoteUpsertWithWhereUniqueWithoutVaultInput[]
+    createMany?: NoteCreateManyVaultInputEnvelope
+    set?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    disconnect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    delete?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    connect?: NoteWhereUniqueInput | NoteWhereUniqueInput[]
+    update?: NoteUpdateWithWhereUniqueWithoutVaultInput | NoteUpdateWithWhereUniqueWithoutVaultInput[]
+    updateMany?: NoteUpdateManyWithWhereWithoutVaultInput | NoteUpdateManyWithWhereWithoutVaultInput[]
+    deleteMany?: NoteScalarWhereInput | NoteScalarWhereInput[]
   }
 
   export type DVaultCreateNestedManyWithoutWorkspaceInput = {
-    create?: XOR<Enumerable<DVaultCreateWithoutWorkspaceInput>, Enumerable<DVaultUncheckedCreateWithoutWorkspaceInput>>
-    connectOrCreate?: Enumerable<DVaultCreateOrConnectWithoutWorkspaceInput>
-    connect?: Enumerable<DVaultWhereUniqueInput>
+    create?: XOR<DVaultCreateWithoutWorkspaceInput, DVaultUncheckedCreateWithoutWorkspaceInput> | DVaultCreateWithoutWorkspaceInput[] | DVaultUncheckedCreateWithoutWorkspaceInput[]
+    connectOrCreate?: DVaultCreateOrConnectWithoutWorkspaceInput | DVaultCreateOrConnectWithoutWorkspaceInput[]
+    createMany?: DVaultCreateManyWorkspaceInputEnvelope
+    connect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
   }
 
   export type DVaultUncheckedCreateNestedManyWithoutWorkspaceInput = {
-    create?: XOR<Enumerable<DVaultCreateWithoutWorkspaceInput>, Enumerable<DVaultUncheckedCreateWithoutWorkspaceInput>>
-    connectOrCreate?: Enumerable<DVaultCreateOrConnectWithoutWorkspaceInput>
-    connect?: Enumerable<DVaultWhereUniqueInput>
+    create?: XOR<DVaultCreateWithoutWorkspaceInput, DVaultUncheckedCreateWithoutWorkspaceInput> | DVaultCreateWithoutWorkspaceInput[] | DVaultUncheckedCreateWithoutWorkspaceInput[]
+    connectOrCreate?: DVaultCreateOrConnectWithoutWorkspaceInput | DVaultCreateOrConnectWithoutWorkspaceInput[]
+    createMany?: DVaultCreateManyWorkspaceInputEnvelope
+    connect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
   }
 
   export type DVaultUpdateManyWithoutWorkspaceNestedInput = {
-    create?: XOR<Enumerable<DVaultCreateWithoutWorkspaceInput>, Enumerable<DVaultUncheckedCreateWithoutWorkspaceInput>>
-    connectOrCreate?: Enumerable<DVaultCreateOrConnectWithoutWorkspaceInput>
-    upsert?: Enumerable<DVaultUpsertWithWhereUniqueWithoutWorkspaceInput>
-    set?: Enumerable<DVaultWhereUniqueInput>
-    disconnect?: Enumerable<DVaultWhereUniqueInput>
-    delete?: Enumerable<DVaultWhereUniqueInput>
-    connect?: Enumerable<DVaultWhereUniqueInput>
-    update?: Enumerable<DVaultUpdateWithWhereUniqueWithoutWorkspaceInput>
-    updateMany?: Enumerable<DVaultUpdateManyWithWhereWithoutWorkspaceInput>
-    deleteMany?: Enumerable<DVaultScalarWhereInput>
+    create?: XOR<DVaultCreateWithoutWorkspaceInput, DVaultUncheckedCreateWithoutWorkspaceInput> | DVaultCreateWithoutWorkspaceInput[] | DVaultUncheckedCreateWithoutWorkspaceInput[]
+    connectOrCreate?: DVaultCreateOrConnectWithoutWorkspaceInput | DVaultCreateOrConnectWithoutWorkspaceInput[]
+    upsert?: DVaultUpsertWithWhereUniqueWithoutWorkspaceInput | DVaultUpsertWithWhereUniqueWithoutWorkspaceInput[]
+    createMany?: DVaultCreateManyWorkspaceInputEnvelope
+    set?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    disconnect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    delete?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    connect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    update?: DVaultUpdateWithWhereUniqueWithoutWorkspaceInput | DVaultUpdateWithWhereUniqueWithoutWorkspaceInput[]
+    updateMany?: DVaultUpdateManyWithWhereWithoutWorkspaceInput | DVaultUpdateManyWithWhereWithoutWorkspaceInput[]
+    deleteMany?: DVaultScalarWhereInput | DVaultScalarWhereInput[]
   }
 
   export type DVaultUncheckedUpdateManyWithoutWorkspaceNestedInput = {
-    create?: XOR<Enumerable<DVaultCreateWithoutWorkspaceInput>, Enumerable<DVaultUncheckedCreateWithoutWorkspaceInput>>
-    connectOrCreate?: Enumerable<DVaultCreateOrConnectWithoutWorkspaceInput>
-    upsert?: Enumerable<DVaultUpsertWithWhereUniqueWithoutWorkspaceInput>
-    set?: Enumerable<DVaultWhereUniqueInput>
-    disconnect?: Enumerable<DVaultWhereUniqueInput>
-    delete?: Enumerable<DVaultWhereUniqueInput>
-    connect?: Enumerable<DVaultWhereUniqueInput>
-    update?: Enumerable<DVaultUpdateWithWhereUniqueWithoutWorkspaceInput>
-    updateMany?: Enumerable<DVaultUpdateManyWithWhereWithoutWorkspaceInput>
-    deleteMany?: Enumerable<DVaultScalarWhereInput>
+    create?: XOR<DVaultCreateWithoutWorkspaceInput, DVaultUncheckedCreateWithoutWorkspaceInput> | DVaultCreateWithoutWorkspaceInput[] | DVaultUncheckedCreateWithoutWorkspaceInput[]
+    connectOrCreate?: DVaultCreateOrConnectWithoutWorkspaceInput | DVaultCreateOrConnectWithoutWorkspaceInput[]
+    upsert?: DVaultUpsertWithWhereUniqueWithoutWorkspaceInput | DVaultUpsertWithWhereUniqueWithoutWorkspaceInput[]
+    createMany?: DVaultCreateManyWorkspaceInputEnvelope
+    set?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    disconnect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    delete?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    connect?: DVaultWhereUniqueInput | DVaultWhereUniqueInput[]
+    update?: DVaultUpdateWithWhereUniqueWithoutWorkspaceInput | DVaultUpdateWithWhereUniqueWithoutWorkspaceInput[]
+    updateMany?: DVaultUpdateManyWithWhereWithoutWorkspaceInput | DVaultUpdateManyWithWhereWithoutWorkspaceInput[]
+    deleteMany?: DVaultScalarWhereInput | DVaultScalarWhereInput[]
   }
 
-  export type NestedStringFilter = {
-    equals?: string
-    in?: Enumerable<string> | string
-    notIn?: Enumerable<string> | string
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringFilter | string
+  export type NestedStringFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel>
+    in?: string[]
+    notIn?: string[]
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringFilter<$PrismaModel> | string
   }
 
-  export type NestedStringNullableFilter = {
-    equals?: string | null
-    in?: Enumerable<string> | string | null
-    notIn?: Enumerable<string> | string | null
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringNullableFilter | string | null
+  export type NestedStringNullableFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
-  export type NestedIntNullableFilter = {
-    equals?: number | null
-    in?: Enumerable<number> | number | null
-    notIn?: Enumerable<number> | number | null
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntNullableFilter | number | null
+  export type NestedIntNullableFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableFilter<$PrismaModel> | number | null
   }
 
-  export type NestedBoolNullableFilter = {
-    equals?: boolean | null
-    not?: NestedBoolNullableFilter | boolean | null
+  export type NestedBoolNullableFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableFilter<$PrismaModel> | boolean | null
   }
 
-  export type NestedIntFilter = {
-    equals?: number
-    in?: Enumerable<number> | number
-    notIn?: Enumerable<number> | number
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntFilter | number
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[]
+    notIn?: number[]
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
-  export type NestedStringWithAggregatesFilter = {
-    equals?: string
-    in?: Enumerable<string> | string
-    notIn?: Enumerable<string> | string
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringWithAggregatesFilter | string
-    _count?: NestedIntFilter
-    _min?: NestedStringFilter
-    _max?: NestedStringFilter
+  export type NestedStringWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel>
+    in?: string[]
+    notIn?: string[]
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringWithAggregatesFilter<$PrismaModel> | string
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedStringFilter<$PrismaModel>
+    _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type NestedStringNullableWithAggregatesFilter = {
-    equals?: string | null
-    in?: Enumerable<string> | string | null
-    notIn?: Enumerable<string> | string | null
-    lt?: string
-    lte?: string
-    gt?: string
-    gte?: string
-    contains?: string
-    startsWith?: string
-    endsWith?: string
-    not?: NestedStringNullableWithAggregatesFilter | string | null
-    _count?: NestedIntNullableFilter
-    _min?: NestedStringNullableFilter
-    _max?: NestedStringNullableFilter
+  export type NestedStringNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: string | StringFieldRefInput<$PrismaModel> | null
+    in?: string[] | null
+    notIn?: string[] | null
+    lt?: string | StringFieldRefInput<$PrismaModel>
+    lte?: string | StringFieldRefInput<$PrismaModel>
+    gt?: string | StringFieldRefInput<$PrismaModel>
+    gte?: string | StringFieldRefInput<$PrismaModel>
+    contains?: string | StringFieldRefInput<$PrismaModel>
+    startsWith?: string | StringFieldRefInput<$PrismaModel>
+    endsWith?: string | StringFieldRefInput<$PrismaModel>
+    not?: NestedStringNullableWithAggregatesFilter<$PrismaModel> | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedStringNullableFilter<$PrismaModel>
+    _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
-  export type NestedIntNullableWithAggregatesFilter = {
-    equals?: number | null
-    in?: Enumerable<number> | number | null
-    notIn?: Enumerable<number> | number | null
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntNullableWithAggregatesFilter | number | null
-    _count?: NestedIntNullableFilter
-    _avg?: NestedFloatNullableFilter
-    _sum?: NestedIntNullableFilter
-    _min?: NestedIntNullableFilter
-    _max?: NestedIntNullableFilter
+  export type NestedIntNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntNullableWithAggregatesFilter<$PrismaModel> | number | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _avg?: NestedFloatNullableFilter<$PrismaModel>
+    _sum?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedIntNullableFilter<$PrismaModel>
+    _max?: NestedIntNullableFilter<$PrismaModel>
   }
 
-  export type NestedFloatNullableFilter = {
-    equals?: number | null
-    in?: Enumerable<number> | number | null
-    notIn?: Enumerable<number> | number | null
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedFloatNullableFilter | number | null
+  export type NestedFloatNullableFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel> | null
+    in?: number[] | null
+    notIn?: number[] | null
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatNullableFilter<$PrismaModel> | number | null
   }
 
-  export type NestedBoolNullableWithAggregatesFilter = {
-    equals?: boolean | null
-    not?: NestedBoolNullableWithAggregatesFilter | boolean | null
-    _count?: NestedIntNullableFilter
-    _min?: NestedBoolNullableFilter
-    _max?: NestedBoolNullableFilter
+  export type NestedBoolNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: boolean | BooleanFieldRefInput<$PrismaModel> | null
+    not?: NestedBoolNullableWithAggregatesFilter<$PrismaModel> | boolean | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedBoolNullableFilter<$PrismaModel>
+    _max?: NestedBoolNullableFilter<$PrismaModel>
   }
 
-  export type NestedIntWithAggregatesFilter = {
-    equals?: number
-    in?: Enumerable<number> | number
-    notIn?: Enumerable<number> | number
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedIntWithAggregatesFilter | number
-    _count?: NestedIntFilter
-    _avg?: NestedFloatFilter
-    _sum?: NestedIntFilter
-    _min?: NestedIntFilter
-    _max?: NestedIntFilter
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[]
+    notIn?: number[]
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
-  export type NestedFloatFilter = {
-    equals?: number
-    in?: Enumerable<number> | number
-    notIn?: Enumerable<number> | number
-    lt?: number
-    lte?: number
-    gt?: number
-    gte?: number
-    not?: NestedFloatFilter | number
+  export type NestedFloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[]
+    notIn?: number[]
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
   }
 
   export type DVaultCreateWithoutNoteInput = {
@@ -4903,6 +5389,12 @@ export namespace Prisma {
   export type DVaultUpsertWithoutNoteInput = {
     update: XOR<DVaultUpdateWithoutNoteInput, DVaultUncheckedUpdateWithoutNoteInput>
     create: XOR<DVaultCreateWithoutNoteInput, DVaultUncheckedCreateWithoutNoteInput>
+    where?: DVaultWhereInput
+  }
+
+  export type DVaultUpdateToOneWithWhereWithoutNoteInput = {
+    where?: DVaultWhereInput
+    data: XOR<DVaultUpdateWithoutNoteInput, DVaultUncheckedUpdateWithoutNoteInput>
   }
 
   export type DVaultUpdateWithoutNoteInput = {
@@ -4956,9 +5448,19 @@ export namespace Prisma {
     create: XOR<NoteCreateWithoutVaultInput, NoteUncheckedCreateWithoutVaultInput>
   }
 
+  export type NoteCreateManyVaultInputEnvelope = {
+    data: NoteCreateManyVaultInput | NoteCreateManyVaultInput[]
+  }
+
   export type WorkspaceUpsertWithoutVaultsInput = {
     update: XOR<WorkspaceUpdateWithoutVaultsInput, WorkspaceUncheckedUpdateWithoutVaultsInput>
     create: XOR<WorkspaceCreateWithoutVaultsInput, WorkspaceUncheckedCreateWithoutVaultsInput>
+    where?: WorkspaceWhereInput
+  }
+
+  export type WorkspaceUpdateToOneWithWhereWithoutVaultsInput = {
+    where?: WorkspaceWhereInput
+    data: XOR<WorkspaceUpdateWithoutVaultsInput, WorkspaceUncheckedUpdateWithoutVaultsInput>
   }
 
   export type WorkspaceUpdateWithoutVaultsInput = {
@@ -4984,20 +5486,20 @@ export namespace Prisma {
 
   export type NoteUpdateManyWithWhereWithoutVaultInput = {
     where: NoteScalarWhereInput
-    data: XOR<NoteUpdateManyMutationInput, NoteUncheckedUpdateManyWithoutNoteInput>
+    data: XOR<NoteUpdateManyMutationInput, NoteUncheckedUpdateManyWithoutVaultInput>
   }
 
   export type NoteScalarWhereInput = {
-    AND?: Enumerable<NoteScalarWhereInput>
-    OR?: Enumerable<NoteScalarWhereInput>
-    NOT?: Enumerable<NoteScalarWhereInput>
-    id?: StringFilter | string
-    fname?: StringNullableFilter | string | null
-    title?: StringNullableFilter | string | null
-    updated?: IntNullableFilter | number | null
-    created?: IntNullableFilter | number | null
-    stub?: BoolNullableFilter | boolean | null
-    dVaultId?: IntFilter | number
+    AND?: NoteScalarWhereInput | NoteScalarWhereInput[]
+    OR?: NoteScalarWhereInput[]
+    NOT?: NoteScalarWhereInput | NoteScalarWhereInput[]
+    id?: StringFilter<"Note"> | string
+    fname?: StringNullableFilter<"Note"> | string | null
+    title?: StringNullableFilter<"Note"> | string | null
+    updated?: IntNullableFilter<"Note"> | number | null
+    created?: IntNullableFilter<"Note"> | number | null
+    stub?: BoolNullableFilter<"Note"> | boolean | null
+    dVaultId?: IntFilter<"Note"> | number
   }
 
   export type DVaultCreateWithoutWorkspaceInput = {
@@ -5018,6 +5520,10 @@ export namespace Prisma {
     create: XOR<DVaultCreateWithoutWorkspaceInput, DVaultUncheckedCreateWithoutWorkspaceInput>
   }
 
+  export type DVaultCreateManyWorkspaceInputEnvelope = {
+    data: DVaultCreateManyWorkspaceInput | DVaultCreateManyWorkspaceInput[]
+  }
+
   export type DVaultUpsertWithWhereUniqueWithoutWorkspaceInput = {
     where: DVaultWhereUniqueInput
     update: XOR<DVaultUpdateWithoutWorkspaceInput, DVaultUncheckedUpdateWithoutWorkspaceInput>
@@ -5031,17 +5537,26 @@ export namespace Prisma {
 
   export type DVaultUpdateManyWithWhereWithoutWorkspaceInput = {
     where: DVaultScalarWhereInput
-    data: XOR<DVaultUpdateManyMutationInput, DVaultUncheckedUpdateManyWithoutVaultsInput>
+    data: XOR<DVaultUpdateManyMutationInput, DVaultUncheckedUpdateManyWithoutWorkspaceInput>
   }
 
   export type DVaultScalarWhereInput = {
-    AND?: Enumerable<DVaultScalarWhereInput>
-    OR?: Enumerable<DVaultScalarWhereInput>
-    NOT?: Enumerable<DVaultScalarWhereInput>
-    id?: IntFilter | number
-    name?: StringNullableFilter | string | null
-    fsPath?: StringFilter | string
-    wsRoot?: StringFilter | string
+    AND?: DVaultScalarWhereInput | DVaultScalarWhereInput[]
+    OR?: DVaultScalarWhereInput[]
+    NOT?: DVaultScalarWhereInput | DVaultScalarWhereInput[]
+    id?: IntFilter<"DVault"> | number
+    name?: StringNullableFilter<"DVault"> | string | null
+    fsPath?: StringFilter<"DVault"> | string
+    wsRoot?: StringFilter<"DVault"> | string
+  }
+
+  export type NoteCreateManyVaultInput = {
+    id: string
+    fname?: string | null
+    title?: string | null
+    updated?: number | null
+    created?: number | null
+    stub?: boolean | null
   }
 
   export type NoteUpdateWithoutVaultInput = {
@@ -5062,13 +5577,19 @@ export namespace Prisma {
     stub?: NullableBoolFieldUpdateOperationsInput | boolean | null
   }
 
-  export type NoteUncheckedUpdateManyWithoutNoteInput = {
+  export type NoteUncheckedUpdateManyWithoutVaultInput = {
     id?: StringFieldUpdateOperationsInput | string
     fname?: NullableStringFieldUpdateOperationsInput | string | null
     title?: NullableStringFieldUpdateOperationsInput | string | null
     updated?: NullableIntFieldUpdateOperationsInput | number | null
     created?: NullableIntFieldUpdateOperationsInput | number | null
     stub?: NullableBoolFieldUpdateOperationsInput | boolean | null
+  }
+
+  export type DVaultCreateManyWorkspaceInput = {
+    id?: number
+    name?: string | null
+    fsPath: string
   }
 
   export type DVaultUpdateWithoutWorkspaceInput = {
@@ -5084,7 +5605,7 @@ export namespace Prisma {
     Note?: NoteUncheckedUpdateManyWithoutVaultNestedInput
   }
 
-  export type DVaultUncheckedUpdateManyWithoutVaultsInput = {
+  export type DVaultUncheckedUpdateManyWithoutWorkspaceInput = {
     id?: IntFieldUpdateOperationsInput | number
     name?: NullableStringFieldUpdateOperationsInput | string | null
     fsPath?: StringFieldUpdateOperationsInput | string
