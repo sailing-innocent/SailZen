@@ -5,7 +5,8 @@
         "install-site": "pnpm install --filter=sail-site",
         "build-site": "pnpm -r --filter=sail-site run build",
         "install-plugin": "pnpm install --filter=sail-zen-vscode",
-        "build-plugin": "pnpm -r --filter=sail-zen-vscode run build",
+        "build-engine-server": "pnpm -r --filter=@saili/engine-server run buildCI",
+        "build-plugin": "pnpm build-engine-server && pnpm -r --filter=sail-zen-vscode run build",
         "package-plugin": "pnpm -r --filter=sail-zen-vscode run package",
         "test": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test",
         "test:common-all": "pnpm --filter=\"./packages/common-all\" run test",
@@ -17,7 +18,7 @@
         "views:build": "pnpm --filter=@saili/dendron-plugin-views run build",
         "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
         
-        "plugin:build": "pnpm views:build && pnpm views:copy && pnpm build-plugin",
+        "plugin:build": "pnpm build-engine-server && pnpm views:build && pnpm views:copy && pnpm build-plugin",
         "plugin:package": "pnpm plugin:build && pnpm package-plugin",
         "plugin:dev": "pnpm views:build && pnpm views:copy && pnpm -r --filter=sail-zen-vscode run watch"
     }

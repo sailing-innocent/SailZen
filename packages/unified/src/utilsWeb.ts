@@ -15,7 +15,8 @@ import variables from "remark-variables";
 import raw from "rehype-raw";
 import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
-import rehypeMermaid from "rehype-mermaid";
+// Use no-op version to avoid mermaid-isomorphic dependencies (playwright, import.meta.resolve)
+import rehypeMermaid from "./rehype/mermaid-noop";
 import { remark } from "remark";
 import { abbrPlugin } from "./remark/abbr";
 import remarkGfm from "remark-gfm";
