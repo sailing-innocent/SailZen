@@ -2,6 +2,7 @@
   "name": "@saili/common-all",
   "version": "0.126.0",
   "description": "common-all",
+  "type": "module",
   "license": "Apache 2.0",
   "repository": {
     "type": "git",
@@ -19,12 +20,19 @@
   "files": [
     "lib"
   ],
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
   "scripts": {
     "clean": "rimraf lib",
-    "test": "jest",
-    "compile": "tsc -p tsconfig.build.json ",
+    "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "compile": "tsc -p tsconfig.build.json",
     "watch": "pnpm compile --watch"
   },
   "dependencies": {
@@ -63,12 +71,13 @@
     "@types/semver": "^7.7.1",
     "@types/spark-md5": "^3.0.5",
     "@types/unist": "^3.0.3",
+    "cross-env": "^10.1.0",
     "jest": "catalog:",
     "rimraf": "^6.1.2",
     "ts-jest": "catalog:"
   },
   "engines": {
-    "node": ">=12.0.0"
+    "node": ">=18.0.0"
   },
   "publishConfig": {
     "access": "public"
