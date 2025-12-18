@@ -16,6 +16,7 @@ Common Frontend
 Common Server
 
 Unified
+depends on common al
 
 Engine Server
 

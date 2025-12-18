@@ -4,6 +4,8 @@
     "outDir": "lib",
     "rootDir": "src",
     "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler"
   },
   "include": [
     "src/**/*"

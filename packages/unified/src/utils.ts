@@ -21,8 +21,7 @@ import { Node, Parent } from "unist";
 // import { normalizev2 } from "../utils";
 import { RemarkUtils } from "./remark";
 import { DendronASTNode, DendronASTTypes } from "./types";
-
-const toString = require("mdast-util-to-string");
+import toString from "mdast-util-to-string";
 
 export const renderFromNote = (opts: { note: NoteProps }) => {
   const { note } = opts;

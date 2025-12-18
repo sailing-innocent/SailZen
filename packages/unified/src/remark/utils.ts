@@ -86,8 +86,7 @@ import {
 } from "../types";
 import { MDUtilsV5, ProcFlavor, ProcMode } from "../utilsv5";
 import { getFrontmatterTags, parseFrontmatter } from "../yaml";
-
-const toString = require("mdast-util-to-string");
+import toString from "mdast-util-to-string";
 
 export { select, selectAll } from "unist-util-select";
 export { mdastBuilder };

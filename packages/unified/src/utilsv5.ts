@@ -14,8 +14,6 @@ import {
 } from "@saili/common-all";
 // @ts-ignore
 import rehypePrism from "@mapbox/rehype-prism";
-// @ts-ignore
-import mermaid from "@dendronhq/remark-mermaid";
 import _ from "lodash";
 import link from "rehype-autolink-headings";
 import math from "remark-math";
@@ -26,9 +24,10 @@ import katex from "rehype-katex";
 import raw from "rehype-raw";
 import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
+import rehypeMermaid from "rehype-mermaid";
 import remark from "remark";
 import abbrPlugin from "remark-abbr";
-import footnotes from "remark-footnotes";
+import remarkGfm from "remark-gfm";
 import frontmatterPlugin from "remark-frontmatter";
 import remarkParse from "remark-parse";
 import remark2rehype from "remark-rehype";
@@ -278,7 +277,7 @@ export class MDUtilsV5 {
       .use(hashtags)
       .use(zdocTags)
       .use(extendedImage)
-      .use(footnotes)
+      .use(remarkGfm)
       .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
       .data("errors", errors);
@@ -374,7 +373,6 @@ export class MDUtilsV5 {
           if (ConfigUtils.getEnableKatex(config, shouldApplyPublishRules)) {
             proc = proc.use(math);
           }
-          proc = proc.use(mermaid, { simple: true });
           // Add remaining flavor specific plugins
           if (opts.flavor === ProcFlavor.PUBLISHING) {
             const prefix = assetsPrefix ? assetsPrefix + "/notes/" : "/notes/";
@@ -410,8 +408,6 @@ export class MDUtilsV5 {
           proc = proc.use(math);
         }
 
-        proc = proc.use(mermaid, { simple: true });
-
         break;
       }
       case ProcMode.NO_DATA:
@@ -432,6 +428,7 @@ export class MDUtilsV5 {
     let pRehype = pRemarkParse
       .use(remark2rehype, { allowDangerousHtml: true })
       .use(rehypePrism, { ignoreMissing: true })
+      .use(rehypeMermaid, { strategy: "pre-mermaid" })
       .use(wrap, { selector: "table", wrapper: "div.table-responsive" })
       .use(raw)
       .use(slug);
