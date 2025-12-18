@@ -2,15 +2,16 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "module": "commonjs",
-    "target": "ES2019",
+    "target": "ES2024",
     "lib": [
-      "es2019"
+      "es2024"
     ],
     "sourceMap": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "strict": true,
     "declaration": true,
+    "types": ["node", "jest"],
     // --- checks
     "noUnusedLocals": false,
     "noUnusedParameters": true,

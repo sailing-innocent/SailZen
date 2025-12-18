@@ -52,16 +52,14 @@ const sidebarItemCategoryConfig: z.ZodType<SidebarItemCategoryConfig> = z.lazy(
         items: z.array(z.lazy(() => sidebarItemConfig)),
         link: sidebarItemCategoryLink,
       })
-      .refine(
-        (item) => {
-          return !(item.items.length === 0 && !item.link);
-        },
-        (item) => {
-          return {
+      .superRefine((item, ctx) => {
+        if (item.items.length === 0 && !item.link) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
             message: `Sidebar category '${item.label}' has neither any subitem nor a link. This makes this item not able to link to anything.`,
-          };
+          });
         }
-      )
+      })
 );
 
 const sidebarItemCategory: z.ZodType<SidebarItemCategory> = z.lazy(() =>
@@ -348,7 +346,7 @@ export function processSidebar(
 
   return sidebarResult
     .andThen((sidebar) => Result.combine(sidebar.map(safeProcessItem)))
-    .map((x) => (x as SidebarItem[]).flat());
+    .map((x) => x.flat());
 }
 
 export function parseSidebarConfig(

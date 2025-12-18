@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { DateTime } from "luxon";
-import minimatch from "minimatch";
+import { minimatch } from "minimatch";
 
 export * from "./colors";
 export * from "./dnode";

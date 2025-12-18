@@ -1,6 +1,5 @@
 import axios, { AxiosInstance } from "axios";
 import _ from "lodash";
-import * as querystring from "qs";
 import {
   BulkGetNoteMetaResp,
   BulkGetNoteResp,
@@ -48,13 +47,45 @@ export type APIRequest<T> = {
 } & T;
 
 export function createNoOpLogger() {
-  const logMethod = (_msg: any) => {};
+  const logMethod = (_msg: any) => { };
   return {
     level: "",
     debug: logMethod,
     info: logMethod,
     error: logMethod,
   };
+}
+
+/**
+ * Convert an object to a query string using URLSearchParams.
+ * Handles arrays by appending multiple values with the same key.
+ * Replaces the deprecated querystring/qs library.
+ */
+function stringifyQueryParams(params: Record<string, any>): string {
+  const searchParams = new URLSearchParams();
+  
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    
+    if (Array.isArray(value)) {
+      // For arrays, append each value with the same key
+      value.forEach((item) => {
+        if (item !== null && item !== undefined) {
+          searchParams.append(key, String(item));
+        }
+      });
+    } else if (typeof value === 'object') {
+      // For nested objects, serialize as JSON string
+      // This maintains compatibility with complex query structures
+      searchParams.append(key, JSON.stringify(value));
+    } else {
+      searchParams.append(key, String(value));
+    }
+  }
+  
+  return searchParams.toString();
 }
 
 interface IRequestArgs {
@@ -237,7 +268,9 @@ abstract class API {
       ...headers,
     };
     this._log({ ctx: "pre-request", requestParams }, "debug");
-    const str = querystring.stringify(requestParams.qs);
+
+    const str = stringifyQueryParams(requestParams.qs);
+
     if (method === "get") {
       return _request.get(requestParams.url + `?${str}`, {
         headers,

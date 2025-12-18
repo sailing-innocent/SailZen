@@ -2,7 +2,7 @@
 // @ts-ignore
 import matter from "gray-matter";
 import _ from "lodash";
-import minimatch from "minimatch";
+import { minimatch } from "minimatch";
 import path from "path";
 import title from "title";
 import { URI } from "vscode-uri";
@@ -1700,7 +1700,7 @@ export class SchemaUtils {
     });
     if (match) {
       return {
-        schema: match,
+        schema: match as SchemaProps,
         namespace,
         notePath,
         schemaModule,

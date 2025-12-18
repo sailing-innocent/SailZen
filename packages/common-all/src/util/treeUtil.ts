@@ -35,8 +35,8 @@ const treeMenuNodeSchema: z.ZodType<TreeMenuNode> = z.lazy(() =>
 
 export const treeMenuSchema = z.object({
   roots: z.array(treeMenuNodeSchema),
-  child2parent: z.record(z.string().nullable()),
-  notesLabelById: z.record(z.string()).optional(), // cheap acces to note labels when computing breadcrumps (TODO improve `TreeMenu` datastructure so that this field is not necessary)
+  child2parent: z.record(z.string(), z.string().nullable()),
+  notesLabelById: z.record(z.string(), z.string()).optional(), // cheap acces to note labels when computing breadcrumps (TODO improve `TreeMenu` datastructure so that this field is not necessary)
 });
 
 export type TreeMenu = z.infer<typeof treeMenuSchema>;

@@ -222,18 +222,18 @@ export function errorsList(error: any) {
 }
 
 export class DendronServerError
-  extends DendronError
+  extends DendronError<StatusCodes>
   implements IDendronError, ServerErrorProps
 {
   /**
    * Optional HTTP status code for error
    */
-  public code?: StatusCodes;
+  declare public code?: StatusCodes;
 
   /**
    * Custom status errors
    */
-  public status?: string;
+  declare public status?: string;
 }
 
 export class IllegalOperationError extends DendronError {}
