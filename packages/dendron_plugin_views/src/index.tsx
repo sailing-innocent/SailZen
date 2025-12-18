@@ -2,6 +2,9 @@ import { renderOnDOM } from "./bootstrap";
 import "./styles/scss/main-plugin.scss";
 // import "./index.css";
 
+// Re-export everything from index.ts for module resolution
+export * from "./index";
+
 const VALID_NAMES = [
   "DendronCalendarPanel",
   "DendronNotePreview"

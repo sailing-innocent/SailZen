@@ -1,9 +1,7 @@
 import { NoteProps } from "@saili/common-all";
-import {
-  createLogger,
-  engineHooks,
-  engineSlice,
-} from "../index";
+import { createLogger } from "../utils/logger";
+import { engineHooks } from "../features/engine";
+import { engineSlice } from "../features/engine";
 import { Mermaid } from "mermaid";
 import React from "react";
 import { DendronProps, WorkspaceProps } from "../types";

@@ -134,11 +134,11 @@
         }
       });
      /**
-       * Decodes a HTML Encoded string
-       * @see https://stackoverflow.com/a/34064434
-       * @param {string} input The HTML Encoded String to be decoded
-       * @returns string
-       */
+      * Decodes a HTML Encoded string
+      * @see https://stackoverflow.com/a/34064434
+      * @param {string} input The HTML Encoded String to be decoded
+      * @returns string
+      */
       function htmlDecode(input) {
           var doc = new DOMParser().parseFromString(input, "text/html");
           return doc.documentElement.textContent;

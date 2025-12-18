@@ -9,10 +9,18 @@ export default defineConfig({
     nodePolyfills({
       // Whether to polyfill `node:` protocol imports.
       protocolImports: true,
+      // Use globals to avoid import resolution issues
+      globals: {
+        process: true,
+      },
     }),
   ],
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+    alias: {
+      // Fix for vite-plugin-node-polyfills shim imports - map to process package
+      'vite-plugin-node-polyfills/shims/process': 'process',
+    },
   },
   server: {
     port: 4000,

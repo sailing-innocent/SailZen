@@ -12,17 +12,13 @@ import {
   SeedBrowserMessageType,
   OnUpdatePreviewHTMLMsg,
 } from "@saili/common-all";
-import {
-  combinedStore,
-  createLogger,
-  engineHooks,
-  engineSlice,
-  ideHooks,
-  ideSlice,
-  LOG_LEVEL,
-  Provider,
-  setLogLevel,
-} from "../index";
+import { combinedStore } from "../features";
+import { Provider } from "react-redux";
+import { createLogger, LOG_LEVEL, setLogLevel } from "../utils/logger";
+import { engineHooks } from "../features/engine";
+import { engineSlice } from "../features/engine";
+import { ideHooks } from "../features/ide";
+import { ideSlice } from "../features/ide";
 import { useWorkspaceProps } from "../hooks";
 import _ from "lodash";
 // import { Layout } from "antd";
