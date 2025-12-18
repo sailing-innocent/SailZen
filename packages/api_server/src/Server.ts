@@ -1,5 +1,4 @@
 import {
-  AppNames,
   error2PlainObject,
   getStage,
   StatusCodes,
@@ -7,10 +6,7 @@ import {
 import {
   findInParent,
   SegmentClient,
-  initializeSentry,
-  NodeJSUtils,
 } from "@saili/common-server";
-import * as Sentry from "@sentry/node";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import asyncHandler from "express-async-handler";
@@ -19,32 +15,22 @@ import morgan from "morgan";
 import path from "path";
 import querystring from "querystring";
 import { getLogger } from "./core";
-import { GoogleAuthController } from "./modules/oauth";
 import { baseRouter } from "./routes";
-import {
-  oauthRouter,
-  OauthService,
-  registerOauthHandler,
-} from "./routes/oauth";
-
-function getSentryRelease() {
-  return `${AppNames.EXPRESS_SERVER}@${NodeJSUtils.getVersionFromPkg()}`;
-}
 
 import { Application } from "express";
+import { fileURLToPath } from "url";
+import { getDirname } from "./utils";
+
+const __dirname = getDirname(import.meta.url);
 
 export function appModule({
   logPath,
   nextServerUrl,
   nextStaticRoot,
-  googleOauthClientId,
-  googleOauthClientSecret,
 }: {
   logPath: string;
   nextServerUrl?: string;
   nextStaticRoot?: string;
-  googleOauthClientId?: string;
-  googleOauthClientSecret: string;
 }): Application {
   const ctx = "appModule:start";
   const logger = getLogger();
@@ -70,7 +56,6 @@ export function appModule({
     );
   }
 
-  logger.info(googleOauthClientId);
   logger.info({ ctx, dirPath: __dirname });
   const staticDir = path.join(__dirname, "static");
   app.use(express.static(staticDir));
@@ -78,15 +63,6 @@ export function appModule({
   // this is the first time we are accessing the segment client instance (when this is run as a separate process).
   // unlock Segment client.
   SegmentClient.unlock();
-
-  if (!SegmentClient.instance().hasOptedOut && getStage() === "prod") {
-    initializeSentry({ environment: getStage(), release: getSentryRelease() });
-  }
-
-  // Re-use the id for error reporting too:
-  Sentry.setUser({ id: SegmentClient.instance().anonymousId });
-
-  app.use(Sentry.Handlers.requestHandler() as express.RequestHandler);
 
   if (nextStaticRoot) {
     logger.info({ ctx, msg: "nextStaticRoot:add", nextStaticRoot });
@@ -124,25 +100,9 @@ export function appModule({
     })
   );
 
-  registerOauthHandler(
-    OauthService.GOOGLE,
-    new GoogleAuthController(googleOauthClientId!, googleOauthClientSecret)
-  );
-  baseRouter.use("/oauth", oauthRouter);
-
   app.use("/api", baseRouter);
 
   // The error handler must be before any other error middleware and after all controllers
-  // app.use(Sentry.Handlers.errorHandler() as express.ErrorRequestHandler);
-  app.use(
-    Sentry.Handlers.errorHandler({
-      shouldHandleError() {
-        // Upload all exceptions
-        return true;
-      },
-    }) as express.ErrorRequestHandler
-  );
-
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     const flattenedError = error2PlainObject(err);
     logger.error({

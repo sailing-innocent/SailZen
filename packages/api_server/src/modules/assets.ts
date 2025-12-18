@@ -9,10 +9,12 @@ import {
   ThemeType,
 } from "@saili/common-all";
 import { WorkspaceUtils } from "@saili/engine-server";
-import { getWSEngine } from "../utils";
+import { getWSEngine, getDirname } from "../utils";
 import fs from "fs-extra";
 import path from "path";
 import { getLogger } from "../core";
+
+const __dirname = getDirname(import.meta.url);
 
 export class AssetsController {
   static singleton?: AssetsController;

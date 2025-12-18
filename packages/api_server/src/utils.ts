@@ -9,8 +9,18 @@ import { createLogger } from "@saili/common-server";
 import { Subprocess } from "execa";
 import _ from "lodash";
 import path from "path";
+import { fileURLToPath } from "url";
 import { launchv2 } from ".";
 import { MemoryStore } from "./store/memoryStore";
+
+/**
+ * ESM-compatible replacement for __dirname
+ * @param importMetaUrl - import.meta.url from the calling module
+ * @returns The directory path of the current module
+ */
+export function getDirname(importMetaUrl: string): string {
+  return path.dirname(fileURLToPath(importMetaUrl));
+}
 
 export function getWSKey(uri: string) {
   return _.trimEnd(uri, "/").toLowerCase();
@@ -36,8 +46,6 @@ type ServerArgs = {
   port?: number;
   nextServerUrl?: string;
   nextStaticRoot?: string;
-  googleOauthClientId?: string;
-  googleOauthClientSecret?: string;
 };
 
 type SERVER_ENV = {
@@ -45,8 +53,6 @@ type SERVER_ENV = {
   NEXT_STATIC_ROOT?: string;
   ENGINE_SERVER_PORT?: string;
   LOG_PATH: string;
-  GOOGLE_OAUTH_ID?: string;
-  GOOGLE_OAUTH_SECRET?: string;
 };
 
 export enum SubProcessExitType {
@@ -104,8 +110,6 @@ export class ServerUtils {
       NEXT_STATIC_ROOT,
       ENGINE_SERVER_PORT,
       LOG_PATH,
-      GOOGLE_OAUTH_ID,
-      GOOGLE_OAUTH_SECRET,
     } = process.env;
     if (
       _.some(["LOG_PATH"], (k) => {
@@ -124,15 +128,11 @@ export class ServerUtils {
     }
     const nextServerUrl = NEXT_SERVER_URL;
     const nextStaticRoot = NEXT_STATIC_ROOT;
-    const googleOauthClientId = GOOGLE_OAUTH_ID!;
-    const googleOauthClientSecret = GOOGLE_OAUTH_SECRET!;
     return {
       port,
       logPath,
       nextServerUrl,
       nextStaticRoot,
-      googleOauthClientId,
-      googleOauthClientSecret,
     };
   }
 
@@ -146,16 +146,12 @@ export class ServerUtils {
     nextServerUrl,
     nextStaticRoot,
     port,
-    googleOauthClientId,
-    googleOauthClientSecret,
   }: Omit<ServerArgs, "scriptPath">) {
     const { port: finalPort } = await launchv2({
       port,
       logPath: path.join(logPath, "dendron.server.log"),
       nextServerUrl,
       nextStaticRoot,
-      googleOauthClientId,
-      googleOauthClientSecret,
     });
     if (!process.send) {
       throw new DendronError({ message: "expect a child process" });
@@ -174,8 +170,6 @@ export class ServerUtils {
     nextServerUrl,
     nextStaticRoot,
     port,
-    googleOauthClientId,
-    googleOauthClientSecret,
   }: ServerArgs): Promise<{ port: number; subprocess: Subprocess }> {
     const logger = createLogger(
       "execServer",
@@ -190,8 +184,6 @@ export class ServerUtils {
           ENGINE_SERVER_PORT: port,
           NEXT_SERVER_URL: nextServerUrl,
           NEXT_STATIC_ROOT: nextStaticRoot,
-          GOOGLE_OAUTH_ID: googleOauthClientId,
-          GOOGLE_OAUTH_SECRET: googleOauthClientSecret,
           ELECTRON_RUN_AS_NODE: 1,
         } as SERVER_ENV,
       });

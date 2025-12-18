@@ -13,7 +13,6 @@ router.use("/note", noteRouter);
 router.use("/schema", schemaRouter);
 router.use("/config", configRouter);
 router.use("/assets", assetsRouter);
-// oauth route is added later within Server.ts.
 // TODO: Improve route construction when necessary
 
 // const engineRouter = Router();
