@@ -324,7 +324,13 @@ export class GotoNoteCommand extends BasicCommand<
                 note,
               });
             }
-            await client.writeNote(note);
+            this.L.info({ ctx, msg: "Creating new note", fname, vault: note.vault });
+            const writeResp = await client.writeNote(note);
+            if (writeResp.error) {
+              this.L.error({ ctx, msg: "Failed to write note", error: writeResp.error });
+              throw writeResp.error;
+            }
+            this.L.info({ ctx, msg: "Note created successfully", fname });
           } else {
             // should not create note if fname is invalid.
             // let the user know and exit early.
@@ -337,7 +343,12 @@ export class GotoNoteCommand extends BasicCommand<
           if (note.stub) {
             delete note.stub;
             note = _.merge(note, overrides || {});
-            await client.writeNote(note);
+            this.L.info({ ctx, msg: "Writing stub note", fname: note.fname });
+            const writeResp = await client.writeNote(note);
+            if (writeResp.error) {
+              this.L.error({ ctx, msg: "Failed to write stub note", error: writeResp.error });
+              throw writeResp.error;
+            }
           }
         }
 

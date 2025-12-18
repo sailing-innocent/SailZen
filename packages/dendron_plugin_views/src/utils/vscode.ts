@@ -62,9 +62,17 @@ export const useVSCodeMessage = (setMsgHook: (msg: VSCodeMessage) => void) => {
 };
 
 export const postVSCodeMessage = (msg: DMessage) => {
+  // In VSCode webviews, we need to use the vscode API to post messages
+  // The vscode object is set up by acquireVsCodeApi() in the HTML template
   // @ts-ignore
-  if (window) {
+  if (window.vscode) {
+    // @ts-ignore
+    window.vscode.postMessage(msg);
+  } else if (window.parent && window.parent !== window) {
+    // Fallback for iframe mode (e.g., dev.html)
     // @ts-ignore
     window.parent.postMessage(msg, "*");
+  } else {
+    console.warn("postVSCodeMessage: No vscode API or parent window available");
   }
 };

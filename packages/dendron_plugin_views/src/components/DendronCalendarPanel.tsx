@@ -64,13 +64,24 @@ const DendronCalendarPanel: DendronComponent = (props: DendronProps) => {
   // -- init
   const ctx = "CalenderView";
   const logger = createLogger("calendarView");
-  // logger info
-  const defaultConfig = ConfigUtils.genDefaultConfig();
-  const journalConfig = ConfigUtils.getJournal(defaultConfig);
+  
+  // Use actual config from engine, fallback to default config
+  const config = props.engine.config || ConfigUtils.genDefaultConfig();
+  const journalConfig = ConfigUtils.getJournal(config);
   const journalDailyDomain = journalConfig.dailyDomain;
   const journalName = journalConfig.name;
-  let journalDateFormat = "YYYY.MM.DD";
+  
+  // Convert Dendron date format (y.MM.dd) to dayjs format (YYYY.MM.DD)
+  // Dendron uses: y=year, M=month, d=day (lowercase)
+  // dayjs uses: YYYY=year, MM=month, DD=day (uppercase)
+  const dendronDateFormat = journalConfig.dateFormat || "y.MM.dd";
+  const journalDateFormat = dendronDateFormat
+    .replace(/y/g, "YYYY")
+    .replace(/M/g, "M")  // dayjs also uses M for month
+    .replace(/d/g, "D"); // dayjs uses D for day
   const journalMonthDateFormat = "YYYY.MM"; // TODO compute format for currentMode="year" from config
+  
+  logger.info({ ctx, journalDailyDomain, journalName, journalDateFormat });
 
   const monthCellRender = (value: Dayjs) => {
     const num = getMonthData(value);
@@ -125,12 +136,13 @@ const DendronCalendarPanel: DendronComponent = (props: DendronProps) => {
   >(
     (date, info) => {
       const dateKey = getDateKey(date, info.source);
-      console.log(dateKey)
+      // fname format: dailyDomain.journalName.dateKey (e.g., daily.journal.2025.12.23)
+      const fname = `${journalDailyDomain}.${journalName}.${dateKey}`;
       postVSCodeMessage({
         type: CalendarViewMessageType.onSelect,
         data: {
           id: undefined,
-          fname: `${journalName}.${journalDailyDomain}.${dateKey}`,
+          fname,
         },
         source: DMessageSource.webClient,
       });

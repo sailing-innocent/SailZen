@@ -37,6 +37,11 @@ catalogs:
       specifier: ^8.50.0
       version: 8.50.0
 
+patchedDependencies:
+  remark-variables@1.4.9:
+    hash: d08619ee2c2d06210b5b6bbf9f4d126113aa18423c7b3ed40566c9930d7e6ce8
+    path: patches/remark-variables@1.4.9.patch
+
 importers:
 
   .: {}
@@ -789,7 +794,7 @@ importers:
         version: 11.1.2
       remark-variables:
         specifier: ^1.4.9
-        version: 1.4.9
+        version: 1.4.9(patch_hash=d08619ee2c2d06210b5b6bbf9f4d126113aa18423c7b3ed40566c9930d7e6ce8)
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -16664,7 +16669,7 @@ snapshots:
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
 
-  remark-variables@1.4.9: {}
+  remark-variables@1.4.9(patch_hash=d08619ee2c2d06210b5b6bbf9f4d126113aa18423c7b3ed40566c9930d7e6ce8): {}
 
   remark@15.0.1:
     dependencies:

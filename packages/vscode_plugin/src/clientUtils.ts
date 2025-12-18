@@ -124,9 +124,8 @@ export class DendronClientUtilsV2 {
     }
 
     if (!_.includes(_noteAddBehaviorEnum, addBehavior)) {
-      const actual = addBehavior;
       const choices = Object.keys(NoteAddBehaviorEnum).join(", ");
-      throw Error(`${actual} must be one of: ${choices}`);
+      throw Error(`${addBehavior} must be one of: ${choices}`);
     }
 
     const editorPath = vscode.window.activeTextEditor?.document.uri.fsPath;

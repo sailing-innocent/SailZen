@@ -5,7 +5,7 @@ import {
   TreeViewItemLabelTypeEnum,
 } from "@saili/common-all";
 import _ from "lodash";
-import { injectable } from "tsyringe";
+import { inject, injectable } from "tsyringe";
 import { Disposable, TextEditor, TreeView, window } from "vscode";
 import { EngineNoteProvider } from "./EngineNoteProvider";
 import { TreeNote } from "./TreeNote";
@@ -28,8 +28,8 @@ export class NativeTreeView implements Disposable {
   private _getExpandableTreeItemsHandler: (() => TreeNote[]) | undefined;
 
   constructor(
-    private _provider: EngineNoteProvider,
-    private wsUtils: WSUtilsWeb
+    @inject(EngineNoteProvider) private _provider: EngineNoteProvider,
+    @inject(WSUtilsWeb) private wsUtils: WSUtilsWeb
   ) {}
 
   dispose() {

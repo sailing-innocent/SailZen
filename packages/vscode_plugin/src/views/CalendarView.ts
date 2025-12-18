@@ -70,35 +70,60 @@ export class CalendarView implements vscode.WebviewViewProvider {
           });
           return;
         }
-        // make sure ext type DendronExtension
-        // eslint-disable-next-line no-cond-assign
+
+        // Get journal config for vault selection
+        const config = this._extension.getDWorkspace().config;
+        const journalConfig = ConfigUtils.getJournal(config);
+        const workspaceConfig = ConfigUtils.getWorkspace(config);
+        const engine = this._extension.getEngine();
+        
+        // Determine vault: dailyVault > mainVault > first vault
+        let vault;
+        const maybeDailyVault = journalConfig.dailyVault;
+        const maybeMainVault = workspaceConfig.mainVault;
+        
+        if (maybeDailyVault) {
+          vault = VaultUtils.getVaultByName({
+            vaults: engine.vaults,
+            vname: maybeDailyVault,
+          });
+        } else if (maybeMainVault) {
+          vault = VaultUtils.getVaultByName({
+            vaults: engine.vaults,
+            vname: maybeMainVault,
+          });
+        } else {
+          // Fallback to first vault
+          vault = engine.vaults[0];
+        }
+        
+        Logger.info({
+          ctx: `${ctx}:onSelect`,
+          msg: "Selected vault for journal",
+          vaultName: vault ? VaultUtils.getName(vault) : "none",
+        });
+
+        // If id is provided, use it directly to get vault info
         if (id) {
           const note = (await this._extension.getEngine().getNoteMeta(id)).data;
           if (note) {
-            // const ext = this._extension;
-            // const config = ext.workspaceService!.config;
-            // const journalConfig = ConfigUtils.getJournal(config);
-            // const maybeDailyVault = journalConfig.dailyVault;
-            // const vault = maybeDailyVault
-            // ? VaultUtils.getVaultByName({
-            //     vaults: this._extension.getEngine().vaults,
-            //     vname: maybeDailyVault,
-            //   })
-            // : undefined;
-
-            // await new GotoNoteCommand(this._extension).execute({
-            //   qs: fname,
-            //   vault: vault,
-            // });
             await new GotoNoteCommand(this._extension).execute({
               qs: note.fname,
               vault: note.vault,
             });
           }
         } else {
-          // if id is not provided, we assume that the user clicked on a date
-          await new CreateDailyJournalCommand(this._extension).execute({
+          // Use GotoNoteCommand which handles both existing and new notes
+          // It will create the note if it doesn't exist
+          Logger.info({
+            ctx: `${ctx}:onSelect`,
+            msg: "Using GotoNoteCommand",
             fname,
+            vault: vault ? VaultUtils.getName(vault) : "default",
+          });
+          await new GotoNoteCommand(this._extension).execute({
+            qs: fname,
+            vault,
           });
         }
 

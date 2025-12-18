@@ -1416,7 +1416,7 @@
 		"precompile": "pnpm --filter=@saili/engine-server run buildCI",
 		"compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap --tsconfig=tsconfig.json && node scripts/fix-import-meta.js && node scripts/copy-prisma-assets.js",
 		"watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap --watch --tsconfig=tsconfig.json",
-		"package": "pnpm run compile && vsce package",
+		"package": "vsce package --no-dependencies",
 		"clean": "rimraf dist node_modules",
 		"vscode:prepublish": "pnpm run compile"
 	},
