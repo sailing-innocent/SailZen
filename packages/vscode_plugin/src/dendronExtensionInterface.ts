@@ -6,7 +6,8 @@ import {
 } from "@saili/common-all";
 import { IWorkspaceService } from "@saili/engine-server";
 import { Subprocess } from "execa";
-import vscode, { CommentController } from "vscode";
+import * as vscode from "vscode";
+import { CommentController } from "vscode";
 import { ILookupControllerV3Factory } from "./components/lookup/LookupControllerV3Interface";
 import {
   INoteLookupProviderFactory,

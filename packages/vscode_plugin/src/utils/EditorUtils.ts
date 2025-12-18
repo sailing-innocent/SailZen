@@ -161,6 +161,7 @@ export class EditorUtils {
     engine: DEngineClient;
   }): string | undefined {
     const { editor } = args;
+
     return (
       EditorUtils.getHeaderAt({ document: editor.document, ...args }) ||
       EditorUtils.getBlockAnchorAt(args)
@@ -174,6 +175,7 @@ export class EditorUtils {
     doEndAnchor?: boolean;
     engine: DEngineClient;
   }): Promise<{ startAnchor?: string; endAnchor?: string }> {
+
     const { editor, selection, doStartAnchor, doEndAnchor, engine } =
       _.defaults(opts, { doStartAnchor: true, doEndAnchor: true });
     if (_.isUndefined(selection)) return {};

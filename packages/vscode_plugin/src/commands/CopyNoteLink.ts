@@ -159,10 +159,12 @@ export class CopyNoteLinkCommand
     }
     const engine = this.extension.getEngine();
     const { selection } = VSCodeUtils.getSelection();
+
     const { startAnchor: anchor } = await EditorUtils.getSelectionAnchors({
       editor,
       selection,
       engine,
+      doStartAnchor: false, // TODO(zzh): temp disable start anchor, here will cause crash
       doEndAnchor: false,
     });
 
@@ -194,10 +196,22 @@ export class CopyNoteLinkCommand
 
   async execute(_opts: CommandOpts) {
     const editor = VSCodeUtils.getActiveTextEditor()!;
-    const fname = NoteUtils.uri2Fname(editor.document.uri);
     const engine = this.extension.getEngine();
-    const vault = PickerUtilsV2.getVaultForOpenEditor();
+    const wsUtils = this.extension.wsUtils;
 
+    // Try to get note directly from document path first
+    // This ensures we get the correct note even if fname has hierarchy
+    let note: NotePropsMeta | undefined = await wsUtils.getNoteFromDocument(editor.document) as NotePropsMeta | undefined;
+
+    // If we couldn't get note from path, fall back to fname lookup
+    if (!note) {
+      const fname = NoteUtils.uri2Fname(editor.document.uri);
+      const vault = PickerUtilsV2.getVaultForOpenEditor();
+      const notes = await engine.findNotesMeta({ fname, vault });
+      note = notes?.[0];
+    }
+
+    const fname = note?.fname || NoteUtils.uri2Fname(editor.document.uri);
 
     if (editor.document.isDirty) {
       this._onEngineNoteStateChangedDisposable = this.extension
@@ -225,9 +239,6 @@ export class CopyNoteLinkCommand
       // Do nothing as engine may still not be up-to-date
       return;
     } else {
-
-      const notes = await engine.findNotesMeta({ fname, vault });
-      const note: NotePropsMeta | undefined = notes?.[0];
       // Validate that note has required properties (id, fname, vault)
       if (note && (!note.id || !note.fname || !note.vault)) {
         this.L.error({

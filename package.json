@@ -20,9 +20,6 @@
         "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage",
         "views:dev": "pnpm --filter=@saili/dendron-plugin-views run dev",
         "views:build": "pnpm --filter=@saili/dendron-plugin-views run build",
-        "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
-        "plugin:build": "pnpm build-engine-server && pnpm views:build && pnpm views:copy && pnpm build-plugin",
-        "plugin:package": "pnpm package-plugin",
-        "plugin:dev": "pnpm views:build && pnpm views:copy && pnpm -r --filter=sail-zen-vscode run watch"
+        "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin"
     }
 }

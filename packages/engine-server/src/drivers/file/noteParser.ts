@@ -293,33 +293,48 @@ export class NoteParser extends ParserBase {
     this.logger.info({ ctx, msg: "post:matchSchemas" });
     if (opts?.useSQLiteMetadataStore) {
       this.logger.info({ ctx, msg: "initialize metadata" });
-      if (await SQLiteMetadataStore.isVaultInitialized(vault)) {
-        this.logger.info({ ctx, msg: "adding update entries" });
-        // initialized, update based on cache
-        const updateDict: NotePropsByIdDict = {};
-        _.map(cacheUpdates, (v, _k) => {
-          // TODO: we need to figure out the right data type to insert into metadata store
-          updateDict[v.data.id] = v.data as NoteProps;
-        });
-        await SQLiteMetadataStore.bulkInsertAllNotes({
-          notesIdDict: updateDict,
-        });
-      } else {
-        this.logger.info({ ctx, msg: "updating all entries" });
-        // we never initialized this vault, initialize it now
-        try {
+      try {
+        if (await SQLiteMetadataStore.isVaultInitialized(vault)) {
+          this.logger.info({ ctx, msg: "adding update entries" });
+          // initialized, update based on cache
+          const updateDict: NotePropsByIdDict = {};
+          _.map(cacheUpdates, (v, _k) => {
+            // TODO: we need to figure out the right data type to insert into metadata store
+            updateDict[v.data.id] = v.data as NoteProps;
+          });
+          if (!_.isEmpty(updateDict)) {
+            await SQLiteMetadataStore.bulkInsertAllNotes({
+              notesIdDict: updateDict,
+            });
+            this.logger.info({ ctx, msg: `bulk inserted ${_.size(updateDict)} updated notes` });
+          }
+        } else {
+          this.logger.info({ ctx, msg: "updating all entries", vault, numNotes: _.size(notesById) });
+          // we never initialized this vault, initialize it now
           // create the vault
           await SQLiteMetadataStore.prisma().dVault.create({
             data: { fsPath: vault.fsPath, wsRoot },
           });
+          this.logger.info({ ctx, msg: "vault created in database" });
           // if vault is not initialized, bulk insert all note metadata into sqlite
-          await SQLiteMetadataStore.bulkInsertAllNotes({
-            notesIdDict: notesById,
-          });
-        } catch (err) {
-          this.logger.error({ ctx, msg: "issue doing bulk insert", vault });
-          throw err;
+          if (!_.isEmpty(notesById)) {
+            await SQLiteMetadataStore.bulkInsertAllNotes({
+              notesIdDict: notesById,
+            });
+            this.logger.info({ ctx, msg: `bulk inserted ${_.size(notesById)} notes into database` });
+          } else {
+            this.logger.info({ ctx, msg: "no notes to insert into database" });
+          }
         }
+      } catch (err) {
+        this.logger.error({ 
+          ctx, 
+          msg: "issue doing bulk insert - meta will not be stored in database", 
+          vault,
+          error: err,
+        });
+        // Don't throw - allow initialization to continue without SQLite metadata store
+        // The in-memory storage will still work
       }
     }
     return { notesById, cacheUpdates, errors };

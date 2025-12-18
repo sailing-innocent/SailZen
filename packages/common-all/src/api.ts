@@ -256,9 +256,11 @@ abstract class API {
   }: IDoRequestArgs) {
     let headers = {};
     const { _request, onAuth, onBuildHeaders, endpoint, apiPath } = this.opts;
+
     if (auth) {
       headers = await onAuth({ headers });
     }
+    
     headers = await onBuildHeaders({ headers });
     const requestParams = {
       url: [endpoint, apiPath, path].join("/"),

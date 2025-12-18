@@ -540,10 +540,31 @@ export class FileStorage implements DStore {
         ctx,
         msg: "checking if sql is initialized...",
         output,
+        storeStatus: store.status,
       });
-      if (!(await SQLiteMetadataStore.isDBInitialized())) {
-        await SQLiteMetadataStore.createAllTables();
-        await SQLiteMetadataStore.createWorkspace(this.wsRoot);
+
+      // Check if initialization failed
+      if (store.status === "error") {
+        const errorMsg = "SQLiteMetadataStore initialization failed. Meta will not be stored in database.";
+        this.logger.error({ ctx, msg: errorMsg });
+        // Continue without SQLite metadata store - fall back to in-memory storage
+      } else if (store.status === "ready") {
+        try {
+          if (!(await SQLiteMetadataStore.isDBInitialized())) {
+            this.logger.info({ ctx, msg: "creating database tables..." });
+            await SQLiteMetadataStore.createAllTables();
+            await SQLiteMetadataStore.createWorkspace(this.wsRoot);
+            this.logger.info({ ctx, msg: "database tables created successfully" });
+          } else {
+            this.logger.info({ ctx, msg: "database already initialized" });
+          }
+        } catch (err) {
+          this.logger.error({ ctx, msg: "failed to initialize database", error: err });
+          // Continue without SQLite metadata store - fall back to in-memory storage
+        }
+      } else {
+        const errorMsg = `SQLiteMetadataStore status is still "${store.status}" after waiting. Meta may not be stored in database.`;
+        this.logger.info({ ctx, msg: errorMsg });
       }
     }
 

@@ -19,7 +19,7 @@ let _prisma: PrismaClient | undefined;
 
 function getPrismaClient(): PrismaClient {
   if (_prisma === undefined) {
-    throw Error("prisma client not initialized");
+    throw Error("prisma client not initialized. This may indicate that SQLiteMetadataStore initialization failed or is still in progress.");
   }
   return _prisma;
 }
@@ -31,7 +31,8 @@ export type NoteIndexLightProps = {
 };
 
 export class SQLiteMetadataStore implements IDataStore<string, NotePropsMeta> {
-  public status: "loading" | "ready";
+  public status: "loading" | "ready" | "error";
+  private _initError: Error | undefined;
 
   constructor({
     wsRoot,
@@ -56,16 +57,28 @@ export class SQLiteMetadataStore implements IDataStore<string, NotePropsMeta> {
     this.status = "loading";
     // example uri: "DATABASE_URL="file://Users/kevinlin/code/dendron/local/notes.db""
     const dbUrl = URI.file(`${wsRoot}/metadata.db`);
-    loadPrisma().then(({ PrismaClient }: { PrismaClient: any }) => {
-      _prisma = new PrismaClient({
-        datasources: {
-          db: {
-            url: dbUrl.toString(),
-          },
-        },
+    loadPrisma()
+      .then(({ PrismaClient }: { PrismaClient: any }) => {
+        try {
+          _prisma = new PrismaClient({
+            datasources: {
+              db: {
+                url: dbUrl.toString(),
+              },
+            },
+          });
+          this.status = "ready";
+        } catch (err) {
+          this._initError = err as Error;
+          this.status = "error";
+          console.error("Failed to initialize PrismaClient:", err);
+        }
+      })
+      .catch((err: unknown) => {
+        this._initError = err as Error;
+        this.status = "error";
+        console.error("Failed to load Prisma:", err);
       });
-      this.status = "ready";
-    });
   }
 
   dispose() {}
