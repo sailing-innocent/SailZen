@@ -2,7 +2,6 @@ import { VSCodeEvents } from "@saili/common-all";
 import { SegmentClient, TelemetryStatus } from "@saili/common-server";
 import { window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { AnalyticsUtils } from "../utils/analytics";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {};
@@ -21,7 +20,6 @@ export class DisableTelemetryCommand extends BasicCommand<
   }
   async execute() {
     const reason = TelemetryStatus.DISABLED_BY_COMMAND;
-    AnalyticsUtils.track(VSCodeEvents.DisableTelemetry, { reason });
     SegmentClient.disable(reason);
     window.showInformationMessage("telemetry disabled");
   }

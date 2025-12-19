@@ -2,7 +2,6 @@ import { VSCodeEvents } from "@saili/common-all";
 import { MetadataService, ShowcaseEntry } from "@saili/engine-server";
 import _ from "lodash";
 import * as vscode from "vscode";
-import { AnalyticsUtils } from "../utils/analytics";
 import { ALL_FEATURE_SHOWCASES } from "./AllFeatureShowcases";
 import {
   DisplayLocation,
@@ -22,9 +21,7 @@ export class FeatureShowcaseToaster {
    */
   public showToast(): boolean {
     // Don't show tips for users in their first week.
-    if (AnalyticsUtils.isFirstWeek()) {
-      return false;
-    }
+    // Analytics check removed
 
     for (const message of ALL_FEATURE_SHOWCASES) {
       // Keep cycling through messages until there's one that should be shown
@@ -79,10 +76,6 @@ export class FeatureShowcaseToaster {
     displayLocation: DisplayLocation,
     message: IFeatureShowcaseMessage
   ) {
-    AnalyticsUtils.track(VSCodeEvents.FeatureShowcaseDisplayed, {
-      messageType: message.showcaseEntry,
-      displayLocation,
-    });
 
     const options = _.without(
       [message.confirmText, message.deferText],
@@ -109,11 +102,6 @@ export class FeatureShowcaseToaster {
           userResponse = FeatureShowcaseUserResponse.deferred;
         }
 
-        AnalyticsUtils.track(VSCodeEvents.FeatureShowcaseResponded, {
-          messageType: message.showcaseEntry,
-          displayLocation: DisplayLocation.InformationMessage,
-          userResponse,
-        });
 
         if (resp === message.confirmText && message.onConfirm) {
           message.onConfirm.bind(message)();

@@ -6,7 +6,6 @@ import {
 } from "@saili/common-all";
 import _ from "lodash";
 import { Disposable, QuickInputButton } from "vscode";
-import { AnalyticsUtils } from "../../utils/analytics";
 import {
   ButtonType,
   DendronBtn,
@@ -324,10 +323,5 @@ export class LookupV3QuickPickView implements Disposable {
         break;
     }
 
-    AnalyticsUtils.track(LookupEvents.LookupModifierToggledByUser, {
-      command: this._providerId,
-      type: (btn as IDendronQuickInputButton).type,
-      pressed: (btn as IDendronQuickInputButton).pressed,
-    });
   };
 }

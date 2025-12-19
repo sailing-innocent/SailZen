@@ -45,7 +45,6 @@ import {
 } from "vscode";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
-import { sentryReportingCallback } from "../utils/analytics";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
 import { WSUtils } from "../WSUtils";
@@ -176,11 +175,10 @@ async function provideCompletionsForTag({
   );
 }
 
-export const provideCompletionItems = sentryReportingCallback(
-  async (
-    document: TextDocument,
-    position: Position
-  ): Promise<CompletionList | undefined> => {
+export const provideCompletionItems = async (
+  document: TextDocument,
+  position: Position
+): Promise<CompletionList | undefined> => {
     const ctx = "provideCompletionItems";
     const startTime = process.hrtime();
     // No-op if we're not in a Dendron Workspace
@@ -335,8 +333,7 @@ export const provideCompletionItems = sentryReportingCallback(
       duration,
     });
     return completionList;
-  }
-);
+  };
 
 /**
  * Debounced version of {@link provideCompletionItems}.
@@ -353,10 +350,9 @@ export const debouncedProvideCompletionItems = _.debounce(
   { leading: true, trailing: true }
 );
 
-export const resolveCompletionItem = sentryReportingCallback(
-  async (
-    item: CompletionItem,
-    token: CancellationToken
+export const resolveCompletionItem = async (
+  item: CompletionItem,
+  token: CancellationToken
   ): Promise<CompletionItem | undefined> => {
     const ctx = "resolveCompletionItem";
     const { label: fname, detail: vname } = item;

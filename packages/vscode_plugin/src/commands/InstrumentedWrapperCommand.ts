@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { AnalyticsUtils } from "../utils/analytics";
 import { BasicCommand } from "./base";
 
 export type InstrumentedWrapperCommandArgs = {
@@ -52,6 +51,5 @@ export class InstrumentedWrapperCommand extends BasicCommand<
     const args = opts.command.arguments ?? [];
     await vscode.commands.executeCommand(opts.command.command, ...args);
 
-    AnalyticsUtils.track(opts.event, opts.customProps);
   }
 }

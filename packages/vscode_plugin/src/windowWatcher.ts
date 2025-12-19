@@ -12,13 +12,9 @@ import { IDendronExtension } from "./dendronExtensionInterface";
 import { ExtensionProvider } from "./ExtensionProvider";
 import { debouncedUpdateDecorations } from "./features/windowDecorations";
 import { Logger } from "./logger";
-import { AnalyticsUtils, sentryReportingCallback } from "./utils/analytics";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
 
 const trackScrolled = _.debounce(() => {
-  AnalyticsUtils.track(EngagementEvents.NoteScrolled, {
-    noteScrolledSource: NoteScrolledSource.EDITOR,
-  });
 }, 2500);
 
 /**
@@ -45,13 +41,13 @@ export class WindowWatcher {
     // provide logging whenever window changes
     this._extension.addDisposable(
       window.onDidChangeVisibleTextEditors(
-        sentryReportingCallback((editors: readonly TextEditor[]) => {
+        (editors: readonly TextEditor[]) => {
           const ctx = "WindowWatcher:onDidChangeVisibleTextEditors";
           const editorPaths = editors.map((editor) => {
             return editor.document.uri.fsPath;
           });
           Logger.info({ ctx, editorPaths });
-        })
+        }
       )
     );
 
@@ -71,13 +67,13 @@ export class WindowWatcher {
     );
   }
 
-  private onDidChangeActiveTextEditor = sentryReportingCallback(
+  private onDidChangeActiveTextEditor =
     async (editor: TextEditor | undefined) => {
       const ctx = "WindowWatcher:onDidChangeActiveTextEditor";
       if (
         !editor ||
         editor.document.uri.fsPath !==
-          window.activeTextEditor?.document.uri.fsPath ||
+        window.activeTextEditor?.document.uri.fsPath ||
         // ignore text editors like the output window
         editor.document.uri.scheme !== "file"
       ) {
@@ -124,16 +120,11 @@ export class WindowWatcher {
             Duration.fromMillis(now - note.updated).as("days")
           );
 
-          AnalyticsUtils.track(EngagementEvents.NoteViewed, {
-            daysSinceCreation: daysSinceCreated,
-            daysSinceUpdate: daysSinceUpdated,
-          });
         }
       }, 5000);
-    }
-  );
+    };
 
-  private onDidChangeTextEditorVisibleRanges = sentryReportingCallback(
+  private onDidChangeTextEditorVisibleRanges =
     async (e: TextEditorVisibleRangesChangeEvent | undefined) => {
       const editor = e?.textEditor;
       const ctx = "WindowWatcher:onDidChangeTextEditorVisibleRanges";
@@ -164,13 +155,12 @@ export class WindowWatcher {
 
       if (
         editor.document.uri.fsPath ===
-          window.activeTextEditor?.document.uri.fsPath &&
+        window.activeTextEditor?.document.uri.fsPath &&
         ExtensionUtils.getTutorialIds().has(note.id)
       ) {
         trackScrolled();
       }
-    }
-  );
+    };
 
   /**
    * Decorate wikilinks, user tags etc. as well as warning about some issues like missing frontmatter

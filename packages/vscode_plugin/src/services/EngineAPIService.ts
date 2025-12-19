@@ -42,7 +42,6 @@ import {
 } from "@saili/common-all";
 import { DendronEngineClient, HistoryService } from "@saili/engine-server";
 import _ from "lodash";
-import { AnalyticsUtils } from "../utils/analytics";
 import { IEngineAPIService } from "./EngineAPIServiceInterface";
 
 export class EngineAPIService
@@ -281,11 +280,6 @@ export class EngineAPIService
         "delete"
       ).length;
 
-      AnalyticsUtils.track(EngagementEvents.EngineStateChanged, {
-        created: createCount,
-        updated: updateCount,
-        deleted: deleteCount,
-      });
     });
   }
 }

@@ -2,7 +2,6 @@ import {
   EngagementEvents,
   RefactoringCommandUsedPayload,
 } from "@saili/common-all";
-import { AnalyticsUtils } from "./analytics";
 
 export class ProxyMetricUtils {
   static trackRefactoringProxyMetric(opts: {
@@ -16,6 +15,5 @@ export class ProxyMetricUtils {
       ...props,
       ...extra,
     };
-    AnalyticsUtils.track(EngagementEvents.RefactoringCommandUsed, payload);
   }
 }

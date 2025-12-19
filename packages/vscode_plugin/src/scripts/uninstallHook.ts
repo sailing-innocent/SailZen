@@ -4,9 +4,7 @@ import { SegmentClient } from "@saili/common-server";
 /**
  * Simple script to fire an uninstall analytics event during the
  * vscode:uninstall hook execution that runs after the extension has been
- * uninstalled. NOTE: we cannot use @see {@link AnalyticsUtils}, as that
- * requires vscode, which is unavailable during the execution of the uninstall
- * hook.
+ * uninstalled. NOTE: AnalyticsUtils has been removed, so we use SegmentClient directly.
  */
 async function main() {
   SegmentClient.instance().track({ event: VSCodeEvents.Uninstall });

@@ -23,7 +23,6 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { VaultSelectionModeConfigUtils } from "../components/lookup/vaultSelectionModeConfigUtils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { TemplateUtils } from "@saili/common-server";
-import { AnalyticsUtils } from "../utils/analytics";
 import { TraitUtils } from "../traits/TraitUtils";
 import _ from "lodash";
 import { Disposable } from "vscode";
@@ -266,9 +265,6 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
         body = dummy.body;
         custom = dummy.custom;
 
-        AnalyticsUtils.track(EngagementEvents.TemplateApplied, {
-          source: "Trait",
-        });
       } else {
         this.L.error({
           ctx: "trait.OnCreate.setTemplate",

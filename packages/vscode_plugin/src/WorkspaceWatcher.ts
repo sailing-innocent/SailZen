@@ -35,7 +35,6 @@ import { IDendronExtension } from "./dendronExtensionInterface";
 import { Logger } from "./logger";
 import { TextDocumentService } from "./services/node/TextDocumentService";
 import { ISchemaSyncService } from "./services/SchemaSyncServiceInterface";
-import { AnalyticsUtils, sentryReportingCallback } from "./utils/analytics";
 import { VSCodeUtils } from "./vsCodeUtils";
 import { WindowWatcher } from "./windowWatcher";
 
@@ -159,7 +158,7 @@ export class WorkspaceWatcher {
 
     this._extension.addDisposable(
       window.onDidChangeActiveTextEditor(
-        sentryReportingCallback((editor: TextEditor | undefined) => {
+        (editor: TextEditor | undefined) => {
           if (
             editor?.document &&
             this.getNewlyOpenedDocument(editor.document)
@@ -475,7 +474,6 @@ export class WorkspaceWatcher {
         },
         metaOnly: true,
       };
-      AnalyticsUtils.track(ContextualUIEvents.ContextualUIRename);
       const engine = this._extension.getEngine();
       const updateNoteReferences = engine.renameNote(opts);
       args.waitUntil(updateNoteReferences);

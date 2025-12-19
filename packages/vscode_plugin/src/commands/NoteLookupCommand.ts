@@ -302,9 +302,6 @@ export class NoteLookupCommand extends BaseCommand<
     this._quickPick = quickpick;
 
     const profile = getDurationMilliseconds(start);
-    AnalyticsUtils.track(VSCodeEvents.NoteLookup_Gather, {
-      duration: profile,
-    });
 
     return {
       controller: this.controller,
@@ -498,11 +495,6 @@ export class NoteLookupCommand extends BaseCommand<
       result = this.acceptExistingItem(item);
     }
     const profile = getDurationMilliseconds(start);
-    AnalyticsUtils.track(VSCodeEvents.NoteLookup_Accept, {
-      duration: profile,
-      isNew,
-      isNewWithTemplate,
-    });
     const metaData = MetadataService.instance().getMeta();
     if (_.isUndefined(metaData.firstLookupTime)) {
       MetadataService.instance().setFirstLookupTime();
@@ -608,10 +600,6 @@ export class NoteLookupCommand extends BaseCommand<
         `Warning: Problem with ${nodeNew.fname} schema. ${templateAppliedResp.error.message}`
       );
     } else if (templateAppliedResp.data) {
-      AnalyticsUtils.track(EngagementEvents.TemplateApplied, {
-        source: this.key,
-        ...TemplateUtils.genTrackPayload(nodeNew),
-      });
     }
 
     if (picker.onCreate) {

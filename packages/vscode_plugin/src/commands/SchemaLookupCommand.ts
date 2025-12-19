@@ -16,7 +16,6 @@ import { DendronQuickPickerV2 } from "../components/lookup/types";
 import { OldNewLocation, PickerUtilsV2 } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { Logger } from "../logger";
-import { AnalyticsUtils } from "../utils/analytics";
 import { BaseCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { ILookupControllerV3 } from "../components/lookup/LookupControllerV3Interface";
@@ -116,9 +115,6 @@ export class SchemaLookupCommand extends BaseCommand<
     });
 
     const profile = getDurationMilliseconds(start);
-    AnalyticsUtils.track(VSCodeEvents.SchemaLookup_Gather, {
-      duration: profile,
-    });
 
     return {
       controller: this.controller,
@@ -176,9 +172,6 @@ export class SchemaLookupCommand extends BaseCommand<
         nonInteractive: opts.noConfirm,
       });
       const profile = getDurationMilliseconds(start);
-      AnalyticsUtils.track(VSCodeEvents.SchemaLookup_Show, {
-        duration: profile,
-      });
     });
   }
 
@@ -194,10 +187,6 @@ export class SchemaLookupCommand extends BaseCommand<
       result = this.acceptExistingSchemaItem(item);
     }
     const profile = getDurationMilliseconds(start);
-    AnalyticsUtils.track(VSCodeEvents.SchemaLookup_Accept, {
-      duration: profile,
-      isNew,
-    });
     return result;
   }
 

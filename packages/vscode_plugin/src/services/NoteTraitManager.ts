@@ -17,7 +17,6 @@ import { NoteTraitService } from "./NoteTraitService";
 import fs from "fs-extra";
 import { Logger } from "../logger";
 import * as vscode from "vscode";
-import { AnalyticsUtils } from "../utils/analytics";
 import _ from "lodash";
 
 export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
@@ -178,13 +177,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
       });
 
       if (traitJSFileCount > 0) {
-        AnalyticsUtils.track(VSCodeEvents.NoteTraitsInitialized, {
-          traitJSFileCount,
-          traitInitializedCount,
-          traitHasSetTitleImplCount,
-          traitHasSetNameModifierImplCount,
-          traitHasSetTemplateImplCount,
-        });
+        // Analytics tracking removed
       }
     }
   }

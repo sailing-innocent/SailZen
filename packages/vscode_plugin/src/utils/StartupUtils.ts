@@ -30,9 +30,7 @@ import { INCOMPATIBLE_EXTENSIONS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
-import { SurveyUtils } from "../survey";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { AnalyticsUtils } from "./analytics";
 // import { ConfigMigrationUtils } from "./ConfigMigration";
 import semver from "semver";
 import os from "os";
@@ -64,16 +62,10 @@ export class StartupUtils {
       .showInformationMessage(MESSAGE, SHOW_ME_HOW)
       .then(async (resp) => {
         if (resp === SHOW_ME_HOW) {
-          AnalyticsUtils.track(MigrationEvents.ManualUpgradeMessageConfirm, {
-            status: ConfirmStatus.accepted,
-          });
           VSCodeUtils.openLink(
             "https://wiki.dendron.so/notes/4119x15gl9w90qx8qh1truj"
           );
         } else {
-          AnalyticsUtils.track(MigrationEvents.ManualUpgradeMessageConfirm, {
-            status: ConfirmStatus.rejected,
-          });
         }
       });
   }
@@ -131,10 +123,6 @@ export class StartupUtils {
           ? MigrationEvents.MigrationSucceeded
           : MigrationEvents.MigrationFailed;
 
-        AnalyticsUtils.track(
-          event,
-          MigrationUtils.getMigrationAnalyticProps(change)
-        );
       });
     }
   }
@@ -169,7 +157,6 @@ export class StartupUtils {
     ext: IDendronExtension;
     message: string;
   }) {
-    AnalyticsUtils.track(ConfigEvents.DuplicateConfigEntryMessageShow);
     const FIX_ISSUE = "Fix Issue";
     const MESSAGE =
       "We have detected duplicate key(s) in dendron.yml. Dendron has activated using the last entry of the duplicate key(s)";
@@ -177,12 +164,6 @@ export class StartupUtils {
       .showInformationMessage(MESSAGE, FIX_ISSUE)
       .then(async (resp) => {
         if (resp === FIX_ISSUE) {
-          AnalyticsUtils.track(
-            ConfigEvents.DuplicateConfigEntryMessageConfirm,
-            {
-              status: ConfirmStatus.accepted,
-            }
-          );
           const wsRoot = opts.ext.getDWorkspace().wsRoot;
           const configPath = DConfig.configPath(wsRoot);
           const configUri = vscode.Uri.file(configPath);
@@ -231,12 +212,6 @@ export class StartupUtils {
             column: vscode.ViewColumn.Beside,
           });
         } else {
-          AnalyticsUtils.track(
-            ConfigEvents.DuplicateConfigEntryMessageConfirm,
-            {
-              status: ConfirmStatus.rejected,
-            }
-          );
         }
       });
   }
@@ -268,7 +243,6 @@ export class StartupUtils {
   }
 
   static showDeprecatedConfigMessage(opts: { ext: IDendronExtension }) {
-    AnalyticsUtils.track(ConfigEvents.DeprecatedConfigMessageShow);
     const REMOVE_CONFIG = "Remove Deprecated Configuration";
     const MESSAGE =
       "We have detected some deprecated configurations. Would you like to remove them from dendron.yml?";
@@ -276,18 +250,12 @@ export class StartupUtils {
       .showInformationMessage(MESSAGE, REMOVE_CONFIG)
       .then(async (resp) => {
         if (resp === REMOVE_CONFIG) {
-          AnalyticsUtils.track(ConfigEvents.DeprecatedConfigMessageConfirm, {
-            status: ConfirmStatus.accepted,
-          });
           const cmd = new DoctorCommand(opts.ext);
           await cmd.execute({
             action: DoctorActionsEnum.REMOVE_DEPRECATED_CONFIGS,
             scope: "workspace",
           });
         } else {
-          AnalyticsUtils.track(ConfigEvents.DeprecatedConfigMessageConfirm, {
-            status: ConfirmStatus.rejected,
-          });
         }
       });
   }
@@ -316,7 +284,6 @@ export class StartupUtils {
   }
 
   static showMissingDefaultConfigMessage(opts: { ext: IDendronExtension }) {
-    AnalyticsUtils.track(ConfigEvents.ShowMissingDefaultConfigMessage);
     const ADD_CONFIG = "Add Missing Configuration";
     const MESSAGE =
       "We have detected a missing configuration. This may happen because a new configuration was introduced, or because an existing required configuration has been deleted. Would you like to add them to dendron.yml?";
@@ -324,10 +291,6 @@ export class StartupUtils {
       .showInformationMessage(MESSAGE, ADD_CONFIG)
       .then(async (resp) => {
         if (resp === ADD_CONFIG) {
-          AnalyticsUtils.track(
-            ConfigEvents.MissingDefaultConfigMessageConfirm,
-            {
-              status: ConfirmStatus.accepted,
             }
           );
           const cmd = new DoctorCommand(opts.ext);
@@ -335,13 +298,6 @@ export class StartupUtils {
             action: DoctorActionsEnum.ADD_MISSING_DEFAULT_CONFIGS,
             scope: "workspace",
           });
-        } else {
-          AnalyticsUtils.track(
-            ConfigEvents.MissingDefaultConfigMessageConfirm,
-            {
-              status: ConfirmStatus.rejected,
-            }
-          );
         }
       });
   }
@@ -415,11 +371,6 @@ export class StartupUtils {
         CUR_TIME.minus(INACTIVE_USER_MSG_SEND_TIME) >= FOUR_WEEKS &&
         isInactive;
       if (shouldSendAgain) {
-        AnalyticsUtils.track(SurveyEvents.InactiveUserSurveyPromptReason, {
-          reason: "reprompt",
-          currentTime,
-          ...metaData,
-        });
       }
       return shouldSendAgain;
     } else {
@@ -431,18 +382,12 @@ export class StartupUtils {
         // this is needed since we may have prompted them before we introduced this metadata
         metaData.inactiveUserMsgSendTime === undefined;
       if (shouldSend) {
-        AnalyticsUtils.track(SurveyEvents.InactiveUserSurveyPromptReason, {
-          reason: "initial_prompt",
-          currentTime,
-          ...metaData,
-        });
       }
       return shouldSend;
     }
   }
 
   static async showInactiveUserMessage() {
-    AnalyticsUtils.track(VSCodeEvents.ShowInactiveUserMessage);
     MetadataService.instance().setInactiveUserMsgSendTime();
     await SurveyUtils.showInactiveUserSurvey();
   }
@@ -460,9 +405,6 @@ export class StartupUtils {
       (status) => status.installed
     );
     if (shouldDisplayWarning) {
-      AnalyticsUtils.track(ExtensionEvents.IncompatibleExtensionsWarned, {
-        installedExtensions,
-      });
       vscode.window
         .showWarningMessage(
           "We have detected some extensions that may conflict with Dendron. Further action is needed for Dendron to function correctly",
@@ -532,7 +474,6 @@ export class StartupUtils {
     panel.webview.html = content;
     panel.reveal();
 
-    AnalyticsUtils.track(VSCodeEvents.V100ReleaseNotesShown);
 
     MetadataService.instance().v100ReleaseMessageShown = true;
   }
@@ -541,5 +482,5 @@ export class StartupUtils {
    * this method pings the localhost and checks if it is available. Incase local is blocked off,
    * displays a toaster with a link to troubleshooting docs
    */
-  static async showWhitelistingLocalhostDocsIfNecessary() {}
+  static async showWhitelistingLocalhostDocsIfNecessary() { }
 }

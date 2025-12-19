@@ -19,7 +19,6 @@ import { Range, window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { getAnalyticsPayload } from "../utils/analytics";
 import { BasicCommand } from "./base";
 import { ProxyMetricUtils } from "../utils/ProxyMetricUtils";
 import { Heading } from "@saili/engine-server";
@@ -227,7 +226,6 @@ export class RenameHeaderCommand extends BasicCommand<
     }
     return {
       ...noteChangeEntryCounts,
-      ...getAnalyticsPayload(opts?.source),
     };
   }
 }

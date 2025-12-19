@@ -16,7 +16,6 @@ import _ from "lodash";
 import { CancellationTokenSource, window } from "vscode";
 import { IDendronExtension } from "../../dendronExtensionInterface";
 import { Logger } from "../../logger";
-import { AnalyticsUtils } from "../../utils/analytics";
 import { NotePickerUtils } from "./NotePickerUtils";
 import { IDendronQuickInputButton } from "./ButtonTypes";
 import {
@@ -158,11 +157,6 @@ export class NoteLookupProvider implements ILookupProviderV3 {
       const { quickpick: picker, cancellationToken } = opts;
 
       picker.buttons.forEach((button) => {
-        AnalyticsUtils.track(LookupEvents.LookupModifiersSetOnAccept, {
-          command: this.id,
-          type: (button as IDendronQuickInputButton).type,
-          pressed: (button as IDendronQuickInputButton).pressed,
-        });
       });
 
       let selectedItems = NotePickerUtils.getSelection(picker);
@@ -520,9 +514,6 @@ export class NoteLookupProvider implements ILookupProviderV3 {
         profile,
         numItems: picker.items.length,
         cancelled: token?.isCancellationRequested,
-      });
-      AnalyticsUtils.track(VSCodeEvents.NoteLookup_Update, {
-        duration: profile,
       });
       return; // eslint-disable-line no-unsafe-finally -- probably can be just removed
     }

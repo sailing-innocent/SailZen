@@ -27,7 +27,6 @@ import { Logger } from "../logger";
 import { FeatureShowcaseToaster } from "../showcase/FeatureShowcaseToaster";
 import { ObsidianImportTip } from "../showcase/ObsidianImportTip";
 import { SurveyUtils } from "../survey";
-import { AnalyticsUtils } from "../utils/analytics";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
 import { BlankInitializer } from "./blankInitializer";
@@ -129,7 +128,6 @@ export class TutorialInitializer
           });
           const { fname } = payload;
           if (fname.includes("tutorial")) {
-            AnalyticsUtils.track(TutorialEvents.TutorialNoteViewed, payload);
 
             // Show import notes tip when they're on the final page of the tutorial.
             if (payload.currentStep === payload.totalSteps) {

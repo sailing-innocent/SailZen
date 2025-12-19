@@ -18,7 +18,6 @@ import _ from "lodash";
 import vscode from "vscode";
 import { RenameNoteV2aCommand } from "../commands/RenameNoteV2a";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { AnalyticsUtils } from "../utils/analytics";
 import {
   getReferenceAtPosition,
   getReferenceAtPositionResp,
@@ -135,16 +134,6 @@ export default class RenameProvider implements vscode.RenameProvider {
     const engine = extension.getEngine();
     const { vaults } = engine;
 
-    AnalyticsUtils.track(EngagementEvents.RefactoringCommandUsed, {
-      command: "RenameProvider",
-      ...noteChangeEntryCounts,
-      numVaults: vaults.length,
-      traits: note.traits ?? [],
-      numChildren: note.children.length,
-      numLinks: note.links.length,
-      numChars: note.body.length,
-      noteDepth: DNodeUtils.getDepth(note),
-    });
   }
 
   public async executeRename(opts: { newName: string }): Promise<

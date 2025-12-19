@@ -5,7 +5,6 @@ import {
   DENDRON_COMMANDS,
   LaunchTutorialCommandInvocationPoint,
 } from "../constants";
-import { AnalyticsUtils } from "../utils/analytics";
 import { TutorialInitializer } from "../workspace/tutorialInitializer";
 import { BasicCommand } from "./base";
 import { SetupWorkspaceCommand } from "./SetupWorkspace";
@@ -32,14 +31,6 @@ export class LaunchTutorialWorkspaceCommand extends BasicCommand<
       fpath: path.join(resolveTilde("~"), "Dendron"),
     });
 
-    // Since this command will cause a window reload, track this telemetry point
-    // via trackForNextRun
-    await AnalyticsUtils.trackForNextRun(
-      TutorialEvents.TutorialWorkspaceLaunching,
-      {
-        invocationPoint: opts.invocationPoint,
-      }
-    );
 
     await new SetupWorkspaceCommand().execute({
       rootDirRaw: filePath,

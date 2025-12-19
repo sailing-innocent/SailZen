@@ -25,7 +25,6 @@ import { NoteLookupCommand } from "../commands/NoteLookupCommand";
 import { PasteLinkCommand } from "../commands/PasteLink";
 import { RenameHeaderCommand } from "../commands/RenameHeader";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { sentryReportingCallback } from "../utils/analytics";
 import { EditorUtils } from "../utils/EditorUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
@@ -45,13 +44,12 @@ export const codeActionProvider = {
 };
 
 export const doctorFrontmatterProvider: CodeActionProvider = {
-  provideCodeActions: sentryReportingCallback(
-    (
-      _document: TextDocument,
-      _range: Range | Selection,
-      context: CodeActionContext,
-      _token: CancellationToken
-    ) => {
+  provideCodeActions: (
+    _document: TextDocument,
+    _range: Range | Selection,
+    context: CodeActionContext,
+    _token: CancellationToken
+  ) => {
       // No-op if we're not in a Dendron Workspace
       if (!DendronExtension.isActive()) {
         return;
@@ -77,8 +75,7 @@ export const doctorFrontmatterProvider: CodeActionProvider = {
         return [action];
       }
       return undefined;
-    }
-  ),
+    },
 };
 
 /**
@@ -89,13 +86,12 @@ export const doctorFrontmatterProvider: CodeActionProvider = {
  * (Similar to the current functionality of creating a new note in 'Selection Extract' mode)
  */
 export const refactorProvider: CodeActionProvider = {
-  provideCodeActions: sentryReportingCallback(
-    async (
-      _document: TextDocument,
-      _range: Range | Selection,
-      _context: CodeActionContext,
-      _token: CancellationToken
-    ) => {
+  provideCodeActions: async (
+    _document: TextDocument,
+    _range: Range | Selection,
+    _context: CodeActionContext,
+    _token: CancellationToken
+  ) => {
       // No-op if we're not in a Dendron Workspace
       const ext = ExtensionProvider.getExtension();
       if (!(await ext.isActiveAndIsDendronNote(_document.uri.fsPath))) {
@@ -207,6 +203,5 @@ export const refactorProvider: CodeActionProvider = {
           ? [createNewNoteAction, renameHeaderAction, copyHeaderRefAction]
           : [createNewNoteAction];
       }
-    }
-  ),
+    },
 };

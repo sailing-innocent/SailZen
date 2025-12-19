@@ -12,7 +12,6 @@ import path from "path";
 import * as vscode from "vscode";
 import { Uri, ViewColumn, window } from "vscode";
 import { Logger } from "../../logger";
-import { sentryReportingCallback } from "../../utils/analytics";
 import { WebViewUtils } from "../../views/utils";
 import { VSCodeUtils } from "../../vsCodeUtils";
 import { DendronExtension } from "../../workspace";
@@ -105,7 +104,7 @@ export class SchemaGraphViewFactory {
     });
 
     this._vsCodeCallback = vscode.window.onDidChangeActiveTextEditor(
-      sentryReportingCallback(async (editor: vscode.TextEditor | undefined) => {
+      async (editor: vscode.TextEditor | undefined) => {
         if (
           SchemaGraphViewFactory._panel &&
           SchemaGraphViewFactory._panel.visible
@@ -125,7 +124,7 @@ export class SchemaGraphViewFactory {
             source: "vscode",
           } as OnDidChangeActiveTextEditorMsg);
         }
-      })
+      }
     );
 
     ext.addDisposable(this._vsCodeCallback);

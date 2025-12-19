@@ -13,7 +13,6 @@ import * as vscode from "vscode";
 import { DoctorCommand } from "../../commands/Doctor";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
-import { AnalyticsUtils } from "../../utils/analytics";
 import { MessageSeverity, VSCodeUtils } from "../../vsCodeUtils";
 
 export class DoctorUtils {
@@ -114,14 +113,8 @@ export class DoctorUtils {
                 },
               ],
             };
-            AnalyticsUtils.track(WorkspaceEvents.DuplicateNoteFound, {
-              state: "resolved",
-            });
             vscode.commands.executeCommand(cmd.command, ...cmd.arguments!);
           }
-        });
-        AnalyticsUtils.track(WorkspaceEvents.DuplicateNoteFound, {
-          source,
         });
       }
     }

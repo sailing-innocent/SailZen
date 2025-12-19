@@ -71,7 +71,6 @@ import { StateService } from "./services/stateService";
 import { Extensions } from "./settings";
 import { CreateScratchNoteKeybindingTip } from "./showcase/CreateScratchNoteKeybindingTip";
 import { FeatureShowcaseToaster } from "./showcase/FeatureShowcaseToaster";
-import { AnalyticsUtils, sentryReportingCallback } from "./utils/analytics";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
 import { StartupPrompts } from "./utils/StartupPrompts";
 import { StartupUtils } from "./utils/StartupUtils";
@@ -184,11 +183,6 @@ export async function _activate(
     );
 
     if (globalStateId !== segmentAnonymousId) {
-      if (globalStateId) {
-        AnalyticsUtils.track(WorkspaceEvents.MultipleTelemetryIdsDetected, {
-          ids: [segmentAnonymousId, globalStateId],
-        });
-      }
       context.globalState.update(
         GLOBAL_STATE_KEYS.ANONYMOUS_ID,
         SegmentClient.instance().anonymousId
@@ -220,13 +214,13 @@ export async function _activate(
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.RELOAD_INDEX.key,
-          sentryReportingCallback(async (silent?: boolean) => {
+          async (silent?: boolean) => {
             const out = await new ReloadIndexCommand().run({ silent });
             if (!silent) {
               vscode.window.showInformationMessage(`finish reload`);
             }
             return out;
-          })
+          }
         )
       );
     }
@@ -281,9 +275,6 @@ export async function _activate(
         default:
           graphTheme = GraphThemeEnum.Classic;
       }
-      AnalyticsUtils.track(GraphEvents.GraphThemeChanged, {
-        setDuringInstall: true,
-      });
       MetadataService.instance().setGraphTheme(graphTheme);
     }
     const assetUri = VSCodeUtils.getAssetUri(context);
@@ -327,8 +318,6 @@ export async function _activate(
         vaults: wsImpl.vaults,
         engine: resp.data.engine,
       });
-      // initialize Segment client
-      AnalyticsUtils.setupSegmentWithCacheFlush({ context, ws: wsImpl });
 
       // show interactive elements when **extension starts**
       if (!opts?.skipInteractiveElements) {
@@ -411,16 +400,12 @@ export async function _activate(
     } else {
       // ws not active
       Logger.info({ ctx, msg: "dendron not active" });
-      AnalyticsUtils.setupSegmentWithCacheFlush({ context });
     }
 
     if (extensionInstallStatus === InstallStatus.INITIAL_INSTALL) {
       // if keybinding conflict is detected, let the users know and guide them how to resolve  ^rikhd9cc0rwb
       await KeybindingUtils.maybePromptKeybindingConflict();
       // if user hasn't opted out of telemetry, notify them about it ^njhii5plxmxr
-      if (!SegmentClient.instance().hasOptedOut) {
-        AnalyticsUtils.showTelemetryNotice();
-      }
     }
 
     if (!opts?.skipInteractiveElements) {
@@ -528,9 +513,6 @@ async function showWelcomeOrWhatsNew({
           ageOfCodeInstallInWeeks
         );
       }
-      // track how long install process took ^e8itkyfj2rn3
-      AnalyticsUtils.track(VSCodeEvents.Install, installTrackProps);
-
       metadataService.setGlobalVersion(version);
 
       // show the welcome page ^ygtm7ofzezwd
@@ -545,12 +527,6 @@ async function showWelcomeOrWhatsNew({
       });
 
       metadataService.setGlobalVersion(version);
-
-      AnalyticsUtils.track(VSCodeEvents.Upgrade, {
-        previousVersion: previousExtensionVersion,
-        duration: getDurationMilliseconds(start),
-      });
-
       const buttonAction = "See what's new";
 
       vscode.window
@@ -560,10 +536,6 @@ async function showWelcomeOrWhatsNew({
         )
         .then((resp) => {
           if (resp === buttonAction) {
-            AnalyticsUtils.track(VSCodeEvents.UpgradeSeeWhatsChangedClicked, {
-              previousVersion: previousExtensionVersion,
-              duration: getDurationMilliseconds(start),
-            });
             vscode.commands.executeCommand(
               "vscode.open",
               vscode.Uri.parse(
@@ -611,9 +583,9 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           cmd.key,
-          sentryReportingCallback(async (args: any) => {
+          async (args: any) => {
             await cmd.run(args);
-          })
+          }
         )
       );
   });
@@ -623,9 +595,9 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.GO_NEXT_HIERARCHY.key,
-          sentryReportingCallback(async () => {
+          async () => {
             await new GoToSiblingCommand().execute({ direction: "next" });
-          })
+          }
         )
       );
     }
@@ -633,9 +605,9 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.GO_PREV_HIERARCHY.key,
-          sentryReportingCallback(async () => {
+          async () => {
             await new GoToSiblingCommand().execute({ direction: "prev" });
-          })
+          }
         )
       );
     }
@@ -646,12 +618,12 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.TOGGLE_PREVIEW.key,
-          sentryReportingCallback(async (args) => {
+          async (args) => {
             if (args === undefined) {
               args = {};
             }
             await new TogglePreviewCommand(preview).run(args);
-          })
+          }
         )
       );
     }
@@ -660,12 +632,12 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.TOGGLE_PREVIEW_LOCK.key,
-          sentryReportingCallback(async (args) => {
+          async (args) => {
             if (args === undefined) {
               args = {};
             }
             await new TogglePreviewLockCommand(preview).run(args);
-          })
+          }
         )
       );
     }
@@ -674,11 +646,11 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.SHOW_SCHEMA_GRAPH.key,
-          sentryReportingCallback(async () => {
+          async () => {
             await new ShowSchemaGraphCommand(
               SchemaGraphViewFactory.create(ext)
             ).run();
-          })
+          }
         )
       );
     }
@@ -687,11 +659,11 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.SHOW_NOTE_GRAPH.key,
-          sentryReportingCallback(async () => {
+          async () => {
             await new ShowNoteGraphCommand(
               NoteGraphPanelFactory.create(ext, ext.getEngine())
             ).run();
-          })
+          }
         )
       );
     }
@@ -700,11 +672,11 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.CONFIGURE_UI.key,
-          sentryReportingCallback(async () => {
+          async () => {
             await new ConfigureWithUICommand(
               ConfigureUIPanelFactory.create(ext)
             ).run();
-          })
+          }
         )
       );
     }
@@ -713,14 +685,14 @@ async function _setupCommands({
       context.subscriptions.push(
         vscode.commands.registerCommand(
           DENDRON_COMMANDS.TREEVIEW_GOTO_NOTE.key,
-          sentryReportingCallback(async (id: string) => {
+          async (id: string) => {
             const resp = await ext.getEngine().getNoteMeta(id);
             const { data } = resp;
             await new GotoNoteCommand(ext).run({
               qs: data?.fname,
               vault: data?.vault,
             });
-          })
+          }
         )
       );
     }
@@ -728,7 +700,7 @@ async function _setupCommands({
     if (!existingCommands.includes(DENDRON_COMMANDS.GOTO_TODAY_NOTE.key)) {
       vscode.commands.registerCommand(
         DENDRON_COMMANDS.GOTO_TODAY_NOTE.key,
-        sentryReportingCallback(async () => {
+        async () => {
           // get today's date in yyyy.mm.dd.md
           const today = new Date();
           const todayStr = today.toISOString().split("T")[0].replace(/-/g, ".");
@@ -741,7 +713,7 @@ async function _setupCommands({
           // goto note
           const vault = maybeDailyVault ? ext.workspaceService!.vaults.find(v => v.name === maybeDailyVault) : undefined;
           await new GotoNoteCommand(ext).run({ qs: todayNote, vault });
-        })
+        }
       );
     }
   }
@@ -765,14 +737,14 @@ async function _setupCommands({
     context.subscriptions.push(
       vscode.commands.registerCommand(
         DENDRON_COMMANDS.SEED_BROWSE.key,
-        sentryReportingCallback(async () => {
+        async () => {
           const panel = WebViewPanelFactory.create(
             ext.workspaceService!.seedService
           );
           const cmd = new SeedBrowseCommand(panel);
 
           return cmd.run();
-        })
+        }
       )
     );
   }

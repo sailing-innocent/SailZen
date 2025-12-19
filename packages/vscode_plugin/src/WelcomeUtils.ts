@@ -5,13 +5,9 @@ import semver from "semver";
 import * as vscode from "vscode";
 import { LaunchTutorialWorkspaceCommand } from "./commands/LaunchTutorialWorkspaceCommand";
 import { LaunchTutorialCommandInvocationPoint } from "./constants";
-import { AnalyticsUtils } from "./utils/analytics";
 import { VSCodeUtils } from "./vsCodeUtils";
 
 async function initWorkspace() {
-  // ^z5hpzc3fdkxs
-  await AnalyticsUtils.trackForNextRun(TutorialEvents.ClickStart);
-
   await new LaunchTutorialWorkspaceCommand().run({
     invocationPoint: LaunchTutorialCommandInvocationPoint.WelcomeWebview,
   });
@@ -69,7 +65,6 @@ export function showWelcome(assetUri: vscode.Uri) {
       async (message) => {
         switch (message.command) {
           case "loaded":
-            AnalyticsUtils.track(TutorialEvents.WelcomeShow, { testgroup });
             return;
 
           case "initializeWorkspace": {

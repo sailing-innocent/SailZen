@@ -20,7 +20,6 @@ import { AnchorUtils } from "@saili/unified";
 import _ from "lodash";
 import { PluginFileUtils } from "../../utils/files";
 import { GotoNoteCommand } from "../../commands/GotoNote";
-import { AnalyticsUtils } from "../../utils/analytics";
 import { ExtensionUtils } from "../../utils/ExtensionUtils";
 import { IPreviewLinkHandler, LinkType } from "./IPreviewLinkHandler";
 

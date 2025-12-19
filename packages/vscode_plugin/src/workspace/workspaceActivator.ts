@@ -31,7 +31,6 @@ import { Logger } from "../logger";
 import { EngineAPIService } from "../services/EngineAPIService";
 import { StateService } from "../services/stateService";
 import { TextDocumentServiceFactory } from "../services/TextDocumentServiceFactory";
-import { AnalyticsUtils, sentryReportingCallback } from "../utils/analytics";
 import { ExtensionUtils } from "../utils/ExtensionUtils";
 import { StartupUtils } from "../utils/StartupUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -55,11 +54,11 @@ function _setupTreeViewCommands(
   ) {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.TREEVIEW_LABEL_BY_TITLE.key,
-      sentryReportingCallback(() => {
+      () => {
         treeView.updateLabelType({
           labelType: TreeViewItemLabelTypeEnum.title,
         });
-      })
+      }
     );
   }
 
@@ -68,20 +67,20 @@ function _setupTreeViewCommands(
   ) {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.TREEVIEW_LABEL_BY_FILENAME.key,
-      sentryReportingCallback(() => {
+      () => {
         treeView.updateLabelType({
           labelType: TreeViewItemLabelTypeEnum.filename,
         });
-      })
+      }
     );
   }
 
   if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_CREATE_NOTE.key)) {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.TREEVIEW_CREATE_NOTE.key,
-      sentryReportingCallback(async (opts) => {
+      async (opts) => {
         await new CreateNoteCommand().run(opts);
-      })
+      }
     );
   }
 
@@ -95,18 +94,18 @@ function _setupTreeViewCommands(
   if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_EXPAND_ALL.key)) {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.TREEVIEW_EXPAND_ALL.key,
-      sentryReportingCallback(async () => {
+      async () => {
         await treeView.expandAll();
-      })
+      }
     );
   }
 
   if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_EXPAND_STUB.key)) {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.TREEVIEW_EXPAND_STUB.key,
-      sentryReportingCallback(async (id) => {
+      async (id) => {
         await treeView.expandTreeItem(id);
-      })
+      }
     );
   }
 }
@@ -121,7 +120,6 @@ export function trackTopLevelRepoFound(opts: { wsService: WorkspaceService }) {
         provider,
         path: SparkMD5.hash(`${path[0]}/${path[1]}.git`),
       };
-      AnalyticsUtils.track(GitEvents.TopLevelRepoFound, payload);
       return payload;
     }
     return undefined;
@@ -135,10 +133,6 @@ function analyzeWorkspace({ wsService }: { wsService: WorkspaceService }) {
   wsService
     .getAllReposNumContributors()
     .then((numContributors) => {
-      AnalyticsUtils.track(GitEvents.ContributorsFound, {
-        maxNumContributors: _.max(numContributors),
-        duration: getDurationMilliseconds(startGetAllReposNumContributors),
-      });
     })
     .catch((err) => {
       Logger.warn({ ctx: "workspaceActivator", msg: "Failed to get all repos num contributors", err });
@@ -709,9 +703,6 @@ export class WorkspaceActivator {
           .showErrorMessage("Dendron engine encountered an error", txt)
           .then(async (resp) => {
             if (resp === txt) {
-              AnalyticsUtils.track(VSCodeEvents.ServerCrashed, {
-                code: type,
-              });
               await ExtensionUtils.activate();
             }
           });

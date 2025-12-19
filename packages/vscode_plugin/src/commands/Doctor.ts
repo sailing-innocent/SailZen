@@ -40,7 +40,6 @@ import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { ReloadIndexCommand } from "./ReloadIndex";
-import { AnalyticsUtils } from "../utils/analytics";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { KeybindingUtils } from "../KeybindingUtils";
 import { QuickPickHierarchySelector } from "../components/lookup/HierarchySelector";
@@ -321,9 +320,6 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
       }
     );
     panel.webview.html = md.render(contents);
-    AnalyticsUtils.track(
-      ExtensionEvents.IncompatibleExtensionsPreviewDisplayed
-    );
     return { installStatus, contents };
   }
 
@@ -497,9 +493,6 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
         });
         if (conflicts.length > 0) {
           await KeybindingUtils.showKeybindingConflictPreview({ conflicts });
-          AnalyticsUtils.track(ExtensionEvents.KeybindingConflictDetected, {
-            source: KeybindingConflictDetectedSource.doctor,
-          });
         } else {
           window.showInformationMessage(`There are no keybinding conflicts!`);
         }

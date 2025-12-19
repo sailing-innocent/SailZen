@@ -28,7 +28,6 @@ import * as vscode from "vscode";
 import { IDendronExtension } from "../../dendronExtensionInterface";
 import { Logger } from "../../logger";
 import { ITextDocumentService } from "../../services/ITextDocumentService";
-import { sentryReportingCallback } from "../../utils/analytics";
 import { WebViewUtils } from "../../views/utils";
 import { VSCodeUtils } from "../../vsCodeUtils";
 import { WSUtilsV2 } from "../../WSUtilsV2";
@@ -274,39 +273,37 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     // shown in the preview
     this._onDidChangeActiveTextEditor =
       vscode.window.onDidChangeActiveTextEditor(
-        sentryReportingCallback(
-          async (editor: vscode.TextEditor | undefined) => {
-            if (
-              !editor ||
-              editor.document.uri.fsPath !==
-                vscode.window.activeTextEditor?.document.uri.fsPath ||
-              (await this.isLockedAndDirty())
-            ) {
-              return;
-            }
-
-            const textDocument = editor.document;
-            const { wsRoot, vaults } = this._ext.getDWorkspace();
-            if (
-              !WorkspaceUtils.isPathInWorkspace({
-                wsRoot,
-                vaults,
-                fpath: textDocument.uri.fsPath,
-              })
-            ) {
-              return;
-            }
-
-            const maybeNote = await this._ext.wsUtils.tryGetNoteFromDocument(
-              editor.document
-            );
-
-            if (!maybeNote) {
-              return;
-            }
-            this.sendRefreshMessage(this._panel!, maybeNote, true);
+        async (editor: vscode.TextEditor | undefined) => {
+          if (
+            !editor ||
+            editor.document.uri.fsPath !==
+              vscode.window.activeTextEditor?.document.uri.fsPath ||
+            (await this.isLockedAndDirty())
+          ) {
+            return;
           }
-        )
+
+          const textDocument = editor.document;
+          const { wsRoot, vaults } = this._ext.getDWorkspace();
+          if (
+            !WorkspaceUtils.isPathInWorkspace({
+              wsRoot,
+              vaults,
+              fpath: textDocument.uri.fsPath,
+            })
+          ) {
+            return;
+          }
+
+          const maybeNote = await this._ext.wsUtils.tryGetNoteFromDocument(
+            editor.document
+          );
+
+          if (!maybeNote) {
+            return;
+          }
+          this.sendRefreshMessage(this._panel!, maybeNote, true);
+        }
       );
 
     // If the text document contents have changed, update the preview with the new

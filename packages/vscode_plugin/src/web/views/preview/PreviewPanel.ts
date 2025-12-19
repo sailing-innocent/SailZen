@@ -251,7 +251,6 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     // shown in the preview
     this._onDidChangeActiveTextEditor =
       vscode.window.onDidChangeActiveTextEditor(
-        // sentryReportingCallback(
         async (editor: vscode.TextEditor | undefined) => {
           if (
             !editor ||

@@ -28,7 +28,6 @@ import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
-import { AnalyticsUtils } from "../utils/analytics";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -153,9 +152,6 @@ export class ReloadIndexCommand extends BasicCommand<
       } else {
         message = `${vaultsToFix.length} vaults need to be marked as self contained vaults in your configuration file`;
       }
-      AnalyticsUtils.track(ConfigEvents.MissingSelfContainedVaultsMessageShow, {
-        vaultsToFix: vaultsToFix.length,
-      });
       const pick = await window.showWarningMessage(
         message,
         {
@@ -170,9 +166,6 @@ export class ReloadIndexCommand extends BasicCommand<
         pick,
       });
       if (pick === fixConfig) {
-        AnalyticsUtils.trackForNextRun(
-          ConfigEvents.MissingSelfContainedVaultsMessageAccept
-        );
         await doctor.executeDoctorActions({
           action: DoctorActionsEnum.FIX_SELF_CONTAINED_VAULT_CONFIG,
           engine,
@@ -218,11 +211,6 @@ export class ReloadIndexCommand extends BasicCommand<
         })
       );
       if (autoFixActions.filter(isNotUndefined).length > 0) {
-        AnalyticsUtils.track(WorkspaceEvents.AutoFix, {
-          ...categorizeActions(autoFixActions),
-          nonFatalInitError:
-            initError && initError.severity === ERROR_SEVERITY.MINOR,
-        });
       }
 
       const start = process.hrtime();
@@ -241,9 +229,6 @@ export class ReloadIndexCommand extends BasicCommand<
         errors.forEach((error) => {
           if (DuplicateNoteError.isDuplicateNoteError(error) && error.code) {
             VSCodeUtils.showMessage(MessageSeverity.WARN, error.message, {});
-            AnalyticsUtils.track(WorkspaceEvents.DuplicateNoteFound, {
-              source: this.key,
-            });
             this.L.info({ ctx, error, msg: "Duplicate note IDs found" });
           } else {
             // Warn about any errors not handled above

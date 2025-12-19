@@ -29,7 +29,6 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
 import { GOOGLE_OAUTH_ID, GOOGLE_OAUTH_SECRET } from "../types/global";
-import { AnalyticsUtils, sentryReportingCallback } from "../utils/analytics";
 import { MarkdownUtils } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { URI, Utils } from "vscode-uri";
@@ -142,9 +141,9 @@ export class ExtensionUtils {
       context.subscriptions.push(
         vscode.commands.registerCommand(
           key,
-          sentryReportingCallback(async (args) => {
+          async (args) => {
             cmd.run(args);
-          })
+          }
         )
       );
     }
@@ -432,9 +431,6 @@ export class ExtensionUtils {
        * The payload will be stored in a _single column_ with a `text` type, and there is no to the length.
        * There is a hard limit of 1GB per field, but not a concern here.
        */
-      AnalyticsUtils.track(ConfigEvents.ConfigChangeDetected, {
-        changed: JSON.stringify(configDiff),
-      });
     }
 
     if (siteUrl !== undefined) {
@@ -493,22 +489,6 @@ export class ExtensionUtils {
       }
     }
 
-    AnalyticsUtils.identify({
-      numNotes,
-      // Which side of all currently running tests is this user on?
-      splitTests: CURRENT_AB_TESTS.map(
-        (test) =>
-          // Formatted as `testName.groupName` since group names are not necessarily unique
-          `${test.name}.${test.getUserGroup(
-            SegmentClient.instance().anonymousId
-          )}`
-      ),
-    });
-    AnalyticsUtils.track(VSCodeEvents.InitializeWorkspace, trackProps);
-    setTimeout(() => {
-      Logger.info("sendSavedAnalytics"); // TODO
-      AnalyticsUtils.sendSavedAnalytics();
-    }, DELAY_TO_SEND_SAVED_TELEMETRY);
   }
 
   /**

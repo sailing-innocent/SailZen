@@ -27,7 +27,6 @@ import {
   CopyToClipboardCommandOpts,
   CopyToClipboardSourceEnum,
 } from "./commands/CopyToClipboardCommand";
-import { AnalyticsUtils } from "./utils/analytics";
 
 type Keybindings = Record<string, string> & CommentJSONValue;
 
@@ -223,8 +222,7 @@ export class KeybindingUtils {
             )}`;
 
           const out = [
-            `### \`${
-              conflict.commandId
+            `### \`${conflict.commandId
             }\` [Copy JSON to disable this keybinding](${copyCommandUri({
               text: disableBlock,
               source: CopyToClipboardSourceEnum.keybindingConflictPreview,
@@ -265,10 +263,7 @@ export class KeybindingUtils {
       .showWarningMessage(message, action)
       .then(async (resp) => {
         if (resp === action) {
-          AnalyticsUtils.track(ExtensionEvents.ShowKeybindingConflictAccepted);
           await this.showKeybindingConflictPreview(opts);
-        } else {
-          AnalyticsUtils.track(ExtensionEvents.ShowKeybindingConflictRejected);
         }
       });
   }
@@ -278,9 +273,6 @@ export class KeybindingUtils {
       knownConflicts: KNOWN_KEYBINDING_CONFLICTS,
     });
     if (conflicts.length > 0) {
-      AnalyticsUtils.track(ExtensionEvents.KeybindingConflictDetected, {
-        source: KeybindingConflictDetectedSource.activation,
-      });
       await KeybindingUtils.showKeybindingConflictConfirmationMessage({
         conflicts,
       });

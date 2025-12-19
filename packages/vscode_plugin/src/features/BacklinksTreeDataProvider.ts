@@ -31,7 +31,6 @@ import {
 import { DendronContext, DENDRON_COMMANDS, ICONS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
-import { AnalyticsUtils } from "../utils/analytics";
 import { findReferencesById, FoundRefT, sortPaths } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtilsV2 } from "../WSUtilsV2";
@@ -193,10 +192,6 @@ export default class BacklinksTreeDataProvider
     _token: CancellationToken
   ): ProviderResult<TreeItem> {
     // This method implies that an item was hovered over
-    AnalyticsUtils.track(VSCodeEvents.BacklinksPanelUsed, {
-      type: "ItemHoverDisplayed",
-      state: element.treeItemType,
-    });
 
     if (
       element.treeItemType === BacklinkTreeItemType.noteLevel &&

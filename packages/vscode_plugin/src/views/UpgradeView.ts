@@ -1,6 +1,5 @@
 import { VSCodeEvents } from "@saili/common-all";
 import vscode from "vscode";
-import { AnalyticsUtils } from "../utils/analytics";
 import { WebViewUtils } from "./utils";
 
 const UPGRADE_VIEW_HTML = `<!DOCTYPE html>
@@ -54,8 +53,5 @@ export function showUpgradeView() {
   panel.webview.html = UPGRADE_VIEW_HTML;
 
   WebViewUtils.openWebviewAndMeasureTimeOpen(panel, (duration) => {
-    AnalyticsUtils.track(VSCodeEvents.UpgradeViewClosed, {
-      timeOpen: duration,
-    });
   });
 }

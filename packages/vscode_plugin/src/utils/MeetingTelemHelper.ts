@@ -2,7 +2,6 @@ import { NoteProps, EngagementEvents } from "@saili/common-all";
 import _ from "lodash";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { AnalyticsUtils } from "./analytics";
 
 /**
  * Send a special telemetry marker if a note is being created from a Meeting
@@ -32,11 +31,5 @@ export async function maybeSendMeetingNoteTelemetry(type: string) {
     activeNote.traitIds &&
     activeNote.traitIds.includes("meetingNote")
   ) {
-    AnalyticsUtils.track(
-      EngagementEvents.AdditionalNoteFromMeetingNoteCreated,
-      {
-        type,
-      }
-    );
   }
 }
