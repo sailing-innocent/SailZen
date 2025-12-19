@@ -33,19 +33,6 @@ pnpm plugin:dev
 
 ### Build & Package
 
-```bash
-# Full build (engine-server + views + plugin)
-pnpm plugin:build
-
-# Package to VSIX
-pnpm plugin:package
-
-# Or do both
-pnpm plugin:build && pnpm plugin:package
-```
-
-The packaged VSIX file will be at `packages/vscode_plugin/sail-zen-vscode-x.x.x.vsix`.
-
 ### Running Tests
 
 ```bash

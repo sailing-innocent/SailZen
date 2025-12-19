@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Dendron",
   "publisher": "SailingInnocent",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -61,7 +61,7 @@
         {
           "id": "dendron-view",
           "title": "Dendron",
-          "icon": "media/icons/sail-dendron-activity-bar-icon.svg"
+          "icon": "media/icons/simple.svg"
         }
       ]
     },
@@ -90,7 +90,7 @@
           "id": "dendron.treeView",
           "name": "Tree View",
           "when": "dendron:pluginActive",
-          "icon": "media/icons/dendron-vscode.svg"
+          "icon": "media/icons/tree.svg"
         },
         {
           "id": "dendron.lookup-view",

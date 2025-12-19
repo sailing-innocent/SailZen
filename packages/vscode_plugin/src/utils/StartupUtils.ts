@@ -6,7 +6,6 @@ import {
   ExtensionEvents,
   InstallStatus,
   MigrationEvents,
-  SurveyEvents,
   Time,
   VSCodeEvents,
   WorkspaceSettings,
@@ -291,8 +290,6 @@ export class StartupUtils {
       .showInformationMessage(MESSAGE, ADD_CONFIG)
       .then(async (resp) => {
         if (resp === ADD_CONFIG) {
-            }
-          );
           const cmd = new DoctorCommand(opts.ext);
           await cmd.execute({
             action: DoctorActionsEnum.ADD_MISSING_DEFAULT_CONFIGS,
@@ -389,7 +386,7 @@ export class StartupUtils {
 
   static async showInactiveUserMessage() {
     MetadataService.instance().setInactiveUserMsgSendTime();
-    await SurveyUtils.showInactiveUserSurvey();
+    // Survey functionality removed
   }
 
   static warnIncompatibleExtensions(opts: { ext: IDendronExtension }) {

@@ -20,6 +20,9 @@
         "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage",
         "views:dev": "pnpm --filter=@saili/dendron-plugin-views run dev",
         "views:build": "pnpm --filter=@saili/dendron-plugin-views run build",
-        "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin"
+        "views:copy": "pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
+        "version:patch": "node scripts/bump-version.js patch",
+        "version:minor": "node scripts/bump-version.js minor",
+        "version:major": "node scripts/bump-version.js major"
     }
 }

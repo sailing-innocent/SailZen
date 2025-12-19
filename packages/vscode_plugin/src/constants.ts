@@ -76,7 +76,7 @@ export const DENDRON_VIEWS_CONTAINERS = {
     {
       id: "dendron-view",
       title: "Dendron",
-      icon: "media/icons/dendron-activity-bar-icon.svg",
+      icon: "media/icons/simple.svg",
     },
   ],
 };
@@ -104,7 +104,7 @@ export const DENDRON_VIEWS = [
     ...treeViewConfig2VSCodeEntry(DendronTreeViewKey.TREE_VIEW),
     when: `${DendronContext.PLUGIN_ACTIVE}`,
     where: "dendron-view",
-    icon: "media/icons/dendron-vscode.svg",
+    icon: "media/icons/tree.svg",
   },
   {
     ...treeViewConfig2VSCodeEntry(DendronTreeViewKey.LOOKUP_VIEW),

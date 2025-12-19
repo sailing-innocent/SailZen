@@ -7,7 +7,6 @@ import { Duration } from "luxon";
 import * as vscode from "vscode";
 import { GLOBAL_STATE } from "../constants";
 import { StateService } from "../services/stateService";
-import { SurveyUtils } from "../survey";
 import { showWelcome } from "../WelcomeUtils";
 
 export class StartupPrompts {
@@ -85,11 +84,6 @@ export class StartupPrompts {
           const lapsedUserSurveySubmitted =
             MetadataService.instance().getLapsedUserSurveyStatus();
 
-          if (
-            lapsedUserSurveySubmitted !== LapsedUserSurveyStatusEnum.submitted
-          ) {
-            await SurveyUtils.showLapsedUserSurvey();
-          }
           return;
         }
       });

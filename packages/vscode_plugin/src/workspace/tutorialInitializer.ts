@@ -26,7 +26,6 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { FeatureShowcaseToaster } from "../showcase/FeatureShowcaseToaster";
 import { ObsidianImportTip } from "../showcase/ObsidianImportTip";
-import { SurveyUtils } from "../survey";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
 import { BlankInitializer } from "./blankInitializer";
@@ -179,11 +178,7 @@ export class TutorialInitializer
     );
 
     const metaData = MetadataService.instance().getMeta();
-    const initialSurveySubmitted =
-      metaData.initialSurveyStatus === InitialSurveyStatusEnum.submitted;
-    if (!initialSurveySubmitted) {
-      await SurveyUtils.showInitialSurvey();
-    }
+    // Survey functionality removed
   }
 
   private triedToShowImportToast: boolean = false;

@@ -165,9 +165,7 @@ export class WorkspaceWatcher {
           ) {
             this.onFirstOpen(editor);
           }
-        }),
-        this,
-        context.subscriptions
+        }
       )
     );
 
@@ -241,11 +239,14 @@ export class WorkspaceWatcher {
         msg: "Note opened",
         fname: NoteUtils.uri2Fname(document.uri),
       });
+
       DoctorUtils.findDuplicateNoteAndPromptIfNecessary(
         document,
         "onDidOpenTextDocument"
       );
+
       DoctorUtils.validateFilenameFromDocumentAndPromptIfNecessary(document);
+
     } catch (error) {
       Logger.error({ ctx: "WorkspaceWatcher", error: error as any });
       throw error;

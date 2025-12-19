@@ -406,8 +406,7 @@ export const resolveCompletionItem = async (
     }
 
     return item;
-  }
-);
+  };
 
 // prettier-ignore
 const PARTIAL_WIKILINK_WITH_ANCHOR_REGEX = new RegExp("" +
