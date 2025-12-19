@@ -28,7 +28,6 @@ import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
-import { GOOGLE_OAUTH_ID, GOOGLE_OAUTH_SECRET } from "../types/global";
 import { MarkdownUtils } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { URI, Utils } from "vscode-uri";
@@ -60,8 +59,6 @@ async function startServerProcess(): Promise<{
   if (getStage() !== "prod") {
     const out = await launchv2({
       logPath: path.join(__dirname, "..", "..", "dendron.server.log"),
-      googleOauthClientId: GOOGLE_OAUTH_ID,
-      googleOauthClientSecret: GOOGLE_OAUTH_SECRET,
     });
     return { port: out.port };
   }
@@ -75,8 +72,6 @@ async function startServerProcess(): Promise<{
       nextServerUrl,
       nextStaticRoot,
       port,
-      googleOauthClientId: GOOGLE_OAUTH_ID,
-      googleOauthClientSecret: GOOGLE_OAUTH_SECRET,
     });
     return { port: out.port, subprocess: out.subprocess as ExecaChildProcess };
   } catch (err) {
@@ -84,8 +79,6 @@ async function startServerProcess(): Promise<{
     Logger.info({ msg: "failed to spawn a subshell" });
     const out = await launchv2({
       logPath: path.join(__dirname, "..", "..", "dendron.server.log"),
-      googleOauthClientId: GOOGLE_OAUTH_ID,
-      googleOauthClientSecret: GOOGLE_OAUTH_SECRET,
     });
     return { port: out.port };
   }
