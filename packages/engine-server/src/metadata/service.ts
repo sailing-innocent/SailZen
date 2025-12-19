@@ -106,11 +106,6 @@ type Metadata = Partial<{
    *
    */
   workspaceActivationContext: WorkspaceActivationContext;
-  /**
-   * Which index of tip-of-the-day the user has last seen so that we can show
-   * the user tips that they havent seen.
-   */
-  tipOfTheDayIndex: number;
   /*
    * Theme for Note Graph View
    */
@@ -144,21 +139,9 @@ type Metadata = Partial<{
   v100ReleaseMessageShown: boolean;
 
   /**
-   * level set by user for local graph view and graph panel
+   * level set by user for local graph view
    */
   graphDepth: number;
-  /**
-   * graph panel show backlinks
-   */
-  graphPanelShowBacklinks: boolean;
-  /**
-   * graph panel show outward links
-   */
-  graphPanelShowOutwardLinks: boolean;
-  /**
-   * graph panel show hierarchical edges
-   */
-  graphPanelShowHierarchy: boolean;
 }>;
 
 export enum InactvieUserMsgStatusEnum {
@@ -239,9 +222,6 @@ export class MetadataService {
     );
   }
 
-  get TipOfDayIndex(): number | undefined {
-    return this.getMeta().tipOfTheDayIndex;
-  }
 
   getGraphTheme() {
     return this.getMeta().graphTheme;
@@ -267,18 +247,6 @@ export class MetadataService {
 
   get graphDepth(): number | undefined {
     return this.getMeta().graphDepth;
-  }
-
-  get graphPanelShowBacklinks(): boolean | undefined {
-    return this.getMeta().graphPanelShowBacklinks;
-  }
-
-  get graphPanelShowOutwardLinks(): boolean | undefined {
-    return this.getMeta().graphPanelShowOutwardLinks;
-  }
-
-  get graphPanelShowHierarchy(): boolean | undefined {
-    return this.getMeta().graphPanelShowHierarchy;
   }
 
   setMeta(key: keyof Metadata, value: any) {
@@ -365,9 +333,6 @@ export class MetadataService {
     this.setMeta("workspaceActivationContext", context);
   }
 
-  set TipOfDayIndex(index: number | undefined) {
-    this.setMeta("tipOfTheDayIndex", index);
-  }
 
   setGraphTheme(graphTheme: GraphThemeEnum) {
     const meta = this.getMeta();
@@ -402,17 +367,6 @@ export class MetadataService {
     this.setMeta("v100ReleaseMessageShown", hasShown);
   }
 
-  set graphPanelShowBacklinks(showBacklinks: boolean | undefined) {
-    this.setMeta("graphPanelShowBacklinks", showBacklinks);
-  }
-
-  set graphPanelShowOutwardLinks(showOutwardLinks: boolean | undefined) {
-    this.setMeta("graphPanelShowOutwardLinks", showOutwardLinks);
-  }
-
-  set graphPanelShowHierarchy(showHierarchy: boolean | undefined) {
-    this.setMeta("graphPanelShowHierarchy", showHierarchy);
-  }
   // Add a single path to recent workspaces. Recent workspaces acts like a FIFO
   // queue
   addToRecentWorkspaces(path: string) {

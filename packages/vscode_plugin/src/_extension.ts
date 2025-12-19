@@ -6,20 +6,14 @@ import {
   DWorkspaceV2,
   getStage,
   GLOBAL_STATE_KEYS,
-  GRAPH_THEME_TEST,
-  GraphEvents,
   GraphThemeEnum,
-  GraphThemeTestGroups,
   InstallStatus,
   isDisposable,
-  VSCodeEvents,
-  WorkspaceEvents,
 } from "@saili/common-all";
 
 import {
   getDurationMilliseconds,
   getOS,
-  SegmentClient,
 } from "@saili/common-server";
 
 import {
@@ -59,7 +53,6 @@ import { codeActionProvider } from "./features/codeActionProvider";
 import { completionProvider } from "./features/completionProvider";
 import DefinitionProvider from "./features/DefinitionProvider";
 import FrontmatterFoldingRangeProvider from "./features/FrontmatterFoldingRangeProvider";
-import setupHelpFeedbackTreeView from "./features/HelpFeedbackTreeview";
 import setupRecentWorkspacesTreeView from "./features/RecentWorkspacesTreeview";
 import ReferenceHoverProvider from "./features/ReferenceHoverProvider";
 import ReferenceProvider from "./features/ReferenceProvider";
@@ -165,31 +158,6 @@ export async function _activate(
   const maybeUUIDPath = path.join(os.homedir(), CONSTANTS.DENDRON_ID);
   const UUIDPathExists = await fs.pathExists(maybeUUIDPath);
 
-  // this is the first time we are accessing the segment client instance.
-  // unlock Segment client.
-  SegmentClient.unlock();
-
-  // If telemetry is not disabled, we enable telemetry ^rw8l1w51hnjz
-  if (!SegmentClient.instance().hasOptedOut && getStage() === "prod") {
-    // Temp: store the user's anonymous ID into global state so that we can link
-    // local ext users to web ext users. If one already exists in global state,
-    // then override that one with the segment client one.
-    context.globalState.setKeysForSync([GLOBAL_STATE_KEYS.ANONYMOUS_ID]);
-
-    const segmentAnonymousId = SegmentClient.instance().anonymousId;
-
-    const globalStateId = context.globalState.get<string | undefined>(
-      GLOBAL_STATE_KEYS.ANONYMOUS_ID
-    );
-
-    if (globalStateId !== segmentAnonymousId) {
-      context.globalState.update(
-        GLOBAL_STATE_KEYS.ANONYMOUS_ID,
-        SegmentClient.instance().anonymousId
-      );
-    }
-  }
-
   try {
     // Setup the workspace trust callback to detect changes from the user's
     // workspace trust settings
@@ -258,24 +226,8 @@ export async function _activate(
       !isSecondaryInstall &&
       extensionInstallStatus === InstallStatus.INITIAL_INSTALL
     ) {
-      // For new users, we want to load graph with new graph themes as default
-      let graphTheme;
-      const ABUserGroup = GRAPH_THEME_TEST.getUserGroup(
-        SegmentClient.instance().anonymousId
-      );
-      switch (ABUserGroup) {
-        case GraphThemeTestGroups.monokai: {
-          graphTheme = GraphThemeEnum.Monokai;
-          break;
-        }
-        case GraphThemeTestGroups.block: {
-          graphTheme = GraphThemeEnum.Block;
-          break;
-        }
-        default:
-          graphTheme = GraphThemeEnum.Classic;
-      }
-      MetadataService.instance().setGraphTheme(graphTheme);
+      // For new users, use Classic graph theme as default
+      MetadataService.instance().setGraphTheme(GraphThemeEnum.Classic);
     }
     const assetUri = VSCodeUtils.getAssetUri(context);
 
@@ -288,9 +240,8 @@ export async function _activate(
       extensionInstallStatus,
     });
 
-    // Setup the help and feedback and recent workspaces views here so that it still works even if
+    // Setup the recent workspaces views here so that it still works even if
     // we're not in a Dendron workspace.
-    context.subscriptions.push(setupHelpFeedbackTreeView());
     context.subscriptions.push(setupRecentWorkspacesTreeView());
 
     if (await DendronExtension.isDendronWorkspace()) {

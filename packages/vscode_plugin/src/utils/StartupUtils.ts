@@ -1,13 +1,9 @@
 import {
-  ConfigEvents,
   ConfigUtils,
   ConfirmStatus,
   DendronConfig,
-  ExtensionEvents,
   InstallStatus,
-  MigrationEvents,
   Time,
-  VSCodeEvents,
   WorkspaceSettings,
 } from "@saili/common-all";
 import { DConfig, readMD } from "@saili/common-server";
@@ -117,12 +113,7 @@ export class StartupUtils {
       workspaceInstallStatus,
     });
     if (changes.length > 0) {
-      changes.forEach((change: MigrationChangeSetStatus) => {
-        const event = _.isUndefined(change.error)
-          ? MigrationEvents.MigrationSucceeded
-          : MigrationEvents.MigrationFailed;
-
-      });
+      // Migration tracking removed
     }
   }
 

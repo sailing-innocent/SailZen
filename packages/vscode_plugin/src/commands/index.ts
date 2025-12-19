@@ -27,9 +27,7 @@ import { DeleteHookCommand } from "./DeleteHookCommand";
 import { DeleteCommand } from "./DeleteCommand";
 import { DevTriggerCommand } from "./DevTriggerCommand";
 import { DiagnosticsReportCommand } from "./DiagnosticsReport";
-import { DisableTelemetryCommand } from "./DisableTelemetry";
 import { DoctorCommand } from "./Doctor";
-import { EnableTelemetryCommand } from "./EnableTelemetry";
 import { GoDownCommand } from "./GoDownCommand";
 import { GotoCommand } from "./Goto";
 import { GotoNoteCommand } from "./GotoNote";
@@ -101,9 +99,7 @@ const ALL_COMMANDS = [
   DeleteHookCommand,
   DeleteCommand,
   DiagnosticsReportCommand,
-  DisableTelemetryCommand,
   DevTriggerCommand,
-  EnableTelemetryCommand,
   DoctorCommand,
   GoDownCommand,
   GoUpCommand,

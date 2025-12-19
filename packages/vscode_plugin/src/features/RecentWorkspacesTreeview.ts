@@ -1,4 +1,4 @@
-import { DendronTreeViewKey, VSCodeEvents } from "@saili/common-all";
+import { DendronTreeViewKey } from "@saili/common-all";
 import { MetadataService } from "@saili/engine-server";
 import * as vscode from "vscode";
 import {
@@ -30,7 +30,6 @@ class RecentWorkspacesTreeDataProvider
         command: "vscode.openFolder",
         arguments: [Uri.file(element.fsPath)],
       },
-      event: VSCodeEvents.RecentWorkspacesPanelUsed,
     };
 
     return {

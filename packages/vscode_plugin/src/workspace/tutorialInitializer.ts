@@ -1,17 +1,11 @@
 import {
-  CURRENT_TUTORIAL_TEST,
   DendronError,
   DWorkspaceV2,
   ErrorUtils,
   getStage,
-  isABTest,
-  MAIN_TUTORIAL_TYPE_NAME,
-  QuickstartTutorialTestGroups,
-  TutorialEvents,
-  TutorialNoteViewedPayload,
   VaultUtils,
 } from "@saili/common-all";
-import { file2Note, SegmentClient, vault2Path } from "@saili/common-server";
+import { file2Note, vault2Path } from "@saili/common-server";
 import {
   InitialSurveyStatusEnum,
   MetadataService,
@@ -44,16 +38,7 @@ export class TutorialInitializer
   implements WorkspaceInitializer
 {
   static getTutorialType() {
-    if (isABTest(CURRENT_TUTORIAL_TEST)) {
-      // NOTE: to force a tutorial group, uncomment the below code
-      // return QuickstartTutorialTestGroups.
-
-      return CURRENT_TUTORIAL_TEST.getUserGroup(
-        SegmentClient.instance().anonymousId
-      );
-    } else {
-      return MAIN_TUTORIAL_TYPE_NAME;
-    }
+    return "main";
   }
 
   async onWorkspaceCreation(opts: OnWorkspaceCreationOpts): Promise<void> {
@@ -157,13 +142,6 @@ export class TutorialInitializer
         // TODO: HACK to wait for existing preview to be ready
         setTimeout(async () => {
           await new TogglePreviewCommand(preview).execute();
-          if (
-            CURRENT_TUTORIAL_TEST?.getUserGroup(
-              SegmentClient.instance().anonymousId
-            ) === QuickstartTutorialTestGroups["quickstart-with-lock"]
-          ) {
-            await new TogglePreviewLockCommand(preview).execute();
-          }
         }, 1000);
       }
     } else {

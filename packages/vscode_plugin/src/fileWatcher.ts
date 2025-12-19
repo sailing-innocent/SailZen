@@ -1,5 +1,4 @@
 import {
-  ContextualUIEvents,
   DVault,
   ErrorUtils,
   NoteProps,

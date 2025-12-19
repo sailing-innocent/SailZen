@@ -1,18 +1,95 @@
-{"level":30,"time":1766116351200,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:start","dirPath":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":30,"time":1766116351221,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"launch","msg":"exit","port":58957,"LOG_DST":"d:\\ws\\repos\\SailZen\\packages\\dendron.server.log","root":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":50,"time":1766116352110,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-POST /api/note/find 500 1.244 ms - 476 - 171
-{"level":50,"time":1766116352113,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-{"level":50,"time":1766116352113,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-{"level":50,"time":1766116352114,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-POST /api/note/find 500 0.453 ms - 476 - 171
-POST /api/note/find 500 0.280 ms - 476 - 171
-POST /api/note/findMeta 500 0.254 ms - 476 - 75
-{"level":50,"time":1766116352124,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-{"level":50,"time":1766116352124,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-POST /api/note/find 500 0.256 ms - 476 - 171
-POST /api/note/find 500 0.245 ms - 476 - 171
-{"level":50,"time":1766116352129,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-POST /api/note/find 500 0.279 ms - 476 - 171
-{"level":50,"time":1766116356431,"pid":26308,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"d","12":":","13":"\\","14":"w","15":"s","16":"\\","17":"r","18":"e","19":"p","20":"o","21":"s","22":"\\","23":"S","24":"a","25":"i","26":"l","27":"Z","28":"e","29":"n","30":"\\","31":"a","32":"s","33":"s","34":"e","35":"t","36":"s","37":"\\","38":"t","39":"e","40":"s","41":"t","42":"-","43":"w","44":"o","45":"r","46":"k","47":"s","48":"p","49":"a","50":"c","51":"e","length":52}}
-POST /api/note/find 500 0.347 ms - 476 - 171
+{"level":30,"time":1766116385012,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"appModule:start","dirPath":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1766116385028,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"launch","msg":"exit","port":59013,"LOG_DST":"d:\\ws\\repos\\SailZen\\packages\\dendron.server.log","root":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1766116385088,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"WorkspaceController:init","msg":"enter","uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+{"level":30,"time":1766116385090,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
+{"level":30,"time":1766116385091,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","msg":"enter"}
+{"level":30,"time":1766116385108,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1766116385108,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+{"level":30,"time":1766116385108,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1766116385108,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1766116385109,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["dendron.schema.yml","root.schema.yml"]}
+{"level":30,"time":1766116385109,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["dendron.schema.yml","root.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1766116385112,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"]}
+{"level":30,"time":1766116385112,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
+{"level":30,"time":1766116385112,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1766116385112,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
+{"level":30,"time":1766116385187,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","msg":"enter"}
+{"level":30,"time":1766116385196,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+POST /api/workspace/initialize 200 209.734 ms - 1129581 - 361
+{"level":30,"time":1766116385198,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1766116385198,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1766116385202,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1766116385204,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1766116385204,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":21,"numCacheUpdates":0}
+{"level":30,"time":1766116385211,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1766116385212,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1766116385213,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1766116385213,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1766116385213,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1766116385214,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":12,"numCacheUpdates":0}
+{"level":30,"time":1766116385221,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1766116385222,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1766116385223,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1766116385242,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1766116385243,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1766116385243,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":61,"numCacheUpdates":3}
+{"level":30,"time":1766116385256,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
+{"level":30,"time":1766116385257,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1766116385258,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1766116385276,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1766116385276,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1766116385277,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":165,"numCacheUpdates":0}
+{"level":30,"time":1766116385283,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
+{"level":30,"time":1766116385284,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1766116385284,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1766116385285,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1766116385285,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1766116385285,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":7,"numCacheUpdates":0}
+{"level":30,"time":1766116385291,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"103\" ms"}
+{"level":30,"time":1766116385292,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
+{"level":30,"time":1766116385293,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"WorkspaceController:init","msg":"finish init","duration":204,"uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+POST /api/note/findMeta 200 11.245 ms - 1021134 - 75
+POST /api/note/find 200 11.146 ms - 646 - 151
+{"level":30,"time":1766116385439,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:querySchema","msg":"exit"}
+POST /api/schema/query 200 0.943 ms - 7966 - 64
+POST /api/note/find 200 7.079 ms - 646 - 151
+POST /api/note/decorations 200 6.618 ms - 287 - 410
+POST /api/note/find 200 0.674 ms - 646 - 151
+POST /api/note/find 200 1.050 ms - 646 - 151
+POST /api/note/find 200 0.650 ms - 646 - 151
+POST /api/note/decorations 200 3.032 ms - 287 - 432
+POST /api/note/find 200 0.891 ms - 646 - 151
+POST /api/note/find 200 0.652 ms - 646 - 151
+POST /api/note/find 200 0.670 ms - 646 - 151
+POST /api/note/decorations 200 2.422 ms - 287 - 410
+POST /api/note/find 200 0.606 ms - 646 - 151
+POST /api/note/find 200 1.809 ms - 646 - 151
+GET /api/note/get?id=6G34jAxKXPXw5FwsglpN4&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 2.060 ms - 644 - -
+{"level":30,"time":1766116390312,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"dendron.hist.2025.12.19","id":"y4pxp2c87zwv6tpvls71w0l","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1766116390313,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+{"level":30,"time":1766116390315,"pid":25896,"hostname":"sail-ldl","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"dendron.hist.2025.12","id":"8binxnrazzxo5xc9k78fwv5","children":["f87upxq0dqn6eabfat4d8ng","6z8mj28eqq4dv761w0gxudu","pypcvurrkxcv17ltzsp3z3v","y4pxp2c87zwv6tpvls71w0l"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":"r570brbujqoiaivkx1c3lsp"},{"fname":"dendron.hist.2025.12.19","id":"y4pxp2c87zwv6tpvls71w0l","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":"8binxnrazzxo5xc9k78fwv5"}]}
+POST /api/note/write 200 4.109 ms - 1311 - 413
+POST /api/note/find 200 3.986 ms - 476 - 172
+GET /api/note/get?id=c637lrwq7e4tgouc1ydtfmq&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 5.311 ms - 474 - -
+POST /api/note/find 200 3.314 ms - 476 - 172
+POST /api/note/find 200 3.531 ms - 476 - 172
+POST /api/note/find 200 0.611 ms - 476 - 172
+POST /api/note/decorations 200 2.650 ms - 287 - 434
+POST /api/note/find 200 0.524 ms - 491 - 153
+GET /api/note/get?id=ar3WPlF6H7rpVR9AFaUFO&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 1.024 ms - 489 - -
+POST /api/note/find 200 0.287 ms - 491 - 153
+POST /api/note/find 200 0.314 ms - 491 - 153
+POST /api/note/find 200 0.334 ms - 491 - 153
+POST /api/note/decorations 200 3.674 ms - 287 - 534
+POST /api/note/find 200 3.822 ms - 496 - 172
+GET /api/note/get?id=pp3u7yxokdpjqnecvczxt0y&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 3.928 ms - 494 - -
+POST /api/note/find 200 3.299 ms - 496 - 172
+POST /api/note/find 200 2.762 ms - 496 - 172
+POST /api/note/find 200 0.560 ms - 496 - 172
+POST /api/note/decorations 200 2.386 ms - 287 - 470
+POST /api/note/find 200 8.797 ms - 434 - 172
+GET /api/note/get?id=e8t7gzff5uq8u9mu4sdjmrf&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 3.940 ms - 432 - -
+POST /api/note/find 200 3.210 ms - 434 - 172
+POST /api/note/find 200 2.334 ms - 434 - 172
+POST /api/note/find 200 0.843 ms - 434 - 172
+POST /api/note/decorations 200 3.680 ms - 287 - 486

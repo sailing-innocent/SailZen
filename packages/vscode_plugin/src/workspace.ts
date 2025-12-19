@@ -7,7 +7,6 @@ import {
   DWorkspaceV2,
   ERROR_STATUS,
   getStage,
-  VSCodeEvents,
   WorkspaceSettings,
   WorkspaceType,
   BacklinkPanelSortOrder,
@@ -43,7 +42,6 @@ import {
 import { ExtensionProvider } from "./ExtensionProvider";
 import { Backlink } from "./features/Backlink";
 import BacklinksTreeDataProvider from "./features/BacklinksTreeDataProvider";
-import TipOfTheDayWebview from "./features/TipOfTheDayWebview";
 import { FileWatcher } from "./fileWatcher";
 import { Logger } from "./logger";
 import { CommandRegistrar } from "./services/CommandRegistrar";
@@ -52,12 +50,9 @@ import { NoteTraitManager } from "./services/NoteTraitManager";
 import { NoteTraitService } from "./services/NoteTraitService";
 import { SchemaSyncService } from "./services/SchemaSyncService";
 import { ISchemaSyncService } from "./services/SchemaSyncServiceInterface";
-import { ALL_FEATURE_SHOWCASES } from "./showcase/AllFeatureShowcases";
-import { DisplayLocation } from "./showcase/IFeatureShowcaseMessage";
 import { DisposableStore } from "./utils";
 import { VersionProvider } from "./versionProvider";
 import { CalendarView } from "./views/CalendarView";
-import { GraphPanel } from "./views/GraphPanel";
 import { SampleView } from "./views/SampleView";
 import { VSCodeUtils } from "./vsCodeUtils";
 import { WindowWatcher } from "./windowWatcher";
@@ -535,31 +530,11 @@ export class DendronExtension implements IDendronExtension {
         // backlinks
         const backlinkTreeView = this.setupBacklinkTreeView();
 
-        // Tip of the Day
-        const tipOfDayView = this.setupTipOfTheDayView();
-
-        // Graph panel (side)
-        const graphPanel = this.setupGraphPanel();
-
         context.subscriptions.push(backlinkTreeView);
-        context.subscriptions.push(tipOfDayView);
-        context.subscriptions.push(graphPanel);
       }
     });
   }
 
-  private setupTipOfTheDayView() {
-    const featureShowcaseWebview = new TipOfTheDayWebview(
-      _.filter(ALL_FEATURE_SHOWCASES, (message) =>
-        message.shouldShow(DisplayLocation.TipOfTheDayView)
-      )
-    );
-
-    return vscode.window.registerWebviewViewProvider(
-      DendronTreeViewKey.TIP_OF_THE_DAY,
-      featureShowcaseWebview
-    );
-  }
 
   private setupBacklinkTreeView() {
     const ctx = "setupBacklinkTreeView";
@@ -615,10 +590,6 @@ export class DendronExtension implements IDendronExtension {
     vscode.commands.registerCommand(
       DENDRON_COMMANDS.BACKLINK_SORT_BY_PATH_NAMES_CHECKED.key,
       () => {
-        VSCodeEvents.BacklinksPanelUsed, {
-          type: "SortOrderChanged",
-          state: "SortByPathName",
-        };
         backlinksTreeDataProvider.sortOrder = BacklinkPanelSortOrder.PathNames;
       }
     );
@@ -651,62 +622,6 @@ export class DendronExtension implements IDendronExtension {
     return backlinkTreeView;
   }
 
-  private setupGraphPanel() {
-    const graphPanel = new GraphPanel(this);
-
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_INCREASE_DEPTH.key,
-      () => {
-        graphPanel.increaseGraphDepth();
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_DECREASE_DEPTH.key,
-      () => {
-        graphPanel.decreaseGraphDepth();
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_BACKLINKS_CHECKED.key,
-      () => {
-        graphPanel.showBacklinks = false;
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_BACKLINKS.key,
-      () => {
-        graphPanel.showBacklinks = true;
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_OUTWARD_LINKS_CHECKED.key,
-      () => {
-        graphPanel.showOutwardLinks = false;
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_OUTWARD_LINKS.key,
-      () => {
-        graphPanel.showOutwardLinks = true;
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_HIERARCHY_CHECKED.key,
-      () => {
-        graphPanel.showHierarchy = false;
-      }
-    );
-    vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GRAPH_PANEL_SHOW_HIERARCHY.key,
-      () => {
-        graphPanel.showHierarchy = true;
-      }
-    );
-    return vscode.window.registerWebviewViewProvider(
-      GraphPanel.viewType,
-      graphPanel
-    );
-  }
 
   addDisposable(disposable: vscode.Disposable) {
     // handle all disposables

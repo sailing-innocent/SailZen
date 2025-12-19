@@ -1,21 +1,17 @@
 import { launchv2, ServerUtils } from "@saili/api-server";
 import {
-  ConfigEvents,
   ConfigUtils,
   CONSTANTS,
-  CURRENT_AB_TESTS,
   DendronConfig,
   getStage,
   InstallStatus,
   TaskNoteUtils,
   Time,
   VaultUtils,
-  VSCodeEvents,
 } from "@saili/common-all";
 import {
   DConfig,
   getDurationMilliseconds,
-  SegmentClient,
 } from "@saili/common-server";
 import { MetadataService, WorkspaceService } from "@saili/engine-server";
 import { Subprocess as ExecaChildProcess } from "execa";
@@ -419,11 +415,6 @@ export class ExtensionUtils {
 
     if (dendronConfigChanged) {
       _.set(trackProps, "numConfigChanged", configDiff.length);
-      /**
-       * This is a separate event because {@link VSCodeEvents.InitializeWorkspace} is getting a little crowded.
-       * The payload will be stored in a _single column_ with a `text` type, and there is no to the length.
-       * There is a hard limit of 1GB per field, but not a concern here.
-       */
     }
 
     if (siteUrl !== undefined) {

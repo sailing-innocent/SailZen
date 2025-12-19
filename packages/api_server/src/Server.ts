@@ -5,7 +5,6 @@ import {
 } from "@saili/common-all";
 import {
   findInParent,
-  SegmentClient,
 } from "@saili/common-server";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
@@ -59,10 +58,6 @@ export function appModule({
   logger.info({ ctx, dirPath: __dirname });
   const staticDir = path.join(__dirname, "static");
   app.use(express.static(staticDir));
-
-  // this is the first time we are accessing the segment client instance (when this is run as a separate process).
-  // unlock Segment client.
-  SegmentClient.unlock();
 
   if (nextStaticRoot) {
     logger.info({ ctx, msg: "nextStaticRoot:add", nextStaticRoot });

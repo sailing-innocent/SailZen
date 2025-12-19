@@ -1,5 +1,4 @@
 import {
-  ContextualUIEvents,
   LookupSelectionTypeEnum,
 } from "@saili/common-all";
 import { DoctorActionsEnum } from "@saili/engine-server";
@@ -115,7 +114,7 @@ export const refactorProvider: CodeActionProvider = {
           command: new RenameHeaderCommand(ExtensionProvider.getExtension())
             .key,
           title: "Rename Header",
-          arguments: [{ source: ContextualUIEvents.ContextualUICodeAction }],
+          arguments: [{ source: "ContextualUICodeAction" }],
         },
       };
       const brokenWikilinkAction = {
@@ -125,7 +124,7 @@ export const refactorProvider: CodeActionProvider = {
         command: {
           command: new GotoNoteCommand(ExtensionProvider.getExtension()).key,
           title: "Add missing note for wikilink declaration",
-          arguments: [{ source: ContextualUIEvents.ContextualUICodeAction }],
+          arguments: [{ source: "ContextualUICodeAction" }],
         },
       };
       const createNewNoteAction = {
@@ -151,7 +150,7 @@ export const refactorProvider: CodeActionProvider = {
         command: {
           command: new CopyNoteRefCommand(ExtensionProvider.getExtension()).key,
           title: "Copy Header Reference",
-          arguments: [{ source: ContextualUIEvents.ContextualUICodeAction }],
+          arguments: [{ source: "ContextualUICodeAction" }],
         },
       };
 

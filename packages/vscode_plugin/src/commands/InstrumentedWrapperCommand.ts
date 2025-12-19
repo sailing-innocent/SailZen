@@ -7,24 +7,12 @@ export type InstrumentedWrapperCommandArgs = {
    * The underlying command to be wrapped
    */
   command: vscode.Command;
-
-  /**
-   * telemetry event name
-   */
-  event: string;
-
-  /**
-   * custom props to attach to the telemetry event
-   */
-  customProps?: any;
 };
 
 /**
- * This command is a simple wrapper around commands, but this wrapper also fires
- * a telemetry event when it is invoked. This is intended to be used as a
+ * This command is a simple wrapper around commands. This is intended to be used as a
  * wrapper around built-in VSCode commands that need to be invoked via a command
- * URI, such as within webviews or in TreeView items, but where we still want a
- * telemetry event to get reported.
+ * URI, such as within webviews or in TreeView items.
  */
 export class InstrumentedWrapperCommand extends BasicCommand<
   InstrumentedWrapperCommandArgs,

@@ -21,9 +21,6 @@ export enum DendronContext {
   SHOULD_SHOW_LOOKUP_VIEW = "dendron:shouldShowLookupView",
   BACKLINKS_SORT_ORDER = "dendron:backlinksSortOrder",
   TREEVIEW_TREE_ITEM_LABEL_TYPE = "dendron:treeviewItemLabelType",
-  GRAPH_PANEL_SHOW_BACKLINKS = "dendron.graph-panel.showBacklinks",
-  GRAPH_PANEL_SHOW_OUTWARD_LINKS = "dendron.graph-panel.showOutwardLinks",
-  GRAPH_PANEL_SHOW_HIERARCHY = "dendron.graph-panel.showHierarchy",
 }
 
 const treeViewConfig2VSCodeEntry = (id: DendronTreeViewKey) => {
@@ -88,13 +85,6 @@ export const DENDRON_VIEWS = [
     where: "explorer",
   },
   {
-    id: DendronTreeViewKey.TIP_OF_THE_DAY,
-    name: "Tip of the Day",
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-    type: "webview",
-    where: "dendron-view",
-  },
-  {
     id: DendronTreeViewKey.BACKLINKS,
     name: "Backlinks",
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
@@ -121,17 +111,6 @@ export const DENDRON_VIEWS = [
     name: "Recent Dendron Workspaces",
     where: "dendron-view",
     when: `${DendronContext.PLUGIN_NOT_ACTIVE} && shellExecutionSupported`,
-  },
-  {
-    id: DendronTreeViewKey.HELP_AND_FEEDBACK,
-    name: "Help and Feedback",
-    where: "dendron-view",
-    when: "shellExecutionSupported",
-  },
-  {
-    ...treeViewConfig2VSCodeEntry(DendronTreeViewKey.GRAPH_PANEL),
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-    where: "dendron-view",
   },
 ];
 
@@ -256,40 +235,6 @@ export const DENDRON_MENUS = {
       command: "dendron.treeView.createNote",
       when: `view == dendron.treeView`,
       group: "navigation@2",
-    },
-    {
-      command: "dendron.graph-panel.increaseDepth",
-      when: "view == dendron.graph-panel",
-      group: "navigation@2",
-    },
-    {
-      command: "dendron.graph-panel.decreaseDepth",
-      when: "view == dendron.graph-panel",
-      group: "navigation@2",
-    },
-    {
-      command: "dendron.graph-panel.showBacklinksChecked",
-      when: `view == dendron.graph-panel && ${DendronContext.GRAPH_PANEL_SHOW_BACKLINKS}`,
-    },
-    {
-      command: "dendron.graph-panel.showOutwardLinksChecked",
-      when: `view == dendron.graph-panel && ${DendronContext.GRAPH_PANEL_SHOW_OUTWARD_LINKS}`,
-    },
-    {
-      command: "dendron.graph-panel.showHierarchyChecked",
-      when: `view == dendron.graph-panel && ${DendronContext.GRAPH_PANEL_SHOW_HIERARCHY}`,
-    },
-    {
-      command: "dendron.graph-panel.showBacklinks",
-      when: `view == dendron.graph-panel && !${DendronContext.GRAPH_PANEL_SHOW_BACKLINKS}`,
-    },
-    {
-      command: "dendron.graph-panel.showOutwardLinks",
-      when: `view == dendron.graph-panel && !${DendronContext.GRAPH_PANEL_SHOW_OUTWARD_LINKS}`,
-    },
-    {
-      command: "dendron.graph-panel.showHierarchy",
-      when: `view == dendron.graph-panel && !${DendronContext.GRAPH_PANEL_SHOW_HIERARCHY}`,
     },
   ],
   "explorer/context": [
@@ -421,41 +366,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `Create Note`, // will appear in the tooltip
     icon: "$(gist-new)",
     when: "false",
-  },
-  // graph panel buttons
-  GRAPH_PANEL_INCREASE_DEPTH: {
-    key: "dendron.graph-panel.increaseDepth",
-    title: "Increase Depth",
-    icon: "$(arrow-up)",
-  },
-  GRAPH_PANEL_DECREASE_DEPTH: {
-    key: "dendron.graph-panel.decreaseDepth",
-    title: "Decrease Depth",
-    icon: "$(arrow-down)",
-  },
-  GRAPH_PANEL_SHOW_BACKLINKS: {
-    key: "dendron.graph-panel.showBacklinks",
-    title: "Show Backlinks",
-  },
-  GRAPH_PANEL_SHOW_OUTWARD_LINKS: {
-    key: "dendron.graph-panel.showOutwardLinks",
-    title: "Show Outward Links",
-  },
-  GRAPH_PANEL_SHOW_HIERARCHY: {
-    key: "dendron.graph-panel.showHierarchy",
-    title: "Show Hierarchy",
-  },
-  GRAPH_PANEL_SHOW_BACKLINKS_CHECKED: {
-    key: "dendron.graph-panel.showBacklinksChecked",
-    title: "✓ Show Backlinks",
-  },
-  GRAPH_PANEL_SHOW_OUTWARD_LINKS_CHECKED: {
-    key: "dendron.graph-panel.showOutwardLinksChecked",
-    title: "✓ Show Outward Links",
-  },
-  GRAPH_PANEL_SHOW_HIERARCHY_CHECKED: {
-    key: "dendron.graph-panel.showHierarchyChecked",
-    title: "✓ Show Hierarchy",
   },
   // --- Notes
   BROWSE_NOTE: {
@@ -877,16 +787,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     when: "shellExecutionSupported",
   },
   // --- Misc
-  ENABLE_TELEMETRY: {
-    key: "dendron.enableTelemetry",
-    title: `${CMD_PREFIX} Enable Telemetry`,
-    when: "shellExecutionSupported",
-  },
-  DISABLE_TELEMETRY: {
-    key: "dendron.disableTelemetry",
-    title: `${CMD_PREFIX} Disable Telemetry`,
-    when: "shellExecutionSupported",
-  },
   OPEN_LINK: {
     key: "dendron.openLink",
     title: `${CMD_PREFIX} Open Link`,

@@ -1,7 +1,6 @@
 import { ShowcaseEntry } from "@saili/engine-server";
 import { BacklinksPanelHoverTip } from "./BacklinksPanelHoverTip";
 import { CreateScratchNoteKeybindingTip } from "./CreateScratchNoteKeybindingTip";
-import { GraphPanelTip } from "./GraphPanelTip";
 import { GraphThemeTip } from "./GraphThemeTip";
 import { IFeatureShowcaseMessage } from "./IFeatureShowcaseMessage";
 import { MeetingNotesTip } from "./MeetingNotesTip";
@@ -86,7 +85,6 @@ export const ALL_FEATURE_SHOWCASES: IFeatureShowcaseMessage[] = [
   INSERT_NOTE_LINK,
   PUBLISH_THEME_LINK,
   new GraphThemeTip(),
-  new GraphPanelTip(),
   PREVIEW_THEME_LINK,
   new BacklinksPanelHoverTip(),
   new ObsidianImportTip(),

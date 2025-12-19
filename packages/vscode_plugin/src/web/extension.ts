@@ -1,6 +1,6 @@
 import "reflect-metadata"; // This needs to be the topmost import for tsyringe to work
 
-import { TreeViewItemLabelTypeEnum, VSCodeEvents } from "@saili/common-all";
+import { TreeViewItemLabelTypeEnum } from "@saili/common-all";
 import { container } from "tsyringe";
 import * as vscode from "vscode";
 import { NoteLookupAutoCompleteCommand } from "../commands/common/NoteLookupAutoCompleteCommand";
@@ -152,10 +152,4 @@ async function setupTreeView(context: vscode.ExtensionContext) {
 }
 
 async function reportActivationTelemetry() {
-  const telemetryClient =
-    container.resolve<ITelemetryClient>("ITelemetryClient");
-
-  await telemetryClient.identify();
-  // TODO: Add workspace properties later.
-  await telemetryClient.track(VSCodeEvents.InitializeWorkspace);
 }
