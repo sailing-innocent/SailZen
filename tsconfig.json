@@ -18,12 +18,6 @@
             "@saili/common-server": [
                 "packages/common-server/src"
             ],
-            "@saili/common-test-utils": [
-                "packages/common-test-utils/src"
-            ],
-            "@saili/dendron-cli": [
-                "packages/dendron-cli/src"
-            ],
             "@saili/engine-server": [
                 "packages/engine-server/src"
             ],
