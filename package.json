@@ -24,5 +24,17 @@
         "version:patch": "node scripts/bump-version.js patch",
         "version:minor": "node scripts/bump-version.js minor",
         "version:major": "node scripts/bump-version.js major"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "@parcel/watcher",
+            "@prisma/client",
+            "@prisma/engines",
+            "@vscode/vsce-sign",
+            "esbuild",
+            "keytar",
+            "prisma",
+            "unrs-resolver"
+        ]
     }
 }

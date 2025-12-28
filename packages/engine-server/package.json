@@ -22,7 +22,7 @@
   "scripts": {
     "clean": "rimraf lib && rimraf coverage && rimraf src/drivers/generated-prisma-client",
     "prisma:generate": "prisma generate",
-    "prisma:postinstall": "ts-node --esm --transpile-only scripts/build-prisma.ts",
+    "prisma:postinstall": "tsx scripts/build-prisma.ts",
     "buildPrismaClient": "pnpm prisma:generate && pnpm prisma:postinstall",
     "prepublishOnly": "pnpm build",
     "prebuild": "pnpm clean && pnpm format && pnpm lint && echo Using TypeScript && tsc --version",
@@ -93,7 +93,8 @@
     "cross-env": "^10.1.0",
     "prisma": "^6.0.0",
     "rimraf": "^6.1.2",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0"
   },
   "engines": {
     "node": ">=18.0.0"
