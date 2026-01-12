@@ -125,4 +125,9 @@ export class Money {
   toFormattedString(): string {
     return formatMoney(this._value)
   }
+
+  // Alias for toFormattedString() for convenience
+  format(): string {
+    return this.toFormattedString()
+  }
 }

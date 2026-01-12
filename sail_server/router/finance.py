@@ -8,7 +8,11 @@
 
 from litestar import Router
 from litestar.di import Provide
-from sail_server.controller.finance import AccountController, TransactionController
+from sail_server.controller.finance import (
+    AccountController,
+    TransactionController,
+    BudgetController,
+)
 from sail_server.db import get_db_dependency
 
 
@@ -18,5 +22,6 @@ router = Router(
     route_handlers=[
         AccountController,
         TransactionController,
+        BudgetController,
     ],
 )

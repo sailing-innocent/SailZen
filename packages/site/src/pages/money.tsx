@@ -4,6 +4,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import AccountsDataTable from '@components/accounts_data_table'
 import TransactionsDataTable from '@components/transactions_data_table'
 import Statistics from '@components/statistics'
+import BudgetsDataTable from '@components/budgets_data_table'
 
 const MoneyPage = () => {
   const isMobile = useIsMobile()
@@ -37,6 +38,11 @@ const MoneyPage = () => {
           >
             <TransactionsDataTable />
           </div>
+        </div>
+
+        {/* 预算管理 */}
+        <div className="w-full mt-4 md:mt-6">
+          <BudgetsDataTable />
         </div>
 
         {/* 统计图表 */}

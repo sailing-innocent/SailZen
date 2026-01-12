@@ -11,8 +11,9 @@ from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
+from sail_server.utils.money import Money
 
-from sail_server.data.finance import AccountData, TransactionData
+from sail_server.data.finance import AccountData, TransactionData, BudgetData
 from sail_server.model.finance.account import (
     read_account_impl,
     read_accounts_impl,
@@ -31,8 +32,20 @@ from sail_server.model.finance.transaction import (
     delete_transaction_impl,
     get_transaction_stats_impl,
 )
+
+from sail_server.model.finance.budget import (
+    read_budget_impl,
+    read_budgets_impl,
+    create_budget_impl,
+    update_budget_impl,
+    delete_budget_impl,
+    get_budget_stats_impl,
+    get_budget_analysis_impl,
+    consume_budget_impl,
+)
 from sqlalchemy.orm import Session
 from typing import Generator, Union
+from datetime import datetime
 
 # -------------
 # Account
@@ -387,3 +400,263 @@ class TransactionController(Controller):
 # -------------
 # Budget Controller
 # -------------
+
+
+class BudgetDataWriteDTO(DataclassDTO[BudgetData]):
+    config = DTOConfig(exclude={"id", "ctime", "mtime"})
+
+
+class BudgetDataUpdateDTO(DataclassDTO[BudgetData]):
+    config = DTOConfig(exclude={"id", "ctime", "mtime"})
+
+
+class BudgetDataReadDTO(DataclassDTO[BudgetData]):
+    config = DTOConfig(exclude={"ctime"})
+
+
+class BudgetConsumeDTO(DataclassDTO[TransactionData]):
+    config = DTOConfig(exclude={"id", "prev_value", "state", "ctime", "mtime", "tags"})
+
+
+class BudgetController(Controller):
+    dto = BudgetDataWriteDTO
+    return_dto = BudgetDataReadDTO
+    path = "/budget"
+
+    @get("/{budget_id:int}")
+    async def get_budget(
+        self,
+        budget_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> BudgetData:
+        """
+        Get the budget data.
+        """
+        try:
+            db = next(router_dependency)
+            budget = read_budget_impl(db, budget_id)
+            request.logger.info(f"Get budget: {budget}")
+        except Exception as e:
+            request.logger.error(f"Error getting budget: {e}")
+            raise HTTPException(status_code=404, detail=f"Budget not found: {str(e)}")
+        if budget is None:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        return budget
+
+    @get()
+    async def get_budget_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        skip: int = 0,
+        limit: int = -1,
+        from_time: float | None = None,
+        to_time: float | None = None,
+        tags: str = "",
+        tag_op: str = "and",
+    ) -> list[BudgetData]:
+        """
+        Get the budget data list.
+        """
+        db = next(router_dependency)
+        
+        # Parse tags from comma-separated string
+        tag_list = []
+        if tags and tags.strip():
+            tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+        
+        budgets = read_budgets_impl(
+            db,
+            skip=skip,
+            limit=limit,
+            from_time=from_time,
+            to_time=to_time,
+            _tags=tag_list,
+            tag_op=tag_op,
+        )
+        return budgets
+
+    @post()
+    async def create_budget(
+        self,
+        data: BudgetData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> BudgetData:
+        """
+        Create a new budget data.
+        """
+        db = next(router_dependency)
+        name = data.name.strip() if data.name else ""
+        if not name:
+            request.logger.error("Budget name cannot be empty.")
+            raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
+        if len(name) > 100:
+            request.logger.error("Budget name is too long.")
+            raise HTTPException(status_code=400, detail="Budget name is too long.")
+        
+        # Validate amount
+        try:
+            amount = Money(data.amount)
+            if amount.value <= 0:
+                raise HTTPException(status_code=400, detail="Budget amount must be positive.")
+        except Exception as e:
+            request.logger.error(f"Invalid budget amount: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid budget amount: {str(e)}")
+        
+        budget = create_budget_impl(db, BudgetData(
+            name=name,
+            amount=data.amount,
+            description=data.description if data.description else "",
+            tags=data.tags if data.tags else "",
+            htime=data.htime if data.htime > 0 else datetime.now().timestamp(),
+        ))
+        request.logger.info(f"Create budget: {budget}")
+        if budget is None:
+            raise HTTPException(status_code=500, detail="Failed to create budget")
+        return budget
+
+    @put("/{budget_id:int}")
+    async def update_budget(
+        self,
+        budget_id: int,
+        data: BudgetData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> BudgetData:
+        """
+        Update the budget data.
+        """
+        db = next(router_dependency)
+        name = data.name.strip() if data.name else ""
+        if not name:
+            request.logger.error("Budget name cannot be empty.")
+            raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
+        
+        # Validate amount
+        try:
+            amount = Money(data.amount)
+            if amount.value <= 0:
+                raise HTTPException(status_code=400, detail="Budget amount must be positive.")
+        except Exception as e:
+            request.logger.error(f"Invalid budget amount: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid budget amount: {str(e)}")
+        
+        budget = update_budget_impl(db, budget_id, BudgetData(
+            name=name,
+            amount=data.amount,
+            description=data.description if data.description else "",
+            tags=data.tags if data.tags else "",
+            htime=data.htime if data.htime > 0 else datetime.now().timestamp(),
+        ))
+        request.logger.info(f"Update budget: {budget}")
+        if budget is None:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        return budget
+
+    @delete("/{budget_id:int}", status_code=200)
+    async def delete_budget(
+        self,
+        budget_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """
+        Delete the budget data.
+        """
+        db = next(router_dependency)
+        result = delete_budget_impl(db, budget_id)
+        if result is None:
+            request.logger.error(f"Budget {budget_id} not found")
+            raise HTTPException(status_code=404, detail="Budget not found")
+        request.logger.info(f"Delete budget: {result}")
+        return result
+
+    @get("/stats/", return_dto=None)
+    async def get_budget_stats(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        from_time: float | None = None,
+        to_time: float | None = None,
+        tags: str = "",
+        tag_op: str = "and",
+        return_list: bool = False,
+    ) -> dict:
+        """
+        Get budget statistics.
+        """
+        try:
+            db = next(router_dependency)
+            
+            # Parse tags from comma-separated string
+            tag_list = []
+            if tags and tags.strip():
+                tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+            
+            result = get_budget_stats_impl(
+                db=db,
+                from_time=from_time,
+                to_time=to_time,
+                _tags=tag_list,
+                tag_op=tag_op,
+                return_list=return_list,
+            )
+            
+            request.logger.info(f"Get budget stats: total_count={result['total_budget_count']}, total_amount={result['total_budget_amount']}")
+            return result
+            
+        except Exception as e:
+            request.logger.error(f"Error getting budget stats: {e}")
+            raise HTTPException(status_code=500, detail=f"Error getting budget stats: {str(e)}")
+
+    @get("/{budget_id:int}/analysis", return_dto=None)
+    async def get_budget_analysis(
+        self,
+        budget_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """
+        Get budget analysis.
+        """
+        try:
+            db = next(router_dependency)
+            result = get_budget_analysis_impl(db, budget_id)
+            if result is None:
+                raise HTTPException(status_code=404, detail="Budget not found")
+            request.logger.info(f"Get budget analysis: budget_id={budget_id}")
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            request.logger.error(f"Error getting budget analysis: {e}")
+            raise HTTPException(status_code=500, detail=f"Error getting budget analysis: {str(e)}")
+
+    @post("/{budget_id:int}/consume", dto=BudgetConsumeDTO)
+    async def consume_budget(
+        self,
+        budget_id: int,
+        data: TransactionData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> TransactionData:
+        """
+        Consume budget by creating a transaction.
+        """
+        try:
+            db = next(router_dependency)
+            
+            # Validate transaction data
+            if not data.value or float(data.value) <= 0:
+                raise HTTPException(status_code=400, detail="Transaction value must be positive")
+            
+            transaction = consume_budget_impl(db, budget_id, data)
+            request.logger.info(f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}")
+            return transaction
+        except ValueError as e:
+            request.logger.error(f"Error consuming budget: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            request.logger.error(f"Error consuming budget: {e}")
+            raise HTTPException(status_code=500, detail=f"Error consuming budget: {str(e)}")

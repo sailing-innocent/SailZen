@@ -6,7 +6,19 @@
  */
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
-import { type AccountData, type AccountOption, type TransactionData, type TransactionCreateProps } from '@lib/data/money'
+import {
+  type AccountData,
+  type AccountOption,
+  type TransactionData,
+  type TransactionCreateProps,
+  type BudgetData,
+  type BudgetCreateProps,
+  type BudgetQueryParams,
+  type BudgetStats,
+  type BudgetStatsParams,
+  type BudgetAnalysis,
+  type BudgetConsumeProps,
+} from '@lib/data/money'
 
 import {
   api_get_accounts,
@@ -18,6 +30,14 @@ import {
   api_create_transaction,
   api_delete_transaction,
   api_update_transaction,
+  api_get_budgets,
+  api_get_budget,
+  api_create_budget,
+  api_update_budget,
+  api_delete_budget,
+  api_get_budget_stats,
+  api_get_budget_analysis,
+  api_consume_budget,
 } from '@lib/api/money'
 
 export interface AccountsState {
@@ -172,5 +192,94 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
   },
   getSupportedTags: (): string[] => {
     return ['零食', '交通', '日用消耗', '大宗电器', '娱乐休闲', '人际交往', '医药健康', '衣物', '大宗收支']
+  },
+}))
+
+export interface BudgetsState {
+  budgets: BudgetData[]
+  isLoading: boolean
+  fetchBudgets: (params?: BudgetQueryParams) => Promise<BudgetData[]>
+  createBudget: (budget: BudgetCreateProps) => Promise<BudgetData>
+  updateBudget: (id: number, budget: BudgetCreateProps) => Promise<BudgetData>
+  deleteBudget: (id: number) => Promise<boolean>
+  consumeBudget: (id: number, consume: BudgetConsumeProps) => Promise<TransactionData>
+  getBudgetStats: (params?: BudgetStatsParams) => Promise<BudgetStats>
+  getBudgetAnalysis: (id: number) => Promise<BudgetAnalysis>
+}
+
+export const useBudgetsStore: UseBoundStore<StoreApi<BudgetsState>> = create<BudgetsState>((set) => ({
+  budgets: [],
+  isLoading: false,
+  fetchBudgets: async (params?: BudgetQueryParams): Promise<BudgetData[]> => {
+    set({ isLoading: true })
+    try {
+      const budgets = await api_get_budgets(params)
+      set({ budgets: budgets, isLoading: false })
+      return budgets
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+  createBudget: async (budget: BudgetCreateProps): Promise<BudgetData> => {
+    const new_budget = await api_create_budget(budget)
+    set((state: BudgetsState): BudgetsState => {
+      return {
+        ...state,
+        budgets: [...state.budgets, new_budget],
+      }
+    })
+    return new_budget
+  },
+  updateBudget: async (id: number, budget: BudgetCreateProps): Promise<BudgetData> => {
+    const updated_budget = await api_update_budget(id, budget)
+    set((state: BudgetsState): BudgetsState => {
+      const index = state.budgets.findIndex((b: BudgetData) => b.id === updated_budget.id)
+      const newState: BudgetsState = {
+        ...state,
+        budgets: [...state.budgets],
+      }
+      if (index !== -1) {
+        newState.budgets[index] = updated_budget
+        return newState // trigger re-render
+      } else {
+        console.log('Budget not found')
+        return state
+      }
+    })
+    return updated_budget
+  },
+  deleteBudget: async (id: number): Promise<boolean> => {
+    const response = await api_delete_budget(id)
+    set((state: BudgetsState): BudgetsState => {
+      const newState: BudgetsState = {
+        ...state,
+        budgets: state.budgets.filter((b: BudgetData) => b.id !== id),
+      }
+      return newState // trigger re-render
+    })
+    return response.status === 'success'
+  },
+  consumeBudget: async (id: number, consume: BudgetConsumeProps): Promise<TransactionData> => {
+    const transaction = await api_consume_budget(id, consume)
+    // Refresh budgets to update remaining amounts
+    set((state: BudgetsState) => {
+      // Trigger refresh by setting isLoading
+      return { ...state, isLoading: true }
+    })
+    // Fetch updated budgets
+    try {
+      const budgets = await api_get_budgets()
+      set({ budgets: budgets, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+    }
+    return transaction
+  },
+  getBudgetStats: async (params?: BudgetStatsParams): Promise<BudgetStats> => {
+    return await api_get_budget_stats(params)
+  },
+  getBudgetAnalysis: async (id: number): Promise<BudgetAnalysis> => {
+    return await api_get_budget_analysis(id)
   },
 }))

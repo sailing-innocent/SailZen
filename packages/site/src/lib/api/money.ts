@@ -13,6 +13,14 @@ import {
   type TransactionResponse,
   type TransactionDataStats,
   type TransactionDataStatsRequest,
+  type BudgetData,
+  type BudgetCreateProps,
+  type BudgetQueryParams,
+  type BudgetStats,
+  type BudgetStatsParams,
+  type BudgetAnalysis,
+  type BudgetConsumeProps,
+  type BudgetResponse,
 } from '@lib/data/money'
 
 import { SERVER_URL, API_BASE } from './config'
@@ -137,6 +145,118 @@ const api_update_transaction = async (id: number, transaction: TransactionCreate
   }
   return response.json()
 }
+// Budget API
+const api_get_budgets = async (params?: BudgetQueryParams): Promise<BudgetData[]> => {
+  let api = `${SERVER_URL}/${FINANCE_API_BASE}/budget/`
+  if (params) {
+    const urlParams = new URLSearchParams()
+    if (params.skip !== undefined) urlParams.append('skip', params.skip.toString())
+    if (params.limit !== undefined) urlParams.append('limit', params.limit.toString())
+    if (params.from_time !== undefined) urlParams.append('from_time', params.from_time.toString())
+    if (params.to_time !== undefined) urlParams.append('to_time', params.to_time.toString())
+    if (params.tags) urlParams.append('tags', params.tags)
+    if (params.tag_op) urlParams.append('tag_op', params.tag_op)
+    const queryString = urlParams.toString()
+    if (queryString) api = api + '?' + queryString
+  }
+  const response = await fetch(api)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budgets')
+  }
+  return response.json()
+}
+
+const api_get_budget = async (id: number): Promise<BudgetData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${id}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budget')
+  }
+  return response.json()
+}
+
+const api_create_budget = async (budget: BudgetCreateProps): Promise<BudgetData> => {
+  const content = JSON.stringify(budget)
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: content,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create budget')
+  }
+  return response.json()
+}
+
+const api_update_budget = async (id: number, budget: BudgetCreateProps): Promise<BudgetData> => {
+  const content = JSON.stringify(budget)
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: content,
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update budget')
+  }
+  return response.json()
+}
+
+const api_delete_budget = async (id: number): Promise<BudgetResponse> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${id}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to delete budget')
+  }
+  return response.json()
+}
+
+const api_get_budget_stats = async (params?: BudgetStatsParams): Promise<BudgetStats> => {
+  let api = `${SERVER_URL}/${FINANCE_API_BASE}/budget/stats/`
+  if (params) {
+    const urlParams = new URLSearchParams()
+    if (params.from_time !== undefined) urlParams.append('from_time', params.from_time.toString())
+    if (params.to_time !== undefined) urlParams.append('to_time', params.to_time.toString())
+    if (params.tags) urlParams.append('tags', params.tags)
+    if (params.tag_op) urlParams.append('tag_op', params.tag_op)
+    if (params.return_list !== undefined) urlParams.append('return_list', params.return_list.toString())
+    const queryString = urlParams.toString()
+    if (queryString) api = api + '?' + queryString
+  }
+  const response = await fetch(api)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budget stats')
+  }
+  return response.json()
+}
+
+const api_get_budget_analysis = async (id: number): Promise<BudgetAnalysis> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${id}/analysis`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budget analysis')
+  }
+  return response.json()
+}
+
+const api_consume_budget = async (id: number, consume: BudgetConsumeProps): Promise<TransactionData> => {
+  const content = JSON.stringify(consume)
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${id}/consume`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: content,
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to consume budget' }))
+    throw new Error(errorData.detail || 'Failed to consume budget')
+  }
+  return response.json()
+}
+
 export {
   api_get_account,
   api_create_account,
@@ -149,4 +269,12 @@ export {
   api_create_transaction,
   api_delete_transaction,
   api_update_transaction,
+  api_get_budgets,
+  api_get_budget,
+  api_create_budget,
+  api_update_budget,
+  api_delete_budget,
+  api_get_budget_stats,
+  api_get_budget_analysis,
+  api_consume_budget,
 }

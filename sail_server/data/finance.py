@@ -25,6 +25,8 @@ __all__ = [
     "Transaction",
     "TransactionData",
     "TransactionState",
+    "Budget",
+    "BudgetData",
     "_acc",
     "_acc_inv",
     "_htime",
@@ -271,6 +273,8 @@ class Budget(ORMBase):
     description = Column(String)
     tags = Column(String, default="")
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
+    ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
 
 @dataclass
 class BudgetData:
@@ -280,3 +284,5 @@ class BudgetData:
     description: str = field(default="")
     tags: str = field(default="")
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
+    ctime: datetime = field(default_factory=lambda: datetime.now())
+    mtime: datetime = field(default_factory=lambda: datetime.now())

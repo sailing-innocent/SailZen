@@ -8,6 +8,8 @@
 export * from './money'
 export * from './project'
 
+export { useBudgetsStore } from './money'
+
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { api_get_health } from '@lib/api'
 
