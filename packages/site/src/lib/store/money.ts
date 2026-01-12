@@ -48,10 +48,14 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
     set({ isLoading: true })
     try {
       const accounts = await api_get_accounts()
-      // sort by balance descending
-      accounts.sort((a: AccountData, b: AccountData) => parseFloat(b.balance) - parseFloat(a.balance))
+
+      accounts
+        .sort( // sort by balance descending
+          (a: AccountData, b: AccountData) => parseFloat(b.balance) - parseFloat(a.balance))
+
       // set the state with fetched accounts
       set({ accounts: accounts, isLoading: false })
+
     } catch (error) {
       set({ isLoading: false })
       throw error

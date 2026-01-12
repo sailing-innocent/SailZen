@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
 import { type AccountsState, useAccountsStore, useServerStore } from '@lib/store'
+import { type AccountData } from '@lib/data/money'
 import { AccountColumns } from './account_column'
 import { DataTable } from '@components/data_table'
 import AccountFixDialog from './account_fix_dialog'
@@ -68,7 +69,9 @@ const AccountDataTable: React.FC = () => {
         {isLoading ? (
           <div className={`w-full space-y-3 ${isMobile ? 'text-sm' : ''}`}>正在加载...</div>
         ) : accounts.length > 0 ? (
-          <DataTable columns={AccountColumns} data={accounts} pagination={pagination} setPagination={setPagination} />
+          <DataTable columns={AccountColumns} data={accounts.filter((a: AccountData) => {
+            return a.state == 0;
+          })} pagination={pagination} setPagination={setPagination} />
         ) : (
           <div className={`text-center py-8 ${isMobile ? 'text-sm' : ''}`}>暂无账户数据</div>
         )}
