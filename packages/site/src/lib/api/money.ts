@@ -80,11 +80,21 @@ const api_get_transactions = async (N: number): Promise<TransactionData[]> => {
 
 const api_get_transactions_stats = async (request: TransactionDataStatsRequest): Promise<TransactionDataStats> => {
   let api = `${SERVER_URL}/${FINANCE_API_BASE}/transaction/stats/`
-  api = api + `?tags=` + request.tags.join(',')
-  api = api + `&tag_op=` + request.tag_op
-  api = api + `&return_list=` + request.return_list.toString()
-  api = api + `&from_time=` + request.from_time.toString()
-  api = api + `&to_time=` + request.to_time.toString()
+  const params = new URLSearchParams()
+  
+  if (request.tags && request.tags.length > 0) {
+    params.append('tags', request.tags.join(','))
+  }
+  
+  if (request.tag_op) {
+    params.append('tag_op', request.tag_op)
+  }
+  
+  params.append('return_list', request.return_list.toString())
+  params.append('from_time', request.from_time.toString())
+  params.append('to_time', request.to_time.toString())
+  
+  api = api + '?' + params.toString()
   const response = await fetch(api)
   return response.json()
 }

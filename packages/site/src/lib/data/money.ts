@@ -19,8 +19,8 @@ export interface TransactionData extends TransactionCreateProps {
 }
 
 export interface TransactionDataStatsRequest {
-  tags: string[]
-  tag_op: 'and' | 'or'
+  tags?: string[]
+  tag_op?: 'and' | 'or'
   return_list: boolean
   from_time: number
   to_time: number
