@@ -16,7 +16,7 @@ from sail_server.data.finance import _htime, _htime_inv
 from sail_server.utils.money import Money
 from datetime import datetime
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -144,12 +144,38 @@ def get_budget_used_amount_impl(
     db, budget: Budget, from_time: float = None, to_time: float = None
 ) -> Money:
     """
-    Calculate the used amount for a budget by matching transactions with budget tags.
+    Calculate the used amount for a budget.
+    Priority: 1. Directly linked transactions (budget_id), 2. Transactions matched by tags.
     Only counts expense transactions (from_acc_id > 0, to_acc_id = -1).
     """
     used_amount = Money("0.0")
 
-    # Get budget tags
+    # First, count directly linked transactions
+    q_linked = db.query(Transaction).filter(
+        Transaction.state != 0,
+        Transaction.budget_id == budget.id
+    )
+    
+    # Filter by time range for linked transactions
+    if from_time is not None:
+        q_linked = q_linked.filter(Transaction.htime >= _htime(from_time))
+    if to_time is not None:
+        q_linked = q_linked.filter(Transaction.htime <= _htime(to_time))
+    
+    linked_transactions = q_linked.all()
+    
+    # Calculate used amount from directly linked transactions
+    for transaction in linked_transactions:
+        from_acc_id = (
+            transaction.from_acc_id if transaction.from_acc_id is not None else -1
+        )
+        to_acc_id = transaction.to_acc_id if transaction.to_acc_id is not None else -1
+
+        # Only count expense transactions (from_acc_id > 0, to_acc_id = -1)
+        if from_acc_id > 0 and to_acc_id == -1:
+            used_amount += Money(transaction.value)
+
+    # Then, count transactions matched by tags (excluding already linked ones)
     budget_tags = []
     if budget.tags:
         budget_tags = [tag.strip() for tag in budget.tags.split(",") if tag.strip()]
@@ -157,8 +183,11 @@ def get_budget_used_amount_impl(
     if len(budget_tags) == 0:
         return used_amount
 
-    # Build query for matching transactions
-    q = db.query(Transaction).filter(Transaction.state != 0)
+    # Build query for tag-matched transactions (excluding already linked)
+    q = db.query(Transaction).filter(
+        Transaction.state != 0,
+        Transaction.budget_id.is_(None)  # Exclude already linked transactions
+    )
 
     # Filter by tags (OR operation - transaction matches if it has any budget tag)
     if len(budget_tags) > 0:
@@ -241,9 +270,26 @@ def get_budget_stats_impl(
         if budget.tags:
             budget_tags = [tag.strip() for tag in budget.tags.split(",") if tag.strip()]
 
+        # Count transactions: directly linked + tag-matched
         transaction_count = 0
+        
+        # Count directly linked transactions
+        q_linked = db.query(Transaction).filter(
+            Transaction.state != 0,
+            Transaction.budget_id == budget.id
+        )
+        if from_time is not None:
+            q_linked = q_linked.filter(Transaction.htime >= _htime(from_time))
+        if to_time is not None:
+            q_linked = q_linked.filter(Transaction.htime <= _htime(to_time))
+        transaction_count += q_linked.count()
+        
+        # Count tag-matched transactions (excluding already linked)
         if len(budget_tags) > 0:
-            q = db.query(Transaction).filter(Transaction.state != 0)
+            q = db.query(Transaction).filter(
+                Transaction.state != 0,
+                Transaction.budget_id.is_(None)  # Exclude already linked
+            )
             tag_condition = None
             for tag in budget_tags:
                 if tag_condition is None:
@@ -262,7 +308,7 @@ def get_budget_stats_impl(
             if to_time is not None:
                 q = q.filter(Transaction.htime <= _htime(to_time))
 
-            transaction_count = q.count()
+            transaction_count += q.count()
 
         budget_details.append(
             {
@@ -303,7 +349,7 @@ def get_budget_analysis_impl(db, budget_id: int) -> Dict:
 
     usage_percentage = 0.0
     if budget_amount.value > 0:
-        usage_percentage = (used_amount.value / budget_amount.value) * 100.0
+        usage_percentage = float((used_amount.value / budget_amount.value) * 100)
 
     # Get matching transactions
     budget_tags = []
@@ -313,8 +359,20 @@ def get_budget_analysis_impl(db, budget_id: int) -> Dict:
     transactions = []
     by_tag: Dict[str, Dict] = {}
 
+    # Get directly linked transactions
+    q_linked = db.query(Transaction).filter(
+        Transaction.state != 0,
+        Transaction.budget_id == budget.id
+    )
+    q_linked = q_linked.order_by(Transaction.htime.desc())
+    linked_transactions = q_linked.all()
+
+    # Get tag-matched transactions (excluding already linked)
     if len(budget_tags) > 0:
-        q = db.query(Transaction).filter(Transaction.state != 0)
+        q = db.query(Transaction).filter(
+            Transaction.state != 0,
+            Transaction.budget_id.is_(None)  # Exclude already linked
+        )
         tag_condition = None
         for tag in budget_tags:
             if tag_condition is None:
@@ -327,39 +385,44 @@ def get_budget_analysis_impl(db, budget_id: int) -> Dict:
         q = q.filter(Transaction.htime >= budget.htime)
         q = q.order_by(Transaction.htime.desc())
 
-        matching_transactions = q.all()
+        tag_matched_transactions = q.all()
+    else:
+        tag_matched_transactions = []
 
-        from sail_server.model.finance.transaction import read_from_trans
+    # Combine both lists
+    matching_transactions = list(linked_transactions) + list(tag_matched_transactions)
 
-        for transaction in matching_transactions:
-            from_acc_id = (
-                transaction.from_acc_id if transaction.from_acc_id is not None else -1
-            )
-            to_acc_id = (
-                transaction.to_acc_id if transaction.to_acc_id is not None else -1
-            )
+    from sail_server.model.finance.transaction import read_from_trans
 
-            # Only include expense transactions
-            if from_acc_id > 0 and to_acc_id == -1:
-                trans_data = read_from_trans(transaction)
-                transactions.append(trans_data)
+    for transaction in matching_transactions:
+        from_acc_id = (
+            transaction.from_acc_id if transaction.from_acc_id is not None else -1
+        )
+        to_acc_id = (
+            transaction.to_acc_id if transaction.to_acc_id is not None else -1
+        )
 
-                # Group by tag
-                trans_tags = []
-                if trans_data.tags:
-                    trans_tags = [
-                        tag.strip() for tag in trans_data.tags.split(",") if tag.strip()
-                    ]
+        # Only include expense transactions
+        if from_acc_id > 0 and to_acc_id == -1:
+            trans_data = read_from_trans(transaction)
+            transactions.append(trans_data)
 
-                for tag in trans_tags:
-                    if tag not in by_tag:
-                        by_tag[tag] = {"amount": Money("0.0"), "count": 0}
-                    by_tag[tag]["amount"] += Money(trans_data.value)
-                    by_tag[tag]["count"] += 1
+            # Group by tag
+            trans_tags = []
+            if trans_data.tags:
+                trans_tags = [
+                    tag.strip() for tag in trans_data.tags.split(",") if tag.strip()
+                ]
 
-        # Convert Money to string in by_tag
-        for tag in by_tag:
-            by_tag[tag]["amount"] = str(by_tag[tag]["amount"])
+            for tag in trans_tags:
+                if tag not in by_tag:
+                    by_tag[tag] = {"amount": Money("0.0"), "count": 0}
+                by_tag[tag]["amount"] += Money(trans_data.value)
+                by_tag[tag]["count"] += 1
+
+    # Convert Money to string in by_tag
+    for tag in by_tag:
+        by_tag[tag]["amount"] = str(by_tag[tag]["amount"])
 
     return {
         "budget": budget_data,
@@ -438,3 +501,83 @@ def consume_budget_impl(
     db.commit()
 
     return transaction
+
+
+def link_transaction_to_budget_impl(
+    db, budget_id: int, transaction_id: int
+) -> TransactionData:
+    """
+    Link an existing transaction to a budget.
+    """
+    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    if budget is None:
+        raise ValueError(f"Budget {budget_id} not found")
+
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if transaction is None:
+        raise ValueError(f"Transaction {transaction_id} not found")
+
+    # Check if transaction is already linked to another budget
+    if transaction.budget_id is not None and transaction.budget_id != budget_id:
+        raise ValueError(
+            f"Transaction {transaction_id} is already linked to budget {transaction.budget_id}"
+        )
+
+    # Validate transaction is an expense transaction
+    from_acc_id = transaction.from_acc_id if transaction.from_acc_id is not None else -1
+    to_acc_id = transaction.to_acc_id if transaction.to_acc_id is not None else -1
+    if not (from_acc_id > 0 and to_acc_id == -1):
+        raise ValueError("Only expense transactions can be linked to budgets")
+
+    # Check if linking this transaction would exceed budget
+    budget_amount = Money(budget.amount)
+    used_amount = get_budget_used_amount_impl(db, budget)
+    
+    # If transaction is not already linked, add its value to used amount
+    if transaction.budget_id is None:
+        transaction_value = Money(transaction.value)
+        if used_amount + transaction_value > budget_amount:
+            raise ValueError(
+                f"Linking transaction {transaction_id} would exceed budget. "
+                f"Remaining: {budget_amount - used_amount}, Transaction: {transaction_value}"
+            )
+
+    # Link transaction to budget
+    transaction.budget_id = budget_id
+    transaction.mtime = datetime.now()
+    
+    # Update budget mtime
+    budget.mtime = datetime.now()
+    
+    db.commit()
+    db.refresh(transaction)
+
+    from sail_server.model.finance.transaction import read_from_trans
+    return read_from_trans(transaction)
+
+
+def unlink_transaction_from_budget_impl(db, transaction_id: int) -> TransactionData:
+    """
+    Unlink a transaction from its budget.
+    """
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if transaction is None:
+        raise ValueError(f"Transaction {transaction_id} not found")
+
+    if transaction.budget_id is None:
+        raise ValueError(f"Transaction {transaction_id} is not linked to any budget")
+
+    budget_id = transaction.budget_id
+    transaction.budget_id = None
+    transaction.mtime = datetime.now()
+
+    # Update budget mtime
+    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    if budget is not None:
+        budget.mtime = datetime.now()
+
+    db.commit()
+    db.refresh(transaction)
+
+    from sail_server.model.finance.transaction import read_from_trans
+    return read_from_trans(transaction)

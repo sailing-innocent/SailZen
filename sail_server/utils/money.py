@@ -103,6 +103,27 @@ class Money:
             return False
         return self.value == other.value
 
+    # comparison operators
+    def __gt__(self, other):
+        if self.currency != other.currency:
+            raise ValueError(f"Currency mismatch: {self.currency} != {other.currency}")
+        return self.value > other.value
+
+    def __lt__(self, other):
+        if self.currency != other.currency:
+            raise ValueError(f"Currency mismatch: {self.currency} != {other.currency}")
+        return self.value < other.value
+
+    def __ge__(self, other):
+        if self.currency != other.currency:
+            raise ValueError(f"Currency mismatch: {self.currency} != {other.currency}")
+        return self.value >= other.value
+
+    def __le__(self, other):
+        if self.currency != other.currency:
+            raise ValueError(f"Currency mismatch: {self.currency} != {other.currency}")
+        return self.value <= other.value
+
     def __str__(self):
         return f"{self.value} {self.currency}"
 

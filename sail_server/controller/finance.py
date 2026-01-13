@@ -42,6 +42,8 @@ from sail_server.model.finance.budget import (
     get_budget_stats_impl,
     get_budget_analysis_impl,
     consume_budget_impl,
+    link_transaction_to_budget_impl,
+    unlink_transaction_from_budget_impl,
 )
 from sqlalchemy.orm import Session
 from typing import Generator, Union
@@ -660,3 +662,50 @@ class BudgetController(Controller):
         except Exception as e:
             request.logger.error(f"Error consuming budget: {e}")
             raise HTTPException(status_code=500, detail=f"Error consuming budget: {str(e)}")
+
+    @post("/{budget_id:int}/link/{transaction_id:int}")
+    async def link_transaction(
+        self,
+        budget_id: int,
+        transaction_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> TransactionData:
+        """
+        Link an existing transaction to a budget.
+        """
+        try:
+            db = next(router_dependency)
+            transaction = link_transaction_to_budget_impl(db, budget_id, transaction_id)
+            request.logger.info(
+                f"Link transaction: budget_id={budget_id}, transaction_id={transaction_id}"
+            )
+            return transaction
+        except ValueError as e:
+            request.logger.error(f"Error linking transaction: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            request.logger.error(f"Error linking transaction: {e}")
+            raise HTTPException(status_code=500, detail=f"Error linking transaction: {str(e)}")
+
+    @delete("/unlink/{transaction_id:int}", status_code=200)
+    async def unlink_transaction(
+        self,
+        transaction_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> TransactionData:
+        """
+        Unlink a transaction from its budget.
+        """
+        try:
+            db = next(router_dependency)
+            transaction = unlink_transaction_from_budget_impl(db, transaction_id)
+            request.logger.info(f"Unlink transaction: transaction_id={transaction_id}")
+            return transaction
+        except ValueError as e:
+            request.logger.error(f"Error unlinking transaction: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            request.logger.error(f"Error unlinking transaction: {e}")
+            raise HTTPException(status_code=500, detail=f"Error unlinking transaction: {str(e)}")

@@ -257,6 +257,28 @@ const api_consume_budget = async (id: number, consume: BudgetConsumeProps): Prom
   return response.json()
 }
 
+const api_link_transaction_to_budget = async (budget_id: number, transaction_id: number): Promise<TransactionData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/link/${transaction_id}`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to link transaction' }))
+    throw new Error(errorData.detail || 'Failed to link transaction')
+  }
+  return response.json()
+}
+
+const api_unlink_transaction_from_budget = async (transaction_id: number): Promise<TransactionData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/unlink/${transaction_id}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to unlink transaction' }))
+    throw new Error(errorData.detail || 'Failed to unlink transaction')
+  }
+  return response.json()
+}
+
 export {
   api_get_account,
   api_create_account,
@@ -277,4 +299,6 @@ export {
   api_get_budget_stats,
   api_get_budget_analysis,
   api_consume_budget,
+  api_link_transaction_to_budget,
+  api_unlink_transaction_from_budget,
 }

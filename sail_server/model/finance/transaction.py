@@ -30,9 +30,11 @@ def trans_from_create(create: TransactionData):
     init_state = TransactionState(0)
     from_acc_id = _acc(create.from_acc_id)
     to_acc_id = _acc(create.to_acc_id)
+    budget_id = create.budget_id if create.budget_id is not None else None
     return Transaction(
         from_acc_id=from_acc_id,
         to_acc_id=to_acc_id,
+        budget_id=budget_id,
         prev_value="0.0",  # default
         value=create.value,
         description=create.description,
@@ -48,6 +50,9 @@ def read_from_trans(trans: Transaction):
     tags = ""
     if trans.tags is not None:
         tags = trans.tags
+    budget_id = None
+    if trans.budget_id is not None:
+        budget_id = trans.budget_id
     return TransactionData(
         id=trans.id,
         from_acc_id=_acc_inv(trans.from_acc_id),
@@ -56,6 +61,7 @@ def read_from_trans(trans: Transaction):
         prev_value=trans.prev_value,
         description=trans.description,
         tags=tags,
+        budget_id=budget_id,
         state=trans.state,
         htime=_htime_inv(trans.htime),
         ctime=trans.ctime,
@@ -246,6 +252,7 @@ def update_transaction_impl(
     # if -1 means third party, write NULL
     transaction.from_acc_id = _acc(transaction_update.from_acc_id)
     transaction.to_acc_id = _acc(transaction_update.to_acc_id)
+    transaction.budget_id = transaction_update.budget_id if transaction_update.budget_id is not None else None
     transaction.prev_value = transaction.value
     transaction.value = transaction_update.value
     transaction.description = transaction_update.description

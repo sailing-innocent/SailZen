@@ -38,6 +38,8 @@ import {
   api_get_budget_stats,
   api_get_budget_analysis,
   api_consume_budget,
+  api_link_transaction_to_budget,
+  api_unlink_transaction_from_budget,
 } from '@lib/api/money'
 
 export interface AccountsState {
@@ -203,6 +205,8 @@ export interface BudgetsState {
   updateBudget: (id: number, budget: BudgetCreateProps) => Promise<BudgetData>
   deleteBudget: (id: number) => Promise<boolean>
   consumeBudget: (id: number, consume: BudgetConsumeProps) => Promise<TransactionData>
+  linkTransaction: (budget_id: number, transaction_id: number) => Promise<TransactionData>
+  unlinkTransaction: (transaction_id: number) => Promise<TransactionData>
   getBudgetStats: (params?: BudgetStatsParams) => Promise<BudgetStats>
   getBudgetAnalysis: (id: number) => Promise<BudgetAnalysis>
 }
@@ -268,6 +272,34 @@ export const useBudgetsStore: UseBoundStore<StoreApi<BudgetsState>> = create<Bud
       return { ...state, isLoading: true }
     })
     // Fetch updated budgets
+    try {
+      const budgets = await api_get_budgets()
+      set({ budgets: budgets, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+    }
+    return transaction
+  },
+  linkTransaction: async (budget_id: number, transaction_id: number): Promise<TransactionData> => {
+    const transaction = await api_link_transaction_to_budget(budget_id, transaction_id)
+    // Refresh budgets to update remaining amounts
+    set((state: BudgetsState) => {
+      return { ...state, isLoading: true }
+    })
+    try {
+      const budgets = await api_get_budgets()
+      set({ budgets: budgets, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+    }
+    return transaction
+  },
+  unlinkTransaction: async (transaction_id: number): Promise<TransactionData> => {
+    const transaction = await api_unlink_transaction_from_budget(transaction_id)
+    // Refresh budgets to update remaining amounts
+    set((state: BudgetsState) => {
+      return { ...state, isLoading: true }
+    })
     try {
       const budgets = await api_get_budgets()
       set({ budgets: budgets, isLoading: false })

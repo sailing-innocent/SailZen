@@ -16,6 +16,7 @@ export interface TransactionCreateProps {
 
 export interface TransactionData extends TransactionCreateProps {
   id: number
+  budget_id?: number | null
 }
 
 export interface TransactionDataStatsRequest {

@@ -129,6 +129,7 @@ class Transaction(ORMBase):
     id = Column(Integer, primary_key=True)
     from_acc_id = Column(Integer, ForeignKey("accounts.id"))
     to_acc_id = Column(Integer, ForeignKey("accounts.id"))
+    budget_id = Column(Integer, ForeignKey("budgets.id"), nullable=True)  # Link to budget
     # Define relationships with back_populates
     from_acc = relationship(
         "Account", back_populates="out_transactions", foreign_keys=[from_acc_id]
@@ -136,6 +137,7 @@ class Transaction(ORMBase):
     to_acc = relationship(
         "Account", back_populates="in_transactions", foreign_keys=[to_acc_id]
     )
+    budget = relationship("Budget", back_populates="transactions", foreign_keys=[budget_id])
 
     value = Column(String)  # Decimal float
     prev_value = Column(String)  # Decimal float
@@ -157,6 +159,7 @@ class TransactionData:
     prev_value: str = field(default="0.0")
     description: str = field(default="")
     tags: str = field(default="")
+    budget_id: int = field(default=None)  # Link to budget
     state: int = field(default_factory=lambda: TransactionState(0).value)
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
     ctime: datetime = field(default_factory=lambda: datetime.now())
@@ -275,6 +278,9 @@ class Budget(ORMBase):
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # Relationship to transactions linked to this budget
+    transactions = relationship("Transaction", back_populates="budget", foreign_keys="Transaction.budget_id")
 
 @dataclass
 class BudgetData:

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useBudgetsStore, type BudgetsState, useAccountsStore, type AccountsState } from '@lib/store'
-import { type BudgetData, type BudgetConsumeProps } from '@lib/data/money'
+import { type BudgetData, type BudgetConsumeProps, type TransactionData } from '@lib/data/money'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -22,6 +22,8 @@ import {
 import DatePicker from '@components/date_picker'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Money } from '@lib/utils/money'
+import TransactionSearchDialog from './transaction_search_dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 interface BudgetConsumeDialogProps {
   budget: BudgetData
@@ -37,6 +39,7 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
   onSuccess,
 }) => {
   const consumeBudget = useBudgetsStore((state: BudgetsState) => state.consumeBudget)
+  const linkTransaction = useBudgetsStore((state: BudgetsState) => state.linkTransaction)
   const getBudgetStats = useBudgetsStore((state: BudgetsState) => state.getBudgetStats)
   const accounts = useAccountsStore((state: AccountsState) => state.accounts)
   const [fromAccId, setFromAccId] = useState<number>(-1)
@@ -46,6 +49,8 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
   const [htime, setHtime] = useState<number>(Math.floor(Date.now() / 1000))
   const [loading, setLoading] = useState(false)
   const [remainingAmount, setRemainingAmount] = useState<string>('0.0')
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('create')
   const isMobile = useIsMobile()
 
   // Get account options
@@ -128,25 +133,48 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
     }
   }
 
+  const handleLinkTransaction = async (transaction: TransactionData) => {
+    setLoading(true)
+    try {
+      await linkTransaction(budget.id, transaction.id)
+      onOpenChange(false)
+      if (onSuccess) {
+        onSuccess()
+      }
+    } catch (error: any) {
+      console.error('Error linking transaction:', error)
+      alert(error.message || '链接交易失败，请稍后重试')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={isMobile ? 'max-w-[95vw]' : ''}>
-        <DialogHeader>
-          <DialogTitle>预算核销</DialogTitle>
-          <DialogDescription>
-            从预算 "{budget.name}" 创建交易记录
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label>预算信息</Label>
-            <div className="text-sm text-muted-foreground">
-              <div>预算金额: {new Money(budget.amount).format()}</div>
-              <div>剩余预算: {new Money(remainingAmount).format()}</div>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className={isMobile ? 'max-w-[95vw]' : ''}>
+          <DialogHeader>
+            <DialogTitle>预算核销</DialogTitle>
+            <DialogDescription>
+              从预算 "{budget.name}" 创建或链接交易记录
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>预算信息</Label>
+              <div className="text-sm text-muted-foreground">
+                <div>预算金额: {new Money(budget.amount).format()}</div>
+                <div>剩余预算: {new Money(remainingAmount).format()}</div>
+              </div>
             </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="from_acc">支出账户 *</Label>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="create">创建新交易</TabsTrigger>
+                <TabsTrigger value="link">链接现有交易</TabsTrigger>
+              </TabsList>
+              <TabsContent value="create">
+                <div className="grid gap-2">
+                  <Label htmlFor="from_acc">支出账户 *</Label>
             <Select
               value={fromAccId.toString()}
               onValueChange={(value) => setFromAccId(parseInt(value))}
@@ -208,19 +236,44 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
               onChange={(date: Date) => {
                 setHtime(Math.floor(date.getTime() / 1000))
               }}
-            />
+                />
+                </div>
+              </TabsContent>
+              <TabsContent value="link">
+                <div className="grid gap-4">
+                  <div className="text-sm text-muted-foreground">
+                    搜索并选择要链接到预算的交易记录
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSearchDialogOpen(true)}
+                    disabled={loading}
+                  >
+                    搜索交易记录
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            取消
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? '核销中...' : '核销'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+              取消
+            </Button>
+            {activeTab === 'create' && (
+              <Button onClick={handleSubmit} disabled={loading}>
+                {loading ? '核销中...' : '核销'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <TransactionSearchDialog
+        open={searchDialogOpen}
+        onOpenChange={setSearchDialogOpen}
+        onSelect={handleLinkTransaction}
+        excludeBudgetId={budget.id}
+      />
+    </>
   )
 }
 
