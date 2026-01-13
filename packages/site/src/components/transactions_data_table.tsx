@@ -72,7 +72,15 @@ const TransactionsDataTable: React.FC = () => {
 
   const getOptions = useAccountsStore((state) => state.getOptions)
   const accountsData = useAccountsStore((state) => state.accounts)
-  const accounts = useMemo(() => getOptions(), [getOptions, accountsData])
+  const accounts = useMemo(() => {
+    const options = getOptions()
+    // 按照state排序，state小的在前，大的在后
+    return options.sort((a, b) => {
+      const stateA = a.state ?? 0
+      const stateB = b.state ?? 0
+      return stateA - stateB
+    })
+  }, [getOptions, accountsData])
 
   // Filter transactions based on current filters
   const filteredTransactions = useMemo(() => {

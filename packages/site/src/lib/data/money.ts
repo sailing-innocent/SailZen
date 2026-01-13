@@ -50,6 +50,7 @@ export interface AccountCreateProps {
 
 export interface AccountOption extends AccountCreateProps {
   id: number
+  state?: number
 }
 
 export interface AccountData extends AccountOption {

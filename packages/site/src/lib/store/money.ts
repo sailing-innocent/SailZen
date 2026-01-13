@@ -61,9 +61,10 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
       return {
         id: account.id,
         name: account.name,
+        state: account.state,
       }
     })
-    options.unshift({ id: -1, name: 'other' })
+    options.unshift({ id: -1, name: 'other', state: 0 })
     return options
   },
   fetchAccounts: async () => {
