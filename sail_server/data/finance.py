@@ -66,7 +66,7 @@ def _htime_inv(x: datetime):
 
 class Account(ORMBase):
     __tablename__ = "accounts"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String)
     description = Column(String)
     balance = Column(String)
@@ -126,7 +126,7 @@ class AccountState(StateBits):
 # transaction
 class Transaction(ORMBase):
     __tablename__ = "transactions"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     from_acc_id = Column(Integer, ForeignKey("accounts.id"))
     to_acc_id = Column(Integer, ForeignKey("accounts.id"))
     budget_id = Column(Integer, ForeignKey("budgets.id"), nullable=True)  # Link to budget
@@ -270,7 +270,7 @@ def transactions_money_iter(transactions: List[TransactionData]) -> Iterator[Mon
 
 class Budget(ORMBase):
     __tablename__ = "budgets"
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String)
     amount = Column(String)  # Decimal float
     description = Column(String)
