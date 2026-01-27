@@ -51,7 +51,16 @@ class SailServer:
         ]
         self.api_router = None
         self.debug = os.environ.get("DEV_MODE", "false").lower() == "true"
-        self.log_file = os.environ.get("SERVER_LOG_FILE")
+        log_file_raw = os.environ.get("SERVER_LOG_FILE")
+        # Validate and normalize log file path early
+        if log_file_raw and log_file_raw.strip():
+            try:
+                self.log_file = os.path.abspath(os.path.expanduser(log_file_raw.strip()))
+            except Exception as e:
+                logger.warning(f"Invalid log file path '{log_file_raw}': {e}. Using console logging.")
+                self.log_file = None
+        else:
+            self.log_file = None
 
     def _create_custom_rotating_handler(self):
         """Create a custom rotating file handler with timestamp-based backup naming."""
@@ -146,37 +155,56 @@ class SailServer:
         )
 
         # Setup file handler manually if log file is specified
-        if self.log_file:
-            # Ensure the log file directory exists
-            log_dir = os.path.dirname(self.log_file)
-            if log_dir and not os.path.exists(log_dir):
-                os.makedirs(log_dir, exist_ok=True)
+        # Note: log_file path is already normalized in __init__
+        if self.log_file and self.log_file.strip():
+            try:
+                # Ensure the log file directory exists
+                log_dir = os.path.dirname(self.log_file)
+                if log_dir:
+                    os.makedirs(log_dir, exist_ok=True)
+                    # Verify we can write to the directory
+                    if not os.access(log_dir, os.W_OK):
+                        logger.warning(f"Cannot write to log directory: {log_dir}. Falling back to console logging.")
+                        self.log_file = None
+                else:
+                    # If no directory specified, use current directory
+                    logger.warning(f"No directory specified for log file: {self.log_file}")
 
+            except Exception as e:
+                logger.error(f"Error setting up log file directory: {e}. Falling back to console logging.")
+                self.log_file = None
+
+        if self.log_file and self.log_file.strip():
             def setup_file_handler():
                 """Set up custom rotating file handler after Litestar configures logging."""
                 import logging.handlers
                 
-                root_logger = logging.getLogger()
-                
-                # Remove any existing file handlers to avoid duplicates
-                for handler in root_logger.handlers[:]:
-                    if isinstance(handler, (logging.handlers.RotatingFileHandler, logging.FileHandler)):
-                        root_logger.removeHandler(handler)
-                        handler.close()
+                try:
+                    root_logger = logging.getLogger()
+                    
+                    # Remove any existing file handlers to avoid duplicates
+                    for handler in root_logger.handlers[:]:
+                        if isinstance(handler, (logging.handlers.RotatingFileHandler, logging.FileHandler)):
+                            root_logger.removeHandler(handler)
+                            handler.close()
 
-                # Add our custom rotating handler
-                custom_handler = self._create_custom_rotating_handler()(
-                    filename=self.log_file,
-                    maxBytes=512 * 1024,  # 512KB
-                    backupCount=0,  # We handle backups manually
-                )
-                custom_handler.setLevel(logging.INFO)
-                custom_handler.setFormatter(
-                    logging.Formatter(
-                        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                    # Add our custom rotating handler
+                    custom_handler = self._create_custom_rotating_handler()(
+                        filename=self.log_file,
+                        maxBytes=512 * 1024,  # 512KB
+                        backupCount=0,  # We handle backups manually
                     )
-                )
-                root_logger.addHandler(custom_handler)
+                    custom_handler.setLevel(logging.INFO)
+                    custom_handler.setFormatter(
+                        logging.Formatter(
+                            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                        )
+                    )
+                    root_logger.addHandler(custom_handler)
+                    logger.info(f"File logging configured: {self.log_file}")
+                except Exception as e:
+                    logger.error(f"Failed to configure file handler: {e}. Using console logging only.")
+                    # Don't raise - allow server to continue with console logging
 
             # Store the setup function to call after app initialization
             self._setup_file_handler = setup_file_handler
@@ -191,20 +219,47 @@ class SailServer:
             path="/api_docs",
         )
 
-        self.app = Litestar(
-            route_handlers=[self.base_router, self.api_router],
-            debug=self.debug,
-            logging_config=logging_config,
-            cors_config=cors_config,
-            exception_handlers=exception_handlers,
-            on_startup=[self.on_startup],
-            on_shutdown=[self.on_shutdown],
-            openapi_config=openapi_config,
-        )
+        try:
+            self.app = Litestar(
+                route_handlers=[self.base_router, self.api_router],
+                debug=self.debug,
+                logging_config=logging_config,
+                cors_config=cors_config,
+                exception_handlers=exception_handlers,
+                on_startup=[self.on_startup],
+                on_shutdown=[self.on_shutdown],
+                openapi_config=openapi_config,
+            )
+        except Exception as e:
+            # If logging config fails, try without it
+            if "handler" in str(e).lower() or "logging" in str(e).lower():
+                logger.warning(f"Logging configuration error: {e}. Retrying with minimal logging config.")
+                # Create a minimal logging config without any custom handlers
+                minimal_logging_config = LoggingConfig(
+                    root={"level": "INFO", "handlers": ["queue_listener"]},
+                    handlers={},
+                    formatters={},
+                    log_exceptions="always",
+                )
+                self.app = Litestar(
+                    route_handlers=[self.base_router, self.api_router],
+                    debug=self.debug,
+                    logging_config=minimal_logging_config,
+                    cors_config=cors_config,
+                    exception_handlers=exception_handlers,
+                    on_startup=[self.on_startup],
+                    on_shutdown=[self.on_shutdown],
+                    openapi_config=openapi_config,
+                )
+            else:
+                raise
 
         # Setup file handler after Litestar configures logging
         if self.log_file and hasattr(self, "_setup_file_handler"):
-            self._setup_file_handler()
+            try:
+                self._setup_file_handler()
+            except Exception as e:
+                logger.error(f"Failed to setup file handler: {e}. Server will continue with console logging.")
 
     async def on_startup(self):
         logger.info("Server starting up...")
