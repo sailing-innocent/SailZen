@@ -128,7 +128,9 @@ class SailServer:
             ],
         )
 
-        # Setup logging configuration with file handler if log file is specified
+        # Setup logging configuration
+        # Note: We don't configure file handler through LoggingConfig to avoid
+        # "Unable to configure handler 'file'" errors. Instead, we set it up manually.
         handlers = ["queue_listener"]
         formatters = {
             "standard": {
@@ -136,47 +138,29 @@ class SailServer:
             }
         }
 
-        # Create custom handler instance if log file is specified
-        handler_config = {}
+        logging_config = LoggingConfig(
+            root={"level": "INFO", "handlers": handlers},
+            handlers={},
+            formatters=formatters,
+            log_exceptions="always",
+        )
+
+        # Setup file handler manually if log file is specified
         if self.log_file:
             # Ensure the log file directory exists
             log_dir = os.path.dirname(self.log_file)
             if log_dir and not os.path.exists(log_dir):
                 os.makedirs(log_dir, exist_ok=True)
-            
-            # Remove console handlers and use only file handler
-            handlers = ["file"]
-            formatters["file"] = {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            }
 
-            # Configure the file handler in LoggingConfig
-            handler_config = {
-                "file": {
-                    "class": "logging.handlers.RotatingFileHandler",
-                    "filename": self.log_file,
-                    "maxBytes": 512 * 1024,  # 512KB
-                    "backupCount": 0,  # We'll override this behavior
-                    "formatter": "file",
-                    "level": "INFO",
-                }
-            }
-
-        logging_config = LoggingConfig(
-            root={"level": "INFO", "handlers": handlers},
-            handlers=handler_config,
-            formatters=formatters,
-            log_exceptions="always",
-        )
-
-        # Override the rotating behavior after Litestar sets up logging
-        if self.log_file:
-
-            def setup_custom_rotation():
-                # Find and replace the rotating file handler with our custom one
+            def setup_file_handler():
+                """Set up custom rotating file handler after Litestar configures logging."""
+                import logging.handlers
+                
                 root_logger = logging.getLogger()
+                
+                # Remove any existing file handlers to avoid duplicates
                 for handler in root_logger.handlers[:]:
-                    if isinstance(handler, logging.handlers.RotatingFileHandler):
+                    if isinstance(handler, (logging.handlers.RotatingFileHandler, logging.FileHandler)):
                         root_logger.removeHandler(handler)
                         handler.close()
 
@@ -195,7 +179,7 @@ class SailServer:
                 root_logger.addHandler(custom_handler)
 
             # Store the setup function to call after app initialization
-            self._setup_custom_rotation = setup_custom_rotation
+            self._setup_file_handler = setup_file_handler
 
         cors_config = CORSConfig(allow_origins=["*"], allow_methods=["*"])
 
@@ -218,9 +202,9 @@ class SailServer:
             openapi_config=openapi_config,
         )
 
-        # Setup custom rotation after Litestar configures logging
-        if self.log_file and hasattr(self, "_setup_custom_rotation"):
-            self._setup_custom_rotation()
+        # Setup file handler after Litestar configures logging
+        if self.log_file and hasattr(self, "_setup_file_handler"):
+            self._setup_file_handler()
 
     async def on_startup(self):
         logger.info("Server starting up...")
