@@ -161,17 +161,25 @@ class SailServer:
                 # Ensure the log file directory exists
                 log_dir = os.path.dirname(self.log_file)
                 if log_dir:
-                    os.makedirs(log_dir, exist_ok=True)
-                    # Verify we can write to the directory
-                    if not os.access(log_dir, os.W_OK):
-                        logger.warning(f"Cannot write to log directory: {log_dir}. Falling back to console logging.")
+                    # Create directory with proper error handling
+                    try:
+                        os.makedirs(log_dir, mode=0o755, exist_ok=True)
+                        # Verify directory was created and is writable
+                        if not os.path.exists(log_dir):
+                            raise OSError(f"Directory creation failed: {log_dir}")
+                        if not os.path.isdir(log_dir):
+                            raise OSError(f"Path exists but is not a directory: {log_dir}")
+                        if not os.access(log_dir, os.W_OK):
+                            raise OSError(f"Directory is not writable: {log_dir}")
+                    except OSError as e:
+                        logger.error(f"Cannot create or access log directory {log_dir}: {e}. Falling back to console logging.")
                         self.log_file = None
                 else:
                     # If no directory specified, use current directory
                     logger.warning(f"No directory specified for log file: {self.log_file}")
 
             except Exception as e:
-                logger.error(f"Error setting up log file directory: {e}. Falling back to console logging.")
+                logger.error(f"Error setting up log file directory: {e}. Falling back to console logging.", exc_info=True)
                 self.log_file = None
 
         if self.log_file and self.log_file.strip():
@@ -180,6 +188,20 @@ class SailServer:
                 import logging.handlers
                 
                 try:
+                    # Ensure directory exists right before creating handler
+                    log_dir = os.path.dirname(self.log_file)
+                    if log_dir:
+                        try:
+                            os.makedirs(log_dir, exist_ok=True)
+                            # Verify directory was created and is writable
+                            if not os.path.exists(log_dir):
+                                raise OSError(f"Failed to create log directory: {log_dir}")
+                            if not os.access(log_dir, os.W_OK):
+                                raise OSError(f"Log directory is not writable: {log_dir}")
+                        except OSError as e:
+                            logger.error(f"Cannot create or access log directory {log_dir}: {e}. Using console logging only.")
+                            return
+                    
                     root_logger = logging.getLogger()
                     
                     # Remove any existing file handlers to avoid duplicates
@@ -203,7 +225,7 @@ class SailServer:
                     root_logger.addHandler(custom_handler)
                     logger.info(f"File logging configured: {self.log_file}")
                 except Exception as e:
-                    logger.error(f"Failed to configure file handler: {e}. Using console logging only.")
+                    logger.error(f"Failed to configure file handler: {e}. Using console logging only.", exc_info=True)
                     # Don't raise - allow server to continue with console logging
 
             # Store the setup function to call after app initialization
