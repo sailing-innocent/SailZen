@@ -139,6 +139,11 @@ class SailServer:
         # Create custom handler instance if log file is specified
         handler_config = {}
         if self.log_file:
+            # Ensure the log file directory exists
+            log_dir = os.path.dirname(self.log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
             # Remove console handlers and use only file handler
             handlers = ["file"]
             formatters["file"] = {
