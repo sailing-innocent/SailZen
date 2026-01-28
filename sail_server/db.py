@@ -23,6 +23,9 @@ import sail_server.data.project
 import sail_server.data.history
 import os
 
+# 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题
+os.environ["PGCLIENTENCODING"] = "UTF8"
+
 __all__ = ["Database", "g_db_func", "db_session"]
 
 
@@ -44,7 +47,11 @@ class Database:
             Database.__instance = self
 
         __uri = os.environ.get("POSTGRE_URI")
+        # 将 postgresql:// 转换为 postgresql+psycopg:// 以使用 psycopg3
+        if __uri and __uri.startswith("postgresql://"):
+            __uri = __uri.replace("postgresql://", "postgresql+psycopg://", 1)
         print("Connecting to ", __uri)
+        # psycopg3 对编码处理更好，不需要额外的 client_encoding 参数
         self.__engine = create_engine(__uri)
         self.SessionLocal = sessionmaker(
             autocommit=False, autoflush=False, bind=self.__engine
