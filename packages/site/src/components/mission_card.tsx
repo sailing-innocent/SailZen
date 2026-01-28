@@ -29,6 +29,7 @@ import {
   isMissionActive,
   isMissionOverdue,
   getHoursUntilDeadline,
+  parseDdl,
 } from '@lib/data/project'
 import { cn } from '@lib/utils'
 import MissionPostponeDialog from './mission_postpone_dialog'
@@ -73,8 +74,8 @@ const MissionCard: React.FC<MissionCardProps> = ({
 
   // Format deadline display
   const formatDeadline = (): string => {
-    if (!mission.ddl) return '无截止日期'
-    const date = new Date(mission.ddl * 1000)
+    const date = parseDdl(mission.ddl)
+    if (!date) return '无截止日期'
     const now = new Date()
     const diffHours = (date.getTime() - now.getTime()) / (1000 * 60 * 60)
 

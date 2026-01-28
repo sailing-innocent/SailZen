@@ -19,9 +19,10 @@ export interface MissionCreateProps {
     ddl: number
 }
 
-export interface MissionData extends MissionCreateProps {
+export interface MissionData extends Omit<MissionCreateProps, 'ddl'> {
     id: number,
     state: number | undefined
+    ddl: number | string | null | undefined  // Can be ISO string from API or number timestamp
 }
 
 // Mission State Constants
@@ -58,16 +59,42 @@ export const isMissionActive = (state: number | undefined): boolean => {
     return state !== MissionState.DONE && state !== MissionState.CANCELED
 }
 
+// Helper function to parse ddl (can be string ISO date or number timestamp in seconds)
+export const parseDdl = (ddl: number | string | null | undefined): Date | null => {
+    if (!ddl) return null
+    if (typeof ddl === 'string') {
+        const date = new Date(ddl)
+        return isNaN(date.getTime()) ? null : date
+    }
+    if (typeof ddl === 'number') {
+        // If it's a timestamp, check if it's in seconds (less than year 2000 timestamp in ms) or milliseconds
+        const date = ddl < 946684800000 ? new Date(ddl * 1000) : new Date(ddl)
+        return isNaN(date.getTime()) ? null : date
+    }
+    return null
+}
+
+// Helper function to get ddl as timestamp in seconds
+export const getDdlTimestamp = (ddl: number | string | null | undefined): number | null => {
+    const date = parseDdl(ddl)
+    if (!date) return null
+    return Math.floor(date.getTime() / 1000)
+}
+
 // Helper function to check if mission is overdue
-export const isMissionOverdue = (ddl: number, state: number | undefined): boolean => {
+export const isMissionOverdue = (ddl: number | string | null | undefined, state: number | undefined): boolean => {
     if (!isMissionActive(state)) return false
-    const now = Date.now() / 1000
-    return ddl < now
+    const ddlTimestamp = getDdlTimestamp(ddl)
+    if (ddlTimestamp === null) return false
+    const now = Math.floor(Date.now() / 1000)
+    return ddlTimestamp < now
 }
 
 // Helper function to get hours until deadline
-export const getHoursUntilDeadline = (ddl: number): number => {
-    const now = Date.now() / 1000
-    return (ddl - now) / 3600
+export const getHoursUntilDeadline = (ddl: number | string | null | undefined): number => {
+    const ddlTimestamp = getDdlTimestamp(ddl)
+    if (ddlTimestamp === null) return Infinity
+    const now = Math.floor(Date.now() / 1000)
+    return (ddlTimestamp - now) / 3600
 }
 

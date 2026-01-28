@@ -21,6 +21,9 @@ import {
   MissionState,
   isMissionActive,
   isMissionOverdue,
+  parseDdl,
+  getHoursUntilDeadline,
+  getDdlTimestamp,
 } from '@lib/data/project'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -79,7 +82,9 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
     if (!aOverdue && bOverdue) return 1
 
     // Then by deadline (earliest first)
-    return a.ddl - b.ddl
+    const aDdl = getDdlTimestamp(a.ddl) ?? Infinity
+    const bDdl = getDdlTimestamp(b.ddl) ?? Infinity
+    return aDdl - bDdl
   })
 
   // Get missions for each tab
@@ -87,11 +92,12 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
     switch (activeTab) {
       case 'urgent':
         return sortedMissions.filter(
-          (m) => isMissionOverdue(m.ddl, m.state) || (m.ddl * 1000 - Date.now()) / (1000 * 60 * 60) <= 24
+          (m) => isMissionOverdue(m.ddl, m.state) || getHoursUntilDeadline(m.ddl) <= 24
         )
       case 'today':
         return sortedMissions.filter((m) => {
-          const ddlDate = new Date(m.ddl * 1000)
+          const ddlDate = parseDdl(m.ddl)
+          if (!ddlDate) return false
           const today = new Date()
           return ddlDate.toDateString() === today.toDateString()
         })
@@ -108,7 +114,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
 
   // Counts
   const urgentCount = sortedMissions.filter(
-    (m) => isMissionOverdue(m.ddl, m.state) || (m.ddl * 1000 - Date.now()) / (1000 * 60 * 60) <= 24
+    (m) => isMissionOverdue(m.ddl, m.state) || getHoursUntilDeadline(m.ddl) <= 24
   ).length
   const doingCount = sortedMissions.filter((m) => m.state === MissionState.DOING).length
   const overdueCount = overdueMissions.length

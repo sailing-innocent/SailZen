@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useMissionsStore, type MissionsState } from '@lib/store/project'
 import type { MissionData } from '@lib/data/project'
+import { parseDdl } from '@lib/data/project'
 
 export interface MissionPostponeDialogProps {
   mission: MissionData
@@ -31,8 +32,8 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
 
   // Calculate new deadline preview
   const getNewDeadlinePreview = (): string => {
-    if (!mission.ddl) return '未设置'
-    const currentDdl = new Date(mission.ddl * 1000)
+    const currentDdl = parseDdl(mission.ddl)
+    if (!currentDdl) return '未设置'
     const newDdl = new Date(currentDdl.getTime() + days * 24 * 60 * 60 * 1000)
     return newDdl.toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -43,8 +44,9 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   }
 
   const getCurrentDeadline = (): string => {
-    if (!mission.ddl) return '未设置'
-    return new Date(mission.ddl * 1000).toLocaleDateString('zh-CN', {
+    const currentDdl = parseDdl(mission.ddl)
+    if (!currentDdl) return '未设置'
+    return currentDdl.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',

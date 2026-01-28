@@ -44,11 +44,14 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
                     ? 'flex-col w-full' 
                     : 'flex-row overflow-x-auto pb-4'
             }`}>
-                <ProjectMissionColumn 
-                    key={NullProject.id} 
-                    project={NullProject} 
-                    missions={groupedMissions[NullProject.id] || []} 
-                />
+                {/* 只有当有任务属于 NullProject 时才显示 */}
+                {(groupedMissions[NullProject.id]?.length || 0) > 0 && (
+                    <ProjectMissionColumn 
+                        key={NullProject.id} 
+                        project={NullProject} 
+                        missions={groupedMissions[NullProject.id] || []} 
+                    />
+                )}
                 {projects.map((project) => (
                     <ProjectMissionColumn 
                         key={project.id} 
