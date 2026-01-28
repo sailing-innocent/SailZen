@@ -15,7 +15,7 @@ from typing import Any
 from datetime import datetime
 
 from litestar import Litestar, Router, get, Request
-from litestar.response import Redirect
+from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
 
 import logging
@@ -91,8 +91,13 @@ class SailServer:
         async def health_check(request: Request) -> dict[str, str]:
             return {"status": "ok"}
 
+        # Suppress Chrome DevTools probe requests (returns 404 silently)
+        @get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+        async def devtools_json() -> Response:
+            return Response(content=b"", status_code=404)
+
         # redirect all self.page_alias to root
-        route_handlers = []
+        route_handlers = [devtools_json]
         for alias in self.page_alias:
             # Create a closure to capture the current alias value
             def create_redirect_function(path):

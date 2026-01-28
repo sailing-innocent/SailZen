@@ -30,6 +30,12 @@ const AccountDataTable: React.FC = () => {
     fetchAccounts()
   }, [fetchAccounts, serverHealth])
 
+  // 缓存过滤后的账户数据，避免每次渲染都创建新数组导致无限循环
+  const filteredAccounts = React.useMemo(
+    () => accounts.filter((a: AccountData) => a.state === 0),
+    [accounts]
+  )
+
   return (
     <Card className="w-full">
       <CardHeader className={`${isMobile ? 'px-4 py-3' : ''}`}>
@@ -68,10 +74,8 @@ const AccountDataTable: React.FC = () => {
         {/* 数据表格区域 */}
         {isLoading ? (
           <div className={`w-full space-y-3 ${isMobile ? 'text-sm' : ''}`}>正在加载...</div>
-        ) : accounts.length > 0 ? (
-          <DataTable columns={AccountColumns} data={accounts.filter((a: AccountData) => {
-            return a.state == 0;
-          })} pagination={pagination} setPagination={setPagination} />
+        ) : filteredAccounts.length > 0 ? (
+          <DataTable columns={AccountColumns} data={filteredAccounts} pagination={pagination} setPagination={setPagination} />
         ) : (
           <div className={`text-center py-8 ${isMobile ? 'text-sm' : ''}`}>暂无账户数据</div>
         )}
