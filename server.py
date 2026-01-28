@@ -42,7 +42,7 @@ class SailServer:
         self.app = None
         self.router = None
         
-        self.api_endpoint = os.environ.get("API_ENDPOINT", "/api")
+        self.api_endpoint = os.environ.get("API_ENDPOINT", "/api/v1")
         self.site_dist = os.environ.get("SITE_DIST", "site_dist")
         self.page_alias = [
             "/health",
