@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { type HealthState, useHealthStore } from '@lib/store/health'
 
 // import { CartesianGrid, Line, LineChart, XAxis } from 'recharts'
@@ -8,24 +8,46 @@ import { Line, LineChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@components/ui/chart'
 
+// 性能优化：将静态配置移到组件外部，避免每次渲染都创建新对象
+const chartConfig: ChartConfig = {
+  desktop: {
+    label: 'Desktop',
+    color: '#2563eb',
+  },
+  mobile: {
+    label: 'Mobile',
+    color: '#60a5fa',
+  },
+}
+
 const WeightChart: React.FC = () => {
   const weights = useHealthStore((state: HealthState) => state.weights)
   const isLoading = useHealthStore((state: HealthState) => state.isLoading)
 
-  const data = weights.map((weight) => ({
-    value: parseFloat(weight.value),
-    timestamp: weight.htime * 1000, // Keep the numeric timestamp for scaling
-  }))
-  const chartConfig = {
-    desktop: {
-      label: 'Desktop',
-      color: '#2563eb',
-    },
-    mobile: {
-      label: 'Mobile',
-      color: '#60a5fa',
-    },
-  } satisfies ChartConfig
+  // 性能优化：使用 useMemo 缓存图表数据，只在 weights 变化时重新计算
+  const chartData = useMemo(() => {
+    return weights.map((weight) => ({
+      value: parseFloat(weight.value),
+      timestamp: weight.htime * 1000, // Keep the numeric timestamp for scaling
+    }))
+  }, [weights])
+
+  // 性能优化：缓存 tooltip formatter，避免每次渲染都创建新函数
+  const tooltipFormatter = useCallback((value: any, _name: any, item: any) => {
+    const date = item.payload?.timestamp
+      ? new Date(item.payload.timestamp).toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        })
+      : ''
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="text-muted-foreground text-xs">{date}</div>
+        <div className="font-semibold">{value} kg</div>
+      </div>
+    )
+  }, [])
 
   return (
     <div className="flex flex-col items-center justify-center">
@@ -38,7 +60,7 @@ const WeightChart: React.FC = () => {
           <p>Chart data would be rendered here. {weights.length}</p>
 
           <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
-            <LineChart data={data} margin={{ right: 30, left: 30 }}>
+            <LineChart data={chartData} margin={{ right: 30, left: 30 }}>
               <CartesianGrid vertical={false} />
               <XAxis
                 dataKey="timestamp"
@@ -56,23 +78,7 @@ const WeightChart: React.FC = () => {
               <Line dataKey="value" />
               <ChartTooltip
                 content={
-                  <ChartTooltipContent
-                    formatter={(value, _name, item) => {
-                      const date = item.payload?.timestamp
-                        ? new Date(item.payload.timestamp).toLocaleDateString('zh-CN', {
-                            year: 'numeric',
-                            month: '2-digit',
-                            day: '2-digit',
-                          })
-                        : ''
-                      return (
-                        <div className="flex flex-col gap-1">
-                          <div className="text-muted-foreground text-xs">{date}</div>
-                          <div className="font-semibold">{value} kg</div>
-                        </div>
-                      )
-                    }}
-                  />
+                  <ChartTooltipContent formatter={tooltipFormatter} />
                 }
               />
             </LineChart>
