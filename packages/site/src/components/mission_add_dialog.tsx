@@ -7,6 +7,7 @@ import DatePicker from '@components/date_picker'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@components/ui/select'
 import { type ProjectData, type MissionCreateProps } from '@lib/data/project'
 import { type ProjectsState, useProjectsStore, type MissionsState, useMissionsStore } from '@lib/store/project'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 export interface AddMissionDialogProps {
     projects?: ProjectData[]
@@ -15,6 +16,7 @@ export interface AddMissionDialogProps {
 const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
     const projects = useProjectsStore((state: ProjectsState) => state.projects)
     const createMission = useMissionsStore((state: MissionsState) => state.createMission)
+    const isMobile = useIsMobile()
 
     const [open, setOpen] = useState(false)
     const [name, setName] = useState<string>('')
@@ -56,7 +58,7 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
             <DialogTrigger asChild>
                 <Button variant="outline">Add Mission</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
                 <DialogHeader>
                     <DialogTitle>新增任务</DialogTitle>
                     <DialogDescription>选择项目并填写任务信息后创建</DialogDescription>

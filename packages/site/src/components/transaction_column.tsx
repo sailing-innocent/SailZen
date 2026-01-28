@@ -6,10 +6,8 @@ import TransactionEditCard from './transaction_edit_card'
 
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -85,21 +83,19 @@ export const TransactionColumns: ColumnDef<TransactionDisplayProps>[] = [
   },
   {
     id: 'edit',
-    header: 'Edit',
+    header: '编辑',
     cell: ({ row }) => {
       return (
         <Dialog>
           <DialogTrigger asChild>
-            <Button variant="outline">Edit</Button>
+            <Button variant="outline" size="sm">编辑</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Edit Transaction</DialogTitle>
-              <DialogDescription>Modify the details of the transaction.</DialogDescription>
+              <DialogTitle>编辑交易</DialogTitle>
+              <DialogDescription>修改交易记录的详细信息</DialogDescription>
             </DialogHeader>
-            <DialogClose asChild>
-              <TransactionEditCard transactionId={row.original.id} />
-            </DialogClose>
+            <TransactionEditCard transactionId={row.original.id} />
           </DialogContent>
         </Dialog>
       )

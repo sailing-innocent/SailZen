@@ -152,7 +152,7 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className={isMobile ? 'max-w-[95vw]' : ''}>
+        <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
           <DialogHeader>
             <DialogTitle>预算核销</DialogTitle>
             <DialogDescription>

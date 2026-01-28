@@ -53,7 +53,7 @@ const TransactionAddCard: React.FC<TransactionAddCardProps> = (props: Transactio
   }
 
   return (
-    <Card className={`w-full ${isMobile ? 'max-w-sm' : 'max-w-md'}`}>
+    <Card className="w-full border-0 shadow-none">
       <CardHeader className={`${isMobile ? 'px-4 py-3' : ''}`}>
         <CardTitle className={`${isMobile ? 'text-lg' : ''}`}>添加交易记录</CardTitle>
         <CardDescription className={`${isMobile ? 'text-sm' : ''}`}>请输入要添加的交易记录详情</CardDescription>

@@ -9,7 +9,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useDebouncedValue } from '@/hooks/use-debounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
 import TransactionAddCard from './transaction_add_card'
 
 
@@ -214,15 +214,15 @@ const TransactionsDataTable: React.FC = () => {
           </Button>
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline">Add Transaction</Button>
+              <Button variant="outline" className={`${isMobile ? 'w-full' : ''}`}>
+                添加交易
+              </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogClose asChild>
-                <TransactionAddCard
-                  onAddTransaction={handleAddTransaction}
-                  accounts={accounts}
-                />
-              </DialogClose>
+            <DialogContent className={`${isMobile ? 'max-h-[85vh] overflow-y-auto p-4' : ''}`}>
+              <TransactionAddCard
+                onAddTransaction={handleAddTransaction}
+                accounts={accounts}
+              />
             </DialogContent>
           </Dialog>
         </div>

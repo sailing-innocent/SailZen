@@ -76,7 +76,7 @@ const BudgetAddDialog: React.FC<BudgetAddDialogProps> = ({ onSuccess }) => {
           创建预算
         </Button>
       </DialogTrigger>
-      <DialogContent className={isMobile ? 'max-w-[95vw]' : ''}>
+      <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
         <DialogHeader>
           <DialogTitle>创建预算</DialogTitle>
           <DialogDescription>创建一个新的预算计划</DialogDescription>

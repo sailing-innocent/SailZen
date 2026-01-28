@@ -7,9 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { QBWDate } from '@lib/utils/qbw_date'
 import { type ProjectCreateProps } from '@lib/data/project'
 import { type ProjectsState, useProjectsStore } from '@lib/store/project'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 const AddProjectDialog: React.FC = () => {
     const createProject = useProjectsStore((state: ProjectsState) => state.createProject)
+    const isMobile = useIsMobile()
     const [open, setOpen] = useState(false)
     const [name, setName] = useState<string>('')
     const [description, setDescription] = useState<string>('')
@@ -56,7 +58,7 @@ const AddProjectDialog: React.FC = () => {
             <DialogTrigger asChild>
                 <Button variant="outline">Add Project</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
                 <DialogHeader>
                     <DialogTitle>新增项目</DialogTitle>
                     <DialogDescription>输入项目信息后创建</DialogDescription>

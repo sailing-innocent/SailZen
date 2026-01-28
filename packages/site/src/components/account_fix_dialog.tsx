@@ -13,6 +13,7 @@ import {
 import { Input } from '@components/ui/input'
 import type { AccountData } from '@lib/data'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@components/ui/select'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 interface FixAccountDialogProps {
   accounts: AccountData[]
@@ -23,12 +24,13 @@ const AccountFixDialog = (props: FixAccountDialogProps) => {
   const [fixedBalance, setFixedBalance] = useState<string>('0.0')
   const [accountId, setAccountId] = useState<number>(-1)
   const { handleFixAccount } = props
+  const isMobile = useIsMobile()
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button variant="outline">Fix Account</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
         <DialogHeader>
           <DialogTitle>Fix Account</DialogTitle>
           <DialogDescription>Fix the account</DialogDescription>
