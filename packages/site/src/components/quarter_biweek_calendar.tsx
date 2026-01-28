@@ -4,6 +4,7 @@ import { Calendar } from '@components/ui/calendar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
 import { Button } from '@components/ui/button'
 import { listFullBiweeksInQuarter, type DateRange, getQuarterStartEnd, isWithin, formatYMD } from '@lib/utils/qbw_date'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 const currentYear = new Date().getFullYear()
 const yearOptions = Array.from({ length: 21 }).map((_, idx) => currentYear - 10 + idx)
@@ -25,6 +26,7 @@ const monthOptions = [
 
 export default function QuarterBiweekCalendar() {
   const today = new Date()
+  const isMobile = useIsMobile()
   const [year, setYear] = React.useState<number>(today.getFullYear())
   const [month, setMonth] = React.useState<number>(today.getMonth() + 1)
   const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(today)
@@ -101,83 +103,97 @@ export default function QuarterBiweekCalendar() {
 
   return (
     <Card className="w-full">
-      <CardHeader>
-        <CardTitle>季度与双周日历</CardTitle>
+      <CardHeader className={isMobile ? 'px-3 py-2' : ''}>
+        <CardTitle className={isMobile ? 'text-lg' : ''}>季度与双周日历</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
-            <SelectTrigger>
-              <SelectValue placeholder="选择年份" />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((y) => (
-                <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <CardContent className={isMobile ? 'px-2' : ''}>
+        {/* 响应式选择器布局：移动端分组垂直排列 */}
+        <div className={`flex flex-wrap items-center gap-2 mb-4 ${isMobile ? 'flex-col' : ''}`}>
+          {/* 年份和季度选择 */}
+          <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
+            <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
+              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+                <SelectValue placeholder="选择年份" />
+              </SelectTrigger>
+              <SelectContent>
+                {yearOptions.map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select
-            value={String(month)}
-            onValueChange={(v) => {
-              const m = parseInt(v)
-              setMonth(m)
-              const q = Math.floor((m - 1) / 3) + 1
-              setQuarter(q)
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择月份" />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((m) => (
-                <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={String(quarter)} onValueChange={(v) => setQuarter(parseInt(v))}>
+              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+                <SelectValue placeholder="选择季度" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">第 1 季度</SelectItem>
+                <SelectItem value="2">第 2 季度</SelectItem>
+                <SelectItem value="3">第 3 季度</SelectItem>
+                <SelectItem value="4">第 4 季度</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <Select value={String(quarter)} onValueChange={(v) => setQuarter(parseInt(v))}>
-            <SelectTrigger>
-              <SelectValue placeholder="选择季度" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">第 1 季度</SelectItem>
-              <SelectItem value="2">第 2 季度</SelectItem>
-              <SelectItem value="3">第 3 季度</SelectItem>
-              <SelectItem value="4">第 4 季度</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* 月份选择（移动端隐藏，减少控件复杂度） */}
+          {!isMobile && (
+            <Select
+              value={String(month)}
+              onValueChange={(v) => {
+                const m = parseInt(v)
+                setMonth(m)
+                const q = Math.floor((m - 1) / 3) + 1
+                setQuarter(q)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择月份" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((m) => (
+                  <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          <Select
-            value={biweekIndex ? String(biweekIndex) : undefined}
-            onValueChange={(v) => setBiweekIndex(parseInt(v))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择季度内完整双周" />
-            </SelectTrigger>
-            <SelectContent>
-              {biweeks.map((bw, idx) => (
-                <SelectItem key={`${year}-${quarter}-${idx}`} value={String(idx + 1)}>
-                  双周 {idx + 1}（{formatYMD(bw.start)} ~ {formatYMD(bw.end)}）
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* 双周选择和今天按钮 */}
+          <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
+            <Select
+              value={biweekIndex ? String(biweekIndex) : undefined}
+              onValueChange={(v) => setBiweekIndex(parseInt(v))}
+            >
+              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+                <SelectValue placeholder={isMobile ? '选择双周' : '选择季度内完整双周'} />
+              </SelectTrigger>
+              <SelectContent>
+                {biweeks.map((bw, idx) => (
+                  <SelectItem key={`${year}-${quarter}-${idx}`} value={String(idx + 1)}>
+                    {isMobile 
+                      ? `双周 ${idx + 1}` 
+                      : `双周 ${idx + 1}（${formatYMD(bw.start)} ~ ${formatYMD(bw.end)}）`
+                    }
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Button variant="outline" onClick={() => {
-            const now = new Date()
-            setYear(now.getFullYear())
-            setMonth(now.getMonth() + 1)
-            setSelectedDate(now)
-            setQuarter(Math.floor(now.getMonth() / 3) + 1)
-          }}>今天</Button>
+            <Button variant="outline" onClick={() => {
+              const now = new Date()
+              setYear(now.getFullYear())
+              setMonth(now.getMonth() + 1)
+              setSelectedDate(now)
+              setQuarter(Math.floor(now.getMonth() / 3) + 1)
+            }}>今天</Button>
+          </div>
         </div>
 
+        {/* 响应式日历：移动端显示 1 个月，桌面端显示 3 个月 */}
         <div className="overflow-x-auto">
           <Calendar
             key={`${year}-${quarter}-single`}
             month={calendarMonthAnchor}
-            numberOfMonths={3}
+            numberOfMonths={isMobile ? 1 : 3}
             mode="single"
             selected={selectedDate}
             onSelect={(d: Date | undefined) => {
@@ -195,13 +211,16 @@ export default function QuarterBiweekCalendar() {
           />
         </div>
 
-        <div className="text-sm text-muted-foreground mt-3">
+        <div className={`text-muted-foreground mt-3 ${isMobile ? 'text-xs' : 'text-sm'}`}>
           {!biweekRange && selectedDate && (
             <span>已选择日期：{formatYMD(selectedDate)}</span>
           )}
           {biweekRange && (
             <span>
-              已选择双周：{formatYMD(biweekRange.from as Date)} ~ {formatYMD(biweekRange.to as Date)}（季度内完整双周）
+              {isMobile 
+                ? `双周：${formatYMD(biweekRange.from as Date)} ~ ${formatYMD(biweekRange.to as Date)}`
+                : `已选择双周：${formatYMD(biweekRange.from as Date)} ~ ${formatYMD(biweekRange.to as Date)}（季度内完整双周）`
+              }
             </span>
           )}
         </div>

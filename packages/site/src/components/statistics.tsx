@@ -442,9 +442,9 @@ const Statistics: React.FC = () => {
                   <CardDescription>支出总体、日常零碎支出、大宗收支、大宗电器的合并趋势</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {/* 性能优化：使用 LazyChart 懒加载图表 */}
-                  <LazyChart height={300} loadingText="支出趋势图加载中...">
-                    <ChartContainer config={chartConfig} className="h-[300px]">
+                  {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
+                  <LazyChart height={isMobile ? 200 : 300} loadingText="支出趋势图加载中...">
+                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
                       <LineChart data={overallExpenseData}>
                         <XAxis dataKey="period" />
                         <YAxis tickFormatter={yAxisFormatter} />
@@ -503,9 +503,9 @@ const Statistics: React.FC = () => {
                   <CardDescription>主要日常消费标签的变化趋势（不含大宗收支）</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {/* 性能优化：使用 LazyChart 懒加载图表 */}
-                  <LazyChart height={300} loadingText="消费趋势图加载中...">
-                    <ChartContainer config={chartConfig} className="h-[300px]">
+                  {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
+                  <LazyChart height={isMobile ? 200 : 300} loadingText="消费趋势图加载中...">
+                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
                       <LineChart data={timeSeriesData}>
                         <XAxis dataKey="period" />
                         <YAxis tickFormatter={yAxisFormatter} />

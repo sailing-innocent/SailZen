@@ -7,13 +7,14 @@ import { useServerStore } from '@lib/store'
 import ProjectMissionBoard from '@components/project_mission_board'
 import AddProjectDialog from '@components/project_add_dialog'
 import AddMissionDialog from '@components/mission_add_dialog'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 const ProjectPage = () => {
     const projects = useProjectsStore((state: ProjectsState) => state.projects)
     const missions = useMissionsStore((state: MissionsState) => state.missions)
     const fetchProjects = useProjectsStore((state: ProjectsState) => state.fetchProjects)
     const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
-    
+    const isMobile = useIsMobile()
 
     const serverHealth = useServerStore((state) => state.serverHealth)
     useEffect(() => {
@@ -34,11 +35,16 @@ const ProjectPage = () => {
                         <AddProjectDialog />
                     </div>
                 </div>
-                <div className="grid grid-cols-5 gap-6">
-                    <div className="col-span-3">
+                {/* 响应式网格布局：移动端单列垂直堆叠，桌面端 5 列布局 */}
+                <div className={`grid gap-4 md:gap-6 ${
+                    isMobile 
+                        ? 'grid-cols-1' 
+                        : 'grid-cols-5'
+                }`}>
+                    <div className={isMobile ? '' : 'col-span-3'}>
                         <ProjectMissionBoard projects={projects} missions={missions} />
                     </div>
-                    <div className="col-span-2">
+                    <div className={isMobile ? '' : 'col-span-2'}>
                         <QuarterBiweekCalendar />
                     </div>
                 </div>

@@ -17,3 +17,43 @@
     --chart-5: oklch(0.645 0.246 16.439);
   }
 }
+
+/* 移动端基础样式降级 - 确保 JS 未加载时也有基础响应式能力 */
+@media (max-width: 767px) {
+  /* 基础堆叠布局 */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  /* 全宽适配 */
+  .mobile-full-width {
+    width: 100% !important;
+  }
+  
+  /* 移动端隐藏 */
+  .mobile-hide {
+    display: none !important;
+  }
+  
+  /* 移动端显示 */
+  .mobile-show {
+    display: block !important;
+  }
+  
+  /* 小字体 */
+  .mobile-small-text {
+    font-size: 0.875rem !important;
+  }
+  
+  /* 紧凑间距 */
+  .mobile-compact {
+    padding: 0.5rem !important;
+    gap: 0.5rem !important;
+  }
+  
+  /* 触摸友好的最小点击区域 */
+  .mobile-touch-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+}
