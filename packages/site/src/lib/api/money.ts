@@ -13,6 +13,10 @@ import {
   type TransactionResponse,
   type TransactionDataStats,
   type TransactionDataStatsRequest,
+  type TransactionQueryParams,
+  type PaginatedTransactionResponse,
+  type BatchStatsQuery,
+  type BatchStatsResult,
   type BudgetData,
   type BudgetCreateProps,
   type BudgetQueryParams,
@@ -86,6 +90,34 @@ const api_get_transactions = async (N: number): Promise<TransactionData[]> => {
   return response.json()
 }
 
+/**
+ * Get paginated transactions with filtering and sorting
+ */
+const api_get_transactions_paginated = async (params: TransactionQueryParams = {}): Promise<PaginatedTransactionResponse> => {
+  const urlParams = new URLSearchParams()
+  
+  if (params.page !== undefined) urlParams.append('page', params.page.toString())
+  if (params.page_size !== undefined) urlParams.append('page_size', params.page_size.toString())
+  if (params.from_time !== undefined) urlParams.append('from_time', params.from_time.toString())
+  if (params.to_time !== undefined) urlParams.append('to_time', params.to_time.toString())
+  if (params.tags) urlParams.append('tags', params.tags)
+  if (params.tag_op) urlParams.append('tag_op', params.tag_op)
+  if (params.description) urlParams.append('description', params.description)
+  if (params.min_value !== undefined) urlParams.append('min_value', params.min_value.toString())
+  if (params.max_value !== undefined) urlParams.append('max_value', params.max_value.toString())
+  if (params.sort_by) urlParams.append('sort_by', params.sort_by)
+  if (params.sort_order) urlParams.append('sort_order', params.sort_order)
+  
+  const queryString = urlParams.toString()
+  const api = `${SERVER_URL}/${FINANCE_API_BASE}/transaction/paginated/${queryString ? '?' + queryString : ''}`
+  
+  const response = await fetch(api)
+  if (!response.ok) {
+    throw new Error('Failed to fetch paginated transactions')
+  }
+  return response.json()
+}
+
 const api_get_transactions_stats = async (request: TransactionDataStatsRequest): Promise<TransactionDataStats> => {
   let api = `${SERVER_URL}/${FINANCE_API_BASE}/transaction/stats/`
   const params = new URLSearchParams()
@@ -104,6 +136,28 @@ const api_get_transactions_stats = async (request: TransactionDataStatsRequest):
   
   api = api + '?' + params.toString()
   const response = await fetch(api)
+  return response.json()
+}
+
+/**
+ * Get transaction statistics for multiple queries in a single request
+ * This is much more efficient than making many individual requests
+ */
+const api_get_transactions_stats_batch = async (queries: BatchStatsQuery[]): Promise<BatchStatsResult[]> => {
+  const api = `${SERVER_URL}/${FINANCE_API_BASE}/transaction/stats/batch/`
+  
+  const response = await fetch(api, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(queries),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch batch transaction stats')
+  }
+  
   return response.json()
 }
 
@@ -287,7 +341,9 @@ export {
   api_recalc_account_balance,
   api_fix_account_balance,
   api_get_transactions,
+  api_get_transactions_paginated,
   api_get_transactions_stats,
+  api_get_transactions_stats_batch,
   api_create_transaction,
   api_delete_transaction,
   api_update_transaction,

@@ -118,17 +118,19 @@ def create_transaction_impl(db, transaction_create: TransactionData):
     return read_from_trans(transaction)
 
 
-def read_transactions_impl(
+def _build_transaction_query(
     db,
-    skip: int = -1,
-    limit: int = -1,
     from_time: float = None,
     to_time: float = None,
-    _tags: str = [],
-    tag_op: str = "and",  # "and" or "or"
+    _tags: list = [],
+    tag_op: str = "and",
     _desc: str = None,
+    min_value: float = None,
+    max_value: float = None,
 ):
+    """Build the base query for transactions with filtering."""
     q = db.query(Transaction).filter(Transaction.state != 0)
+    
     if len(_tags) > 0:
         condition = None
         for tag in _tags:
@@ -142,15 +144,34 @@ def read_transactions_impl(
                         condition = condition & Transaction.tags.like(f"%{tag}%")
         if condition is not None:
             q = q.filter(condition)
-        # q = q.filter(Transaction.tags.like(f"%{_tags}%"))
+    
     if _desc is not None:
         q = q.filter(Transaction.description.like(f"%{_desc}%"))
     if from_time is not None:
         q = q.filter(Transaction.htime >= _htime(from_time))
     if to_time is not None:
         q = q.filter(Transaction.htime <= _htime(to_time))
+    if min_value is not None:
+        q = q.filter(Transaction.value >= str(min_value))
+    if max_value is not None:
+        q = q.filter(Transaction.value <= str(max_value))
+    
+    return q
 
+
+def read_transactions_impl(
+    db,
+    skip: int = -1,
+    limit: int = -1,
+    from_time: float = None,
+    to_time: float = None,
+    _tags: str = [],
+    tag_op: str = "and",  # "and" or "or"
+    _desc: str = None,
+):
+    q = _build_transaction_query(db, from_time, to_time, _tags, tag_op, _desc)
     q = q.order_by(Transaction.htime.desc())
+    
     if skip >= 0:
         q = q.offset(skip)
     if limit > 0:
@@ -160,6 +181,70 @@ def read_transactions_impl(
     if transactions is None:
         return []
     return [read_from_trans(transaction) for transaction in transactions]
+
+
+def read_transactions_paginated_impl(
+    db,
+    page: int = 1,
+    page_size: int = 20,
+    from_time: float = None,
+    to_time: float = None,
+    _tags: list = [],
+    tag_op: str = "and",
+    _desc: str = None,
+    min_value: float = None,
+    max_value: float = None,
+    sort_by: str = "htime",
+    sort_order: str = "desc",
+):
+    """
+    Get transactions with pagination support.
+    
+    Returns:
+        Dict with pagination metadata and data:
+        {
+            "data": List[TransactionData],
+            "total": int,
+            "page": int,
+            "page_size": int,
+            "total_pages": int,
+            "has_next": bool,
+            "has_prev": bool
+        }
+    """
+    from sqlalchemy import func
+    
+    # Build base query
+    q = _build_transaction_query(db, from_time, to_time, _tags, tag_op, _desc, min_value, max_value)
+    
+    # Get total count (without pagination)
+    total = q.count()
+    
+    # Apply sorting
+    sort_column = getattr(Transaction, sort_by, Transaction.htime)
+    if sort_order == "asc":
+        q = q.order_by(sort_column.asc())
+    else:
+        q = q.order_by(sort_column.desc())
+    
+    # Apply pagination
+    skip = (page - 1) * page_size
+    q = q.offset(skip).limit(page_size)
+    
+    transactions = q.all()
+    data = [read_from_trans(t) for t in transactions] if transactions else []
+    
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+    
+    return {
+        "data": data,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+    }
 
 
 def read_transaction_impl(db, transaction_id: int):

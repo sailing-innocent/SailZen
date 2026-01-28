@@ -63,7 +63,7 @@ const WeightChart: React.FC = () => {
 
           <ChartContainer 
             config={chartConfig} 
-            className={isMobile ? 'min-h-[150px] w-full' : 'min-h-[200px] w-full'}
+            className={`${isMobile ? 'h-[180px]' : 'h-[250px]'} w-full max-w-full !aspect-auto overflow-hidden [&_.recharts-responsive-container]:!w-full`}
           >
             <LineChart 
               data={chartData} 

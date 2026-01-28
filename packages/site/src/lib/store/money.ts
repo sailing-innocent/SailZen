@@ -11,6 +11,8 @@ import {
   type AccountOption,
   type TransactionData,
   type TransactionCreateProps,
+  type TransactionQueryParams,
+  type PaginatedTransactionResponse,
   type BudgetData,
   type BudgetCreateProps,
   type BudgetQueryParams,
@@ -27,6 +29,7 @@ import {
   api_recalc_account_balance,
   api_fix_account_balance,
   api_get_transactions,
+  api_get_transactions_paginated,
   api_create_transaction,
   api_delete_transaction,
   api_update_transaction,
@@ -130,19 +133,43 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
   },
 }))
 
+export interface PaginationMeta {
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
 export interface TransactionsState {
   transactions: TransactionData[]
   isLoading: boolean
+  // Pagination state
+  pagination: PaginationMeta
+  // Legacy method
   fetchTransactions: (N: number) => Promise<TransactionData[]>
+  // New paginated method
+  fetchTransactionsPaginated: (params: TransactionQueryParams) => Promise<PaginatedTransactionResponse>
   createTransaction: (transaction: TransactionCreateProps) => Promise<TransactionData>
   updateTransaction: (id: number, transaction: TransactionCreateProps) => Promise<TransactionData>
   deleteTransaction: (id: number) => Promise<boolean>
   getSupportedTags: () => string[]
 }
 
+const defaultPagination: PaginationMeta = {
+  total: 0,
+  page: 1,
+  pageSize: 20,
+  totalPages: 1,
+  hasNext: false,
+  hasPrev: false,
+}
+
 export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = create<TransactionsState>((set) => ({
   transactions: [],
   isLoading: false,
+  pagination: defaultPagination,
   fetchTransactions: async (N: number): Promise<TransactionData[]> => {
     set({ isLoading: true })
     try {
@@ -154,12 +181,38 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
       throw error
     }
   },
+  fetchTransactionsPaginated: async (params: TransactionQueryParams): Promise<PaginatedTransactionResponse> => {
+    set({ isLoading: true })
+    try {
+      const response = await api_get_transactions_paginated(params)
+      set({
+        transactions: response.data,
+        isLoading: false,
+        pagination: {
+          total: response.total,
+          page: response.page,
+          pageSize: response.page_size,
+          totalPages: response.total_pages,
+          hasNext: response.has_next,
+          hasPrev: response.has_prev,
+        },
+      })
+      return response
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
   createTransaction: async (transaction: TransactionCreateProps): Promise<TransactionData> => {
     const new_transaction = await api_create_transaction(transaction)
     set((state: TransactionsState): TransactionsState => {
       return {
         ...state,
         transactions: [...state.transactions, new_transaction],
+        pagination: {
+          ...state.pagination,
+          total: state.pagination.total + 1,
+        },
       }
     })
     return new_transaction
@@ -188,6 +241,10 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
       const newState: TransactionsState = {
         ...state,
         transactions: state.transactions.filter((t: TransactionData) => t.id !== id),
+        pagination: {
+          ...state.pagination,
+          total: Math.max(0, state.pagination.total - 1),
+        },
       }
       return newState // trigger re-render
     })

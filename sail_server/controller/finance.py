@@ -27,6 +27,7 @@ from sail_server.model.finance.account import (
 from sail_server.model.finance.transaction import (
     read_transaction_impl,
     read_transactions_impl,
+    read_transactions_paginated_impl,
     create_transaction_impl,
     update_transaction_impl,
     delete_transaction_impl,
@@ -46,7 +47,7 @@ from sail_server.model.finance.budget import (
     unlink_transaction_from_budget_impl,
 )
 from sqlalchemy.orm import Session
-from typing import Generator, Union
+from typing import Generator, Union, Any
 from datetime import datetime
 
 # -------------
@@ -265,6 +266,85 @@ class TransactionController(Controller):
         transactions = read_transactions_impl(db, skip, limit)
         return transactions
 
+    @get("/paginated/", return_dto=None)
+    async def get_transaction_list_paginated(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        page: int = 1,
+        page_size: int = 20,
+        from_time: float | None = None,
+        to_time: float | None = None,
+        tags: str = "",
+        tag_op: str = "and",
+        description: str | None = None,
+        min_value: float | None = None,
+        max_value: float | None = None,
+        sort_by: str = "htime",
+        sort_order: str = "desc",
+    ) -> dict:
+        """
+        Get paginated transaction list with filtering and sorting.
+        
+        Query Parameters:
+        - page: Page number (1-based, default: 1)
+        - page_size: Number of items per page (default: 20, max: 100)
+        - from_time: Start timestamp for filtering
+        - to_time: End timestamp for filtering
+        - tags: Comma-separated list of tags to filter by
+        - tag_op: "and" or "or" operation for tag filtering (default: "and")
+        - description: Description filter (partial match)
+        - min_value: Minimum transaction value
+        - max_value: Maximum transaction value
+        - sort_by: Field to sort by (default: "htime")
+        - sort_order: "asc" or "desc" (default: "desc")
+        
+        Returns:
+        - Paginated response:
+          {
+            "data": List[TransactionData],
+            "total": int,
+            "page": int,
+            "page_size": int,
+            "total_pages": int,
+            "has_next": bool,
+            "has_prev": bool
+          }
+        """
+        try:
+            db = next(router_dependency)
+            
+            # Validate and clamp page_size
+            page_size = min(max(1, page_size), 100)
+            page = max(1, page)
+            
+            # Parse tags from comma-separated string
+            tag_list = []
+            if tags and tags.strip():
+                tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
+            
+            result = read_transactions_paginated_impl(
+                db=db,
+                page=page,
+                page_size=page_size,
+                from_time=from_time,
+                to_time=to_time,
+                _tags=tag_list,
+                tag_op=tag_op,
+                _desc=description,
+                min_value=min_value,
+                max_value=max_value,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
+            
+            request.logger.info(f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}")
+            return result
+            
+        except Exception as e:
+            request.logger.error(f"Error getting paginated transactions: {e}")
+            raise HTTPException(status_code=500, detail=f"Error getting paginated transactions: {str(e)}")
+
     @post()
     async def create_transaction(
         self,
@@ -324,6 +404,71 @@ class TransactionController(Controller):
             "status": "success",
             "message": f"Transaction {transaction_id} deleted successfully",
         }
+
+    @post("/stats/batch/", dto=None, return_dto=None)
+    async def get_transaction_stats_batch(
+        self,
+        data: list[dict[str, Any]],
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> list[dict]:
+        """
+        Get transaction statistics for multiple queries in a single request.
+        
+        Request Body:
+        - Array of stat request objects, each containing:
+          {
+            "id": str (unique identifier for this query),
+            "from_time": float | null,
+            "to_time": float | null,
+            "tags": str (comma-separated),
+            "tag_op": "and" | "or",
+            "return_list": bool
+          }
+        
+        Returns:
+        - Array of results, each containing:
+          {
+            "id": str,
+            "stats": {...} | null (null if error)
+          }
+        """
+        try:
+            db = next(router_dependency)
+            results = []
+            
+            for query in data:
+                query_id = query.get("id", "")
+                try:
+                    tag_list = []
+                    tags_str = query.get("tags", "")
+                    if tags_str and tags_str.strip():
+                        tag_list = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
+                    
+                    stats = get_transaction_stats_impl(
+                        db=db,
+                        skip=query.get("skip", 0),
+                        limit=query.get("limit", -1),
+                        from_time=query.get("from_time"),
+                        to_time=query.get("to_time"),
+                        _tags=tag_list,
+                        tag_op=query.get("tag_op", "and"),
+                        _desc=query.get("description"),
+                        min_value=query.get("min_value"),
+                        max_value=query.get("max_value"),
+                        return_list=query.get("return_list", False),
+                    )
+                    results.append({"id": query_id, "stats": stats})
+                except Exception as e:
+                    request.logger.error(f"Error getting stats for query {query_id}: {e}")
+                    results.append({"id": query_id, "stats": None, "error": str(e)})
+            
+            request.logger.info(f"Batch stats: processed {len(results)} queries")
+            return results
+            
+        except Exception as e:
+            request.logger.error(f"Error in batch stats: {e}")
+            raise HTTPException(status_code=500, detail=f"Error in batch stats: {str(e)}")
 
     @get("/stats/", return_dto=None)
     async def get_transaction_stats(
