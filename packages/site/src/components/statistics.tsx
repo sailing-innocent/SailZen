@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LineChart, Line, XAxis, YAxis } from 'recharts'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { LazyChart } from '@/components/lazy_chart'
 import { api_get_transactions_stats } from '@lib/api'
 import type { TransactionDataStatsRequest } from '@lib/data/money'
 import { Money } from '@lib/utils/money'
@@ -441,52 +442,55 @@ const Statistics: React.FC = () => {
                   <CardDescription>支出总体、日常零碎支出、大宗收支、大宗电器的合并趋势</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <LineChart data={overallExpenseData}>
-                      <XAxis dataKey="period" />
-                      <YAxis tickFormatter={yAxisFormatter} />
+                  {/* 性能优化：使用 LazyChart 懒加载图表 */}
+                  <LazyChart height={300} loadingText="支出趋势图加载中...">
+                    <ChartContainer config={chartConfig} className="h-[300px]">
+                      <LineChart data={overallExpenseData}>
+                        <XAxis dataKey="period" />
+                        <YAxis tickFormatter={yAxisFormatter} />
 
-                      <Line
-                        key="支出总体"
-                        type="monotone"
-                        dataKey="支出总体"
-                        stroke="#ff0000"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="日常零碎支出"
-                        type="monotone"
-                        dataKey="日常零碎支出"
-                        stroke="#ffc658"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="大宗收支"
-                        type="monotone"
-                        dataKey="大宗收支"
-                        stroke={TAG_COLORS['大宗收支'] || '#8000ff'}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="大宗电器"
-                        type="monotone"
-                        dataKey="大宗电器"
-                        stroke={TAG_COLORS['大宗电器'] || '#ff7300'}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
+                        <Line
+                          key="支出总体"
+                          type="monotone"
+                          dataKey="支出总体"
+                          stroke="#ff0000"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="日常零碎支出"
+                          type="monotone"
+                          dataKey="日常零碎支出"
+                          stroke="#ffc658"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="大宗收支"
+                          type="monotone"
+                          dataKey="大宗收支"
+                          stroke={TAG_COLORS['大宗收支'] || '#8000ff'}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="大宗电器"
+                          type="monotone"
+                          dataKey="大宗电器"
+                          stroke={TAG_COLORS['大宗电器'] || '#ff7300'}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
 
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent formatter={moneyTooltipFormatter} />
-                        }
-                      />
-                      <ChartLegend content={ChartLegendContent} />
-                    </LineChart>
-                  </ChartContainer>
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent formatter={moneyTooltipFormatter} />
+                          }
+                        />
+                        <ChartLegend content={ChartLegendContent} />
+                      </LineChart>
+                    </ChartContainer>
+                  </LazyChart>
                 </CardContent>
               </Card>
             )}
@@ -499,23 +503,26 @@ const Statistics: React.FC = () => {
                   <CardDescription>主要日常消费标签的变化趋势（不含大宗收支）</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <LineChart data={timeSeriesData}>
-                      <XAxis dataKey="period" />
-                      <YAxis tickFormatter={yAxisFormatter} />
+                  {/* 性能优化：使用 LazyChart 懒加载图表 */}
+                  <LazyChart height={300} loadingText="消费趋势图加载中...">
+                    <ChartContainer config={chartConfig} className="h-[300px]">
+                      <LineChart data={timeSeriesData}>
+                        <XAxis dataKey="period" />
+                        <YAxis tickFormatter={yAxisFormatter} />
 
-                      {regularTagStats.slice(0, 5).map(({ tag }) => (
-                        <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag]} strokeWidth={2} dot={{ r: 4 }} />
-                      ))}
+                        {regularTagStats.slice(0, 5).map(({ tag }) => (
+                          <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag]} strokeWidth={2} dot={{ r: 4 }} />
+                        ))}
 
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent formatter={moneyTooltipFormatter} />
-                        }
-                      />
-                      <ChartLegend content={ChartLegendContent} />
-                    </LineChart>
-                  </ChartContainer>
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent formatter={moneyTooltipFormatter} />
+                          }
+                        />
+                        <ChartLegend content={ChartLegendContent} />
+                      </LineChart>
+                    </ChartContainer>
+                  </LazyChart>
                 </CardContent>
               </Card>
             )}

@@ -6,6 +6,7 @@ import { DataTable } from '@components/data_table'
 import { Button } from '@components/ui/button'
 import TransactionFiltersComponent, { type TransactionFilters } from './transaction_filters'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useDebouncedValue } from '@/hooks/use-debounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/dialog'
@@ -97,28 +98,32 @@ const TransactionsDataTable: React.FC = () => {
     return new Map(accounts.map(acc => [acc.id, acc]))
   }, [accounts])
 
-  // Filter transactions based on current filters
+  // 性能优化：对过滤条件进行防抖处理，避免频繁输入时的重复计算
+  // 300ms 的延迟在用户体验和性能之间取得平衡
+  const debouncedFilters = useDebouncedValue(filters, 300)
+
+  // Filter transactions based on debounced filters
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
       // Date range filter
-      if (filters.dateRange.start || filters.dateRange.end) {
+      if (debouncedFilters.dateRange.start || debouncedFilters.dateRange.end) {
         const transactionDate = new Date(transaction.htime * 1000)
-        if (filters.dateRange.start && transactionDate < filters.dateRange.start) {
+        if (debouncedFilters.dateRange.start && transactionDate < debouncedFilters.dateRange.start) {
           return false
         }
-        if (filters.dateRange.end && transactionDate >= filters.dateRange.end) {
+        if (debouncedFilters.dateRange.end && transactionDate >= debouncedFilters.dateRange.end) {
           return false
         }
       }
 
       // Tags filter
-      if (filters.tags.length > 0) {
+      if (debouncedFilters.tags.length > 0) {
         const transactionTags = transaction.tags
           .split(',')
           .map((tag) => tag.trim())
           .filter((tag) => tag.length > 0)
 
-        const hasMatchingTag = filters.tags.some((filterTag) =>
+        const hasMatchingTag = debouncedFilters.tags.some((filterTag) =>
           transactionTags.some((transactionTag) => transactionTag.toLowerCase().includes(filterTag.toLowerCase()))
         )
 
@@ -129,16 +134,16 @@ const TransactionsDataTable: React.FC = () => {
 
       // Amount range filter
       const transactionValue = parseFloat(transaction.value)
-      if (filters.amountRange.min !== undefined && transactionValue < filters.amountRange.min) {
+      if (debouncedFilters.amountRange.min !== undefined && transactionValue < debouncedFilters.amountRange.min) {
         return false
       }
-      if (filters.amountRange.max !== undefined && transactionValue > filters.amountRange.max) {
+      if (debouncedFilters.amountRange.max !== undefined && transactionValue > debouncedFilters.amountRange.max) {
         return false
       }
 
       return true
     })
-  }, [transactions, filters])
+  }, [transactions, debouncedFilters])
 
   const resetFilters = () => {
     setFilters({

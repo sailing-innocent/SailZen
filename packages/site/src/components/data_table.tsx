@@ -29,34 +29,43 @@ interface DataTableProps<TData, TValue> {
   keepPaginationOnDataChange?: boolean
 }
 
+// 性能优化：缓存 row model 获取函数，这些是纯函数不需要每次重新创建
+const coreRowModel = getCoreRowModel()
+const paginationRowModel = getPaginationRowModel()
+const sortedRowModel = getSortedRowModel()
+const filteredRowModel = getFilteredRowModel()
+
 export function DataTable<TData, TValue>({ columns, data, pagination, setPagination, keepPaginationOnDataChange = false }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const isMobile = useIsMobile()
 
-  // 稳定化表格配置，避免不必要的重新创建
-  const tableConfig = React.useMemo(() => ({
+  // 性能优化：分离静态配置（不依赖状态）和动态配置
+  // 静态配置只在 keepPaginationOnDataChange 变化时重新创建
+  const staticConfig = React.useMemo(() => ({
+    getCoreRowModel: coreRowModel,
+    getPaginationRowModel: paginationRowModel,
+    getSortedRowModel: sortedRowModel,
+    getFilteredRowModel: filteredRowModel,
+    autoResetPageIndex: !keepPaginationOnDataChange,
+    enableRowSelection: false,
+    enableMultiRowSelection: false,
+  }), [keepPaginationOnDataChange])
+
+  // 使用 useReactTable，动态配置直接传入
+  const table = useReactTable({
     data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    autoResetPageIndex: !keepPaginationOnDataChange,
+    ...staticConfig,
     state: {
       sorting,
       columnFilters,
       pagination,
     },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
-    // 确保分页状态正确保持
-    enableRowSelection: false,
-    enableMultiRowSelection: false,
-  }), [data, columns, sorting, columnFilters, pagination, setPagination, keepPaginationOnDataChange])
-
-  const table = useReactTable(tableConfig)
+  })
 
   return (
     <div className="w-full">
