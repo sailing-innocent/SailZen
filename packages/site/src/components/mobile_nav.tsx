@@ -52,8 +52,10 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
         </Sheet>
       </div>
 
-      {/* 主内容区域 */}
-      <div className="p-4">{children}</div>
+      {/* 主内容区域 - 添加溢出控制防止图表超出屏幕 */}
+      <div className="p-4 overflow-x-hidden max-w-full">
+        <div className="flex flex-col gap-4 w-full max-w-full">{children}</div>
+      </div>
     </div>
   )
 }

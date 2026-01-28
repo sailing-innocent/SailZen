@@ -16,7 +16,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
 from sail_server.utils.money import Money
-from typing import List, Iterator
+from typing import List, Iterator, Optional
 
 __all__ = [
     "Account",
@@ -159,7 +159,7 @@ class TransactionData:
     prev_value: str = field(default="0.0")
     description: str = field(default="")
     tags: str = field(default="")
-    budget_id: int = field(default=None)  # Link to budget
+    budget_id: Optional[int] = field(default=None)  # Link to budget
     state: int = field(default_factory=lambda: TransactionState(0).value)
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
     ctime: datetime = field(default_factory=lambda: datetime.now())

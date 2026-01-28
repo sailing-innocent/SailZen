@@ -37,6 +37,27 @@ export interface TransactionDataStats {
   data?: TransactionData[]
 }
 
+// Batch stats request types
+export interface BatchStatsQuery {
+  id: string
+  from_time?: number
+  to_time?: number
+  tags?: string
+  tag_op?: 'and' | 'or'
+  return_list?: boolean
+  skip?: number
+  limit?: number
+  description?: string
+  min_value?: number
+  max_value?: number
+}
+
+export interface BatchStatsResult {
+  id: string
+  stats: TransactionDataStats | null
+  error?: string
+}
+
 
 export interface TransactionResponse {
   id: number
@@ -129,3 +150,30 @@ export interface BudgetResponse {
   status: string
   message: string
 }
+
+// Paginated transaction types
+export interface TransactionQueryParams {
+  page?: number
+  page_size?: number
+  from_time?: number
+  to_time?: number
+  tags?: string
+  tag_op?: 'and' | 'or'
+  description?: string
+  min_value?: number
+  max_value?: number
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
+}
+
+export type PaginatedTransactionResponse = PaginatedResponse<TransactionData>

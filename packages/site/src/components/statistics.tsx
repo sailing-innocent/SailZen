@@ -6,8 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { LineChart, Line, XAxis, YAxis } from 'recharts'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { LazyChart } from '@/components/lazy_chart'
-import { api_get_transactions_stats } from '@lib/api'
-import type { TransactionDataStatsRequest } from '@lib/data/money'
+import { api_get_transactions_stats_batch } from '@lib/api'
+import type { BatchStatsQuery } from '@lib/data/money'
 import { Money } from '@lib/utils/money'
 type TimeRange = 'monthly' | 'quarterly' | 'yearly'
 
@@ -146,117 +146,88 @@ const Statistics: React.FC = () => {
         const overallFromTime = periods[0].from
         const overallToTime = periods[periods.length - 1].to
 
-        // Prepare all requests upfront for concurrent execution
-        const allRequests: Array<{
-          key: string
-          periodKey?: string
-          request: TransactionDataStatsRequest
-        }> = []
+        // 性能优化：使用批量 API 代替多次并发请求
+        // Prepare all queries for batch request
+        const batchQueries: BatchStatsQuery[] = []
 
         // Add requests for time series data (each period for each tag)
         for (const period of periods) {
           // Regular tags for this period
           for (const tag of currentRegularTags) {
-            allRequests.push({
-              key: `regular-${period.key}-${tag}`,
-              periodKey: period.key,
-              request: {
-                tags: [tag],
-                tag_op: 'or',
-                return_list: false,
-                from_time: period.from,
-                to_time: period.to,
-              },
+            batchQueries.push({
+              id: `regular-${period.key}-${tag}`,
+              tags: tag,
+              tag_op: 'or',
+              return_list: false,
+              from_time: period.from,
+              to_time: period.to,
             })
           }
 
           // Total expense for this period
-          allRequests.push({
-            key: `total-${period.key}`,
-            periodKey: period.key,
-            request: {
-              return_list: false,
-              from_time: period.from,
-              to_time: period.to,
-            },
+          batchQueries.push({
+            id: `total-${period.key}`,
+            return_list: false,
+            from_time: period.from,
+            to_time: period.to,
           })
 
           // Major tags for this period
           for (const tag of currentMajorTags) {
-            allRequests.push({
-              key: `major-${period.key}-${tag}`,
-              periodKey: period.key,
-              request: {
-                tags: [tag],
-                tag_op: 'or',
-                return_list: false,
-                from_time: period.from,
-                to_time: period.to,
-              },
+            batchQueries.push({
+              id: `major-${period.key}-${tag}`,
+              tags: tag,
+              tag_op: 'or',
+              return_list: false,
+              from_time: period.from,
+              to_time: period.to,
             })
           }
 
           // Daily expense (日用消耗 excluding 大宗收支) for this period
           if (currentRegularTags.includes('日用消耗')) {
-            allRequests.push({
-              key: `daily-${period.key}`,
-              periodKey: period.key,
-              request: {
-                tags: ['日用消耗'],
-                tag_op: 'or',
-                return_list: false,
-                from_time: period.from,
-                to_time: period.to,
-              },
+            batchQueries.push({
+              id: `daily-${period.key}`,
+              tags: '日用消耗',
+              tag_op: 'or',
+              return_list: false,
+              from_time: period.from,
+              to_time: period.to,
             })
           }
         }
 
         // Add requests for overall stats (across all periods)
         for (const tag of currentRegularTags) {
-          allRequests.push({
-            key: `overall-regular-${tag}`,
-            request: {
-              tags: [tag],
-              tag_op: 'or',
-              return_list: false,
-              from_time: overallFromTime,
-              to_time: overallToTime,
-            },
+          batchQueries.push({
+            id: `overall-regular-${tag}`,
+            tags: tag,
+            tag_op: 'or',
+            return_list: false,
+            from_time: overallFromTime,
+            to_time: overallToTime,
           })
         }
 
         for (const tag of currentMajorTags) {
-          allRequests.push({
-            key: `overall-major-${tag}`,
-            request: {
-              tags: [tag],
-              tag_op: 'or',
-              return_list: false,
-              from_time: overallFromTime,
-              to_time: overallToTime,
-            },
+          batchQueries.push({
+            id: `overall-major-${tag}`,
+            tags: tag,
+            tag_op: 'or',
+            return_list: false,
+            from_time: overallFromTime,
+            to_time: overallToTime,
           })
         }
 
-        // Execute all requests concurrently
-        const results = await Promise.all(
-          allRequests.map(async ({ key, request }) => {
-            try {
-              const stats = await api_get_transactions_stats(request)
-              return { key, stats }
-            } catch (error) {
-              console.error(`Failed to fetch stats for ${key}:`, error)
-              return { key, stats: null }
-            }
-          })
-        )
+        // Execute batch request (single HTTP request instead of many)
+        const batchResults = await api_get_transactions_stats_batch(batchQueries)
 
         // Process results into data structures
         const resultsMap = new Map<string, any>()
-        results.forEach(({ key, stats }) => {
+        batchResults.forEach(({ id, stats }) => {
           if (stats) {
-            resultsMap.set(key, stats)
+            resultsMap.set(id, stats)
           }
         })
 
@@ -441,13 +412,24 @@ const Statistics: React.FC = () => {
                   <CardTitle>支出总体趋势</CardTitle>
                   <CardDescription>支出总体、日常零碎支出、大宗收支、大宗电器的合并趋势</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className={isMobile ? 'px-2' : ''}>
                   {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
                   <LazyChart height={isMobile ? 200 : 300} loadingText="支出趋势图加载中...">
-                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
-                      <LineChart data={overallExpenseData}>
-                        <XAxis dataKey="period" />
-                        <YAxis tickFormatter={yAxisFormatter} />
+                    <ChartContainer config={chartConfig} className={`${isMobile ? 'h-[200px]' : 'h-[300px]'} w-full max-w-full !aspect-auto [&_.recharts-responsive-container]:!w-full`}>
+                      <LineChart 
+                        data={overallExpenseData}
+                        margin={isMobile ? { left: 0, right: 10, top: 5, bottom: 5 } : undefined}
+                      >
+                        <XAxis 
+                          dataKey="period" 
+                          tick={{ fontSize: isMobile ? 10 : 12 }}
+                          interval={isMobile ? 'preserveStartEnd' : 0}
+                        />
+                        <YAxis 
+                          tickFormatter={yAxisFormatter}
+                          tick={{ fontSize: isMobile ? 10 : 12 }}
+                          width={isMobile ? 50 : 60}
+                        />
 
                         <Line
                           key="支出总体"
@@ -502,13 +484,24 @@ const Statistics: React.FC = () => {
                   <CardTitle>日常消费趋势线</CardTitle>
                   <CardDescription>主要日常消费标签的变化趋势（不含大宗收支）</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className={isMobile ? 'px-2' : ''}>
                   {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
                   <LazyChart height={isMobile ? 200 : 300} loadingText="消费趋势图加载中...">
-                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
-                      <LineChart data={timeSeriesData}>
-                        <XAxis dataKey="period" />
-                        <YAxis tickFormatter={yAxisFormatter} />
+                    <ChartContainer config={chartConfig} className={`${isMobile ? 'h-[200px]' : 'h-[300px]'} w-full max-w-full !aspect-auto [&_.recharts-responsive-container]:!w-full`}>
+                      <LineChart 
+                        data={timeSeriesData}
+                        margin={isMobile ? { left: 0, right: 10, top: 5, bottom: 5 } : undefined}
+                      >
+                        <XAxis 
+                          dataKey="period" 
+                          tick={{ fontSize: isMobile ? 10 : 12 }}
+                          interval={isMobile ? 'preserveStartEnd' : 0}
+                        />
+                        <YAxis 
+                          tickFormatter={yAxisFormatter}
+                          tick={{ fontSize: isMobile ? 10 : 12 }}
+                          width={isMobile ? 50 : 60}
+                        />
 
                         {regularTagStats.slice(0, 5).map(({ tag }) => (
                           <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag]} strokeWidth={2} dot={{ r: 4 }} />
