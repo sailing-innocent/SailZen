@@ -91,6 +91,60 @@ const api_delete_mission = async (id: number): Promise<{ id: number, status: str
     return response.json()
 }
 
+// Mission State Transition APIs
+const api_pending_mission = async (id: number): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/pending`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+const api_ready_mission = async (id: number): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/ready`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+const api_doing_mission = async (id: number): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/doing`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+const api_done_mission = async (id: number): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/done`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+const api_cancel_mission = async (id: number): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/cancel`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+const api_postpone_mission = async (id: number, days: number = 7): Promise<MissionData> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/${id}/postpone?days=${days}`, {
+        method: 'POST',
+    })
+    return response.json()
+}
+
+// Mission Reminder APIs
+const api_get_upcoming_missions = async (hours: number = 24): Promise<MissionData[]> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/upcoming?hours=${hours}`)
+    return response.json()
+}
+
+const api_get_overdue_missions = async (): Promise<MissionData[]> => {
+    const response = await fetch(`${SERVER_URL}/${PROJECT_API_BASE}/mission/overdue`)
+    return response.json()
+}
+
 export {
     api_get_projects,
     api_get_project,
@@ -102,4 +156,14 @@ export {
     api_create_mission,
     api_update_mission,
     api_delete_mission,
+    // State transition APIs
+    api_pending_mission,
+    api_ready_mission,
+    api_doing_mission,
+    api_done_mission,
+    api_cancel_mission,
+    api_postpone_mission,
+    // Reminder APIs
+    api_get_upcoming_missions,
+    api_get_overdue_missions,
 }

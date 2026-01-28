@@ -23,6 +23,14 @@ from sail_server.model.project import (
     get_missions_impl,
     update_mission_impl,
     delete_mission_impl,
+    pending_mission_impl,
+    ready_mission_impl,
+    doing_mission_impl,
+    done_mission_impl,
+    cancel_mission_impl,
+    postpone_mission_impl,
+    get_upcoming_missions_impl,
+    get_overdue_missions_impl,
 )
 from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
@@ -235,3 +243,125 @@ class MissionController(Controller):
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
+
+    # ------------------------------------------------
+    # Mission State Transition APIs
+    # ------------------------------------------------
+    @post("/{mission_id:int}/pending", status_code=200)
+    async def pending_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> MissionData:
+        """Set mission state to PENDING."""
+        db = next(router_dependency)
+        mission = pending_mission_impl(db, mission_id)
+        request.logger.info(f"Mission {mission_id} set to PENDING")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    @post("/{mission_id:int}/ready", status_code=200)
+    async def ready_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> MissionData:
+        """Set mission state to READY."""
+        db = next(router_dependency)
+        mission = ready_mission_impl(db, mission_id)
+        request.logger.info(f"Mission {mission_id} set to READY")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    @post("/{mission_id:int}/doing", status_code=200)
+    async def doing_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> MissionData:
+        """Set mission state to DOING (start working)."""
+        db = next(router_dependency)
+        mission = doing_mission_impl(db, mission_id)
+        request.logger.info(f"Mission {mission_id} set to DOING")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    @post("/{mission_id:int}/done", status_code=200)
+    async def done_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> MissionData:
+        """Set mission state to DONE (complete mission)."""
+        db = next(router_dependency)
+        mission = done_mission_impl(db, mission_id)
+        request.logger.info(f"Mission {mission_id} set to DONE")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    @post("/{mission_id:int}/cancel", status_code=200)
+    async def cancel_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> MissionData:
+        """Set mission state to CANCELED."""
+        db = next(router_dependency)
+        mission = cancel_mission_impl(db, mission_id)
+        request.logger.info(f"Mission {mission_id} set to CANCELED")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    @post("/{mission_id:int}/postpone", status_code=200)
+    async def postpone_mission(
+        self,
+        mission_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        days: int = 7,
+    ) -> MissionData:
+        """Postpone mission deadline by specified days."""
+        db = next(router_dependency)
+        mission = postpone_mission_impl(db, mission_id, days)
+        request.logger.info(f"Mission {mission_id} postponed by {days} days")
+        if not mission:
+            raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
+        return mission
+
+    # ------------------------------------------------
+    # Mission Reminder APIs
+    # ------------------------------------------------
+    @get("/upcoming")
+    async def get_upcoming_missions(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        hours: int = 24,
+    ) -> List[MissionData]:
+        """Get missions with deadlines within specified hours."""
+        db = next(router_dependency)
+        missions = get_upcoming_missions_impl(db, hours)
+        request.logger.info(f"Found {len(missions)} upcoming missions within {hours}h")
+        return missions
+
+    @get("/overdue")
+    async def get_overdue_missions(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> List[MissionData]:
+        """Get all overdue missions (past deadline, not done/canceled)."""
+        db = next(router_dependency)
+        missions = get_overdue_missions_impl(db)
+        request.logger.info(f"Found {len(missions)} overdue missions")
+        return missions

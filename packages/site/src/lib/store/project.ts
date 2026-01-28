@@ -17,6 +17,14 @@ import {
   api_create_mission,
   api_update_mission,
   api_delete_mission,
+  api_pending_mission,
+  api_ready_mission,
+  api_doing_mission,
+  api_done_mission,
+  api_cancel_mission,
+  api_postpone_mission,
+  api_get_upcoming_missions,
+  api_get_overdue_missions,
 } from '@lib/api/project'
 
 export interface ProjectsState {
@@ -95,16 +103,30 @@ export const useProjectsStore: UseBoundStore<StoreApi<ProjectsState>> = create<P
 
 export interface MissionsState {
   missions: MissionData[]
+  upcomingMissions: MissionData[]
+  overdueMissions: MissionData[]
   isLoading: boolean
   fetchMissions: (projectId?: number) => Promise<void>
   fetchMission: (id: number) => Promise<MissionData>
   createMission: (mission: MissionCreateProps) => Promise<MissionData>
   updateMission: (id: number, mission: MissionCreateProps) => Promise<MissionData>
   deleteMission: (id: number) => Promise<boolean>
+  // State transitions
+  pendingMission: (id: number) => Promise<MissionData>
+  readyMission: (id: number) => Promise<MissionData>
+  doingMission: (id: number) => Promise<MissionData>
+  doneMission: (id: number) => Promise<MissionData>
+  cancelMission: (id: number) => Promise<MissionData>
+  postponeMission: (id: number, days?: number) => Promise<MissionData>
+  // Reminder queries
+  fetchUpcomingMissions: (hours?: number) => Promise<void>
+  fetchOverdueMissions: () => Promise<void>
 }
 
 export const useMissionsStore: UseBoundStore<StoreApi<MissionsState>> = create<MissionsState>((set) => ({
   missions: [],
+  upcomingMissions: [],
+  overdueMissions: [],
   isLoading: false,
   fetchMissions: async (projectId?: number): Promise<void> => {
     set({ isLoading: true })
@@ -164,6 +186,123 @@ export const useMissionsStore: UseBoundStore<StoreApi<MissionsState>> = create<M
       missions: state.missions.filter((m: MissionData) => m.id !== id),
     }))
     return response.status === 'success'
+  },
+  
+  // Helper function to update mission in state
+  _updateMissionInState: (updatedMission: MissionData, state: MissionsState): MissionsState => {
+    const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+    const nextState: MissionsState = {
+      ...state,
+      missions: [...state.missions],
+    }
+    if (index !== -1) {
+      nextState.missions[index] = updatedMission
+    }
+    return nextState
+  },
+
+  // State transitions
+  pendingMission: async (id: number): Promise<MissionData> => {
+    const updatedMission = await api_pending_mission(id)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+  
+  readyMission: async (id: number): Promise<MissionData> => {
+    const updatedMission = await api_ready_mission(id)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+  
+  doingMission: async (id: number): Promise<MissionData> => {
+    const updatedMission = await api_doing_mission(id)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+  
+  doneMission: async (id: number): Promise<MissionData> => {
+    const updatedMission = await api_done_mission(id)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+  
+  cancelMission: async (id: number): Promise<MissionData> => {
+    const updatedMission = await api_cancel_mission(id)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+  
+  postponeMission: async (id: number, days: number = 7): Promise<MissionData> => {
+    const updatedMission = await api_postpone_mission(id, days)
+    set((state: MissionsState): MissionsState => {
+      const index = state.missions.findIndex((m: MissionData) => m.id === updatedMission.id)
+      if (index !== -1) {
+        const missions = [...state.missions]
+        missions[index] = updatedMission
+        return { ...state, missions }
+      }
+      return state
+    })
+    return updatedMission
+  },
+
+  // Reminder queries
+  fetchUpcomingMissions: async (hours: number = 24): Promise<void> => {
+    try {
+      const missions = await api_get_upcoming_missions(hours)
+      set({ upcomingMissions: missions })
+    } catch (error) {
+      console.error('Failed to fetch upcoming missions:', error)
+    }
+  },
+  
+  fetchOverdueMissions: async (): Promise<void> => {
+    try {
+      const missions = await api_get_overdue_missions()
+      set({ overdueMissions: missions })
+    } catch (error) {
+      console.error('Failed to fetch overdue missions:', error)
+    }
   },
 }))
 

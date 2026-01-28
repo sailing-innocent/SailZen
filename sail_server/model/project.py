@@ -15,8 +15,9 @@ from sail_server.data.project import (
     MissionState,
     MissionData,
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 from sail_server.utils.time_utils import QuarterBiWeekTime
+from typing import List
 
 
 def clean_all_impl(db):
@@ -211,3 +212,109 @@ def delete_mission_impl(db, mission_id: int):
     db.delete(mission)
     db.commit()
     return MissionData.read_from_orm(mission)
+
+
+# ------------------------------------------------
+# Mission State Transition (Simplified)
+# ------------------------------------------------
+# For the basic task loop, we simplify state transitions:
+# Any state can transition to any other state for flexibility
+
+def pending_mission_impl(db, mission_id: int):
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    mission.state = MissionState.PENDING
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+def ready_mission_impl(db, mission_id: int):
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    mission.state = MissionState.READY
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+def doing_mission_impl(db, mission_id: int):
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    mission.state = MissionState.DOING
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+def done_mission_impl(db, mission_id: int):
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    mission.state = MissionState.DONE
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+def cancel_mission_impl(db, mission_id: int):
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    mission.state = MissionState.CANCELED
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+def postpone_mission_impl(db, mission_id: int, days: int = 7):
+    """Postpone mission deadline by specified days."""
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        return None
+    if mission.ddl:
+        mission.ddl = mission.ddl + timedelta(days=days)
+    else:
+        mission.ddl = datetime.now() + timedelta(days=days)
+    mission.mtime = datetime.now()
+    db.commit()
+    db.refresh(mission)
+    return MissionData.read_from_orm(mission)
+
+
+# ------------------------------------------------
+# Mission Reminder Queries
+# ------------------------------------------------
+
+def get_upcoming_missions_impl(db, hours: int = 24) -> List[MissionData]:
+    """Get missions with deadlines within specified hours that are not done/canceled."""
+    now = datetime.now()
+    deadline_threshold = now + timedelta(hours=hours)
+    
+    missions = db.query(Mission).filter(
+        Mission.ddl >= now,
+        Mission.ddl <= deadline_threshold,
+        Mission.state.notin_([MissionState.DONE, MissionState.CANCELED])
+    ).order_by(Mission.ddl.asc()).all()
+    
+    return [MissionData.read_from_orm(m) for m in missions]
+
+
+def get_overdue_missions_impl(db) -> List[MissionData]:
+    """Get all overdue missions (past deadline, not done/canceled)."""
+    now = datetime.now()
+    
+    missions = db.query(Mission).filter(
+        Mission.ddl < now,
+        Mission.state.notin_([MissionState.DONE, MissionState.CANCELED])
+    ).order_by(Mission.ddl.asc()).all()
+    
+    return [MissionData.read_from_orm(m) for m in missions]
