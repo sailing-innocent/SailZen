@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { type TransactionsState, useTransactionsStore, useServerStore, useAccountsStore } from '@lib/store'
 import { TransactionColumns, type TransactionDisplayProps } from './transaction_column'
 import { DataTable } from '@components/data_table'
 import { Button } from '@components/ui/button'
 import TransactionFiltersComponent, { type TransactionFilters } from './transaction_filters'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { useDebouncedValue } from '@/hooks/use-debounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@/components/ui/dialog'
@@ -50,11 +52,15 @@ const TransactionsDataTable: React.FC = () => {
     }))
   }, [isMobile])
 
-  const transactions = useTransactionsStore((state: TransactionsState) => state.transactions)
-  const isLoading = useTransactionsStore((state: TransactionsState) => state.isLoading)
-
-  const fetchTransactions = useTransactionsStore((state: TransactionsState) => state.fetchTransactions)
-  const createTransaction = useTransactionsStore((state: TransactionsState) => state.createTransaction)
+  // 性能优化：使用 useShallow 合并多个选择器，减少不必要的重渲染
+  const { transactions, isLoading, fetchTransactions, createTransaction } = useTransactionsStore(
+    useShallow((state: TransactionsState) => ({
+      transactions: state.transactions,
+      isLoading: state.isLoading,
+      fetchTransactions: state.fetchTransactions,
+      createTransaction: state.createTransaction,
+    }))
+  )
 
   const serverHealth = useServerStore((state) => state.serverHealth)
   const accountsLoading = useAccountsStore((state) => state.isLoading)
@@ -70,8 +76,13 @@ const TransactionsDataTable: React.FC = () => {
     fetchTransactions(maxTransactions)
   }, [fetchTransactions, serverHealth, accountsLoading, dataUpdated, maxTransactions])
 
-  const getOptions = useAccountsStore((state) => state.getOptions)
-  const accountsData = useAccountsStore((state) => state.accounts)
+  // 性能优化：合并账户相关的选择器
+  const { getOptions, accounts: accountsData } = useAccountsStore(
+    useShallow((state) => ({
+      getOptions: state.getOptions,
+      accounts: state.accounts,
+    }))
+  )
   const accounts = useMemo(() => {
     const options = getOptions()
     // 按照state排序，state小的在前，大的在后
@@ -82,28 +93,37 @@ const TransactionsDataTable: React.FC = () => {
     })
   }, [getOptions, accountsData])
 
-  // Filter transactions based on current filters
+  // 性能优化：使用 Map 进行 O(1) 账户查找，替代 O(n) 的 find()
+  const accountsMap = useMemo(() => {
+    return new Map(accounts.map(acc => [acc.id, acc]))
+  }, [accounts])
+
+  // 性能优化：对过滤条件进行防抖处理，避免频繁输入时的重复计算
+  // 300ms 的延迟在用户体验和性能之间取得平衡
+  const debouncedFilters = useDebouncedValue(filters, 300)
+
+  // Filter transactions based on debounced filters
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
       // Date range filter
-      if (filters.dateRange.start || filters.dateRange.end) {
+      if (debouncedFilters.dateRange.start || debouncedFilters.dateRange.end) {
         const transactionDate = new Date(transaction.htime * 1000)
-        if (filters.dateRange.start && transactionDate < filters.dateRange.start) {
+        if (debouncedFilters.dateRange.start && transactionDate < debouncedFilters.dateRange.start) {
           return false
         }
-        if (filters.dateRange.end && transactionDate >= filters.dateRange.end) {
+        if (debouncedFilters.dateRange.end && transactionDate >= debouncedFilters.dateRange.end) {
           return false
         }
       }
 
       // Tags filter
-      if (filters.tags.length > 0) {
+      if (debouncedFilters.tags.length > 0) {
         const transactionTags = transaction.tags
           .split(',')
           .map((tag) => tag.trim())
           .filter((tag) => tag.length > 0)
 
-        const hasMatchingTag = filters.tags.some((filterTag) =>
+        const hasMatchingTag = debouncedFilters.tags.some((filterTag) =>
           transactionTags.some((transactionTag) => transactionTag.toLowerCase().includes(filterTag.toLowerCase()))
         )
 
@@ -114,16 +134,16 @@ const TransactionsDataTable: React.FC = () => {
 
       // Amount range filter
       const transactionValue = parseFloat(transaction.value)
-      if (filters.amountRange.min !== undefined && transactionValue < filters.amountRange.min) {
+      if (debouncedFilters.amountRange.min !== undefined && transactionValue < debouncedFilters.amountRange.min) {
         return false
       }
-      if (filters.amountRange.max !== undefined && transactionValue > filters.amountRange.max) {
+      if (debouncedFilters.amountRange.max !== undefined && transactionValue > debouncedFilters.amountRange.max) {
         return false
       }
 
       return true
     })
-  }, [transactions, filters])
+  }, [transactions, debouncedFilters])
 
   const resetFilters = () => {
     setFilters({
@@ -141,34 +161,27 @@ const TransactionsDataTable: React.FC = () => {
   }, [createTransaction])
 
 
+  // 性能优化：使用 Map 进行 O(1) 查找，预解析标签避免重复 split()
   const transactionsDisplay: TransactionDisplayProps[] = useMemo(() => {
     return filteredTransactions.map((transaction) => {
-      const fromAccount = accounts.find((acc) => acc.id === transaction.from_acc_id)
-      const toAccount = accounts.find((acc) => acc.id === transaction.to_acc_id)
+      // 使用 Map 的 O(1) 查找替代 find() 的 O(n) 查找
+      const fromAccount = accountsMap.get(transaction.from_acc_id)
+      const toAccount = accountsMap.get(transaction.to_acc_id)
       
-      // 调试信息
-      if (!fromAccount) {
-        console.log('From account not found:', {
-          transactionId: transaction.id,
-          from_acc_id: transaction.from_acc_id,
-          availableAccounts: accounts.map(acc => ({ id: acc.id, name: acc.name }))
-        })
-      }
-      if (!toAccount) {
-        console.log('To account not found:', {
-          transactionId: transaction.id,
-          to_acc_id: transaction.to_acc_id,
-          availableAccounts: accounts.map(acc => ({ id: acc.id, name: acc.name }))
-        })
-      }
+      // 预解析标签，避免在渲染时重复解析
+      const parsedTags = transaction.tags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(tag => tag.length > 0)
       
       return {
         ...transaction,
         from_acc_name: fromAccount?.name || 'Unknown',
         to_acc_name: toAccount?.name || 'Unknown',
+        parsedTags,
       }
     })
-  }, [filteredTransactions, accounts])
+  }, [filteredTransactions, accountsMap])
 
   // 稳定化数据引用，避免不必要的重新渲染
   const stableTransactionsDisplay = useMemo(() => transactionsDisplay, [transactionsDisplay])

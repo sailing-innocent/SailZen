@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react'
 import type { ProjectData, MissionData } from '@lib/data/project'
 import ProjectMissionColumn from './project_mission_column'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 export interface ProjectMissionBoardProps {
     projects: ProjectData[]
@@ -8,6 +9,8 @@ export interface ProjectMissionBoardProps {
 }
 
 const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, missions }) => {
+    const isMobile = useIsMobile()
+    
     // NullProject is used to represent a list of missions that are not belong to any project
     const NullProject: ProjectData = {
         id: 0,
@@ -32,12 +35,27 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
 
     return (
         <div className="flex flex-col items-center justify-center">
-            <h1 className="text-2xl font-bold mb-4">Project Mission Board</h1>
-            <div className="flex flex-row items-center justify-center">
-            <ProjectMissionColumn key={NullProject.id} project={NullProject} missions={groupedMissions[NullProject.id] || []} />
-            {projects.map((project) => (
-                <ProjectMissionColumn key={project.id} project={project} missions={groupedMissions[project.id] || []} />
-            ))}
+            <h1 className={`font-bold mb-4 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
+                Project Mission Board
+            </h1>
+            {/* 移动端垂直布局，桌面端横向滚动 */}
+            <div className={`flex items-start gap-4 ${
+                isMobile 
+                    ? 'flex-col w-full' 
+                    : 'flex-row overflow-x-auto pb-4'
+            }`}>
+                <ProjectMissionColumn 
+                    key={NullProject.id} 
+                    project={NullProject} 
+                    missions={groupedMissions[NullProject.id] || []} 
+                />
+                {projects.map((project) => (
+                    <ProjectMissionColumn 
+                        key={project.id} 
+                        project={project} 
+                        missions={groupedMissions[project.id] || []} 
+                    />
+                ))}
             </div>            
         </div>
     )

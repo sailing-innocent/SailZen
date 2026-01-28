@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTransactionsStore } from '@lib/store'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LineChart, Line, XAxis, YAxis } from 'recharts'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { LazyChart } from '@/components/lazy_chart'
 import { api_get_transactions_stats } from '@lib/api'
 import type { TransactionDataStatsRequest } from '@lib/data/money'
 import { Money } from '@lib/utils/money'
@@ -87,6 +88,20 @@ const generatePeriods = (timeRange: TimeRange, numPeriods: number = 12): Array<{
   return periods
 }
 
+// 性能优化：将静态配置移到组件外部，避免每次渲染都创建新对象
+const TAG_COLORS: Record<string, string> = {
+  零食: '#8884d8',
+  交通: '#82ca9d',
+  日用消耗: '#ffc658',
+  大宗电器: '#ff7300',
+  娱乐休闲: '#00ff00',
+  人际交往: '#ff00ff',
+  医药健康: '#00ffff',
+  衣物: '#ff0080',
+  大宗收支: '#8000ff',
+  总支出: '#ff0000',
+}
+
 const Statistics: React.FC = () => {
   const getSupportedTags = useTransactionsStore((state) => state.getSupportedTags)
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('monthly')
@@ -97,20 +112,21 @@ const Statistics: React.FC = () => {
   const [overallExpenseData, setOverallExpenseData] = useState<TimeSeriesData[]>([])
   const isMobile = useIsMobile()
 
+  // 性能优化：缓存 tooltip formatter，避免每次渲染都创建新函数
+  const moneyTooltipFormatter = useCallback((_value: any, _name: any) => {
+    const value = _value as number
+    const money = new Money(value)
+    return (
+      <div>
+        <div>
+          {_name}:{money.toFormattedString()}
+        </div>
+      </div>
+    )
+  }, [])
 
-  // Color mapping for tags
-  const tagColors: Record<string, string> = {
-    零食: '#8884d8',
-    交通: '#82ca9d',
-    日用消耗: '#ffc658',
-    大宗电器: '#ff7300',
-    娱乐休闲: '#00ff00',
-    人际交往: '#ff00ff',
-    医药健康: '#00ffff',
-    衣物: '#ff0080',
-    大宗收支: '#8000ff',
-    总支出: '#ff0000',
-  }
+  // 性能优化：缓存 Y 轴格式化函数
+  const yAxisFormatter = useCallback((value: number) => new Money(value).toFormattedString(), [])
 
   // Fetch statistics data from backend
   useEffect(() => {
@@ -301,7 +317,7 @@ const Statistics: React.FC = () => {
               tag,
               amount: new Money(stats.expense_total),
               count: stats.expense_count,
-              color: tagColors[tag] || '#888888',
+              color: TAG_COLORS[tag] || '#888888',
             }
           })
           .filter((stat): stat is TagStatistic => stat !== null && stat.amount.value > 0)
@@ -318,7 +334,7 @@ const Statistics: React.FC = () => {
               tag,
               amount: new Money(stats.expense_total),
               count: stats.expense_count,
-              color: tagColors[tag] || '#888888',
+              color: TAG_COLORS[tag] || '#888888',
             }
           })
           .filter((stat): stat is TagStatistic => stat !== null && stat.amount.value > 0)
@@ -344,14 +360,14 @@ const Statistics: React.FC = () => {
     supportedTags.forEach((tag) => {
       config[tag] = {
         label: tag,
-        color: tagColors[tag] || '#888888',
+        color: TAG_COLORS[tag] || '#888888',
       }
     })
     
     // Add total expense to chart config
     config['总支出'] = {
       label: '总支出',
-      color: tagColors['总支出'] || '#ff0000',
+      color: TAG_COLORS['总支出'] || '#ff0000',
     }
     
     // Add overall expense and daily expense to chart config
@@ -368,12 +384,12 @@ const Statistics: React.FC = () => {
     // Add major tags to chart config
     config['大宗收支'] = {
       label: '大宗收支',
-      color: tagColors['大宗收支'] || '#8000ff',
+      color: TAG_COLORS['大宗收支'] || '#8000ff',
     }
     
     config['大宗电器'] = {
       label: '大宗电器',
-      color: tagColors['大宗电器'] || '#ff7300',
+      color: TAG_COLORS['大宗电器'] || '#ff7300',
     }
     
     return config
@@ -426,68 +442,55 @@ const Statistics: React.FC = () => {
                   <CardDescription>支出总体、日常零碎支出、大宗收支、大宗电器的合并趋势</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <LineChart data={overallExpenseData}>
-                      <XAxis dataKey="period" />
-                      <YAxis tickFormatter={(value) => new Money(value).toFormattedString()} />
+                  {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
+                  <LazyChart height={isMobile ? 200 : 300} loadingText="支出趋势图加载中...">
+                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
+                      <LineChart data={overallExpenseData}>
+                        <XAxis dataKey="period" />
+                        <YAxis tickFormatter={yAxisFormatter} />
 
-                      <Line
-                        key="支出总体"
-                        type="monotone"
-                        dataKey="支出总体"
-                        stroke="#ff0000"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="日常零碎支出"
-                        type="monotone"
-                        dataKey="日常零碎支出"
-                        stroke="#ffc658"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="大宗收支"
-                        type="monotone"
-                        dataKey="大宗收支"
-                        stroke={tagColors['大宗收支'] || '#8000ff'}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
-                      <Line
-                        key="大宗电器"
-                        type="monotone"
-                        dataKey="大宗电器"
-                        stroke={tagColors['大宗电器'] || '#ff7300'}
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                      />
+                        <Line
+                          key="支出总体"
+                          type="monotone"
+                          dataKey="支出总体"
+                          stroke="#ff0000"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="日常零碎支出"
+                          type="monotone"
+                          dataKey="日常零碎支出"
+                          stroke="#ffc658"
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="大宗收支"
+                          type="monotone"
+                          dataKey="大宗收支"
+                          stroke={TAG_COLORS['大宗收支'] || '#8000ff'}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
+                        <Line
+                          key="大宗电器"
+                          type="monotone"
+                          dataKey="大宗电器"
+                          stroke={TAG_COLORS['大宗电器'] || '#ff7300'}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                        />
 
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(_value, _name) => {
-                              const value = _value as number
-                              const money = new Money(value)
-                              return (
-                                <div>
-                                  <div>
-                                    {_name}:{money.toFormattedString()}
-                                  </div>
-                                </div>
-                              )
-                            }}
-                          />
-                        }
-                      />
-                      <ChartLegend
-                        content={(props: any) => {
-                          return <ChartLegendContent {...props} />
-                        }}
-                      />
-                    </LineChart>
-                  </ChartContainer>
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent formatter={moneyTooltipFormatter} />
+                          }
+                        />
+                        <ChartLegend content={ChartLegendContent} />
+                      </LineChart>
+                    </ChartContainer>
+                  </LazyChart>
                 </CardContent>
               </Card>
             )}
@@ -500,39 +503,26 @@ const Statistics: React.FC = () => {
                   <CardDescription>主要日常消费标签的变化趋势（不含大宗收支）</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ChartContainer config={chartConfig} className="h-[300px]">
-                    <LineChart data={timeSeriesData}>
-                      <XAxis dataKey="period" />
-                      <YAxis tickFormatter={(value) => new Money(value).toFormattedString()} />
+                  {/* 性能优化：使用 LazyChart 懒加载图表，移动端使用更小高度 */}
+                  <LazyChart height={isMobile ? 200 : 300} loadingText="消费趋势图加载中...">
+                    <ChartContainer config={chartConfig} className={isMobile ? 'h-[200px]' : 'h-[300px]'}>
+                      <LineChart data={timeSeriesData}>
+                        <XAxis dataKey="period" />
+                        <YAxis tickFormatter={yAxisFormatter} />
 
-                      {regularTagStats.slice(0, 5).map(({ tag }) => (
-                        <Line key={tag} type="monotone" dataKey={tag} stroke={tagColors[tag]} strokeWidth={2} dot={{ r: 4 }} />
-                      ))}
+                        {regularTagStats.slice(0, 5).map(({ tag }) => (
+                          <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag]} strokeWidth={2} dot={{ r: 4 }} />
+                        ))}
 
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(_value, _name) => {
-                              const value = _value as number
-                              const money = new Money(value)
-                              return (
-                                <div>
-                                  <div>
-                                    {_name}:{money.toFormattedString()}
-                                  </div>
-                                </div>
-                              )
-                            }}
-                          />
-                        }
-                      />
-                      <ChartLegend
-                        content={(props: any) => {
-                          return <ChartLegendContent {...props} />
-                        }}
-                      />
-                    </LineChart>
-                  </ChartContainer>
+                        <ChartTooltip
+                          content={
+                            <ChartTooltipContent formatter={moneyTooltipFormatter} />
+                          }
+                        />
+                        <ChartLegend content={ChartLegendContent} />
+                      </LineChart>
+                    </ChartContainer>
+                  </LazyChart>
                 </CardContent>
               </Card>
             )}

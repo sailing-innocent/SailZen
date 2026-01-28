@@ -19,4 +19,5 @@ def read_env(mode='dev'):
         raise ValueError('mode must be dev or prod')
 
     print(f"Loading environment variables from {env_file}")
-    dotenv.load_dotenv(env_file)
+    # 明确指定 UTF-8 编码，避免 Windows 系统默认使用 GBK 导致的解析错误
+    dotenv.load_dotenv(env_file, encoding='utf-8')

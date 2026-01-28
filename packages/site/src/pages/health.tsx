@@ -19,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 type DateSpanChoice = '7d' | '30d' | '90d' | '1y' | 'all'
 
@@ -39,6 +40,7 @@ const dateSpanSelectOptions: DateSpanOption[] = [
 const HealthPage = () => {
   const fetchWeights = useHealthStore((state: HealthState) => state.fetchWeights)
   const createWeight = useHealthStore((state: HealthState) => state.createWeight)
+  const isMobile = useIsMobile()
 
   const selectItems = dateSpanSelectOptions.map((option) => (
     <SelectItem key={option.value} value={option.value}>
@@ -77,28 +79,33 @@ const HealthPage = () => {
   return (
     <>
       <PageLayout>
-        <div>Health Page</div>
-        <div className="flex gap-4">
-          <DatePicker
-            label="Start Date"
-            placeholder={startDate.toLocaleDateString()}
-            onChange={(date: Date) => {
-              setStartDate(date)
-            }}
-          />
-          <DatePicker
-            label="End Date"
-            placeholder={endDate.toLocaleDateString()}
-            onChange={(date: Date) => {
-              setEndDate(date)
-            }}
-          />
-          <div className="flex flex-col gap-3">
-            <Label htmlFor="date-span" className="px-1">
+        <div className={isMobile ? 'text-lg px-2' : 'text-xl'}>体重管理</div>
+        {/* 响应式控件布局：移动端垂直堆叠，桌面端横向排列 */}
+        <div className={`flex gap-3 ${isMobile ? 'flex-col px-2' : 'flex-row flex-wrap'}`}>
+          {/* 日期选择器组 */}
+          <div className={`flex gap-3 ${isMobile ? 'flex-col' : 'flex-row'}`}>
+            <DatePicker
+              label="Start Date"
+              placeholder={startDate.toLocaleDateString()}
+              onChange={(date: Date) => {
+                setStartDate(date)
+              }}
+            />
+            <DatePicker
+              label="End Date"
+              placeholder={endDate.toLocaleDateString()}
+              onChange={(date: Date) => {
+                setEndDate(date)
+              }}
+            />
+          </div>
+          {/* 时间范围选择 */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="date-span" className="px-1 text-sm">
               Date Span
             </Label>
             <Select onValueChange={(value) => setDateSpan(value as '7d' | '30d' | '90d' | '1y' | 'all')}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className={isMobile ? 'w-full' : 'w-[180px]'}>
                 <SelectValue placeholder="Select DateSpan" />
               </SelectTrigger>
               <SelectContent>
@@ -109,33 +116,34 @@ const HealthPage = () => {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-3">
-            <Label htmlFor="add-weight" className="px-1">
+          {/* 添加体重按钮 */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="add-weight" className="px-1 text-sm">
               Add Weight
             </Label>
             <Dialog>
-              <DialogTrigger className="w-48">
+              <DialogTrigger className={isMobile ? 'w-full' : 'w-48'}>
                 <Input id="add-weight" placeholder="Add Weight" />
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className={isMobile ? 'w-[95vw] max-w-[95vw]' : ''}>
                 <DialogHeader>
                   <DialogTitle>Add Weight</DialogTitle>
                   <DialogDescription>Enter your weight data below.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="weight" className="text-right">
+                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="weight" className={isMobile ? '' : 'text-right'}>
                       Weight
                     </Label>
                     <Input
                       id="weight"
-                      className="col-span-3"
+                      className={isMobile ? 'w-full' : 'col-span-3'}
                       placeholder="e.g., 70.5"
                       onChange={(e) => setCreateWeightValue(e.target.value)}
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="weight-date" className="text-right">
+                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="weight-date" className={isMobile ? '' : 'text-right'}>
                       Date
                     </Label>
                     <DatePicker
@@ -167,7 +175,7 @@ const HealthPage = () => {
             </Dialog>
           </div>
         </div>
-        <div>
+        <div className={isMobile ? 'px-2' : ''}>
           <WeightChart />
         </div>
       </PageLayout>

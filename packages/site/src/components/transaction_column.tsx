@@ -18,7 +18,14 @@ import {
 export interface TransactionDisplayProps extends TransactionData {
   from_acc_name: string
   to_acc_name: string
+  parsedTags: string[]  // 预解析的标签数组，避免渲染时重复解析
 }
+
+// 性能优化：缓存 Intl.NumberFormat 实例，避免每次渲染都创建新实例
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'CNY',
+})
 
 export const TransactionColumns: ColumnDef<TransactionDisplayProps>[] = [
   {
@@ -55,24 +62,19 @@ export const TransactionColumns: ColumnDef<TransactionDisplayProps>[] = [
     header: 'Value',
     cell: ({ row }) => {
       const value: number = parseFloat(row.getValue('value'))
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'CNY',
-      }).format(value)
+      // 使用缓存的 formatter 实例
+      return currencyFormatter.format(value)
     },
   },
   {
     accessorKey: 'tags',
     header: 'Tags',
     cell: ({ row }) => {
-      const tags: string = row.getValue('tags')
-      const tagList = tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0)
+      // 使用预解析的标签数组，避免每次渲染都重新解析
+      const parsedTags = row.original.parsedTags
       return (
         <>
-          {tagList.map((tag) => (
+          {parsedTags.map((tag) => (
             <Badge key={tag} className="mr-1">
               {tag}
             </Badge>

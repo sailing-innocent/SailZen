@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from 'react-router-dom'
 import { useServerStore, type ServerState } from '@lib/store'
+import { MobileProviderWithFallback } from '@/hooks/use-mobile'
 import './App.css'
 
 // import MainPage from '@pages/main'
@@ -49,11 +50,13 @@ const AppRoutes: React.FC = () => {
 
 function App() {
   return (
-    <>
+    <MobileProviderWithFallback>
       <BrowserRouter>
-        <AppRoutes />
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
+          <AppRoutes />
+        </Suspense>
       </BrowserRouter>
-    </>
+    </MobileProviderWithFallback>
   )
 }
 
