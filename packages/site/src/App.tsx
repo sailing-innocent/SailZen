@@ -10,6 +10,7 @@ const MoneyPage = React.lazy(() => import('@pages/money'))
 const HealthPage = React.lazy(() => import('@pages/health'))
 const ProjectPage = React.lazy(() => import('@pages/project'))
 const ContentPage = React.lazy(() => import('@pages/content'))
+const TextPage = React.lazy(() => import('@pages/text'))
 
 interface URLParams {
   path?: string
@@ -44,6 +45,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/health" element={<HealthPage />} />
       <Route path="/project" element={<ProjectPage />} />
       <Route path="/content" element={<ContentPage />} />
+      <Route path="/text" element={<TextPage />} />
     </Routes>
   )
 }
