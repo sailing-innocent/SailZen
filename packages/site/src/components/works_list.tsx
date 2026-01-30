@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api_get_works, api_search_works, api_delete_work } from '@lib/api/text'
 import type { Work } from '@lib/data/text'
 import { formatCharCount, getWorkStatusLabel, getWorkTypeLabel } from '@lib/data/text'
+import WorkEditDialog from './work_edit_dialog'
 
 interface WorksListProps {
   onSelectWork?: (work: Work) => void
@@ -59,6 +60,10 @@ export default function WorksList({ onSelectWork, refreshTrigger }: WorksListPro
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败')
     }
+  }
+
+  const handleWorkUpdate = (updatedWork: Work) => {
+    setWorks(works.map((w) => (w.id === updatedWork.id ? updatedWork : w)))
   }
 
   if (loading) {
@@ -139,14 +144,29 @@ export default function WorksList({ onSelectWork, refreshTrigger }: WorksListPro
                     <span>{formatCharCount(work.total_chars)}</span>
                     <span>{work.edition_count} 个版本</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={(e) => handleDelete(work, e)}
-                  >
-                    删除
-                  </Button>
+                  <div className="flex gap-2">
+                    <WorkEditDialog
+                      work={work}
+                      onUpdateSuccess={handleWorkUpdate}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          编辑
+                        </Button>
+                      }
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={(e) => handleDelete(work, e)}
+                    >
+                      删除
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
