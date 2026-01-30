@@ -11,6 +11,20 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
+import {
   api_get_chapter_list,
   api_get_chapter_content,
   api_update_node,
@@ -37,6 +51,7 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
+  const [isMobileTocOpen, setIsMobileTocOpen] = useState(false)
 
   // 加载版本和章节列表
   useEffect(() => {
@@ -151,31 +166,89 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
     )
   }
 
+  // 移动端目录选择处理
+  const handleMobileChapterSelect = (index: number) => {
+    loadChapter(index)
+    setIsMobileTocOpen(false)
+  }
+
+  // 目录列表组件（复用）
+  const ChapterList = ({ onSelect }: { onSelect?: (idx: number) => void }) => (
+    <ul className="divide-y">
+      {chapters.map((chapter, idx) => (
+        <li
+          key={chapter.id}
+          className={`px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${
+            currentIndex === idx ? 'bg-muted font-medium' : ''
+          }`}
+          onClick={() => (onSelect ? onSelect(idx) : loadChapter(idx))}
+        >
+          <div className="text-sm truncate">
+            {chapter.label}
+            {chapter.title && ` ${chapter.title}`}
+          </div>
+          {chapter.char_count && (
+            <div className="text-xs text-muted-foreground">{formatCharCount(chapter.char_count)}</div>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-16 md:pb-0">
       {/* 顶部导航 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={onBack}>
-            返回列表
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2 md:gap-4">
+          <Button variant="outline" size="sm" onClick={onBack}>
+            返回
           </Button>
-          <div>
-            <h2 className="text-xl font-bold">{work.title}</h2>
-            {work.author && <p className="text-sm text-muted-foreground">作者：{work.author}</p>}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg md:text-xl font-bold truncate">{work.title}</h2>
+            {work.author && (
+              <p className="text-xs md:text-sm text-muted-foreground truncate">作者：{work.author}</p>
+            )}
           </div>
         </div>
-        {edition && (
-          <div className="text-sm text-muted-foreground">
-            {chapters.length} 章 · {formatCharCount(edition.char_count || 0)}
-          </div>
-        )}
+        <div className="flex items-center justify-between md:justify-end gap-2">
+          {edition && (
+            <div className="text-xs md:text-sm text-muted-foreground">
+              {chapters.length} 章 · {formatCharCount(edition.char_count || 0)}
+            </div>
+          )}
+          {/* 移动端目录按钮 */}
+          <Sheet open={isMobileTocOpen} onOpenChange={setIsMobileTocOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm" className="md:hidden">
+                目录
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[280px] p-0">
+              <SheetHeader className="p-4 border-b">
+                <SheetTitle className="flex items-center justify-between">
+                  <span>目录</span>
+                  {edition && (
+                    <ChapterInsertDialog
+                      editionId={edition.id}
+                      chapters={chapters}
+                      onInsertSuccess={handleInsertSuccess}
+                    />
+                  )}
+                </SheetTitle>
+              </SheetHeader>
+              <div className="overflow-y-auto max-h-[calc(100vh-80px)]">
+                <ChapterList onSelect={handleMobileChapterSelect} />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       {error && <div className="text-sm text-red-500 p-2 bg-red-50 rounded">{error}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* 章节目录 */}
-        <Card className="md:col-span-1 max-h-[70vh] overflow-y-auto">
+        {/* 章节目录 - 仅桌面端显示 */}
+        <Card className="hidden md:block md:col-span-1 max-h-[70vh] overflow-y-auto">
           <CardHeader className="py-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">目录</CardTitle>
@@ -189,74 +262,67 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ul className="divide-y">
-              {chapters.map((chapter, idx) => (
-                <li
-                  key={chapter.id}
-                  className={`px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${
-                    currentIndex === idx ? 'bg-muted font-medium' : ''
-                  }`}
-                  onClick={() => loadChapter(idx)}
-                >
-                  <div className="text-sm truncate">
-                    {chapter.label}
-                    {chapter.title && ` ${chapter.title}`}
-                  </div>
-                  {chapter.char_count && (
-                    <div className="text-xs text-muted-foreground">
-                      {formatCharCount(chapter.char_count)}
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <ChapterList />
           </CardContent>
         </Card>
 
         {/* 章节内容 */}
         <Card className="md:col-span-3">
-          <CardHeader className="py-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
+          <CardHeader className="py-2 md:py-3">
+            {/* 移动端章节快速选择 */}
+            {chapters.length > 0 && (
+              <div className="md:hidden mb-2">
+                <Select
+                  value={currentIndex?.toString() ?? ''}
+                  onValueChange={(val) => loadChapter(parseInt(val))}
+                >
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder="选择章节..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {chapters.map((chapter, idx) => (
+                      <SelectItem key={chapter.id} value={idx.toString()}>
+                        {chapter.label}
+                        {chapter.title && ` ${chapter.title}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* 章节标题和编辑按钮 */}
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <CardTitle className="text-sm md:text-base flex-1 min-w-0">
                 {currentChapter ? (
                   isEditing ? (
                     <Input
                       value={editTitle}
                       onChange={(e) => setEditTitle(e.target.value)}
-                      className="w-64"
+                      className="w-full md:w-64"
                       placeholder="章节标题"
                     />
                   ) : (
-                    <>
+                    <span className="truncate block">
                       {currentChapter.label}
                       {currentChapter.title && ` ${currentChapter.title}`}
-                    </>
+                    </span>
                   )
                 ) : (
-                  '请选择章节'
+                  <span className="hidden md:inline">请选择章节</span>
                 )}
               </CardTitle>
-              {currentChapter && (
-                <div className="flex gap-2">
-                  {isEditing ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                        取消
-                      </Button>
-                      <Button size="sm" onClick={handleSave}>
-                        保存
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                      编辑
-                    </Button>
-                  )}
+              {/* 桌面端编辑按钮 */}
+              {currentChapter && !isEditing && (
+                <div className="hidden md:flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                    编辑
+                  </Button>
                 </div>
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 md:px-6">
             {contentLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-4 w-full" />
@@ -267,47 +333,80 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
               <>
                 {isEditing ? (
                   <textarea
-                    className="w-full min-h-[400px] p-4 border rounded-md font-mono text-sm"
+                    className="w-full min-h-[50vh] md:min-h-[400px] p-3 md:p-4 border rounded-md font-mono text-sm"
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
                   />
                 ) : (
                   <div className="prose prose-sm max-w-none max-h-[60vh] overflow-y-auto">
-                    <div className="whitespace-pre-wrap leading-relaxed">
+                    <div className="whitespace-pre-wrap leading-relaxed text-sm md:text-base">
                       {currentChapter.raw_text}
                     </div>
                   </div>
                 )}
 
-                {/* 底部导航 */}
-                <div className="flex justify-between mt-4 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={goToPrev}
-                    disabled={currentIndex === 0}
-                  >
-                    上一章
-                  </Button>
-                  <span className="text-sm text-muted-foreground self-center">
-                    {currentIndex !== null ? `${currentIndex + 1} / ${chapters.length}` : ''}
-                  </span>
-                  <Button
-                    variant="outline"
-                    onClick={goToNext}
-                    disabled={currentIndex === chapters.length - 1}
-                  >
-                    下一章
-                  </Button>
-                </div>
+                {/* 底部导航 - 非编辑模式 */}
+                {!isEditing && (
+                  <div className="flex justify-between mt-4 pt-4 border-t">
+                    <Button variant="outline" size="sm" onClick={goToPrev} disabled={currentIndex === 0}>
+                      上一章
+                    </Button>
+                    <span className="text-xs md:text-sm text-muted-foreground self-center">
+                      {currentIndex !== null ? `${currentIndex + 1} / ${chapters.length}` : ''}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={goToNext}
+                      disabled={currentIndex === chapters.length - 1}
+                    >
+                      下一章
+                    </Button>
+                  </div>
+                )}
               </>
             ) : (
-              <div className="text-center py-16 text-muted-foreground">
-                点击左侧目录选择章节开始阅读
+              <div className="text-center py-8 md:py-16 text-muted-foreground text-sm">
+                <span className="hidden md:inline">点击左侧目录选择章节开始阅读</span>
+                <span className="md:hidden">点击上方目录或下拉选择章节</span>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* 移动端底部悬浮操作栏 */}
+      {currentChapter && (
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-3 flex gap-2 justify-end md:hidden z-50">
+          {isEditing ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} className="flex-1">
+                取消
+              </Button>
+              <Button size="sm" onClick={handleSave} className="flex-1">
+                保存
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={goToPrev} disabled={currentIndex === 0}>
+                上一章
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                编辑
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNext}
+                disabled={currentIndex === chapters.length - 1}
+              >
+                下一章
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

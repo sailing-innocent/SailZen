@@ -212,10 +212,12 @@ def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNo
     if update_data.title is not None:
         node.title = update_data.title
     if update_data.raw_text is not None:
-        node.raw_text = update_data.raw_text
+        # 清理文本内容
+        cleaned_text = sanitize_text(update_data.raw_text)
+        node.raw_text = cleaned_text
         # 重新计算字符数
-        node.char_count = len(update_data.raw_text)
-        node.word_count = len(update_data.raw_text.split())
+        node.char_count = len(cleaned_text)
+        node.word_count = len(cleaned_text.split())
     if update_data.meta_data:
         node.meta_data = update_data.meta_data
 
@@ -260,6 +262,18 @@ DEFAULT_CHAPTER_PATTERNS = [
 ]
 
 
+def sanitize_text(text: str) -> str:
+    """
+    清理文本内容，移除不支持的特殊字符
+    
+    PostgreSQL text 字段不支持 NUL (0x00) 字符
+    """
+    if not text:
+        return text
+    # 移除 NUL 字符
+    return text.replace('\x00', '')
+
+
 def parse_chapters(content: str, pattern: Optional[str] = None) -> List[Tuple[str, str, int, int]]:
     """
     解析文本内容，识别章节
@@ -268,6 +282,9 @@ def parse_chapters(content: str, pattern: Optional[str] = None) -> List[Tuple[st
     """
     if not content:
         return []
+    
+    # 先清理文本
+    content = sanitize_text(content)
     
     # 合并所有模式
     if pattern:
@@ -546,7 +563,8 @@ def insert_chapter_impl(db: Session, edition_id: int, sort_index: int, label: Op
         node.sort_index += 1
         node.path = f"{node.sort_index:04d}"
     
-    # 创建新章节
+    # 创建新章节（清理文本内容）
+    content = sanitize_text(content)
     char_count = len(content)
     word_count = len(content.split())
     
