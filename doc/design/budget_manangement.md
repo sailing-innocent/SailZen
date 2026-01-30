@@ -153,6 +153,23 @@ Transaction模型已经存在，预算核销时创建的Transaction会：
 }
 ```
 
+### 5. Budget与Transaction关联 ✅ 已实现
+
+#### POST /finance/budget/{budget_id}/link/{transaction_id}
+将交易记录关联到预算
+- 说明：将现有的交易记录关联到指定预算，用于追踪预算使用情况
+- 返回：`TransactionData`（更新后的交易记录）
+
+#### DELETE /finance/budget/unlink/{transaction_id}
+取消交易与预算的关联
+- 说明：解除交易记录与预算的关联
+- 返回：`TransactionData`（更新后的交易记录）
+
+**使用场景**：
+- 导入历史交易后，将其关联到对应的预算
+- 手动调整预算执行记录
+- 批量管理预算与交易的对应关系
+
 ## 业务逻辑设计
 
 ### 1. 预算创建
@@ -235,24 +252,30 @@ api_get_budget_analysis(id: number): Promise<BudgetAnalysis>
 
 ## 实现步骤
 
-1. **后端实现**
-   - [x] Budget模型已存在，需要完善（添加ctime, mtime）
-   - [ ] 实现Budget业务逻辑（model层）
-   - [ ] 实现Budget控制器（controller层）
-   - [ ] 添加Budget路由
+1. **后端实现** ✅ 已完成
+   - [x] Budget模型（`sail_server/model/finance/budget.py`）
+   - [x] Budget数据层（`sail_server/data/finance.py`）
+   - [x] Budget控制器（`sail_server/controller/finance.py`）
+   - [x] Budget路由（`sail_server/router/finance.py`）
+   - [x] Budget与Transaction关联（link/unlink API）
 
-2. **前端实现**
-   - [ ] 定义Budget数据类型
-   - [ ] 实现Budget API调用
-   - [ ] 实现Budget Store
-   - [ ] 实现Budget组件
-   - [ ] 集成到money页面
+2. **前端实现** ✅ 已完成
+   - [x] Budget数据类型（`lib/data/money.ts`）
+   - [x] Budget API调用（`lib/api/money.ts`）
+   - [x] Budget Store（`lib/store/money.ts` - `useBudgetsStore`）
+   - [x] Budget组件：
+     - `budgets_data_table.tsx` - 预算列表
+     - `budget_add_dialog.tsx` - 新建预算对话框
+     - `budget_consume_dialog.tsx` - 预算核销对话框
+     - `budget_analysis_card.tsx` - 预算分析卡片
+   - [x] 集成到money页面
 
 3. **功能测试**
-   - [ ] 预算CRUD功能
-   - [ ] 预算核销功能
-   - [ ] 预算统计功能
-   - [ ] 预算对比分析功能
+   - [x] 预算CRUD功能
+   - [x] 预算核销功能
+   - [x] 预算统计功能
+   - [x] 预算对比分析功能
+   - [x] 交易关联/取消关联预算功能
 
 ## 注意事项
 

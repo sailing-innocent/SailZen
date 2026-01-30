@@ -4,4 +4,5 @@ export const PAGE_ROUTES = [
   { name: 'Health', path: '/health' },
   { name: 'Project', path: '/project' },
   { name: 'Content', path: '/content' },
+  { name: 'Text', path: '/text' },
 ]

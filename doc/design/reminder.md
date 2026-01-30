@@ -1650,29 +1650,36 @@ register_checker(ProjectReminderChecker())
 
 ## 7. 待办清单
 
-### 已完成 ✅
+### 已完成 ✅ (2026-01 更新)
 - [x] Mission 状态转换 API（pending/ready/doing/done/cancel）
 - [x] Mission 延期 API（postpone）
-- [x] 即将到期/已逾期任务查询 API
+- [x] 即将到期/已逾期任务查询 API（`/mission/upcoming`, `/mission/overdue`）
 - [x] 前端 MissionsStore 扩展（状态操作、提醒查询）
-- [x] MissionCard 组件（状态显示、快捷操作）
+- [x] MissionCard 组件（状态显示、快捷操作、延期入口）
 - [x] MissionPostponeDialog 延期对话框
-- [x] ReminderTodoList 组件（主页 TODO List）
+- [x] ReminderTodoList 组件（主页 TODO List，基于 Mission 任务）
+  - 支持全部/紧急/进行中 Tab 筛选
+  - 逾期任务优先显示
+  - 自动刷新（每5分钟）
 - [x] MainPage 集成待办任务列表
 - [x] ProjectMissionColumn 使用 MissionCard
+- [x] 响应式布局（移动端/桌面端适配）
 
 ### 高优先级
-- [ ] 创建独立的 `reminders` 数据库表
+- [ ] 创建独立的 `reminders` 数据库表（支持跨模块提醒聚合）
 - [ ] 实现 ReminderController 基础 CRUD
-- [ ] 实现独立的 ReminderStore
+- [ ] 实现独立的 ReminderStore（从 MissionsStore 解耦）
+- [ ] 实现 ReminderAddDialog（自定义提醒创建）
 
 ### 中优先级
-- [ ] 实现 ProjectReminderChecker（项目停滞检测）
-- [ ] 实现 BudgetReminderChecker（预算预警）
+- [ ] 实现 ProjectReminderChecker（项目停滞检测：7天无更新）
+- [ ] 实现 BudgetReminderChecker（预算预警：使用率超过80%/95%）
 - [ ] 实现稍后提醒功能（snooze）
+- [ ] ReminderFilters 组件（按模块、优先级筛选）
 
 ### 低优先级
-- [ ] 实现 NecessityReminderChecker
-- [ ] 实现 HealthReminderChecker
+- [ ] 实现 NecessityReminderChecker（物品过期、库存不足）
+- [ ] 实现 HealthReminderChecker（健康护理提醒）
 - [ ] 实现自定义提醒功能
-- [ ] 实现浏览器推送通知
+- [ ] 实现浏览器推送通知（Web Push）
+- [ ] 每日摘要功能

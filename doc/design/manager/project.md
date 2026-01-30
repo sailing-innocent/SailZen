@@ -171,7 +171,7 @@ PENDING(0) → READY(1) → DOING(2) → DONE(3)
 
 ## 2. 后端 API 接口
 
-### 2.1 项目接口 (`/api/project`) ✅ 部分实现
+### 2.1 项目接口 (`/api/v1/project/project`) ✅ 已实现
 
 | 方法 | 路径 | 说明 | 实现状态 |
 |------|------|------|----------|
@@ -180,12 +180,11 @@ PENDING(0) → READY(1) → DOING(2) → DONE(3)
 | POST | `/` | 创建项目 | ✅ |
 | PUT | `/{id}` | 更新项目 | ✅ |
 | DELETE | `/{id}` | 删除项目 | ✅ |
-| POST | `/{id}/state/{action}` | 状态转换 | ❌ 模型层已实现，API 待暴露 |
 | GET | `/{id}/progress` | 获取项目进度 | ❌ 待实现 |
 | GET | `/{id}/stats` | 获取项目统计 | ❌ 待实现 |
 | GET | `/search` | 搜索项目 | ❌ 待实现 |
 
-### 2.2 任务接口 (`/api/mission`) ✅ 部分实现
+### 2.2 任务接口 (`/api/v1/project/mission`) ✅ 已实现
 
 | 方法 | 路径 | 说明 | 实现状态 |
 |------|------|------|----------|
@@ -194,9 +193,14 @@ PENDING(0) → READY(1) → DOING(2) → DONE(3)
 | POST | `/` | 创建任务 | ✅ |
 | PUT | `/{id}` | 更新任务 | ✅ |
 | DELETE | `/{id}` | 删除任务 | ✅ |
-| POST | `/{id}/state/{action}` | 状态转换 | ❌ 模型层已实现，API 待暴露 |
-| GET | `/overdue` | 获取逾期任务 | ❌ 待实现 |
-| GET | `/upcoming` | 获取即将到期任务 | ❌ 待实现 |
+| POST | `/{id}/pending` | 设置状态为待处理 | ✅ |
+| POST | `/{id}/ready` | 设置状态为就绪 | ✅ |
+| POST | `/{id}/doing` | 设置状态为进行中 | ✅ |
+| POST | `/{id}/done` | 设置状态为已完成 | ✅ |
+| POST | `/{id}/cancel` | 设置状态为已取消 | ✅ |
+| POST | `/{id}/postpone` | 任务延期（参数：days） | ✅ |
+| GET | `/overdue` | 获取逾期任务 | ✅ |
+| GET | `/upcoming` | 获取即将到期任务（参数：hours） | ✅ |
 | GET | `/today` | 获取今日任务 | ❌ 待实现 |
 | POST | `/{id}/time-log` | 记录工时 | ❌ 待实现 |
 
@@ -759,7 +763,7 @@ interface IntegratedSuggestion {
 
 ## 8. 状态管理 (Zustand)
 
-### 8.1 ProjectsStore ✅ 部分实现
+### 8.1 ProjectsStore ✅ 已实现
 
 ```typescript
 interface ProjectsStore {
@@ -771,10 +775,10 @@ interface ProjectsStore {
   // 已实现
   fetchProjects: (skip?: number, limit?: number) => Promise<void>  // ✅
   createProject: (project: ProjectCreateProps) => Promise<void>    // ✅
+  updateProject: (id: number, updates: Partial<ProjectData>) => Promise<void>  // ✅
+  deleteProject: (id: number) => Promise<void>                                  // ✅
   
   // 待实现
-  updateProject: (id: number, updates: Partial<ProjectData>) => Promise<void>  // ❌
-  deleteProject: (id: number) => Promise<void>                                  // ❌
   getProjectById: (id: number) => Promise<ProjectData>                          // ❌
   changeProjectState: (id: number, action: string) => Promise<void>             // ❌
   getProjectProgress: (id: number) => Promise<ProjectProgress>                  // ❌
@@ -782,25 +786,36 @@ interface ProjectsStore {
 }
 ```
 
-### 8.2 MissionsStore ✅ 部分实现
+### 8.2 MissionsStore ✅ 已实现
 
 ```typescript
 interface MissionsStore {
   // 状态
   missions: MissionData[]
+  upcomingMissions: MissionData[]
+  overdueMissions: MissionData[]
   isLoading: boolean
   
   // 已实现
   fetchMissions: (params?: MissionQueryParams) => Promise<void>   // ✅
   createMission: (mission: MissionCreateProps) => Promise<void>   // ✅
+  updateMission: (id: number, updates: Partial<MissionData>) => Promise<void>  // ✅
+  deleteMission: (id: number) => Promise<void>                                  // ✅
+  
+  // 状态转换（已实现）
+  pendingMission: (id: number) => Promise<void>   // ✅
+  readyMission: (id: number) => Promise<void>     // ✅
+  doingMission: (id: number) => Promise<void>     // ✅
+  doneMission: (id: number) => Promise<void>      // ✅
+  cancelMission: (id: number) => Promise<void>    // ✅
+  postponeMission: (id: number, days: number) => Promise<void>  // ✅
+  
+  // 提醒相关（已实现）
+  fetchUpcomingMissions: (hours?: number) => Promise<void>  // ✅
+  fetchOverdueMissions: () => Promise<void>                 // ✅
   
   // 待实现
-  updateMission: (id: number, updates: Partial<MissionData>) => Promise<void>  // ❌
-  deleteMission: (id: number) => Promise<void>                                  // ❌
-  changeMissionState: (id: number, action: string) => Promise<void>             // ❌
-  getOverdueMissions: () => Promise<MissionData[]>                              // ❌
-  getUpcomingMissions: (days: number) => Promise<MissionData[]>                 // ❌
-  getTodayMissions: () => Promise<MissionData[]>                                // ❌
+  getTodayMissions: () => Promise<MissionData[]>            // ❌
 }
 ```
 
@@ -951,21 +966,30 @@ async def send_daily_summaries():
 
 ## 11. 待办事项
 
+### 已完成 ✅
+- [x] 任务状态转换 API（pending/ready/doing/done/cancel/postpone）
+- [x] 即将到期任务 API（/upcoming）
+- [x] 逾期任务 API（/overdue）
+- [x] 任务编辑功能（通过 PUT API）
+- [x] 任务删除功能（通过 DELETE API）
+- [x] 项目编辑/删除功能
+- [x] MissionsStore 状态转换和提醒功能
+- [x] MissionCard 组件
+- [x] MissionPostponeDialog 延期对话框
+
 ### 高优先级
-- [ ] 暴露项目/任务状态转换 API
-- [ ] 实现任务编辑对话框
-- [ ] 实现任务删除功能
-- [ ] 实现项目编辑/删除
-- [ ] 任务筛选功能
+- [ ] 任务筛选器组件（按状态/项目/截止日期）
+- [ ] 项目进度计算逻辑
+- [ ] 进度追踪仪表盘
 
 ### 中优先级
 - [ ] 里程碑功能设计与实现
 - [ ] 日程管理功能
-- [ ] 进度追踪仪表盘
-- [ ] 项目进度计算
+- [ ] 今日任务 API（/today）
+- [ ] 工时记录功能
 
 ### 低优先级
 - [ ] 推送通知系统
-- [ ] 模块联动实现
+- [ ] 模块联动实现（与预算、健康联动）
 - [ ] 智能日程建议
 - [ ] 健康感知调度
