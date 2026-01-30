@@ -16,8 +16,9 @@ import {
   api_update_node,
   api_get_edition,
 } from '@lib/api/text'
-import type { Work, Edition, ChapterListItem, DocumentNode } from '@lib/data/text'
+import type { Work, Edition, ChapterListItem, DocumentNode, ChapterInsertResponse } from '@lib/data/text'
 import { formatCharCount } from '@lib/data/text'
+import ChapterInsertDialog from './chapter_insert_dialog'
 
 interface ChapterReaderProps {
   work: Work
@@ -123,6 +124,24 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
     }
   }
 
+  // 插入章节成功后刷新列表
+  const handleInsertSuccess = async (response: ChapterInsertResponse) => {
+    if (!edition) return
+
+    try {
+      // 重新加载章节列表
+      const chapterList = await api_get_chapter_list(edition.id)
+      setChapters(chapterList)
+
+      // 如果当前有选中的章节，需要更新索引
+      if (currentIndex !== null && response.chapter.sort_index <= currentIndex) {
+        setCurrentIndex(currentIndex + 1)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '刷新章节列表失败')
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -158,7 +177,16 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
         {/* 章节目录 */}
         <Card className="md:col-span-1 max-h-[70vh] overflow-y-auto">
           <CardHeader className="py-3">
-            <CardTitle className="text-base">目录</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">目录</CardTitle>
+              {edition && (
+                <ChapterInsertDialog
+                  editionId={edition.id}
+                  chapters={chapters}
+                  onInsertSuccess={handleInsertSuccess}
+                />
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <ul className="divide-y">

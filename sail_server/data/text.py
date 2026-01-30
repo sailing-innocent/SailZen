@@ -29,7 +29,7 @@ class Work(ORMBase):
     作品表 - 代表一本书或小说
     """
     __tablename__ = "works"
-    
+
     id = Column(Integer, primary_key=True)
     slug = Column(String, unique=True, nullable=False)  # 唯一标识符
     title = Column(String, nullable=False)
@@ -411,4 +411,15 @@ class DocumentNodeUpdateRequest:
     label: Optional[str] = None
     title: Optional[str] = None
     raw_text: Optional[str] = None
+    meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ChapterInsertRequest:
+    """插入章节请求"""
+    edition_id: int
+    sort_index: int  # 插入位置（0-based），插入后该位置及之后的章节会后移
+    label: Optional[str] = None  # 章节标签，如 "第一章"
+    title: Optional[str] = None  # 章节标题
+    content: str = ""  # 章节内容
     meta_data: Dict[str, Any] = field(default_factory=dict)

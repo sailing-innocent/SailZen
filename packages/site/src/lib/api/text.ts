@@ -16,6 +16,8 @@ import type {
   TextImportRequest,
   ImportResponse,
   AppendResponse,
+  ChapterInsertRequest,
+  ChapterInsertResponse,
 } from '@lib/data/text'
 import { SERVER_URL, API_BASE } from './config'
 
@@ -231,6 +233,26 @@ export async function api_append_chapters(
   })
   if (!response.ok) {
     throw new Error(`Failed to append chapters: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+// ============================================================================
+// Chapter Insert API
+// ============================================================================
+
+export async function api_insert_chapter(
+  edition_id: number,
+  data: Omit<ChapterInsertRequest, 'edition_id'>
+): Promise<ChapterInsertResponse> {
+  const response = await fetch(`${SERVER_URL}/${TEXT_API_BASE}/edition/${edition_id}/chapter/insert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...data, edition_id }),
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to insert chapter: ${response.statusText} - ${errorText}`)
   }
   return response.json()
 }

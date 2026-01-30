@@ -14,13 +14,13 @@ from litestar.exceptions import NotFoundException
 
 from sail_server.data.text import (
     WorkData, EditionData, DocumentNodeData, DocumentNodeUpdateRequest,
-    TextImportRequest, ChapterListItem
+    TextImportRequest, ChapterListItem, ChapterInsertRequest
 )
 from sail_server.model.text import (
     create_work_impl, get_work_impl, get_works_impl, update_work_impl, delete_work_impl,
     create_edition_impl, get_edition_impl, get_editions_by_work_impl, update_edition_impl, delete_edition_impl,
     get_document_node_impl, get_chapter_list_impl, get_chapter_content_impl, update_document_node_impl,
-    import_text_impl, append_chapters_impl,
+    import_text_impl, append_chapters_impl, insert_chapter_impl,
     search_works_impl, search_content_impl,
 )
 
@@ -68,6 +68,11 @@ class DocumentNodeUpdateDTO(DataclassDTO[DocumentNodeUpdateRequest]):
     pass
 
 
+class ChapterInsertRequestDTO(DataclassDTO[ChapterInsertRequest]):
+    """插入章节请求DTO"""
+    pass
+
+
 class DocumentNodeDataReadDTO(DataclassDTO[DocumentNodeData]):
     """读取文档节点时使用的DTO"""
     pass
@@ -97,6 +102,13 @@ class AppendResponse:
     edition_id: int
     new_chapter_count: int
     message: str = "追加成功"
+
+
+@dataclass
+class ChapterInsertResponse:
+    """插入章节响应"""
+    chapter: DocumentNodeData
+    message: str = "插入成功"
 
 
 # ============================================================================
@@ -324,6 +336,32 @@ class EditionController(Controller):
         results = search_content_impl(db, edition_id, keyword, skip, limit)
         request.logger.info(f"Search content in edition {edition_id} with keyword '{keyword}': {len(results)} results")
         return results
+    
+    @post("/{edition_id:int}/chapter/insert", dto=ChapterInsertRequestDTO)
+    async def insert_chapter(
+        self,
+        edition_id: int,
+        data: ChapterInsertRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> ChapterInsertResponse:
+        """
+        向版本的指定位置插入新章节
+        
+        插入后，目标位置及之后的章节会自动后移
+        """
+        db = next(router_dependency)
+        chapter = insert_chapter_impl(
+            db, edition_id, data.sort_index, 
+            data.label, data.title, data.content, data.meta_data
+        )
+        if not chapter:
+            raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
+        request.logger.info(f"Inserted chapter at position {data.sort_index} in edition {edition_id}")
+        return ChapterInsertResponse(
+            chapter=chapter,
+            message=f"成功插入章节到位置 {data.sort_index}"
+        )
 
 
 # ============================================================================

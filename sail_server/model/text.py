@@ -496,3 +496,82 @@ def search_content_impl(db: Session, edition_id: int, keyword: str, skip: int = 
     ).order_by(DocumentNode.sort_index).offset(skip).limit(limit).all()
     
     return [DocumentNodeData.read_from_orm(node, 0, True) for node in nodes]
+
+
+# ============================================================================
+# Chapter Insert Operations
+# ============================================================================
+
+def insert_chapter_impl(db: Session, edition_id: int, sort_index: int, label: Optional[str],
+                        title: Optional[str], content: str, meta_data: dict = None) -> Optional[DocumentNodeData]:
+    """
+    向版本的指定位置插入新章节
+    
+    Args:
+        edition_id: 版本ID
+        sort_index: 插入位置（0-based），插入后该位置及之后的章节会后移
+        label: 章节标签，如 "第一章"
+        title: 章节标题
+        content: 章节内容
+        meta_data: 元数据
+    
+    Returns:
+        新创建的章节数据，如果版本不存在则返回 None
+    """
+    # 检查版本是否存在
+    edition = db.query(Edition).filter(Edition.id == edition_id).first()
+    if not edition:
+        return None
+    
+    # 获取当前章节总数
+    chapter_count = db.query(func.count(DocumentNode.id)).filter(
+        DocumentNode.edition_id == edition_id,
+        DocumentNode.node_type == 'chapter'
+    ).scalar() or 0
+    
+    # 规范化 sort_index：确保在有效范围内
+    if sort_index < 0:
+        sort_index = 0
+    if sort_index > chapter_count:
+        sort_index = chapter_count
+    
+    # 将目标位置及之后的章节 sort_index 后移
+    nodes_to_shift = db.query(DocumentNode).filter(
+        DocumentNode.edition_id == edition_id,
+        DocumentNode.node_type == 'chapter',
+        DocumentNode.sort_index >= sort_index
+    ).order_by(DocumentNode.sort_index.desc()).all()
+    
+    for node in nodes_to_shift:
+        node.sort_index += 1
+        node.path = f"{node.sort_index:04d}"
+    
+    # 创建新章节
+    char_count = len(content)
+    word_count = len(content.split())
+    
+    new_node = DocumentNode(
+        edition_id=edition_id,
+        parent_id=None,
+        node_type='chapter',
+        sort_index=sort_index,
+        depth=1,
+        label=label,
+        title=title,
+        raw_text=content,
+        word_count=word_count,
+        char_count=char_count,
+        path=f"{sort_index:04d}",
+        status='active',
+        meta_data=meta_data or {},
+    )
+    db.add(new_node)
+    
+    # 更新版本统计
+    edition.char_count = (edition.char_count or 0) + char_count
+    edition.word_count = (edition.word_count or 0) + word_count
+    
+    db.commit()
+    db.refresh(new_node)
+    
+    return DocumentNodeData.read_from_orm(new_node, 0, True)
