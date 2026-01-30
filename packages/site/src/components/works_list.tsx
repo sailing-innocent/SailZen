@@ -144,19 +144,10 @@ export default function WorksList({ onSelectWork, refreshTrigger }: WorksListPro
                     <span>{formatCharCount(work.total_chars)}</span>
                     <span>{work.edition_count} 个版本</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                     <WorkEditDialog
                       work={work}
                       onUpdateSuccess={handleWorkUpdate}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          编辑
-                        </Button>
-                      }
                     />
                     <Button
                       variant="ghost"
