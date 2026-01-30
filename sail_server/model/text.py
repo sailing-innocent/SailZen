@@ -15,7 +15,7 @@ from sqlalchemy import func
 
 from sail_server.data.text import (
     Work, Edition, DocumentNode, IngestJob,
-    WorkData, EditionData, DocumentNodeData, IngestJobData,
+    WorkData, EditionData, DocumentNodeData, DocumentNodeUpdateRequest, IngestJobData,
     TextImportRequest, ChapterListItem
 )
 
@@ -200,24 +200,31 @@ def get_chapter_content_impl(db: Session, edition_id: int, chapter_index: int) -
     return DocumentNodeData.read_from_orm(node, 0, True)
 
 
-def update_document_node_impl(db: Session, node_id: int, node_data: DocumentNodeData) -> Optional[DocumentNodeData]:
-    """更新文档节点"""
+def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNodeUpdateRequest) -> Optional[DocumentNodeData]:
+    """更新文档节点（仅更新可编辑字段）"""
     node = db.query(DocumentNode).filter(DocumentNode.id == node_id).first()
     if not node:
         return None
-    
-    node_data.update_orm(node)
-    # 重新计算字符数
-    if node_data.raw_text:
-        node.char_count = len(node_data.raw_text)
-        node.word_count = len(node_data.raw_text.split())
-    
+
+    # 仅更新传入的字段
+    if update_data.label is not None:
+        node.label = update_data.label
+    if update_data.title is not None:
+        node.title = update_data.title
+    if update_data.raw_text is not None:
+        node.raw_text = update_data.raw_text
+        # 重新计算字符数
+        node.char_count = len(update_data.raw_text)
+        node.word_count = len(update_data.raw_text.split())
+    if update_data.meta_data:
+        node.meta_data = update_data.meta_data
+
     db.commit()
     db.refresh(node)
-    
+
     # 更新版本的总字符数
     _update_edition_stats(db, node.edition_id)
-    
+
     return DocumentNodeData.read_from_orm(node, 0, True)
 
 

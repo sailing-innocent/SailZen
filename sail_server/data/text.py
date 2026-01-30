@@ -403,3 +403,12 @@ class ChapterListItem:
     title: Optional[str]
     char_count: Optional[int]
     path: str
+
+
+@dataclass
+class DocumentNodeUpdateRequest:
+    """文档节点更新请求（仅包含可编辑字段）"""
+    label: Optional[str] = None
+    title: Optional[str] = None
+    raw_text: Optional[str] = None
+    meta_data: Dict[str, Any] = field(default_factory=dict)

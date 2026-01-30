@@ -13,7 +13,7 @@ from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
 
 from sail_server.data.text import (
-    WorkData, EditionData, DocumentNodeData, 
+    WorkData, EditionData, DocumentNodeData, DocumentNodeUpdateRequest,
     TextImportRequest, ChapterListItem
 )
 from sail_server.model.text import (
@@ -63,13 +63,9 @@ class EditionDataReadDTO(DataclassDTO[EditionData]):
     pass
 
 
-class DocumentNodeDataWriteDTO(DataclassDTO[DocumentNodeData]):
+class DocumentNodeUpdateDTO(DataclassDTO[DocumentNodeUpdateRequest]):
     """更新文档节点时使用的DTO"""
-    config = DTOConfig(
-        include={
-            "label", "title", "raw_text", "meta_data",
-        },
-    )
+    pass
 
 
 class DocumentNodeDataReadDTO(DataclassDTO[DocumentNodeData]):
@@ -336,10 +332,9 @@ class EditionController(Controller):
 
 class DocumentNodeController(Controller):
     """文档节点控制器"""
-    dto = DocumentNodeDataWriteDTO
     return_dto = DocumentNodeDataReadDTO
     path = "/node"
-    
+
     @get("/{node_id:int}")
     async def get_node(
         self,
@@ -355,12 +350,12 @@ class DocumentNodeController(Controller):
             raise NotFoundException(detail=f"Node with ID {node_id} not found")
         request.logger.info(f"Get node {node_id}")
         return node
-    
-    @put("/{node_id:int}")
+
+    @put("/{node_id:int}", dto=DocumentNodeUpdateDTO)
     async def update_node(
         self,
         node_id: int,
-        data: DocumentNodeData,
+        data: DocumentNodeUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> DocumentNodeData:
