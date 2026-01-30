@@ -196,7 +196,7 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
   )
 
   return (
-    <div className="space-y-4 pb-16 md:pb-0">
+    <div className="space-y-4">
       {/* 顶部导航 */}
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2 md:gap-4">
@@ -291,7 +291,7 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
               </div>
             )}
 
-            {/* 章节标题和编辑按钮 */}
+            {/* 章节标题 */}
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <CardTitle className="text-sm md:text-base flex-1 min-w-0">
                 {currentChapter ? (
@@ -312,14 +312,6 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
                   <span className="hidden md:inline">请选择章节</span>
                 )}
               </CardTitle>
-              {/* 桌面端编辑按钮 */}
-              {currentChapter && !isEditing && (
-                <div className="hidden md:flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                    编辑
-                  </Button>
-                </div>
-              )}
             </div>
           </CardHeader>
           <CardContent className="px-3 md:px-6">
@@ -345,25 +337,44 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
                   </div>
                 )}
 
-                {/* 底部导航 - 非编辑模式 */}
-                {!isEditing && (
-                  <div className="flex justify-between mt-4 pt-4 border-t">
-                    <Button variant="outline" size="sm" onClick={goToPrev} disabled={currentIndex === 0}>
-                      上一章
-                    </Button>
-                    <span className="text-xs md:text-sm text-muted-foreground self-center">
-                      {currentIndex !== null ? `${currentIndex + 1} / ${chapters.length}` : ''}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={goToNext}
-                      disabled={currentIndex === chapters.length - 1}
-                    >
-                      下一章
-                    </Button>
-                  </div>
-                )}
+                {/* 底部操作栏 */}
+                <div className="flex justify-between items-center mt-4 pt-4 border-t">
+                  {isEditing ? (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>
+                        取消
+                      </Button>
+                      <span className="text-xs md:text-sm text-muted-foreground">
+                        {editContent.length.toLocaleString()} 字符
+                      </span>
+                      <Button size="sm" onClick={handleSave}>
+                        保存
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="outline" size="sm" onClick={goToPrev} disabled={currentIndex === 0}>
+                        上一章
+                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs md:text-sm text-muted-foreground">
+                          {currentIndex !== null ? `${currentIndex + 1} / ${chapters.length}` : ''}
+                        </span>
+                        <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                          编辑
+                        </Button>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={goToNext}
+                        disabled={currentIndex === chapters.length - 1}
+                      >
+                        下一章
+                      </Button>
+                    </>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center py-8 md:py-16 text-muted-foreground text-sm">
@@ -374,39 +385,6 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
           </CardContent>
         </Card>
       </div>
-
-      {/* 移动端底部悬浮操作栏 */}
-      {currentChapter && (
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-3 flex gap-2 justify-end md:hidden z-50">
-          {isEditing ? (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} className="flex-1">
-                取消
-              </Button>
-              <Button size="sm" onClick={handleSave} className="flex-1">
-                保存
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" size="sm" onClick={goToPrev} disabled={currentIndex === 0}>
-                上一章
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                编辑
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToNext}
-                disabled={currentIndex === chapters.length - 1}
-              >
-                下一章
-              </Button>
-            </>
-          )}
-        </div>
-      )}
     </div>
   )
 }
