@@ -27,6 +27,7 @@ npm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+_tmp*
 
 .env
 .env.dev
