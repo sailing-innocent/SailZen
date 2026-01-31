@@ -1,0 +1,130 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "watch-plugin",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "watch"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "fileLocation": "relative",
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[watch\\]",
+          "endsPattern": "^✓"
+        }
+      },
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated",
+        "clear": false
+      },
+      "group": "build"
+    },
+    {
+      "label": "compile-plugin",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "compile"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "build-plugin",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build"
+    },
+    {
+      "label": "precompile-deps",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "precompile"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build"
+    },
+    {
+      "label": "package-plugin",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "package"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "dependsOn": ["compile-plugin"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": "build"
+    },
+    {
+      "label": "clean-plugin",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["run", "clean"],
+      "options": {
+        "cwd": "${workspaceFolder}/packages/vscode_plugin"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "install-deps",
+      "type": "shell",
+      "command": "pnpm",
+      "args": ["install"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

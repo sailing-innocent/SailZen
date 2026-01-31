@@ -1,0 +1,84 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode_plugin"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode_plugin/dist/**/*.js"
+      ],
+      "preLaunchTask": "watch-plugin",
+      "env": {
+        "VSCODE_DEBUGGING_EXTENSION": "true",
+        "LOG_LEVEL": "debug"
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/vscode_plugin/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "name": "Run Extension (No Watch)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode_plugin"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode_plugin/dist/**/*.js"
+      ],
+      "env": {
+        "VSCODE_DEBUGGING_EXTENSION": "true",
+        "LOG_LEVEL": "debug"
+      },
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/packages/vscode_plugin/**",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "name": "Run Extension (Production)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode_plugin"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode_plugin/dist/**/*.js"
+      ],
+      "preLaunchTask": "compile-plugin",
+      "env": {
+        "LOG_LEVEL": "info"
+      },
+      "sourceMaps": true
+    },
+    {
+      "name": "Run Web Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode_plugin",
+        "--extensionDevelopmentKind=web"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/packages/vscode_plugin/dist/**/*.js"
+      ],
+      "env": {
+        "VSCODE_DEBUGGING_EXTENSION": "true"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Extension + Watch",
+      "configurations": ["Run Extension"],
+      "stopAll": true
+    }
+  ]
+}
