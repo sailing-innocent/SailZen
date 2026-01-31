@@ -1,54 +1,56 @@
-{"level":30,"time":1769869050433,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"appModule:start","dirPath":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":30,"time":1769869050439,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"launch","msg":"exit","port":53351,"LOG_DST":"d:\\ws\\repos\\SailZen\\packages\\dendron.server.log","root":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":30,"time":1769869050466,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"WorkspaceController:init","msg":"enter","uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
-{"level":30,"time":1769869050469,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
-{"level":30,"time":1769869050470,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","msg":"enter"}
-{"level":30,"time":1769869050474,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1769869050474,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
-{"level":30,"time":1769869050475,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1769869050475,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
-{"level":30,"time":1769869050476,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["dendron.schema.yml","root.schema.yml"]}
-{"level":30,"time":1769869050476,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["dendron.schema.yml","root.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
-{"level":30,"time":1769869050480,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"]}
-{"level":30,"time":1769869050480,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
-{"level":30,"time":1769869050480,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1769869050480,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
-{"level":30,"time":1769869050531,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","msg":"enter"}
-{"level":30,"time":1769869050549,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
-POST /api/workspace/initialize 200 2033.800 ms - 248106 - 361
-{"level":30,"time":1769869050566,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1769869050576,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1769869050713,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1769869050714,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1769869050714,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":21,"numCacheUpdates":0}
-{"level":30,"time":1769869050727,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
-{"level":30,"time":1769869050738,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1769869050785,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1769869050837,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1769869050838,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1769869050838,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":12,"numCacheUpdates":0}
-{"level":30,"time":1769869050860,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
-{"level":30,"time":1769869050872,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1769869050952,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1769869051270,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1769869051271,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1769869051272,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":66,"numCacheUpdates":1}
-{"level":30,"time":1769869051285,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
-{"level":30,"time":1769869051297,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1769869051305,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1769869051313,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1769869051313,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1769869051313,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":7,"numCacheUpdates":0}
-{"level":30,"time":1769869051331,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
-{"level":30,"time":1769869051340,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1769869051428,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1769869052491,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1769869052492,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1769869052492,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":165,"numCacheUpdates":0}
-{"level":30,"time":1769869052493,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"1961\" ms"}
-{"level":30,"time":1769869052498,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
-{"level":30,"time":1769869052498,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"WorkspaceController:init","msg":"finish init","duration":2031,"uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
-POST /api/note/findMeta 200 4.359 ms - 132834 - 75
-POST /api/note/findMeta 200 0.568 ms - 3258 - 70
-{"level":30,"time":1769869052742,"pid":19676,"hostname":"saili","name":"dendron.server","ctx":"DEngine:querySchema","msg":"exit"}
-POST /api/schema/query 200 1.111 ms - 7966 - 64
+{"level":30,"time":1769879572410,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"appModule:start","dirPath":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1769879572434,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"launch","msg":"exit","port":52626,"LOG_DST":"d:\\ws\\repos\\SailZen\\packages\\dendron.server.log","root":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1769879572541,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"WorkspaceController:init","msg":"enter","uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+{"level":30,"time":1769879572544,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
+{"level":30,"time":1769879572546,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","msg":"enter"}
+{"level":30,"time":1769879572568,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1769879572568,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+{"level":30,"time":1769879572569,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1769879572569,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1769879572570,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["dendron.schema.yml","root.schema.yml"]}
+{"level":30,"time":1769879572570,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["dendron.schema.yml","root.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1769879572574,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"]}
+{"level":30,"time":1769879572574,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
+{"level":30,"time":1769879572575,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1769879572575,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
+{"level":30,"time":1769879572613,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","msg":"enter"}
+{"level":30,"time":1769879572632,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+POST /api/workspace/initialize 200 170.924 ms - 250483 - 361
+{"level":30,"time":1769879572635,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1769879572635,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1769879572640,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1769879572641,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1769879572641,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":21,"numCacheUpdates":0}
+{"level":30,"time":1769879572642,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1769879572643,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1769879572644,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1769879572645,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1769879572645,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1769879572645,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":12,"numCacheUpdates":0}
+{"level":30,"time":1769879572665,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1769879572666,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1769879572667,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1769879572675,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1769879572676,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1769879572676,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":69,"numCacheUpdates":0}
+{"level":30,"time":1769879572676,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
+{"level":30,"time":1769879572677,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1769879572677,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1769879572677,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1769879572677,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1769879572677,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":1,"numCacheUpdates":0}
+{"level":30,"time":1769879572681,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
+{"level":30,"time":1769879572682,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1769879572683,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1769879572703,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1769879572704,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1769879572704,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":165,"numCacheUpdates":0}
+{"level":30,"time":1769879572705,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"92\" ms"}
+{"level":30,"time":1769879572709,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
+{"level":30,"time":1769879572709,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"WorkspaceController:init","msg":"finish init","duration":167,"uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+POST /api/note/findMeta 200 3.507 ms - 134928 - 75
+{"level":30,"time":1769879572889,"pid":9784,"hostname":"saili","name":"dendron.server","ctx":"DEngine:querySchema","msg":"exit"}
+POST /api/schema/query 200 1.134 ms - 7966 - 64
+POST /api/note/find 200 9.311 ms - 1524 - 170
+POST /api/note/find 200 8.257 ms - 1524 - 170
+POST /api/note/decorations 200 16.086 ms - 1363 - 676

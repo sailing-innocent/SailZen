@@ -353,6 +353,7 @@ export async function updateDecorations(editor: TextEditor): Promise<{
     }
 
     const { data, error } = out;
+
     Logger.info({
       ctx,
       msg: "decorating...",

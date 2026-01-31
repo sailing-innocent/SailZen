@@ -74,6 +74,9 @@
     "exit": "^0.1.2",
     "jest": "catalog:",
     "jest-config": "catalog:",
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-util-types": "^2.0.2",
     "rimraf": "^6.1.2",
     "ts-jest": "catalog:"
   },

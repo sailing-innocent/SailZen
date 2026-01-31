@@ -975,6 +975,18 @@ export class DendronEngineV3 extends EngineV3Base implements DEngine {
       const { data: config } = DConfig.readConfigAndApplyLocalOverrideSync(
         this.wsRoot
       );
+
+      // DEBUG: Log config read from DConfig
+      // console.log("[DendronEngineV3.getDecorations] Config loaded", {
+      //   wsRoot: this.wsRoot,
+      //   hasConfig: !!config,
+      //   hasWorkspace: !!config?.workspace,
+      //   vaultsCount: config?.workspace?.vaults?.length ?? 0,
+      //   vaults: config?.workspace?.vaults?.map(v => ({ fsPath: v.fsPath, name: v.name })),
+      //   engineVaultsCount: this.vaults?.length ?? 0,
+      //   engineVaults: this.vaults?.map(v => ({ fsPath: v.fsPath, name: v.name })),
+      // });
+
       const {
         allDecorations: decorations,
         allDiagnostics: diagnostics,

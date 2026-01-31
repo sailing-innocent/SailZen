@@ -19,6 +19,8 @@ import { WikiLinkNoteV4 } from "../types";
 import { decorateTaskNote, DecorationTaskNote } from "./taskNotes";
 import { Decoration, DECORATION_TYPES, Decorator } from "./utils";
 
+
+
 export type DecorationWikilink = WikiLinkDecorator | NoteRefDecorator;
 
 export type WikiLinkDecorator = Decoration & {
@@ -51,6 +53,15 @@ export const decorateWikilink: Decorator<
   const fname: string | undefined = wikiLink.value;
   const vaultName = wikiLink.data.vaultName;
 
+  // DEBUG: Log parsed wikilink data
+  // console.log("[decorateWikilink] Parsed wikilink", {
+  //   fname,
+  //   alias: wikiLink.data.alias,
+  //   vaultName,
+  //   anchorHeader: wikiLink.data.anchorHeader,
+  //   rawNode: JSON.stringify(wikiLink),
+  // });
+
   const { type, errors } = await linkedNoteType({
     fname,
     anchorStart: wikiLink.data.anchorHeader,
@@ -59,6 +70,7 @@ export const decorateWikilink: Decorator<
     engine,
     vaults: config.workspace?.vaults ?? [],
   });
+
   const wikilinkRange = position2VSCodeRange(position);
   const decorations: DecorationsForDecorateWikilink[] = [];
 
@@ -150,16 +162,18 @@ export async function linkedNoteType({
   errors: IDendronError[];
 }> {
   const ctx = "linkedNoteType";
-  // const { vaults } = engine;
+
   const vault = vaultName
     ? VaultUtils.getVaultByName({ vname: vaultName, vaults })
     : undefined;
+
   // Vault specified, but can't find it.
-  if (vaultName && !vault)
+  if (vaultName && !vault) {
     return {
       type: DECORATION_TYPES.brokenWikilink,
       errors: [],
     };
+  }
 
   let matchingNotes: NotePropsMeta[];
   // Same-file links have `fname` undefined or empty string
@@ -168,6 +182,13 @@ export async function linkedNoteType({
   } else if (fname) {
     try {
       matchingNotes = await engine.findNotesMeta({ fname, vault });
+      // DEBUG: Log findNotesMeta result
+      // console.log("[linkedNoteType] findNotesMeta result", {
+      //   fname,
+      //   vault: vault?.fsPath,
+      //   matchingNotesCount: matchingNotes?.length ?? 0,
+      //   matchingNotes: matchingNotes?.map(n => ({ id: n.id, fname: n.fname })),
+      // });
     } catch (err) {
       return {
         type: DECORATION_TYPES.brokenWikilink,
@@ -222,6 +243,7 @@ export async function linkedNoteType({
 
   if (matchingNotes.length > 0) {
     // There are no anchors specified in the link, but we did find matching notes
+    // console.log("[linkedNoteType] VALID: Found matching notes", { fname, count: matchingNotes.length });
     return {
       type: DECORATION_TYPES.wikiLink,
       errors: [],
@@ -229,5 +251,6 @@ export async function linkedNoteType({
     };
   }
   // No matching notes, and not a non-note file or web URL. This is just a broken link then.
+  // console.log("[linkedNoteType] BROKEN: No matching notes found", { fname });
   return { type: DECORATION_TYPES.brokenWikilink, errors: [] };
 }

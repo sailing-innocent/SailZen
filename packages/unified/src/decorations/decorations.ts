@@ -10,7 +10,7 @@ import {
   NoteProps,
   offsetRange,
 } from "@saili/common-all";
-import { decorateZDocTag } from "./zdocTags";
+
 import {
   DendronASTDest,
   DendronASTNode,
@@ -21,10 +21,12 @@ import {
   NoteRefNoteV4,
   WikiLinkNoteV4,
 } from "../types";
+
 import { decorateHashTag } from "./hashTags";
 import { decorateReference } from "./references";
-import { Decoration, DecoratorIn, DecoratorOut } from "./utils";
+import { decorateZDocTag } from "./zdocTags";
 import { decorateWikilink } from "./wikilinks";
+import { Decoration, DecoratorIn, DecoratorOut } from "./utils";
 import { decorateFrontmatter } from "./frontmatter";
 import { decorateBlockAnchor } from "./blockAnchors";
 import { MDUtilsV5, ProcMode } from "../utilsv5";
@@ -42,6 +44,7 @@ function runDecorator(
   opts: DecoratorIn
 ): DecoratorOut | Promise<DecoratorOut> | undefined {
   const { node } = opts;
+
   switch (node.type) {
     case DendronASTTypes.BLOCK_ANCHOR:
       return decorateBlockAnchor(opts as DecoratorIn<BlockAnchor>);
@@ -102,6 +105,25 @@ export async function runAllDecorators(
       };
     }
     const tree = proc.parse(text);
+
+    // DEBUG: Log parsed tree structure
+    // const collectNodeTypes = (node: any, types: string[] = []): string[] => {
+    //   if (node.type) types.push(node.type);
+    //   if (node.children) {
+    //     for (const child of node.children) {
+    //       collectNodeTypes(child, types);
+    //     }
+    //   }
+    //   return types;
+    // };
+    // const nodeTypes = collectNodeTypes(tree);
+    // console.log("[runAllDecorators] Parsed tree", {
+    //   textLength: text.length,
+    //   textPreview: text.substring(0, 200),
+    //   nodeTypesInTree: nodeTypes,
+    //   hasWikiLink: nodeTypes.includes("wikiLink"),
+    //   wikiLinkCount: nodeTypes.filter(t => t === "wikiLink").length,
+    // });
 
     // eslint-disable-next-line no-await-in-loop
     await MdastUtils.visitAsync(tree, [], async (nodeIn) => {
