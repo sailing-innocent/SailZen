@@ -56,14 +56,14 @@
 
 **任务清单**：
 
-- [ ] 实现大纲 ORM 模型
+- [x] 实现大纲 ORM 模型
   ```python
   class Outline(ORMBase)
   class OutlineNode(ORMBase)
   class OutlineEvent(ORMBase)
   ```
 
-- [ ] 实现人物 ORM 模型
+- [x] 实现人物 ORM 模型
   ```python
   class Character(ORMBase)
   class CharacterAlias(ORMBase)
@@ -72,7 +72,7 @@
   class CharacterRelation(ORMBase)
   ```
 
-- [ ] 实现设定 ORM 模型
+- [x] 实现设定 ORM 模型
   ```python
   class Setting(ORMBase)
   class SettingAttribute(ORMBase)
