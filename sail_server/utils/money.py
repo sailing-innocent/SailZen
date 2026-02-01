@@ -47,7 +47,14 @@ class Money:
     def __init__(self, value: str = "0.0", currency: str = "CNY"):
         if currency not in Money._supported_currency:
             raise ValueError(f"Unsupported currency: {currency}")
-        # print(value)
+        
+        # Handle value strings that include currency suffix (e.g., "100.00 CNY")
+        if isinstance(value, str):
+            parts = value.strip().split()
+            if len(parts) == 2 and parts[1] in Money._supported_currency:
+                value = parts[0]
+                currency = parts[1]
+        
         self.value = Decimal(value)
         self.currency = currency
 
@@ -91,6 +98,15 @@ class Money:
         if self.currency != other.currency:
             raise ValueError(f"Currency mismatch: {self.currency} != {other.currency}")
         return Money(self.value - other.value, self.currency)
+
+    # operator *
+    def __mul__(self, other):
+        if isinstance(other, (int, float, Decimal)):
+            return Money(str(self.value * Decimal(str(other))), self.currency)
+        raise TypeError(f"unsupported operand type(s) for *: 'Money' and '{type(other).__name__}'")
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
 
     # unary operator -
     def __neg__(self):

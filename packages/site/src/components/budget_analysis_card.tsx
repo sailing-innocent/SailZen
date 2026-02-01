@@ -55,7 +55,7 @@ const BudgetAnalysisCard: React.FC<BudgetAnalysisCardProps> = ({ budgetId }) => 
   }
 
   const usedAmount = new Money(analysis.used_amount)
-  const budgetAmount = new Money(analysis.budget.amount)
+  const budgetAmount = new Money(analysis.budget.total_amount)
   const remainingAmount = new Money(analysis.remaining_amount)
   const usagePercentage = analysis.usage_percentage
 

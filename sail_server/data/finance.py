@@ -382,7 +382,7 @@ class BudgetItem(ORMBase):
         if self.item_type == ItemType.FIXED:
             return self.amount
         else:
-            return str(Money(self.amount) * self.period_count)
+            return (Money(self.amount) * self.period_count).value_str
     
     @property
     def remaining_periods(self) -> int:

@@ -20,7 +20,6 @@ export default defineConfig(({ mode }) => {
   },
   define: {
     'process.env.SERVER_URL': JSON.stringify(env.SERVER_URL),
-    'process.env.CONTENT_SERVER_URL': JSON.stringify(env.CONTENT_SERVER_URL),
   },
   build: {
     outDir: 'dist',

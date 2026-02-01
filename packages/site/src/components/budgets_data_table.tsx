@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { type BudgetsState, useBudgetsStore, useServerStore, useAccountsStore, type AccountsState } from '@lib/store'
-import { type BudgetData, type TransactionData, BudgetTypeLabels, BudgetType, PeriodTypeLabels, PeriodType, BudgetCategoryLabels, BudgetCategory } from '@lib/data/money'
+import { type BudgetData, type TransactionData } from '@lib/data/money'
 import { DataTable } from '@components/data_table'
 import BudgetAddDialog from './budget_add_dialog'
 import BudgetConsumeDialog from './budget_consume_dialog'
@@ -37,10 +37,10 @@ const BudgetColumns: ColumnDef<BudgetWithStats>[] = [
     },
   },
   {
-    accessorKey: 'amount',
+    accessorKey: 'total_amount',
     header: '预算金额',
     cell: ({ row }) => {
-      const amount = new Money(row.getValue('amount') as string)
+      const amount = new Money(row.getValue('total_amount') as string)
       return <div className="text-right font-semibold">{amount.format()}</div>
     },
   },
@@ -58,11 +58,11 @@ const BudgetColumns: ColumnDef<BudgetWithStats>[] = [
     id: 'remaining_amount',
     header: '剩余',
     cell: ({ row }) => {
-      const remaining = row.original.remaining_amount || row.original.amount
+      const remaining = row.original.remaining_amount || row.original.total_amount
       const amount = new Money(remaining)
       const used = row.original.used_amount
       const usedAmount = used ? new Money(used).value : 0
-      const budgetAmount = new Money(row.original.amount).value
+      const budgetAmount = new Money(row.original.total_amount).value
       const isLow = budgetAmount > 0 && (budgetAmount - usedAmount) / budgetAmount < 0.2
       return (
         <div className={`text-right font-semibold ${isLow ? 'text-red-600' : ''}`}>
@@ -326,7 +326,7 @@ const BudgetsDataTable: React.FC = () => {
                         <div className="flex-1 grid grid-cols-2 md:grid-cols-7 gap-2 md:gap-4 text-left">
                           <div className="font-medium">{budget.name}</div>
                           <div className="text-right font-semibold">
-                            {new Money(budget.amount).format()}
+                            {new Money(budget.total_amount).format()}
                           </div>
                           <div className="text-right text-muted-foreground">
                             {budget.used_amount ? new Money(budget.used_amount).format() : '-'}
@@ -335,14 +335,14 @@ const BudgetsDataTable: React.FC = () => {
                             className={`text-right font-semibold ${
                               budget.remaining_amount &&
                               new Money(budget.remaining_amount).value <
-                                new Money(budget.amount).value * 0.2
+                                new Money(budget.total_amount).value * 0.2
                                 ? 'text-red-600'
                                 : ''
                             }`}
                           >
                             {budget.remaining_amount
                               ? new Money(budget.remaining_amount).format()
-                              : new Money(budget.amount).format()}
+                              : new Money(budget.total_amount).format()}
                           </div>
                           <div className="hidden md:block max-w-[200px] truncate text-sm">
                             {budget.description || '-'}

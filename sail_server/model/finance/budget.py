@@ -43,7 +43,7 @@ def budget_item_to_data(item: BudgetItem) -> BudgetItemData:
     if item.item_type == ItemType.FIXED:
         total = item.amount or "0.0"
     else:
-        total = str(Money(item.amount or "0.0") * (item.period_count or 1))
+        total = (Money(item.amount or "0.0") * (item.period_count or 1)).value_str
     
     return BudgetItemData(
         id=item.id,
@@ -160,7 +160,7 @@ def create_budget_impl(db, data: BudgetData) -> BudgetData:
     db.flush()
     
     # Recalculate and update total
-    budget.total_amount = str(calculate_budget_total(budget.items))
+    budget.total_amount = calculate_budget_total(budget.items).value_str
     
     db.commit()
     db.refresh(budget)
@@ -237,7 +237,7 @@ def update_budget_impl(db, budget_id: int, data: BudgetData) -> Optional[BudgetD
     budget.mtime = datetime.now()
     
     # Recalculate total from items
-    budget.total_amount = str(calculate_budget_total(budget.items))
+    budget.total_amount = calculate_budget_total(budget.items).value_str
 
     db.commit()
     db.refresh(budget)
@@ -273,7 +273,7 @@ def create_item_impl(db, budget_id: int, data: BudgetItemData) -> BudgetItemData
     db.flush()
     
     # Update budget total
-    budget.total_amount = str(calculate_budget_total(budget.items))
+    budget.total_amount = calculate_budget_total(budget.items).value_str
     budget.mtime = datetime.now()
     
     db.commit()
@@ -317,7 +317,7 @@ def update_item_impl(db, item_id: int, data: BudgetItemData) -> Optional[BudgetI
     # Update budget total
     budget = item.budget
     if budget:
-        budget.total_amount = str(calculate_budget_total(budget.items))
+        budget.total_amount = calculate_budget_total(budget.items).value_str
         budget.mtime = datetime.now()
     
     db.commit()
@@ -337,7 +337,7 @@ def delete_item_impl(db, item_id: int) -> Optional[dict]:
     # Update budget total
     if budget:
         db.flush()
-        budget.total_amount = str(calculate_budget_total(budget.items))
+        budget.total_amount = calculate_budget_total(budget.items).value_str
         budget.mtime = datetime.now()
     
     db.commit()
@@ -458,8 +458,7 @@ def get_budget_stats_impl(
     )
 
     total_budget_amount = Money("0.0")
-    total_expense_used = Money("0.0")
-    total_income_used = Money("0.0")
+    total_used_amount = Money("0.0")
 
     budget_details = []
 
@@ -470,10 +469,13 @@ def get_budget_stats_impl(
 
         budget_amount = Money(budget_data.total_amount)
         used = get_budget_used_amount_impl(db, budget, from_time, to_time)
+        
+        # Calculate used amount (expense - income for net spending)
+        used_amount = used["expense"]
+        remaining_amount = budget_amount - used_amount
 
         total_budget_amount += budget_amount
-        total_expense_used += used["expense"]
-        total_income_used += used["income"]
+        total_used_amount += used_amount
 
         # Count transactions
         q = db.query(Transaction).filter(
@@ -488,16 +490,18 @@ def get_budget_stats_impl(
 
         budget_details.append({
             "budget": budget_data,
-            "expense_used": str(used["expense"]),
-            "income_used": str(used["income"]),
+            "used_amount": used_amount.value_str,
+            "remaining_amount": remaining_amount.value_str,
             "transaction_count": transaction_count,
         })
 
+    total_remaining = total_budget_amount - total_used_amount
+    
     result = {
         "total_budget_count": len(budgets),
-        "total_budget_amount": str(total_budget_amount),
-        "total_expense_used": str(total_expense_used),
-        "total_income_used": str(total_income_used),
+        "total_budget_amount": total_budget_amount.value_str,
+        "total_used_amount": total_used_amount.value_str,
+        "total_remaining_amount": total_remaining.value_str,
     }
 
     if return_list:
@@ -516,10 +520,13 @@ def get_budget_analysis_impl(db, budget_id: int) -> Optional[Dict]:
     budget_amount = Money(budget_data.total_amount)
     used = get_budget_used_amount_impl(db, budget)
     
-    total_used = used["expense"] + used["income"]
+    # Calculate used amount (expense for spending tracking)
+    used_amount = used["expense"]
+    remaining_amount = budget_amount - used_amount
+    
     usage_percentage = 0.0
     if budget_amount.value > 0:
-        usage_percentage = float((total_used.value / budget_amount.value) * 100)
+        usage_percentage = float((used_amount.value / budget_amount.value) * 100)
 
     # Get transactions
     from sail_server.model.finance.transaction import read_from_trans
@@ -539,26 +546,19 @@ def get_budget_analysis_impl(db, budget_id: int) -> Optional[Dict]:
                 tag = tag.strip()
                 if tag:
                     if tag not in by_tag:
-                        by_tag[tag] = {"expense": Money("0.0"), "income": Money("0.0"), "count": 0}
+                        by_tag[tag] = {"amount": Money("0.0"), "count": 0}
                     
-                    from_id = trans.from_acc_id if trans.from_acc_id else -1
-                    to_id = trans.to_acc_id if trans.to_acc_id else -1
-                    
-                    if from_id > 0 and to_id == -1:
-                        by_tag[tag]["expense"] += Money(trans.value)
-                    elif from_id == -1 and to_id > 0:
-                        by_tag[tag]["income"] += Money(trans.value)
+                    by_tag[tag]["amount"] += Money(trans.value)
                     by_tag[tag]["count"] += 1
 
     # Convert Money to string
     for tag in by_tag:
-        by_tag[tag]["expense"] = str(by_tag[tag]["expense"])
-        by_tag[tag]["income"] = str(by_tag[tag]["income"])
+        by_tag[tag]["amount"] = by_tag[tag]["amount"].value_str
 
     return {
         "budget": budget_data,
-        "expense_used": str(used["expense"]),
-        "income_used": str(used["income"]),
+        "used_amount": used_amount.value_str,
+        "remaining_amount": remaining_amount.value_str,
         "usage_percentage": usage_percentage,
         "transactions": transactions,
         "by_tag": by_tag,

@@ -640,6 +640,7 @@ class BudgetController(Controller):
     ) -> BudgetData:
         """
         Create a new budget data.
+        Budget total_amount is computed from items automatically.
         """
         db = next(router_dependency)
         name = data.name.strip() if data.name else ""
@@ -650,21 +651,14 @@ class BudgetController(Controller):
             request.logger.error("Budget name is too long.")
             raise HTTPException(status_code=400, detail="Budget name is too long.")
         
-        # Validate amount
-        try:
-            amount = Money(data.amount)
-            if amount.value <= 0:
-                raise HTTPException(status_code=400, detail="Budget amount must be positive.")
-        except Exception as e:
-            request.logger.error(f"Invalid budget amount: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid budget amount: {str(e)}")
-        
         budget = create_budget_impl(db, BudgetData(
             name=name,
-            amount=data.amount,
             description=data.description if data.description else "",
             tags=data.tags if data.tags else "",
-            htime=data.htime if data.htime > 0 else datetime.now().timestamp(),
+            start_date=data.start_date,
+            end_date=data.end_date,
+            htime=data.htime if data.htime and data.htime > 0 else datetime.now().timestamp(),
+            items=data.items if data.items else [],
         ))
         request.logger.info(f"Create budget: {budget}")
         if budget is None:
@@ -681,6 +675,7 @@ class BudgetController(Controller):
     ) -> BudgetData:
         """
         Update the budget data.
+        Budget total_amount is recomputed from items automatically.
         """
         db = next(router_dependency)
         name = data.name.strip() if data.name else ""
@@ -688,21 +683,13 @@ class BudgetController(Controller):
             request.logger.error("Budget name cannot be empty.")
             raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
         
-        # Validate amount
-        try:
-            amount = Money(data.amount)
-            if amount.value <= 0:
-                raise HTTPException(status_code=400, detail="Budget amount must be positive.")
-        except Exception as e:
-            request.logger.error(f"Invalid budget amount: {e}")
-            raise HTTPException(status_code=400, detail=f"Invalid budget amount: {str(e)}")
-        
         budget = update_budget_impl(db, budget_id, BudgetData(
             name=name,
-            amount=data.amount,
             description=data.description if data.description else "",
             tags=data.tags if data.tags else "",
-            htime=data.htime if data.htime > 0 else datetime.now().timestamp(),
+            start_date=data.start_date,
+            end_date=data.end_date,
+            htime=data.htime if data.htime and data.htime > 0 else datetime.now().timestamp(),
         ))
         request.logger.info(f"Update budget: {budget}")
         if budget is None:

@@ -10,8 +10,8 @@
 -- Reset the sequence to the maximum id value + 1
 --
 -- Execution:
--- \i sail_server/migration/fix_transactions_sequence.sql
--- Or execute this file directly in psql
+-- Option 1 (Python, recommended): python sail_server/migration/run_fix_transactions_sequence.py
+-- Option 2 (psql): \i sail_server/migration/fix_transactions_sequence.sql
 
 -- Step 1: Find the sequence name for transactions.id
 -- PostgreSQL typically creates sequences named: tablename_columnname_seq

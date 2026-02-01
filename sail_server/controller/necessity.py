@@ -503,7 +503,7 @@ class ItemController(Controller):
         limit: int = -1,
         category_id: Optional[int] = None,
         item_type: Optional[int] = None,
-        state: Optional[int] = None,
+        item_state: Optional[int] = None,
         tags: str = "",
     ) -> list[ItemData]:
         """Get items with optional filtering"""
@@ -512,7 +512,7 @@ class ItemController(Controller):
             db, skip, limit,
             category_id=category_id,
             item_type=item_type,
-            state=state,
+            state=item_state,
             tags=tags if tags else None,
         )
 
@@ -524,7 +524,7 @@ class ItemController(Controller):
         page_size: int = 20,
         category_id: Optional[int] = None,
         item_type: Optional[int] = None,
-        state: Optional[int] = None,
+        item_state: Optional[int] = None,
         tags: str = "",
         keyword: str = "",
         sort_by: str = "mtime",
@@ -538,7 +538,7 @@ class ItemController(Controller):
             page_size=page_size,
             category_id=category_id,
             item_type=item_type,
-            state=state,
+            state=item_state,
             tags=tags if tags else None,
             keyword=keyword if keyword else None,
             sort_by=sort_by,
