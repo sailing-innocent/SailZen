@@ -43,21 +43,15 @@ from sail_server.model.finance.budget import (
     get_budget_stats_impl,
     get_budget_analysis_impl,
     consume_budget_impl,
-    link_transaction_to_budget_impl,
-    unlink_transaction_from_budget_impl,
+    link_transaction_impl,
+    unlink_transaction_impl,
     # Budget Item functions
-    create_budget_item_impl,
-    read_budget_items_impl,
-    read_budget_item_impl,
-    update_budget_item_impl,
-    delete_budget_item_impl,
-    record_item_refund_impl,
-    advance_item_period_impl,
-    get_budget_with_items_impl,
-    # Budget templates
-    create_rent_budget_impl,
-    create_mortgage_budget_impl,
-    create_salary_budget_impl,
+    create_item_impl,
+    read_items_impl,
+    update_item_impl,
+    delete_item_impl,
+    record_refund_impl,
+    advance_period_impl,
 )
 from sail_server.data.finance import BudgetItemData
 from sqlalchemy.orm import Session
@@ -835,7 +829,7 @@ class BudgetController(Controller):
         """
         try:
             db = next(router_dependency)
-            transaction = link_transaction_to_budget_impl(db, budget_id, transaction_id)
+            transaction = link_transaction_impl(db, budget_id, transaction_id)
             request.logger.info(
                 f"Link transaction: budget_id={budget_id}, transaction_id={transaction_id}"
             )
@@ -859,7 +853,7 @@ class BudgetController(Controller):
         """
         try:
             db = next(router_dependency)
-            transaction = unlink_transaction_from_budget_impl(db, transaction_id)
+            transaction = unlink_transaction_impl(db, transaction_id)
             request.logger.info(f"Unlink transaction: transaction_id={transaction_id}")
             return transaction
         except ValueError as e:
@@ -881,8 +875,8 @@ class BudgetController(Controller):
         """Get all items for a budget"""
         try:
             db = next(router_dependency)
-            items = read_budget_items_impl(db, budget_id)
-            return items
+            items = read_items_impl(db, budget_id)
+            return [item.__dict__ for item in items]
         except Exception as e:
             request.logger.error(f"Error getting budget items: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -895,20 +889,37 @@ class BudgetController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> dict:
-        """Create a new budget item"""
+        """
+        Create a new budget item.
+        
+        Body:
+        {
+            "name": "string",           # 子项名称
+            "description": "string",    # 描述（可选）
+            "direction": 0,             # 0: 支出, 1: 收入
+            "item_type": 0,             # 0: 固定金额, 1: 周期性金额
+            "amount": "0.0",            # 金额
+            "period_count": 1,          # 期数
+            "is_refundable": 0          # 是否可退还
+        }
+        """
         try:
             db = next(router_dependency)
             item_data = BudgetItemData(
                 budget_id=budget_id,
                 name=data.get("name", ""),
-                amount=data.get("amount", "0.0"),
                 description=data.get("description", ""),
-                is_refundable=data.get("is_refundable", 0),
+                direction=data.get("direction", 0),
+                item_type=data.get("item_type", 0),
+                amount=data.get("amount", "0.0"),
                 period_count=data.get("period_count", 1),
+                is_refundable=data.get("is_refundable", 0),
             )
-            item = create_budget_item_impl(db, item_data)
+            item = create_item_impl(db, budget_id, item_data)
             request.logger.info(f"Created budget item: {item.name}")
             return item.__dict__
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             request.logger.error(f"Error creating budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -928,16 +939,18 @@ class BudgetController(Controller):
                 id=item_id,
                 budget_id=data.get("budget_id", -1),
                 name=data.get("name", ""),
-                amount=data.get("amount", "0.0"),
                 description=data.get("description", ""),
+                direction=data.get("direction", 0),
+                item_type=data.get("item_type", 0),
+                amount=data.get("amount", "0.0"),
+                period_count=data.get("period_count", 1),
                 is_refundable=data.get("is_refundable", 0),
                 refund_amount=data.get("refund_amount", "0.0"),
-                status=data.get("status", 0),
-                period_count=data.get("period_count", 1),
                 current_period=data.get("current_period", 0),
+                status=data.get("status", 0),
                 due_date=data.get("due_date"),
             )
-            item = update_budget_item_impl(db, item_id, item_data)
+            item = update_item_impl(db, item_id, item_data)
             if item is None:
                 raise HTTPException(status_code=404, detail="Budget item not found")
             return item.__dict__
@@ -957,7 +970,7 @@ class BudgetController(Controller):
         """Delete a budget item"""
         try:
             db = next(router_dependency)
-            result = delete_budget_item_impl(db, item_id)
+            result = delete_item_impl(db, item_id)
             if result is None:
                 raise HTTPException(status_code=404, detail="Budget item not found")
             return result
@@ -979,7 +992,7 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             refund_amount = data.get("refund_amount", "0.0")
-            item = record_item_refund_impl(db, item_id, refund_amount)
+            item = record_refund_impl(db, item_id, refund_amount)
             request.logger.info(f"Recorded refund for item {item_id}: {refund_amount}")
             return item.__dict__
         except ValueError as e:
@@ -998,7 +1011,7 @@ class BudgetController(Controller):
         """Advance a periodic item to the next period"""
         try:
             db = next(router_dependency)
-            item = advance_item_period_impl(db, item_id)
+            item = advance_period_impl(db, item_id)
             request.logger.info(f"Advanced item {item_id} to period {item.current_period}")
             return item.__dict__
         except ValueError as e:
@@ -1017,7 +1030,7 @@ class BudgetController(Controller):
         """Get budget with all its items"""
         try:
             db = next(router_dependency)
-            budget = get_budget_with_items_impl(db, budget_id)
+            budget = read_budget_impl(db, budget_id, include_items=True)
             if budget is None:
                 raise HTTPException(status_code=404, detail="Budget not found")
             return budget.__dict__
@@ -1025,84 +1038,4 @@ class BudgetController(Controller):
             raise
         except Exception as e:
             request.logger.error(f"Error getting budget detail: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    # ============ Budget Templates ============
-
-    @post("/template/rent", dto=None, return_dto=None)
-    async def create_rent_budget(
-        self,
-        data: dict,
-        router_dependency: Generator[Session, None, None],
-        request: Request,
-    ) -> dict:
-        """Create a rent budget template with deposit and monthly rent"""
-        try:
-            db = next(router_dependency)
-            budget = create_rent_budget_impl(
-                db,
-                name=data.get("name", "租房预算"),
-                monthly_rent=data.get("monthly_rent", "0.0"),
-                deposit=data.get("deposit", "0.0"),
-                start_date=data.get("start_date", datetime.now().timestamp()),
-                end_date=data.get("end_date", datetime.now().timestamp()),
-                description=data.get("description", ""),
-                tags=data.get("tags", ""),
-            )
-            request.logger.info(f"Created rent budget: {budget.name}")
-            return budget.__dict__
-        except Exception as e:
-            request.logger.error(f"Error creating rent budget: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    @post("/template/mortgage", dto=None, return_dto=None)
-    async def create_mortgage_budget(
-        self,
-        data: dict,
-        router_dependency: Generator[Session, None, None],
-        request: Request,
-    ) -> dict:
-        """Create a mortgage budget template with down payment and monthly payments"""
-        try:
-            db = next(router_dependency)
-            budget = create_mortgage_budget_impl(
-                db,
-                name=data.get("name", "房贷预算"),
-                down_payment=data.get("down_payment", "0.0"),
-                monthly_payment=data.get("monthly_payment", "0.0"),
-                monthly_interest=data.get("monthly_interest", "0.0"),
-                loan_months=data.get("loan_months", 360),
-                start_date=data.get("start_date", datetime.now().timestamp()),
-                description=data.get("description", ""),
-                tags=data.get("tags", ""),
-            )
-            request.logger.info(f"Created mortgage budget: {budget.name}")
-            return budget.__dict__
-        except Exception as e:
-            request.logger.error(f"Error creating mortgage budget: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-    @post("/template/salary", dto=None, return_dto=None)
-    async def create_salary_budget(
-        self,
-        data: dict,
-        router_dependency: Generator[Session, None, None],
-        request: Request,
-    ) -> dict:
-        """Create a salary/income budget template for a year"""
-        try:
-            db = next(router_dependency)
-            budget = create_salary_budget_impl(
-                db,
-                name=data.get("name", "年度工资预算"),
-                monthly_salary=data.get("monthly_salary", "0.0"),
-                year=data.get("year", datetime.now().year),
-                annual_bonus=data.get("annual_bonus", "0.0"),
-                description=data.get("description", ""),
-                tags=data.get("tags", ""),
-            )
-            request.logger.info(f"Created salary budget: {budget.name}")
-            return budget.__dict__
-        except Exception as e:
-            request.logger.error(f"Error creating salary budget: {e}")
             raise HTTPException(status_code=500, detail=str(e))

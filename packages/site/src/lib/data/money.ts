@@ -81,134 +81,258 @@ export interface AccountData extends AccountOption {
   mtime: number
 }
 
-// Budget types and enums
-export enum BudgetType {
-  EXPENSE = 0,  // 支出预算
-  INCOME = 1,   // 收入预算
+// ============ Budget Unified Model ============
+// 通用预算系统 - 所有业务场景使用相同的数据结构
+
+/**
+ * 预算项方向（收入/支出）
+ */
+export enum BudgetDirection {
+  EXPENSE = 0,  // 支出
+  INCOME = 1,   // 收入
 }
 
-export const BudgetTypeLabels: Record<BudgetType, string> = {
-  [BudgetType.EXPENSE]: '支出预算',
-  [BudgetType.INCOME]: '收入预算',
+export const BudgetDirectionLabels: Record<BudgetDirection, string> = {
+  [BudgetDirection.EXPENSE]: '支出',
+  [BudgetDirection.INCOME]: '收入',
 }
 
-export enum PeriodType {
-  ONCE = 0,       // 一次性
-  MONTHLY = 1,    // 月度
-  QUARTERLY = 2,  // 季度
-  YEARLY = 3,     // 年度
+/**
+ * 预算项金额类型
+ */
+export enum ItemType {
+  FIXED = 0,     // 固定金额（如押金、首付、年终奖）
+  PERIODIC = 1,  // 周期性金额（如月租、月供、月薪）
 }
 
-export const PeriodTypeLabels: Record<PeriodType, string> = {
-  [PeriodType.ONCE]: '一次性',
-  [PeriodType.MONTHLY]: '月度',
-  [PeriodType.QUARTERLY]: '季度',
-  [PeriodType.YEARLY]: '年度',
+export const ItemTypeLabels: Record<ItemType, string> = {
+  [ItemType.FIXED]: '固定金额',
+  [ItemType.PERIODIC]: '周期性',
 }
 
-export enum BudgetItemStatus {
+/**
+ * 预算项状态
+ */
+export enum ItemStatus {
   PENDING = 0,     // 待执行
   IN_PROGRESS = 1, // 进行中
   COMPLETED = 2,   // 已完成
   REFUNDED = 3,    // 已退还
 }
 
-export const BudgetItemStatusLabels: Record<BudgetItemStatus, string> = {
-  [BudgetItemStatus.PENDING]: '待执行',
-  [BudgetItemStatus.IN_PROGRESS]: '进行中',
-  [BudgetItemStatus.COMPLETED]: '已完成',
-  [BudgetItemStatus.REFUNDED]: '已退还',
+export const ItemStatusLabels: Record<ItemStatus, string> = {
+  [ItemStatus.PENDING]: '待执行',
+  [ItemStatus.IN_PROGRESS]: '进行中',
+  [ItemStatus.COMPLETED]: '已完成',
+  [ItemStatus.REFUNDED]: '已退还',
 }
 
-export enum BudgetCategory {
-  GENERAL = '',
-  RENT = 'rent',
-  MORTGAGE = 'mortgage',
-  SALARY = 'salary',
-  PROJECT = 'project',
-}
-
-export const BudgetCategoryLabels: Record<BudgetCategory, string> = {
-  [BudgetCategory.GENERAL]: '通用',
-  [BudgetCategory.RENT]: '租房',
-  [BudgetCategory.MORTGAGE]: '房贷',
-  [BudgetCategory.SALARY]: '工资',
-  [BudgetCategory.PROJECT]: '项目',
-}
-
+/**
+ * 预算创建属性
+ */
 export interface BudgetCreateProps {
   name: string
-  amount: string
   description?: string
   tags?: string
-  budget_type?: BudgetType
-  period_type?: PeriodType
   start_date?: number
   end_date?: number
-  category?: string
   htime?: number
+  items?: BudgetItemCreateProps[]  // 创建时可以带子项
 }
 
-export interface BudgetData extends BudgetCreateProps {
+/**
+ * 预算数据
+ */
+export interface BudgetData {
   id: number
+  name: string
+  description: string
+  tags: string
+  start_date?: number
+  end_date?: number
+  total_amount: string  // 由子项汇总计算
+  htime: number
   mtime: number
   items?: BudgetItemData[]
 }
 
+/**
+ * 预算子项创建属性
+ * 
+ * 示例配置：
+ * - 押金：{ name: "押金", direction: EXPENSE, item_type: FIXED, amount: "7000", period_count: 1, is_refundable: 1 }
+ * - 月租：{ name: "月租", direction: EXPENSE, item_type: PERIODIC, amount: "3500", period_count: 12, is_refundable: 0 }
+ * - 首付：{ name: "首付", direction: EXPENSE, item_type: FIXED, amount: "500000", period_count: 1, is_refundable: 0 }
+ * - 月供：{ name: "月供", direction: EXPENSE, item_type: PERIODIC, amount: "8000", period_count: 360, is_refundable: 0 }
+ * - 月薪：{ name: "月薪", direction: INCOME, item_type: PERIODIC, amount: "20000", period_count: 12, is_refundable: 0 }
+ * - 年终奖：{ name: "年终奖", direction: INCOME, item_type: FIXED, amount: "50000", period_count: 1, is_refundable: 0 }
+ */
+export interface BudgetItemCreateProps {
+  name: string
+  description?: string
+  direction?: BudgetDirection  // 默认: EXPENSE
+  item_type?: ItemType         // 默认: FIXED
+  amount: string
+  period_count?: number        // 默认: 1
+  is_refundable?: number       // 默认: 0
+  due_date?: number
+}
+
+/**
+ * 预算子项数据
+ */
 export interface BudgetItemData {
   id: number
   budget_id: number
   name: string
-  amount: string
-  description?: string
+  description: string
+  
+  // 核心属性
+  direction: BudgetDirection
+  item_type: ItemType
+  amount: string               // 固定型=总额，周期型=单期金额
+  period_count: number
+  
+  // 可退还
   is_refundable: number
   refund_amount: string
-  status: BudgetItemStatus
-  period_count: number
+  
+  // 进度
   current_period: number
+  status: ItemStatus
+  
   due_date?: number
   ctime?: string
   mtime?: string
+  
+  // 计算属性（只读）
+  total_amount: string         // 子项总金额
+  remaining_periods: number    // 剩余期数
 }
 
-export interface BudgetItemCreateProps {
+// ============ 预算模板预设配置 ============
+// 模板不再需要后端 API，只是前端的预设配置
+
+/**
+ * 预设模板类型
+ */
+export type BudgetPresetType = 'rent' | 'mortgage' | 'salary' | 'custom'
+
+/**
+ * 预设模板配置
+ */
+export interface BudgetPreset {
+  type: BudgetPresetType
   name: string
-  amount: string
-  description?: string
-  is_refundable?: number
-  period_count?: number
-  due_date?: number
+  description: string
+  defaultTags: string
+  itemPresets: BudgetItemCreateProps[]
 }
 
-// Budget template props
-export interface RentBudgetProps {
-  name: string
-  monthly_rent: string
-  deposit: string
-  start_date: number
-  end_date: number
-  description?: string
-  tags?: string
+/**
+ * 租房预算预设
+ */
+export const RENT_PRESET: BudgetPreset = {
+  type: 'rent',
+  name: '租房预算',
+  description: '追踪租金和押金',
+  defaultTags: 'rent,housing',
+  itemPresets: [
+    {
+      name: '押金',
+      description: '租房押金（合同结束可退还）',
+      direction: BudgetDirection.EXPENSE,
+      item_type: ItemType.FIXED,
+      amount: '0',
+      period_count: 1,
+      is_refundable: 1,
+    },
+    {
+      name: '月租金',
+      description: '每月租金',
+      direction: BudgetDirection.EXPENSE,
+      item_type: ItemType.PERIODIC,
+      amount: '0',
+      period_count: 12,
+      is_refundable: 0,
+    },
+  ],
 }
 
-export interface MortgageBudgetProps {
-  name: string
-  down_payment: string
-  monthly_payment: string
-  monthly_interest: string
-  loan_months: number
-  start_date: number
-  description?: string
-  tags?: string
+/**
+ * 房贷预算预设
+ */
+export const MORTGAGE_PRESET: BudgetPreset = {
+  type: 'mortgage',
+  name: '房贷预算',
+  description: '追踪首付和月供',
+  defaultTags: 'mortgage,housing',
+  itemPresets: [
+    {
+      name: '首付款',
+      description: '购房首付款',
+      direction: BudgetDirection.EXPENSE,
+      item_type: ItemType.FIXED,
+      amount: '0',
+      period_count: 1,
+      is_refundable: 0,
+    },
+    {
+      name: '月供',
+      description: '每月还款',
+      direction: BudgetDirection.EXPENSE,
+      item_type: ItemType.PERIODIC,
+      amount: '0',
+      period_count: 360,
+      is_refundable: 0,
+    },
+  ],
 }
 
-export interface SalaryBudgetProps {
-  name: string
-  monthly_salary: string
-  year: number
-  annual_bonus?: string
-  description?: string
-  tags?: string
+/**
+ * 工资预算预设
+ */
+export const SALARY_PRESET: BudgetPreset = {
+  type: 'salary',
+  name: '工资收入',
+  description: '追踪年度收入',
+  defaultTags: 'salary,income',
+  itemPresets: [
+    {
+      name: '月薪',
+      description: '每月工资收入',
+      direction: BudgetDirection.INCOME,
+      item_type: ItemType.PERIODIC,
+      amount: '0',
+      period_count: 12,
+      is_refundable: 0,
+    },
+    {
+      name: '年终奖',
+      description: '年终奖金',
+      direction: BudgetDirection.INCOME,
+      item_type: ItemType.FIXED,
+      amount: '0',
+      period_count: 1,
+      is_refundable: 0,
+    },
+  ],
+}
+
+/**
+ * 所有预设模板
+ */
+export const BUDGET_PRESETS: Record<BudgetPresetType, BudgetPreset> = {
+  rent: RENT_PRESET,
+  mortgage: MORTGAGE_PRESET,
+  salary: SALARY_PRESET,
+  custom: {
+    type: 'custom',
+    name: '自定义',
+    description: '自定义预算',
+    defaultTags: '',
+    itemPresets: [],
+  },
 }
 
 export interface BudgetQueryParams {

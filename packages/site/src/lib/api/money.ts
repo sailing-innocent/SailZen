@@ -333,8 +333,11 @@ const api_unlink_transaction_from_budget = async (transaction_id: number): Promi
   return response.json()
 }
 
-// Budget Item APIs
-const api_get_budget_items = async (budget_id: number): Promise<any[]> => {
+// ============ Budget Item APIs ============
+
+import type { BudgetItemCreateProps, BudgetItemData, BudgetData as FullBudgetData } from '@lib/data/money'
+
+const api_get_budget_items = async (budget_id: number): Promise<BudgetItemData[]> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/items`)
   if (!response.ok) {
     throw new Error('Failed to fetch budget items')
@@ -342,19 +345,20 @@ const api_get_budget_items = async (budget_id: number): Promise<any[]> => {
   return response.json()
 }
 
-const api_create_budget_item = async (budget_id: number, item: any): Promise<any> => {
+const api_create_budget_item = async (budget_id: number, item: BudgetItemCreateProps): Promise<BudgetItemData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item),
   })
   if (!response.ok) {
-    throw new Error('Failed to create budget item')
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to create item' }))
+    throw new Error(errorData.detail || 'Failed to create budget item')
   }
   return response.json()
 }
 
-const api_update_budget_item = async (item_id: number, item: any): Promise<any> => {
+const api_update_budget_item = async (item_id: number, item: Partial<BudgetItemData>): Promise<BudgetItemData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -366,7 +370,7 @@ const api_update_budget_item = async (item_id: number, item: any): Promise<any> 
   return response.json()
 }
 
-const api_delete_budget_item = async (item_id: number): Promise<any> => {
+const api_delete_budget_item = async (item_id: number): Promise<{ id: number; status: string }> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}`, {
     method: 'DELETE',
   })
@@ -376,7 +380,7 @@ const api_delete_budget_item = async (item_id: number): Promise<any> => {
   return response.json()
 }
 
-const api_record_item_refund = async (item_id: number, refund_amount: string): Promise<any> => {
+const api_record_item_refund = async (item_id: number, refund_amount: string): Promise<BudgetItemData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}/refund`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -389,7 +393,7 @@ const api_record_item_refund = async (item_id: number, refund_amount: string): P
   return response.json()
 }
 
-const api_advance_item_period = async (item_id: number): Promise<any> => {
+const api_advance_item_period = async (item_id: number): Promise<BudgetItemData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}/advance`, {
     method: 'POST',
   })
@@ -400,7 +404,7 @@ const api_advance_item_period = async (item_id: number): Promise<any> => {
   return response.json()
 }
 
-const api_get_budget_detail = async (budget_id: number): Promise<any> => {
+const api_get_budget_detail = async (budget_id: number): Promise<FullBudgetData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/detail`)
   if (!response.ok) {
     throw new Error('Failed to fetch budget detail')
@@ -408,41 +412,32 @@ const api_get_budget_detail = async (budget_id: number): Promise<any> => {
   return response.json()
 }
 
-// Budget Template APIs
-const api_create_rent_budget = async (data: any): Promise<any> => {
-  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/rent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+/**
+ * 创建带子项的预算（统一接口）
+ * 
+ * 使用此接口替代原来的模板 API（rent/mortgage/salary）
+ * 所有预算创建都使用相同的数据结构
+ */
+const api_create_budget_with_items = async (
+  budget: { name: string; description?: string; tags?: string; start_date?: number; end_date?: number; htime?: number },
+  items: BudgetItemCreateProps[]
+): Promise<FullBudgetData> => {
+  // 先创建预算
+  const budgetResponse = await api_create_budget({
+    name: budget.name,
+    amount: '0',  // 会被子项汇总覆盖
+    description: budget.description,
+    tags: budget.tags,
+    htime: budget.htime || Date.now() / 1000,
   })
-  if (!response.ok) {
-    throw new Error('Failed to create rent budget')
+  
+  // 再创建子项
+  for (const item of items) {
+    await api_create_budget_item(budgetResponse.id, item)
   }
-  return response.json()
-}
-
-const api_create_mortgage_budget = async (data: any): Promise<any> => {
-  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/mortgage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to create mortgage budget')
-  }
-  return response.json()
-}
-
-const api_create_salary_budget = async (data: any): Promise<any> => {
-  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/salary`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    throw new Error('Failed to create salary budget')
-  }
-  return response.json()
+  
+  // 返回完整预算
+  return api_get_budget_detail(budgetResponse.id)
 }
 
 export {
@@ -477,8 +472,6 @@ export {
   api_record_item_refund,
   api_advance_item_period,
   api_get_budget_detail,
-  // Budget Templates
-  api_create_rent_budget,
-  api_create_mortgage_budget,
-  api_create_salary_budget,
+  // Unified budget creation
+  api_create_budget_with_items,
 }
