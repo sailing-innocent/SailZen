@@ -2,9 +2,29 @@ import React from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Menu } from 'lucide-react'
+import {
+  Menu,
+  Home,
+  Wallet,
+  Heart,
+  FolderKanban,
+  FileText,
+  Type,
+  Package,
+} from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { PAGE_ROUTES } from '@/config/basic'
+
+// 图标映射
+const iconMap: Record<string, React.ReactNode> = {
+  Home: <Home className="h-5 w-5" />,
+  Wallet: <Wallet className="h-5 w-5" />,
+  Heart: <Heart className="h-5 w-5" />,
+  FolderKanban: <FolderKanban className="h-5 w-5" />,
+  FileText: <FileText className="h-5 w-5" />,
+  Type: <Type className="h-5 w-5" />,
+  Package: <Package className="h-5 w-5" />,
+}
 
 interface MobileNavProps {
   children: React.ReactNode
@@ -34,17 +54,18 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
             <SheetHeader>
               <SheetTitle>导航菜单</SheetTitle>
             </SheetHeader>
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-2">
               {PAGE_ROUTES.map((route) => (
                 <Link
                   key={route.path}
                   to={route.path}
-                  className={`block w-full p-3 text-left rounded-md transition-colors ${
+                  className={`flex items-center gap-3 w-full p-3 text-left rounded-md transition-colors ${
                     location.pathname === route.path ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                   }`}
                   onClick={() => setOpen(false)}
                 >
-                  {route.name}
+                  {route.icon && iconMap[route.icon]}
+                  <span>{route.label || route.name}</span>
                 </Link>
               ))}
             </div>

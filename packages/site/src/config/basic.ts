@@ -1,8 +1,11 @@
 export const PAGE_ROUTES = [
-  { name: 'Home', path: '/' },
-  { name: 'Money', path: '/money' },
-  { name: 'Health', path: '/health' },
-  { name: 'Project', path: '/project' },
-  { name: 'Content', path: '/content' },
-  { name: 'Text', path: '/text' },
+  { name: 'Home', path: '/', label: '首页', icon: 'Home' },
+  { name: 'Money', path: '/money', label: '财务', icon: 'Wallet' },
+  { name: 'Health', path: '/health', label: '健康', icon: 'Heart' },
+  { name: 'Project', path: '/project', label: '项目', icon: 'FolderKanban' },
+  { name: 'Content', path: '/content', label: '内容', icon: 'FileText' },
+  { name: 'Text', path: '/text', label: '文本', icon: 'Type' },
+  { name: 'Necessity', path: '/necessity', label: '物资', icon: 'Package' },
 ]
+
+export type PageRoute = (typeof PAGE_ROUTES)[number]
