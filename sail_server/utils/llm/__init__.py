@@ -4,15 +4,17 @@
 # @author sailing-innocent
 # @date 2025-02-01
 
-from .client import LLMClient, LLMConfig, LLMProvider, LLMResponse
-from .prompts import PromptTemplate, PromptTemplateManager, RenderedPrompt
+from .client import LLMClient, LLMConfig, LLMProvider, LLMResponse, create_llm_client
+from .prompts import PromptTemplate, PromptTemplateManager, RenderedPrompt, get_template_manager
 
 __all__ = [
     'LLMClient',
     'LLMConfig', 
     'LLMProvider',
     'LLMResponse',
+    'create_llm_client',
     'PromptTemplate',
     'PromptTemplateManager',
     'RenderedPrompt',
+    'get_template_manager',
 ]

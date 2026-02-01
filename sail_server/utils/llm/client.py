@@ -25,6 +25,7 @@ class LLMProvider(Enum):
     """LLM 提供商"""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    GOOGLE = "google"         # Google Gemini
     LOCAL = "local"           # 本地 Ollama 等
     EXTERNAL = "external"     # 仅生成 Prompt，不调用 API
 
@@ -56,6 +57,12 @@ class LLMConfig:
                 model=os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229"),
                 api_key=os.getenv("ANTHROPIC_API_KEY"),
             )
+        elif provider == LLMProvider.GOOGLE:
+            return cls(
+                provider=provider,
+                model=os.getenv("GOOGLE_MODEL", "gemini-2.0-flash"),
+                api_key=os.getenv("GOOGLE_API_KEY"),
+            )
         else:
             return cls(provider=provider)
     
@@ -63,7 +70,7 @@ class LLMConfig:
         """验证配置是否有效"""
         if self.provider == LLMProvider.EXTERNAL:
             return True
-        if self.provider in (LLMProvider.OPENAI, LLMProvider.ANTHROPIC):
+        if self.provider in (LLMProvider.OPENAI, LLMProvider.ANTHROPIC, LLMProvider.GOOGLE):
             return self.api_key is not None
         return True
 
@@ -126,6 +133,17 @@ class ExportedPrompt:
             "temperature": self.temperature,
         }
     
+    def to_google_format(self) -> Dict[str, Any]:
+        """转换为 Google Gemini API 格式"""
+        return {
+            "model": "gemini-2.0-flash",
+            "system_instruction": self.system_prompt,
+            "contents": self.user_prompt,
+            "generation_config": {
+                "temperature": self.temperature,
+            },
+        }
+    
     def to_plain_text(self) -> str:
         """转换为纯文本格式"""
         return f"""=== System Prompt ===
@@ -170,6 +188,7 @@ class ExportedPrompt:
             "formats": {
                 "openai": self.to_openai_format(),
                 "anthropic": self.to_anthropic_format(),
+                "google": self.to_google_format(),
                 "plain": self.to_plain_text(),
             }
         }
@@ -181,17 +200,19 @@ class LLMClient:
     def __init__(self, config: LLMConfig):
         self.config = config
         self._client = None
+        self._use_legacy_google = False  # 是否使用旧版 Google API
         self._init_client()
     
     def _init_client(self):
         """初始化底层客户端"""
         if self.config.provider == LLMProvider.OPENAI:
             try:
-                import openai
-                if self.config.api_base:
-                    openai.api_base = self.config.api_base
-                openai.api_key = self.config.api_key
-                self._client = openai
+                from openai import OpenAI
+                # OpenAI v1.x API: 使用 OpenAI 客户端类
+                self._client = OpenAI(
+                    api_key=self.config.api_key,
+                    base_url=self.config.api_base,
+                )
             except ImportError:
                 logger.warning("OpenAI package not installed, using external mode")
                 self.config.provider = LLMProvider.EXTERNAL
@@ -203,6 +224,23 @@ class LLMClient:
             except ImportError:
                 logger.warning("Anthropic package not installed, using external mode")
                 self.config.provider = LLMProvider.EXTERNAL
+                
+        elif self.config.provider == LLMProvider.GOOGLE:
+            try:
+                # 使用新的 google.genai 包 (google-genai)
+                from google import genai
+                self._client = genai.Client(api_key=self.config.api_key)
+            except ImportError:
+                # 回退到旧包（已弃用）
+                try:
+                    import google.generativeai as genai_old
+                    genai_old.configure(api_key=self.config.api_key)
+                    self._client = genai_old
+                    self._use_legacy_google = True
+                    logger.warning("Using deprecated google.generativeai package. Please upgrade to google-genai.")
+                except ImportError:
+                    logger.warning("Google genai package not installed, using external mode")
+                    self.config.provider = LLMProvider.EXTERNAL
     
     async def complete(
         self, 
@@ -220,6 +258,8 @@ class LLMClient:
                 response = await self._complete_openai(prompt, system)
             elif self.config.provider == LLMProvider.ANTHROPIC:
                 response = await self._complete_anthropic(prompt, system)
+            elif self.config.provider == LLMProvider.GOOGLE:
+                response = await self._complete_google(prompt, system)
             elif self.config.provider == LLMProvider.LOCAL:
                 response = await self._complete_local(prompt, system)
             else:
@@ -234,17 +274,17 @@ class LLMClient:
             raise
     
     async def _complete_openai(self, prompt: str, system: Optional[str]) -> LLMResponse:
-        """OpenAI API 调用"""
+        """OpenAI API 调用 (v1.x API)"""
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         
-        # 使用同步调用并在线程池中执行
+        # 使用同步调用并在线程池中执行 (OpenAI v1.x API)
         loop = asyncio.get_event_loop()
         response = await loop.run_in_executor(
             None,
-            lambda: self._client.ChatCompletion.create(
+            lambda: self._client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 temperature=self.config.temperature,
@@ -262,7 +302,7 @@ class LLMClient:
                 "total_tokens": response.usage.total_tokens,
             },
             finish_reason=response.choices[0].finish_reason,
-            raw_response=response.to_dict() if hasattr(response, 'to_dict') else None,
+            raw_response=response.model_dump() if hasattr(response, 'model_dump') else None,
         )
     
     async def _complete_anthropic(self, prompt: str, system: Optional[str]) -> LLMResponse:
@@ -292,6 +332,103 @@ class LLMClient:
                 "total_tokens": response.usage.input_tokens + response.usage.output_tokens,
             },
             finish_reason=response.stop_reason,
+        )
+    
+    async def _complete_google(self, prompt: str, system: Optional[str]) -> LLMResponse:
+        """Google Gemini API 调用"""
+        loop = asyncio.get_event_loop()
+        
+        if self._use_legacy_google:
+            # 使用旧版 API (google.generativeai) - 已弃用
+            return await self._complete_google_legacy(prompt, system)
+        
+        # 使用新版 API (google.genai)
+        from google.genai import types
+        
+        # 构建配置
+        config = types.GenerateContentConfig(
+            temperature=self.config.temperature,
+            max_output_tokens=self.config.max_tokens,
+            system_instruction=system if system else None,
+        )
+        
+        def call_gemini():
+            return self._client.models.generate_content(
+                model=self.config.model,
+                contents=prompt,
+                config=config,
+            )
+        
+        response = await loop.run_in_executor(None, call_gemini)
+        
+        # 提取 usage 信息
+        usage = {}
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            usage = {
+                "prompt_tokens": getattr(response.usage_metadata, 'prompt_token_count', 0),
+                "completion_tokens": getattr(response.usage_metadata, 'candidates_token_count', 0),
+                "total_tokens": getattr(response.usage_metadata, 'total_token_count', 0),
+            }
+        
+        # 获取文本内容
+        text_content = ""
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and candidate.content:
+                if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    text_content = candidate.content.parts[0].text
+            elif hasattr(response, 'text'):
+                text_content = response.text
+        
+        finish_reason = None
+        if response.candidates and len(response.candidates) > 0:
+            fr = getattr(response.candidates[0], 'finish_reason', None)
+            if fr:
+                finish_reason = fr.name if hasattr(fr, 'name') else str(fr)
+        
+        return LLMResponse(
+            content=text_content,
+            model=self.config.model,
+            provider="google",
+            usage=usage,
+            finish_reason=finish_reason,
+        )
+    
+    async def _complete_google_legacy(self, prompt: str, system: Optional[str]) -> LLMResponse:
+        """Google Gemini API 调用 (旧版 - 已弃用)"""
+        loop = asyncio.get_event_loop()
+        
+        # 构建完整 prompt（Gemini 使用 system_instruction 作为系统提示）
+        generation_config = {
+            "temperature": self.config.temperature,
+            "max_output_tokens": self.config.max_tokens,
+        }
+        
+        def call_gemini():
+            model = self._client.GenerativeModel(
+                model_name=self.config.model,
+                generation_config=generation_config,
+                system_instruction=system if system else None,
+            )
+            return model.generate_content(prompt)
+        
+        response = await loop.run_in_executor(None, call_gemini)
+        
+        # 提取 usage 信息（如果可用）
+        usage = {}
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            usage = {
+                "prompt_tokens": getattr(response.usage_metadata, 'prompt_token_count', 0),
+                "completion_tokens": getattr(response.usage_metadata, 'candidates_token_count', 0),
+                "total_tokens": getattr(response.usage_metadata, 'total_token_count', 0),
+            }
+        
+        return LLMResponse(
+            content=response.text,
+            model=self.config.model,
+            provider="google",
+            usage=usage,
+            finish_reason=response.candidates[0].finish_reason.name if response.candidates else None,
         )
     
     async def _complete_local(self, prompt: str, system: Optional[str]) -> LLMResponse:
@@ -391,7 +528,7 @@ class LLMClient:
     
     def estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """估算成本（美元）"""
-        # 基于 GPT-4 的定价估算
+        # 基于各提供商的定价估算
         if "gpt-4" in self.config.model:
             input_cost = input_tokens * 0.00003
             output_cost = output_tokens * 0.00006
@@ -401,6 +538,10 @@ class LLMClient:
         elif "claude" in self.config.model:
             input_cost = input_tokens * 0.000015
             output_cost = output_tokens * 0.000075
+        elif "gemini" in self.config.model:
+            # Gemini 2.0 Flash 定价 (相对便宜)
+            input_cost = input_tokens * 0.0000001
+            output_cost = output_tokens * 0.0000004
         else:
             # 默认估算
             input_cost = input_tokens * 0.00001
