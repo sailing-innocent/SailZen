@@ -5,6 +5,7 @@ export const PAGE_ROUTES = [
   { name: 'Project', path: '/project', label: '项目', icon: 'FolderKanban' },
   { name: 'Content', path: '/content', label: '内容', icon: 'FileText' },
   { name: 'Text', path: '/text', label: '文本', icon: 'Type' },
+  { name: 'Analysis', path: '/analysis', label: '分析', icon: 'BookOpen' },
   { name: 'Necessity', path: '/necessity', label: '物资', icon: 'Package' },
 ]
 

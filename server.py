@@ -49,6 +49,7 @@ class SailServer:
             "/money",
             "/project",
             "/text",
+            "/analysis",
             "/necessity",
         ]
         self.api_router = None

@@ -20,6 +20,7 @@ import {
   FileText,
   Type,
   Package,
+  BookOpen,
 } from 'lucide-react'
 
 // 图标映射
@@ -31,6 +32,7 @@ const iconMap: Record<string, React.ReactNode> = {
   FileText: <FileText className="h-4 w-4" />,
   Type: <Type className="h-4 w-4" />,
   Package: <Package className="h-4 w-4" />,
+  BookOpen: <BookOpen className="h-4 w-4" />,
 }
 
 const Pagebar: React.FC = () => {

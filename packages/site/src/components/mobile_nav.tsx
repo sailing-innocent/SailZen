@@ -11,6 +11,7 @@ import {
   FileText,
   Type,
   Package,
+  BookOpen,
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { PAGE_ROUTES } from '@/config/basic'
@@ -24,6 +25,7 @@ const iconMap: Record<string, React.ReactNode> = {
   FileText: <FileText className="h-5 w-5" />,
   Type: <Type className="h-5 w-5" />,
   Package: <Package className="h-5 w-5" />,
+  BookOpen: <BookOpen className="h-5 w-5" />,
 }
 
 interface MobileNavProps {
