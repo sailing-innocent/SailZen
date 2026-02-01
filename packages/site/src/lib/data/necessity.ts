@@ -322,6 +322,7 @@ export interface InventoryCreateProps {
   unit?: string
   min_quantity?: string
   max_quantity?: string
+  last_check_time?: number | null
   notes?: string
 }
 
