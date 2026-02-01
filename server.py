@@ -133,6 +133,7 @@ class SailServer:
         from sail_server.router.history import router as history_router
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
+        from sail_server.router.analysis import analysis_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -145,6 +146,7 @@ class SailServer:
                 history_router,
                 text_router,
                 necessity_router,
+                analysis_router,
             ],
         )
 
