@@ -223,7 +223,7 @@ class Setting(ORMBase):
     """
     设定表 - 存储世界观设定元素
     """
-    __tablename__ = "settings"
+    __tablename__ = "novel_settings"
 
     id = Column(Integer, primary_key=True)
     edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
@@ -251,7 +251,7 @@ class SettingAttribute(ORMBase):
     __tablename__ = "setting_attributes"
 
     id = Column(Integer, primary_key=True)
-    setting_id = Column(Integer, ForeignKey("settings.id", ondelete="CASCADE"), nullable=False)
+    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
     attr_key = Column(String, nullable=False)
     attr_value = Column(JSONB, nullable=False)
     source = Column(String, default='manual')
@@ -271,8 +271,8 @@ class SettingRelation(ORMBase):
 
     id = Column(Integer, primary_key=True)
     edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    source_setting_id = Column(Integer, ForeignKey("settings.id", ondelete="CASCADE"), nullable=False)
-    target_setting_id = Column(Integer, ForeignKey("settings.id", ondelete="CASCADE"), nullable=False)
+    source_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    target_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
     relation_type = Column(String, nullable=False)  # contains | belongs_to | produces | requires | opposes
     description = Column(Text, nullable=True)
     meta_data = Column(JSONB, default={})
@@ -291,7 +291,7 @@ class CharacterSettingLink(ORMBase):
 
     id = Column(Integer, primary_key=True)
     character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    setting_id = Column(Integer, ForeignKey("settings.id", ondelete="CASCADE"), nullable=False)
+    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
     link_type = Column(String, nullable=False)  # owns | belongs_to | created | uses | guards
     description = Column(Text, nullable=True)
     start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)

@@ -21,30 +21,26 @@
 
 **任务清单**：
 
-- [ ] 创建大纲相关表
+- [x] 创建大纲相关表
   - `outlines` - 大纲表
   - `outline_nodes` - 大纲节点表
   - `outline_events` - 大纲事件表
-
-- [ ] 创建人物相关表
+- [x] 创建人物相关表
   - `characters` - 人物表
   - `character_aliases` - 人物别名表
   - `character_attributes` - 人物属性表
   - `character_arcs` - 人物弧线表
   - `character_relations` - 人物关系表
-
-- [ ] 创建设定相关表
-  - `settings` - 设定表
+- [x] 创建设定相关表
+  - `novel_settings` - 设定表
   - `setting_attributes` - 设定属性表
   - `setting_relations` - 设定关系表
   - `character_setting_links` - 人物-设定关联表
-
-- [ ] 创建分析任务相关表
+- [x] 创建分析任务相关表
   - `text_evidence` - 文本证据表
   - `analysis_tasks` - 分析任务表
   - `analysis_results` - 分析结果表
-
-- [ ] 添加必要索引
+- [x] 添加必要索引
   - 全文搜索索引（`gin_trgm_ops`）
   - 外键索引
   - 状态筛选索引

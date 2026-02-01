@@ -23,12 +23,13 @@ import sail_server.data.project
 import sail_server.data.history
 import sail_server.data.text
 import sail_server.data.necessity
+import sail_server.data.analysis
 import os
 
 # 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
-__all__ = ["Database", "g_db_func", "db_session"]
+__all__ = ["Database", "g_db_func", "db_session", "provide_db_session", "get_db_dependency"]
 
 
 class Database:
@@ -89,6 +90,11 @@ g_db_func = Database.get_instance().get_db
 
 async def get_db_dependency():
     return g_db_func()
+
+
+def provide_db_session():
+    """Litestar dependency that provides a database session (for analysis router)."""
+    yield from Database.get_instance().get_db()
 
 
 def db_session(func):
