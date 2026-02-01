@@ -152,10 +152,6 @@ const MissionCard: React.FC<MissionCardProps> = ({
     navigate(`/project?mission=${mission.id}`)
   }
 
-  // Don't render completed/canceled missions in compact mode
-  if (compact && !isActive) {
-    return null
-  }
 
   return (
     <>

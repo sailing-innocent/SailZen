@@ -41,7 +41,7 @@ const ProjectPage = () => {
                         ? 'grid-cols-1' 
                         : 'grid-cols-5'
                 }`}>
-                    <div className={isMobile ? '' : 'col-span-3'}>
+                    <div className={isMobile ? '' : 'col-span-3 overflow-hidden'}>
                         <ProjectMissionBoard projects={projects} missions={missions} />
                     </div>
                     <div className={isMobile ? '' : 'col-span-2'}>

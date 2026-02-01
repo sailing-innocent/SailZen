@@ -4,6 +4,8 @@ import React from 'react'
 import { QBWDate } from '@lib/utils/qbw_date'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Badge } from '@/components/ui/badge'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
+import { CheckCircle2 } from 'lucide-react'
 import MissionCard from './mission_card'
 
 export interface ProjectMissionColumnProps {
@@ -71,20 +73,27 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({ project, mi
                         
                         {/* Completed missions (collapsed) */}
                         {completedMissions.length > 0 && (
-                            <details className="mt-2">
-                                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                                    已完成 ({completedMissions.length})
-                                </summary>
-                                <div className="mt-2 space-y-2">
-                                    {completedMissions.map((mission) => (
-                                        <MissionCard
-                                            key={mission.id}
-                                            mission={mission}
-                                            compact
-                                        />
-                                    ))}
-                                </div>
-                            </details>
+                            <Accordion type="single" collapsible className="mt-2">
+                                <AccordionItem value="completed" className="border-none">
+                                    <AccordionTrigger className="py-2 text-xs text-muted-foreground hover:text-foreground hover:no-underline">
+                                        <span className="flex items-center gap-1">
+                                            <CheckCircle2 className="h-3 w-3" />
+                                            已完成 ({completedMissions.length})
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pb-0">
+                                        <div className="space-y-2">
+                                            {completedMissions.map((mission) => (
+                                                <MissionCard
+                                                    key={mission.id}
+                                                    mission={mission}
+                                                    compact
+                                                />
+                                            ))}
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
                         )}
                     </>
                 )}
