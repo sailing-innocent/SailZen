@@ -16,6 +16,12 @@ from sail_server.controller.analysis import (
     EvidenceController,
     AnalysisTaskController,
 )
+from sail_server.controller.analysis_llm import (
+    TaskExecutionController,
+    PromptTemplateController,
+    PromptExportController,
+    LLMConfigController,
+)
 
 analysis_router = Router(
     path="/analysis",
@@ -28,6 +34,11 @@ analysis_router = Router(
         OutlineController,
         EvidenceController,
         AnalysisTaskController,
+        # LLM 辅助分析
+        TaskExecutionController,
+        PromptTemplateController,
+        PromptExportController,
+        LLMConfigController,
     ],
     tags=["Analysis"],
 )

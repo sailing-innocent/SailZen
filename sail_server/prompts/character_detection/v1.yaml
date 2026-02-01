@@ -1,0 +1,127 @@
+id: character_detection_v1
+name: "人物识别 - 基础版"
+description: "从章节内容中识别人物，包括名称、别名、角色类型和特征描述"
+task_type: character_detection
+version: "1.0"
+
+system_prompt: |
+  你是一位专业的文学分析师，擅长分析小说中的人物形象。
+  你的任务是从给定的章节内容中识别和分析人物。
+  
+  请严格按照要求的 JSON 格式输出分析结果。
+  不要输出任何解释性文字，只输出 JSON。
+
+user_prompt_template: |
+  ## 任务：识别小说中的人物
+  
+  ### 背景信息
+  - 作品名称：{{work_title}}
+  - 章节范围：{{chapter_range}}
+  
+  ### 章节内容
+  {{chapter_contents}}
+  
+  ### 分析要求
+  1. 识别所有出现的人物名称
+  2. 合并同一人物的不同称呼（如：张三、小张、张先生可能是同一人）
+  3. 判断人物在本章的角色重要性：
+     - protagonist（主角）：故事的主要视角人物
+     - deuteragonist（二号主角）：仅次于主角的重要人物
+     - supporting（配角）：有一定戏份的次要人物
+     - minor（龙套）：出场较少的人物
+     - mentioned（提及）：只是被提到，未实际出场
+  4. 提取人物的基本特征描述（外貌、性格、身份等）
+  5. 记录人物首次出现的句子
+  6. 统计人物在本章的提及次数
+  
+  ### 输出格式
+  请以 JSON 格式输出，结构如下：
+  
+  ```json
+  {
+    "characters": [
+      {
+        "canonical_name": "标准名称（最常用的称呼）",
+        "aliases": ["别名1", "别名2"],
+        "role_type": "protagonist|deuteragonist|supporting|minor|mentioned",
+        "first_mention": "人物首次出现的完整句子",
+        "description": "本章对该人物的描述（外貌、性格、身份等）",
+        "actions": ["主要行动1", "主要行动2"],
+        "mention_count": 10
+      }
+    ],
+    "total_characters": 5
+  }
+  ```
+
+output_schema:
+  type: object
+  properties:
+    characters:
+      type: array
+      items:
+        type: object
+        properties:
+          canonical_name:
+            type: string
+            description: "人物的标准名称"
+          aliases:
+            type: array
+            items:
+              type: string
+            description: "人物的别名列表"
+          role_type:
+            type: string
+            enum: ["protagonist", "deuteragonist", "supporting", "minor", "mentioned"]
+          first_mention:
+            type: string
+            description: "首次出现的句子"
+          description:
+            type: string
+            description: "人物描述"
+          actions:
+            type: array
+            items:
+              type: string
+            description: "主要行动"
+          mention_count:
+            type: integer
+            description: "提及次数"
+        required: ["canonical_name", "role_type"]
+    total_characters:
+      type: integer
+      description: "人物总数"
+  required: ["characters"]
+
+example_input: |
+  work_title: 示例小说
+  chapter_range: 第1章
+  chapter_contents: |
+    李明是个普通的上班族，今年二十八岁，身材中等，戴着一副黑框眼镜。
+    "小李，这份报告你看一下。"王经理把文件递给他。
+    李明接过文件，仔细阅读起来...
+
+example_output: |
+  {
+    "characters": [
+      {
+        "canonical_name": "李明",
+        "aliases": ["小李"],
+        "role_type": "protagonist",
+        "first_mention": "李明是个普通的上班族，今年二十八岁，身材中等，戴着一副黑框眼镜。",
+        "description": "二十八岁的普通上班族，身材中等，戴黑框眼镜",
+        "actions": ["接过文件", "阅读文件"],
+        "mention_count": 3
+      },
+      {
+        "canonical_name": "王经理",
+        "aliases": [],
+        "role_type": "supporting",
+        "first_mention": ""小李，这份报告你看一下。"王经理把文件递给他。",
+        "description": "李明的上级",
+        "actions": ["递文件给李明"],
+        "mention_count": 1
+      }
+    ],
+    "total_characters": 2
+  }
