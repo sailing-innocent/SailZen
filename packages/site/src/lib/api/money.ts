@@ -333,6 +333,118 @@ const api_unlink_transaction_from_budget = async (transaction_id: number): Promi
   return response.json()
 }
 
+// Budget Item APIs
+const api_get_budget_items = async (budget_id: number): Promise<any[]> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/items`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budget items')
+  }
+  return response.json()
+}
+
+const api_create_budget_item = async (budget_id: number, item: any): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create budget item')
+  }
+  return response.json()
+}
+
+const api_update_budget_item = async (item_id: number, item: any): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update budget item')
+  }
+  return response.json()
+}
+
+const api_delete_budget_item = async (item_id: number): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to delete budget item')
+  }
+  return response.json()
+}
+
+const api_record_item_refund = async (item_id: number, refund_amount: string): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}/refund`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refund_amount }),
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to record refund' }))
+    throw new Error(errorData.detail || 'Failed to record refund')
+  }
+  return response.json()
+}
+
+const api_advance_item_period = async (item_id: number): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/items/${item_id}/advance`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to advance period' }))
+    throw new Error(errorData.detail || 'Failed to advance period')
+  }
+  return response.json()
+}
+
+const api_get_budget_detail = async (budget_id: number): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/detail`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch budget detail')
+  }
+  return response.json()
+}
+
+// Budget Template APIs
+const api_create_rent_budget = async (data: any): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/rent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create rent budget')
+  }
+  return response.json()
+}
+
+const api_create_mortgage_budget = async (data: any): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/mortgage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create mortgage budget')
+  }
+  return response.json()
+}
+
+const api_create_salary_budget = async (data: any): Promise<any> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/template/salary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to create salary budget')
+  }
+  return response.json()
+}
+
 export {
   api_get_account,
   api_create_account,
@@ -357,4 +469,16 @@ export {
   api_consume_budget,
   api_link_transaction_to_budget,
   api_unlink_transaction_from_budget,
+  // Budget Items
+  api_get_budget_items,
+  api_create_budget_item,
+  api_update_budget_item,
+  api_delete_budget_item,
+  api_record_item_refund,
+  api_advance_item_period,
+  api_get_budget_detail,
+  // Budget Templates
+  api_create_rent_budget,
+  api_create_mortgage_budget,
+  api_create_salary_budget,
 }

@@ -285,10 +285,164 @@ api_get_budget_analysis(id: number): Promise<BudgetAnalysis>
 4. **错误处理**：完善的错误处理和用户提示
 5. **数据一致性**：核销时验证预算剩余金额
 
-## 扩展功能（未来）
+## 扩展功能（已实现）
 
-1. 预算模板：支持创建预算模板，快速创建相似预算
-2. 预算提醒：当预算使用率达到阈值时提醒
-3. 预算周期：支持周期性预算（月度、季度、年度）
-4. 预算审批流程：多级审批流程
-5. 预算报表：生成预算执行报表
+### 1. 预算类型支持 ✅
+
+系统现在支持两种预算类型：
+- **支出预算（EXPENSE）**：用于追踪支出，如租金、房贷、购物等
+- **收入预算（INCOME）**：用于追踪收入，如工资、奖金等
+
+### 2. 预算周期支持 ✅
+
+支持以下周期类型：
+- **一次性（ONCE）**：一次性预算，如首付款
+- **月度（MONTHLY）**：每月重复，如月租、月供
+- **季度（QUARTERLY）**：每季度重复
+- **年度（YEARLY）**：每年重复，如年度工资
+
+### 3. 预算子项 ✅
+
+每个预算可以包含多个子项（BudgetItem），用于细分预算：
+- 子项可以是可退还的（如押金）
+- 子项支持分期追踪（如12期月租）
+- 子项有独立的状态：待执行、进行中、已完成、已退还
+
+### 4. 预算模板 ✅
+
+系统提供三种预设模板：
+
+#### 租房预算模板
+自动创建：
+- 押金子项（可退还）
+- 月租金子项（按期追踪）
+
+#### 房贷预算模板
+自动创建：
+- 首付款子项
+- 月供子项（按期追踪）
+- 利息支出子项
+
+#### 工资预算模板
+自动创建：
+- 月薪子项（12期）
+- 年终奖子项（可选）
+
+---
+
+## 使用指南
+
+### 场景一：租房合同管理
+
+**步骤：**
+1. 点击"预算模板"按钮，选择"租房预算"
+2. 填写：
+   - 预算名称：如"2026年上海租房"
+   - 月租金：如 3500
+   - 押金：如 7000（押一付一则为一个月租金）
+   - 合同开始/结束日期
+3. 系统自动计算总预算并创建子项
+
+**追踪押金退还：**
+- 合同结束后，在押金子项中点击"记录退还"
+- 输入退还金额，系统自动更新子项状态
+
+**追踪月租支付：**
+- 每月支付租金后，关联交易记录到该预算
+- 或使用"核销"功能从预算创建交易
+
+### 场景二：购房贷款管理
+
+**步骤：**
+1. 点击"预算模板"按钮，选择"房贷预算"
+2. 填写：
+   - 预算名称：如"购房贷款2026"
+   - 首付款：如 500000
+   - 月供：如 8000
+   - 月均利息：如 3000（可选，用于追踪利息支出）
+   - 贷款期数：如 360（30年）
+   - 贷款开始日期
+
+**追踪月供：**
+- 每月还款后，关联交易记录到该预算
+- 月供子项会自动追踪已完成期数
+
+### 场景三：年度收入管理
+
+**步骤：**
+1. 点击"预算模板"按钮，选择"工资预算"
+2. 填写：
+   - 预算名称：如"2026年工资收入"
+   - 月薪（税后）：如 20000
+   - 年份：如 2026
+   - 年终奖（可选）：如 50000
+
+**追踪收入：**
+- 每月发工资后，将收入交易关联到该预算
+- 系统自动统计实际收入与预算的对比
+
+### API 接口说明
+
+#### 预算模板 API
+
+```
+POST /api/v1/finance/budget/template/rent
+POST /api/v1/finance/budget/template/mortgage
+POST /api/v1/finance/budget/template/salary
+```
+
+#### 预算子项 API
+
+```
+GET    /api/v1/finance/budget/{budget_id}/items     # 获取预算子项列表
+POST   /api/v1/finance/budget/{budget_id}/items     # 创建预算子项
+PUT    /api/v1/finance/budget/items/{item_id}       # 更新预算子项
+DELETE /api/v1/finance/budget/items/{item_id}       # 删除预算子项
+POST   /api/v1/finance/budget/items/{item_id}/refund   # 记录退还
+POST   /api/v1/finance/budget/items/{item_id}/advance  # 推进期数
+GET    /api/v1/finance/budget/{budget_id}/detail    # 获取预算详情（含子项）
+```
+
+---
+
+## 数据模型扩展
+
+### Budget 表新增字段
+
+```sql
+ALTER TABLE budgets ADD COLUMN budget_type INTEGER DEFAULT 0;  -- 0: 支出, 1: 收入
+ALTER TABLE budgets ADD COLUMN period_type INTEGER DEFAULT 0;  -- 0: 一次性, 1: 月度, 2: 季度, 3: 年度
+ALTER TABLE budgets ADD COLUMN start_date TIMESTAMP;           -- 开始日期
+ALTER TABLE budgets ADD COLUMN end_date TIMESTAMP;             -- 结束日期
+ALTER TABLE budgets ADD COLUMN category VARCHAR(50);           -- 分类: rent, mortgage, salary
+```
+
+### BudgetItem 表（新增）
+
+```sql
+CREATE TABLE budget_items (
+    id SERIAL PRIMARY KEY,
+    budget_id INTEGER NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    amount VARCHAR(50),
+    description TEXT,
+    is_refundable INTEGER DEFAULT 0,
+    refund_amount VARCHAR(50) DEFAULT '0.0',
+    status INTEGER DEFAULT 0,
+    period_count INTEGER DEFAULT 1,
+    current_period INTEGER DEFAULT 0,
+    due_date TIMESTAMP,
+    ctime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    mtime TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+---
+
+## 未来扩展（待实现）
+
+1. 预算提醒：当预算使用率达到阈值时提醒
+2. 预算审批流程：多级审批流程
+3. 预算报表：生成预算执行报表
+4. 预算复制：快速复制现有预算
+5. 批量操作：批量关联交易到预算

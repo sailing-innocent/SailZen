@@ -10,6 +10,7 @@ import {
   Heart,
   FolderKanban,
   Activity,
+  Package,
 } from 'lucide-react'
 
 const MainPage = () => {
@@ -62,7 +63,7 @@ const MainPage = () => {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">快捷入口</CardTitle>
               </CardHeader>
-              <CardContent className="grid grid-cols-3 gap-2">
+              <CardContent className="grid grid-cols-4 gap-2">
                 <QuickAccessCard
                   icon={<Wallet className="h-5 w-5" />}
                   label="财务"
@@ -80,6 +81,12 @@ const MainPage = () => {
                   label="项目"
                   href="/project"
                   color="text-blue-600"
+                />
+                <QuickAccessCard
+                  icon={<Package className="h-5 w-5" />}
+                  label="物资"
+                  href="/necessity"
+                  color="text-orange-500"
                 />
               </CardContent>
             </Card>

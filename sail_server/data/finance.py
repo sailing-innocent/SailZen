@@ -27,6 +27,11 @@ __all__ = [
     "TransactionState",
     "Budget",
     "BudgetData",
+    "BudgetType",
+    "PeriodType",
+    "BudgetItem",
+    "BudgetItemData",
+    "BudgetItemStatus",
     "_acc",
     "_acc_inv",
     "_htime",
@@ -268,19 +273,75 @@ def transactions_money_iter(transactions: List[TransactionData]) -> Iterator[Mon
 
 # Budget is a plan for future transactions, frequently used for project management
 
+from enum import IntEnum
+
+
+class BudgetType(IntEnum):
+    """预算类型"""
+    EXPENSE = 0     # 支出预算
+    INCOME = 1      # 收入预算
+
+
+class PeriodType(IntEnum):
+    """预算周期类型"""
+    ONCE = 0        # 一次性
+    MONTHLY = 1     # 月度
+    QUARTERLY = 2   # 季度
+    YEARLY = 3      # 年度
+
+
+class BudgetItemStatus(IntEnum):
+    """预算子项状态"""
+    PENDING = 0     # 待执行
+    IN_PROGRESS = 1 # 进行中
+    COMPLETED = 2   # 已完成
+    REFUNDED = 3    # 已退还（用于押金）
+
+
 class Budget(ORMBase):
     __tablename__ = "budgets"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String)
-    amount = Column(String)  # Decimal float
+    amount = Column(String)  # Decimal float - 总预算金额
     description = Column(String)
     tags = Column(String, default="")
+    # 新增字段
+    budget_type = Column(Integer, default=0)  # 0: 支出, 1: 收入
+    period_type = Column(Integer, default=0)  # 0: 一次性, 1: 月度, 2: 季度, 3: 年度
+    start_date = Column(TIMESTAMP)  # 预算开始日期（合同开始）
+    end_date = Column(TIMESTAMP)    # 预算结束日期（合同结束）
+    category = Column(String)       # 预算分类: rent(租房), mortgage(房贷), salary(工资), project(项目)
+    
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
     
     # Relationship to transactions linked to this budget
     transactions = relationship("Transaction", back_populates="budget", foreign_keys="Transaction.budget_id")
+    # Relationship to budget items
+    items = relationship("BudgetItem", back_populates="budget", cascade="all, delete-orphan")
+
+
+class BudgetItem(ORMBase):
+    """预算子项 - 用于管理预算下的各个子项目"""
+    __tablename__ = "budget_items"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    budget_id = Column(Integer, ForeignKey("budgets.id"), nullable=False)
+    name = Column(String, nullable=False)  # 子项名称：如"押金"、"月租"、"首付"、"利息"
+    amount = Column(String)  # 子项金额
+    description = Column(String)
+    is_refundable = Column(Integer, default=0)  # 是否可退还（0: 否, 1: 是）
+    refund_amount = Column(String, default="0.0")  # 已退还金额
+    status = Column(Integer, default=0)  # 0: 待执行, 1: 进行中, 2: 已完成, 3: 已退还
+    period_count = Column(Integer, default=1)  # 期数（用于分期，如12期月租）
+    current_period = Column(Integer, default=0)  # 当前期数
+    due_date = Column(TIMESTAMP)  # 到期日期
+    ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # Relationship
+    budget = relationship("Budget", back_populates="items")
+
 
 @dataclass
 class BudgetData:
@@ -289,6 +350,33 @@ class BudgetData:
     amount: str = field(default="0.0")
     description: str = field(default="")
     tags: str = field(default="")
+    # 新增字段
+    budget_type: int = field(default=0)  # 0: 支出, 1: 收入
+    period_type: int = field(default=0)  # 0: 一次性, 1: 月度, 2: 季度, 3: 年度
+    start_date: Optional[float] = field(default=None)  # timestamp
+    end_date: Optional[float] = field(default=None)    # timestamp
+    category: str = field(default="")  # 分类
+    
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
+    ctime: datetime = field(default_factory=lambda: datetime.now())
+    mtime: datetime = field(default_factory=lambda: datetime.now())
+    
+    # 扩展字段（用于返回时携带子项信息）
+    items: List["BudgetItemData"] = field(default_factory=list)
+
+
+@dataclass
+class BudgetItemData:
+    id: int = field(default=-1)
+    budget_id: int = field(default=-1)
+    name: str = field(default="")
+    amount: str = field(default="0.0")
+    description: str = field(default="")
+    is_refundable: int = field(default=0)
+    refund_amount: str = field(default="0.0")
+    status: int = field(default=0)
+    period_count: int = field(default=1)
+    current_period: int = field(default=0)
+    due_date: Optional[float] = field(default=None)  # timestamp
     ctime: datetime = field(default_factory=lambda: datetime.now())
     mtime: datetime = field(default_factory=lambda: datetime.now())

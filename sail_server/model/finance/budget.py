@@ -9,6 +9,11 @@
 from sail_server.data.finance import (
     Budget,
     BudgetData,
+    BudgetItem,
+    BudgetItemData,
+    BudgetType,
+    PeriodType,
+    BudgetItemStatus,
     Transaction,
     TransactionData,
 )
@@ -16,7 +21,7 @@ from sail_server.data.finance import _htime, _htime_inv
 from sail_server.utils.money import Money
 from datetime import datetime
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -27,25 +32,76 @@ def budget_from_create(create: BudgetData):
         amount=create.amount,
         description=create.description,
         tags=create.tags,
+        budget_type=create.budget_type,
+        period_type=create.period_type,
+        start_date=_htime(create.start_date) if create.start_date else None,
+        end_date=_htime(create.end_date) if create.end_date else None,
+        category=create.category,
         htime=_htime(create.htime),
         ctime=datetime.now(),
         mtime=datetime.now(),
     )
 
 
-def read_from_budget(budget: Budget):
+def read_from_budget(budget: Budget, include_items: bool = False):
     tags = ""
     if budget.tags is not None:
         tags = budget.tags
+    
+    items = []
+    if include_items and budget.items:
+        items = [read_from_budget_item(item) for item in budget.items]
+    
     return BudgetData(
         id=budget.id,
         name=budget.name,
         amount=budget.amount,
-        description=budget.description,
+        description=budget.description or "",
         tags=tags,
+        budget_type=budget.budget_type or 0,
+        period_type=budget.period_type or 0,
+        start_date=_htime_inv(budget.start_date) if budget.start_date else None,
+        end_date=_htime_inv(budget.end_date) if budget.end_date else None,
+        category=budget.category or "",
         htime=_htime_inv(budget.htime),
         ctime=budget.ctime,
         mtime=budget.mtime,
+        items=items,
+    )
+
+
+def read_from_budget_item(item: BudgetItem) -> BudgetItemData:
+    return BudgetItemData(
+        id=item.id,
+        budget_id=item.budget_id,
+        name=item.name,
+        amount=item.amount or "0.0",
+        description=item.description or "",
+        is_refundable=item.is_refundable or 0,
+        refund_amount=item.refund_amount or "0.0",
+        status=item.status or 0,
+        period_count=item.period_count or 1,
+        current_period=item.current_period or 0,
+        due_date=_htime_inv(item.due_date) if item.due_date else None,
+        ctime=item.ctime,
+        mtime=item.mtime,
+    )
+
+
+def budget_item_from_create(create: BudgetItemData) -> BudgetItem:
+    return BudgetItem(
+        budget_id=create.budget_id,
+        name=create.name,
+        amount=create.amount,
+        description=create.description,
+        is_refundable=create.is_refundable,
+        refund_amount=create.refund_amount,
+        status=create.status,
+        period_count=create.period_count,
+        current_period=create.current_period,
+        due_date=_htime(create.due_date) if create.due_date else None,
+        ctime=datetime.now(),
+        mtime=datetime.now(),
     )
 
 
@@ -118,6 +174,11 @@ def update_budget_impl(db, budget_id: int, budget_update: BudgetData):
     budget.amount = budget_update.amount
     budget.description = budget_update.description
     budget.tags = budget_update.tags
+    budget.budget_type = budget_update.budget_type
+    budget.period_type = budget_update.period_type
+    budget.start_date = _htime(budget_update.start_date) if budget_update.start_date else None
+    budget.end_date = _htime(budget_update.end_date) if budget_update.end_date else None
+    budget.category = budget_update.category
     budget.htime = _htime(budget_update.htime)
     budget.mtime = datetime.now()
 
@@ -523,11 +584,18 @@ def link_transaction_to_budget_impl(
             f"Transaction {transaction_id} is already linked to budget {transaction.budget_id}"
         )
 
-    # Validate transaction is an expense transaction
+    # Validate transaction type matches budget type
     from_acc_id = transaction.from_acc_id if transaction.from_acc_id is not None else -1
     to_acc_id = transaction.to_acc_id if transaction.to_acc_id is not None else -1
-    if not (from_acc_id > 0 and to_acc_id == -1):
-        raise ValueError("Only expense transactions can be linked to budgets")
+    
+    budget_type = budget.budget_type or 0
+    is_expense = from_acc_id > 0 and to_acc_id == -1  # 支出：从账户到外部
+    is_income = from_acc_id == -1 and to_acc_id > 0   # 收入：从外部到账户
+    
+    if budget_type == 0 and not is_expense:  # 支出预算
+        raise ValueError("Only expense transactions can be linked to expense budgets")
+    if budget_type == 1 and not is_income:   # 收入预算
+        raise ValueError("Only income transactions can be linked to income budgets")
 
     # Check if linking this transaction would exceed budget
     budget_amount = Money(budget.amount)
@@ -581,3 +649,335 @@ def unlink_transaction_from_budget_impl(db, transaction_id: int) -> TransactionD
 
     from sail_server.model.finance.transaction import read_from_trans
     return read_from_trans(transaction)
+
+
+# ============ Budget Item CRUD ============
+
+def create_budget_item_impl(db, item_create: BudgetItemData) -> BudgetItemData:
+    """Create a new budget item"""
+    item = budget_item_from_create(item_create)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return read_from_budget_item(item)
+
+
+def read_budget_items_impl(db, budget_id: int) -> List[BudgetItemData]:
+    """Read all items for a budget"""
+    items = db.query(BudgetItem).filter(BudgetItem.budget_id == budget_id).all()
+    return [read_from_budget_item(item) for item in items]
+
+
+def read_budget_item_impl(db, item_id: int) -> Optional[BudgetItemData]:
+    """Read a specific budget item"""
+    item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
+    if item is None:
+        return None
+    return read_from_budget_item(item)
+
+
+def update_budget_item_impl(db, item_id: int, item_update: BudgetItemData) -> Optional[BudgetItemData]:
+    """Update a budget item"""
+    item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
+    if item is None:
+        return None
+    
+    item.name = item_update.name
+    item.amount = item_update.amount
+    item.description = item_update.description
+    item.is_refundable = item_update.is_refundable
+    item.refund_amount = item_update.refund_amount
+    item.status = item_update.status
+    item.period_count = item_update.period_count
+    item.current_period = item_update.current_period
+    item.due_date = _htime(item_update.due_date) if item_update.due_date else None
+    item.mtime = datetime.now()
+    
+    db.commit()
+    db.refresh(item)
+    return read_from_budget_item(item)
+
+
+def delete_budget_item_impl(db, item_id: int) -> Optional[dict]:
+    """Delete a budget item"""
+    item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
+    if item is None:
+        return None
+    
+    db.delete(item)
+    db.commit()
+    return {"id": item_id, "status": "success", "message": "Budget item deleted"}
+
+
+def record_item_refund_impl(db, item_id: int, refund_amount: str) -> BudgetItemData:
+    """Record a refund for a refundable budget item (e.g., deposit)"""
+    item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
+    if item is None:
+        raise ValueError(f"Budget item {item_id} not found")
+    
+    if not item.is_refundable:
+        raise ValueError(f"Budget item {item_id} is not refundable")
+    
+    current_refund = Money(item.refund_amount or "0.0")
+    new_refund = current_refund + Money(refund_amount)
+    item_amount = Money(item.amount)
+    
+    if new_refund > item_amount:
+        raise ValueError(f"Refund amount exceeds item amount. Max refundable: {item_amount - current_refund}")
+    
+    item.refund_amount = str(new_refund)
+    if new_refund >= item_amount:
+        item.status = BudgetItemStatus.REFUNDED
+    item.mtime = datetime.now()
+    
+    db.commit()
+    db.refresh(item)
+    return read_from_budget_item(item)
+
+
+def advance_item_period_impl(db, item_id: int) -> BudgetItemData:
+    """Advance a periodic item to the next period (e.g., next month's rent)"""
+    item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
+    if item is None:
+        raise ValueError(f"Budget item {item_id} not found")
+    
+    if item.current_period >= item.period_count:
+        raise ValueError(f"Budget item {item_id} has completed all periods")
+    
+    item.current_period += 1
+    if item.current_period >= item.period_count:
+        item.status = BudgetItemStatus.COMPLETED
+    else:
+        item.status = BudgetItemStatus.IN_PROGRESS
+    item.mtime = datetime.now()
+    
+    db.commit()
+    db.refresh(item)
+    return read_from_budget_item(item)
+
+
+# ============ Budget Templates ============
+
+def create_rent_budget_impl(
+    db,
+    name: str,
+    monthly_rent: str,
+    deposit: str,
+    start_date: float,
+    end_date: float,
+    description: str = "",
+    tags: str = "",
+) -> BudgetData:
+    """Create a rent budget with monthly rent and deposit items"""
+    # Calculate number of months
+    start_dt = datetime.fromtimestamp(start_date)
+    end_dt = datetime.fromtimestamp(end_date)
+    months = (end_dt.year - start_dt.year) * 12 + (end_dt.month - start_dt.month) + 1
+    
+    # Calculate total amount
+    total_rent = Money(monthly_rent) * months
+    total_deposit = Money(deposit)
+    total_amount = total_rent + total_deposit
+    
+    # Create budget
+    budget_data = BudgetData(
+        name=name,
+        amount=str(total_amount),
+        description=description,
+        tags=tags if tags else "rent,housing",
+        budget_type=BudgetType.EXPENSE,
+        period_type=PeriodType.MONTHLY,
+        start_date=start_date,
+        end_date=end_date,
+        category="rent",
+        htime=start_date,
+    )
+    
+    budget = budget_from_create(budget_data)
+    db.add(budget)
+    db.flush()  # Get the budget ID
+    
+    # Create deposit item (refundable)
+    deposit_item = BudgetItem(
+        budget_id=budget.id,
+        name="押金",
+        amount=deposit,
+        description="租房押金（合同结束可退还）",
+        is_refundable=1,
+        status=BudgetItemStatus.PENDING,
+        period_count=1,
+    )
+    db.add(deposit_item)
+    
+    # Create monthly rent item
+    rent_item = BudgetItem(
+        budget_id=budget.id,
+        name="月租金",
+        amount=monthly_rent,
+        description=f"每月租金，共{months}期",
+        is_refundable=0,
+        status=BudgetItemStatus.PENDING,
+        period_count=months,
+    )
+    db.add(rent_item)
+    
+    db.commit()
+    db.refresh(budget)
+    return read_from_budget(budget, include_items=True)
+
+
+def create_mortgage_budget_impl(
+    db,
+    name: str,
+    down_payment: str,
+    monthly_payment: str,
+    monthly_interest: str,
+    loan_months: int,
+    start_date: float,
+    description: str = "",
+    tags: str = "",
+) -> BudgetData:
+    """Create a mortgage budget with down payment and monthly payments"""
+    from dateutil.relativedelta import relativedelta
+    
+    # Calculate total amounts
+    total_monthly = Money(monthly_payment) * loan_months
+    total_interest = Money(monthly_interest) * loan_months
+    total_amount = Money(down_payment) + total_monthly
+    
+    # Calculate end date
+    start_dt = datetime.fromtimestamp(start_date)
+    end_dt = start_dt + relativedelta(months=loan_months)
+    
+    # Create budget
+    budget_data = BudgetData(
+        name=name,
+        amount=str(total_amount),
+        description=description,
+        tags=tags if tags else "mortgage,housing",
+        budget_type=BudgetType.EXPENSE,
+        period_type=PeriodType.MONTHLY,
+        start_date=start_date,
+        end_date=end_dt.timestamp(),
+        category="mortgage",
+        htime=start_date,
+    )
+    
+    budget = budget_from_create(budget_data)
+    db.add(budget)
+    db.flush()
+    
+    # Create down payment item
+    down_item = BudgetItem(
+        budget_id=budget.id,
+        name="首付款",
+        amount=down_payment,
+        description="购房首付款",
+        is_refundable=0,
+        status=BudgetItemStatus.PENDING,
+        period_count=1,
+    )
+    db.add(down_item)
+    
+    # Create monthly payment item
+    payment_item = BudgetItem(
+        budget_id=budget.id,
+        name="月供",
+        amount=monthly_payment,
+        description=f"每月还款，共{loan_months}期",
+        is_refundable=0,
+        status=BudgetItemStatus.PENDING,
+        period_count=loan_months,
+    )
+    db.add(payment_item)
+    
+    # Create interest tracking item
+    interest_item = BudgetItem(
+        budget_id=budget.id,
+        name="利息支出",
+        amount=str(total_interest),
+        description=f"贷款利息，月均{monthly_interest}",
+        is_refundable=0,
+        status=BudgetItemStatus.PENDING,
+        period_count=loan_months,
+    )
+    db.add(interest_item)
+    
+    db.commit()
+    db.refresh(budget)
+    return read_from_budget(budget, include_items=True)
+
+
+def create_salary_budget_impl(
+    db,
+    name: str,
+    monthly_salary: str,
+    year: int,
+    annual_bonus: str = "0.0",
+    description: str = "",
+    tags: str = "",
+) -> BudgetData:
+    """Create a salary/income budget for a year"""
+    # Calculate total expected income
+    total_salary = Money(monthly_salary) * 12
+    total_bonus = Money(annual_bonus)
+    total_amount = total_salary + total_bonus
+    
+    # Set date range for the year
+    start_dt = datetime(year, 1, 1)
+    end_dt = datetime(year, 12, 31)
+    
+    # Create budget
+    budget_data = BudgetData(
+        name=name,
+        amount=str(total_amount),
+        description=description,
+        tags=tags if tags else "salary,income",
+        budget_type=BudgetType.INCOME,  # Income budget
+        period_type=PeriodType.YEARLY,
+        start_date=start_dt.timestamp(),
+        end_date=end_dt.timestamp(),
+        category="salary",
+        htime=start_dt.timestamp(),
+    )
+    
+    budget = budget_from_create(budget_data)
+    db.add(budget)
+    db.flush()
+    
+    # Create monthly salary item
+    salary_item = BudgetItem(
+        budget_id=budget.id,
+        name="月薪",
+        amount=monthly_salary,
+        description=f"{year}年月薪，共12期",
+        is_refundable=0,
+        status=BudgetItemStatus.PENDING,
+        period_count=12,
+    )
+    db.add(salary_item)
+    
+    # Create annual bonus item if applicable
+    if Money(annual_bonus).value > 0:
+        bonus_item = BudgetItem(
+            budget_id=budget.id,
+            name="年终奖",
+            amount=annual_bonus,
+            description=f"{year}年年终奖",
+            is_refundable=0,
+            status=BudgetItemStatus.PENDING,
+            period_count=1,
+        )
+        db.add(bonus_item)
+    
+    db.commit()
+    db.refresh(budget)
+    return read_from_budget(budget, include_items=True)
+
+
+def get_budget_with_items_impl(db, budget_id: int) -> Optional[BudgetData]:
+    """Get budget with all its items"""
+    budget = db.query(Budget).filter(Budget.id == budget_id).first()
+    if budget is None:
+        return None
+    return read_from_budget(budget, include_items=True)

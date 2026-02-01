@@ -49,6 +49,7 @@ class SailServer:
             "/money",
             "/project",
             "/text",
+            "/necessity",
         ]
         self.api_router = None
         self.debug = os.environ.get("DEV_MODE", "false").lower() == "true"
@@ -131,6 +132,7 @@ class SailServer:
         from sail_server.router.project import router as project_router
         from sail_server.router.history import router as history_router
         from sail_server.router.text import router as text_router
+        from sail_server.router.necessity import router as necessity_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -142,6 +144,7 @@ class SailServer:
                 project_router,
                 history_router,
                 text_router,
+                necessity_router,
             ],
         )
 

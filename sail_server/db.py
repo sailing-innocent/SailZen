@@ -22,6 +22,7 @@ import sail_server.data.life
 import sail_server.data.project
 import sail_server.data.history
 import sail_server.data.text
+import sail_server.data.necessity
 import os
 
 # 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题

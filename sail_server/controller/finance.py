@@ -45,7 +45,21 @@ from sail_server.model.finance.budget import (
     consume_budget_impl,
     link_transaction_to_budget_impl,
     unlink_transaction_from_budget_impl,
+    # Budget Item functions
+    create_budget_item_impl,
+    read_budget_items_impl,
+    read_budget_item_impl,
+    update_budget_item_impl,
+    delete_budget_item_impl,
+    record_item_refund_impl,
+    advance_item_period_impl,
+    get_budget_with_items_impl,
+    # Budget templates
+    create_rent_budget_impl,
+    create_mortgage_budget_impl,
+    create_salary_budget_impl,
 )
+from sail_server.data.finance import BudgetItemData
 from sqlalchemy.orm import Session
 from typing import Generator, Union, Any
 from datetime import datetime
@@ -854,3 +868,241 @@ class BudgetController(Controller):
         except Exception as e:
             request.logger.error(f"Error unlinking transaction: {e}")
             raise HTTPException(status_code=500, detail=f"Error unlinking transaction: {str(e)}")
+
+    # ============ Budget Items ============
+
+    @get("/{budget_id:int}/items", return_dto=None)
+    async def get_budget_items(
+        self,
+        budget_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> list:
+        """Get all items for a budget"""
+        try:
+            db = next(router_dependency)
+            items = read_budget_items_impl(db, budget_id)
+            return items
+        except Exception as e:
+            request.logger.error(f"Error getting budget items: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/{budget_id:int}/items", dto=None, return_dto=None)
+    async def create_budget_item(
+        self,
+        budget_id: int,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Create a new budget item"""
+        try:
+            db = next(router_dependency)
+            item_data = BudgetItemData(
+                budget_id=budget_id,
+                name=data.get("name", ""),
+                amount=data.get("amount", "0.0"),
+                description=data.get("description", ""),
+                is_refundable=data.get("is_refundable", 0),
+                period_count=data.get("period_count", 1),
+            )
+            item = create_budget_item_impl(db, item_data)
+            request.logger.info(f"Created budget item: {item.name}")
+            return item.__dict__
+        except Exception as e:
+            request.logger.error(f"Error creating budget item: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @put("/items/{item_id:int}", dto=None, return_dto=None)
+    async def update_budget_item(
+        self,
+        item_id: int,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Update a budget item"""
+        try:
+            db = next(router_dependency)
+            item_data = BudgetItemData(
+                id=item_id,
+                budget_id=data.get("budget_id", -1),
+                name=data.get("name", ""),
+                amount=data.get("amount", "0.0"),
+                description=data.get("description", ""),
+                is_refundable=data.get("is_refundable", 0),
+                refund_amount=data.get("refund_amount", "0.0"),
+                status=data.get("status", 0),
+                period_count=data.get("period_count", 1),
+                current_period=data.get("current_period", 0),
+                due_date=data.get("due_date"),
+            )
+            item = update_budget_item_impl(db, item_id, item_data)
+            if item is None:
+                raise HTTPException(status_code=404, detail="Budget item not found")
+            return item.__dict__
+        except HTTPException:
+            raise
+        except Exception as e:
+            request.logger.error(f"Error updating budget item: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @delete("/items/{item_id:int}", status_code=200, return_dto=None)
+    async def delete_budget_item(
+        self,
+        item_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Delete a budget item"""
+        try:
+            db = next(router_dependency)
+            result = delete_budget_item_impl(db, item_id)
+            if result is None:
+                raise HTTPException(status_code=404, detail="Budget item not found")
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            request.logger.error(f"Error deleting budget item: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/items/{item_id:int}/refund", dto=None, return_dto=None)
+    async def record_item_refund(
+        self,
+        item_id: int,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Record a refund for a refundable item (e.g., deposit)"""
+        try:
+            db = next(router_dependency)
+            refund_amount = data.get("refund_amount", "0.0")
+            item = record_item_refund_impl(db, item_id, refund_amount)
+            request.logger.info(f"Recorded refund for item {item_id}: {refund_amount}")
+            return item.__dict__
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            request.logger.error(f"Error recording refund: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/items/{item_id:int}/advance", return_dto=None)
+    async def advance_item_period(
+        self,
+        item_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Advance a periodic item to the next period"""
+        try:
+            db = next(router_dependency)
+            item = advance_item_period_impl(db, item_id)
+            request.logger.info(f"Advanced item {item_id} to period {item.current_period}")
+            return item.__dict__
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            request.logger.error(f"Error advancing period: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @get("/{budget_id:int}/detail", return_dto=None)
+    async def get_budget_with_items(
+        self,
+        budget_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Get budget with all its items"""
+        try:
+            db = next(router_dependency)
+            budget = get_budget_with_items_impl(db, budget_id)
+            if budget is None:
+                raise HTTPException(status_code=404, detail="Budget not found")
+            return budget.__dict__
+        except HTTPException:
+            raise
+        except Exception as e:
+            request.logger.error(f"Error getting budget detail: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    # ============ Budget Templates ============
+
+    @post("/template/rent", dto=None, return_dto=None)
+    async def create_rent_budget(
+        self,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Create a rent budget template with deposit and monthly rent"""
+        try:
+            db = next(router_dependency)
+            budget = create_rent_budget_impl(
+                db,
+                name=data.get("name", "租房预算"),
+                monthly_rent=data.get("monthly_rent", "0.0"),
+                deposit=data.get("deposit", "0.0"),
+                start_date=data.get("start_date", datetime.now().timestamp()),
+                end_date=data.get("end_date", datetime.now().timestamp()),
+                description=data.get("description", ""),
+                tags=data.get("tags", ""),
+            )
+            request.logger.info(f"Created rent budget: {budget.name}")
+            return budget.__dict__
+        except Exception as e:
+            request.logger.error(f"Error creating rent budget: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/template/mortgage", dto=None, return_dto=None)
+    async def create_mortgage_budget(
+        self,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Create a mortgage budget template with down payment and monthly payments"""
+        try:
+            db = next(router_dependency)
+            budget = create_mortgage_budget_impl(
+                db,
+                name=data.get("name", "房贷预算"),
+                down_payment=data.get("down_payment", "0.0"),
+                monthly_payment=data.get("monthly_payment", "0.0"),
+                monthly_interest=data.get("monthly_interest", "0.0"),
+                loan_months=data.get("loan_months", 360),
+                start_date=data.get("start_date", datetime.now().timestamp()),
+                description=data.get("description", ""),
+                tags=data.get("tags", ""),
+            )
+            request.logger.info(f"Created mortgage budget: {budget.name}")
+            return budget.__dict__
+        except Exception as e:
+            request.logger.error(f"Error creating mortgage budget: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/template/salary", dto=None, return_dto=None)
+    async def create_salary_budget(
+        self,
+        data: dict,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """Create a salary/income budget template for a year"""
+        try:
+            db = next(router_dependency)
+            budget = create_salary_budget_impl(
+                db,
+                name=data.get("name", "年度工资预算"),
+                monthly_salary=data.get("monthly_salary", "0.0"),
+                year=data.get("year", datetime.now().year),
+                annual_bonus=data.get("annual_bonus", "0.0"),
+                description=data.get("description", ""),
+                tags=data.get("tags", ""),
+            )
+            request.logger.info(f"Created salary budget: {budget.name}")
+            return budget.__dict__
+        except Exception as e:
+            request.logger.error(f"Error creating salary budget: {e}")
+            raise HTTPException(status_code=500, detail=str(e))

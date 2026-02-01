@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { type BudgetsState, useBudgetsStore, useServerStore, useAccountsStore, type AccountsState } from '@lib/store'
-import { type BudgetData, type TransactionData } from '@lib/data/money'
+import { type BudgetData, type TransactionData, BudgetTypeLabels, BudgetType, PeriodTypeLabels, PeriodType, BudgetCategoryLabels, BudgetCategory } from '@lib/data/money'
 import { DataTable } from '@components/data_table'
 import BudgetAddDialog from './budget_add_dialog'
 import BudgetConsumeDialog from './budget_consume_dialog'
+import BudgetTemplateDialog from './budget_template_dialog'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -294,6 +295,11 @@ const BudgetsDataTable: React.FC = () => {
               <Button variant="outline" size="sm" onClick={handleRefresh}>
                 刷新
               </Button>
+              <BudgetTemplateDialog
+                onSuccess={() => {
+                  setDataUpdated(false)
+                }}
+              />
               <BudgetAddDialog
                 onSuccess={() => {
                   setDataUpdated(false)
