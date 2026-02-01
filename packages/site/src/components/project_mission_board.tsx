@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import type { ProjectData, MissionData } from '@lib/data/project'
 import ProjectMissionColumn from './project_mission_column'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 
 export interface ProjectMissionBoardProps {
     projects: ProjectData[]
@@ -10,7 +11,7 @@ export interface ProjectMissionBoardProps {
 
 const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, missions }) => {
     const isMobile = useIsMobile()
-    
+
     // NullProject is used to represent a list of missions that are not belong to any project
     const NullProject: ProjectData = {
         id: 0,
@@ -23,7 +24,7 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
 
     // sort and group missions by project
     const sortedMissions = useMemo(() => {
-        return missions.sort((a, b) => a.id - b.id)
+        return [...missions].sort((a, b) => a.id - b.id)
     }, [missions])
     const groupedMissions = useMemo(() => {
         return sortedMissions.reduce((acc, mission) => {
@@ -34,33 +35,38 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
     }, [sortedMissions])
 
     return (
-        <div className="flex flex-col items-center justify-center">
-            <h1 className={`font-bold mb-4 ${isMobile ? 'text-lg' : 'text-2xl'}`}>
-                Project Mission Board
-            </h1>
-            {/* 移动端垂直布局，桌面端横向滚动 */}
-            <div className={`flex items-start gap-4 ${
-                isMobile 
-                    ? 'flex-col w-full' 
-                    : 'flex-row overflow-x-auto pb-4'
-            }`}>
-                {/* 只有当有任务属于 NullProject 时才显示 */}
-                {(groupedMissions[NullProject.id]?.length || 0) > 0 && (
-                    <ProjectMissionColumn 
-                        key={NullProject.id} 
-                        project={NullProject} 
-                        missions={groupedMissions[NullProject.id] || []} 
-                    />
-                )}
-                {projects.map((project) => (
-                    <ProjectMissionColumn 
-                        key={project.id} 
-                        project={project} 
-                        missions={groupedMissions[project.id] || []} 
-                    />
-                ))}
-            </div>            
-        </div>
+        <Card className="flex flex-col h-full min-h-0 overflow-hidden">
+            <CardHeader className={isMobile ? 'px-3 py-2' : ''}>
+                <CardTitle className={isMobile ? 'text-lg' : ''}>
+                    Project Mission Board
+                </CardTitle>
+            </CardHeader>
+            <CardContent className={`flex-1 min-h-0 overflow-hidden ${isMobile ? 'px-2' : ''}`}>
+                {/* 移动端垂直布局，桌面端横向滚动，内容不超出 Card 边界 */}
+                <div
+                    className={`flex items-start gap-4 h-full ${
+                        isMobile
+                            ? 'flex-col overflow-y-auto'
+                            : 'flex-row overflow-x-auto overflow-y-hidden pb-2'
+                    }`}
+                >
+                    {(groupedMissions[NullProject.id]?.length || 0) > 0 && (
+                        <ProjectMissionColumn
+                            key={NullProject.id}
+                            project={NullProject}
+                            missions={groupedMissions[NullProject.id] || []}
+                        />
+                    )}
+                    {projects.map((project) => (
+                        <ProjectMissionColumn
+                            key={project.id}
+                            project={project}
+                            missions={groupedMissions[project.id] || []}
+                        />
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
     )
 }
 

@@ -102,17 +102,21 @@ export default function QuarterBiweekCalendar() {
   }, [biweeks, colorClasses])
 
   return (
-    <Card className="w-full">
+    <Card className="flex flex-col w-full min-w-0 overflow-hidden">
       <CardHeader className={isMobile ? 'px-3 py-2' : ''}>
         <CardTitle className={isMobile ? 'text-lg' : ''}>季度与双周日历</CardTitle>
       </CardHeader>
-      <CardContent className={isMobile ? 'px-2' : ''}>
-        {/* 响应式选择器布局：移动端分组垂直排列 */}
-        <div className={`flex flex-wrap items-center gap-2 mb-4 ${isMobile ? 'flex-col' : ''}`}>
+      <CardContent className={`flex flex-col min-w-0 overflow-hidden ${isMobile ? 'px-2' : ''}`}>
+        {/* 控制区：约束在 Card 内，按钮不超出范围 */}
+        <div
+          className={`flex flex-col gap-3 mb-4 min-w-0 ${
+            isMobile ? 'w-full' : 'flex-row flex-wrap'
+          }`}
+        >
           {/* 年份和季度选择 */}
-          <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
+          <div className={`flex gap-2 min-w-0 ${isMobile ? 'w-full' : 'flex-shrink-0'}`}>
             <Select value={String(year)} onValueChange={(v) => setYear(parseInt(v))}>
-              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+              <SelectTrigger className={isMobile ? 'flex-1 min-w-0' : 'w-[100px]'}>
                 <SelectValue placeholder="选择年份" />
               </SelectTrigger>
               <SelectContent>
@@ -123,7 +127,7 @@ export default function QuarterBiweekCalendar() {
             </Select>
 
             <Select value={String(quarter)} onValueChange={(v) => setQuarter(parseInt(v))}>
-              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+              <SelectTrigger className={isMobile ? 'flex-1 min-w-0' : 'w-[90px]'}>
                 <SelectValue placeholder="选择季度" />
               </SelectTrigger>
               <SelectContent>
@@ -135,7 +139,7 @@ export default function QuarterBiweekCalendar() {
             </Select>
           </div>
 
-          {/* 月份选择（移动端隐藏，减少控件复杂度） */}
+          {/* 月份选择（移动端隐藏） */}
           {!isMobile && (
             <Select
               value={String(month)}
@@ -146,7 +150,7 @@ export default function QuarterBiweekCalendar() {
                 setQuarter(q)
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-[100px]">
                 <SelectValue placeholder="选择月份" />
               </SelectTrigger>
               <SelectContent>
@@ -158,19 +162,19 @@ export default function QuarterBiweekCalendar() {
           )}
 
           {/* 双周选择和今天按钮 */}
-          <div className={`flex gap-2 ${isMobile ? 'w-full' : ''}`}>
+          <div className={`flex gap-2 min-w-0 ${isMobile ? 'w-full' : 'flex-1 min-w-0'}`}>
             <Select
               value={biweekIndex ? String(biweekIndex) : undefined}
               onValueChange={(v) => setBiweekIndex(parseInt(v))}
             >
-              <SelectTrigger className={isMobile ? 'flex-1' : ''}>
+              <SelectTrigger className="flex-1 min-w-0">
                 <SelectValue placeholder={isMobile ? '选择双周' : '选择季度内完整双周'} />
               </SelectTrigger>
               <SelectContent>
                 {biweeks.map((bw, idx) => (
                   <SelectItem key={`${year}-${quarter}-${idx}`} value={String(idx + 1)}>
-                    {isMobile 
-                      ? `双周 ${idx + 1}` 
+                    {isMobile
+                      ? `双周 ${idx + 1}`
                       : `双周 ${idx + 1}（${formatYMD(bw.start)} ~ ${formatYMD(bw.end)}）`
                     }
                   </SelectItem>
@@ -178,18 +182,25 @@ export default function QuarterBiweekCalendar() {
               </SelectContent>
             </Select>
 
-            <Button variant="outline" onClick={() => {
-              const now = new Date()
-              setYear(now.getFullYear())
-              setMonth(now.getMonth() + 1)
-              setSelectedDate(now)
-              setQuarter(Math.floor(now.getMonth() / 3) + 1)
-            }}>今天</Button>
+            <Button
+              variant="outline"
+              size="default"
+              className="shrink-0"
+              onClick={() => {
+                const now = new Date()
+                setYear(now.getFullYear())
+                setMonth(now.getMonth() + 1)
+                setSelectedDate(now)
+                setQuarter(Math.floor(now.getMonth() / 3) + 1)
+              }}
+            >
+              今天
+            </Button>
           </div>
         </div>
 
-        {/* 响应式日历：移动端显示 1 个月，桌面端显示 3 个月 */}
-        <div className="overflow-x-auto">
+        {/* 日历区域：约束在 Card 内，不超出边界 */}
+        <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden">
           <Calendar
             key={`${year}-${quarter}-single`}
             month={calendarMonthAnchor}
@@ -211,13 +222,13 @@ export default function QuarterBiweekCalendar() {
           />
         </div>
 
-        <div className={`text-muted-foreground mt-3 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+        <div className={`text-muted-foreground mt-3 shrink-0 ${isMobile ? 'text-xs' : 'text-sm'}`}>
           {!biweekRange && selectedDate && (
             <span>已选择日期：{formatYMD(selectedDate)}</span>
           )}
           {biweekRange && (
             <span>
-              {isMobile 
+              {isMobile
                 ? `双周：${formatYMD(biweekRange.from as Date)} ~ ${formatYMD(biweekRange.to as Date)}`
                 : `已选择双周：${formatYMD(biweekRange.from as Date)} ~ ${formatYMD(biweekRange.to as Date)}（季度内完整双周）`
               }

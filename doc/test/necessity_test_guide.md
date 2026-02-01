@@ -7,19 +7,18 @@
 ## 前置条件
 
 1. **启动后端服务**
-   ```bash
-   cd sail_server
-   python -m uvicorn main:app --reload --port 8000
-   ```
+```bash
+uv run server.py --dev
+```
 
 2. **启动前端服务**
-   ```bash
-   cd packages/site
-   npm run dev
-   ```
+```bash
+cd packages/site
+pnpm dev
+```
 
 3. **确保数据库已初始化**
-   - 运行数据库迁移脚本 `sail_server/migration/create_necessity_tables.sql`
+- 运行数据库迁移脚本 `sail_server/migration/create_necessity_tables.sql`
 
 ---
 

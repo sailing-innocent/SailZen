@@ -19,37 +19,48 @@ const ProjectPage = () => {
     const serverHealth = useServerStore((state) => state.serverHealth)
     useEffect(() => {
         if (!serverHealth) {
-            return 
+            return
         }
         fetchProjects()
         fetchMissions()
     }, [fetchProjects, fetchMissions, serverHealth])
 
     return (
-        <>
-            <PageLayout>
-                <div className="flex items-center justify-between px-2 md:px-0">
-                    <div className="text-xl md:text-2xl font-bold">项目管理</div>
-                    <div className="flex gap-2">
-                        <AddMissionDialog />
-                        <AddProjectDialog />
-                    </div>
+        <PageLayout>
+            {/* 页面头部：标题与操作按钮 */}
+            <header className="flex items-center justify-between px-2 md:px-0 shrink-0">
+                <h1 className="text-xl md:text-2xl font-bold">项目管理</h1>
+                <div className="flex gap-2 shrink-0">
+                    <AddMissionDialog />
+                    <AddProjectDialog />
                 </div>
-                {/* 响应式网格布局：移动端单列垂直堆叠，桌面端 5 列布局 */}
-                <div className={`grid gap-4 md:gap-6 ${
-                    isMobile 
-                        ? 'grid-cols-1' 
-                        : 'grid-cols-5'
-                }`}>
-                    <div className={isMobile ? '' : 'col-span-3 overflow-hidden'}>
-                        <ProjectMissionBoard projects={projects} missions={missions} />
-                    </div>
-                    <div className={isMobile ? '' : 'col-span-2'}>
-                        <QuarterBiweekCalendar />
-                    </div>
-                </div>
-            </PageLayout>
-        </>
+            </header>
+
+            {/* 主内容区：MissionBoard 与 Calendar 并排，互不重叠 */}
+            <main
+                className={`flex w-full gap-4 md:gap-6 min-w-0 ${
+                    isMobile ? 'flex-col' : 'flex-row'
+                }`}
+            >
+                {/* 任务看板区域：桌面端占 3/5，移动端全宽 */}
+                <section
+                    className={`flex flex-col min-w-0 ${
+                        isMobile ? 'w-full' : 'flex-1 basis-0'
+                    }`}
+                >
+                    <ProjectMissionBoard projects={projects} missions={missions} />
+                </section>
+
+                {/* 日历区域：桌面端占 2/5，移动端全宽 */}
+                <section
+                    className={`flex flex-col min-w-0 ${
+                        isMobile ? 'w-full' : 'shrink-0 basis-[40%] max-w-[420px]'
+                    }`}
+                >
+                    <QuarterBiweekCalendar />
+                </section>
+            </main>
+        </PageLayout>
     )
 }
 
