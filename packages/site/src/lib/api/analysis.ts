@@ -362,6 +362,31 @@ export async function api_delete_setting(setting_id: number): Promise<boolean> {
   return result.success
 }
 
+export async function api_update_setting(
+  setting_id: number,
+  data: Partial<{
+    setting_type: string
+    canonical_name: string
+    category: string | null
+    description: string
+    first_appearance_node_id: number | null
+    importance: string
+    status: string
+    meta_data: Record<string, unknown>
+  }>
+): Promise<Setting | null> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/setting/${setting_id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    if (response.status === 404) return null
+    throw new Error(`Failed to update setting: ${response.statusText}`)
+  }
+  return response.json()
+}
+
 export async function api_get_setting_detail(setting_id: number): Promise<SettingDetail | null> {
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/setting/${setting_id}/detail`)
   if (!response.ok) {

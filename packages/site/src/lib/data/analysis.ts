@@ -337,6 +337,7 @@ export interface AnalysisTask {
   result_summary: Record<string, unknown> | null;
   created_by: string | null;
   created_at: string | null;
+  /** 任务结果数量（由后端计算返回） */
   result_count: number;
 }
 
