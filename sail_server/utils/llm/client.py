@@ -26,6 +26,7 @@ class LLMProvider(Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"         # Google Gemini
+    MOONSHOT = "moonshot"     # Moonshot (Kimi K2.5)
     LOCAL = "local"           # 本地 Ollama 等
     EXTERNAL = "external"     # 仅生成 Prompt，不调用 API
 
@@ -62,6 +63,13 @@ class LLMConfig:
                 provider=provider,
                 model=os.getenv("GOOGLE_MODEL", "gemini-2.0-flash"),
                 api_key=os.getenv("GOOGLE_API_KEY"),
+            )
+        elif provider == LLMProvider.MOONSHOT:
+            return cls(
+                provider=provider,
+                model=os.getenv("MOONSHOT_MODEL", "kimi-k2-5"),
+                api_key=os.getenv("MOONSHOT_API_KEY"),
+                api_base=os.getenv("MOONSHOT_API_BASE", "https://api.moonshot.cn/v1"),
             )
         else:
             return cls(provider=provider)
@@ -225,6 +233,18 @@ class LLMClient:
                 logger.warning("Anthropic package not installed, using external mode")
                 self.config.provider = LLMProvider.EXTERNAL
                 
+        elif self.config.provider == LLMProvider.MOONSHOT:
+            try:
+                from openai import OpenAI
+                # Moonshot 使用 OpenAI 兼容 API
+                self._client = OpenAI(
+                    api_key=self.config.api_key,
+                    base_url=self.config.api_base or "https://api.moonshot.cn/v1",
+                )
+            except ImportError:
+                logger.warning("OpenAI package not installed, using external mode")
+                self.config.provider = LLMProvider.EXTERNAL
+                
         elif self.config.provider == LLMProvider.GOOGLE:
             try:
                 # 使用新的 google.genai 包 (google-genai)
@@ -258,6 +278,8 @@ class LLMClient:
                 response = await self._complete_openai(prompt, system)
             elif self.config.provider == LLMProvider.ANTHROPIC:
                 response = await self._complete_anthropic(prompt, system)
+            elif self.config.provider == LLMProvider.MOONSHOT:
+                response = await self._complete_moonshot(prompt, system)
             elif self.config.provider == LLMProvider.GOOGLE:
                 response = await self._complete_google(prompt, system)
             elif self.config.provider == LLMProvider.LOCAL:
@@ -296,6 +318,37 @@ class LLMClient:
             content=response.choices[0].message.content,
             model=response.model,
             provider="openai",
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            },
+            finish_reason=response.choices[0].finish_reason,
+            raw_response=response.model_dump() if hasattr(response, 'model_dump') else None,
+        )
+    
+    async def _complete_moonshot(self, prompt: str, system: Optional[str]) -> LLMResponse:
+        """Moonshot (Kimi) API 调用 - 使用 OpenAI 兼容接口"""
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: self._client.chat.completions.create(
+                model=self.config.model,
+                messages=messages,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+            )
+        )
+        
+        return LLMResponse(
+            content=response.choices[0].message.content,
+            model=response.model,
+            provider="moonshot",
             usage={
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,
@@ -529,19 +582,27 @@ class LLMClient:
     def estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
         """估算成本（美元）"""
         # 基于各提供商的定价估算
-        if "gpt-4" in self.config.model:
+        model_lower = self.config.model.lower()
+        
+        if "gpt-4" in model_lower:
             input_cost = input_tokens * 0.00003
             output_cost = output_tokens * 0.00006
-        elif "gpt-3.5" in self.config.model:
+        elif "gpt-3.5" in model_lower:
             input_cost = input_tokens * 0.0000015
             output_cost = output_tokens * 0.000002
-        elif "claude" in self.config.model:
+        elif "claude" in model_lower:
             input_cost = input_tokens * 0.000015
             output_cost = output_tokens * 0.000075
-        elif "gemini" in self.config.model:
+        elif "gemini" in model_lower:
             # Gemini 2.0 Flash 定价 (相对便宜)
             input_cost = input_tokens * 0.0000001
             output_cost = output_tokens * 0.0000004
+        elif "kimi" in model_lower or "moonshot" in model_lower:
+            # Moonshot Kimi K2.5 定价 (参考价格，实际以官网为准)
+            # 输入: ¥0.006 / 1K tokens, 输出: ¥0.006 / 1K tokens
+            # 换算为美元 (约 7.2 汇率)
+            input_cost = input_tokens * 0.00000083  # ¥0.006 / 7.2 / 1000
+            output_cost = output_tokens * 0.00000083
         else:
             # 默认估算
             input_cost = input_tokens * 0.00001
