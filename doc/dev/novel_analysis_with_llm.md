@@ -20,16 +20,19 @@
 - [x] 基础 API 控制器（AnalysisTaskController）
 - [x] 任务创建、查询、取消 API
 - [x] 结果审核流程 API
+- [x] LLM 客户端封装（支持 OpenAI/Anthropic/Google/Local/Mock）
+- [x] Mock LLM 模式（用于测试和演示）
+- [x] 异步任务执行引擎（AnalysisTaskRunner）
+- [x] 任务状态实时推送（SSE 端点）
+- [x] 前端任务管理界面（TaskPanel 组件）
+- [x] 验收测试文档
 
 尚未实现：
-- [ ] LLM 客户端封装
-- [ ] 提示词模板管理系统
-- [ ] 后台任务调度器
-- [ ] 异步任务执行引擎
-- [ ] 任务状态实时推送
-- [ ] Prompt 导出功能
-- [ ] 前端任务管理界面完善
-- [ ] WebSocket/SSE 状态监控
+- [ ] 提示词模板管理系统（YAML 模板）
+- [ ] Prompt 导出功能完善
+- [ ] WebSocket 状态监控（备选方案）
+- [ ] 批量任务处理
+- [ ] 任务优先级调度
 
 ================================================================================
 ## 2. 后端开发计划 Backend Development Plan

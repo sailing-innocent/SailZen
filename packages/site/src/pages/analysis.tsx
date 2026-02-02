@@ -23,6 +23,7 @@ import { api_get_editions_by_work } from '@lib/api/text'
 import CharacterPanel from '@components/analysis/character_panel'
 import SettingPanel from '@components/analysis/setting_panel'
 import OutlinePanel from '@components/analysis/outline_panel'
+import TaskPanel from '@components/analysis/task_panel'
 
 export default function AnalysisPage() {
   const [works, setWorks] = useState<Work[]>([])
@@ -31,7 +32,7 @@ export default function AnalysisPage() {
   const [selectedEdition, setSelectedEdition] = useState<Edition | null>(null)
   const [stats, setStats] = useState<AnalysisStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('characters')
+  const [activeTab, setActiveTab] = useState('tasks')
 
   // Load works on mount
   useEffect(() => {
@@ -202,11 +203,16 @@ export default function AnalysisPage() {
         {/* Main Tabs */}
         {selectedEdition && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="tasks">任务管理</TabsTrigger>
               <TabsTrigger value="characters">人物管理</TabsTrigger>
               <TabsTrigger value="settings">设定管理</TabsTrigger>
               <TabsTrigger value="outline">大纲分析</TabsTrigger>
             </TabsList>
+            
+            <TabsContent value="tasks" className="mt-4">
+              <TaskPanel editionId={selectedEdition.id} />
+            </TabsContent>
             
             <TabsContent value="characters" className="mt-4">
               <CharacterPanel editionId={selectedEdition.id} />

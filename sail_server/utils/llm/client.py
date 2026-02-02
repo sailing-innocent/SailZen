@@ -28,6 +28,7 @@ class LLMProvider(Enum):
     GOOGLE = "google"         # Google Gemini
     LOCAL = "local"           # 本地 Ollama 等
     EXTERNAL = "external"     # 仅生成 Prompt，不调用 API
+    MOCK = "mock"             # 模拟模式，用于测试和演示
 
 
 @dataclass
@@ -254,7 +255,9 @@ class LLMClient:
             raise ValueError("External mode does not support direct completion. Use generate_prompt_only() instead.")
         
         try:
-            if self.config.provider == LLMProvider.OPENAI:
+            if self.config.provider == LLMProvider.MOCK:
+                response = await self._complete_mock(prompt, system)
+            elif self.config.provider == LLMProvider.OPENAI:
                 response = await self._complete_openai(prompt, system)
             elif self.config.provider == LLMProvider.ANTHROPIC:
                 response = await self._complete_anthropic(prompt, system)
@@ -461,6 +464,152 @@ class LLMClient:
                 "total_tokens": data.get("prompt_eval_count", 0) + data.get("eval_count", 0),
             },
         )
+    
+    async def _complete_mock(self, prompt: str, system: Optional[str]) -> LLMResponse:
+        """模拟 LLM 调用（用于测试和演示）"""
+        import random
+        
+        # 模拟处理延迟（1-3秒）
+        delay = random.uniform(1.0, 3.0)
+        await asyncio.sleep(delay)
+        
+        # 根据任务类型生成模拟结果
+        mock_response = self._generate_mock_response(prompt, system)
+        
+        # 估算 token 数量
+        prompt_tokens = self.estimate_tokens(prompt + (system or ""))
+        completion_tokens = self.estimate_tokens(mock_response)
+        
+        return LLMResponse(
+            content=mock_response,
+            model="mock-model",
+            provider="mock",
+            usage={
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+            },
+            finish_reason="stop",
+        )
+    
+    def _generate_mock_response(self, prompt: str, system: Optional[str]) -> str:
+        """根据 prompt 内容生成模拟响应"""
+        import random
+        
+        # 检测任务类型
+        prompt_lower = prompt.lower()
+        
+        if "大纲" in prompt or "outline" in prompt_lower or "plot" in prompt_lower:
+            return self._generate_mock_outline()
+        elif "人物" in prompt or "character" in prompt_lower:
+            return self._generate_mock_characters()
+        elif "设定" in prompt or "setting" in prompt_lower:
+            return self._generate_mock_settings()
+        else:
+            # 默认返回大纲
+            return self._generate_mock_outline()
+    
+    def _generate_mock_outline(self) -> str:
+        """生成模拟大纲分析结果"""
+        import random
+        
+        plot_types = ["conflict", "revelation", "climax", "resolution", "setup"]
+        importance_levels = ["critical", "major", "normal", "minor"]
+        
+        # 生成 2-5 个情节点
+        num_points = random.randint(2, 5)
+        plot_points = []
+        
+        for i in range(num_points):
+            point = {
+                "title": f"模拟情节点 {i+1}",
+                "type": random.choice(plot_types),
+                "importance": random.choice(importance_levels),
+                "summary": f"这是一个模拟生成的情节描述。主角在此处遇到了重要的转折，故事情节得到了推进。（模拟内容 #{random.randint(1000, 9999)}）",
+                "chapter_number": random.randint(1, 100),
+                "evidence": "「这是模拟的原文引用内容，用于验证分析结果的准确性。」",
+                "characters": [f"角色{random.randint(1,5)}" for _ in range(random.randint(1, 3))]
+            }
+            plot_points.append(point)
+        
+        result = {
+            "plot_points": plot_points,
+            "overall_summary": f"本段章节主要讲述了故事的发展过程，涉及 {num_points} 个关键情节点。（模拟分析结果，生成时间: {datetime.utcnow().isoformat()}）"
+        }
+        
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    
+    def _generate_mock_characters(self) -> str:
+        """生成模拟人物识别结果"""
+        import random
+        
+        role_types = ["protagonist", "antagonist", "deuteragonist", "supporting", "minor"]
+        
+        # 生成 2-4 个人物
+        num_chars = random.randint(2, 4)
+        characters = []
+        
+        names = ["张三", "李四", "王五", "赵六", "孙七", "周八", "吴九", "郑十"]
+        
+        for i in range(num_chars):
+            name = random.choice(names)
+            names.remove(name)  # 避免重复
+            
+            char = {
+                "canonical_name": name,
+                "aliases": [f"{name}大人", f"小{name[1]}"] if random.random() > 0.5 else [],
+                "role_type": random.choice(role_types),
+                "description": f"这是{name}的角色描述。是一个重要的角色，在故事中扮演着关键作用。（模拟数据）",
+                "first_mention": f"第{random.randint(1, 10)}章首次出现",
+                "actions": [f"动作描述{j+1}" for j in range(random.randint(1, 3))],
+                "mention_count": random.randint(5, 50)
+            }
+            characters.append(char)
+        
+        result = {"characters": characters}
+        return json.dumps(result, ensure_ascii=False, indent=2)
+    
+    def _generate_mock_settings(self) -> str:
+        """生成模拟设定提取结果"""
+        import random
+        
+        setting_types = ["item", "location", "organization", "concept"]
+        importance_levels = ["critical", "major", "normal", "minor"]
+        
+        # 生成 2-4 个设定
+        num_settings = random.randint(2, 4)
+        settings = []
+        
+        for i in range(num_settings):
+            setting_type = random.choice(setting_types)
+            
+            if setting_type == "item":
+                names = ["天龙剑", "乾坤袋", "九转灵丹", "紫金葫芦"]
+                categories = ["武器", "法宝", "丹药", "器物"]
+            elif setting_type == "location":
+                names = ["青云山", "玄天宗", "无尽森林", "龙渊深海"]
+                categories = ["山脉", "门派", "秘境", "海域"]
+            elif setting_type == "organization":
+                names = ["天机阁", "暗影联盟", "圣光教会", "商会"]
+                categories = ["势力", "暗组织", "宗教", "商业"]
+            else:
+                names = ["灵气", "境界", "功法", "天道"]
+                categories = ["能量", "修炼", "技能", "法则"]
+            
+            setting = {
+                "name": random.choice(names),
+                "type": setting_type,
+                "category": random.choice(categories),
+                "description": f"这是一个模拟的{setting_type}设定描述，包含了详细的背景信息。",
+                "attributes": {"等级": f"{random.choice(['普通', '珍稀', '史诗', '传说'])}"},
+                "related_characters": [f"角色{random.randint(1,3)}"],
+                "importance": random.choice(importance_levels),
+                "evidence": "「原文中提到了这个设定的相关描述。」"
+            }
+            settings.append(setting)
+        
+        result = {"settings": settings}
+        return json.dumps(result, ensure_ascii=False, indent=2)
     
     async def complete_json(
         self, 

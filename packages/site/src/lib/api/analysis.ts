@@ -827,3 +827,169 @@ export async function api_get_analysis_stats(edition_id: number): Promise<Analys
   }
   return response.json()
 }
+
+// ============================================================================
+// Task Execution API - 任务执行相关
+// ============================================================================
+
+export interface TaskExecutionPlan {
+  task_id: number
+  mode: string
+  chunks: {
+    index: number
+    node_ids: number[]
+    chapter_range: string
+    token_estimate: number
+  }[]
+  total_estimated_tokens: number
+  estimated_cost_usd: number
+  prompt_template_id: string
+}
+
+export interface TaskProgress {
+  task_id: number
+  status: string
+  current_step: string
+  total_chunks: number
+  completed_chunks: number
+  current_chunk_info?: string
+  started_at?: string
+  estimated_remaining_seconds?: number
+  error?: string
+}
+
+export interface TaskExecuteRequest {
+  mode: 'llm_direct' | 'prompt_only'
+  llm_provider?: string
+  llm_model?: string
+  llm_api_key?: string
+  temperature?: number
+}
+
+export interface LLMProvider {
+  id: string
+  name: string
+  description?: string
+  requires_api_key: boolean
+  models: {
+    id: string
+    name: string
+    context_length: number
+  }[]
+}
+
+export async function api_create_task_plan(
+  task_id: number,
+  mode: 'llm_direct' | 'prompt_only'
+): Promise<{ success: boolean; plan?: TaskExecutionPlan; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to create plan: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_execute_task(
+  task_id: number,
+  data: TaskExecuteRequest
+): Promise<{ success: boolean; result?: { task_id: number; success: boolean; results_count: number; error_message?: string }; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to execute task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_execute_task_async(
+  task_id: number,
+  data: TaskExecuteRequest
+): Promise<{ success: boolean; message?: string; task_id?: number; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/execute-async`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to start task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_get_task_progress(
+  task_id: number
+): Promise<{ success: boolean; is_running?: boolean; completed?: boolean; progress?: TaskProgress; result?: unknown; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/progress`)
+  if (!response.ok) {
+    throw new Error(`Failed to get progress: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_cancel_running_task(task_id: number): Promise<{ success: boolean; message?: string; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/cancel`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to cancel task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_get_llm_providers(): Promise<{ success: boolean; providers: LLMProvider[] }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/llm/providers`)
+  if (!response.ok) {
+    throw new Error(`Failed to get providers: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_get_task_prompts(
+  task_id: number,
+  format: 'json' | 'plain' | 'openai' | 'anthropic' | 'markdown' = 'json'
+): Promise<{
+  success: boolean
+  task_id: number
+  format: string
+  prompts: {
+    result_id: number
+    chunk_index: number
+    chunk_range: string
+    awaiting_result: boolean
+    content: unknown
+  }[]
+}> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/export/task/${task_id}/prompts?format=${format}`)
+  if (!response.ok) {
+    throw new Error(`Failed to get prompts: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+export async function api_import_external_result(
+  task_id: number,
+  chunk_index: number,
+  result_text: string
+): Promise<{ success: boolean; result?: { id: number; result_type: string; review_status: string }; error?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/import-result`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chunk_index, result_text }),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to import result: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+// SSE 连接用于任务状态实时更新
+export function createTaskStatusEventSource(task_id: number): EventSource {
+  return new EventSource(`${SERVER_URL}/${ANALYSIS_API_BASE}/task-execution/${task_id}/status-stream`)
+}
