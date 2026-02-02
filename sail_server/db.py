@@ -29,7 +29,7 @@ import os
 # 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
-__all__ = ["Database", "g_db_func", "db_session", "provide_db_session", "get_db_dependency"]
+__all__ = ["Database", "g_db_func", "db_session", "provide_db_session", "get_db_dependency", "get_db_session"]
 
 
 class Database:
@@ -104,3 +104,15 @@ def db_session(func):
         return func(db, *args, **kwargs)
 
     return wrapper
+
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_db_session():
+    """Context manager for getting a database session (useful for background tasks)."""
+    db = Database.get_instance().get_db_session()
+    try:
+        yield db
+    finally:
+        db.close()
