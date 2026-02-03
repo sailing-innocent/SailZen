@@ -19,6 +19,7 @@ import {
 
 const TransactionsDataTable: React.FC = () => {
   const [dataUpdated, setDataUpdated] = React.useState(false)
+  const [isAddDialogOpen, setIsAddDialogOpen] = React.useState(false)
   const maxTransactions = 2048
   const [filters, setFilters] = React.useState<TransactionFilters>({
     dateRange: {},
@@ -160,6 +161,10 @@ const TransactionsDataTable: React.FC = () => {
     return res
   }, [createTransaction])
 
+  const handleCloseAddDialog = React.useCallback(() => {
+    setIsAddDialogOpen(false)
+  }, [])
+
 
   // 性能优化：使用 Map 进行 O(1) 查找，预解析标签避免重复 split()
   const transactionsDisplay: TransactionDisplayProps[] = useMemo(() => {
@@ -212,7 +217,7 @@ const TransactionsDataTable: React.FC = () => {
           >
             刷新交易记录
           </Button>
-          <Dialog>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className={`${isMobile ? 'w-full' : ''}`}>
                 添加交易
@@ -222,6 +227,7 @@ const TransactionsDataTable: React.FC = () => {
               <TransactionAddCard
                 onAddTransaction={handleAddTransaction}
                 accounts={accounts}
+                onClose={handleCloseAddDialog}
               />
             </DialogContent>
           </Dialog>
