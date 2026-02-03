@@ -33,10 +33,11 @@ import {
   api_reject_result,
   api_apply_all_results,
   api_create_task_plan,
-  api_execute_task,
+  api_execute_task_async,
   api_get_task_progress,
   api_cancel_running_task,
   api_get_llm_providers,
+  api_get_analysis_task,
   type TaskProgress,
   type TaskExecutionPlan,
   type LLMProvider,
@@ -156,7 +157,7 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
     }
   }
   
-  // 执行任务
+  // 执行任务（异步 + 轮询进度）
   const handleExecuteTask = async () => {
     if (!selectedTask) return
     
@@ -170,60 +171,69 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
         completed_chunks: 0,
       })
       
-      // 使用同步执行 API（对于演示来说更简单）
-      const result = await api_execute_task(selectedTask.id, {
+      // 使用异步执行 API 启动任务
+      const startResult = await api_execute_task_async(selectedTask.id, {
         mode: 'llm_direct',
         llm_provider: selectedProvider,
         temperature: 0.3,
       })
       
-      if (result.success && result.result) {
-        setTaskProgress({
-          task_id: selectedTask.id,
-          status: 'completed',
-          current_step: 'done',
-          total_chunks: executionPlan?.chunks.length || 0,
-          completed_chunks: executionPlan?.chunks.length || 0,
-        })
-        
-        // 重新加载任务列表
-        await loadTasks()
-        
-        // 加载结果
-        const updatedTask = tasks.find(t => t.id === selectedTask.id)
-        if (updatedTask) {
-          setSelectedTask({ ...updatedTask, status: 'completed' })
-        }
-      } else {
-        setTaskProgress(prev => prev ? { ...prev, status: 'failed', error: result.error } : null)
+      if (!startResult.success) {
+        setTaskProgress(prev => prev ? { 
+          ...prev, 
+          status: 'failed', 
+          error: startResult.error || 'Failed to start task' 
+        } : null)
+        setExecuting(false)
+        return
       }
+      
+      // 开始轮询进度
+      pollProgressUntilComplete(selectedTask.id)
+      
     } catch (err) {
       console.error('Failed to execute task:', err)
       setTaskProgress(prev => prev ? { ...prev, status: 'failed', error: String(err) } : null)
-    } finally {
       setExecuting(false)
     }
   }
   
-  // 轮询进度
-  const pollProgress = useCallback(async (taskId: number) => {
-    try {
-      const result = await api_get_task_progress(taskId)
-      if (result.success && result.progress) {
-        setTaskProgress(result.progress)
-        
-        if (result.progress.status === 'running') {
-          // 继续轮询
-          setTimeout(() => pollProgress(taskId), 1000)
-        } else if (result.progress.status === 'completed') {
-          // 重新加载任务
-          await loadTasks()
+  // 轮询进度直到任务完成
+  const pollProgressUntilComplete = async (taskId: number) => {
+    const poll = async () => {
+      try {
+        const result = await api_get_task_progress(taskId)
+        if (result.success && result.progress) {
+          setTaskProgress(result.progress)
+          
+          if (result.progress.status === 'running' || result.progress.status === 'pending') {
+            // 继续轮询
+            setTimeout(poll, 1000)
+          } else if (result.progress.status === 'completed') {
+            // 任务完成
+            setExecuting(false)
+            await loadTasks()
+            // 更新选中的任务状态
+            setSelectedTask(prev => prev ? { ...prev, status: 'completed' } : null)
+          } else if (['failed', 'cancelled'].includes(result.progress.status)) {
+            // 任务失败或取消
+            setExecuting(false)
+            await loadTasks()
+          }
+        } else {
+          // 无法获取进度，继续轮询（可能任务还没初始化）
+          setTimeout(poll, 1000)
         }
+      } catch (err) {
+        console.error('Failed to poll progress:', err)
+        // 出错后继续轮询，最多重试一定次数
+        setTimeout(poll, 2000)
       }
-    } catch (err) {
-      console.error('Failed to poll progress:', err)
     }
-  }, [loadTasks])
+    
+    // 开始轮询
+    poll()
+  }
   
   // 加载任务结果
   const loadTaskResults = async (task: AnalysisTask) => {

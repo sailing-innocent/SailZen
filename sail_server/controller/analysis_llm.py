@@ -398,7 +398,7 @@ class TaskExecutionController(Controller):
     async def stream_task_status(
         self, 
         task_id: int
-    ) -> Stream[bytes]:
+    ) -> Stream:
         """SSE 端点 - 实时推送任务状态"""
         task_manager = get_task_manager()
         

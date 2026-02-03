@@ -214,13 +214,13 @@ class AnalysisTaskRunner:
         if task.target_node_ids and len(task.target_node_ids) > 0:
             nodes = db.query(DocumentNode).filter(
                 DocumentNode.id.in_(task.target_node_ids)
-            ).order_by(DocumentNode.sort_key).all()
+            ).order_by(DocumentNode.sort_index).all()
         else:
             # 获取整个版本的所有章节
             nodes = db.query(DocumentNode).filter(
                 DocumentNode.edition_id == task.edition_id,
                 DocumentNode.node_type == 'chapter'
-            ).order_by(DocumentNode.sort_key).all()
+            ).order_by(DocumentNode.sort_index).all()
         
         if not nodes:
             return chunks
@@ -234,7 +234,7 @@ class AnalysisTaskRunner:
         client = self._get_llm_client()
         
         for node in nodes:
-            node_content = node.content or ""
+            node_content = node.raw_text or ""
             node_tokens = client.estimate_tokens(node_content)
             
             # 如果单个章节就超过限制，单独作为一块
