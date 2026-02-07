@@ -67,6 +67,7 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({ project, mi
                             <MissionCard
                                 key={mission.id}
                                 mission={mission}
+                                project={project}
                                 compact
                             />
                         ))}
@@ -87,6 +88,7 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({ project, mi
                                                 <MissionCard
                                                     key={mission.id}
                                                     mission={mission}
+                                                    project={project}
                                                     compact
                                                 />
                                             ))}

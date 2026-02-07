@@ -20,10 +20,11 @@ import {
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import MissionDetailDialog from './mission_detail_dialog'
 import { useMissionsStore, type MissionsState } from '@lib/store/project'
 import {
   type MissionData,
+  type ProjectData,
   MissionState,
   MissionStateLabels,
   isMissionActive,
@@ -38,6 +39,7 @@ export interface MissionCardProps {
   mission: MissionData
   compact?: boolean
   showProject?: boolean
+  project?: ProjectData
   onComplete?: () => void
 }
 
@@ -45,10 +47,11 @@ const MissionCard: React.FC<MissionCardProps> = ({
   mission,
   compact = false,
   showProject = false,
+  project,
   onComplete,
 }) => {
-  const navigate = useNavigate()
   const [isPostponeOpen, setIsPostponeOpen] = useState(false)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   const doingMission = useMissionsStore((state: MissionsState) => state.doingMission)
@@ -148,10 +151,9 @@ const MissionCard: React.FC<MissionCardProps> = ({
     }
   }
 
-  const handleNavigateToProject = () => {
-    navigate(`/project?mission=${mission.id}`)
+  const handleViewDetail = () => {
+    setIsDetailOpen(true)
   }
-
 
   return (
     <>
@@ -276,7 +278,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
                     </>
                   )}
                   
-                  <DropdownMenuItem onClick={handleNavigateToProject}>
+                  <DropdownMenuItem onClick={handleViewDetail}>
                     <ExternalLink className="h-4 w-4 mr-2" />
                     查看详情
                   </DropdownMenuItem>
@@ -312,6 +314,14 @@ const MissionCard: React.FC<MissionCardProps> = ({
         mission={mission}
         open={isPostponeOpen}
         onOpenChange={setIsPostponeOpen}
+      />
+
+      {/* Detail Dialog */}
+      <MissionDetailDialog
+        mission={mission}
+        project={project}
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
       />
     </>
   )
