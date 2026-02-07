@@ -1,5 +1,5 @@
 import React from 'react'
-import { type BudgetData, type TransactionData } from '@lib/data/money'
+import { type BudgetData, type TransactionData, BudgetDirection, BudgetDirectionLabels } from '@lib/data/money'
 import { Money } from '@lib/utils/money'
 import { useAccountsStore, type AccountsState } from '@lib/store'
 import {
@@ -40,9 +40,9 @@ const BudgetDetailDialog: React.FC<BudgetDetailDialogProps> = ({
 
   if (!budget) return null
 
-  const budgetAmount = new Money(budget.total_amount)
-  const used = usedAmount ? new Money(usedAmount) : new Money('0')
-  const remaining = remainingAmount ? new Money(remainingAmount) : budgetAmount
+  const budgetAmount = budget.total_amount ? new Money(budget.total_amount) : new Money('0')
+  const used = usedAmount && usedAmount !== '0.0' ? new Money(usedAmount) : new Money('0')
+  const remaining = remainingAmount && remainingAmount !== '0.0' ? new Money(remainingAmount) : budgetAmount
   const usagePercentage = budgetAmount.value > 0 
     ? (used.value / budgetAmount.value) * 100 
     : 0
@@ -60,8 +60,18 @@ const BudgetDetailDialog: React.FC<BudgetDetailDialogProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-primary" />
+                <DollarSign className={`h-5 w-5 ${budget.direction === BudgetDirection.INCOME ? 'text-green-500' : 'text-red-500'}`} />
                 {budget.name}
+                <Badge 
+                  variant="outline" 
+                  className={`text-xs ${
+                    budget.direction === BudgetDirection.INCOME
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : 'bg-red-50 text-red-700 border-red-200'
+                  }`}
+                >
+                  {BudgetDirectionLabels[budget.direction ?? BudgetDirection.EXPENSE]}
+                </Badge>
               </DialogTitle>
               <DialogDescription>
                 预算ID: {budget.id} | 创建于 {new Date(budget.htime * 1000).toLocaleDateString('zh-CN')}

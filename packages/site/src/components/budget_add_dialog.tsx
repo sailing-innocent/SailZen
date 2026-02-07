@@ -45,7 +45,7 @@ const BudgetAddDialog: React.FC<BudgetAddDialogProps> = ({ onSuccess }) => {
     try {
       const budget: BudgetCreateProps = {
         name: name.trim(),
-        amount: amount,
+        total_amount: amount,
         description: description.trim() || undefined,
         tags: tags.trim() || undefined,
         htime: htime > 0 ? htime : undefined,
@@ -57,10 +57,10 @@ const BudgetAddDialog: React.FC<BudgetAddDialogProps> = ({ onSuccess }) => {
       setDescription('')
       setTags('')
       setHtime(Math.floor(Date.now() / 1000))
-      setOpen(false)
       if (onSuccess) {
         onSuccess()
       }
+      setOpen(false)
     } catch (error) {
       console.error('Error creating budget:', error)
       alert('创建预算失败，请稍后重试')

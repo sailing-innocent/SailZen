@@ -132,6 +132,7 @@ export const ItemStatusLabels: Record<ItemStatus, string> = {
  */
 export interface BudgetCreateProps {
   name: string
+  total_amount: string  // 预算金额
   description?: string
   tags?: string
   start_date?: number
@@ -151,6 +152,7 @@ export interface BudgetData {
   start_date?: number
   end_date?: number
   total_amount: string  // 由子项汇总计算
+  direction: number  // 0=支出, 1=收入
   htime: number
   mtime: number
   items?: BudgetItemData[]

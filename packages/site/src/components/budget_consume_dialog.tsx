@@ -163,7 +163,7 @@ const BudgetConsumeDialog: React.FC<BudgetConsumeDialogProps> = ({
             <div className="grid gap-2">
               <Label>预算信息</Label>
               <div className="text-sm text-muted-foreground">
-                <div>预算金额: {new Money(budget.total_amount).format()}</div>
+                <div>预算金额: {budget.total_amount ? new Money(budget.total_amount).format() : '¥0.00'}</div>
                 <div>剩余预算: {new Money(remainingAmount).format()}</div>
               </div>
             </div>

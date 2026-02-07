@@ -41,7 +41,7 @@ const BudgetEditDialog: React.FC<BudgetEditDialogProps> = ({
   useEffect(() => {
     if (budget) {
       setName(budget.name)
-      setAmount(budget.total_amount)
+      setAmount(budget.total_amount || '')
       setDescription(budget.description || '')
       setTags(budget.tags || '')
       setHtime(budget.htime)
@@ -64,7 +64,7 @@ const BudgetEditDialog: React.FC<BudgetEditDialogProps> = ({
     try {
       const budgetData: BudgetCreateProps = {
         name: name.trim(),
-        amount: amount,
+        total_amount: amount,
         description: description.trim() || undefined,
         tags: tags.trim() || undefined,
         htime: htime > 0 ? htime : undefined,

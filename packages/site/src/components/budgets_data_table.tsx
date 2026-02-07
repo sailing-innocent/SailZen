@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { type BudgetsState, useBudgetsStore, useServerStore, useAccountsStore, type AccountsState } from '@lib/store'
-import { type BudgetData, type TransactionData } from '@lib/data/money'
+import { type BudgetData, type TransactionData, BudgetDirection, BudgetDirectionLabels } from '@lib/data/money'
 import { DataTable } from '@components/data_table'
 import BudgetAddDialog from './budget_add_dialog'
 import BudgetConsumeDialog from './budget_consume_dialog'
@@ -339,25 +339,37 @@ const BudgetsDataTable: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <AccordionTrigger className="hover:no-underline flex-1">
                         <div className="flex-1 grid grid-cols-2 md:grid-cols-7 gap-2 md:gap-4 text-left">
-                          <div className="font-medium">{budget.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{budget.name}</span>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-[10px] h-5 px-1.5 ${
+                                budget.direction === BudgetDirection.INCOME
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                              }`}
+                            >
+                              {BudgetDirectionLabels[budget.direction ?? BudgetDirection.EXPENSE]}
+                            </Badge>
+                          </div>
                           <div className="text-right font-semibold">
-                            {new Money(budget.total_amount).format()}
+                            {budget.total_amount ? new Money(budget.total_amount).format() : '¥0.00'}
                           </div>
                           <div className="text-right text-muted-foreground">
-                            {budget.used_amount ? new Money(budget.used_amount).format() : '-'}
+                            {budget.used_amount && budget.used_amount !== '0.0' ? new Money(budget.used_amount).format() : '¥0.00'}
                           </div>
                           <div
                             className={`text-right font-semibold ${
-                              budget.remaining_amount &&
+                              budget.remaining_amount && budget.total_amount &&
                               new Money(budget.remaining_amount).value <
                                 new Money(budget.total_amount).value * 0.2
                                 ? 'text-red-600'
                                 : ''
                             }`}
                           >
-                            {budget.remaining_amount
+                            {budget.remaining_amount && budget.remaining_amount !== '0.0'
                               ? new Money(budget.remaining_amount).format()
-                              : new Money(budget.total_amount).format()}
+                              : budget.total_amount ? new Money(budget.total_amount).format() : '¥0.00'}
                           </div>
                           <div className="hidden md:block max-w-[200px] truncate text-sm">
                             {budget.description || '-'}
@@ -441,8 +453,8 @@ const BudgetsDataTable: React.FC = () => {
                                       <th className="px-3 py-2 text-left text-xs font-medium w-24">
                                         日期
                                       </th>
-                                      <th className={`px-3 py-2 text-left text-xs font-medium ${isMobile ? 'hidden' : 'w-28'}`}>
-                                        账户
+                                      <th className={`px-3 py-2 text-left text-xs font-medium ${isMobile ? 'hidden' : 'w-32'}`}>
+                                        收支类型
                                       </th>
                                       <th className="px-3 py-2 text-left text-xs font-medium flex-1">
                                         描述
@@ -473,20 +485,96 @@ const BudgetsDataTable: React.FC = () => {
                                           )}
                                         </td>
                                         <td className={`px-3 py-2 text-xs ${isMobile ? 'hidden' : ''}`}>
-                                          <div className="space-y-0.5">
-                                            <div className="text-muted-foreground truncate" title={`支出: ${getAccountName(transaction.from_acc_id)}`}>
-                                              出: {getAccountName(transaction.from_acc_id)}
-                                            </div>
-                                            <div className="text-muted-foreground truncate" title={`收入: ${getAccountName(transaction.to_acc_id)}`}>
-                                              入: {getAccountName(transaction.to_acc_id)}
-                                            </div>
-                                          </div>
+                                          {(() => {
+                                            const fromId = transaction.from_acc_id ?? -1
+                                            const toId = transaction.to_acc_id ?? -1
+                                            const isExpense = fromId > 0 && toId === -1
+                                            const isIncome = fromId === -1 && toId > 0
+                                            const isTransfer = fromId > 0 && toId > 0
+                                            
+                                            if (isExpense) {
+                                              return (
+                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded-md border border-red-100">
+                                                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                                                  <span className="text-red-700 font-medium truncate max-w-[100px]" title={getAccountName(fromId)}>
+                                                    {getAccountName(fromId)}
+                                                  </span>
+                                                  <Badge variant="outline" className="text-[10px] h-4 px-1 bg-red-100 text-red-700 border-red-200">
+                                                    支出
+                                                  </Badge>
+                                                </div>
+                                              )
+                                            }
+                                            if (isIncome) {
+                                              return (
+                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 rounded-md border border-green-100">
+                                                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                                                  <span className="text-green-700 font-medium truncate max-w-[100px]" title={getAccountName(toId)}>
+                                                    {getAccountName(toId)}
+                                                  </span>
+                                                  <Badge variant="outline" className="text-[10px] h-4 px-1 bg-green-100 text-green-700 border-green-200">
+                                                    收入
+                                                  </Badge>
+                                                </div>
+                                              )
+                                            }
+                                            if (isTransfer) {
+                                              return (
+                                                <div className="space-y-1">
+                                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-orange-50 rounded border border-orange-100">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                                    <span className="text-orange-700 text-[10px] truncate max-w-[100px]" title={`转出: ${getAccountName(fromId)}`}>
+                                                      出: {getAccountName(fromId)}
+                                                    </span>
+                                                  </div>
+                                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded border border-blue-100">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                    <span className="text-blue-700 text-[10px] truncate max-w-[100px]" title={`转入: ${getAccountName(toId)}`}>
+                                                      入: {getAccountName(toId)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              )
+                                            }
+                                            return (
+                                              <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-md border border-gray-100">
+                                                <span className="w-2 h-2 rounded-full bg-gray-400" />
+                                                <span className="text-gray-600 font-medium">-</span>
+                                              </div>
+                                            )
+                                          })()}
                                         </td>
                                         <td className="px-3 py-2 text-xs max-w-[200px] truncate" title={transaction.description || '-'}>
                                           {transaction.description || '-'}
                                         </td>
-                                        <td className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap">
-                                          {new Money(transaction.value).format()}
+                                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                                          {(() => {
+                                            const fromId = transaction.from_acc_id ?? -1
+                                            const toId = transaction.to_acc_id ?? -1
+                                            const isExpense = fromId > 0 && toId === -1
+                                            const isIncome = fromId === -1 && toId > 0
+                                            const amount = new Money(transaction.value).format()
+                                            
+                                            if (isExpense) {
+                                              return (
+                                                <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 font-bold rounded text-xs">
+                                                  -{amount}
+                                                </span>
+                                              )
+                                            }
+                                            if (isIncome) {
+                                              return (
+                                                <span className="inline-flex items-center px-2 py-0.5 bg-green-50 text-green-700 font-bold rounded text-xs">
+                                                  +{amount}
+                                                </span>
+                                              )
+                                            }
+                                            return (
+                                              <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 text-orange-700 font-bold rounded text-xs">
+                                                {amount}
+                                              </span>
+                                            )
+                                          })()}
                                         </td>
                                         <td className={`px-3 py-2 ${isMobile ? 'hidden' : ''}`}>
                                           <div className="flex flex-wrap gap-1">
