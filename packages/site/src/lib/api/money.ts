@@ -419,13 +419,13 @@ const api_get_budget_detail = async (budget_id: number): Promise<FullBudgetData>
  * 所有预算创建都使用相同的数据结构
  */
 const api_create_budget_with_items = async (
-  budget: { name: string; description?: string; tags?: string; start_date?: number; end_date?: number; htime?: number },
+  budget: { name: string; total_amount?: string; description?: string; tags?: string; start_date?: number; end_date?: number; htime?: number },
   items: BudgetItemCreateProps[]
 ): Promise<FullBudgetData> => {
   // 先创建预算
   const budgetResponse = await api_create_budget({
     name: budget.name,
-    amount: '0',  // 会被子项汇总覆盖
+    total_amount: budget.total_amount || '0',  // 如果有传入金额则使用，否则会被子项汇总覆盖
     description: budget.description,
     tags: budget.tags,
     htime: budget.htime || Date.now() / 1000,

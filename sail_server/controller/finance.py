@@ -653,6 +653,7 @@ class BudgetController(Controller):
         
         budget = create_budget_impl(db, BudgetData(
             name=name,
+            total_amount=data.total_amount if data.total_amount else "0.0",
             description=data.description if data.description else "",
             tags=data.tags if data.tags else "",
             start_date=data.start_date,
@@ -685,6 +686,7 @@ class BudgetController(Controller):
         
         budget = update_budget_impl(db, budget_id, BudgetData(
             name=name,
+            total_amount=data.total_amount if data.total_amount else "0.0",
             description=data.description if data.description else "",
             tags=data.tags if data.tags else "",
             start_date=data.start_date,

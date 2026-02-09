@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { type BudgetsState, useBudgetsStore, useServerStore, useAccountsStore, type AccountsState } from '@lib/store'
-import { type BudgetData, type TransactionData } from '@lib/data/money'
+import { type BudgetData, type TransactionData, BudgetDirection, BudgetDirectionLabels } from '@lib/data/money'
 import { DataTable } from '@components/data_table'
 import BudgetAddDialog from './budget_add_dialog'
 import BudgetConsumeDialog from './budget_consume_dialog'
 import BudgetTemplateDialog from './budget_template_dialog'
+import BudgetEditDialog from './budget_edit_dialog'
+import BudgetDetailDialog from './budget_detail_dialog'
+import { Pencil, Eye } from 'lucide-react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -116,6 +119,8 @@ const BudgetsDataTable: React.FC = () => {
   const [dataUpdated, setDataUpdated] = useState(false)
   const [selectedBudget, setSelectedBudget] = useState<BudgetData | null>(null)
   const [consumeDialogOpen, setConsumeDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [budgetsWithStats, setBudgetsWithStats] = useState<BudgetWithStats[]>([])
   const [expandedBudgets, setExpandedBudgets] = useState<Set<number>>(new Set())
   const [loadingTransactions, setLoadingTransactions] = useState<Set<number>>(new Set())
@@ -255,6 +260,16 @@ const BudgetsDataTable: React.FC = () => {
     setConsumeDialogOpen(true)
   }
 
+  const handleEdit = (budget: BudgetData) => {
+    setSelectedBudget(budget)
+    setEditDialogOpen(true)
+  }
+
+  const handleViewDetail = (budget: BudgetWithStats) => {
+    setSelectedBudget(budget)
+    setDetailDialogOpen(true)
+  }
+
 
   const columnsWithActions: ColumnDef<BudgetWithStats>[] = [
     ...BudgetColumns,
@@ -324,25 +339,37 @@ const BudgetsDataTable: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <AccordionTrigger className="hover:no-underline flex-1">
                         <div className="flex-1 grid grid-cols-2 md:grid-cols-7 gap-2 md:gap-4 text-left">
-                          <div className="font-medium">{budget.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{budget.name}</span>
+                            <Badge 
+                              variant="outline" 
+                              className={`text-[10px] h-5 px-1.5 ${
+                                budget.direction === BudgetDirection.INCOME
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                              }`}
+                            >
+                              {BudgetDirectionLabels[budget.direction ?? BudgetDirection.EXPENSE]}
+                            </Badge>
+                          </div>
                           <div className="text-right font-semibold">
-                            {new Money(budget.total_amount).format()}
+                            {budget.total_amount ? new Money(budget.total_amount).format() : '¥0.00'}
                           </div>
                           <div className="text-right text-muted-foreground">
-                            {budget.used_amount ? new Money(budget.used_amount).format() : '-'}
+                            {budget.used_amount && budget.used_amount !== '0.0' ? new Money(budget.used_amount).format() : '¥0.00'}
                           </div>
                           <div
                             className={`text-right font-semibold ${
-                              budget.remaining_amount &&
+                              budget.remaining_amount && budget.total_amount &&
                               new Money(budget.remaining_amount).value <
                                 new Money(budget.total_amount).value * 0.2
                                 ? 'text-red-600'
                                 : ''
                             }`}
                           >
-                            {budget.remaining_amount
+                            {budget.remaining_amount && budget.remaining_amount !== '0.0'
                               ? new Money(budget.remaining_amount).format()
-                              : new Money(budget.total_amount).format()}
+                              : budget.total_amount ? new Money(budget.total_amount).format() : '¥0.00'}
                           </div>
                           <div className="hidden md:block max-w-[200px] truncate text-sm">
                             {budget.description || '-'}
@@ -357,18 +384,48 @@ const BudgetsDataTable: React.FC = () => {
                           </div>
                         </div>
                       </AccordionTrigger>
-                      <div className="flex gap-2 pr-4">
+                      <div className="flex gap-1 pr-4">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleViewDetail(budget)
+                          }}
+                          title="查看详情"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleEdit(budget)
+                          }}
+                          title="编辑"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleConsume(budget)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleConsume(budget)
+                          }}
                         >
                           核销
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => handleDelete(budget.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDelete(budget.id)
+                          }}
                         >
                           删除
                         </Button>
@@ -390,28 +447,25 @@ const BudgetsDataTable: React.FC = () => {
                                 <table className="w-full text-sm">
                                   <thead>
                                     <tr className="border-b bg-muted/50">
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'text-xs' : ''}`}>
+                                      <th className="px-3 py-2 text-left text-xs font-medium w-16">
                                         ID
                                       </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'text-xs' : ''}`}>
+                                      <th className="px-3 py-2 text-left text-xs font-medium w-24">
                                         日期
                                       </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'hidden' : ''}`}>
-                                        支出账户
+                                      <th className={`px-3 py-2 text-left text-xs font-medium ${isMobile ? 'hidden' : 'w-32'}`}>
+                                        收支类型
                                       </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'hidden' : ''}`}>
-                                        收入账户
-                                      </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'text-xs' : ''}`}>
+                                      <th className="px-3 py-2 text-left text-xs font-medium flex-1">
                                         描述
                                       </th>
-                                      <th className={`px-2 py-2 text-right ${isMobile ? 'text-xs' : ''}`}>
+                                      <th className="px-3 py-2 text-right text-xs font-medium w-24">
                                         金额
                                       </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'hidden' : ''}`}>
+                                      <th className={`px-3 py-2 text-left text-xs font-medium ${isMobile ? 'hidden' : 'w-32'}`}>
                                         标签
                                       </th>
-                                      <th className={`px-2 py-2 text-left ${isMobile ? 'text-xs' : ''}`}>
+                                      <th className="px-3 py-2 text-center text-xs font-medium w-20">
                                         操作
                                       </th>
                                     </tr>
@@ -420,50 +474,130 @@ const BudgetsDataTable: React.FC = () => {
                                     {budget.transactions.map((transaction) => (
                                       <tr
                                         key={transaction.id}
-                                        className="border-b hover:bg-muted/50"
+                                        className="border-b hover:bg-muted/50 last:border-0"
                                       >
-                                        <td className={`px-2 py-2 font-mono ${isMobile ? 'text-xs' : 'text-xs'}`}>
+                                        <td className="px-3 py-2 font-mono text-xs">
                                           {transaction.id}
                                         </td>
-                                        <td className={`px-2 py-2 ${isMobile ? 'text-xs' : ''}`}>
+                                        <td className="px-3 py-2 text-xs whitespace-nowrap">
                                           {new Date(transaction.htime * 1000).toLocaleDateString(
                                             'zh-CN'
                                           )}
                                         </td>
-                                        <td className={`px-2 py-2 ${isMobile ? 'hidden' : ''}`}>
-                                          {getAccountName(transaction.from_acc_id)}
+                                        <td className={`px-3 py-2 text-xs ${isMobile ? 'hidden' : ''}`}>
+                                          {(() => {
+                                            const fromId = transaction.from_acc_id ?? -1
+                                            const toId = transaction.to_acc_id ?? -1
+                                            const isExpense = fromId > 0 && toId === -1
+                                            const isIncome = fromId === -1 && toId > 0
+                                            const isTransfer = fromId > 0 && toId > 0
+                                            
+                                            if (isExpense) {
+                                              return (
+                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded-md border border-red-100">
+                                                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                                                  <span className="text-red-700 font-medium truncate max-w-[100px]" title={getAccountName(fromId)}>
+                                                    {getAccountName(fromId)}
+                                                  </span>
+                                                  <Badge variant="outline" className="text-[10px] h-4 px-1 bg-red-100 text-red-700 border-red-200">
+                                                    支出
+                                                  </Badge>
+                                                </div>
+                                              )
+                                            }
+                                            if (isIncome) {
+                                              return (
+                                                <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 rounded-md border border-green-100">
+                                                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                                                  <span className="text-green-700 font-medium truncate max-w-[100px]" title={getAccountName(toId)}>
+                                                    {getAccountName(toId)}
+                                                  </span>
+                                                  <Badge variant="outline" className="text-[10px] h-4 px-1 bg-green-100 text-green-700 border-green-200">
+                                                    收入
+                                                  </Badge>
+                                                </div>
+                                              )
+                                            }
+                                            if (isTransfer) {
+                                              return (
+                                                <div className="space-y-1">
+                                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-orange-50 rounded border border-orange-100">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                                    <span className="text-orange-700 text-[10px] truncate max-w-[100px]" title={`转出: ${getAccountName(fromId)}`}>
+                                                      出: {getAccountName(fromId)}
+                                                    </span>
+                                                  </div>
+                                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded border border-blue-100">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                    <span className="text-blue-700 text-[10px] truncate max-w-[100px]" title={`转入: ${getAccountName(toId)}`}>
+                                                      入: {getAccountName(toId)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              )
+                                            }
+                                            return (
+                                              <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-md border border-gray-100">
+                                                <span className="w-2 h-2 rounded-full bg-gray-400" />
+                                                <span className="text-gray-600 font-medium">-</span>
+                                              </div>
+                                            )
+                                          })()}
                                         </td>
-                                        <td className={`px-2 py-2 ${isMobile ? 'hidden' : ''}`}>
-                                          {getAccountName(transaction.to_acc_id)}
-                                        </td>
-                                        <td className={`px-2 py-2 max-w-[150px] truncate ${isMobile ? 'text-xs' : ''}`}>
+                                        <td className="px-3 py-2 text-xs max-w-[200px] truncate" title={transaction.description || '-'}>
                                           {transaction.description || '-'}
                                         </td>
-                                        <td className={`px-2 py-2 text-right font-semibold ${isMobile ? 'text-xs' : ''}`}>
-                                          {new Money(transaction.value).format()}
+                                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                                          {(() => {
+                                            const fromId = transaction.from_acc_id ?? -1
+                                            const toId = transaction.to_acc_id ?? -1
+                                            const isExpense = fromId > 0 && toId === -1
+                                            const isIncome = fromId === -1 && toId > 0
+                                            const amount = new Money(transaction.value).format()
+                                            
+                                            if (isExpense) {
+                                              return (
+                                                <span className="inline-flex items-center px-2 py-0.5 bg-red-50 text-red-700 font-bold rounded text-xs">
+                                                  -{amount}
+                                                </span>
+                                              )
+                                            }
+                                            if (isIncome) {
+                                              return (
+                                                <span className="inline-flex items-center px-2 py-0.5 bg-green-50 text-green-700 font-bold rounded text-xs">
+                                                  +{amount}
+                                                </span>
+                                              )
+                                            }
+                                            return (
+                                              <span className="inline-flex items-center px-2 py-0.5 bg-orange-50 text-orange-700 font-bold rounded text-xs">
+                                                {amount}
+                                              </span>
+                                            )
+                                          })()}
                                         </td>
-                                        <td className={`px-2 py-2 ${isMobile ? 'hidden' : ''}`}>
+                                        <td className={`px-3 py-2 ${isMobile ? 'hidden' : ''}`}>
                                           <div className="flex flex-wrap gap-1">
                                             {transaction.tags
                                               ?.split(',')
                                               .map((tag) => tag.trim())
                                               .filter((tag) => tag.length > 0)
-                                              .slice(0, 3)
+                                              .slice(0, 2)
                                               .map((tag) => (
-                                                <Badge key={tag} variant="outline" className="text-xs">
+                                                <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0 h-4">
                                                   {tag}
                                                 </Badge>
                                               ))}
                                             {transaction.tags
                                               ?.split(',')
-                                              .filter((tag) => tag.trim().length > 0).length > 3 && (
-                                              <Badge variant="outline" className="text-xs">
-                                                +{transaction.tags.split(',').filter((tag) => tag.trim().length > 0).length - 3}
+                                              .filter((tag) => tag.trim().length > 0).length > 2 && (
+                                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                                +{transaction.tags.split(',').filter((tag) => tag.trim().length > 0).length - 2}
                                               </Badge>
                                             )}
                                           </div>
                                         </td>
-                                        <td className={`px-2 py-2 ${isMobile ? 'text-xs' : ''}`}>
+                                        <td className="px-3 py-2 text-center">
                                           {transaction.budget_id === budget.id && (
                                             <Button
                                               variant="ghost"
@@ -536,16 +670,40 @@ const BudgetsDataTable: React.FC = () => {
       </Card>
 
       {selectedBudget && (
-        <BudgetConsumeDialog
-          budget={selectedBudget}
-          open={consumeDialogOpen}
-          onOpenChange={setConsumeDialogOpen}
-          onSuccess={() => {
-            setDataUpdated(false)
-            setConsumeDialogOpen(false)
-            setSelectedBudget(null)
-          }}
-        />
+        <>
+          <BudgetConsumeDialog
+            budget={selectedBudget}
+            open={consumeDialogOpen}
+            onOpenChange={setConsumeDialogOpen}
+            onSuccess={() => {
+              setDataUpdated(false)
+              setConsumeDialogOpen(false)
+              setSelectedBudget(null)
+            }}
+          />
+          <BudgetEditDialog
+            budget={selectedBudget}
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            onSuccess={() => {
+              setDataUpdated(false)
+              setEditDialogOpen(false)
+              setSelectedBudget(null)
+            }}
+          />
+          <BudgetDetailDialog
+            budget={selectedBudget}
+            usedAmount={budgetsWithStats.find(b => b.id === selectedBudget.id)?.used_amount}
+            remainingAmount={budgetsWithStats.find(b => b.id === selectedBudget.id)?.remaining_amount}
+            transactions={budgetsWithStats.find(b => b.id === selectedBudget.id)?.transactions}
+            open={detailDialogOpen}
+            onOpenChange={setDetailDialogOpen}
+            onEdit={() => {
+              setDetailDialogOpen(false)
+              setEditDialogOpen(true)
+            }}
+          />
+        </>
       )}
     </>
   )

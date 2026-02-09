@@ -82,7 +82,7 @@ const TransactionAddCard: React.FC<TransactionAddCardProps> = (props: Transactio
 
   const handleContinueAdd = () => {
     setDialogState({ type: 'idle' })
-    resetForm()
+    // 保留表单内容，不清空
   }
 
   const handleClose = () => {
@@ -104,7 +104,7 @@ const TransactionAddCard: React.FC<TransactionAddCardProps> = (props: Transactio
               <Label htmlFor="from-account" className={`${isMobile ? 'text-sm' : ''}`}>
                 转出账户
               </Label>
-              <Select onValueChange={(value) => setFromAccId(parseInt(value))} defaultValue="-1">
+              <Select onValueChange={(value) => setFromAccId(parseInt(value))} value={fromAccId === -1 ? undefined : fromAccId.toString()}>
                 <SelectTrigger className={`w-full ${isMobile ? 'h-10' : ''}`}>
                   <SelectValue placeholder="选择账户" />
                 </SelectTrigger>
@@ -124,7 +124,7 @@ const TransactionAddCard: React.FC<TransactionAddCardProps> = (props: Transactio
               <Label htmlFor="to-account" className={`${isMobile ? 'text-sm' : ''}`}>
                 转入账户
               </Label>
-              <Select onValueChange={(value) => setToAccId(parseInt(value))} defaultValue="-1">
+              <Select onValueChange={(value) => setToAccId(parseInt(value))} value={toAccId === -1 ? undefined : toAccId.toString()}>
                 <SelectTrigger className={`w-full ${isMobile ? 'h-10' : ''}`}>
                   <SelectValue placeholder="选择账户" />
                 </SelectTrigger>

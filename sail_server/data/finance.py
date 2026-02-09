@@ -316,6 +316,7 @@ class Budget(ORMBase):
     
     # 计算字段（由 items 汇总，存储用于快速查询）
     total_amount = Column(String, default="0.0")    # 总预算金额（items 汇总）
+    direction = Column(Integer, default=0)          # 预算方向：0=支出, 1=收入（由子项决定）
     
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # 生效时间
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
@@ -400,6 +401,7 @@ class BudgetData:
     start_date: Optional[float] = field(default=None)
     end_date: Optional[float] = field(default=None)
     total_amount: str = field(default="0.0")
+    direction: int = field(default=0)  # 0=支出, 1=收入
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
     ctime: datetime = field(default_factory=lambda: datetime.now())
     mtime: datetime = field(default_factory=lambda: datetime.now())

@@ -100,6 +100,7 @@ def budget_to_data(budget: Budget, include_items: bool = True) -> BudgetData:
         start_date=_htime_inv(budget.start_date) if budget.start_date else None,
         end_date=_htime_inv(budget.end_date) if budget.end_date else None,
         total_amount=budget.total_amount or "0.0",
+        direction=budget.direction or 0,
         htime=_htime_inv(budget.htime) if budget.htime else datetime.now().timestamp(),
         ctime=budget.ctime,
         mtime=budget.mtime,
@@ -116,6 +117,7 @@ def budget_from_data(data: BudgetData) -> Budget:
         start_date=_htime(data.start_date) if data.start_date else None,
         end_date=_htime(data.end_date) if data.end_date else None,
         total_amount=data.total_amount,
+        direction=data.direction if hasattr(data, 'direction') else 0,
         htime=_htime(data.htime) if data.htime else datetime.now(),
         ctime=datetime.now(),
         mtime=datetime.now(),
@@ -136,6 +138,30 @@ def calculate_budget_total(items: List[BudgetItem]) -> Money:
             item_total = Money(item.amount or "0.0") * (item.period_count or 1)
         total += item_total
     return total
+
+
+def calculate_budget_direction(items: List[BudgetItem]) -> int:
+    """
+    Calculate budget direction from items.
+    Returns: 0 = EXPENSE (支出), 1 = INCOME (收入)
+    Direction is determined by the majority of item amounts weighted by their totals.
+    """
+    expense_total = Money("0.0")
+    income_total = Money("0.0")
+    
+    for item in items:
+        if item.item_type == ItemType.FIXED:
+            item_total = Money(item.amount or "0.0")
+        else:
+            item_total = Money(item.amount or "0.0") * (item.period_count or 1)
+        
+        if item.direction == BudgetDirection.INCOME:
+            income_total += item_total
+        else:
+            expense_total += item_total
+    
+    # If income total is greater, it's an income budget
+    return BudgetDirection.INCOME if income_total > expense_total else BudgetDirection.EXPENSE
 
 
 # ============ Budget CRUD ============
@@ -159,8 +185,14 @@ def create_budget_impl(db, data: BudgetData) -> BudgetData:
     
     db.flush()
     
-    # Recalculate and update total
-    budget.total_amount = calculate_budget_total(budget.items).value_str
+    # Use provided total_amount if valid, otherwise recalculate from items
+    if data.total_amount and data.total_amount != "0.0":
+        budget.total_amount = data.total_amount
+    else:
+        budget.total_amount = calculate_budget_total(budget.items).value_str
+    
+    # Calculate direction from items
+    budget.direction = calculate_budget_direction(budget.items)
     
     db.commit()
     db.refresh(budget)
@@ -236,8 +268,14 @@ def update_budget_impl(db, budget_id: int, data: BudgetData) -> Optional[BudgetD
     budget.htime = _htime(data.htime) if data.htime else budget.htime
     budget.mtime = datetime.now()
     
-    # Recalculate total from items
-    budget.total_amount = calculate_budget_total(budget.items).value_str
+    # Update total_amount if provided, otherwise recalculate from items
+    if data.total_amount and data.total_amount != "0.0":
+        budget.total_amount = data.total_amount
+    else:
+        budget.total_amount = calculate_budget_total(budget.items).value_str
+    
+    # Recalculate direction from items
+    budget.direction = calculate_budget_direction(budget.items)
 
     db.commit()
     db.refresh(budget)
