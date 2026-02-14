@@ -3,7 +3,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import AddHistoryEventDialog from '@components/history_event_add_dialog'
 import HistoryEventsDataTable from '@components/history_events_data_table'
 
-const ContentPage = () => {
+const InfoPage = () => {
   const isMobile = useIsMobile()
 
   return (
@@ -22,5 +22,5 @@ const ContentPage = () => {
   )
 }
 
-export default ContentPage
+export default InfoPage
 

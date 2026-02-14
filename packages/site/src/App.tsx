@@ -2,17 +2,8 @@ import React, { useEffect, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from 'react-router-dom'
 import { useServerStore, type ServerState } from '@lib/store'
 import { MobileProviderWithFallback } from '@/hooks/use-mobile'
+import { PAGE_ROUTES, getPageComponent } from './config/basic'
 import './App.css'
-
-// import MainPage from '@pages/main'
-const MainPage = React.lazy(() => import('@pages/main'))
-const MoneyPage = React.lazy(() => import('@pages/money'))
-const HealthPage = React.lazy(() => import('@pages/health'))
-const ProjectPage = React.lazy(() => import('@pages/project'))
-const ContentPage = React.lazy(() => import('@pages/content'))
-const TextPage = React.lazy(() => import('@pages/text'))
-const AnalysisPage = React.lazy(() => import('@pages/analysis'))
-const NecessityPage = React.lazy(() => import('@pages/necessity'))
 
 interface URLParams {
   path?: string
@@ -40,16 +31,15 @@ const AppRoutes: React.FC = () => {
     }
   }, [fetchServerHealth, searchParams, navigate])
 
+  const MainComponent = getPageComponent('/main')
+
   return (
     <Routes>
-      <Route path="/" element={<MainPage />} />
-      <Route path="/money" element={<MoneyPage />} />
-      <Route path="/health" element={<HealthPage />} />
-      <Route path="/project" element={<ProjectPage />} />
-      <Route path="/content" element={<ContentPage />} />
-      <Route path="/text" element={<TextPage />} />
-      <Route path="/analysis" element={<AnalysisPage />} />
-      <Route path="/necessity" element={<NecessityPage />} />
+      <Route path="/" element={MainComponent ? <MainComponent /> : null} />
+      {PAGE_ROUTES.map((item) => {
+        const Component = item.component
+        return <Route key={item.path} path={item.path} element={<Component />} />
+      })}
     </Routes>
   )
 }
