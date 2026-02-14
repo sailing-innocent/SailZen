@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.data.health import Weight, WeightData
+from sail_server.data.health import Weight, WeightData, Exercise, ExerciseData
 from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy import func, cast, Float
@@ -131,3 +131,67 @@ def target_weight_impl(db, target_date: datetime):
         tag="target",
         description="Target weight based on linear approximation",
     )
+
+
+# Exercise implementations
+
+
+def read_from_exercise(exercise: Exercise):
+    return ExerciseData(
+        id=exercise.id,
+        htime=exercise.htime.timestamp(),
+        description=exercise.description,
+    )
+
+
+def create_exercise_impl(db, exercise_create: ExerciseData):
+    exercise = Exercise(
+        htime=datetime.fromtimestamp(exercise_create.htime),
+        description=exercise_create.description,
+    )
+    db.add(exercise)
+    db.commit()
+    db.refresh(exercise)
+    return read_from_exercise(exercise)
+
+
+def read_exercise_impl(db, exercise_id: int = -1):
+    exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
+    return read_from_exercise(exercise) if exercise else None
+
+
+def read_exercises_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    start_time: float = None,
+    end_time: float = None,
+):
+    query = db.query(Exercise)
+    if start_time is not None:
+        query = query.filter(Exercise.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(Exercise.htime <= datetime.fromtimestamp(end_time))
+    exercises = query.order_by(Exercise.htime.desc()).offset(skip)
+    if limit != -1:
+        exercises = exercises.limit(limit)
+    exercises = exercises.all()
+    return [read_from_exercise(exercise) for exercise in exercises]
+
+
+def update_exercise_impl(db, id, exercise: ExerciseData):
+    exercise_rec = db.query(Exercise).filter(Exercise.id == id).first()
+    if exercise_rec is None:
+        return None
+    exercise_rec.htime = datetime.fromtimestamp(exercise.htime)
+    exercise_rec.description = exercise.description
+    db.commit()
+    return read_exercise_impl(db, id)
+
+
+def delete_exercise_impl(db, id=None):
+    if id is not None:
+        db.query(Exercise).filter(Exercise.id == id).delete()
+    else:
+        db.query(Exercise).delete()
+    db.commit()

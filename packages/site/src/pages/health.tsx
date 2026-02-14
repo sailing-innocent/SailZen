@@ -1,5 +1,5 @@
 import React from 'react'
-import { type WeightCreateProps } from '@lib/data'
+import { type WeightCreateProps, type ExerciseCreateProps } from '@lib/data'
 import { type HealthState, useHealthStore } from '@lib/store/health'
 
 import PageLayout from '@components/page_layout'
@@ -18,8 +18,10 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { Trash2 } from 'lucide-react'
 
 type DateSpanChoice = '7d' | '30d' | '90d' | '1y' | 'all'
 
@@ -40,6 +42,10 @@ const dateSpanSelectOptions: DateSpanOption[] = [
 const HealthPage = () => {
   const fetchWeights = useHealthStore((state: HealthState) => state.fetchWeights)
   const createWeight = useHealthStore((state: HealthState) => state.createWeight)
+  const exercises = useHealthStore((state: HealthState) => state.exercises)
+  const fetchExercises = useHealthStore((state: HealthState) => state.fetchExercises)
+  const createExercise = useHealthStore((state: HealthState) => state.createExercise)
+  const deleteExercise = useHealthStore((state: HealthState) => state.deleteExercise)
   const isMobile = useIsMobile()
 
   const selectItems = dateSpanSelectOptions.map((option) => (
@@ -55,12 +61,24 @@ const HealthPage = () => {
   const [createDate, setCreateDate] = React.useState<Date>(new Date()) // Default to today
   const [createWeightValue, setCreateWeightValue] = React.useState<string>('')
 
+  // Exercise form state
+  const [exerciseDate, setExerciseDate] = React.useState<Date>(new Date())
+  const [exerciseDescription, setExerciseDescription] = React.useState<string>('')
+  const [isExerciseDialogOpen, setIsExerciseDialogOpen] = React.useState<boolean>(false)
+
   React.useEffect(() => {
     const startDateUnix = Math.floor(startDate.getTime() / 1000)
     const endDateUnix = Math.floor(endDate.getTime() / 1000)
     // console.log(`Fetching weights from ${startDateUnix} to ${endDateUnix}`)
     fetchWeights(0, 4096, startDateUnix, endDateUnix)
   }, [fetchWeights, startDate, endDate])
+
+  // Fetch exercises on mount and when date range changes
+  React.useEffect(() => {
+    const startDateUnix = Math.floor(startDate.getTime() / 1000)
+    const endDateUnix = Math.floor(endDate.getTime() / 1000)
+    fetchExercises(0, 100, startDateUnix, endDateUnix)
+  }, [fetchExercises, startDate, endDate])
 
   // change startDate and endDate when dateSpan changes
   React.useEffect(() => {
@@ -75,6 +93,32 @@ const HealthPage = () => {
     setStartDate(newStartDate)
     setEndDate(now)
   }, [dateSpan])
+
+  const handleCreateExercise = async () => {
+    const props: ExerciseCreateProps = {
+      htime: Math.floor(exerciseDate.getTime() / 1000),
+      description: exerciseDescription,
+    }
+    await createExercise(props)
+    setExerciseDescription('')
+    setExerciseDate(new Date())
+    setIsExerciseDialogOpen(false)
+  }
+
+  const handleDeleteExercise = async (id: number) => {
+    await deleteExercise(id)
+  }
+
+  // Format timestamp to date string
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
 
   return (
     <>
@@ -177,6 +221,93 @@ const HealthPage = () => {
         </div>
         <div className={isMobile ? 'px-2' : ''}>
           <WeightChart />
+        </div>
+
+        {/* 运动记录部分 */}
+        <div className={`${isMobile ? 'text-lg px-2 mt-8' : 'text-xl mt-10'} border-t pt-6`}>运动记录</div>
+        <div className={`flex gap-3 ${isMobile ? 'flex-col px-2' : 'flex-row flex-wrap'}`}>
+          {/* 添加运动记录按钮 */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="add-exercise" className="px-1 text-sm">
+              Add Exercise
+            </Label>
+            <Dialog open={isExerciseDialogOpen} onOpenChange={setIsExerciseDialogOpen}>
+              <DialogTrigger className={isMobile ? 'w-full' : 'w-48'}>
+                <Input id="add-exercise" placeholder="Add Exercise Record" readOnly />
+              </DialogTrigger>
+              <DialogContent className={isMobile ? 'w-[95vw] max-w-[95vw]' : ''}>
+                <DialogHeader>
+                  <DialogTitle>Add Exercise Record</DialogTitle>
+                  <DialogDescription>Record your exercise activity below.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="exercise-date" className={isMobile ? '' : 'text-right'}>
+                      Date & Time
+                    </Label>
+                    <DatePicker
+                      label=""
+                      placeholder="Select date"
+                      onChange={(date: Date) => {
+                        setExerciseDate(date)
+                      }}
+                    />
+                  </div>
+                  <div className={`grid items-start gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="exercise-description" className={isMobile ? '' : 'text-right pt-2'}>
+                      Description
+                    </Label>
+                    <Textarea
+                      id="exercise-description"
+                      className={isMobile ? 'w-full' : 'col-span-3'}
+                      placeholder="e.g., Ran 5km in the park, felt good..."
+                      value={exerciseDescription}
+                      onChange={(e) => setExerciseDescription(e.target.value)}
+                      rows={4}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <DialogClose
+                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:bg-gray-400"
+                    onClick={handleCreateExercise}
+                    disabled={!exerciseDescription.trim()}
+                  >
+                    Save
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        {/* 运动记录列表 */}
+        <div className={`${isMobile ? 'px-2' : ''} mt-4`}>
+          <h3 className={`font-semibold mb-3 ${isMobile ? 'text-base' : 'text-lg'}`}>Recent Exercises</h3>
+          {exercises.length === 0 ? (
+            <div className="text-gray-500 text-sm">No exercise records yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {exercises.map((exercise) => (
+                <div
+                  key={exercise.id}
+                  className="border rounded-lg p-3 bg-white dark:bg-gray-800 flex justify-between items-start gap-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-500 mb-1">{formatDate(exercise.htime)}</div>
+                    <div className="text-sm break-words">{exercise.description}</div>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteExercise(exercise.id)}
+                    className="text-red-500 hover:text-red-700 p-1 flex-shrink-0"
+                    title="Delete"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </PageLayout>
     </>

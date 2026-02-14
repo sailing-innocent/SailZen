@@ -6,9 +6,11 @@
 
 ---
 
-## 1. 体重管理 (Weight Management)
+## 已实现功能
 
-### 功能描述
+### 1. 体重管理 (Weight Management)
+
+#### 功能描述
 
 保持BMI长期位于健康区间
 
@@ -17,9 +19,9 @@
 - 支持时间范围筛选（7天、30天、90天、1年、全部）
 - 目标体重计算（线性逼近）
 
-### 后端实现 (sail_server)
+#### 后端实现 (sail_server)
 
-#### 数据模型 (`data/health.py`)
+##### 数据模型 (`data/health.py`)
 
 ```python
 class Weight(ORMBase):
@@ -39,7 +41,7 @@ class WeightData:
     description: str = ""
 ```
 
-#### API 端点 (`controller/health.py`)
+##### API 端点 (`controller/health.py`)
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
@@ -49,7 +51,7 @@ class WeightData:
 | GET | `/api/health/weight/target?date=` | 获取目标体重 |
 | POST | `/api/health/weight` | 创建新体重记录 |
 
-#### 业务逻辑层 (`model/health.py`)
+##### 业务逻辑层 (`model/health.py`)
 
 - `create_weight_impl()` - 创建体重记录
 - `read_weight_impl()` - 读取单条记录
@@ -57,21 +59,21 @@ class WeightData:
 - `read_weights_avg_impl()` - 计算平均体重
 - `target_weight_impl()` - 线性逼近目标体重
 
-### 前端实现 (packages/site)
+#### 前端实现 (packages/site)
 
-#### 页面组件 (`pages/health.tsx`)
+##### 页面组件 (`pages/health.tsx`)
 
 - 日期范围选择器（预设选项 + 自定义日期）
 - 体重录入对话框表单
 - 体重图表容器
 
-#### 图表组件 (`components/weight_chart.tsx`)
+##### 图表组件 (`components/weight_chart.tsx`)
 
 - 使用 Recharts 展示体重折线图
 - X轴为时间，Y轴为体重值
 - 支持加载状态和空数据提示
 
-#### 状态管理 (`lib/store/health.ts`)
+##### 状态管理 (`lib/store/health.ts`)
 
 ```typescript
 interface HealthState {
@@ -82,7 +84,7 @@ interface HealthState {
 }
 ```
 
-#### API 调用 (`lib/api/health.ts`)
+##### API 调用 (`lib/api/health.ts`)
 
 - `api_get_weight(index)` - 获取单条记录
 - `api_get_weights(skip, limit, start, end)` - 获取记录列表
@@ -90,7 +92,101 @@ interface HealthState {
 
 ---
 
-## 2. 健身管理 (Fitness Management)
+### 2. 运动记录 (Exercise Record)
+
+#### 功能描述
+
+简化版的运动记录功能，用于记录日常运动活动。只包含发生时间和自然语言描述，便于快速记录。
+
+- 运动记录的创建、查询、删除
+- 自然语言描述支持
+- 按时间范围筛选
+- 记录列表展示
+
+#### 后端实现 (sail_server)
+
+##### 数据模型 (`data/health.py`)
+
+```python
+class Exercise(ORMBase):
+    __tablename__ = "exercises"
+    id = Column(Integer, primary_key=True)
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # 发生时间
+    description = Column(String, default="")  # 自然语言描述
+
+@dataclass
+class ExerciseData:
+    htime: float  # Unix timestamp
+    id: int = -1
+    description: str = ""
+```
+
+##### API 端点 (`controller/health.py`)
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/health/exercise/{exercise_id}` | 获取单条运动记录 |
+| GET | `/api/health/exercise?skip=&limit=&start=&end=` | 获取运动记录列表 |
+| POST | `/api/health/exercise` | 创建新运动记录 |
+| PUT | `/api/health/exercise/{exercise_id}` | 更新运动记录 |
+| DELETE | `/api/health/exercise/{exercise_id}` | 删除运动记录 |
+
+##### 业务逻辑层 (`model/health.py`)
+
+- `create_exercise_impl()` - 创建运动记录
+- `read_exercise_impl()` - 读取单条记录
+- `read_exercises_impl()` - 分页读取记录列表
+- `update_exercise_impl()` - 更新记录
+- `delete_exercise_impl()` - 删除记录
+
+#### 前端实现 (packages/site)
+
+##### 数据类型 (`lib/data/health.ts`)
+
+```typescript
+export interface ExerciseCreateProps {
+  htime: number
+  description: string
+}
+
+export interface ExerciseData extends ExerciseCreateProps {
+  id: number
+}
+```
+
+##### 状态管理 (`lib/store/health.ts`)
+
+```typescript
+interface HealthState {
+  // ... 体重管理状态
+  exercises: ExerciseData[]
+  fetchExercises: (skip, limit, start, end) => Promise<void>
+  createExercise: (exercise: ExerciseCreateProps) => Promise<void>
+  deleteExercise: (id: number) => Promise<void>
+}
+```
+
+##### API 调用 (`lib/api/health.ts`)
+
+- `api_get_exercises(skip, limit, start, end)` - 获取记录列表
+- `api_create_exercise(newExercise)` - 创建记录
+- `api_delete_exercise(id)` - 删除记录
+
+##### 页面组件 (`pages/health.tsx`)
+
+- 运动记录区域位于体重管理下方
+- 添加运动记录按钮（打开对话框）
+- 运动记录表单：
+  - 日期时间选择器
+  - 自然语言描述文本框
+- 运动记录列表：
+  - 按时间倒序排列
+  - 显示日期时间和描述
+  - 删除按钮
+
+---
+
+## 3. 健身管理 (Fitness Management) [规划中]
 
 ### 功能描述
 
@@ -264,7 +360,7 @@ interface FitnessState {
 
 ---
 
-## 3. 专项保养 (Specialized Care)
+## 4. 专项保养 (Specialized Care) [规划中]
 
 ### 3.1 口腔保养 (Oral Care)
 
@@ -480,7 +576,7 @@ interface CareState {
 
 ---
 
-## 4. 医疗杂项 (Medical Miscellaneous)
+## 5. 医疗杂项 (Medical Miscellaneous) [规划中]
 
 ### 功能描述
 
@@ -799,29 +895,34 @@ interface MedicalState {
 
 ---
 
-## 5. 路由规划
+## 6. 路由规划
 
 ### 后端路由 (`router/health.py`)
 
 ```python
-# 扩展后的健康路由
+# 当前已实现的健康路由
 router = Router(
     path="/health",
     dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
         WeightController,     # /api/health/weight
-        FitnessController,    # /api/health/fitness
-        CareController,       # /api/health/care (口腔/皮肤保养)
-        MedicalController,    # /api/health/medical (保险/用品)
+        ExerciseController,   # /api/health/exercise
     ],
 )
+
+# 规划中的路由
+# FitnessController,    # /api/health/fitness
+# CareController,       # /api/health/care (口腔/皮肤保养)
+# MedicalController,    # /api/health/medical (保险/用品)
 ```
 
 ### 前端路由 (`App.tsx`)
 
 ```typescript
-// 扩展后的前端路由
-<Route path="/health" element={<HealthPage />} />        {/* 体重管理 */}
+// 当前已实现的页面
+<Route path="/health" element={<HealthPage />} />        {/* 体重管理 + 运动记录 */}
+
+// 规划中的页面
 <Route path="/fitness" element={<FitnessPage />} />      {/* 健身管理 */}
 <Route path="/care" element={<CarePage />} />            {/* 专项保养 */}
 <Route path="/medical" element={<MedicalPage />} />      {/* 医疗杂项 */}
@@ -829,26 +930,30 @@ router = Router(
 
 ---
 
-## 6. 数据库迁移计划
+## 7. 数据库表
 
-### 新增表
+### 已实现表
 
-1. `exercises` - 健身记录
-2. `fitness_goals` - 健身目标
-3. `oral_care_records` - 口腔护理记录
-4. `oral_care_reminders` - 口腔护理提醒
-5. `skin_care_routines` - 护肤流程记录
-6. `skin_care_products` - 护肤品库存
-7. `skin_condition_logs` - 皮肤状态日志
-8. `medical_insurances` - 医疗保险
-9. `insurance_claims` - 保险理赔记录
-10. `health_products` - 健康用品库存
-11. `product_usage_logs` - 产品使用记录
-12. `product_purchases` - 产品购买记录
+1. `weights` - 体重记录
+2. `exercises` - 运动记录
+
+### 规划中表
+
+3. `fitness_goals` - 健身目标
+4. `oral_care_records` - 口腔护理记录
+5. `oral_care_reminders` - 口腔护理提醒
+6. `skin_care_routines` - 护肤流程记录
+7. `skin_care_products` - 护肤品库存
+8. `skin_condition_logs` - 皮肤状态日志
+9. `medical_insurances` - 医疗保险
+10. `insurance_claims` - 保险理赔记录
+11. `health_products` - 健康用品库存
+12. `product_usage_logs` - 产品使用记录
+13. `product_purchases` - 产品购买记录
 
 ---
 
-## 7. 后续待办
+## 8. 后续待办
 
 - [ ] 评审数据模型设计
 - [ ] 评审 API 端点设计

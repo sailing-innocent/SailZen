@@ -9,9 +9,7 @@
 from sqlalchemy import Column, Integer, String, TIMESTAMP, func
 from .orm import ORMBase
 from dataclasses import dataclass, field
-from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
-# 设计原则就是可以一次测量的内容放在一张表内
 
 
 # The Raw Weight Data
@@ -63,3 +61,22 @@ class BodySizeData:
     tag: str = field(default="daily")
     id: int = field(default=-1)
     htime: float = field(default_factory=lambda: datetime.now().timestamp())
+
+
+# The Exercise Record Data
+class Exercise(ORMBase):
+    __tablename__ = "exercises"
+    id = Column(Integer, primary_key=True)
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
+    description = Column(String, default="")  # natural language description
+
+
+@dataclass
+class ExerciseData:
+    """
+    The Exercise Data
+    """
+
+    htime: float = field(default_factory=lambda: datetime.now().timestamp())
+    id: int = field(default=-1)
+    description: str = field(default="")

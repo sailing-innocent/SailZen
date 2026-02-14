@@ -17,3 +17,13 @@ export interface WeightData extends WeightCreateProps {
 export interface WeightStatsResponse {
   result: number
 }
+
+// Exercise Data Types
+export interface ExerciseCreateProps {
+  htime: number
+  description: string
+}
+
+export interface ExerciseData extends ExerciseCreateProps {
+  id: number
+}
