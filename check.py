@@ -1,12 +1,15 @@
-import datetime
+from sail_server.utils.env import read_env
 
-start_date_literal = "2025-06-05"
-start_date = datetime.datetime.strptime(start_date_literal, "%Y-%m-%d")
+read_env("dev")
+from sail_server.db import Database
 
-ten_days = datetime.timedelta(days=10)
-end_date = start_date + ten_days
-print(f"Start Date: {start_date_literal}, End Date: {end_date.strftime('%Y-%m-%d')}")
-one_handred_days = datetime.timedelta(days=100)
-end_date = start_date + one_handred_days
-end_date_literal = end_date.strftime("%Y-%m-%d")
-print(f"Start Date: {start_date_literal}, End Date: {end_date_literal}")
+db = Database.get_instance().get_db_session()
+from sail_server.data.text import Work
+
+work = db.query(Work).filter(Work.id == 8).first()
+print(f"作品: {work.title}")
+print(f"作者: {work.author}")
+print(f"版本数: {len(work.editions)}")
+for e in work.editions:
+    print(f"  版本 {e.id}: {e.edition_name}, {e.char_count:,} 字")
+db.close()
