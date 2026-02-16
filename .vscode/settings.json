@@ -1,0 +1,13 @@
+{
+	// 工作区设置
+	"files.exclude": {
+		"**/node_modules": true,
+		"**/dist": false
+	},
+	// TypeScript 设置
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"typescript.enablePromptUseWorkspaceTsdk": true,
+	// 调试设置
+	"debug.allowBreakpointsEverywhere": true,
+	"debug.javascript.usePreview": true
+}
