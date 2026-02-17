@@ -15,7 +15,7 @@ AI 文本导入主程序
 4. 人机确认后导入数据库
 
 使用方法：
-    python import_with_ai.py <file.txt> --title "作品标题" --author "作者"
+    uv import_with_ai.py <file.txt> --title "作品标题" --author "作者"
 """
 
 import os
@@ -33,22 +33,23 @@ from ai_chapter_parser import AIChapterParser, ChapterType
 
 # 颜色输出
 class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+    HEADER = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    ENDC = "\033[0m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
 
 
 def colorize(text: str, color: str) -> str:
     """添加颜色"""
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
         except:
@@ -85,66 +86,80 @@ def print_chapter_preview(chapter, show_content: bool = True, content_limit: int
         ChapterType.AUTHOR: Colors.YELLOW,
         ChapterType.NOISE: Colors.RED,
     }
-    
+
     type_color = type_colors.get(chapter.chapter_type, Colors.ENDC)
     type_label = chapter.chapter_type.value.upper()
-    
+
     # 标题行
     title_display = chapter.title
     if chapter.chapter_title:
         title_display = f"{chapter.label} {chapter.chapter_title}"
-    
-    print(f"\n  {colorize(f'[{chapter.index}]', Colors.YELLOW)} "
-          f"{colorize(title_display, Colors.BOLD)} "
-          f"{colorize(f'[{type_label}]', type_color)}")
-    
+
+    print(
+        f"\n  {colorize(f'[{chapter.index}]', Colors.YELLOW)} "
+        f"{colorize(title_display, Colors.BOLD)} "
+        f"{colorize(f'[{type_label}]', type_color)}"
+    )
+
     # 统计信息
-    print(f"      字数: {colorize(format_number(chapter.char_count), Colors.CYAN)} | "
-          f"位置: {format_number(chapter.start_pos)}-{format_number(chapter.end_pos)}")
-    
+    print(
+        f"      字数: {colorize(format_number(chapter.char_count), Colors.CYAN)} | "
+        f"位置: {format_number(chapter.start_pos)}-{format_number(chapter.end_pos)}"
+    )
+
     # 警告
     if chapter.warnings:
         for warning in chapter.warnings:
             print(f"      {colorize('[!] ' + warning, Colors.YELLOW)}")
-    
+
     # 内容预览
     if show_content and chapter.content:
-        content_preview = chapter.content[:content_limit].replace('\n', ' ').strip()
+        content_preview = chapter.content[:content_limit].replace("\n", " ").strip()
         if len(chapter.content) > content_limit:
             content_preview += "..."
         print(f"      开头: {content_preview[:100]}")
-        
+
         if len(chapter.content) > 200:
-            ending_preview = chapter.content[-200:].replace('\n', ' ').strip()
+            ending_preview = chapter.content[-200:].replace("\n", " ").strip()
             print(f"      结尾: ...{ending_preview[-100:]}")
 
 
 def print_analysis_result(result):
     """打印分析结果摘要"""
     print_header("ANALYSIS RESULT")
-    
+
     print_separator()
-    print(f"  总章节数: {colorize(format_number(result.chapter_count), Colors.GREEN + Colors.BOLD)}")
+    print(
+        f"  总章节数: {colorize(format_number(result.chapter_count), Colors.GREEN + Colors.BOLD)}"
+    )
     print(f"  总字数:   {colorize(format_number(result.total_chars), Colors.GREEN)}")
-    print(f"  平均每章: {colorize(format_number(result.avg_char_count), Colors.CYAN)} 字")
-    print(f"  最短章节: {colorize(format_number(result.min_char_count), Colors.YELLOW)} 字")
-    print(f"  最长章节: {colorize(format_number(result.max_char_count), Colors.YELLOW)} 字")
+    print(
+        f"  平均每章: {colorize(format_number(result.avg_char_count), Colors.CYAN)} 字"
+    )
+    print(
+        f"  最短章节: {colorize(format_number(result.min_char_count), Colors.YELLOW)} 字"
+    )
+    print(
+        f"  最长章节: {colorize(format_number(result.max_char_count), Colors.YELLOW)} 字"
+    )
     print_separator()
-    
+
     # 拆分规则
     print(f"\n  {colorize('拆分规则:', Colors.BOLD)}")
     for rule in result.split_rules:
         print(f"    - {rule}")
-    
+
     # 异常章节
     if result.anomalies:
         print(f"\n  {colorize('异常章节:', Colors.BOLD + Colors.YELLOW)}")
         for anomaly in result.anomalies[:5]:  # 只显示前5个
-            print(f"    [{anomaly['index']}] {anomaly['title'][:30]} "
-                  f"({format_number(anomaly['char_count'])} 字)")
+            print(
+                f"    [{anomaly['index']}] {anomaly['title'][:30]} "
+                f"({format_number(anomaly['char_count'])} 字)"
+            )
         if len(result.anomalies) > 5:
             print(f"    ... 还有 {len(result.anomalies) - 5} 个异常章节")
-    
+
     # 警告
     if result.warnings:
         print(f"\n  {colorize('⚠️ 警告:', Colors.BOLD + Colors.YELLOW)}")
@@ -156,22 +171,22 @@ def print_preview_chapters(result, num_preview: int = 3):
     """打印章节预览"""
     chapters = result.chapters
     total = len(chapters)
-    
+
     if total == 0:
         print(colorize("\n  未识别到任何章节", Colors.RED))
         return
-    
+
     # 前 N 章
     print_header(f"PREVIEW: First {min(num_preview, total)} chapters")
     for chapter in result.get_first_chapters(num_preview):
         print_chapter_preview(chapter)
-    
+
     # 中间章节（如果足够多）
     if total > num_preview * 2 + 2:
         mid_idx = total // 2
         print_header(f"PREVIEW: Middle chapter ({mid_idx + 1})")
         print_chapter_preview(chapters[mid_idx])
-    
+
     # 后 N 章
     if total > num_preview:
         print_header(f"PREVIEW: Last {min(num_preview, total - num_preview)} chapters")
@@ -183,17 +198,21 @@ def confirm_import_interactive() -> bool:
     """交互式确认导入"""
     print()
     print_separator("─")
-    
+
     while True:
-        response = input(
-            colorize("\n是否确认导入? (y/n/e=编辑): ", Colors.BOLD + Colors.YELLOW)
-        ).strip().lower()
-        
-        if response in ['y', 'yes', '是', '确认']:
+        response = (
+            input(
+                colorize("\n是否确认导入? (y/n/e=编辑): ", Colors.BOLD + Colors.YELLOW)
+            )
+            .strip()
+            .lower()
+        )
+
+        if response in ["y", "yes", "是", "确认"]:
             return True
-        elif response in ['n', 'no', '否', '取消']:
+        elif response in ["n", "no", "否", "取消"]:
             return False
-        elif response in ['e', 'edit', '编辑']:
+        elif response in ["e", "edit", "编辑"]:
             return None  # 返回 None 表示需要编辑
         else:
             print("  请输入: y (确认) / n (取消) / e (编辑)")
@@ -209,22 +228,22 @@ def edit_chapters(result):
     print("  l  - 列出所有章节")
     print("  q  - 完成编辑")
     print()
-    
+
     while True:
         command = input(colorize("编辑 > ", Colors.CYAN)).strip().split()
-        
+
         if not command:
             continue
-        
+
         cmd = command[0].lower()
-        
-        if cmd == 'q':
+
+        if cmd == "q":
             break
-        elif cmd == 'l':
+        elif cmd == "l":
             print(f"\n共 {len(result.chapters)} 章:")
             for c in result.chapters:
                 print(f"  [{c.index}] {c.title[:40]} ({c.chapter_type.value})")
-        elif cmd == 'd' and len(command) >= 2:
+        elif cmd == "d" and len(command) >= 2:
             try:
                 idx = int(command[1])
                 chapter = next((c for c in result.chapters if c.index == idx), None)
@@ -235,7 +254,7 @@ def edit_chapters(result):
                     print(f"  未找到章节 [{idx}]")
             except ValueError:
                 print("  无效的索引")
-        elif cmd == 't' and len(command) >= 3:
+        elif cmd == "t" and len(command) >= 3:
             try:
                 idx = int(command[1])
                 new_type = command[2]
@@ -252,44 +271,46 @@ def edit_chapters(result):
                 print("  无效的索引")
         else:
             print("  未知命令")
-    
+
     # 重新计算索引
     for i, chapter in enumerate(result.chapters):
         chapter.index = i
-    
+
     return result
 
 
-def export_to_database(result, title: str, author: Optional[str], 
-                       edition_name: Optional[str]):
+def export_to_database(
+    result, title: str, author: Optional[str], edition_name: Optional[str]
+):
     """导出到数据库"""
     print_header("IMPORTING TO DATABASE")
-    
+
     try:
         # 添加项目根目录到路径以导入 sail_server
         # 脚本路径: .agents/skills/sailzen-ai-text-import/scripts/
         # 项目根目录在脚本的上四级目录
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.abspath(os.path.join(script_dir, '..', '..', '..', '..'))
+        project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         print(f"Project root: {project_root}")
-        
+
         # 读取环境变量
         from sail_server.utils.env import read_env
+
         read_env("dev")  # 使用开发环境
-        
+
         from sail_server.db import Database
         from sail_server.data.text import TextImportRequest
         from sail_server.model.text import import_text_impl
-        
+
         # 构建导入请求
         # 将解析好的章节组装成 content
         content_parts = []
         for c in result.chapters:
             content_parts.append(f"{c.title}\n{c.content}")
         content = "\n\n".join(content_parts)
-        
+
         request = TextImportRequest(
             work_title=title,
             content=content,
@@ -297,7 +318,7 @@ def export_to_database(result, title: str, author: Optional[str],
             edition_name=edition_name or "AI导入",
             language="zh",
         )
-        
+
         print(f"Title: {title}")
         print(f"Author: {author or 'Unknown'}")
         print(f"Edition: {edition_name or 'AI Import'}")
@@ -305,17 +326,17 @@ def export_to_database(result, title: str, author: Optional[str],
         print(f"Content size: {len(content):,} chars")
         print()
         print("Connecting to database...")
-        
+
         db = Database.get_instance().get_db_session()
         work_data, edition_data, chapter_count = import_text_impl(db, request)
-        
+
         print()
         print(colorize("[SUCCESS] Import completed!", Colors.GREEN))
         print(f"  Work ID: {work_data.id}")
         print(f"  Edition ID: {edition_data.id}")
         print(f"  Chapter count: {chapter_count}")
         print(f"  Total chars: {edition_data.char_count:,}")
-        
+
     except ImportError as e:
         print(colorize(f"[Error] Cannot import sail_server modules: {e}", Colors.RED))
         print("Make sure you are running from the project root or skill directory")
@@ -325,12 +346,18 @@ def export_to_database(result, title: str, author: Optional[str],
         raise
 
 
-def run_import(file_path: str, title: Optional[str], author: Optional[str],
-               edition_name: Optional[str], use_ai: bool = True,
-               skip_confirm: bool = False, preview_only: bool = False):
+def run_import(
+    file_path: str,
+    title: Optional[str],
+    author: Optional[str],
+    edition_name: Optional[str],
+    use_ai: bool = True,
+    skip_confirm: bool = False,
+    preview_only: bool = False,
+):
     """
     执行导入流程
-    
+
     Args:
         file_path: 文件路径
         title: 作品标题
@@ -344,15 +371,15 @@ def run_import(file_path: str, title: Optional[str], author: Optional[str],
     if not os.path.exists(file_path):
         print(colorize(f"❌ 文件不存在: {file_path}", Colors.RED))
         return
-    
+
     file_name = Path(file_path).name
     work_title = title or Path(file_path).stem
-    
+
     print()
     print_separator("═")
     print(f"  {colorize('SailZen AI Text Import Tool', Colors.BOLD + Colors.CYAN)}")
     print_separator("═")
-    
+
     # 1. 读取文件
     print(f"\n[File] Reading: {colorize(file_name, Colors.BOLD)}")
     try:
@@ -362,40 +389,42 @@ def run_import(file_path: str, title: Optional[str], author: Optional[str],
     except Exception as e:
         print(colorize(f"❌ 读取失败: {e}", Colors.RED))
         return
-    
+
     # 2. 清理文本
     print(f"\n[Clean] Cleaning text...")
     cleaner = TextCleaner()
     clean_result = cleaner.clean(content, encoding)
-    
-    print(f"  清理后大小: {colorize(format_number(len(clean_result.cleaned_text)), Colors.CYAN)} 字符")
+
+    print(
+        f"  清理后大小: {colorize(format_number(len(clean_result.cleaned_text)), Colors.CYAN)} 字符"
+    )
     print(f"  Removed: {len(clean_result.removed_content)} items")
-    
+
     if clean_result.warnings:
         for warning in clean_result.warnings:
             print(f"  {colorize('[Warning] ' + warning, Colors.YELLOW)}")
-    
+
     # 3. 解析章节
     print(f"\n[Parse] Parsing chapters{' (AI mode)' if use_ai else ' (Rule mode)'}...")
     parser = AIChapterParser(sample_size=3000)
     parse_result = parser.parse(clean_result.cleaned_text, use_ai=use_ai)
-    
+
     # 4. 展示分析结果
     print_analysis_result(parse_result)
-    
+
     # 5. 展示章节预览
     print_preview_chapters(parse_result, num_preview=3)
-    
+
     # 6. 预览模式
     if preview_only:
         print_header("PREVIEW MODE COMPLETE")
         print("  使用 --confirm 参数执行实际导入")
         return
-    
+
     # 7. 确认导入
     if not skip_confirm:
         confirm_result = confirm_import_interactive()
-        
+
         if confirm_result is None:  # 编辑模式
             parse_result = edit_chapters(parse_result)
             # 重新展示结果
@@ -403,11 +432,11 @@ def run_import(file_path: str, title: Optional[str], author: Optional[str],
             confirm_result = confirm_import_interactive()
             if confirm_result is None:
                 confirm_result = True  # 编辑后直接确认
-        
+
         if not confirm_result:
             print(colorize("\n[Cancelled] Import cancelled", Colors.YELLOW))
             return
-    
+
     # 8. 导入数据库
     export_to_database(parse_result, work_title, author, edition_name)
 
@@ -430,28 +459,31 @@ def main():
   
   # 指定版本名称
   python import_with_ai.py novel.txt --title "我的小说" --edition "精校版"
-        """
+        """,
     )
-    
+
     parser.add_argument("file", help="要导入的 .txt 文件路径")
     parser.add_argument("--title", "-t", help="作品标题（默认使用文件名）")
     parser.add_argument("--author", "-a", help="作者名")
     parser.add_argument("--edition", "-e", help="版本名称")
-    
-    parser.add_argument("--no-ai", action="store_true",
-                        help="不使用 AI，仅使用规则解析")
-    parser.add_argument("--preview", "-p", action="store_true",
-                        help="仅预览分析结果，不导入")
-    parser.add_argument("--yes", "-y", action="store_true",
-                        help="跳过确认直接导入")
-    
-    parser.add_argument("--sample-size", type=int, default=3000,
-                        help="AI 采样大小（默认: 3000）")
-    parser.add_argument("--preview-count", type=int, default=3,
-                        help="预览时显示的章节数量（默认: 3）")
-    
+
+    parser.add_argument(
+        "--no-ai", action="store_true", help="不使用 AI，仅使用规则解析"
+    )
+    parser.add_argument(
+        "--preview", "-p", action="store_true", help="仅预览分析结果，不导入"
+    )
+    parser.add_argument("--yes", "-y", action="store_true", help="跳过确认直接导入")
+
+    parser.add_argument(
+        "--sample-size", type=int, default=3000, help="AI 采样大小（默认: 3000）"
+    )
+    parser.add_argument(
+        "--preview-count", type=int, default=3, help="预览时显示的章节数量（默认: 3）"
+    )
+
     args = parser.parse_args()
-    
+
     run_import(
         file_path=args.file,
         title=args.title,
@@ -459,7 +491,7 @@ def main():
         edition_name=args.edition,
         use_ai=not args.no_ai,
         skip_confirm=args.yes,
-        preview_only=args.preview
+        preview_only=args.preview,
     )
 
 

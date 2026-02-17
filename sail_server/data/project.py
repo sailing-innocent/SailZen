@@ -6,7 +6,7 @@ from sail_server.utils.time_utils import QuarterBiWeekTime
 from sail_server.utils.money import Money
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, date
-import json 
+import json
 from typing import Any
 from msgspec import Struct
 
@@ -92,7 +92,7 @@ class ProjectState:
 
 
 @dataclass
-class ProjectData():
+class ProjectData:
     """
     The Project Data
     """
@@ -128,7 +128,7 @@ class ProjectData():
             mtime=orm.mtime,
         )
 
-    @classmethod 
+    @classmethod
     def from_dict(cls, json_data: dict):
         return cls(
             id=json_data.get("id"),
@@ -140,7 +140,7 @@ class ProjectData():
             ctime=json_data.get("ctime"),
             mtime=json_data.get("mtime"),
         )
-    
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -152,7 +152,7 @@ class ProjectData():
             "ctime": self.ctime,
             "mtime": self.mtime,
         }
-    
+
     @classmethod
     def from_string(cls, project_str: str):
         return cls.from_dict(json.loads(project_str))
@@ -245,7 +245,7 @@ class MissionState:
 
 
 @dataclass
-class MissionData():
+class MissionData:
     id: int = field(default=None)
     name: str = field(default="")
     description: str = field(default="")

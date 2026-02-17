@@ -151,7 +151,7 @@ for w in works:
 uv run server.py --dev
 
 # 终端 2: 前端开发
-pnpm run views:dev
+pnpm run dev:site
 ```
 
 ### 2. 添加新依赖

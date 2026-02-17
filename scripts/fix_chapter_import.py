@@ -17,13 +17,13 @@
 
 使用方法：
     # 开发环境导入
-    python scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根"
+    uv run scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根"
 
     # 开发环境自动导入（跳过确认）
-    python scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根" --yes
+    uv run scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根" --yes
 
     # 生产环境导入（需要双重确认）
-    python scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根" --prod
+    uv run scripts/fix_chapter_import.py "novel.txt" --title "求魔" --author "耳根" --prod
 
 生产环境安全机制：
     - 显示详细的预览信息
@@ -43,21 +43,11 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
+from .utils.cmd import Colors
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
-
-
-class Colors:
-    HEADER = "\033[95m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
 
 
 def colorize(text: str, color: str) -> str:

@@ -13,6 +13,7 @@
         "build:unified": "node scripts/build-with-deps.js @saili/unified",
         "build:api-server": "node scripts/build-with-deps.js @saili/api-server",
         "build-with-deps": "node scripts/build-with-deps.js",
+        "dev:site": "pnpm --filter=sail-site run dev",
         "test": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test",
         "test:common-all": "pnpm --filter=\"./packages/common-all\" run test",
         "test:common-server": "pnpm --filter=\"./packages/common-server\" run test",

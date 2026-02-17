@@ -677,17 +677,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  # 撤销导入（删除作品及其所有数据）
-  python text_import_manager.py --undo --work-id 9
-  
-  # 分析文件章节
-  python text_import_manager.py --analyze novel.txt
-  
-  # 安全导入（带异常检测和用户确认）
-  python text_import_manager.py --safe-import novel.txt --title "求魔" --author "耳根"
-  
-  # 安全导入（自动修复异常）
-  python text_import_manager.py --safe-import novel.txt --title "求魔" --author "耳根" --auto-fix
+# 撤销导入（删除作品及其所有数据）
+python text_import_manager.py --undo --work-id 9
+
+# 分析文件章节
+python text_import_manager.py --analyze novel.txt
+
+# 安全导入（带异常检测和用户确认）
+python text_import_manager.py --safe-import novel.txt --title "求魔" --author "耳根"
+
+# 安全导入（自动修复异常）
+python text_import_manager.py --safe-import novel.txt --title "求魔" --author "耳根" --auto-fix
         """,
     )
 

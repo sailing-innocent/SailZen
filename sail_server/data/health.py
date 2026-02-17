@@ -87,7 +87,9 @@ class WeightPlan(ORMBase):
     __tablename__ = "weight_plans"
     id = Column(Integer, primary_key=True)
     target_weight = Column(String)  # target weight value in kg
-    start_time = Column(TIMESTAMP, server_default=func.current_timestamp())  # plan start time
+    start_time = Column(
+        TIMESTAMP, server_default=func.current_timestamp()
+    )  # plan start time
     target_time = Column(TIMESTAMP)  # plan target time
     description = Column(String, default="")  # plan description
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
@@ -143,7 +145,9 @@ class WeightPlanProgress:
     control_rate: float = 0.0  # 0-100, how well the plan is being followed
     current_weight: float = 0.0
     expected_current_weight: float = 0.0  # what weight should be according to plan
-    daily_predictions: list = field(default_factory=list)  # list of {htime, expected_weight, actual_weight}
+    daily_predictions: list = field(
+        default_factory=list
+    )  # list of {htime, expected_weight, actual_weight}
     is_on_track: bool = True  # whether current weight is within expected range
 
 
