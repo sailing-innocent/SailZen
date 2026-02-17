@@ -43,53 +43,11 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
-from .utils.cmd import Colors
-
-# 添加项目根目录到路径
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
-
-
-def colorize(text: str, color: str) -> str:
-    if sys.platform == "win32":
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-        except:
-            return text
-    return f"{color}{text}{Colors.ENDC}"
-
-
-def print_separator(char: str = "─", width: int = 70):
-    print(char * width)
-
-
-def print_header(title: str, color: str = Colors.CYAN):
-    print()
-    print_separator("═")
-    print(f"  {colorize(title, Colors.BOLD + color)}")
-    print_separator("═")
-
-
-def read_file(file_path: str) -> str:
-    """读取文件并自动检测编码"""
-    encodings = ["utf-8", "utf-8-sig", "gb18030", "gbk", "gb2312", "utf-16", "big5"]
-
-    for encoding in encodings:
-        try:
-            with open(file_path, "r", encoding=encoding) as f:
-                return f.read()
-        except (UnicodeDecodeError, UnicodeError):
-            continue
-
-    raise ValueError(f"无法解析文件编码: {file_path}")
+from sailzen.cmd import Colors, colorize, print_separator, print_header, read_file
 
 
 def extract_chapter_number(title: str) -> Optional[int]:
     """从章节标题中提取数字"""
-    # 匹配第XXX章
     match = re.search(r"第([一二三四五六七八九十百千万零〇\d]+)章", title)
     if match:
         num_str = match.group(1)

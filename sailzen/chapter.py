@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-# @file ai_chapter_parser.py
-# @brief AI-Powered Chapter Parser with Sampling and Anomaly Detection
-# @author sailing-innocent
-# @date 2026-02-16
-# @version 1.0
-# ---------------------------------
-"""
-AI 驱动的章节解析器
-
-核心功能：
-1. 采样分析 - 对大文件进行分段采样，使用 LLM 学习章节模式
-2. 智能解析 - 根据学习到的模式解析所有章节
-3. 异常处理 - 检测超长/超短章节，单独提交 AI 分析
-4. 人机确认 - 提供详细的预览界面
-
-支持的 LLM 提供商：
-- Google Gemini
-- OpenAI GPT
-- Moonshot AI
-"""
-
 import os
 import re
 import json

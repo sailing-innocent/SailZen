@@ -15,7 +15,7 @@ AI 文本导入主程序
 4. 人机确认后导入数据库
 
 使用方法：
-    uv import_with_ai.py <file.txt> --title "作品标题" --author "作者"
+    uv run import_with_ai.py <file.txt> --title "作品标题" --author "作者"
 """
 
 import os
@@ -24,50 +24,9 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-# 添加当前目录到路径以导入本地模块
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from text_cleaner import TextCleaner, detect_encoding
-from ai_chapter_parser import AIChapterParser, ChapterType
-
-
-# 颜色输出
-class Colors:
-    HEADER = "\033[95m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    ENDC = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-
-
-def colorize(text: str, color: str) -> str:
-    """添加颜色"""
-    if sys.platform == "win32":
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-        except:
-            return text
-    return f"{color}{text}{Colors.ENDC}"
-
-
-def print_separator(char: str = "─", width: int = 70):
-    """打印分隔线"""
-    print(char * width)
-
-
-def print_header(title: str):
-    """打印标题"""
-    print()
-    print_separator("═")
-    print(f"  {colorize(title, Colors.BOLD + Colors.CYAN)}")
-    print_separator("═")
+from sailzen.text import TextCleaner, detect_encoding
+from sailzen.chapter import AIChapterParser, ChapterType
+from sailzen.cmd import Colors, colorize, print_separator, print_header
 
 
 def format_number(n: int) -> str:
