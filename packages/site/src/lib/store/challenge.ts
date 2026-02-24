@@ -232,8 +232,9 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     set({ isCheckingIn: true, error: null })
     try {
       await api_check_in_success(missionId)
-      // 刷新详情
+      // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
+      await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to check in'
@@ -245,8 +246,9 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     set({ isCheckingIn: true, error: null })
     try {
       await api_check_in_failed(missionId)
-      // 刷新详情
+      // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
+      await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to check in'
@@ -258,8 +260,9 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     set({ isCheckingIn: true, error: null })
     try {
       await api_reset_check_in(missionId)
-      // 刷新详情
+      // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
+      await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to reset check-in'

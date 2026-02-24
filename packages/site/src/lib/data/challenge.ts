@@ -135,20 +135,20 @@ export function parseChallengeName(name: string): { type: ChallengeTypeValue; da
   if (!name.startsWith(CHALLENGE_PREFIX)) {
     return null
   }
-  
+
   const parts = name.slice(CHALLENGE_PREFIX.length).split('#')
   if (parts.length < 3) {
     return null
   }
-  
+
   const [type, daysStr, ...titleParts] = parts
   const days = parseInt(daysStr, 10)
   const title = titleParts.join('#') // 标题中可能包含#
-  
+
   if (isNaN(days) || !title) {
     return null
   }
-  
+
   return {
     type: type as ChallengeTypeValue,
     days,
@@ -173,7 +173,7 @@ export function missionStateToCheckInStatus(
   if (isFuture) {
     return CheckInStatus.FUTURE
   }
-  
+
   switch (state) {
     case MissionState.DONE:
       return CheckInStatus.SUCCESS
@@ -219,9 +219,9 @@ export function calculateCurrentDay(startDate: Date, totalDays: number): number 
   start.setHours(0, 0, 0, 0)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
-  
+
   const diffDays = Math.floor((today.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  
+
   if (diffDays < 0) return 0 // 还未开始
   if (diffDays >= totalDays) return totalDays + 1 // 已结束
   return diffDays + 1 // 1-based
@@ -255,7 +255,7 @@ export function dateToQBW(date: Date): number {
   const year = date.getFullYear()
   const month = date.getMonth() + 1
   const quarter = Math.floor((month - 1) / 3) + 1
-  
+
   // 找到该日期所在的双周
   const qbwDate = QBWDate.from_date(date)
   return qbwDate.to_int()
@@ -272,29 +272,30 @@ export function qbwToDate(qbw: number): Date {
 /**
  * 从 ProjectData 转换为 ChallengeData
  * 使用 QBW 格式的时间
+ * @param correctStartDate 可选的正确开始日期（从 missions 推断），如果提供则优先使用
  */
-export function projectToChallenge(project: ProjectData): ChallengeData | null {
+export function projectToChallenge(project: ProjectData, correctStartDate?: Date | null): ChallengeData | null {
   const parsed = parseChallengeName(project.name)
   if (!parsed) {
     return null
   }
-  
-  // 使用 QBW 格式转换
-  const startDate = qbwToDate(project.start_time_qbw)
-  const endDate = qbwToDate(project.end_time_qbw)
-  
-  // 结束日期应该是双周的结束
-  const qbwEnd = QBWDate.from_int(project.end_time_qbw)
-  endDate.setTime(qbwEnd.get_end_date().getTime())
-  
+
+  // 使用正确的开始日期（如果提供），否则使用 QBW 格式转换
+  const startDate = correctStartDate ?? qbwToDate(project.start_time_qbw)
+
+  // 结束日期根据开始日期和天数计算
+  const endDate = new Date(startDate)
+  endDate.setDate(endDate.getDate() + parsed.days - 1)
+  endDate.setHours(23, 59, 59, 999)
+
   const now = new Date()
-  
+
   // 确定状态
   let status: ChallengeStatusValue = ChallengeStatus.ACTIVE
   if (now > endDate) {
     status = ChallengeStatus.COMPLETED
   }
-  
+
   return {
     id: project.id,
     title: parsed.title,
@@ -320,11 +321,11 @@ export function missionsToCheckIns(
     const bTime = b.ddl ? new Date(b.ddl).getTime() : 0
     return aTime - bTime
   })
-  
+
   return sortedMissions.map((mission, index) => {
     const day = index + 1
     const isFuture = isFutureDay(startDate, day)
-    
+
     return {
       day,
       mission,
@@ -345,14 +346,14 @@ export function calculateChallengeStats(
   const successDays = checkIns.filter(c => c.status === CheckInStatus.SUCCESS).length
   const failedDays = checkIns.filter(c => c.status === CheckInStatus.FAILED).length
   const pendingDays = checkIns.filter(c => c.status === CheckInStatus.PENDING).length
-  
+
   const completedDays = successDays + failedDays
   const successRate = completedDays > 0 ? Math.round((successDays / completedDays) * 100) : 0
-  
+
   const currentDay = calculateCurrentDay(startDate, totalDays)
   const todayCheckIn = checkIns.find(c => isTodayDay(startDate, c.day))
   const isTodayChecked = todayCheckIn ? todayCheckIn.status !== CheckInStatus.PENDING : false
-  
+
   return {
     totalDays,
     successDays,
@@ -382,22 +383,22 @@ export function formatChallengeDate(date: Date): string {
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  
+
   if (targetDate.getTime() === today.getTime()) {
     return '今天'
   }
-  
+
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   if (targetDate.getTime() === tomorrow.getTime()) {
     return '明天'
   }
-  
+
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
   if (targetDate.getTime() === yesterday.getTime()) {
     return '昨天'
   }
-  
+
   return `${date.getMonth() + 1}/${date.getDate()}`
 }

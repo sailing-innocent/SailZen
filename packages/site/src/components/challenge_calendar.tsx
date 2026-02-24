@@ -16,16 +16,49 @@ const ChallengeCalendar: React.FC<ChallengeCalendarProps> = ({
   onCheckInClick,
   onDayClick,
 }) => {
-  // 将打卡记录按周分组（每行7天）
-  const weeks: CheckInData[][] = []
-  for (let i = 0; i < checkIns.length; i += 7) {
-    weeks.push(checkIns.slice(i, i + 7))
+  // 计算开始日期是星期几 (0=周日, 1=周一, ..., 6=周六)
+  // 我们使用周一作为一周的第一天，所以周一=0, 周日=6
+  const getDayOfWeek = (date: Date): number => {
+    const day = date.getDay() // 0=周日, 1=周一, ..., 6=周六
+    return day === 0 ? 6 : day - 1 // 转换为: 周一=0, ..., 周日=6
+  }
+
+  const startDayOfWeek = getDayOfWeek(startDate)
+  const totalDays = checkIns.length
+
+  // 计算需要多少行来显示所有日期
+  // 前面补白的格子数 + 总天数，除以7向上取整
+  const totalCells = startDayOfWeek + totalDays
+  const totalWeeks = Math.ceil(totalCells / 7)
+  const totalGridCells = totalWeeks * 7
+
+  // 构建日历网格数据
+  const calendarGrid: (CheckInData | null)[] = []
+
+  // 1. 添加前面的空白格子
+  for (let i = 0; i < startDayOfWeek; i++) {
+    calendarGrid.push(null)
+  }
+
+  // 2. 添加打卡数据
+  calendarGrid.push(...checkIns)
+
+  // 3. 添加后面的空白格子（补齐最后一行）
+  const remainingCells = totalGridCells - calendarGrid.length
+  for (let i = 0; i < remainingCells; i++) {
+    calendarGrid.push(null)
+  }
+
+  // 将一维数组转换为二维数组（每周一行）
+  const weeks: (CheckInData | null)[][] = []
+  for (let i = 0; i < calendarGrid.length; i += 7) {
+    weeks.push(calendarGrid.slice(i, i + 7))
   }
 
   // 获取状态对应的样式和图标
   const getStatusStyle = (status: CheckInStatusValue, isToday: boolean) => {
     const baseClasses = 'flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer transition-all hover:scale-105'
-    
+
     switch (status) {
       case CheckInStatus.SUCCESS:
         return {
@@ -66,9 +99,9 @@ const ChallengeCalendar: React.FC<ChallengeCalendarProps> = ({
     if (checkIn.status === CheckInStatus.FUTURE) {
       return // 未来日期不可点击
     }
-    
+
     const isToday = isTodayDay(startDate, checkIn.day)
-    
+
     if (isToday && onCheckInClick) {
       onCheckInClick(checkIn.day)
     } else if (onDayClick) {
@@ -91,10 +124,17 @@ const ChallengeCalendar: React.FC<ChallengeCalendarProps> = ({
       <div className="space-y-2">
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="grid grid-cols-7 gap-2">
-            {week.map((checkIn) => {
+            {week.map((checkIn, dayIndex) => {
+              // 空白格子
+              if (!checkIn) {
+                return <div key={`empty-${weekIndex}-${dayIndex}`} className="p-2" />
+              }
+
               const isToday = isTodayDay(startDate, checkIn.day)
               const style = getStatusStyle(checkIn.status, isToday)
-              
+
+              const dateStr = `${checkIn.date.getMonth() + 1}/${checkIn.date.getDate()}`
+
               return (
                 <div
                   key={checkIn.day}
@@ -102,17 +142,12 @@ const ChallengeCalendar: React.FC<ChallengeCalendarProps> = ({
                   onClick={() => handleDayClick(checkIn)}
                   title={`第${checkIn.day}天 - ${formatChallengeDate(checkIn.date)} - ${style.label}`}
                 >
-                  <span className="text-xs font-medium">{checkIn.day}</span>
+                  <span className="text-[10px] text-muted-foreground">{dateStr}</span>
+                  <span className="text-sm font-semibold">{checkIn.day}</span>
                   {style.icon}
                 </div>
               )
             })}
-            {/* 补全最后一周的空白 */}
-            {week.length < 7 && 
-              Array.from({ length: 7 - week.length }).map((_, idx) => (
-                <div key={`empty-${idx}`} className="p-2" />
-              ))
-            }
           </div>
         ))}
       </div>

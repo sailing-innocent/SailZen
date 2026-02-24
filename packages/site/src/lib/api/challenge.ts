@@ -11,6 +11,7 @@ import {
   type ChallengeStats,
   type ChallengeTypeValue,
   buildChallengeName,
+  parseChallengeName,
   projectToChallenge,
   missionsToCheckIns,
   calculateChallengeStats,
@@ -43,13 +44,43 @@ import {
 
 /**
  * 获取所有挑战（Project 列表中筛选）
+ * 注意：这个函数返回的 startDate 可能不准确（基于 QBW 格式）
+ * 如果需要精确的日期，请使用 api_get_challenge_detail
  */
 export const api_get_challenges = async (): Promise<ChallengeData[]> => {
   const projects = await api_get_projects()
-  const challenges = projects
-    .map(projectToChallenge)
-    .filter((c): c is ChallengeData => c !== null)
-  
+  const challenges: ChallengeData[] = []
+
+  for (const project of projects) {
+    const parsed = parseChallengeName(project.name)
+    if (!parsed) continue
+
+    // 尝试获取 missions 来确定正确的开始日期
+    let correctStartDate: Date | null = null
+    try {
+      const missions = await api_get_missions(project.id)
+      if (missions.length > 0) {
+        const sortedMissions = [...missions].sort((a, b) => {
+          const aTime = a.ddl ? new Date(a.ddl).getTime() : 0
+          const bTime = b.ddl ? new Date(b.ddl).getTime() : 0
+          return aTime - bTime
+        })
+        const firstMission = sortedMissions[0]
+        if (firstMission.ddl) {
+          const firstDayEnd = new Date(firstMission.ddl)
+          correctStartDate = new Date(firstDayEnd.getFullYear(), firstDayEnd.getMonth(), firstDayEnd.getDate())
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed to get missions for project ${project.id}:`, err)
+    }
+
+    const challenge = projectToChallenge(project, correctStartDate)
+    if (challenge) {
+      challenges.push(challenge)
+    }
+  }
+
   // 按开始时间倒序排列（最新的在前）
   return challenges.sort((a, b) => b.startDate.getTime() - a.startDate.getTime())
 }
@@ -62,19 +93,40 @@ export const api_get_challenge_detail = async (
 ): Promise<{ challenge: ChallengeData; checkIns: CheckInData[] } | null> => {
   const projects = await api_get_projects()
   const project = projects.find(p => p.id === challengeId)
-  
+
   if (!project) {
     return null
   }
-  
-  const challenge = projectToChallenge(project)
+
+  // 先获取 missions 来确定正确的开始日期
+  const missions = await api_get_missions(challengeId)
+
+  // 从 missions 推断正确的开始日期（第一个 mission 的 ddl 对应的日期即为第一天的结束日期，
+  // 因此开始日期是 ddl 对应日期的当天凌晨）
+  let correctStartDate: Date | null = null
+  if (missions.length > 0) {
+    // 按 ddl 排序获取第一个 mission
+    const sortedMissions = [...missions].sort((a, b) => {
+      const aTime = a.ddl ? new Date(a.ddl).getTime() : 0
+      const bTime = b.ddl ? new Date(b.ddl).getTime() : 0
+      return aTime - bTime
+    })
+    const firstMission = sortedMissions[0]
+    if (firstMission.ddl) {
+      // 第一个 mission 的 ddl 是第一天的 23:59:59
+      // 因此开始日期是该日期的当天凌晨
+      const firstDayEnd = new Date(firstMission.ddl)
+      correctStartDate = new Date(firstDayEnd.getFullYear(), firstDayEnd.getMonth(), firstDayEnd.getDate())
+    }
+  }
+
+  const challenge = projectToChallenge(project, correctStartDate)
   if (!challenge) {
     return null
   }
-  
-  const missions = await api_get_missions(challengeId)
+
   const checkIns = missionsToCheckIns(missions, challenge.startDate)
-  
+
   return { challenge, checkIns }
 }
 
@@ -95,12 +147,12 @@ export const api_create_challenge = async (
   props: ChallengeCreateProps
 ): Promise<ChallengeData> => {
   const { title, type, days, startDate, description = '' } = props
-  
+
   // 1. 计算结束日期
   const endDate = new Date(startDate)
   endDate.setDate(endDate.getDate() + days - 1)
   endDate.setHours(23, 59, 59, 0)
-  
+
   // 2. 创建 Project (使用 QBW 格式)
   const projectProps: ProjectCreateProps = {
     name: buildChallengeName(type, days, title),
@@ -108,18 +160,18 @@ export const api_create_challenge = async (
     start_time_qbw: dateToQBW(startDate),
     end_time_qbw: dateToQBW(endDate),
   }
-  
+
   const project = await api_create_project(projectProps)
-  
+
   // 3. 批量创建 Mission（每天一个）
   const missionPromises: Promise<unknown>[] = []
-  
+
   for (let day = 1; day <= days; day++) {
     // 计算该天的截止日期（当天23:59:59）
     const dayDeadline = new Date(startDate)
     dayDeadline.setDate(dayDeadline.getDate() + (day - 1))
     dayDeadline.setHours(23, 59, 59, 0)
-    
+
     const missionProps: MissionCreateProps = {
       name: `第${day}天`,
       description: `第 ${day}/${days} 天打卡 - ${title}`,
@@ -127,19 +179,19 @@ export const api_create_challenge = async (
       project_id: project.id,
       ddl: Math.floor(dayDeadline.getTime() / 1000),
     }
-    
+
     missionPromises.push(api_create_mission(missionProps))
   }
-  
+
   // 等待所有 Mission 创建完成
   await Promise.all(missionPromises)
-  
+
   // 4. 转换为 ChallengeData 返回
   const challenge = projectToChallenge(project)
   if (!challenge) {
     throw new Error('Failed to create challenge')
   }
-  
+
   return challenge
 }
 
@@ -161,14 +213,14 @@ export const api_abort_challenge = async (
   if (!detail) {
     return false
   }
-  
+
   const { checkIns } = detail
-  
+
   // 将所有 PENDING 状态的 Mission 标记为 CANCELED
   const abortPromises = checkIns
     .filter(c => c.status === CheckInStatus.PENDING)
     .map(c => api_cancel_mission(c.mission.id))
-  
+
   await Promise.all(abortPromises)
   return true
 }
@@ -210,12 +262,12 @@ export const api_quick_check_in = async (
   if (!detail) {
     throw new Error('Challenge not found')
   }
-  
+
   const todayMissionId = getTodayMissionId(detail.checkIns, detail.challenge.startDate)
   if (!todayMissionId) {
     throw new Error('No check-in for today')
   }
-  
+
   if (success) {
     await api_check_in_success(todayMissionId)
   } else {
@@ -237,7 +289,7 @@ export const api_get_challenge_stats = async (
   if (!detail) {
     return null
   }
-  
+
   return calculateChallengeStats(
     detail.checkIns,
     detail.challenge.startDate,

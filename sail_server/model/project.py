@@ -110,6 +110,9 @@ def delete_project_impl(db, project_id: int):
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         return None
+    # 先删除关联的所有 missions（避免外键约束违反）
+    db.query(Mission).filter(Mission.project_id == project_id).delete()
+    # 再删除 project
     db.delete(project)
     db.commit()
     return ProjectData.read_from_orm(project)
