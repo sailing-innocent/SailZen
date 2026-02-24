@@ -38,13 +38,13 @@ from typing import Generator, List, Optional
 
 class ProjectDataWriteDTO(DataclassDTO[ProjectData]):
     config = DTOConfig(
-        include={"name", "description", "start_time", "end_time"},
+        include={"name", "description", "start_time_qbw", "end_time_qbw"},
     )
 
 
 class ProjectDataUpdateDTO(DataclassDTO[ProjectData]):
     config = DTOConfig(
-        include={"name", "description", "start_time", "end_time"},
+        include={"name", "description", "start_time_qbw", "end_time_qbw"},
     )
 
 

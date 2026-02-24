@@ -1,8 +1,8 @@
 export interface ProjectCreateProps {
     name: string,
     description: string,
-    start_time: number,
-    end_time: number
+    start_time_qbw: number,  // QBW format: YYYYQQWW
+    end_time_qbw: number     // QBW format: YYYYQQWW
 }
 
 export interface ProjectData extends ProjectCreateProps {

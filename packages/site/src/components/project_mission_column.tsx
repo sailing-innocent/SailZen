@@ -15,24 +15,25 @@ export interface ProjectMissionColumnProps {
     defaultCollapsed?: boolean
 }
 
-interface ProjectDisplayData extends ProjectData {
-    start_time_qbw: QBWDate,
-    end_time_qbw: QBWDate
+/**
+ * 格式化 QBW 时间范围为可读字符串
+ */
+function formatQBWRange(startTimeQBW: number, endTimeQBW: number): string {
+    // 使用 QBWDate 解析
+    const startQBW = QBWDate.from_int(startTimeQBW)
+    const endQBW = QBWDate.from_int(endTimeQBW)
+    
+    return `${startQBW.get_fmt_string()} - ${endQBW.get_fmt_string()}`
 }
 
-const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({ 
-    project, 
+const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({
+    project,
     missions,
     defaultCollapsed = false
 }) => {
+
     const isMobile = useIsMobile()
     const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
-    
-    const projectDisplayData: ProjectDisplayData = {
-        ...project,
-        start_time_qbw: QBWDate.from_int(project.start_time),
-        end_time_qbw: QBWDate.from_int(project.end_time)
-    }
 
     // Count active missions
     const activeMissions = missions.filter((m) => isMissionActive(m.state))
@@ -57,21 +58,21 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({
                     >
                         <ChevronRight className="h-4 w-4" />
                     </Button>
-                    
+
                     {/* Vertical Project Name */}
                     <div 
                         className="flex-1 cursor-pointer"
                         onClick={() => setIsCollapsed(false)}
-                        title={projectDisplayData.name}
+                        title={project.name}
                     >
                         <span 
                             className="writing-mode-vertical text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                             style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
                         >
-                            {projectDisplayData.name}
+                            {project.name}
                         </span>
                     </div>
-                    
+
                     {/* Badge at bottom */}
                     <div className="flex flex-col items-center gap-1">
                         {hasOverdue && (
@@ -113,13 +114,13 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({
                             )}
                             <h2 
                                 className={`font-bold truncate ${isMobile ? 'text-base' : 'text-base'}`}
-                                title={projectDisplayData.name}
+                                title={project.name}
                             >
-                                {projectDisplayData.name}
+                                {project.name}
                             </h2>
                         </div>
                         <p className={`text-muted-foreground truncate ${isMobile ? 'text-xs' : 'text-xs'} mt-0.5`}>
-                            {projectDisplayData.description}
+                            {project.description}
                         </p>
                     </div>
                     <Badge 
@@ -130,7 +131,7 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({
                     </Badge>
                 </div>
                 <p className={`text-muted-foreground ${isMobile ? 'text-xs' : 'text-xs'} mt-1`}>
-                    {projectDisplayData.start_time_qbw.get_fmt_string()} - {projectDisplayData.end_time_qbw.get_fmt_string()}
+                    {formatQBWRange(project.start_time_qbw, project.end_time_qbw)}
                 </p>
             </div>
 
@@ -152,7 +153,7 @@ const ProjectMissionColumn: React.FC<ProjectMissionColumnProps> = ({
                                 compact
                             />
                         ))}
-                        
+
                         {/* Completed missions (collapsed) */}
                         {completedMissions.length > 0 && (
                             <Accordion type="single" collapsible className="mt-2">

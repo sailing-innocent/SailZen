@@ -10,6 +10,7 @@
  */
 
 import { type ProjectData, type MissionData, MissionState } from './project'
+import { QBWDate } from '@lib/utils/qbw_date'
 
 // ============================================
 // Challenge 类型常量
@@ -248,7 +249,29 @@ export function isTodayDay(startDate: Date, day: number): boolean {
 }
 
 /**
+ * 将 Date 转换为 QBW 格式 (YYYYQQWW)
+ */
+export function dateToQBW(date: Date): number {
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const quarter = Math.floor((month - 1) / 3) + 1
+  
+  // 找到该日期所在的双周
+  const qbwDate = QBWDate.from_date(date)
+  return qbwDate.to_int()
+}
+
+/**
+ * 将 QBW 格式 (YYYYQQWW) 转换为 Date (返回该双周的开始日期)
+ */
+export function qbwToDate(qbw: number): Date {
+  const qbwDate = QBWDate.from_int(qbw)
+  return qbwDate.get_start_date()
+}
+
+/**
  * 从 ProjectData 转换为 ChallengeData
+ * 使用 QBW 格式的时间
  */
 export function projectToChallenge(project: ProjectData): ChallengeData | null {
   const parsed = parseChallengeName(project.name)
@@ -256,16 +279,14 @@ export function projectToChallenge(project: ProjectData): ChallengeData | null {
     return null
   }
   
-  const startTimestamp = typeof project.start_time === 'number' 
-    ? project.start_time 
-    : Math.floor(new Date(project.start_time).getTime() / 1000)
+  // 使用 QBW 格式转换
+  const startDate = qbwToDate(project.start_time_qbw)
+  const endDate = qbwToDate(project.end_time_qbw)
   
-  const endTimestamp = typeof project.end_time === 'number'
-    ? project.end_time
-    : Math.floor(new Date(project.end_time).getTime() / 1000)
+  // 结束日期应该是双周的结束
+  const qbwEnd = QBWDate.from_int(project.end_time_qbw)
+  endDate.setTime(qbwEnd.get_end_date().getTime())
   
-  const startDate = new Date(startTimestamp * 1000)
-  const endDate = new Date(endTimestamp * 1000)
   const now = new Date()
   
   // 确定状态

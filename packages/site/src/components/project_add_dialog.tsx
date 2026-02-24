@@ -30,16 +30,16 @@ const AddProjectDialog: React.FC = () => {
         if (!name.trim()) {
             return
         }
-        const start_time = new QBWDate(startYear, startQuarter, startIndex).to_int()
-        const end_time = new QBWDate(endYear, endQuarter, endIndex).to_int()
-        if (end_time < start_time) {
+        const start_time_qbw = new QBWDate(startYear, startQuarter, startIndex).to_int()
+        const end_time_qbw = new QBWDate(endYear, endQuarter, endIndex).to_int()
+        if (end_time_qbw < start_time_qbw) {
             return
         }
         const payload: ProjectCreateProps = {
             name: name.trim(),
             description: description.trim(),
-            start_time,
-            end_time,
+            start_time_qbw,
+            end_time_qbw,
         }
         try {
             setSubmitting(true)

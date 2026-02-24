@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import {
   Calendar,
   AlertTriangle,
   ExternalLink,
+  Target,
 } from 'lucide-react'
 import MissionDetailDialog from './mission_detail_dialog'
 import { useMissionsStore, type MissionsState } from '@lib/store/project'
@@ -32,8 +33,9 @@ import {
   getHoursUntilDeadline,
   parseDdl,
 } from '@lib/data/project'
-import { cn } from '@lib/utils'
+import { cn } from '@/lib/utils'
 import MissionPostponeDialog from './mission_postpone_dialog'
+import { isChallengeProject, parseChallengeName, ChallengeTypeIcons, ChallengeTypeLabels } from '@lib/data/challenge'
 
 export interface MissionCardProps {
   mission: MissionData
@@ -62,6 +64,22 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const isOverdue = isMissionOverdue(mission.ddl, mission.state)
   const isActive = isMissionActive(mission.state)
   const hoursUntilDeadline = getHoursUntilDeadline(mission.ddl)
+
+  // Check if this mission belongs to a Challenge project
+  const challengeInfo = useMemo(() => {
+    if (!project || !isChallengeProject(project.name)) {
+      return null
+    }
+    const parsed = parseChallengeName(project.name)
+    if (!parsed) return null
+    return {
+      type: parsed.type,
+      typeLabel: ChallengeTypeLabels[parsed.type],
+      icon: ChallengeTypeIcons[parsed.type],
+      title: parsed.title,
+      days: parsed.days,
+    }
+  }, [project])
 
   // Get priority based on deadline
   const getPriority = (): 'urgent' | 'high' | 'normal' | 'low' => {
@@ -184,6 +202,18 @@ const MissionCard: React.FC<MissionCardProps> = ({
             {/* Content */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
+                {/* Challenge Icon */}
+                {challengeInfo && (
+                  <span className="text-lg" title={`${challengeInfo.typeLabel}挑战`}>
+                    {challengeInfo.icon}
+                  </span>
+                )}
+                {/* Challenge Title for context */}
+                {challengeInfo && (
+                  <span className="text-sm text-muted-foreground truncate max-w-[120px]">
+                    {challengeInfo.title}
+                  </span>
+                )}
                 <span
                   className={cn(
                     'font-medium truncate',
@@ -197,10 +227,23 @@ const MissionCard: React.FC<MissionCardProps> = ({
                 )}
               </div>
 
-              {!compact && mission.description && (
+              {!compact && mission.description && !challengeInfo && (
                 <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
                   {mission.description}
                 </p>
+              )}
+              
+              {/* Challenge badge */}
+              {challengeInfo && (
+                <div className="flex items-center gap-1 mb-2">
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    <Target className="h-3 w-3 mr-1" />
+                    {challengeInfo.typeLabel}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {challengeInfo.days}天挑战
+                  </span>
+                </div>
               )}
 
               <div className="flex items-center gap-2 flex-wrap text-xs">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,8 +14,9 @@ import {
 } from 'lucide-react'
 import MissionCard from './mission_card'
 import AddMissionDialog from './mission_add_dialog'
-import { useMissionsStore, type MissionsState } from '@lib/store/project'
+import { useMissionsStore, type MissionsState, useProjectsStore, type ProjectsState } from '@lib/store/project'
 import { useServerStore } from '@lib/store'
+import { isChallengeProject } from '@lib/data/challenge'
 import {
   type MissionData,
   MissionState,
@@ -48,6 +49,36 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
   const fetchUpcomingMissions = useMissionsStore((state: MissionsState) => state.fetchUpcomingMissions)
   const fetchOverdueMissions = useMissionsStore((state: MissionsState) => state.fetchOverdueMissions)
+  
+  // Get projects to filter out Challenge-related missions
+  const projects = useProjectsStore((state: ProjectsState) => state.projects)
+  
+  // Filter out Challenge-related missions
+  const regularMissions = useMemo(() => {
+    const challengeProjectIds = new Set(
+      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
+    )
+    return missions.filter(m => !challengeProjectIds.has(m.project_id))
+  }, [missions, projects])
+  
+  const regularUpcomingMissions = useMemo(() => {
+    const challengeProjectIds = new Set(
+      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
+    )
+    return upcomingMissions.filter(m => !challengeProjectIds.has(m.project_id))
+  }, [upcomingMissions, projects])
+  
+  const regularOverdueMissions = useMemo(() => {
+    const challengeProjectIds = new Set(
+      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
+    )
+    return overdueMissions.filter(m => !challengeProjectIds.has(m.project_id))
+  }, [overdueMissions, projects])
+
+  // Helper function to get project by ID
+  const getProjectById = (projectId: number) => {
+    return projects.find(p => p.id === projectId)
+  }
 
   const [activeTab, setActiveTab] = useState('all')
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -69,8 +100,8 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
     return () => clearInterval(interval)
   }, [serverHealth, fetchMissions, fetchUpcomingMissions, fetchOverdueMissions])
 
-  // Filter active missions
-  const activeMissions = missions.filter((m) => isMissionActive(m.state))
+  // Filter active missions (excluding Challenge-related)
+  const activeMissions = regularMissions.filter((m) => isMissionActive(m.state))
 
   // Sort by priority (overdue first, then by deadline)
   const sortedMissions = [...activeMissions].sort((a, b) => {
@@ -112,12 +143,12 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
     ? getTabMissions().slice(0, maxItems)
     : getTabMissions()
 
-  // Counts
+  // Counts (excluding Challenge-related)
   const urgentCount = sortedMissions.filter(
     (m) => isMissionOverdue(m.ddl, m.state) || getHoursUntilDeadline(m.ddl) <= 24
   ).length
   const doingCount = sortedMissions.filter((m) => m.state === MissionState.DOING).length
-  const overdueCount = overdueMissions.length
+  const overdueCount = regularOverdueMissions.length
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -236,10 +267,11 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                         已逾期（需要立即处理）
                       </h4>
                       <div className="space-y-2">
-                        {overdueMissions.map((mission) => (
+                        {regularOverdueMissions.map((mission) => (
                           <MissionCard
                             key={mission.id}
                             mission={mission}
+                            project={getProjectById(mission.project_id)}
                             compact
                             showProject
                           />
@@ -255,6 +287,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                       <MissionCard
                         key={mission.id}
                         mission={mission}
+                        project={getProjectById(mission.project_id)}
                         compact
                         showProject
                       />

@@ -23,8 +23,8 @@ class Project(ORMBase):
     name = Column(String)
     description = Column(String)
     state = Column(Integer)  # Project State
-    start_time = Column(Integer)  # QBWTime
-    end_time = Column(Integer)  # QBWTime
+    start_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
+    end_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
 
@@ -101,13 +101,13 @@ class ProjectData:
     name: str = field(default="")
     description: str = field(default="")
     state: int = field(default_factory=lambda: ProjectState().get_state())
-    # Project Start and End Time is QuarterBiWeekTime
-    start_time: int = field(
+    # Project Start and End Time is QuarterBiWeekTime (YYYYQQWW format)
+    start_time_qbw: int = field(
         default_factory=lambda: QuarterBiWeekTime.from_datetime(
             datetime.now()
         ).to_db_int()
     )
-    end_time: int = field(
+    end_time_qbw: int = field(
         default_factory=lambda: QuarterBiWeekTime.from_datetime(
             datetime.now() + timedelta(days=14)
         ).to_db_int()
@@ -122,8 +122,8 @@ class ProjectData:
             name=orm.name,
             description=orm.description,
             state=orm.state,
-            start_time=orm.start_time,
-            end_time=orm.end_time,
+            start_time_qbw=orm.start_time_qbw,
+            end_time_qbw=orm.end_time_qbw,
             ctime=orm.ctime,
             mtime=orm.mtime,
         )
@@ -135,8 +135,8 @@ class ProjectData:
             name=json_data.get("name"),
             description=json_data.get("description"),
             state=json_data.get("state"),
-            start_time=json_data.get("start_time"),
-            end_time=json_data.get("end_time"),
+            start_time_qbw=json_data.get("start_time_qbw"),
+            end_time_qbw=json_data.get("end_time_qbw"),
             ctime=json_data.get("ctime"),
             mtime=json_data.get("mtime"),
         )
@@ -147,8 +147,8 @@ class ProjectData:
             "name": self.name,
             "description": self.description,
             "state": self.state,
-            "start_time": self.start_time,
-            "end_time": self.end_time,
+            "start_time_qbw": self.start_time_qbw,
+            "end_time_qbw": self.end_time_qbw,
             "ctime": self.ctime,
             "mtime": self.mtime,
         }
@@ -164,15 +164,15 @@ class ProjectData:
         return Project(
             name=self.name,
             description=self.description,
-            start_time=self.start_time,
-            end_time=self.end_time,
+            start_time_qbw=self.start_time_qbw,
+            end_time_qbw=self.end_time_qbw,
         )
 
     def update_project(self, project: Project):
         project.name = self.name
         project.description = self.description
-        project.start_time = self.start_time
-        project.end_time = self.end_time
+        project.start_time_qbw = self.start_time_qbw
+        project.end_time_qbw = self.end_time_qbw
         project.mtime = datetime.now()
 
 

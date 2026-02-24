@@ -18,6 +18,7 @@ import {
   ChallengeStatus,
   CheckInStatus,
   ChallengeTypeLabels,
+  dateToQBW,
 } from '@lib/data/challenge'
 import {
   type ProjectCreateProps,
@@ -100,12 +101,12 @@ export const api_create_challenge = async (
   endDate.setDate(endDate.getDate() + days - 1)
   endDate.setHours(23, 59, 59, 0)
   
-  // 2. 创建 Project
+  // 2. 创建 Project (使用 QBW 格式)
   const projectProps: ProjectCreateProps = {
     name: buildChallengeName(type, days, title),
     description: description || `${ChallengeTypeLabels[type]} - ${days}天打卡挑战`,
-    start_time: Math.floor(startDate.getTime() / 1000),
-    end_time: Math.floor(endDate.getTime() / 1000),
+    start_time_qbw: dateToQBW(startDate),
+    end_time_qbw: dateToQBW(endDate),
   }
   
   const project = await api_create_project(projectProps)

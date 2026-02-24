@@ -6,6 +6,7 @@ import { Button } from '@components/ui/button'
 import DatePicker from '@components/date_picker'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@components/ui/select'
 import { type ProjectData, type MissionCreateProps } from '@lib/data/project'
+import { isChallengeProject } from '@lib/data/challenge'
 import { type ProjectsState, useProjectsStore, type MissionsState, useMissionsStore } from '@lib/store/project'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -26,7 +27,12 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
     const [ddl, setDdl] = useState<number>(Math.floor(Date.now() / 1000))
     const [submitting, setSubmitting] = useState<boolean>(false)
 
-    const projectOptions = useMemo(() => projects.sort((a, b) => a.id - b.id), [projects])
+    // Filter out Challenge-related projects
+    const projectOptions = useMemo(() => {
+        return projects
+            .filter(p => !isChallengeProject(p.name))
+            .sort((a, b) => a.id - b.id)
+    }, [projects])
 
     const handleSubmit = async () => {
         if (!name.trim()) {

@@ -108,14 +108,35 @@ export class QBWDate {
         this.biweek = getBiWeek(year, quarter, index)
     }
     
-    // to_int: return year * 10000 + quarter * 100 + index
+    // to_int: return year * 100 + quarter * 10 + index (e.g., 202616)
     to_int() {
         return this.year * 100 + this.quarter * 10 + this.index
     }
     
-    // from_int: return year, quarter, index
+    // from_int: parse YYYYQQWW format (e.g., 202616 -> year=2026, quarter=1, index=6)
     static from_int(value: number) {
-        return new QBWDate(Math.floor(value / 100), Math.floor((value % 100) / 10), value % 10)
+        const year = Math.floor(value / 100)
+        const quarter = Math.floor((value % 100) / 10)
+        const index = value % 10
+        return new QBWDate(year, quarter, index)
+    }
+    
+    // from_date: create QBWDate from a Date object
+    static from_date(date: Date): QBWDate {
+        const year = date.getFullYear()
+        const quarter = Math.floor(date.getMonth() / 3) + 1
+        
+        // Find which biweek the date belongs to
+        const biweeks = listFullBiweeksInQuarter(year, quarter)
+        for (let i = 0; i < biweeks.length; i++) {
+            const bw = biweeks[i]
+            if (date >= bw.start && date <= bw.end) {
+                return new QBWDate(year, quarter, i + 1)
+            }
+        }
+        
+        // If not found in current quarter, default to first biweek
+        return new QBWDate(year, quarter, 1)
     }
     
     get_start_date(): Date {return this.biweek.start}

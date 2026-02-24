@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react'
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import type { ProjectData, MissionData } from '@lib/data/project'
 import { isMissionActive } from '@lib/data/project'
+import { isChallengeProject } from '@lib/data/challenge'
 import ProjectMissionColumn from './project_mission_column'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
@@ -16,11 +17,8 @@ import {
     ChevronLast
 } from 'lucide-react'
 import { cn } from '@lib/utils'
-
-export interface ProjectMissionBoardProps {
-    projects: ProjectData[]
-    missions: MissionData[]
-}
+import { type ProjectsState, useProjectsStore, type MissionsState, useMissionsStore } from '@lib/store/project'
+import { useServerStore } from '@lib/store'
 
 interface ProjectWithStats extends ProjectData {
     missionCount: number
@@ -28,7 +26,12 @@ interface ProjectWithStats extends ProjectData {
     hasOverdue: boolean
 }
 
-const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, missions }) => {
+const ProjectMissionBoard: React.FC = () => {
+    const projects = useProjectsStore((state: ProjectsState) => state.projects)
+    const missions = useMissionsStore((state: MissionsState) => state.missions)
+    const fetchProjects = useProjectsStore((state: ProjectsState) => state.fetchProjects)
+    const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
+    
     const isMobile = useIsMobile()
     const scrollContainerRef = useRef<HTMLDivElement>(null)
     const [showProjectNav, setShowProjectNav] = useState(false)
@@ -36,20 +39,43 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
     const [canScrollRight, setCanScrollRight] = useState(false)
     const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(new Set())
 
+    const serverHealth = useServerStore((state) => state.serverHealth)
+    
+    // 数据获取
+    useEffect(() => {
+        if (!serverHealth) return
+        fetchProjects()
+        fetchMissions()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [serverHealth])
+
     // NullProject is used to represent a list of missions that are not belong to any project
     const NullProject: ProjectData = {
         id: 0,
         state: 0,
         name: '未分类任务',
         description: '不属于任何项目的任务',
-        start_time: 0,
-        end_time: 0,
+        start_time_qbw: 0,
+        end_time_qbw: 0,
     }
 
-    // sort and group missions by project
+    // Filter out Challenge-related projects
+    const regularProjects = useMemo(() => {
+        return projects.filter(p => !isChallengeProject(p.name))
+    }, [projects])
+
+    // Filter out Challenge-related missions (missions belonging to challenge projects)
+    const regularMissions = useMemo(() => {
+        const challengeProjectIds = new Set(
+            projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
+        )
+        return missions.filter(m => !challengeProjectIds.has(m.project_id))
+    }, [missions, projects])
+
+    // sort and group regular missions by project
     const sortedMissions = useMemo(() => {
-        return [...missions].sort((a, b) => a.id - b.id)
-    }, [missions])
+        return [...regularMissions].sort((a, b) => a.id - b.id)
+    }, [regularMissions])
     
     const groupedMissions = useMemo(() => {
         return sortedMissions.reduce((acc, mission) => {
@@ -59,11 +85,11 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
         }, {} as Record<number, MissionData[]>)
     }, [sortedMissions])
 
-    // Calculate project stats
+    // Calculate project stats (only for regular projects)
     const projectsWithStats: ProjectWithStats[] = useMemo(() => {
         const allProjects = [
             ...(groupedMissions[NullProject.id]?.length ? [NullProject] : []),
-            ...projects
+            ...regularProjects
         ]
         return allProjects.map(p => {
             const projectMissions = groupedMissions[p.id] || []
@@ -79,17 +105,17 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
                 hasOverdue
             }
         })
-    }, [projects, groupedMissions])
+    }, [regularProjects, groupedMissions])
 
     // Check scroll position
-    const checkScroll = () => {
+    const checkScroll = useCallback(() => {
         const container = scrollContainerRef.current
         if (!container) return
         setCanScrollLeft(container.scrollLeft > 0)
         setCanScrollRight(
             container.scrollLeft < container.scrollWidth - container.clientWidth - 10
         )
-    }
+    }, [])
 
     useEffect(() => {
         checkScroll()
@@ -98,7 +124,7 @@ const ProjectMissionBoard: React.FC<ProjectMissionBoardProps> = ({ projects, mis
             container.addEventListener('scroll', checkScroll)
             return () => container.removeEventListener('scroll', checkScroll)
         }
-    }, [projects, missions, collapsedProjects])
+    }, [checkScroll, projects, missions, collapsedProjects])
 
     // Scroll handlers
     const scroll = (direction: 'left' | 'right' | 'start' | 'end') => {
