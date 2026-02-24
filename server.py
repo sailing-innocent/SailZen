@@ -41,7 +41,7 @@ class SailServer:
         self.port = port
         self.app = None
         self.router = None
-        
+
         self.api_endpoint = os.environ.get("API_ENDPOINT", "/api/v1")
         self.site_dist = os.environ.get("SITE_DIST", "site_dist")
         self.page_alias = [
@@ -58,9 +58,13 @@ class SailServer:
         # Validate and normalize log file path early
         if log_file_raw and log_file_raw.strip():
             try:
-                self.log_file = os.path.abspath(os.path.expanduser(log_file_raw.strip()))
+                self.log_file = os.path.abspath(
+                    os.path.expanduser(log_file_raw.strip())
+                )
             except Exception as e:
-                logger.warning(f"Invalid log file path '{log_file_raw}': {e}. Using console logging.")
+                logger.warning(
+                    f"Invalid log file path '{log_file_raw}': {e}. Using console logging."
+                )
                 self.log_file = None
         else:
             self.log_file = None
@@ -95,7 +99,9 @@ class SailServer:
             return {"status": "ok"}
 
         # Suppress Chrome DevTools probe requests (returns 404 silently)
-        @get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+        @get(
+            "/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False
+        )
         async def devtools_json() -> Response:
             return Response(content=b"", status_code=404)
 
@@ -182,25 +188,35 @@ class SailServer:
                         if not os.path.exists(log_dir):
                             raise OSError(f"Directory creation failed: {log_dir}")
                         if not os.path.isdir(log_dir):
-                            raise OSError(f"Path exists but is not a directory: {log_dir}")
+                            raise OSError(
+                                f"Path exists but is not a directory: {log_dir}"
+                            )
                         if not os.access(log_dir, os.W_OK):
                             raise OSError(f"Directory is not writable: {log_dir}")
                     except OSError as e:
-                        logger.error(f"Cannot create or access log directory {log_dir}: {e}. Falling back to console logging.")
+                        logger.error(
+                            f"Cannot create or access log directory {log_dir}: {e}. Falling back to console logging."
+                        )
                         self.log_file = None
                 else:
                     # If no directory specified, use current directory
-                    logger.warning(f"No directory specified for log file: {self.log_file}")
+                    logger.warning(
+                        f"No directory specified for log file: {self.log_file}"
+                    )
 
             except Exception as e:
-                logger.error(f"Error setting up log file directory: {e}. Falling back to console logging.", exc_info=True)
+                logger.error(
+                    f"Error setting up log file directory: {e}. Falling back to console logging.",
+                    exc_info=True,
+                )
                 self.log_file = None
 
         if self.log_file and self.log_file.strip():
+
             def setup_file_handler():
                 """Set up custom rotating file handler after Litestar configures logging."""
                 import logging.handlers
-                
+
                 try:
                     # Ensure directory exists right before creating handler
                     log_dir = os.path.dirname(self.log_file)
@@ -209,18 +225,27 @@ class SailServer:
                             os.makedirs(log_dir, exist_ok=True)
                             # Verify directory was created and is writable
                             if not os.path.exists(log_dir):
-                                raise OSError(f"Failed to create log directory: {log_dir}")
+                                raise OSError(
+                                    f"Failed to create log directory: {log_dir}"
+                                )
                             if not os.access(log_dir, os.W_OK):
-                                raise OSError(f"Log directory is not writable: {log_dir}")
+                                raise OSError(
+                                    f"Log directory is not writable: {log_dir}"
+                                )
                         except OSError as e:
-                            logger.error(f"Cannot create or access log directory {log_dir}: {e}. Using console logging only.")
+                            logger.error(
+                                f"Cannot create or access log directory {log_dir}: {e}. Using console logging only."
+                            )
                             return
-                    
+
                     root_logger = logging.getLogger()
-                    
+
                     # Remove any existing file handlers to avoid duplicates
                     for handler in root_logger.handlers[:]:
-                        if isinstance(handler, (logging.handlers.RotatingFileHandler, logging.FileHandler)):
+                        if isinstance(
+                            handler,
+                            (logging.handlers.RotatingFileHandler, logging.FileHandler),
+                        ):
                             root_logger.removeHandler(handler)
                             handler.close()
 
@@ -239,7 +264,10 @@ class SailServer:
                     root_logger.addHandler(custom_handler)
                     logger.info(f"File logging configured: {self.log_file}")
                 except Exception as e:
-                    logger.error(f"Failed to configure file handler: {e}. Using console logging only.", exc_info=True)
+                    logger.error(
+                        f"Failed to configure file handler: {e}. Using console logging only.",
+                        exc_info=True,
+                    )
                     # Don't raise - allow server to continue with console logging
 
             # Store the setup function to call after app initialization
@@ -269,7 +297,9 @@ class SailServer:
         except Exception as e:
             # If logging config fails, try without it
             if "handler" in str(e).lower() or "logging" in str(e).lower():
-                logger.warning(f"Logging configuration error: {e}. Retrying with minimal logging config.")
+                logger.warning(
+                    f"Logging configuration error: {e}. Retrying with minimal logging config."
+                )
                 # Create a minimal logging config without any custom handlers
                 minimal_logging_config = LoggingConfig(
                     root={"level": "INFO", "handlers": ["queue_listener"]},
@@ -295,7 +325,9 @@ class SailServer:
             try:
                 self._setup_file_handler()
             except Exception as e:
-                logger.error(f"Failed to setup file handler: {e}. Server will continue with console logging.")
+                logger.error(
+                    f"Failed to setup file handler: {e}. Server will continue with console logging."
+                )
 
     async def on_startup(self):
         logger.info("Server starting up...")

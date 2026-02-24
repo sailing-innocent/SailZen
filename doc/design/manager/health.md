@@ -6,20 +6,25 @@
 
 ---
 
-## 1. 体重管理 (Weight Management)
+## 已实现功能
 
-### 功能描述
+### 1. 体重管理 (Weight Management)
+
+#### 功能描述
 
 保持BMI长期位于健康区间
 
 - 体重提交并展示折线图
-- 体重变化趋势分析和预测功能
+- **体重趋势分析和预测**（线性回归模型）
+- **体重计划制定和追踪**（设定目标体重和目标日期）
+- **控制率计算**（计划执行情况的量化指标）
+- **超标提醒**（超过计划预期体重时红色标记）
 - 支持时间范围筛选（7天、30天、90天、1年、全部）
 - 目标体重计算（线性逼近）
 
-### 后端实现 (sail_server)
+#### 后端实现 (sail_server)
 
-#### 数据模型 (`data/health.py`)
+##### 数据模型 (`data/health.py`)
 
 ```python
 class Weight(ORMBase):
@@ -37,9 +42,61 @@ class WeightData:
     id: int = -1
     tag: str = "raw"
     description: str = ""
+
+# 体重计划模型
+class WeightPlan(ORMBase):
+    __tablename__ = "weight_plans"
+    id = Column(Integer, primary_key=True)
+    target_weight = Column(String)  # 目标体重 (kg)
+    start_time = Column(TIMESTAMP, server_default=func.current_timestamp())  # 计划开始时间
+    target_time = Column(TIMESTAMP)  # 计划目标时间
+    description = Column(String, default="")  # 计划描述
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+@dataclass
+class WeightPlanData:
+    target_weight: float
+    start_time: float
+    target_time: float
+    id: int = -1
+    description: str = ""
+    created_at: float = field(default_factory=lambda: datetime.now().timestamp())
+
+# 分析结果
+@dataclass
+class WeightAnalysisResult:
+    model_type: str  # 'linear', 'polynomial'
+    slope: float  # 每日体重变化量 (kg/day)
+    intercept: float  # 截距
+    r_squared: float  # R² 拟合优度
+    current_weight: float  # 当前体重
+    current_trend: str  # 'decreasing', 'stable', 'increasing'
+    predicted_weights: list  # 预测数据点列表
+
+# 计划进度
+@dataclass
+class WeightPlanProgress:
+    plan: WeightPlanData
+    control_rate: float  # 控制率 0-100
+    current_weight: float
+    expected_current_weight: float  # 当前应达到的体重
+    daily_predictions: list  # 每日预期体重列表
+    is_on_track: bool  # 是否按计划进行
+
+# 带状态对比的体重记录
+@dataclass
+class WeightRecordWithStatus:
+    id: int
+    value: float  # 实际体重
+    htime: float  # 记录时间
+    expected_value: float  # 计划预期体重
+    status: str  # 'above'(超过/红), 'below'(低于/绿), 'normal'(符合/蓝)
+    diff: float  # 与预期的差值 (正数=超过, 负数=低于)
 ```
 
-#### API 端点 (`controller/health.py`)
+##### API 端点 (`controller/health.py`)
+
+**基础体重管理**
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
@@ -49,48 +106,217 @@ class WeightData:
 | GET | `/api/health/weight/target?date=` | 获取目标体重 |
 | POST | `/api/health/weight` | 创建新体重记录 |
 
-#### 业务逻辑层 (`model/health.py`)
+**体重趋势分析**
 
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/health/weight/analysis?start=&end=&model_type=` | 分析体重趋势（线性/多项式回归） |
+| GET | `/api/health/weight/prediction?target_time=&model_type=` | 预测指定时间的体重 |
+
+**体重计划管理**（独立 Controller）
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/health/weight/plan/` | 获取当前体重计划 |
+| POST | `/api/health/weight/plan/` | 创建体重计划（支持自定义开始日期） |
+| GET | `/api/health/weight/plan/progress` | 获取计划进度和控制率 |
+| GET | `/api/health/weight/plan/weights-with-status` | 获取带计划对比状态的体重记录 |
+
+##### 业务逻辑层 (`model/health.py`)
+
+**基础操作**
 - `create_weight_impl()` - 创建体重记录
 - `read_weight_impl()` - 读取单条记录
 - `read_weights_impl()` - 分页读取记录列表
 - `read_weights_avg_impl()` - 计算平均体重
 - `target_weight_impl()` - 线性逼近目标体重
 
-### 前端实现 (packages/site)
+**趋势分析**
+- `analyze_weight_trend_impl()` - 使用线性/多项式回归分析体重趋势，返回模型参数和未来30天预测
+- `predict_weight_impl()` - 预测指定时间点的体重
 
-#### 页面组件 (`pages/health.tsx`)
+**计划管理**
+- `create_weight_plan_impl()` - 创建体重计划（支持自定义开始日期）
+- `get_active_weight_plan_impl()` - 获取当前生效的计划
+- `get_weight_plan_progress_impl()` - 计算计划进度，包括：
+  - 控制率：根据当前体重与计划预期体重的偏差计算
+  - 每日预期体重：从计划开始到目标日期的线性插值
+  - 是否按计划进行：判断当前体重是否在预期范围内（±2kg）
+- `get_weights_with_plan_status_impl()` - 获取带计划对比状态的体重记录
+  - 对比实际体重与计划预期体重
+  - 返回状态：'above'(超过), 'below'(低于), 'normal'(符合)
+  - 容差：±0.5kg 视为 normal
+
+#### 前端实现 (packages/site)
+
+##### 页面组件 (`pages/health.tsx`)
 
 - 日期范围选择器（预设选项 + 自定义日期）
 - 体重录入对话框表单
+- **体重计划设置对话框**（目标体重、目标日期、描述）
+- **趋势概览面板**（当前体重、趋势、周变化量、控制率）
 - 体重图表容器
+- 运动记录区域
 
-#### 图表组件 (`components/weight_chart.tsx`)
+##### 图表组件 (`components/weight_chart.tsx`)
 
-- 使用 Recharts 展示体重折线图
-- X轴为时间，Y轴为体重值
-- 支持加载状态和空数据提示
+- 使用 Recharts ComposedChart 展示多线图表
+- **实际体重点**（颜色根据状态）：
+  - 🔴 **红色**：体重超过计划预期（above）
+  - 🟢 **绿色**：体重低于计划预期（below）
+  - 🔵 **蓝色**：体重基本符合计划（normal，在±0.5kg容差内）
+- **预测趋势线**（绿色虚线）：基于线性回归的未来30天预测
+- **计划目标线**（橙色虚线）：计划预期体重曲线
+- **体重记录连线**（蓝色细线）：连接各数据点
+- 顶部显示控制率和计划目标信息
+- 趋势徽章（减少/稳定/增加）
+- Tooltip 显示与预期体重的差值信息
 
-#### 状态管理 (`lib/store/health.ts`)
+##### 状态管理 (`lib/store/health.ts`)
 
 ```typescript
 interface HealthState {
+  // 体重数据
   weights: WeightData[]
   isLoading: boolean
   fetchWeights: (skip, limit, start, end) => Promise<void>
   createWeight: (weight: WeightCreateProps) => Promise<void>
+  
+  // 趋势分析
+  analysisResult: WeightAnalysisResult | null
+  fetchWeightAnalysis: (start?, end?, modelType?) => Promise<void>
+  
+  // 体重计划
+  weightPlan: WeightPlanData | null
+  planProgress: WeightPlanProgress | null
+  dailyPredictions: DailyPrediction[]
+  controlRate: number
+  isOnTrack: boolean
+  fetchWeightPlan: () => Promise<void>
+  createWeightPlan: (plan) => Promise<void>
+  fetchPlanProgress: () => Promise<void>
+  
+  // 带状态对比的体重记录
+  weightsWithStatus: WeightRecordWithStatus[]
+  fetchWeightsWithStatus: (start?, end?) => Promise<void>
 }
 ```
 
-#### API 调用 (`lib/api/health.ts`)
+##### API 调用 (`lib/api/health.ts`)
 
+**基础体重管理**
 - `api_get_weight(index)` - 获取单条记录
 - `api_get_weights(skip, limit, start, end)` - 获取记录列表
 - `api_create_weight(newWeight)` - 创建记录
 
+**趋势分析**
+- `api_analyze_weight_trend(start, end, modelType)` - 分析体重趋势
+- `api_predict_weight(targetTime, modelType)` - 预测体重
+
+**计划管理**
+- `api_create_weight_plan(plan)` - 创建体重计划（支持自定义开始日期）
+- `api_get_weight_plan()` - 获取当前计划
+- `api_get_weight_plan_progress()` - 获取计划进度
+- `api_get_weights_with_status(start, end)` - 获取带计划对比状态的体重记录
+  - 返回每条记录的对比状态：'above'(红), 'below'(绿), 'normal'(蓝)
+
 ---
 
-## 2. 健身管理 (Fitness Management)
+### 2. 运动记录 (Exercise Record)
+
+#### 功能描述
+
+简化版的运动记录功能，用于记录日常运动活动。只包含发生时间和自然语言描述，便于快速记录。
+
+- 运动记录的创建、查询、删除
+- 自然语言描述支持
+- 按时间范围筛选
+- 记录列表展示
+
+#### 后端实现 (sail_server)
+
+##### 数据模型 (`data/health.py`)
+
+```python
+class Exercise(ORMBase):
+    __tablename__ = "exercises"
+    id = Column(Integer, primary_key=True)
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # 发生时间
+    description = Column(String, default="")  # 自然语言描述
+
+@dataclass
+class ExerciseData:
+    htime: float  # Unix timestamp
+    id: int = -1
+    description: str = ""
+```
+
+##### API 端点 (`controller/health.py`)
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/health/exercise/{exercise_id}` | 获取单条运动记录 |
+| GET | `/api/health/exercise?skip=&limit=&start=&end=` | 获取运动记录列表 |
+| POST | `/api/health/exercise` | 创建新运动记录 |
+| PUT | `/api/health/exercise/{exercise_id}` | 更新运动记录 |
+| DELETE | `/api/health/exercise/{exercise_id}` | 删除运动记录 |
+
+##### 业务逻辑层 (`model/health.py`)
+
+- `create_exercise_impl()` - 创建运动记录
+- `read_exercise_impl()` - 读取单条记录
+- `read_exercises_impl()` - 分页读取记录列表
+- `update_exercise_impl()` - 更新记录
+- `delete_exercise_impl()` - 删除记录
+
+#### 前端实现 (packages/site)
+
+##### 数据类型 (`lib/data/health.ts`)
+
+```typescript
+export interface ExerciseCreateProps {
+  htime: number
+  description: string
+}
+
+export interface ExerciseData extends ExerciseCreateProps {
+  id: number
+}
+```
+
+##### 状态管理 (`lib/store/health.ts`)
+
+```typescript
+interface HealthState {
+  // ... 体重管理状态
+  exercises: ExerciseData[]
+  fetchExercises: (skip, limit, start, end) => Promise<void>
+  createExercise: (exercise: ExerciseCreateProps) => Promise<void>
+  deleteExercise: (id: number) => Promise<void>
+}
+```
+
+##### API 调用 (`lib/api/health.ts`)
+
+- `api_get_exercises(skip, limit, start, end)` - 获取记录列表
+- `api_create_exercise(newExercise)` - 创建记录
+- `api_delete_exercise(id)` - 删除记录
+
+##### 页面组件 (`pages/health.tsx`)
+
+- 运动记录区域位于体重管理下方
+- 添加运动记录按钮（打开对话框）
+- 运动记录表单：
+  - 日期时间选择器
+  - 自然语言描述文本框
+- 运动记录列表：
+  - 按时间倒序排列
+  - 显示日期时间和描述
+  - 删除按钮
+
+---
+
+## 3. 健身管理 (Fitness Management) [规划中]
 
 ### 功能描述
 
@@ -264,7 +490,7 @@ interface FitnessState {
 
 ---
 
-## 3. 专项保养 (Specialized Care)
+## 4. 专项保养 (Specialized Care) [规划中]
 
 ### 3.1 口腔保养 (Oral Care)
 
@@ -480,7 +706,7 @@ interface CareState {
 
 ---
 
-## 4. 医疗杂项 (Medical Miscellaneous)
+## 5. 医疗杂项 (Medical Miscellaneous) [规划中]
 
 ### 功能描述
 
@@ -799,29 +1025,34 @@ interface MedicalState {
 
 ---
 
-## 5. 路由规划
+## 6. 路由规划
 
 ### 后端路由 (`router/health.py`)
 
 ```python
-# 扩展后的健康路由
+# 当前已实现的健康路由
 router = Router(
     path="/health",
     dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
         WeightController,     # /api/health/weight
-        FitnessController,    # /api/health/fitness
-        CareController,       # /api/health/care (口腔/皮肤保养)
-        MedicalController,    # /api/health/medical (保险/用品)
+        ExerciseController,   # /api/health/exercise
     ],
 )
+
+# 规划中的路由
+# FitnessController,    # /api/health/fitness
+# CareController,       # /api/health/care (口腔/皮肤保养)
+# MedicalController,    # /api/health/medical (保险/用品)
 ```
 
 ### 前端路由 (`App.tsx`)
 
 ```typescript
-// 扩展后的前端路由
-<Route path="/health" element={<HealthPage />} />        {/* 体重管理 */}
+// 当前已实现的页面
+<Route path="/health" element={<HealthPage />} />        {/* 体重管理 + 运动记录 */}
+
+// 规划中的页面
 <Route path="/fitness" element={<FitnessPage />} />      {/* 健身管理 */}
 <Route path="/care" element={<CarePage />} />            {/* 专项保养 */}
 <Route path="/medical" element={<MedicalPage />} />      {/* 医疗杂项 */}
@@ -829,26 +1060,31 @@ router = Router(
 
 ---
 
-## 6. 数据库迁移计划
+## 7. 数据库表
 
-### 新增表
+### 已实现表
 
-1. `exercises` - 健身记录
-2. `fitness_goals` - 健身目标
-3. `oral_care_records` - 口腔护理记录
-4. `oral_care_reminders` - 口腔护理提醒
-5. `skin_care_routines` - 护肤流程记录
-6. `skin_care_products` - 护肤品库存
-7. `skin_condition_logs` - 皮肤状态日志
-8. `medical_insurances` - 医疗保险
-9. `insurance_claims` - 保险理赔记录
-10. `health_products` - 健康用品库存
-11. `product_usage_logs` - 产品使用记录
-12. `product_purchases` - 产品购买记录
+1. `weights` - 体重记录
+2. `exercises` - 运动记录
+3. `weight_plans` - 体重计划（目标体重、目标日期、控制率计算基础）
+
+### 规划中表
+
+3. `fitness_goals` - 健身目标
+4. `oral_care_records` - 口腔护理记录
+5. `oral_care_reminders` - 口腔护理提醒
+6. `skin_care_routines` - 护肤流程记录
+7. `skin_care_products` - 护肤品库存
+8. `skin_condition_logs` - 皮肤状态日志
+9. `medical_insurances` - 医疗保险
+10. `insurance_claims` - 保险理赔记录
+11. `health_products` - 健康用品库存
+12. `product_usage_logs` - 产品使用记录
+13. `product_purchases` - 产品购买记录
 
 ---
 
-## 7. 后续待办
+## 8. 后续待办
 
 - [ ] 评审数据模型设计
 - [ ] 评审 API 端点设计

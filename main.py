@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 def run_task_mode(args):
     """运行任务调度模式"""
     from sail_server.utils.env import read_env
+
     read_env("prod")
 
     from sail_server.db import g_db_func
@@ -39,8 +40,8 @@ def run_task_mode(args):
 
 def run_import_text_mode():
     """运行文本导入模式"""
-    # 文本导入工具有自己的参数解析器
     from sail_server.cli.text_import import run_text_import_cli
+
     run_text_import_cli()
 
 
@@ -52,8 +53,6 @@ def main():
         return
 
     # 原有的任务调度模式
-    from sail_server.utils.env import read_env
-    read_env("prod")
 
     parser = argparse.ArgumentParser(
         description="SailZen 主入口脚本",
@@ -61,38 +60,41 @@ def main():
         epilog="""
 命令模式:
   任务调度模式:
-    python main.py --task <task_name> --args <arg1> <arg2> ...
+    uv run main.py --task <task_name> --args <arg1> <arg2> ...
 
   文本导入模式:
-    python main.py --import-text <file.txt> [options]
+    uv run main.py --import-text <file.txt> [options]
 
 文本导入示例:
   # 预览章节切分（不导入）
-  python main.py --import-text novel.txt --preview
+  uv run main.py --import-text novel.txt --preview
 
   # 使用自定义正则匹配
-  python main.py --import-text novel.txt --pattern "^第\\d+章.*" --preview
+  uv run main.py --import-text novel.txt --pattern "^第\\d+章.*" --preview
 
   # 导入到开发环境
-  python main.py --import-text novel.txt --title "小说标题" --author "作者" --dev
+  uv run main.py --import-text novel.txt --title "小说标题" --author "作者" --dev
 
   # 导入到生产环境
-  python main.py --import-text novel.txt --title "小说标题" --prod
+  uv run main.py --import-text novel.txt --title "小说标题" --prod
 
   # 交互式测试正则表达式
-  python main.py --import-text novel.txt --interactive
+  uv run main.py --import-text novel.txt --interactive
 
-  更多选项请运行: python main.py --import-text --help
-        """
+  更多选项请运行: uv run main.py --import-text --help
+        """,
     )
     parser.add_argument("--task", type=str, help="Task to run")
     parser.add_argument("--args", type=str, nargs="+", help="Task arguments")
+    parser.add_argument(
+        "--prod", type=bool, help="use production mode", action="store_true"
+    )
     args = parser.parse_args()
+    from sail_server.utils.env import read_env
 
+    read_env("prod" if args.prod else "dev")
     if args.task:
         run_task_mode(args)
-    else:
-        parser.print_help()
 
 
 if __name__ == "__main__":

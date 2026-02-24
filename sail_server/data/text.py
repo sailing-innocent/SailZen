@@ -5,12 +5,21 @@
 # @date 2025-01-29
 # @version 1.0
 # ---------------------------------
-# 
+#
 # 基于 doc/design/manager/text.md 的简化实现
 # 实现最小可行的文本管理功能：作品、版本、文档节点
 #
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, func, Text, Boolean, ForeignKey
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    TIMESTAMP,
+    func,
+    Text,
+    Boolean,
+    ForeignKey,
+)
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID
 from sqlalchemy.orm import relationship
 from .orm import ORMBase
@@ -24,10 +33,12 @@ import uuid
 # ORM Models
 # ============================================================================
 
+
 class Work(ORMBase):
     """
     作品表 - 代表一本书或小说
     """
+
     __tablename__ = "works"
 
     id = Column(Integer, primary_key=True)
@@ -35,29 +46,38 @@ class Work(ORMBase):
     title = Column(String, nullable=False)
     original_title = Column(String, nullable=True)
     author = Column(String, nullable=True)
-    language_primary = Column(String, nullable=False, default='zh')
-    work_type = Column(String, default='web_novel')  # web_novel | novel | essay
-    status = Column(String, default='ongoing')  # ongoing | completed | hiatus
+    language_primary = Column(String, nullable=False, default="zh")
+    work_type = Column(String, default="web_novel")  # web_novel | novel | essay
+    status = Column(String, default="ongoing")  # ongoing | completed | hiatus
     synopsis = Column(Text, nullable=True)
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-    
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
     # 关联
-    editions = relationship("Edition", back_populates="work", cascade="all, delete-orphan")
+    editions = relationship(
+        "Edition", back_populates="work", cascade="all, delete-orphan"
+    )
 
 
 class Edition(ORMBase):
     """
     版本表 - 代表作品的一个具体版本/译本
     """
+
     __tablename__ = "editions"
-    
+
     id = Column(Integer, primary_key=True)
-    work_id = Column(Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False)
+    work_id = Column(
+        Integer, ForeignKey("works.id", ondelete="CASCADE"), nullable=False
+    )
     edition_name = Column(String, nullable=True)
-    language = Column(String, nullable=False, default='zh')
-    source_format = Column(String, default='txt')
+    language = Column(String, nullable=False, default="zh")
+    source_format = Column(String, default="txt")
     canonical = Column(Boolean, default=False)
     source_path = Column(String, nullable=True)  # 原始文件路径
     source_checksum = Column(String, nullable=True)
@@ -65,14 +85,20 @@ class Edition(ORMBase):
     word_count = Column(Integer, nullable=True)
     char_count = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
-    status = Column(String, default='draft')  # draft | active | archived
+    status = Column(String, default="draft")  # draft | active | archived
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-    
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
     # 关联
     work = relationship("Work", back_populates="editions")
-    document_nodes = relationship("DocumentNode", back_populates="edition", cascade="all, delete-orphan")
+    document_nodes = relationship(
+        "DocumentNode", back_populates="edition", cascade="all, delete-orphan"
+    )
 
 
 class DocumentNode(ORMBase):
@@ -80,12 +106,19 @@ class DocumentNode(ORMBase):
     文档节点表 - 树形结构存储文本内容
     node_type: volume | part | chapter | section | paragraph
     """
+
     __tablename__ = "document_nodes"
-    
+
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=True)
-    node_type = Column(String, nullable=False)  # volume | part | chapter | section | paragraph
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=True
+    )
+    node_type = Column(
+        String, nullable=False
+    )  # volume | part | chapter | section | paragraph
     sort_index = Column(Integer, nullable=False)
     depth = Column(Integer, nullable=False)
     label = Column(String, nullable=True)  # "第一章" 等显示标签
@@ -94,14 +127,20 @@ class DocumentNode(ORMBase):
     word_count = Column(Integer, nullable=True)
     char_count = Column(Integer, nullable=True)
     path = Column(String, nullable=False)  # materialized path，如 "0001.0003"
-    status = Column(String, default='active')  # active | deprecated | superseded
+    status = Column(String, default="active")  # active | deprecated | superseded
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-    
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
     # 关联
     edition = relationship("Edition", back_populates="document_nodes")
-    children = relationship("DocumentNode", back_populates="parent", cascade="all, delete-orphan")
+    children = relationship(
+        "DocumentNode", back_populates="parent", cascade="all, delete-orphan"
+    )
     parent = relationship("DocumentNode", back_populates="children", remote_side=[id])
 
 
@@ -109,12 +148,15 @@ class IngestJob(ORMBase):
     """
     导入作业表 - 跟踪文本导入任务
     """
+
     __tablename__ = "ingest_jobs"
-    
+
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    job_type = Column(String, default='initial_import')
-    status = Column(String, default='pending')  # pending | running | completed | failed
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    job_type = Column(String, default="initial_import")
+    status = Column(String, default="pending")  # pending | running | completed | failed
     payload = Column(JSONB, default={})
     started_at = Column(TIMESTAMP, nullable=True)
     finished_at = Column(TIMESTAMP, nullable=True)
@@ -128,9 +170,11 @@ class IngestJob(ORMBase):
 # Data Transfer Objects
 # ============================================================================
 
+
 @dataclass
 class WorkData:
     """作品数据传输对象"""
+
     title: str
     slug: str = ""
     id: int = field(default=-1)
@@ -146,9 +190,15 @@ class WorkData:
     edition_count: int = 0
     chapter_count: int = 0
     total_chars: int = 0
-    
+
     @classmethod
-    def read_from_orm(cls, orm: Work, edition_count: int = 0, chapter_count: int = 0, total_chars: int = 0):
+    def read_from_orm(
+        cls,
+        orm: Work,
+        edition_count: int = 0,
+        chapter_count: int = 0,
+        total_chars: int = 0,
+    ):
         return cls(
             id=orm.id,
             slug=orm.slug,
@@ -166,7 +216,7 @@ class WorkData:
             chapter_count=chapter_count,
             total_chars=total_chars,
         )
-    
+
     def create_orm(self) -> Work:
         return Work(
             slug=self.slug or self._generate_slug(),
@@ -179,7 +229,7 @@ class WorkData:
             synopsis=self.synopsis,
             meta_data=self.meta_data,
         )
-    
+
     def update_orm(self, orm: Work):
         orm.title = self.title
         orm.original_title = self.original_title
@@ -189,19 +239,21 @@ class WorkData:
         orm.status = self.status
         orm.synopsis = self.synopsis
         orm.meta_data = self.meta_data
-    
+
     def _generate_slug(self) -> str:
         import re
         import time
+
         # 简单的slug生成：移除特殊字符，转小写，用下划线连接
-        slug = re.sub(r'[^\w\s-]', '', self.title.lower())
-        slug = re.sub(r'[-\s]+', '_', slug)
+        slug = re.sub(r"[^\w\s-]", "", self.title.lower())
+        slug = re.sub(r"[-\s]+", "_", slug)
         return f"{slug}_{int(time.time())}"
 
 
 @dataclass
 class EditionData:
     """版本数据传输对象"""
+
     work_id: int
     language: str = "zh"
     id: int = field(default=-1)
@@ -219,7 +271,7 @@ class EditionData:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     chapter_count: int = 0
-    
+
     @classmethod
     def read_from_orm(cls, orm: Edition, chapter_count: int = 0):
         return cls(
@@ -241,7 +293,7 @@ class EditionData:
             updated_at=orm.updated_at,
             chapter_count=chapter_count,
         )
-    
+
     def create_orm(self) -> Edition:
         return Edition(
             work_id=self.work_id,
@@ -258,7 +310,7 @@ class EditionData:
             status=self.status,
             meta_data=self.meta_data,
         )
-    
+
     def update_orm(self, orm: Edition):
         orm.edition_name = self.edition_name
         orm.language = self.language
@@ -277,6 +329,7 @@ class EditionData:
 @dataclass
 class DocumentNodeData:
     """文档节点数据传输对象"""
+
     edition_id: int
     node_type: str
     sort_index: int
@@ -294,9 +347,11 @@ class DocumentNodeData:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     children_count: int = 0
-    
+
     @classmethod
-    def read_from_orm(cls, orm: DocumentNode, children_count: int = 0, include_content: bool = True):
+    def read_from_orm(
+        cls, orm: DocumentNode, children_count: int = 0, include_content: bool = True
+    ):
         return cls(
             id=orm.id,
             edition_id=orm.edition_id,
@@ -316,7 +371,7 @@ class DocumentNodeData:
             updated_at=orm.updated_at,
             children_count=children_count,
         )
-    
+
     def create_orm(self) -> DocumentNode:
         return DocumentNode(
             edition_id=self.edition_id,
@@ -333,7 +388,7 @@ class DocumentNodeData:
             status=self.status,
             meta_data=self.meta_data,
         )
-    
+
     def update_orm(self, orm: DocumentNode):
         orm.parent_id = self.parent_id
         orm.node_type = self.node_type
@@ -352,6 +407,7 @@ class DocumentNodeData:
 @dataclass
 class IngestJobData:
     """导入作业数据传输对象"""
+
     edition_id: int
     id: int = field(default=-1)
     job_type: str = "initial_import"
@@ -363,7 +419,7 @@ class IngestJobData:
     progress: int = 0
     total_items: int = 0
     processed_items: int = 0
-    
+
     @classmethod
     def read_from_orm(cls, orm: IngestJob):
         return cls(
@@ -384,6 +440,7 @@ class IngestJobData:
 @dataclass
 class TextImportRequest:
     """文本导入请求数据"""
+
     work_title: str
     content: str  # 原始文本内容
     work_author: Optional[str] = None
@@ -397,6 +454,7 @@ class TextImportRequest:
 @dataclass
 class ChapterListItem:
     """章节列表项（简化版，用于目录展示）"""
+
     id: int
     sort_index: int
     label: Optional[str]
@@ -408,6 +466,7 @@ class ChapterListItem:
 @dataclass
 class DocumentNodeUpdateRequest:
     """文档节点更新请求（仅包含可编辑字段）"""
+
     label: Optional[str] = None
     title: Optional[str] = None
     raw_text: Optional[str] = None
@@ -417,6 +476,7 @@ class DocumentNodeUpdateRequest:
 @dataclass
 class ChapterInsertRequest:
     """插入章节请求"""
+
     edition_id: int
     sort_index: int  # 插入位置（0-based），插入后该位置及之后的章节会后移
     label: Optional[str] = None  # 章节标签，如 "第一章"

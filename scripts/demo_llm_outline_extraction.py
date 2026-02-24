@@ -24,7 +24,10 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from sail_server.utils.llm import (
-    LLMClient, LLMConfig, LLMProvider, get_template_manager
+    LLMClient,
+    LLMConfig,
+    LLMProvider,
+    get_template_manager,
 )
 
 
@@ -61,14 +64,14 @@ async def main():
     print("=" * 70)
     print("小说大纲提取演示 - 使用 Kimi K2.5")
     print("=" * 70)
-    
+
     # 检查 API Key
     api_key = os.getenv("MOONSHOT_API_KEY")
     if not api_key:
         print("\n⚠️  请设置 MOONSHOT_API_KEY 环境变量")
         print("    PowerShell: $env:MOONSHOT_API_KEY = 'your-key'")
         return
-    
+
     # 创建 LLM 客户端
     print("\n[1/5] 初始化 LLM 客户端...")
     config = LLMConfig(
@@ -80,13 +83,13 @@ async def main():
     )
     client = LLMClient(config)
     print("    ✓ 客户端已初始化")
-    
+
     # 获取模板管理器
     print("\n[2/5] 加载提示词模板...")
     manager = get_template_manager()
     template = manager.get_template("outline_extraction_v1")
     print(f"    ✓ 模板已加载: {template.name}")
-    
+
     # 渲染模板
     print("\n[3/5] 渲染 Prompt...")
     variables = {
@@ -95,35 +98,36 @@ async def main():
         "chapter_contents": SAMPLE_CHAPTER,
         "known_characters": "林峰(主角刑警), 张明(反派副队长)",
     }
-    
+
     rendered = manager.render("outline_extraction_v1", variables)
     print(f"    ✓ System prompt: {len(rendered.system_prompt)} chars")
     print(f"    ✓ User prompt: {len(rendered.user_prompt)} chars")
     print(f"    ✓ Estimated tokens: {rendered.estimated_tokens}")
-    
+
     # 估算成本
     estimated_output_tokens = int(rendered.estimated_tokens * 0.3)
     cost = client.estimate_cost(rendered.estimated_tokens, estimated_output_tokens)
     print(f"    ✓ Estimated cost: ${cost:.6f}")
-    
+
     # 调用 LLM
     print("\n[4/5] 调用 Kimi K2.5 API...")
     print("    请稍候...")
-    
+
     response = await client.complete(
-        prompt=rendered.user_prompt,
-        system=rendered.system_prompt
+        prompt=rendered.user_prompt, system=rendered.system_prompt
     )
-    
+
     print(f"    ✓ 响应接收完成")
     print(f"    ✓ Model: {response.model}")
-    print(f"    ✓ Tokens: {response.total_tokens} ({response.prompt_tokens} in, {response.completion_tokens} out)")
+    print(
+        f"    ✓ Tokens: {response.total_tokens} ({response.prompt_tokens} in, {response.completion_tokens} out)"
+    )
     print(f"    ✓ Latency: {response.latency_ms}ms")
-    
+
     # 解析结果
     print("\n[5/5] 解析 LLM 输出...")
     content = response.content.strip()
-    
+
     # 清理 markdown
     if content.startswith("```json"):
         content = content[7:]
@@ -131,62 +135,62 @@ async def main():
         content = content[3:]
     if content.endswith("```"):
         content = content[:-3]
-    
+
     try:
         parsed = json.loads(content.strip())
         print("    ✓ JSON 解析成功")
-        
+
         # 验证
         validation = manager.validate_output("outline_extraction_v1", parsed)
         print(f"    ✓ 验证结果: {'通过' if validation['valid'] else '失败'}")
-        
+
     except json.JSONDecodeError as e:
         print(f"    ⚠ JSON 解析失败: {e}")
         parsed = {"raw_output": content}
-    
+
     # 显示结果
     print("\n" + "=" * 70)
     print("提取结果")
     print("=" * 70)
-    
+
     if "plot_points" in parsed:
         print(f"\n📌 识别到 {len(parsed['plot_points'])} 个情节点:\n")
-        
+
         for i, point in enumerate(parsed["plot_points"], 1):
             importance_emoji = {
                 "critical": "🔴",
-                "major": "🟠", 
+                "major": "🟠",
                 "normal": "🟡",
-                "minor": "⚪"
+                "minor": "⚪",
             }.get(point.get("importance", "normal"), "🟡")
-            
+
             type_emoji = {
                 "conflict": "⚔️",
                 "revelation": "💡",
                 "climax": "🔥",
                 "resolution": "✅",
-                "setup": "📖"
+                "setup": "📖",
             }.get(point.get("type", "scene"), "📖")
-            
+
             print(f"  {importance_emoji} 情节点 {i}: {point.get('title', 'N/A')}")
             print(f"     类型: {type_emoji} {point.get('type', 'N/A')}")
             print(f"     重要度: {point.get('importance', 'N/A')}")
             print(f"     摘要: {point.get('summary', 'N/A')[:100]}...")
-            
+
             if point.get("characters"):
                 print(f"     涉及人物: {', '.join(point['characters'])}")
             print()
-    
+
     if "overall_summary" in parsed:
         print("\n📝 整体概述:")
         print(f"   {parsed['overall_summary']}")
-    
+
     # 原始输出
     print("\n" + "=" * 70)
     print("原始 LLM 输出")
     print("=" * 70)
     print(response.content)
-    
+
     print("\n" + "=" * 70)
     print("演示完成!")
     print("=" * 70)

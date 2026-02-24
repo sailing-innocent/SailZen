@@ -19,10 +19,13 @@ class HistoryEvent(ORMBase):
     历史事件表
     用于记录和组织历史事件，支持嵌套结构和关联检索
     """
+
     __tablename__ = "history_events"
-    
+
     id = Column(Integer, primary_key=True)
-    receive_time = Column(TIMESTAMP, server_default=func.current_timestamp())  # 接收消息的时间
+    receive_time = Column(
+        TIMESTAMP, server_default=func.current_timestamp()
+    )  # 接收消息的时间
     title = Column(String, nullable=False)  # 事件标题
     description = Column(Text, nullable=False)  # 事件描述
     rar_tags = Column(ARRAY(String), default=[])  # 手动标注的标签
@@ -39,6 +42,7 @@ class HistoryEventData:
     """
     历史事件数据传输对象
     """
+
     title: str
     description: str
     id: int = field(default=-1)
@@ -93,4 +97,3 @@ class HistoryEventData:
         event.related_events = self.related_events
         event.parent_event = self.parent_event
         event.details = self.details
-

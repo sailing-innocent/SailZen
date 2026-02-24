@@ -10,13 +10,24 @@ from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 
-from sail_server.data.health import WeightData
+from sail_server.data.health import WeightData, ExerciseData, WeightPlanData, WeightAnalysisResult, WeightPlanProgress, WeightRecordWithStatus
 from sail_server.model.health import (
     read_weight_impl,
     read_weights_impl,
     read_weights_avg_impl,
     create_weight_impl,
     target_weight_impl,
+    read_exercise_impl,
+    read_exercises_impl,
+    create_exercise_impl,
+    update_exercise_impl,
+    delete_exercise_impl,
+    analyze_weight_trend_impl,
+    predict_weight_impl,
+    create_weight_plan_impl,
+    get_active_weight_plan_impl,
+    get_weight_plan_progress_impl,
+    get_weights_with_plan_status_impl,
 )
 from sqlalchemy.orm import Session
 from typing import Generator
@@ -24,14 +35,20 @@ from typing import Generator
 from datetime import datetime
 
 
-# output
-# htime: timestamp string in ISO format
+# ===================================================
+# Weight DTOs
+# ===================================================
+
 class WeightDataWriteDTO(DataclassDTO[WeightData]):
     config = DTOConfig(exclude={"id"})
 
 
 class WeightDataReadDTO(DataclassDTO[WeightData]): ...
 
+
+# ===================================================
+# Weight Controller
+# ===================================================
 
 class WeightController(Controller):
     dto = WeightDataWriteDTO
@@ -130,3 +147,238 @@ class WeightController(Controller):
             return None
 
         return weight
+
+    # GET /weight/analysis?start=&end=&model_type=
+    @get("/analysis")
+    async def analyze_weight_trend(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        start: float = None,  # timestamp as float in seconds
+        end: float = None,
+        model_type: str = "linear",  # 'linear' or 'polynomial'
+    ) -> WeightAnalysisResult:
+        """
+        Analyze weight trend and return model parameters with predictions.
+        """
+        db = next(router_dependency)
+        result = analyze_weight_trend_impl(db, start, end, model_type)
+        request.logger.info(f"Weight analysis: slope={result.slope}, trend={result.current_trend}")
+        return result
+
+    # GET /weight/prediction?target_time=&model_type=&start=&end=
+    @get("/prediction")
+    async def predict_weight(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        target_time: float,  # target timestamp for prediction
+        model_type: str = "linear",
+        start: float = None,
+        end: float = None,
+    ) -> dict:
+        """
+        Predict weight at a specific future timestamp.
+        """
+        db = next(router_dependency)
+        predicted = predict_weight_impl(db, target_time, model_type, start, end)
+        request.logger.info(f"Weight prediction for {target_time}: {predicted}")
+        return {"predicted_weight": predicted, "target_time": target_time}
+
+
+# ===================================================
+# Weight Plan DTOs
+# ===================================================
+
+class WeightPlanWriteDTO(DataclassDTO[WeightPlanData]):
+    config = DTOConfig(exclude={"id", "created_at"})
+
+
+class WeightPlanReadDTO(DataclassDTO[WeightPlanData]): ...
+
+
+class WeightRecordWithStatusReadDTO(DataclassDTO[WeightRecordWithStatus]): ...
+
+
+# ===================================================
+# Weight Plan Controller
+# ===================================================
+
+class WeightPlanController(Controller):
+    dto = WeightPlanWriteDTO
+    return_dto = WeightPlanReadDTO
+    path = "/weight/plan"
+
+    @get()
+    async def get_weight_plan(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> WeightPlanData | None:
+        """
+        Get the active weight plan.
+        """
+        db = next(router_dependency)
+        plan = get_active_weight_plan_impl(db)
+        request.logger.info(f"Get weight plan: {plan}")
+        if plan is None:
+            return None
+        return plan
+
+    @post()
+    async def create_weight_plan(
+        self,
+        data: WeightPlanData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> WeightPlanData:
+        """
+        Create a new weight plan.
+        """
+        db = next(router_dependency)
+        plan = create_weight_plan_impl(db, data)
+        request.logger.info(f"Create weight plan: {plan}")
+        return plan
+
+    @get("/progress")
+    async def get_weight_plan_progress(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        plan_id: int | None = None,
+    ) -> WeightPlanProgress | None:
+        """
+        Get weight plan progress with daily predictions.
+        Returns control rate and expected vs actual weights.
+        """
+        db = next(router_dependency)
+        progress = get_weight_plan_progress_impl(db, plan_id)
+        request.logger.info(f"Weight plan progress: control_rate={progress.control_rate if progress else None}")
+        if progress is None:
+            return None
+        return progress
+
+    @get("/weights-with-status", return_dto=WeightRecordWithStatusReadDTO)
+    async def get_weights_with_status(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        start: float | None = None,
+        end: float | None = None,
+        plan_id: int | None = None,
+    ) -> list[WeightRecordWithStatus]:
+        """
+        Get weight records with comparison status against plan.
+        
+        Returns weight records with:
+        - expected_value: expected weight at that time
+        - status: 'above' (red), 'below' (green), 'normal' (blue)
+        - diff: difference from expected
+        """
+        db = next(router_dependency)
+        result = get_weights_with_plan_status_impl(db, start, end, plan_id)
+        request.logger.info(f"Get {len(result)} weights with status")
+        return result
+
+
+# ===================================================
+# Exercise DTOs
+# ===================================================
+
+class ExerciseDataWriteDTO(DataclassDTO[ExerciseData]):
+    config = DTOConfig(exclude={"id"})
+
+
+class ExerciseDataReadDTO(DataclassDTO[ExerciseData]): ...
+
+
+# ===================================================
+# Exercise Controller
+# ===================================================
+
+class ExerciseController(Controller):
+    dto = ExerciseDataWriteDTO
+    return_dto = ExerciseDataReadDTO
+    path = "/exercise"
+
+    @get("/{exercise_id:int}")
+    async def get_exercise(
+        self,
+        exercise_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> ExerciseData:
+        """
+        Get the exercise record.
+        """
+        db = next(router_dependency)
+        exercise = read_exercise_impl(db, exercise_id)
+        request.logger.info(f"Get exercise: {exercise}")
+        if exercise is None:
+            return None
+        return exercise
+
+    @get()
+    async def get_exercise_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        skip: int = 0,
+        limit: int = -1,
+        start: float = None,
+        end: float = None,
+    ) -> list[ExerciseData]:
+        """
+        Get the exercise record list.
+        """
+        db = next(router_dependency)
+        exercises = read_exercises_impl(db, skip, limit, start, end)
+        return exercises
+
+    @post()
+    async def create_exercise(
+        self,
+        data: ExerciseData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ExerciseData:
+        """
+        Create a new exercise record.
+        """
+        db = next(router_dependency)
+        exercise = create_exercise_impl(db, data)
+        request.logger.info(f"Create exercise: {exercise}")
+        if exercise is None:
+            return None
+        return exercise
+
+    @put("/{exercise_id:int}")
+    async def update_exercise(
+        self,
+        exercise_id: int,
+        data: ExerciseData,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ExerciseData:
+        """
+        Update an exercise record.
+        """
+        db = next(router_dependency)
+        exercise = update_exercise_impl(db, exercise_id, data)
+        request.logger.info(f"Update exercise: {exercise}")
+        if exercise is None:
+            return None
+        return exercise
+
+    @delete("/{exercise_id:int}")
+    async def delete_exercise(
+        self,
+        exercise_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> None:
+        """
+        Delete an exercise record.
+        """
+        db = next(router_dependency)
+        delete_exercise_impl(db, exercise_id)
+        request.logger.info(f"Delete exercise: {exercise_id}")

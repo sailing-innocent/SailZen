@@ -10,7 +10,17 @@
 # 实现大纲、人物、设定分析功能的数据模型
 #
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, func, Text, Boolean, ForeignKey, Numeric
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    TIMESTAMP,
+    func,
+    Text,
+    Boolean,
+    ForeignKey,
+    Numeric,
+)
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from .orm import ORMBase
@@ -23,72 +33,108 @@ from typing import Optional, List, Dict, Any
 # ORM Models - Outline
 # ============================================================================
 
+
 class Outline(ORMBase):
     """
     大纲表 - 存储作品的各类大纲结构
     """
+
     __tablename__ = "outlines"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    outline_type = Column(String, nullable=False, default='main')  # main | subplot | character_arc
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    outline_type = Column(
+        String, nullable=False, default="main"
+    )  # main | subplot | character_arc
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String, default='draft')  # draft | analyzing | reviewed | finalized
-    source = Column(String, default='manual')  # manual | ai_generated | hybrid
+    status = Column(String, default="draft")  # draft | analyzing | reviewed | finalized
+    source = Column(String, default="manual")  # manual | ai_generated | hybrid
     meta_data = Column(JSONB, default={})
     created_by = Column(String, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
-    nodes = relationship("OutlineNode", back_populates="outline", cascade="all, delete-orphan")
+    nodes = relationship(
+        "OutlineNode", back_populates="outline", cascade="all, delete-orphan"
+    )
 
 
 class OutlineNode(ORMBase):
     """
     大纲节点表 - 树形结构表示情节层级
     """
+
     __tablename__ = "outline_nodes"
 
     id = Column(Integer, primary_key=True)
-    outline_id = Column(Integer, ForeignKey("outlines.id", ondelete="CASCADE"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=True)
-    node_type = Column(String, nullable=False)  # act | arc | beat | scene | turning_point
+    outline_id = Column(
+        Integer, ForeignKey("outlines.id", ondelete="CASCADE"), nullable=False
+    )
+    parent_id = Column(
+        Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=True
+    )
+    node_type = Column(
+        String, nullable=False
+    )  # act | arc | beat | scene | turning_point
     sort_index = Column(Integer, nullable=False)
     depth = Column(Integer, nullable=False, default=0)
     title = Column(String, nullable=False)
     summary = Column(Text, nullable=True)
-    significance = Column(String, default='normal')  # critical | major | normal | minor
-    chapter_start_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    chapter_end_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    significance = Column(String, default="normal")  # critical | major | normal | minor
+    chapter_start_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    chapter_end_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
     path = Column(String, nullable=False)
-    status = Column(String, default='draft')
+    status = Column(String, default="draft")
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
     outline = relationship("Outline", back_populates="nodes")
-    children = relationship("OutlineNode", back_populates="parent", cascade="all, delete-orphan")
+    children = relationship(
+        "OutlineNode", back_populates="parent", cascade="all, delete-orphan"
+    )
     parent = relationship("OutlineNode", back_populates="children", remote_side=[id])
-    events = relationship("OutlineEvent", back_populates="node", cascade="all, delete-orphan")
+    events = relationship(
+        "OutlineEvent", back_populates="node", cascade="all, delete-orphan"
+    )
 
 
 class OutlineEvent(ORMBase):
     """
     大纲事件表 - 记录情节中的关键事件
     """
+
     __tablename__ = "outline_events"
 
     id = Column(Integer, primary_key=True)
-    outline_node_id = Column(Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=False)
-    event_type = Column(String, nullable=False)  # plot | conflict | revelation | resolution | climax
+    outline_node_id = Column(
+        Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type = Column(
+        String, nullable=False
+    )  # plot | conflict | revelation | resolution | climax
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     chronology_order = Column(Numeric(10, 2), nullable=True)
     narrative_order = Column(Integer, nullable=True)
-    importance = Column(String, default='normal')
+    importance = Column(String, default="normal")
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
@@ -100,45 +146,70 @@ class OutlineEvent(ORMBase):
 # ORM Models - Character
 # ============================================================================
 
+
 class Character(ORMBase):
     """
     人物表 - 存储作品中的人物信息
     """
+
     __tablename__ = "characters"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
     canonical_name = Column(String, nullable=False)
-    role_type = Column(String, default='supporting')  # protagonist | antagonist | deuteragonist | supporting | minor | mentioned
+    role_type = Column(
+        String, default="supporting"
+    )  # protagonist | antagonist | deuteragonist | supporting | minor | mentioned
     description = Column(Text, nullable=True)
-    first_appearance_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, default='draft')
-    source = Column(String, default='manual')
+    first_appearance_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="draft")
+    source = Column(String, default="manual")
     importance_score = Column(Numeric(5, 4), nullable=True)
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
-    aliases = relationship("CharacterAlias", back_populates="character", cascade="all, delete-orphan")
-    attributes = relationship("CharacterAttribute", back_populates="character", cascade="all, delete-orphan")
-    arcs = relationship("CharacterArc", back_populates="character", cascade="all, delete-orphan")
-    setting_links = relationship("CharacterSettingLink", back_populates="character", cascade="all, delete-orphan")
+    aliases = relationship(
+        "CharacterAlias", back_populates="character", cascade="all, delete-orphan"
+    )
+    attributes = relationship(
+        "CharacterAttribute", back_populates="character", cascade="all, delete-orphan"
+    )
+    arcs = relationship(
+        "CharacterArc", back_populates="character", cascade="all, delete-orphan"
+    )
+    setting_links = relationship(
+        "CharacterSettingLink", back_populates="character", cascade="all, delete-orphan"
+    )
 
 
 class CharacterAlias(ORMBase):
     """
     人物别名表 - 存储人物的各种称呼
     """
+
     __tablename__ = "character_aliases"
 
     id = Column(Integer, primary_key=True)
-    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
     alias = Column(String, nullable=False)
-    alias_type = Column(String, default='nickname')  # nickname | title | formal_name | pen_name | code_name
+    alias_type = Column(
+        String, default="nickname"
+    )  # nickname | title | formal_name | pen_name | code_name
     usage_context = Column(Text, nullable=True)
     is_preferred = Column(Boolean, default=False)
-    source = Column(String, default='manual')
+    source = Column(String, default="manual")
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
     # 关联
@@ -149,19 +220,30 @@ class CharacterAttribute(ORMBase):
     """
     人物属性表 - 存储人物的各类属性
     """
+
     __tablename__ = "character_attributes"
 
     id = Column(Integer, primary_key=True)
-    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    category = Column(String, nullable=False)  # basic | appearance | personality | ability | background | goal
+    character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    category = Column(
+        String, nullable=False
+    )  # basic | appearance | personality | ability | background | goal
     attr_key = Column(String, nullable=False)
     attr_value = Column(JSONB, nullable=False)
     confidence = Column(Numeric(5, 4), nullable=True)
-    source = Column(String, default='manual')
-    source_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, default='pending')
+    source = Column(String, default="manual")
+    source_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="pending")
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
     character = relationship("Character", back_populates="attributes")
@@ -171,16 +253,25 @@ class CharacterArc(ORMBase):
     """
     人物弧线表 - 记录人物的成长变化轨迹
     """
+
     __tablename__ = "character_arcs"
 
     id = Column(Integer, primary_key=True)
-    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    arc_type = Column(String, nullable=False)  # growth | fall | flat | transformation | redemption
+    character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    arc_type = Column(
+        String, nullable=False
+    )  # growth | fall | flat | transformation | redemption
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, default='draft')
+    start_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    end_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="draft")
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
@@ -192,23 +283,40 @@ class CharacterRelation(ORMBase):
     """
     人物关系表 - 存储人物之间的关系
     """
+
     __tablename__ = "character_relations"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    source_character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    target_character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    relation_type = Column(String, nullable=False)  # family | romance | friendship | rivalry | mentor | alliance | enemy
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    source_character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    target_character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    relation_type = Column(
+        String, nullable=False
+    )  # family | romance | friendship | rivalry | mentor | alliance | enemy
     relation_subtype = Column(String, nullable=True)
     description = Column(Text, nullable=True)
     strength = Column(Numeric(5, 4), nullable=True)
     is_mutual = Column(Boolean, default=True)
-    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, default='draft')
+    start_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    end_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="draft")
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
     source_character = relationship("Character", foreign_keys=[source_character_id])
@@ -219,44 +327,65 @@ class CharacterRelation(ORMBase):
 # ORM Models - Setting
 # ============================================================================
 
+
 class Setting(ORMBase):
     """
     设定表 - 存储世界观设定元素
     """
+
     __tablename__ = "novel_settings"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    setting_type = Column(String, nullable=False)  # item | location | organization | concept | magic_system | creature
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    setting_type = Column(
+        String, nullable=False
+    )  # item | location | organization | concept | magic_system | creature
     canonical_name = Column(String, nullable=False)
     category = Column(String, nullable=True)
     description = Column(Text, nullable=True)
-    first_appearance_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    importance = Column(String, default='normal')
-    status = Column(String, default='draft')
-    source = Column(String, default='manual')
+    first_appearance_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    importance = Column(String, default="normal")
+    status = Column(String, default="draft")
+    source = Column(String, default="manual")
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
     # 关联
-    attributes = relationship("SettingAttribute", back_populates="setting", cascade="all, delete-orphan")
-    character_links = relationship("CharacterSettingLink", back_populates="setting", cascade="all, delete-orphan")
+    attributes = relationship(
+        "SettingAttribute", back_populates="setting", cascade="all, delete-orphan"
+    )
+    character_links = relationship(
+        "CharacterSettingLink", back_populates="setting", cascade="all, delete-orphan"
+    )
 
 
 class SettingAttribute(ORMBase):
     """
     设定属性表 - 存储设定的详细属性
     """
+
     __tablename__ = "setting_attributes"
 
     id = Column(Integer, primary_key=True)
-    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    setting_id = Column(
+        Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False
+    )
     attr_key = Column(String, nullable=False)
     attr_value = Column(JSONB, nullable=False)
-    source = Column(String, default='manual')
-    source_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    status = Column(String, default='pending')
+    source = Column(String, default="manual")
+    source_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    status = Column(String, default="pending")
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
     # 关联
@@ -267,13 +396,22 @@ class SettingRelation(ORMBase):
     """
     设定关系表 - 存储设定之间的关系
     """
+
     __tablename__ = "setting_relations"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    source_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
-    target_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
-    relation_type = Column(String, nullable=False)  # contains | belongs_to | produces | requires | opposes
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    source_setting_id = Column(
+        Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False
+    )
+    target_setting_id = Column(
+        Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False
+    )
+    relation_type = Column(
+        String, nullable=False
+    )  # contains | belongs_to | produces | requires | opposes
     description = Column(Text, nullable=True)
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
@@ -287,15 +425,26 @@ class CharacterSettingLink(ORMBase):
     """
     人物-设定关联表 - 记录人物与设定的关系
     """
+
     __tablename__ = "character_setting_links"
 
     id = Column(Integer, primary_key=True)
-    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
-    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
-    link_type = Column(String, nullable=False)  # owns | belongs_to | created | uses | guards
+    character_id = Column(
+        Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False
+    )
+    setting_id = Column(
+        Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False
+    )
+    link_type = Column(
+        String, nullable=False
+    )  # owns | belongs_to | created | uses | guards
     description = Column(Text, nullable=True)
-    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
-    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    start_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
+    end_node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True
+    )
     meta_data = Column(JSONB, default={})
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
@@ -308,25 +457,33 @@ class CharacterSettingLink(ORMBase):
 # ORM Models - Analysis Task
 # ============================================================================
 
+
 class TextEvidence(ORMBase):
     """
     文本证据表 - 存储分析结果的原文依据
     """
+
     __tablename__ = "text_evidence"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=False)
-    target_type = Column(String, nullable=False)  # outline_node | character | character_attribute | setting | relation
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    node_id = Column(
+        Integer, ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=False
+    )
+    target_type = Column(
+        String, nullable=False
+    )  # outline_node | character | character_attribute | setting | relation
     target_id = Column(Integer, nullable=False)
     start_char = Column(Integer, nullable=True)
     end_char = Column(Integer, nullable=True)
     text_snippet = Column(Text, nullable=True)
     context_before = Column(Text, nullable=True)
     context_after = Column(Text, nullable=True)
-    evidence_type = Column(String, default='explicit')  # explicit | implicit | inferred
+    evidence_type = Column(String, default="explicit")  # explicit | implicit | inferred
     confidence = Column(Numeric(5, 4), nullable=True)
-    source = Column(String, default='manual')
+    source = Column(String, default="manual")
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
 
@@ -334,17 +491,24 @@ class AnalysisTask(ORMBase):
     """
     分析任务表 - 管理AI分析和人工标注任务
     """
+
     __tablename__ = "analysis_tasks"
 
     id = Column(Integer, primary_key=True)
-    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
-    task_type = Column(String, nullable=False)  # outline_extraction | character_detection | setting_extraction | relation_analysis
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
+    )
+    task_type = Column(
+        String, nullable=False
+    )  # outline_extraction | character_detection | setting_extraction | relation_analysis
     target_scope = Column(String, nullable=False)  # full | range | chapter
     target_node_ids = Column(ARRAY(Integer), default=[])
     parameters = Column(JSONB, default={})
     llm_model = Column(String, nullable=True)
     llm_prompt_template = Column(String, nullable=True)
-    status = Column(String, default='pending')  # pending | running | completed | failed | cancelled
+    status = Column(
+        String, default="pending"
+    )  # pending | running | completed | failed | cancelled
     priority = Column(Integer, default=0)
     scheduled_at = Column(TIMESTAMP, nullable=True)
     started_at = Column(TIMESTAMP, nullable=True)
@@ -355,21 +519,28 @@ class AnalysisTask(ORMBase):
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
     # 关联
-    results = relationship("AnalysisResult", back_populates="task", cascade="all, delete-orphan")
+    results = relationship(
+        "AnalysisResult", back_populates="task", cascade="all, delete-orphan"
+    )
 
 
 class AnalysisResult(ORMBase):
     """
     分析结果表 - 存储待审核的分析结果
     """
+
     __tablename__ = "analysis_results"
 
     id = Column(Integer, primary_key=True)
-    task_id = Column(Integer, ForeignKey("analysis_tasks.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(
+        Integer, ForeignKey("analysis_tasks.id", ondelete="CASCADE"), nullable=False
+    )
     result_type = Column(String, nullable=False)
     result_data = Column(JSONB, nullable=False)
     confidence = Column(Numeric(5, 4), nullable=True)
-    review_status = Column(String, default='pending')  # pending | approved | rejected | modified
+    review_status = Column(
+        String, default="pending"
+    )  # pending | approved | rejected | modified
     reviewer = Column(String, nullable=True)
     reviewed_at = Column(TIMESTAMP, nullable=True)
     review_notes = Column(Text, nullable=True)
@@ -385,9 +556,11 @@ class AnalysisResult(ORMBase):
 # Data Transfer Objects - Outline
 # ============================================================================
 
+
 @dataclass
 class OutlineData:
     """大纲数据传输对象"""
+
     edition_id: int
     title: str
     id: int = field(default=-1)
@@ -442,6 +615,7 @@ class OutlineData:
 @dataclass
 class OutlineNodeData:
     """大纲节点数据传输对象"""
+
     outline_id: int
     node_type: str
     sort_index: int
@@ -462,7 +636,9 @@ class OutlineNodeData:
     events_count: int = 0
 
     @classmethod
-    def read_from_orm(cls, orm: OutlineNode, children_count: int = 0, events_count: int = 0):
+    def read_from_orm(
+        cls, orm: OutlineNode, children_count: int = 0, events_count: int = 0
+    ):
         return cls(
             id=orm.id,
             outline_id=orm.outline_id,
@@ -519,6 +695,7 @@ class OutlineNodeData:
 @dataclass
 class OutlineEventData:
     """大纲事件数据传输对象"""
+
     outline_node_id: int
     event_type: str
     title: str
@@ -538,7 +715,9 @@ class OutlineEventData:
             event_type=orm.event_type,
             title=orm.title,
             description=orm.description,
-            chronology_order=float(orm.chronology_order) if orm.chronology_order else None,
+            chronology_order=float(orm.chronology_order)
+            if orm.chronology_order
+            else None,
             narrative_order=orm.narrative_order,
             importance=orm.importance,
             meta_data=orm.meta_data or {},
@@ -562,9 +741,11 @@ class OutlineEventData:
 # Data Transfer Objects - Character
 # ============================================================================
 
+
 @dataclass
 class CharacterData:
     """人物数据传输对象"""
+
     edition_id: int
     canonical_name: str
     id: int = field(default=-1)
@@ -582,7 +763,13 @@ class CharacterData:
     relation_count: int = 0
 
     @classmethod
-    def read_from_orm(cls, orm: Character, alias_count: int = 0, attribute_count: int = 0, relation_count: int = 0):
+    def read_from_orm(
+        cls,
+        orm: Character,
+        alias_count: int = 0,
+        attribute_count: int = 0,
+        relation_count: int = 0,
+    ):
         return cls(
             id=orm.id,
             edition_id=orm.edition_id,
@@ -592,7 +779,9 @@ class CharacterData:
             first_appearance_node_id=orm.first_appearance_node_id,
             status=orm.status,
             source=orm.source,
-            importance_score=float(orm.importance_score) if orm.importance_score else None,
+            importance_score=float(orm.importance_score)
+            if orm.importance_score
+            else None,
             meta_data=orm.meta_data or {},
             created_at=orm.created_at,
             updated_at=orm.updated_at,
@@ -628,6 +817,7 @@ class CharacterData:
 @dataclass
 class CharacterAliasData:
     """人物别名数据传输对象"""
+
     character_id: int
     alias: str
     id: int = field(default=-1)
@@ -664,6 +854,7 @@ class CharacterAliasData:
 @dataclass
 class CharacterAttributeData:
     """人物属性数据传输对象"""
+
     character_id: int
     category: str
     attr_key: str
@@ -713,6 +904,7 @@ class CharacterAttributeData:
 @dataclass
 class CharacterArcData:
     """人物弧线数据传输对象"""
+
     character_id: int
     arc_type: str
     title: str
@@ -755,6 +947,7 @@ class CharacterArcData:
 @dataclass
 class CharacterRelationData:
     """人物关系数据传输对象"""
+
     edition_id: int
     source_character_id: int
     target_character_id: int
@@ -775,7 +968,9 @@ class CharacterRelationData:
     target_character_name: Optional[str] = None
 
     @classmethod
-    def read_from_orm(cls, orm: CharacterRelation, source_name: str = None, target_name: str = None):
+    def read_from_orm(
+        cls, orm: CharacterRelation, source_name: str = None, target_name: str = None
+    ):
         return cls(
             id=orm.id,
             edition_id=orm.edition_id,
@@ -828,9 +1023,11 @@ class CharacterRelationData:
 # Data Transfer Objects - Setting
 # ============================================================================
 
+
 @dataclass
 class SettingData:
     """设定数据传输对象"""
+
     edition_id: int
     setting_type: str
     canonical_name: str
@@ -848,7 +1045,9 @@ class SettingData:
     character_link_count: int = 0
 
     @classmethod
-    def read_from_orm(cls, orm: Setting, attribute_count: int = 0, character_link_count: int = 0):
+    def read_from_orm(
+        cls, orm: Setting, attribute_count: int = 0, character_link_count: int = 0
+    ):
         return cls(
             id=orm.id,
             edition_id=orm.edition_id,
@@ -896,6 +1095,7 @@ class SettingData:
 @dataclass
 class SettingAttributeData:
     """设定属性数据传输对象"""
+
     setting_id: int
     attr_key: str
     attr_value: Any
@@ -932,6 +1132,7 @@ class SettingAttributeData:
 @dataclass
 class SettingRelationData:
     """设定关系数据传输对象"""
+
     edition_id: int
     source_setting_id: int
     target_setting_id: int
@@ -945,7 +1146,9 @@ class SettingRelationData:
     target_setting_name: Optional[str] = None
 
     @classmethod
-    def read_from_orm(cls, orm: SettingRelation, source_name: str = None, target_name: str = None):
+    def read_from_orm(
+        cls, orm: SettingRelation, source_name: str = None, target_name: str = None
+    ):
         return cls(
             id=orm.id,
             edition_id=orm.edition_id,
@@ -973,6 +1176,7 @@ class SettingRelationData:
 @dataclass
 class CharacterSettingLinkData:
     """人物-设定关联数据传输对象"""
+
     character_id: int
     setting_id: int
     link_type: str
@@ -987,7 +1191,12 @@ class CharacterSettingLinkData:
     setting_name: Optional[str] = None
 
     @classmethod
-    def read_from_orm(cls, orm: CharacterSettingLink, character_name: str = None, setting_name: str = None):
+    def read_from_orm(
+        cls,
+        orm: CharacterSettingLink,
+        character_name: str = None,
+        setting_name: str = None,
+    ):
         return cls(
             id=orm.id,
             character_id=orm.character_id,
@@ -1018,9 +1227,11 @@ class CharacterSettingLinkData:
 # Data Transfer Objects - Analysis Task
 # ============================================================================
 
+
 @dataclass
 class TextEvidenceData:
     """文本证据数据传输对象"""
+
     edition_id: int
     node_id: int
     target_type: str
@@ -1075,6 +1286,7 @@ class TextEvidenceData:
 @dataclass
 class AnalysisTaskData:
     """分析任务数据传输对象"""
+
     edition_id: int
     task_type: str
     target_scope: str
@@ -1145,6 +1357,7 @@ class AnalysisTaskData:
 @dataclass
 class AnalysisResultData:
     """分析结果数据传输对象"""
+
     task_id: int
     result_type: str
     result_data: Dict[str, Any]
@@ -1197,9 +1410,11 @@ class AnalysisResultData:
 # Composite Data Types for API responses
 # ============================================================================
 
+
 @dataclass
 class CharacterProfile:
     """人物完整档案"""
+
     character: CharacterData
     aliases: List[CharacterAliasData]
     attributes: Dict[str, List[CharacterAttributeData]]  # 按 category 分组
@@ -1211,6 +1426,7 @@ class CharacterProfile:
 @dataclass
 class SettingDetail:
     """设定详情"""
+
     setting: SettingData
     attributes: List[SettingAttributeData]
     character_links: List[CharacterSettingLinkData]
@@ -1220,6 +1436,7 @@ class SettingDetail:
 @dataclass
 class OutlineTree:
     """大纲树结构"""
+
     outline: OutlineData
     nodes: List[Dict[str, Any]]  # 嵌套的树形结构
 
@@ -1227,5 +1444,6 @@ class OutlineTree:
 @dataclass
 class RelationGraphData:
     """关系图数据（用于可视化）"""
+
     nodes: List[Dict[str, Any]]  # id, name, role_type, importance_score
     edges: List[Dict[str, Any]]  # source, target, relation_type, strength
