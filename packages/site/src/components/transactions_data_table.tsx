@@ -4,7 +4,7 @@ import { type TransactionsState, useTransactionsStore, useServerStore, useAccoun
 import { TransactionColumns, type TransactionDisplayProps } from './transaction_column'
 import { DataTable } from '@components/data_table'
 import { Button } from '@components/ui/button'
-import TransactionFiltersComponent, { type TransactionFilters } from './transaction_filters'
+import TransactionFiltersComponent, { type TransactionFilters, type TransactionTypeFilter } from './transaction_filters'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useDebouncedValue } from '@/hooks/use-debounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,6 +25,9 @@ const TransactionsDataTable: React.FC = () => {
     dateRange: {},
     tags: [],
     amountRange: {},
+    transactionType: 'all',
+    fromAccountId: undefined,
+    toAccountId: undefined,
   })
   const isMobile = useIsMobile()
   const [pagination, setPagination] = React.useState<PaginationState>(() => ({
@@ -142,6 +145,43 @@ const TransactionsDataTable: React.FC = () => {
         return false
       }
 
+      // Transaction type filter
+      const transactionType: TransactionTypeFilter = debouncedFilters.transactionType || 'all'
+      if (transactionType !== 'all') {
+        const fromAccId = transaction.from_acc_id
+        const toAccId = transaction.to_acc_id
+        
+        // Determine transaction type
+        // income: from_acc_id == -1 (money from external to account)
+        // expense: to_acc_id == -1 (money from account to external)
+        // transfer: both from_acc_id and to_acc_id are valid accounts
+        const isIncome = fromAccId === -1
+        const isExpense = toAccId === -1
+        const isTransfer = !isIncome && !isExpense
+
+        if (transactionType === 'income' && !isIncome) {
+          return false
+        }
+        if (transactionType === 'expense' && !isExpense) {
+          return false
+        }
+        if (transactionType === 'transfer' && !isTransfer) {
+          return false
+        }
+      }
+
+      // Account filters
+      if (debouncedFilters.fromAccountId !== undefined) {
+        if (transaction.from_acc_id !== debouncedFilters.fromAccountId) {
+          return false
+        }
+      }
+      if (debouncedFilters.toAccountId !== undefined) {
+        if (transaction.to_acc_id !== debouncedFilters.toAccountId) {
+          return false
+        }
+      }
+
       return true
     })
   }, [transactions, debouncedFilters])
@@ -151,6 +191,9 @@ const TransactionsDataTable: React.FC = () => {
       dateRange: {},
       tags: [],
       amountRange: {},
+      transactionType: 'all',
+      fromAccountId: undefined,
+      toAccountId: undefined,
     })
   }
 
@@ -199,7 +242,7 @@ const TransactionsDataTable: React.FC = () => {
       <CardContent className={`${isMobile ? 'px-4 py-3' : ''}`}>
         {/* 筛选器组件 */}
         <div className="mb-4">
-          <TransactionFiltersComponent filters={filters} onFiltersChange={setFilters} onReset={resetFilters} />
+          <TransactionFiltersComponent filters={filters} onFiltersChange={setFilters} onReset={resetFilters} accounts={accounts} />
         </div>
 
         {/* 操作按钮区域 */}

@@ -5,10 +5,12 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { X, Filter, Calendar, Tag, DollarSign } from 'lucide-react'
+import { X, Filter, Calendar, Tag, DollarSign, ArrowLeftRight, Wallet } from 'lucide-react'
 import DatePicker from './date_picker'
 import { Separator } from '@/components/ui/separator'
 import { useIsMobile } from '@/hooks/use-mobile'
+
+export type TransactionTypeFilter = 'all' | 'income' | 'expense' | 'transfer'
 
 export interface TransactionFilters {
   dateRange: {
@@ -22,15 +24,19 @@ export interface TransactionFilters {
     max?: number
   }
   amountPreset?: 'small' | 'medium' | 'large' | 'custom'
+  transactionType?: TransactionTypeFilter
+  fromAccountId?: number
+  toAccountId?: number
 }
 
 interface TransactionFiltersProps {
   filters: TransactionFilters
   onFiltersChange: (filters: TransactionFilters) => void
   onReset: () => void
+  accounts: { id: number; name: string; state?: number }[]
 }
 
-const TransactionFiltersComponent: React.FC<TransactionFiltersProps> = ({ filters, onFiltersChange, onReset }) => {
+const TransactionFiltersComponent: React.FC<TransactionFiltersProps> = ({ filters, onFiltersChange, onReset, accounts }) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const isMobile = useIsMobile()
@@ -133,7 +139,10 @@ const TransactionFiltersComponent: React.FC<TransactionFiltersProps> = ({ filter
     filters.dateRange.end ||
     filters.tags.length > 0 ||
     filters.amountRange.min !== undefined ||
-    filters.amountRange.max !== undefined
+    filters.amountRange.max !== undefined ||
+    (filters.transactionType && filters.transactionType !== 'all') ||
+    filters.fromAccountId !== undefined ||
+    filters.toAccountId !== undefined
 
   return (
     <Card className="w-full mb-4">
@@ -324,6 +333,112 @@ const TransactionFiltersComponent: React.FC<TransactionFiltersProps> = ({ filter
                   }
                 />
               </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Transaction Type Filter */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <ArrowLeftRight className="h-4 w-4" />
+              <Label className="text-sm font-medium">交易类型</Label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="transaction-type" className="text-sm">
+                  类型筛选
+                </Label>
+                <Select
+                  value={filters.transactionType || 'all'}
+                  onValueChange={(value) =>
+                    updateFilters({ transactionType: value as TransactionTypeFilter })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择交易类型" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部</SelectItem>
+                    <SelectItem value="income">收入</SelectItem>
+                    <SelectItem value="expense">支出</SelectItem>
+                    <SelectItem value="transfer">转账</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              <span className="font-medium">说明：</span>
+              收入 = 从外部转入账户，支出 = 从账户转出到外部，转账 = 账户间互转
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Account Filter */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4" />
+              <Label className="text-sm font-medium">账户筛选</Label>
+            </div>
+
+            <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              <div>
+                <Label htmlFor="from-account-filter" className="text-sm">
+                  转出账户
+                </Label>
+                <Select
+                  value={filters.fromAccountId?.toString() || 'all'}
+                  onValueChange={(value) =>
+                    updateFilters({ fromAccountId: value === 'all' ? undefined : parseInt(value) })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择转出账户" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部账户</SelectItem>
+                    <SelectItem value="-1">外部账户</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id.toString()}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="to-account-filter" className="text-sm">
+                  转入账户
+                </Label>
+                <Select
+                  value={filters.toAccountId?.toString() || 'all'}
+                  onValueChange={(value) =>
+                    updateFilters({ toAccountId: value === 'all' ? undefined : parseInt(value) })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="选择转入账户" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部账户</SelectItem>
+                    <SelectItem value="-1">外部账户</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id.toString()}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              <span className="font-medium">说明：</span>
+              选择"外部账户"可筛选收入/支出类型的交易
             </div>
           </div>
         </CardContent>
