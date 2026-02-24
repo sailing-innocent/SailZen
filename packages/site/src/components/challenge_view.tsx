@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useChallengeStore, type ChallengeStore } from '@lib/store/challenge'
-import { ChallengeStatus, CheckInStatus, type ChallengeData, type CheckInData, type CheckInStatusValue, type ChallengeStats, calculateChallengeStats } from '@lib/data/challenge'
+import { ChallengeStatus, CheckInStatus, type ChallengeData, type CheckInData, type CheckInStatusValue, type ChallengeStats, calculateChallengeStats, isTodayDay } from '@lib/data/challenge'
 import { api_get_challenge_detail } from '@lib/api/challenge'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -141,14 +141,10 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
         setSelectedDay({ day, date: checkIn.date, status: checkIn.status })
       }
     } else {
-      // 今日打卡
+      // 今日打卡 - 使用 isTodayDay 函数查找今天的打卡记录
       const todayCheckIn = currentCheckIns.find(c => {
         if (!currentChallenge) return false
-        const checkDate = new Date(c.date)
-        const today = new Date()
-        return checkDate.getDate() === today.getDate() &&
-          checkDate.getMonth() === today.getMonth() &&
-          checkDate.getFullYear() === today.getFullYear()
+        return isTodayDay(currentChallenge.startDate, c.day)
       })
       if (todayCheckIn) {
         setSelectedDay({

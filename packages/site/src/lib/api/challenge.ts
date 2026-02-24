@@ -186,8 +186,8 @@ export const api_create_challenge = async (
   // 等待所有 Mission 创建完成
   await Promise.all(missionPromises)
 
-  // 4. 转换为 ChallengeData 返回
-  const challenge = projectToChallenge(project)
+  // 4. 转换为 ChallengeData 返回（使用正确的 startDate）
+  const challenge = projectToChallenge(project, startDate)
   if (!challenge) {
     throw new Error('Failed to create challenge')
   }
