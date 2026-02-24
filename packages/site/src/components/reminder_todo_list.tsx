@@ -45,13 +45,15 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   const missions = useMissionsStore((state: MissionsState) => state.missions)
   const upcomingMissions = useMissionsStore((state: MissionsState) => state.upcomingMissions)
   const overdueMissions = useMissionsStore((state: MissionsState) => state.overdueMissions)
-  const isLoading = useMissionsStore((state: MissionsState) => state.isLoading)
+  const isMissionsLoading = useMissionsStore((state: MissionsState) => state.isLoading)
   const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
   const fetchUpcomingMissions = useMissionsStore((state: MissionsState) => state.fetchUpcomingMissions)
   const fetchOverdueMissions = useMissionsStore((state: MissionsState) => state.fetchOverdueMissions)
   
   // Get projects to filter out Challenge-related missions
   const projects = useProjectsStore((state: ProjectsState) => state.projects)
+  const isProjectsLoading = useProjectsStore((state: ProjectsState) => state.isLoading)
+  const fetchProjects = useProjectsStore((state: ProjectsState) => state.fetchProjects)
   
   // Filter out Challenge-related missions
   const regularMissions = useMemo(() => {
@@ -83,13 +85,24 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   const [activeTab, setActiveTab] = useState('all')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Fetch data on mount
+  // Combined loading state for initial data fetch
+  const isInitialLoading = isMissionsLoading || isProjectsLoading
+
+  // Fetch data on mount - load both projects and missions in parallel
   useEffect(() => {
     if (!serverHealth) return
     
-    fetchMissions()
-    fetchUpcomingMissions(72) // Get missions due in next 72 hours
-    fetchOverdueMissions()
+    // Load projects first, then missions (missions need projects for filtering)
+    const loadData = async () => {
+      await fetchProjects()
+      await Promise.all([
+        fetchMissions(),
+        fetchUpcomingMissions(72), // Get missions due in next 72 hours
+        fetchOverdueMissions(),
+      ])
+    }
+    
+    loadData()
 
     // Auto-refresh every 5 minutes
     const interval = setInterval(() => {
@@ -98,7 +111,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
     }, 5 * 60 * 1000)
 
     return () => clearInterval(interval)
-  }, [serverHealth, fetchMissions, fetchUpcomingMissions, fetchOverdueMissions])
+  }, [serverHealth, fetchProjects, fetchMissions, fetchUpcomingMissions, fetchOverdueMissions])
 
   // Filter active missions (excluding Challenge-related)
   const activeMissions = regularMissions.filter((m) => isMissionActive(m.state))
@@ -153,6 +166,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
+      await fetchProjects()
       await Promise.all([
         fetchMissions(),
         fetchUpcomingMissions(72),
@@ -239,7 +253,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
             </TabsList>
 
             <TabsContent value={activeTab} className="mt-0">
-              {isLoading ? (
+              {isInitialLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-20 w-full" />
@@ -307,7 +321,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
 
         {!showFilters && (
           <>
-            {isLoading ? (
+            {isInitialLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
