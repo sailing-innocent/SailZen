@@ -141,6 +141,7 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
+        from sail_server.router.agent import router as agent_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -154,6 +155,7 @@ class SailServer:
                 text_router,
                 necessity_router,
                 analysis_router,
+                agent_router,
             ],
         )
 
@@ -331,13 +333,19 @@ class SailServer:
 
     async def on_startup(self):
         logger.info("Server starting up...")
-        # Initialize any resources or connections here
-        await asyncio.sleep(0.1)
+        # 启动 Agent 调度器
+        from sail_server.model.agent import get_agent_scheduler
+        scheduler = get_agent_scheduler()
+        await scheduler.start()
+        logger.info("Agent scheduler started")
 
     async def on_shutdown(self):
         logger.info("Server shutting down...")
-        # Clean up any resources or connections here
-        await asyncio.sleep(0.1)
+        # 停止 Agent 调度器
+        from sail_server.model.agent import get_agent_scheduler
+        scheduler = get_agent_scheduler()
+        await scheduler.stop()
+        logger.info("Agent scheduler stopped")
 
     def run(self):
         logger.info(f"Server running on {self.host}:{self.port}")
