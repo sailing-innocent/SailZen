@@ -12,12 +12,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from typing import Any
-from litestar import Router, Controller, get, post, delete
+from litestar import Router, Controller, get, post, delete, websocket
 from litestar.di import Provide
 from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar.exceptions import NotFoundException
-from litestar.handlers import WebsocketListener
 
 from sail_server.data.agent import (
     UserPrompt, UserPromptData, UserPromptCreateRequest,
@@ -322,31 +321,22 @@ class SchedulerController(Controller):
 # WebSocket for Real-time Updates
 # ============================================================================
 
-class AgentEventWebSocket(WebsocketListener):
+# Store active WebSocket connections
+_active_websockets: List[Any] = []
+
+@websocket("/ws/events", name="agent_events")
+async def agent_event_websocket(socket: Any) -> None:
     """Agent 事件 WebSocket - 实时推送状态更新"""
-    path = "/ws/events"
+    await socket.accept()
+    _active_websockets.append(socket)
     
-    async def on_accept(self, websocket: Any, close_code: int = 0) -> None:
-        """连接建立时订阅事件"""
-        self.websocket = websocket
-        # 获取全局调度器并订阅
-        scheduler = get_agent_scheduler()
-        scheduler.subscribe(self._on_event)
+    # 获取全局调度器并订阅
+    scheduler = get_agent_scheduler()
     
-    async def on_disconnect(self, websocket: Any, close_code: int) -> None:
-        """连接断开时取消订阅"""
-        scheduler = get_agent_scheduler()
-        scheduler.unsubscribe(self._on_event)
-    
-    async def on_receive(self, websocket: Any, data: Any) -> Any:
-        """接收客户端消息（本实现中不需要处理客户端消息）"""
-        # 可以在这里处理客户端发送的命令，如心跳、订阅特定任务等
-        return None
-    
-    async def _on_event(self, event: Any) -> None:
+    async def on_event(event: Any) -> None:
         """事件回调 - 发送给客户端"""
         try:
-            await self.websocket.send_json({
+            await socket.send_json({
                 'event_type': event.event_type,
                 'task_id': event.task_id,
                 'timestamp': event.timestamp.isoformat(),
@@ -355,6 +345,20 @@ class AgentEventWebSocket(WebsocketListener):
         except Exception as e:
             # WebSocket 可能已关闭
             pass
+    
+    scheduler.subscribe(on_event)
+    
+    try:
+        # Keep connection alive - just wait for connection to close
+        # No need to receive messages, just push events
+        await socket.receive()
+    except Exception as e:
+        # Connection closed or error
+        pass
+    finally:
+        scheduler.unsubscribe(on_event)
+        if socket in _active_websockets:
+            _active_websockets.remove(socket)
 
 
 # ============================================================================
@@ -368,6 +372,6 @@ router = Router(
         UserPromptController,
         AgentTaskController,
         SchedulerController,
-        AgentEventWebSocket,
+        agent_event_websocket,
     ],
 )

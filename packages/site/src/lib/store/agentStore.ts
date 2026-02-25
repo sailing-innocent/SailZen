@@ -4,7 +4,8 @@
  */
 
 import { create } from 'zustand';
-import { agentAPI, AgentTask, AgentStep, AgentOutput, UserPrompt, SchedulerState, AgentStreamEvent } from '@/lib/api/agent';
+import { agentAPI } from '@/lib/api/agent';
+import type { AgentTask, AgentStep, AgentOutput, UserPrompt, SchedulerState, AgentStreamEvent } from '@/lib/api/agent';
 
 // ============================================================================
 // Types
@@ -236,7 +237,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     
     // Close existing connection
     if (wsConnection) {
-      wsConnection.close();
+      try {
+        wsConnection.close();
+      } catch (e) {
+        // Ignore errors when closing
+      }
     }
 
     const ws = agentAPI.connectEventStream(
@@ -244,13 +249,25 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         handleAgentEvent(event);
       },
       (error) => {
-        console.error('WebSocket error:', error);
-        // Try to reconnect after a delay
-        setTimeout(() => {
-          get().connectRealtimeUpdates();
-        }, 5000);
+        // Only log error if connection is not already being closed
+        if (ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+          console.log('WebSocket connection error, will retry...');
+        }
       }
     );
+
+    // Handle connection close with reconnect
+    ws.onclose = () => {
+      // Clear the connection from state
+      set({ wsConnection: null });
+      // Try to reconnect after a delay
+      setTimeout(() => {
+        const current = get();
+        if (!current.wsConnection) {
+          get().connectRealtimeUpdates();
+        }
+      }, 3000);
+    };
 
     set({ wsConnection: ws });
     
@@ -262,7 +279,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   disconnectRealtimeUpdates: () => {
     const { wsConnection } = get();
     if (wsConnection) {
-      wsConnection.close();
+      // Remove onclose handler to prevent reconnection
+      wsConnection.onclose = null;
+      try {
+        wsConnection.close();
+      } catch (e) {
+        // Ignore errors when closing
+      }
       set({ wsConnection: null });
     }
   },

@@ -38,11 +38,11 @@ class AgentRunner:
     """
     
     # Mock 配置
-    MOCK_MIN_DELAY = 0.5  # 最小步骤延时（秒）
-    MOCK_MAX_DELAY = 2.0  # 最大步骤延时（秒）
-    MOCK_FAILURE_RATE = 0.2  # 失败率（20%）
-    MOCK_MIN_STEPS = 3  # 最小步骤数
-    MOCK_MAX_STEPS = 6  # 最大步骤数
+    MOCK_MIN_DELAY = 0.3  # 最小步骤延时（秒）
+    MOCK_MAX_DELAY = 1.0  # 最大步骤延时（秒）
+    MOCK_FAILURE_RATE = 0.05  # 失败率（5%）
+    MOCK_MIN_STEPS = 2  # 最小步骤数
+    MOCK_MAX_STEPS = 4  # 最大步骤数
     
     def __init__(self, task_id: int, event_callback: Optional[Callable] = None):
         self.task_id = task_id
@@ -208,6 +208,7 @@ class AgentRunner:
     async def _complete_task(self):
         """标记任务完成"""
         completed_at = datetime.utcnow()
+        output_id = None
         
         with get_db_session() as db:
             task = db.query(AgentTask).filter(AgentTask.id == self.task_id).first()
@@ -223,6 +224,8 @@ class AgentRunner:
                 meta_data={'mock': True, 'total_steps': self._current_step}
             )
             db.add(output)
+            db.flush()  # Flush to get the ID
+            output_id = output.id
             
             # 更新 Prompt 状态
             prompt = task.prompt
@@ -233,7 +236,7 @@ class AgentRunner:
         
         self._emit_event('task_completed', {
             'completed_at': completed_at.isoformat(),
-            'output_id': output.id,
+            'output_id': output_id,
         })
         
         logger.info(f"Task {self.task_id} completed")

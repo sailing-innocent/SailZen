@@ -133,7 +133,7 @@ export class AgentAPI {
     if (params?.status) query.append('status', params.status);
     if (params?.skip !== undefined) query.append('skip', String(params.skip));
     if (params?.limit !== undefined) query.append('limit', String(params.limit));
-    
+
     const res = await fetch(`${this.baseUrl}/prompt?${query}`);
     if (!res.ok) throw new Error(`Failed to list prompts: ${res.statusText}`);
     return res.json();
@@ -166,7 +166,7 @@ export class AgentAPI {
     if (params?.status) query.append('status', params.status);
     if (params?.skip !== undefined) query.append('skip', String(params.skip));
     if (params?.limit !== undefined) query.append('limit', String(params.limit));
-    
+
     const res = await fetch(`${this.baseUrl}/task?${query}`);
     if (!res.ok) throw new Error(`Failed to list tasks: ${res.statusText}`);
     return res.json();
@@ -182,7 +182,7 @@ export class AgentAPI {
     const query = new URLSearchParams();
     if (params?.skip !== undefined) query.append('skip', String(params.skip));
     if (params?.limit !== undefined) query.append('limit', String(params.limit));
-    
+
     const res = await fetch(`${this.baseUrl}/task/${id}/steps?${query}`);
     if (!res.ok) throw new Error(`Failed to get task steps: ${res.statusText}`);
     return res.json();
@@ -227,9 +227,19 @@ export class AgentAPI {
   // --------------------------------------------------------------------------
 
   connectEventStream(onEvent: (event: AgentStreamEvent) => void, onError?: (error: Event) => void): WebSocket {
-    const wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/ws/events';
+    // Build WebSocket URL - use window.location if baseUrl is relative
+    let wsUrl: string;
+    if (this.baseUrl.startsWith('http')) {
+      wsUrl = this.baseUrl.replace(/^http/, 'ws') + '/ws/events';
+    } else {
+      // Relative URL - construct from current location
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      wsUrl = `${protocol}//${host}${this.baseUrl}/ws/events`;
+    }
+    console.log('Connecting to WebSocket:', wsUrl);
     const ws = new WebSocket(wsUrl);
-    
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -238,19 +248,20 @@ export class AgentAPI {
         console.error('Failed to parse WebSocket message:', e);
       }
     };
-    
+
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      // Silently handle errors - onclose will handle reconnection
       onError?.(error);
     };
-    
+
     ws.onclose = () => {
       console.log('WebSocket connection closed');
     };
-    
+
     return ws;
   }
 }
 
 // Singleton instance
 export const agentAPI = new AgentAPI();
+

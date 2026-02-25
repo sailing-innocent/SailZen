@@ -11,6 +11,7 @@ export interface PageRoute {
 
 export const PAGE_ROUTES: PageRoute[] = [
   { name: 'Main', path: '/main', label: '首页', icon: 'Home', component: React.lazy(() => import('@pages/main')) },
+  { name: 'Agent', path: '/agent', label: 'Agent', icon: 'Bot', component: React.lazy(() => import('@pages/agent')) },
   { name: 'Money', path: '/money', label: '财务', icon: 'Wallet', component: React.lazy(() => import('@pages/money')) },
   { name: 'Health', path: '/health', label: '健康', icon: 'Heart', component: React.lazy(() => import('@pages/health')) },
   { name: 'Project', path: '/project', label: '项目', icon: 'FolderKanban', component: React.lazy(() => import('@pages/project')) },
