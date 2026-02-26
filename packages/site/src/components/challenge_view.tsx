@@ -162,8 +162,6 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
     const missionId = getTodayMissionId()
     if (missionId && selectedChallengeId) {
       await checkInSuccess(missionId, selectedChallengeId)
-      // 刷新该挑战的 stats（更新左侧列表显示）
-      await loadSingleChallengeStats(selectedChallengeId)
       setIsCheckInDialogOpen(false)
     }
   }
@@ -173,8 +171,6 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
     const missionId = getTodayMissionId()
     if (missionId && selectedChallengeId) {
       await checkInFailed(missionId, selectedChallengeId)
-      // 刷新该挑战的 stats（更新左侧列表显示）
-      await loadSingleChallengeStats(selectedChallengeId)
       setIsCheckInDialogOpen(false)
     }
   }
@@ -185,8 +181,6 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
       const checkIn = currentCheckIns.find(c => c.day === selectedDay.day)
       if (checkIn) {
         await resetCheckIn(checkIn.mission.id, selectedChallengeId)
-        // 刷新该挑战的 stats（更新左侧列表显示）
-        await loadSingleChallengeStats(selectedChallengeId)
         setIsCheckInDialogOpen(false)
       }
     }
