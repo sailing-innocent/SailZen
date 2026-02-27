@@ -478,8 +478,10 @@ class LLMGateway:
     def get_cache_stats(self) -> Dict[str, Any]:
         """获取缓存统计"""
         if self._cache:
-            return self._cache.get_stats()
-        return {"enabled": False}
+            stats = self._cache.get_stats()
+            stats["enabled"] = True
+            return stats
+        return {"enabled": False, "size": 0, "max_size": 0, "ttl_seconds": 0}
     
     def clear_cache(self):
         """清空缓存"""

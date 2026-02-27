@@ -22,9 +22,15 @@ class ProviderError(Exception):
     """Provider 错误基类"""
     
     def __init__(self, message: str, error_code: str = None, retryable: bool = False):
-        super().__init__(message)
+        self.message = message
         self.error_code = error_code
         self.retryable = retryable
+        # Include error code in string representation for easier debugging
+        if error_code:
+            full_message = f"[{error_code}] {message}"
+        else:
+            full_message = message
+        super().__init__(full_message)
 
 
 class ProviderRateLimitError(ProviderError):
