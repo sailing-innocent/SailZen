@@ -1,560 +1,459 @@
 # -*- coding: utf-8 -*-
 # @file unified_agent.py
-# @brief Unified Agent Task Models
+# @brief Unified Agent Task Models - Business Logic
 # @author sailing-innocent
-# @date 2026-02-26
+# @date 2026-02-27
 # @version 1.0
 # ---------------------------------
-#
-# 统一的 Agent 任务数据模型
-# 整合 Agent 系统和小说分析系统的任务模型
 
+from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
+from sqlalchemy.orm import Session
+from sqlalchemy import desc, asc, func
 
-from sqlalchemy import (
-    Column, Integer, String, ForeignKey, TIMESTAMP, func, Text, Numeric
+from sail_server.data.unified_agent import (
+    UnifiedAgentTask,
+    UnifiedAgentStep,
+    UnifiedAgentEvent,
+    UnifiedTaskData,
+    UnifiedStepData,
+    TaskStatus,
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
-from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sail_server.data.orm import ORMBase
 
 
-# ============================================================================
-# ORM Models
-# ============================================================================
-
-class UnifiedAgentTask(ORMBase):
-    """
-    统一 Agent 任务表
+class UnifiedTaskDAO:
+    """统一任务数据访问对象"""
     
-    整合 AgentTask 和 AnalysisTask 的功能：
-    - 支持通用 Agent 任务 (code/writing/general)
-    - 支持小说分析任务 (novel_analysis)
-    - 统一的成本追踪和状态管理
-    """
-    __tablename__ = "unified_agent_tasks"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
+    def __init__(self, db: Session):
+        self.db = db
     
     # =========================================================================
-    # 任务分类
+    # CRUD 操作
     # =========================================================================
-    task_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    """任务类型: 'novel_analysis' | 'code' | 'writing' | 'general' | 'data'"""
     
-    sub_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    """子类型: 如 'outline_extraction', 'character_detection' 等"""
+    def create(self, data: UnifiedTaskData) -> UnifiedAgentTask:
+        """创建任务"""
+        orm = data.to_orm()
+        self.db.add(orm)
+        self.db.commit()
+        self.db.refresh(orm)
+        return orm
     
-    # =========================================================================
-    # 关联信息 (小说分析用)
-    # =========================================================================
-    edition_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("editions.id", ondelete="SET NULL"), 
-        nullable=True, 
-        index=True
-    )
-    """关联的版本 ID (小说分析任务)"""
+    def get_by_id(self, task_id: int) -> Optional[UnifiedAgentTask]:
+        """根据 ID 获取任务"""
+        return self.db.query(UnifiedAgentTask).filter(
+            UnifiedAgentTask.id == task_id
+        ).first()
     
-    target_node_ids: Mapped[Optional[List[int]]] = mapped_column(
-        ARRAY(Integer), 
-        nullable=True
-    )
-    """目标章节节点 ID 列表"""
+    def get_with_step_count(self, task_id: int) -> Optional[tuple[UnifiedAgentTask, int]]:
+        """获取任务及步骤数"""
+        task = self.get_by_id(task_id)
+        if not task:
+            return None
+        step_count = self.db.query(func.count(UnifiedAgentStep.id)).filter(
+            UnifiedAgentStep.task_id == task_id
+        ).scalar()
+        return task, step_count or 0
     
-    target_scope: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    """目标范围: 'full' | 'range' | 'chapter'"""
+    def update(self, task_id: int, **kwargs) -> Optional[UnifiedAgentTask]:
+        """更新任务字段"""
+        task = self.get_by_id(task_id)
+        if not task:
+            return None
+        
+        for key, value in kwargs.items():
+            if hasattr(task, key):
+                setattr(task, key, value)
+        
+        self.db.commit()
+        self.db.refresh(task)
+        return task
     
-    # =========================================================================
-    # LLM 配置
-    # =========================================================================
-    llm_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    """LLM 提供商: 'google' | 'openai' | 'moonshot' | 'anthropic'"""
-    
-    llm_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    """LLM 模型名称"""
-    
-    prompt_template_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    """Prompt 模板 ID"""
-    
-    # =========================================================================
-    # 执行状态
-    # =========================================================================
-    status: Mapped[str] = mapped_column(
-        String(50), 
-        nullable=False, 
-        default="pending",
-        index=True
-    )
-    """任务状态: pending | scheduled | running | paused | completed | failed | cancelled"""
-    
-    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    """执行进度 0-100"""
-    
-    current_phase: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    """当前执行阶段描述"""
-    
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    """优先级 1-10, 1为最高"""
+    def delete(self, task_id: int) -> bool:
+        """删除任务"""
+        task = self.get_by_id(task_id)
+        if not task:
+            return False
+        self.db.delete(task)
+        self.db.commit()
+        return True
     
     # =========================================================================
-    # 错误信息
+    # 列表查询
     # =========================================================================
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    """错误信息"""
     
-    error_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    """错误码"""
+    def list_tasks(
+        self,
+        status: Optional[str] = None,
+        task_type: Optional[str] = None,
+        sub_type: Optional[str] = None,
+        edition_id: Optional[int] = None,
+        review_status: Optional[str] = None,
+        order_by: str = "created_at",
+        order_desc: bool = True,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> List[UnifiedAgentTask]:
+        """列表查询任务"""
+        query = self.db.query(UnifiedAgentTask)
+        
+        if status:
+            query = query.filter(UnifiedAgentTask.status == status)
+        if task_type:
+            query = query.filter(UnifiedAgentTask.task_type == task_type)
+        if sub_type:
+            query = query.filter(UnifiedAgentTask.sub_type == sub_type)
+        if edition_id:
+            query = query.filter(UnifiedAgentTask.edition_id == edition_id)
+        if review_status:
+            query = query.filter(UnifiedAgentTask.review_status == review_status)
+        
+        # 排序
+        order_column = getattr(UnifiedAgentTask, order_by, UnifiedAgentTask.created_at)
+        query = query.order_by(desc(order_column) if order_desc else asc(order_column))
+        
+        return query.offset(skip).limit(limit).all()
     
-    # =========================================================================
-    # 成本追踪
-    # =========================================================================
-    estimated_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    """预估 Token 数量"""
-    
-    actual_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    """实际 Token 消耗"""
-    
-    estimated_cost: Mapped[Optional[float]] = mapped_column(Numeric(10, 6), nullable=True)
-    """预估成本 (USD)"""
-    
-    actual_cost: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False, default=0.0)
-    """实际成本 (USD)"""
-    
-    # =========================================================================
-    # 结果数据
-    # =========================================================================
-    result_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    """任务结果数据 (JSON 格式)"""
-    
-    review_status: Mapped[str] = mapped_column(
-        String(50), 
-        nullable=False, 
-        default="pending"
-    )
-    """审核状态: pending | approved | rejected | modified"""
-    
-    # =========================================================================
-    # 配置参数
-    # =========================================================================
-    config: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        JSONB, 
-        nullable=True, 
-        default=dict
-    )
-    """任务配置参数 (原 agent_config / parameters)"""
-    
-    # =========================================================================
-    # 时间戳
-    # =========================================================================
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, 
-        server_default=func.current_timestamp()
-    )
-    
-    started_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
-    """开始执行时间"""
-    
-    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
-    """完成时间"""
-    
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP, nullable=True)
-    """取消时间"""
-    
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP,
-        server_default=func.current_timestamp(),
-        onupdate=func.current_timestamp()
-    )
+    def count_tasks(
+        self,
+        status: Optional[str] = None,
+        task_type: Optional[str] = None,
+        edition_id: Optional[int] = None,
+    ) -> int:
+        """统计任务数量"""
+        query = self.db.query(func.count(UnifiedAgentTask.id))
+        
+        if status:
+            query = query.filter(UnifiedAgentTask.status == status)
+        if task_type:
+            query = query.filter(UnifiedAgentTask.task_type == task_type)
+        if edition_id:
+            query = query.filter(UnifiedAgentTask.edition_id == edition_id)
+        
+        return query.scalar() or 0
     
     # =========================================================================
-    # 关联
+    # 调度器专用查询
     # =========================================================================
-    steps: Mapped[List["UnifiedAgentStep"]] = relationship(
-        "UnifiedAgentStep",
-        back_populates="task",
-        cascade="all, delete-orphan",
-        order_by="UnifiedAgentStep.step_number"
-    )
-
-
-class UnifiedAgentStep(ORMBase):
-    """
-    统一 Agent 任务步骤表
     
-    整合 AgentStep 功能，增强 LLM 调用追踪
-    """
-    __tablename__ = "unified_agent_steps"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
+    def get_pending_tasks(
+        self,
+        limit: int = 10,
+        task_type: Optional[str] = None,
+    ) -> List[UnifiedAgentTask]:
+        """获取待处理任务（按优先级排序）"""
+        query = self.db.query(UnifiedAgentTask).filter(
+            UnifiedAgentTask.status == TaskStatus.PENDING
+        )
+        
+        if task_type:
+            query = query.filter(UnifiedAgentTask.task_type == task_type)
+        
+        return query.order_by(
+            asc(UnifiedAgentTask.priority),  # 优先级高的在前
+            asc(UnifiedAgentTask.created_at),  # 同优先级按时间
+        ).limit(limit).all()
     
-    task_id: Mapped[int] = mapped_column(
-        ForeignKey("unified_agent_tasks.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
+    def get_running_tasks(self) -> List[UnifiedAgentTask]:
+        """获取正在运行的任务"""
+        return self.db.query(UnifiedAgentTask).filter(
+            UnifiedAgentTask.status == TaskStatus.RUNNING
+        ).all()
     
-    # 步骤信息
-    step_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    """步骤序号"""
+    def get_tasks_by_edition(
+        self,
+        edition_id: int,
+        status: Optional[str] = None,
+        task_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> List[UnifiedAgentTask]:
+        """按版本获取任务"""
+        query = self.db.query(UnifiedAgentTask).filter(
+            UnifiedAgentTask.edition_id == edition_id
+        )
+        
+        if status:
+            query = query.filter(UnifiedAgentTask.status == status)
+        if task_type:
+            query = query.filter(UnifiedAgentTask.task_type == task_type)
+        
+        return query.order_by(desc(UnifiedAgentTask.created_at)).offset(skip).limit(limit).all()
     
-    step_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    """步骤类型: thought | action | observation | llm_call | data_processing | error | completion"""
+    # =========================================================================
+    # 状态更新
+    # =========================================================================
     
-    title: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    """步骤标题"""
-    
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    """详细内容"""
-    
-    content_summary: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    """内容摘要"""
-    
-    # LLM 调用追踪 (新增)
-    llm_provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    """LLM 提供商"""
-    
-    llm_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    """LLM 模型"""
-    
-    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    """Prompt Token 数"""
-    
-    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    """补全 Token 数"""
-    
-    cost: Mapped[float] = mapped_column(Numeric(10, 6), nullable=False, default=0.0)
-    """本步成本 (USD)"""
-    
-    # 元数据
-    meta_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
-        JSONB, 
-        nullable=True, 
-        default=dict
-    )
-    """附加信息"""
-    
-    # 时间戳
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, 
-        server_default=func.current_timestamp()
-    )
-    
-    duration_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    """执行耗时 (毫秒)"""
-    
-    # 关联
-    task: Mapped["UnifiedAgentTask"] = relationship(
-        "UnifiedAgentTask", 
-        back_populates="steps"
-    )
-
-
-class UnifiedAgentEvent(ORMBase):
-    """
-    统一 Agent 事件日志表
-    
-    用于记录任务执行过程中的关键事件，便于审计和调试
-    """
-    __tablename__ = "unified_agent_events"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    
-    task_id: Mapped[int] = mapped_column(
-        ForeignKey("unified_agent_tasks.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
-    
-    event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    """事件类型: task_started | step_completed | llm_called | progress_update | error | task_completed"""
-    
-    event_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    """事件数据"""
-    
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, 
-        server_default=func.current_timestamp(),
-        index=True
-    )
-
-
-# ============================================================================
-# Data Transfer Objects
-# ============================================================================
-
-@dataclass
-class UnifiedTaskData:
-    """统一任务数据传输对象"""
-    
-    id: int = -1
-    task_type: str = "general"
-    sub_type: Optional[str] = None
-    
-    # 关联信息
-    edition_id: Optional[int] = None
-    target_node_ids: Optional[List[int]] = None
-    target_scope: Optional[str] = None
-    
-    # LLM 配置
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    prompt_template_id: Optional[str] = None
-    
-    # 执行状态
-    status: str = "pending"
-    progress: int = 0
-    current_phase: Optional[str] = None
-    priority: int = 5
-    
-    # 错误信息
-    error_message: Optional[str] = None
-    error_code: Optional[str] = None
-    
-    # 成本追踪
-    estimated_tokens: Optional[int] = None
-    actual_tokens: int = 0
-    estimated_cost: Optional[float] = None
-    actual_cost: float = 0.0
-    
-    # 结果数据
-    result_data: Optional[Dict[str, Any]] = None
-    review_status: str = "pending"
-    
-    # 配置
-    config: Dict[str, Any] = field(default_factory=dict)
-    
-    # 时间戳
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    cancelled_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    # 统计
-    step_count: int = 0
-    
-    @classmethod
-    def from_orm(cls, orm: UnifiedAgentTask, step_count: int = 0) -> "UnifiedTaskData":
-        """从 ORM 对象创建 DTO"""
-        return cls(
-            id=orm.id,
-            task_type=orm.task_type,
-            sub_type=orm.sub_type,
-            edition_id=orm.edition_id,
-            target_node_ids=orm.target_node_ids,
-            target_scope=orm.target_scope,
-            llm_provider=orm.llm_provider,
-            llm_model=orm.llm_model,
-            prompt_template_id=orm.prompt_template_id,
-            status=orm.status,
-            progress=orm.progress,
-            current_phase=orm.current_phase,
-            priority=orm.priority,
-            error_message=orm.error_message,
-            error_code=orm.error_code,
-            estimated_tokens=orm.estimated_tokens,
-            actual_tokens=orm.actual_tokens,
-            estimated_cost=float(orm.estimated_cost) if orm.estimated_cost else None,
-            actual_cost=float(orm.actual_cost),
-            result_data=orm.result_data,
-            review_status=orm.review_status,
-            config=orm.config or {},
-            created_at=orm.created_at,
-            started_at=orm.started_at,
-            completed_at=orm.completed_at,
-            cancelled_at=orm.cancelled_at,
-            updated_at=orm.updated_at,
-            step_count=step_count,
+    def mark_as_scheduled(self, task_id: int) -> Optional[UnifiedAgentTask]:
+        """标记为已调度"""
+        return self.update(
+            task_id,
+            status=TaskStatus.SCHEDULED,
         )
     
-    def to_orm(self) -> UnifiedAgentTask:
-        """转换为 ORM 对象"""
-        return UnifiedAgentTask(
-            id=self.id if self.id > 0 else None,
-            task_type=self.task_type,
-            sub_type=self.sub_type,
-            edition_id=self.edition_id,
-            target_node_ids=self.target_node_ids,
-            target_scope=self.target_scope,
-            llm_provider=self.llm_provider,
-            llm_model=self.llm_model,
-            prompt_template_id=self.prompt_template_id,
-            status=self.status,
-            progress=self.progress,
-            current_phase=self.current_phase,
-            priority=self.priority,
-            error_message=self.error_message,
-            error_code=self.error_code,
-            estimated_tokens=self.estimated_tokens,
-            actual_tokens=self.actual_tokens,
-            estimated_cost=self.estimated_cost,
-            actual_cost=self.actual_cost,
-            result_data=self.result_data,
-            review_status=self.review_status,
-            config=self.config,
-            created_at=self.created_at,
-            started_at=self.started_at,
-            completed_at=self.completed_at,
-            cancelled_at=self.cancelled_at,
+    def mark_as_running(self, task_id: int) -> Optional[UnifiedAgentTask]:
+        """标记为运行中"""
+        return self.update(
+            task_id,
+            status=TaskStatus.RUNNING,
+            started_at=datetime.utcnow(),
         )
-
-
-@dataclass
-class UnifiedStepData:
-    """统一步骤数据传输对象"""
     
-    id: int = -1
-    task_id: int = -1
-    step_number: int = 0
-    step_type: str = "thought"
-    title: Optional[str] = None
-    content: Optional[str] = None
-    content_summary: Optional[str] = None
+    def mark_as_completed(
+        self,
+        task_id: int,
+        result_data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[UnifiedAgentTask]:
+        """标记为已完成"""
+        updates = {
+            "status": TaskStatus.COMPLETED,
+            "progress": 100,
+            "completed_at": datetime.utcnow(),
+        }
+        if result_data is not None:
+            updates["result_data"] = result_data
+        return self.update(task_id, **updates)
     
-    # LLM 追踪
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    cost: float = 0.0
-    
-    # 元数据
-    meta_data: Dict[str, Any] = field(default_factory=dict)
-    
-    # 时间戳
-    created_at: Optional[datetime] = None
-    duration_ms: Optional[int] = None
-    
-    @classmethod
-    def from_orm(cls, orm: UnifiedAgentStep) -> "UnifiedStepData":
-        """从 ORM 对象创建 DTO"""
-        return cls(
-            id=orm.id,
-            task_id=orm.task_id,
-            step_number=orm.step_number,
-            step_type=orm.step_type,
-            title=orm.title,
-            content=orm.content,
-            content_summary=orm.content_summary,
-            llm_provider=orm.llm_provider,
-            llm_model=orm.llm_model,
-            prompt_tokens=orm.prompt_tokens,
-            completion_tokens=orm.completion_tokens,
-            cost=float(orm.cost),
-            meta_data=orm.meta_data or {},
-            created_at=orm.created_at,
-            duration_ms=orm.duration_ms,
+    def mark_as_failed(
+        self,
+        task_id: int,
+        error_message: str,
+        error_code: Optional[str] = None,
+    ) -> Optional[UnifiedAgentTask]:
+        """标记为失败"""
+        return self.update(
+            task_id,
+            status=TaskStatus.FAILED,
+            error_message=error_message,
+            error_code=error_code,
+            completed_at=datetime.utcnow(),
         )
+    
+    def mark_as_cancelled(self, task_id: int) -> Optional[UnifiedAgentTask]:
+        """标记为已取消"""
+        return self.update(
+            task_id,
+            status=TaskStatus.CANCELLED,
+            cancelled_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+        )
+    
+    def update_progress(
+        self,
+        task_id: int,
+        progress: int,
+        current_phase: Optional[str] = None,
+    ) -> Optional[UnifiedAgentTask]:
+        """更新进度"""
+        updates = {"progress": max(0, min(100, progress))}
+        if current_phase:
+            updates["current_phase"] = current_phase
+        return self.update(task_id, **updates)
+    
+    def update_cost(
+        self,
+        task_id: int,
+        actual_tokens: int,
+        actual_cost: float,
+    ) -> Optional[UnifiedAgentTask]:
+        """更新成本"""
+        return self.update(
+            task_id,
+            actual_tokens=actual_tokens,
+            actual_cost=actual_cost,
+        )
+    
+    def update_review_status(
+        self,
+        task_id: int,
+        review_status: str,
+    ) -> Optional[UnifiedAgentTask]:
+        """更新审核状态"""
+        return self.update(task_id, review_status=review_status)
 
 
-@dataclass
-class UnifiedTaskCreateRequest:
-    """创建统一任务请求"""
+class UnifiedStepDAO:
+    """统一步骤数据访问对象"""
     
-    task_type: str = "general"
-    sub_type: Optional[str] = None
+    def __init__(self, db: Session):
+        self.db = db
     
-    # 小说分析用
-    edition_id: Optional[int] = None
-    target_node_ids: Optional[List[int]] = None
-    target_scope: Optional[str] = None
+    def create(
+        self,
+        task_id: int,
+        step_number: int,
+        step_type: str,
+        title: Optional[str] = None,
+        content: Optional[str] = None,
+        content_summary: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cost: float = 0.0,
+        meta_data: Optional[Dict[str, Any]] = None,
+        duration_ms: Optional[int] = None,
+    ) -> UnifiedAgentStep:
+        """创建步骤"""
+        step = UnifiedAgentStep(
+            task_id=task_id,
+            step_number=step_number,
+            step_type=step_type,
+            title=title,
+            content=content,
+            content_summary=content_summary,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost=cost,
+            meta_data=meta_data or {},
+            duration_ms=duration_ms,
+        )
+        self.db.add(step)
+        self.db.commit()
+        self.db.refresh(step)
+        return step
     
-    # LLM 配置
-    llm_provider: Optional[str] = None
-    llm_model: Optional[str] = None
-    prompt_template_id: Optional[str] = None
+    def get_by_id(self, step_id: int) -> Optional[UnifiedAgentStep]:
+        """根据 ID 获取步骤"""
+        return self.db.query(UnifiedAgentStep).filter(
+            UnifiedAgentStep.id == step_id
+        ).first()
     
-    # 优先级
-    priority: int = 5
+    def get_by_task_id(
+        self,
+        task_id: int,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[UnifiedAgentStep]:
+        """获取任务的所有步骤"""
+        return self.db.query(UnifiedAgentStep).filter(
+            UnifiedAgentStep.task_id == task_id
+        ).order_by(asc(UnifiedAgentStep.step_number)).offset(skip).limit(limit).all()
     
-    # 配置
-    config: Dict[str, Any] = field(default_factory=dict)
+    def get_last_step(self, task_id: int) -> Optional[UnifiedAgentStep]:
+        """获取任务的最后一步"""
+        return self.db.query(UnifiedAgentStep).filter(
+            UnifiedAgentStep.task_id == task_id
+        ).order_by(desc(UnifiedAgentStep.step_number)).first()
+    
+    def get_next_step_number(self, task_id: int) -> int:
+        """获取下一步的序号"""
+        last_step = self.get_last_step(task_id)
+        return (last_step.step_number + 1) if last_step else 1
+    
+    def update(self, step_id: int, **kwargs) -> Optional[UnifiedAgentStep]:
+        """更新步骤"""
+        step = self.get_by_id(step_id)
+        if not step:
+            return None
+        
+        for key, value in kwargs.items():
+            if hasattr(step, key):
+                setattr(step, key, value)
+        
+        self.db.commit()
+        self.db.refresh(step)
+        return step
+    
+    def delete_by_task_id(self, task_id: int) -> int:
+        """删除任务的所有步骤"""
+        result = self.db.query(UnifiedAgentStep).filter(
+            UnifiedAgentStep.task_id == task_id
+        ).delete()
+        self.db.commit()
+        return result
 
 
-@dataclass
-class UnifiedTaskProgress:
-    """任务进度信息"""
+class UnifiedEventDAO:
+    """统一事件数据访问对象"""
     
-    task_id: int
-    status: str
-    progress: int
-    current_phase: Optional[str] = None
-    current_step: Optional[int] = None
-    total_steps: Optional[int] = None
-    estimated_remaining_seconds: Optional[int] = None
-    error_message: Optional[str] = None
+    def __init__(self, db: Session):
+        self.db = db
     
-    # 成本信息
-    actual_tokens: int = 0
-    actual_cost: float = 0.0
+    def create(
+        self,
+        task_id: int,
+        event_type: str,
+        event_data: Optional[Dict[str, Any]] = None,
+    ) -> UnifiedAgentEvent:
+        """创建事件"""
+        event = UnifiedAgentEvent(
+            task_id=task_id,
+            event_type=event_type,
+            event_data=event_data or {},
+        )
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(event)
+        return event
     
-    # 时间戳
-    started_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-
-@dataclass
-class UnifiedTaskResult:
-    """任务执行结果"""
+    def get_by_task_id(
+        self,
+        task_id: int,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[UnifiedAgentEvent]:
+        """获取任务的所有事件"""
+        return self.db.query(UnifiedAgentEvent).filter(
+            UnifiedAgentEvent.task_id == task_id
+        ).order_by(desc(UnifiedAgentEvent.created_at)).offset(skip).limit(limit).all()
     
-    task_id: int
-    success: bool
-    result_data: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-    execution_time_seconds: float = 0.0
-    total_tokens: int = 0
-    total_cost: float = 0.0
+    def get_recent_events(
+        self,
+        task_type: Optional[str] = None,
+        event_type: Optional[str] = None,
+        minutes: int = 60,
+        limit: int = 100,
+    ) -> List[UnifiedAgentEvent]:
+        """获取最近的事件"""
+        from sqlalchemy import text
+        
+        since = datetime.utcnow().timestamp() - (minutes * 60)
+        
+        query = self.db.query(UnifiedAgentEvent).filter(
+            func.extract('epoch', UnifiedAgentEvent.created_at) > since
+        )
+        
+        if event_type:
+            query = query.filter(UnifiedAgentEvent.event_type == event_type)
+        
+        # 如果需要按 task_type 过滤，需要 JOIN
+        if task_type:
+            query = query.join(
+                UnifiedAgentTask,
+                UnifiedAgentEvent.task_id == UnifiedAgentTask.id
+            ).filter(UnifiedAgentTask.task_type == task_type)
+        
+        return query.order_by(desc(UnifiedAgentEvent.created_at)).limit(limit).all()
+    
+    def delete_old_events(self, days: int = 30) -> int:
+        """删除旧事件"""
+        from sqlalchemy import text
+        
+        cutoff = datetime.utcnow().timestamp() - (days * 24 * 60 * 60)
+        result = self.db.query(UnifiedAgentEvent).filter(
+            func.extract('epoch', UnifiedAgentEvent.created_at) < cutoff
+        ).delete()
+        self.db.commit()
+        return result
 
 
 # ============================================================================
-# Enums
+# 便捷函数
 # ============================================================================
 
-class TaskType:
-    """任务类型常量"""
-    NOVEL_ANALYSIS = "novel_analysis"
-    CODE = "code"
-    WRITING = "writing"
-    GENERAL = "general"
-    DATA = "data"
+def get_unified_task_dao(db: Session) -> UnifiedTaskDAO:
+    """获取 UnifiedTaskDAO 实例"""
+    return UnifiedTaskDAO(db)
 
 
-class TaskSubType:
-    """任务子类型常量 (小说分析)"""
-    OUTLINE_EXTRACTION = "outline_extraction"
-    CHARACTER_DETECTION = "character_detection"
-    SETTING_EXTRACTION = "setting_extraction"
-    RELATION_ANALYSIS = "relation_analysis"
-    PLOT_ANALYSIS = "plot_analysis"
+def get_unified_step_dao(db: Session) -> UnifiedStepDAO:
+    """获取 UnifiedStepDAO 实例"""
+    return UnifiedStepDAO(db)
 
 
-class TaskStatus:
-    """任务状态常量"""
-    PENDING = "pending"
-    SCHEDULED = "scheduled"
-    RUNNING = "running"
-    PAUSED = "paused"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class ReviewStatus:
-    """审核状态常量"""
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    MODIFIED = "modified"
-
-
-class StepType:
-    """步骤类型常量"""
-    THOUGHT = "thought"
-    ACTION = "action"
-    OBSERVATION = "observation"
-    LLM_CALL = "llm_call"
-    DATA_PROCESSING = "data_processing"
-    ERROR = "error"
-    COMPLETION = "completion"
+def get_unified_event_dao(db: Session) -> UnifiedEventDAO:
+    """获取 UnifiedEventDAO 实例"""
+    return UnifiedEventDAO(db)

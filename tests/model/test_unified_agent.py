@@ -14,7 +14,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 from sail_server.data.orm import ORMBase
-from sail_server.model.unified_agent import (
+from sail_server.data.unified_agent import (
     UnifiedAgentTask,
     UnifiedAgentStep,
     UnifiedAgentEvent,
@@ -26,7 +26,7 @@ from sail_server.model.unified_agent import (
     ReviewStatus,
     StepType,
 )
-from sail_server.data.unified_agent import (
+from sail_server.model.unified_agent import (
     UnifiedTaskDAO,
     UnifiedStepDAO,
     UnifiedEventDAO,

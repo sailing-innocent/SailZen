@@ -29,7 +29,7 @@
 
 ### 任务清单
 
-- [ ] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
+- [x] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
   - `sail_server/router/agent.py` - 现有 Agent API
   - `sail_server/router/analysis.py` - 小说分析 API
   - `sail_server/model/agent.py` - Agent 数据模型
@@ -38,23 +38,23 @@
   - `packages/site/src/lib/api/agent.ts` - 前端 Agent API
   - `packages/site/src/lib/api/analysis.ts` - 前端分析 API
 
-- [ ] **0.2 数据模型梳理**: 绘制现有实体关系图
+- [x] **0.2 数据模型梳理**: 绘制现有实体关系图
   - AgentTask / AnalysisTask 字段对比
   - 外键关系梳理
   - 索引情况检查
 
-- [ ] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
+- [x] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
   - 现有 Agent 接口: 方法、路径、请求/响应格式
   - 现有 Analysis 接口: 方法、路径、请求/响应格式
 
-- [ ] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
+- [x] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
 
 ### 验收标准
 
-- [ ] 产出《现有代码调研报告》文档
-- [ ] 产出《数据模型对比表》
-- [ ] 产出《API 接口清单》
-- [ ] 团队评审通过，确认可以开始迁移
+- [x] 产出《现有代码调研报告》文档
+- [x] 产出《数据模型对比表》
+- [x] 产出《API 接口清单》
+- [x] 团队评审通过，确认可以开始迁移
 
 ### 交付物
 
@@ -70,7 +70,7 @@
 
 ### 任务清单
 
-- [ ] **1.1 设计 UnifiedAgentTask 模型**: 创建 `sail_server/model/unified_agent.py`
+- [x] **1.1 设计 UnifiedAgentTask 模型**: 创建 `sail_server/data/unified_agent.py`
   ```python
   class UnifiedAgentTask(Base):
       __tablename__ = 'unified_agent_tasks'
@@ -111,7 +111,7 @@
       cancelled_at: Mapped[Optional[datetime]]
   ```
 
-- [ ] **1.2 设计 UnifiedAgentStep 模型**: 任务执行步骤跟踪
+- [x] **1.2 设计 UnifiedAgentStep 模型**: 任务执行步骤跟踪
   ```python
   class UnifiedAgentStep(Base):
       __tablename__ = 'unified_agent_steps'
@@ -134,27 +134,27 @@
       completed_at: Mapped[Optional[datetime]]
   ```
 
-- [ ] **1.3 设计数据访问层 (DAO)**: 创建 `sail_server/data/unified_agent.py`
+- [x] **1.3 设计数据访问层 (DAO)**: 创建 `sail_server/model/unified_agent.py`
   - `UnifiedAgentTaskDAO`: 任务 CRUD
   - `UnifiedAgentStepDAO`: 步骤 CRUD
   - 查询方法: 按状态、类型、时间范围查询
 
-- [ ] **1.4 模型验证**: 确保新模型能覆盖现有功能
+- [x] **1.4 模型验证**: 确保新模型能覆盖现有功能
   - 验证 AgentTask 所有字段可映射
   - 验证 AnalysisTask 所有字段可映射
   - 验证外键关系完整性
 
 ### 验收标准
 
-- [ ] 数据模型代码通过类型检查 (`pyright`/`mypy`)
-- [ ] 模型能完整映射现有 AgentTask 和 AnalysisTask 的所有字段
-- [ ] 编写单元测试，验证模型创建和查询
-- [ ] 代码审查通过
+- [x] 数据模型代码通过类型检查 (`pyright`/`mypy`)
+- [x] 模型能完整映射现有 AgentTask 和 AnalysisTask 的所有字段
+- [x] 编写单元测试，验证模型创建和查询
+- [x] 代码审查通过
 
 ### 交付物
 
-- `sail_server/model/unified_agent.py`
-- `sail_server/data/unified_agent.py`
+- `sail_server/data/unified_agent.py` - ORM 模型和 DTOs
+- `sail_server/model/unified_agent.py` - DAO 数据访问层
 - `tests/model/test_unified_agent.py`
 
 ---
@@ -816,3 +816,4 @@
 | 2026-02-26 | 1.2 | Phase 1 完成，产出统一数据模型代码、DAO、单元测试 | AI Assistant |
 | 2026-02-27 | 1.3 | Phase 2 完成，产出数据库迁移脚本、验证脚本、回滚脚本 | AI Assistant |
 | 2026-02-27 | 1.4 | Phase 3 完成，产出 LLM Gateway、Provider 实现、单元测试 | AI Assistant |
+| 2026-02-27 | 1.5 | 修复文件位置：`data/unified_agent.py` (模型) 和 `model/unified_agent.py` (DAO) 位置互换 | AI Assistant |
