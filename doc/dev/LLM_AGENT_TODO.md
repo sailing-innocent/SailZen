@@ -29,7 +29,7 @@
 
 ### 任务清单
 
-- [x] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
+- [ ] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
   - `sail_server/router/agent.py` - 现有 Agent API
   - `sail_server/router/analysis.py` - 小说分析 API
   - `sail_server/model/agent.py` - Agent 数据模型
@@ -37,21 +37,24 @@
   - `sail_server/utils/llm/` - LLM 相关工具
   - `packages/site/src/lib/api/agent.ts` - 前端 Agent API
   - `packages/site/src/lib/api/analysis.ts` - 前端分析 API
-- [x] **0.2 数据模型梳理**: 绘制现有实体关系图
+
+- [ ] **0.2 数据模型梳理**: 绘制现有实体关系图
   - AgentTask / AnalysisTask 字段对比
   - 外键关系梳理
   - 索引情况检查
-- [x] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
+
+- [ ] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
   - 现有 Agent 接口: 方法、路径、请求/响应格式
   - 现有 Analysis 接口: 方法、路径、请求/响应格式
-- [x] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
+
+- [ ] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
 
 ### 验收标准
 
-- [x] 产出《现有代码调研报告》文档
-- [x] 产出《数据模型对比表》
-- [x] 产出《API 接口清单》
-- [x] 团队评审通过，确认可以开始迁移
+- [ ] 产出《现有代码调研报告》文档
+- [ ] 产出《数据模型对比表》
+- [ ] 产出《API 接口清单》
+- [ ] 团队评审通过，确认可以开始迁移
 
 ### 交付物
 
@@ -783,8 +786,9 @@
 <!-- 更新此处的阶段状态 -->
 - [x] Phase 0: 代码调研与冻结 ✅
 - [x] Phase 1: 统一数据模型设计 ✅
-- [ ] Phase 2: 数据库迁移 🔄
-- [ ] Phase 3: LLM 网关封装
+- [x] Phase 2: 数据库迁移 ✅
+- [x] Phase 3: LLM 网关封装 ✅
+- [ ] Phase 4: 统一调度器实现 🔄
 - [ ] Phase 4: 统一调度器实现
 - [ ] Phase 5: Agent 抽象与 NovelAnalysisAgent
 - [ ] Phase 6: GeneralAgent 实现
@@ -810,3 +814,5 @@
 | 2026-02-26 | 1.0 | 初始版本 | AI Assistant |
 | 2026-02-26 | 1.1 | Phase 0 完成，产出调研报告、数据模型对比、API清单 | AI Assistant |
 | 2026-02-26 | 1.2 | Phase 1 完成，产出统一数据模型代码、DAO、单元测试 | AI Assistant |
+| 2026-02-27 | 1.3 | Phase 2 完成，产出数据库迁移脚本、验证脚本、回滚脚本 | AI Assistant |
+| 2026-02-27 | 1.4 | Phase 3 完成，产出 LLM Gateway、Provider 实现、单元测试 | AI Assistant |
