@@ -143,6 +143,9 @@ class SailServer:
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
         from sail_server.router.agent import router as agent_router
+        from sail_server.router.unified_agent import unified_agent_router
+        from sail_server.router.analysis_compat import analysis_compat_router
+        from sail_server.router.agent_compat import agent_compat_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -157,6 +160,11 @@ class SailServer:
                 necessity_router,
                 analysis_router,
                 agent_router,
+                # 新的统一 Agent 路由
+                unified_agent_router,
+                # 兼容层路由
+                analysis_compat_router,
+                agent_compat_router,
             ],
         )
 
