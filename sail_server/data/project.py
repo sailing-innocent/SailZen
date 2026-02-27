@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, TIMESTAMP, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sail_server.data.types import JSONB
 from .orm import ORMBase
 from sqlalchemy.orm import relationship
 from sail_server.utils.time_utils import QuarterBiWeekTime

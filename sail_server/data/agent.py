@@ -7,7 +7,7 @@
 # ---------------------------------
 
 from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func, Text, Boolean
-from sqlalchemy.dialects.postgresql import JSONB
+from sail_server.data.types import JSONB
 from sail_server.data.orm import ORMBase
 from sqlalchemy.orm import relationship
 from dataclasses import dataclass, field

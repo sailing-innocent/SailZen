@@ -20,7 +20,8 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY, UUID
+from sqlalchemy.dialects.postgresql import UUID
+from sail_server.data.types import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from .orm import ORMBase
 from dataclasses import dataclass, field

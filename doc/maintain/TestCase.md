@@ -14,9 +14,6 @@ tests/
 ├── test_unified_agent_system.py     # Unified Agent 系统测试 ✅ 新增
 ├── model/
 │   └── test_unified_agent.py        # Unified Agent 模型测试
-├── server/
-│   ├── conftest.py                  # Server 测试配置
-│   └── test_basic_connect.py        # 基础连接测试
 ├── utils/
 │   └── llm/
 │       └── test_gateway.py          # LLM Gateway 单元测试
@@ -52,7 +49,6 @@ tests/
 | `tests/llm_integration/test_llm_connection.py` | LLM 提供商连接测试 | ✅ 活跃 |
 | `tests/llm_integration/test_prompt_templates.py` | Prompt 模板渲染测试 | ✅ 活跃 |
 | `tests/llm_integration/test_task_flow.py` | 任务执行流程测试 | ✅ 活跃 |
-| `tests/server/test_basic_connect.py` | 服务器基础连接测试 | ⚠️ 需配置 |
 
 ## LLM 网关重构后的变更
 
@@ -95,9 +91,6 @@ uv run pytest tests/utils/llm/test_gateway.py::TestLLMGateway -v
 # 跳过异步测试（不调用真实 LLM）
 uv run pytest -m "not asyncio"
 
-# 运行服务器测试
-uv run pytest -m "server"
-
 # 运行当前标记的测试
 uv run pytest -m "current"
 ```
@@ -139,7 +132,6 @@ $env:POSTGRE_URI="postgresql://postgres:password@localhost:5432/main"
 | 标记 | 描述 | 使用场景 |
 |------|------|---------|
 | `@pytest.mark.asyncio` | 异步测试 | 所有 async 测试函数 |
-| `@pytest.mark.server` | 服务器测试 | 需要运行服务器的测试 |
 | `@pytest.mark.skipif` | 条件跳过 | API Key 未配置时跳过 |
 | `@pytest.mark.current` | 当前开发标记 | 标记正在开发的测试 |
 

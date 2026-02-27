@@ -7,7 +7,7 @@
 # ---------------------------------
 
 from sqlalchemy import Column, Integer, String, TIMESTAMP, func, Text
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sail_server.data.types import JSONB, ARRAY
 from .orm import ORMBase
 from dataclasses import dataclass, field
 from datetime import datetime

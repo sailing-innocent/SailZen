@@ -21,7 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Numeric,
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sail_server.data.types import JSONB, ARRAY
 from sqlalchemy.orm import relationship
 from .orm import ORMBase
 from dataclasses import dataclass, field

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import (
     Column, Integer, String, ForeignKey, TIMESTAMP, func, Text, Numeric
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sail_server.data.types import JSONB, ARRAY
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sail_server.data.orm import ORMBase
 
