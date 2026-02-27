@@ -1,28 +1,43 @@
 # -*- coding: utf-8 -*-
 # @file test_llm_backend_closed_loop.py
-# @brief LLM Backend Closed-Loop Integration Test
-# @description 使用 Kimi K2.5 验证 LLM 后端的闭环功能
+# @brief LLM Backend Closed-Loop Integration Test (DEPRECATED)
+# @description 此测试文件已弃用，功能已迁移至 tests/llm_integration/
 # ---------------------------------
 
 """
-LLM 后端闭环功能测试
-====================
+⚠️ 此测试文件已弃用 (DEPRECATED)
 
-测试内容:
-1. LLM Client 连接测试 (Kimi K2.5)
-2. Prompt 模板渲染
-3. LLM 调用与响应
-4. JSON 输出解析
-5. 成本估算
-6. 完整任务执行流程
+弃用原因：
+- LLM 网关已重构，旧版 LLMClient API 已弃用
+- 功能已迁移至 tests/llm_integration/ 目录
+- 新版推荐使用 LLMGateway API
 
-使用方法:
-    uv run pytest tests/test_llm_backend_closed_loop.py -v -s
+替代测试：
+- tests/llm_integration/test_llm_connection.py - LLM 连接测试
+- tests/llm_integration/test_prompt_templates.py - Prompt 模板测试
+- tests/llm_integration/test_task_flow.py - 任务流程测试
+- tests/utils/llm/test_gateway.py - LLM Gateway 单元测试
+
+运行方式：
+    # 快速检查（不调用真实 LLM）
+    uv run python tests/llm_integration/run_validation.py quick
     
-环境变量:
-    MOONSHOT_API_KEY: Kimi API Key (必需)
+    # 完整验证
+    uv run python tests/llm_integration/run_validation.py all
+
+如需查看旧版代码，请参考 git 历史记录。
 """
 
+import pytest
+
+pytest.skip(
+    "此测试文件已弃用，功能已迁移至 tests/llm_integration/。"
+    "请使用 tests/llm_integration/run_validation.py 进行替代测试。",
+    allow_module_level=True
+)
+
+# 保留旧代码作为参考（不会执行）
+"""
 import os
 import json
 import asyncio
@@ -30,7 +45,6 @@ import pytest
 from datetime import datetime
 from typing import Dict, Any
 
-# 确保从项目根目录导入
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
