@@ -29,7 +29,7 @@
 
 ### 任务清单
 
-- [ ] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
+- [x] **0.1 代码走查**: 阅读现有 Agent 系统和小说分析系统完整代码
   - `sail_server/router/agent.py` - 现有 Agent API
   - `sail_server/router/analysis.py` - 小说分析 API
   - `sail_server/model/agent.py` - Agent 数据模型
@@ -37,24 +37,21 @@
   - `sail_server/utils/llm/` - LLM 相关工具
   - `packages/site/src/lib/api/agent.ts` - 前端 Agent API
   - `packages/site/src/lib/api/analysis.ts` - 前端分析 API
-
-- [ ] **0.2 数据模型梳理**: 绘制现有实体关系图
+- [x] **0.2 数据模型梳理**: 绘制现有实体关系图
   - AgentTask / AnalysisTask 字段对比
   - 外键关系梳理
   - 索引情况检查
-
-- [ ] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
+- [x] **0.3 接口清单整理**: 列出所有需要兼容的 API 端点
   - 现有 Agent 接口: 方法、路径、请求/响应格式
   - 现有 Analysis 接口: 方法、路径、请求/响应格式
-
-- [ ] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
+- [x] **0.4 功能冻结声明**: 在相关代码添加注释标记迁移边界
 
 ### 验收标准
 
-- [ ] 产出《现有代码调研报告》文档
-- [ ] 产出《数据模型对比表》
-- [ ] 产出《API 接口清单》
-- [ ] 团队评审通过，确认可以开始迁移
+- [x] 产出《现有代码调研报告》文档
+- [x] 产出《数据模型对比表》
+- [x] 产出《API 接口清单》
+- [x] 团队评审通过，确认可以开始迁移
 
 ### 交付物
 
