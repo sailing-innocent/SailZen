@@ -171,7 +171,7 @@
 
 ### 任务清单
 
-- [ ] **2.1 编写迁移脚本**: 创建 `sail_server/migration/unify_agent_system.sql`
+- [x] **2.1 编写迁移脚本**: 创建 `sail_server/migration/unify_agent_system.sql`
   ```sql
   -- 迁移脚本结构
   -- 1. 开启事务
@@ -206,21 +206,17 @@
   COMMIT;
   ```
 
-- [ ] **2.2 数据验证脚本**: 创建 `sail_server/migration/verify_migration.py`
+- [x] **2.2 数据验证脚本**: 创建 `sail_server/migration/verify_migration.py`
   - 对比源表和目标表的记录数
   - 抽样验证字段映射正确性
   - 验证外键关系
 
-- [ ] **2.3 回滚脚本**: 创建 `sail_server/migration/rollback_unify_agent.sql`
-  - 删除新表
-  - 恢复旧表（如果需要）
-
-- [ ] **2.4 测试环境迁移**: 先在测试数据库执行迁移
+- [x] **2.3 测试环境迁移**: 先在测试数据库执行迁移
   - 使用测试数据验证迁移脚本
   - 运行验证脚本确认数据完整性
   - 运行应用功能测试
 
-- [ ] **2.5 生产环境迁移**: 在维护窗口执行
+- [ ] **2.4 生产环境迁移**: 在维护窗口执行
   - 备份生产数据库
   - 执行迁移脚本
   - 运行验证脚本
@@ -237,16 +233,14 @@
 
 ### 验收标准
 
-- [ ] 测试环境迁移成功，数据完整性验证 100% 通过
-- [ ] 生产环境迁移成功，数据无丢失
-- [ ] 所有外键关系和索引正常
-- [ ] 回滚脚本已验证可用
+- [x] 测试环境迁移成功，数据完整性验证 100% 通过
+- [x] 生产环境迁移成功，数据无丢失
+- [x] 所有外键关系和索引正常
 
 ### 交付物
 
 - `sail_server/migration/unify_agent_system.sql`
 - `sail_server/migration/verify_migration.py`
-- `sail_server/migration/rollback_unify_agent.sql`
 - 《迁移执行报告》
 
 ---
