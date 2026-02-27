@@ -12,6 +12,7 @@
 import json
 import asyncio
 import logging
+import re
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, Callable
@@ -312,6 +313,7 @@ class AnalysisTaskRunner:
     ) -> TaskRunResult:
         """执行分析任务"""
         start_time = datetime.utcnow()
+        logger.info(f"[DEBUG] Starting task {task_id}, mode={mode.value}")
         
         try:
             # 获取任务
@@ -319,13 +321,17 @@ class AnalysisTaskRunner:
             if not task:
                 raise ValueError(f"Task not found: {task_id}")
             
+            logger.info(f"[DEBUG] Task info: type={task.task_type}, edition_id={task.edition_id}")
+            
             # 更新任务状态为运行中
             task.status = 'running'
             task.started_at = start_time
             db.commit()
             
             # 创建执行计划
+            logger.info(f"[DEBUG] Creating execution plan...")
             plan = self.create_execution_plan(db, task_id, mode)
+            logger.info(f"[DEBUG] Execution plan created: {len(plan.chunks)} chunks, template={plan.prompt_template_id}")
             
             # 初始化进度
             self._progress[task_id] = TaskProgress(
@@ -339,12 +345,19 @@ class AnalysisTaskRunner:
             
             # 执行分析
             results = []
+            chunk_start_time = datetime.utcnow()
             
-            for chunk in plan.chunks:
+            for i, chunk in enumerate(plan.chunks):
+                chunk_elapsed = (datetime.utcnow() - chunk_start_time).total_seconds()
+                logger.info(f"[DEBUG] Processing chunk {i+1}/{len(plan.chunks)}: {chunk.chapter_range} "
+                           f"(elapsed: {chunk_elapsed:.2f}s)")
+                
                 self._update_progress(task_id, 
                     current_step="processing_chunk",
                     current_chunk_info=chunk.chapter_range
                 )
+                
+                chunk_process_start = datetime.utcnow()
                 
                 if mode == TaskExecutionMode.LLM_DIRECT:
                     chunk_results = await self._process_chunk_with_llm(
@@ -354,6 +367,10 @@ class AnalysisTaskRunner:
                     chunk_results = await self._generate_chunk_prompt(
                         db, task, chunk, plan.prompt_template_id
                     )
+                
+                chunk_process_time = (datetime.utcnow() - chunk_process_start).total_seconds()
+                logger.info(f"[DEBUG] Chunk {i+1} processed in {chunk_process_time:.2f}s, "
+                           f"got {len(chunk_results)} results")
                 
                 results.extend(chunk_results)
                 
@@ -422,6 +439,8 @@ class AnalysisTaskRunner:
         template_id: str
     ) -> List[Dict[str, Any]]:
         """使用 LLM 处理分块"""
+        logger.info(f"[DEBUG] Starting LLM processing for chunk {chunk.index}: {chunk.chapter_range}")
+        
         # 获取作品信息
         from sail_server.data.text import Edition, Work
         edition = db.query(Edition).filter(Edition.id == task.edition_id).first()
@@ -441,15 +460,32 @@ class AnalysisTaskRunner:
         }
         
         rendered = self.template_manager.render(template_id, variables)
+        logger.info(f"[DEBUG] Template rendered: {template_id}, estimated_tokens: {rendered.estimated_tokens}")
         
         # 调用 LLM
         client = self._get_llm_client()
+        logger.info(f"[DEBUG] LLM client created, starting API call for chunk {chunk.index}...")
         
         try:
+            import time
+            api_start = time.time()
+            
             response = await client.complete(
                 rendered.user_prompt,
                 system=rendered.system_prompt
             )
+            
+            api_duration = time.time() - api_start
+            logger.info(f"[DEBUG] LLM API call completed for chunk {chunk.index}: "
+                       f"duration={api_duration:.2f}s, "
+                       f"model={response.model}, "
+                       f"finish_reason={response.finish_reason}, "
+                       f"tokens={response.total_tokens}, "
+                       f"content_length={len(response.content)}")
+            
+            # 检查是否因为 max_tokens 导致截断
+            if response.finish_reason == "length":
+                logger.warning(f"LLM response truncated due to max_tokens limit for chunk {chunk.index}")
             
             # 解析响应
             content = response.content.strip()
@@ -462,7 +498,23 @@ class AnalysisTaskRunner:
             if content.endswith("```"):
                 content = content[:-3]
             
-            parsed = json.loads(content.strip())
+            content = content.strip()
+            
+            # 尝试解析 JSON，如果失败则尝试修复
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parse error for chunk {chunk.index}: {e}, attempting to fix...")
+                # 尝试修复不完整的 JSON
+                fixed_content = self._fix_incomplete_json(content)
+                try:
+                    parsed = json.loads(fixed_content)
+                    logger.info(f"Successfully fixed JSON for chunk {chunk.index}")
+                except json.JSONDecodeError:
+                    # 如果修复失败，尝试提取有效部分
+                    parsed = self._extract_valid_json(content)
+                    if parsed is None:
+                        raise e
             
             # 转换为结果列表
             results = self._parse_llm_output(task.task_type, parsed, chunk)
@@ -480,6 +532,76 @@ class AnalysisTaskRunner:
                 },
                 "confidence": 0,
             }]
+    
+    def _fix_incomplete_json(self, content: str) -> str:
+        """尝试修复不完整的 JSON 字符串"""
+        # 移除尾部的不完整内容
+        # 找到最后一个完整的 JSON 对象/数组
+        content = content.strip()
+        
+        # 尝试找到最后一个完整的结构
+        braces = 0
+        brackets = 0
+        in_string = False
+        escape_next = False
+        last_valid_pos = 0
+        
+        for i, char in enumerate(content):
+            if escape_next:
+                escape_next = False
+                continue
+            if char == '\\':
+                escape_next = True
+                continue
+            if char == '"' and not in_string:
+                in_string = True
+            elif char == '"' and in_string:
+                in_string = False
+            elif not in_string:
+                if char == '{':
+                    braces += 1
+                elif char == '}':
+                    braces -= 1
+                    if braces == 0 and brackets == 0:
+                        last_valid_pos = i + 1
+                elif char == '[':
+                    brackets += 1
+                elif char == ']':
+                    brackets -= 1
+                    if braces == 0 and brackets == 0:
+                        last_valid_pos = i + 1
+        
+        # 如果找到了完整的结构，截取到那里
+        if last_valid_pos > 0:
+            return content[:last_valid_pos]
+        
+        # 否则尝试补全
+        if braces > 0:
+            content += '}' * braces
+        if brackets > 0:
+            content += ']' * brackets
+        
+        return content
+    
+    def _extract_valid_json(self, content: str) -> Optional[Dict[str, Any]]:
+        """从文本中提取有效的 JSON 对象"""
+        # 尝试找到第一个 JSON 对象
+        obj_match = re.search(r'\{[\s\S]*\}', content)
+        if obj_match:
+            try:
+                return json.loads(obj_match.group())
+            except json.JSONDecodeError:
+                pass
+        
+        # 尝试找到第一个 JSON 数组
+        arr_match = re.search(r'\[[\s\S]*\]', content)
+        if arr_match:
+            try:
+                return json.loads(arr_match.group())
+            except json.JSONDecodeError:
+                pass
+        
+        return None
     
     async def _generate_chunk_prompt(
         self,

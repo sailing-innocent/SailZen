@@ -20,12 +20,17 @@ import json
 import asyncio
 import argparse
 import logging
+import signal
 from datetime import datetime
 from pathlib import Path
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
+
+# 禁用 Google Gemini 的 AFC (Automatic Function Calling) 以避免卡住
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "False"
+os.environ["GOOGLE_GENAI_DISABLE_AFC"] = "True"
 
 # 加载环境变量
 from sail_server.utils.env import read_env
@@ -78,7 +83,7 @@ async def run_connection_validation(args):
     
     # 可选：运行稳定性测试
     if args.stability and args.real_connection:
-        for provider in (providers or ['openai']):
+        for provider in (providers or ['moonshot']):
             stability_validator = LLMStabilityValidator(
                 provider=provider,
                 num_iterations=args.stability_iterations,
@@ -245,6 +250,9 @@ def export_report(report, output_path: str, format: str = "json"):
 
 
 def main():
+    # 设置信号处理，确保 Ctrl+C 能正常工作
+    signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(130))
+    
     parser = argparse.ArgumentParser(
         description='SailZen LLM Integration Validation Framework',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -283,8 +291,8 @@ Examples:
     # LLM 相关参数
     llm_parser = argparse.ArgumentParser(add_help=False)
     llm_parser.add_argument('--real-llm', action='store_true', help='Test with real LLM API')
-    llm_parser.add_argument('--llm-provider', default='google', 
-                           choices=['openai', 'anthropic', 'google', 'local'],
+    llm_parser.add_argument('--llm-provider', default='moonshot',
+                           choices=['openai', 'anthropic', 'google', 'moonshot', 'local'],
                            help='LLM provider to use')
     
     # quick 命令
@@ -338,18 +346,21 @@ Examples:
     print(f"Command: {args.command}")
     print(f"Time: {datetime.now().isoformat()}")
     
-    # 运行验证
+    # 运行验证 - 使用新的事件循环并设置超时
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     try:
         if args.command == 'quick':
-            report = asyncio.run(run_quick_check(args))
+            report = loop.run_until_complete(run_quick_check(args))
         elif args.command == 'connection':
-            report = asyncio.run(run_connection_validation(args))
+            report = loop.run_until_complete(run_connection_validation(args))
         elif args.command == 'prompt':
-            report = asyncio.run(run_prompt_validation(args))
+            report = loop.run_until_complete(run_prompt_validation(args))
         elif args.command == 'task':
-            report = asyncio.run(run_task_validation(args))
+            report = loop.run_until_complete(run_task_validation(args))
         elif args.command == 'all':
-            report = asyncio.run(run_all_validations(args))
+            report = loop.run_until_complete(run_all_validations(args))
         else:
             parser.print_help()
             sys.exit(1)
@@ -369,6 +380,18 @@ Examples:
         import traceback
         traceback.print_exc()
         sys.exit(1)
+    finally:
+        # 清理事件循环
+        try:
+            # 取消所有待处理的任务
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            if pending:
+                loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            loop.close()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':

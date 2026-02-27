@@ -55,7 +55,7 @@ class PromptValidator(BaseValidator):
     def __init__(
         self,
         test_real_llm: bool = False,
-        llm_provider: str = "google",
+        llm_provider: str = "moonshot",
     ):
         super().__init__("Prompt Template Validator")
         self.test_real_llm = test_real_llm

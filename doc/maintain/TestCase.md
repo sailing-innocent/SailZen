@@ -12,8 +12,6 @@ tests/
 ├── __init__.py
 ├── test_db_read.py                  # 数据库读取基础测试
 ├── test_unified_agent_system.py     # Unified Agent 系统测试 ✅ 新增
-├── test_agent_system.py             # Agent 系统测试 ❌ 已弃用
-├── test_llm_backend_closed_loop.py  # LLM 闭环集成测试 ❌ 已弃用
 ├── model/
 │   └── test_unified_agent.py        # Unified Agent 模型测试
 ├── server/
@@ -56,16 +54,6 @@ tests/
 | `tests/llm_integration/test_task_flow.py` | 任务执行流程测试 | ✅ 活跃 |
 | `tests/server/test_basic_connect.py` | 服务器基础连接测试 | ⚠️ 需配置 |
 
-### 3. 已弃用测试（保留参考）
-
-| 测试文件 | 描述 | 状态 | 备注 |
-|---------|------|------|------|
-| `tests/test_agent_system.py` | 旧版 Agent 系统测试 | ❌ 已弃用 | 已跳过，使用 pytest.skip() |
-| `tests/test_llm_backend_closed_loop.py` | 旧版 LLM 闭环测试 | ❌ 已弃用 | 已跳过，功能迁移至 llm_integration/ |
-
-**说明**：这些测试文件保留在仓库中作为历史参考，但已添加 `pytest.skip()` 标记，
-运行测试时会自动跳过。如需查看旧代码，请参考 git 历史记录。
-
 ## LLM 网关重构后的变更
 
 ### 新架构（推荐）
@@ -88,20 +76,6 @@ config = LLMExecutionConfig(
     enable_caching=True,
 )
 result = await gateway.execute("prompt", config)
-```
-
-### 旧架构（向后兼容但已弃用）
-
-```python
-# 旧版 API（仍可用但不推荐）
-from sail_server.utils.llm import LLMClient, LLMConfig, LLMProvider
-
-config = LLMConfig(
-    provider=LLMProvider.OPENAI,
-    model="gpt-4o",
-)
-client = LLMClient(config)
-response = await client.complete("prompt")
 ```
 
 ## 运行测试
@@ -190,28 +164,6 @@ $env:POSTGRE_URI="postgresql://postgres:password@localhost:5432/main"
    - 使用 fixtures 管理依赖
    - 使用参数化测试减少重复代码
    - 使用适当的标记分类测试
-
-### 更新过时测试
-
-1. 检查测试是否使用已弃用的 API
-2. 更新导入语句到新架构
-3. 替换旧 API 调用为新 Gateway API
-4. 验证测试通过后更新本文档
-
-### 删除过时测试
-
-以下测试文件已标记为弃用，保留作为历史参考：
-
-- `tests/test_agent_system.py` - 旧版 Agent 系统已完全重构为 Unified Agent
-  - 替代：`tests/test_unified_agent_system.py`
-- `tests/test_llm_backend_closed_loop.py` - 已合并到 `tests/llm_integration/`
-  - 替代：`tests/llm_integration/run_validation.py`
-
-如需彻底删除这些文件，请执行：
-```powershell
-git rm tests/test_agent_system.py
-git rm tests/test_llm_backend_closed_loop.py
-```
 
 ## 常见问题
 

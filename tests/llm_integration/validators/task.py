@@ -62,7 +62,7 @@ class TaskFlowValidator(BaseValidator):
         self,
         db_session_factory: Optional[Callable[[], Session]] = None,
         use_real_llm: bool = False,
-        llm_provider: str = "google",
+        llm_provider: str = "moonshot",
         cleanup_after_test: bool = True,
     ):
         super().__init__("Task Flow Validator")
@@ -74,6 +74,7 @@ class TaskFlowValidator(BaseValidator):
         # 用于清理的 ID 列表
         self._created_task_ids: List[int] = []
         self._created_result_ids: List[int] = []
+        self._created_node_ids: List[int] = []
     
     async def validate(self) -> ValidationReport:
         """执行任务流程验证"""
@@ -455,7 +456,7 @@ class TaskFlowValidator(BaseValidator):
         db: Session,
         runner
     ):
-        """验证 LLM Direct 模式"""
+        """验证 LLM Direct 模式 - 使用少量测试数据"""
         print("\n  >> Testing LLM Direct mode...")
         
         AnalysisTask = modules['AnalysisTask']
@@ -477,13 +478,41 @@ class TaskFlowValidator(BaseValidator):
         # 更新 runner 的 LLM 配置
         runner.set_llm_config(config)
         
-        # 创建测试任务
+        # 创建测试用的 DocumentNode 记录（少量内容）
+        from sail_server.data.text import DocumentNode
+        test_nodes = []
+        test_content = [
+            ("第一章 初遇", "张三是个铁匠。李四是个道士。他们在青云镇相遇了。"),
+            ("第二章 抉择", "李四问张三是否愿意修行。张三决定跟随他。"),
+        ]
+        
         try:
+            for i, (title, raw_text) in enumerate(test_content):
+                char_count = len(raw_text)
+                node = DocumentNode(
+                    edition_id=1,
+                    node_type='chapter',
+                    title=title,
+                    raw_text=raw_text,
+                    sort_index=i,
+                    depth=1,
+                    path=f"{i:04d}",
+                    char_count=char_count,
+                    word_count=len(raw_text.split()),
+                    status='active',
+                )
+                db.add(node)
+                db.commit()
+                db.refresh(node)
+                test_nodes.append(node)
+                self._created_node_ids.append(node.id)  # 记录以便清理
+            
+            # 创建测试任务 - 只针对测试节点
             task = AnalysisTask(
                 edition_id=1,
                 task_type="character_detection",
-                target_scope="full",  # 必填字段
-                target_node_ids=[],
+                target_scope="full",
+                target_node_ids=[n.id for n in test_nodes],  # 只处理测试节点
                 status="pending",
                 priority=1,
                 parameters={
@@ -500,24 +529,33 @@ class TaskFlowValidator(BaseValidator):
             
             self._success(
                 "llm_task_create",
-                f"LLM test task created (ID: {task.id})"
+                f"LLM test task created (ID: {task.id}, nodes: {len(test_nodes)})"
             )
         except Exception as e:
             self._error("llm_task_create", f"Failed to create task: {e}")
             return
         
-        # 执行任务
+        # 执行任务 - 使用较短的超时
         try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"[DEBUG] Starting run_task for task {task.id}, timeout=60s")
+            
             result, duration, error = await self._measure_async(
                 asyncio.wait_for(
                     runner.run_task(db, task.id, TaskExecutionMode.LLM_DIRECT),
-                    timeout=120  # LLM 调用可能需要更长时间
+                    timeout=60  # 少量内容，60秒应该足够
                 )
             )
             
+            logger.info(f"[DEBUG] run_task completed: duration={duration}ms, error={error}")
+            
             if error:
                 if isinstance(error, asyncio.TimeoutError):
-                    self._error("llm_task_execute", "Task execution timeout (120s)", duration_ms=duration)
+                    self._error("llm_task_execute", 
+                               f"Task execution timeout (60s). "
+                               f"Check server logs for detailed timing info.",
+                               duration_ms=duration)
                 else:
                     self._error("llm_task_execute", f"Task failed: {error}", duration_ms=duration)
                 return
@@ -693,6 +731,7 @@ class TaskFlowValidator(BaseValidator):
         
         try:
             from sail_server.data.analysis import AnalysisResult, AnalysisTask
+            from sail_server.data.text import DocumentNode
             
             # 删除结果
             if self._created_result_ids:
@@ -720,6 +759,17 @@ class TaskFlowValidator(BaseValidator):
                     "cleanup_tasks",
                     f"Deleted {deleted_tasks} test tasks"
                 )
+            
+            # 删除测试节点
+            if self._created_node_ids:
+                deleted_nodes = db.query(DocumentNode).filter(
+                    DocumentNode.id.in_(self._created_node_ids)
+                ).delete(synchronize_session=False)
+                db.commit()
+                self._success(
+                    "cleanup_nodes",
+                    f"Deleted {deleted_nodes} test nodes"
+                )
                 
         except Exception as e:
             self._warning("cleanup", f"Cleanup partially failed: {e}")
@@ -728,7 +778,7 @@ class TaskFlowValidator(BaseValidator):
 class MinimalTaskValidator(BaseValidator):
     """最简任务验证器 - 不需要数据库，仅验证核心逻辑"""
     
-    def __init__(self, use_real_llm: bool = False, llm_provider: str = "google"):
+    def __init__(self, use_real_llm: bool = False, llm_provider: str = "moonshot"):
         super().__init__("Minimal Task Validator")
         self.use_real_llm = use_real_llm
         self.llm_provider = llm_provider

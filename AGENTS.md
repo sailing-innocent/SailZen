@@ -90,6 +90,8 @@ SailZen/
 
 ## Build Commands
 
+当前项目使用 **pwsh** (Powershell7)为默认Shell，如果Shell和powershell均无法使用的时候，可以尝试使用`pwsh`
+
 ### TypeScript Packages
 
 ```bash

@@ -31,7 +31,7 @@ class LLMConnectionValidator(BaseValidator):
     }
     
     # 支持的提供商
-    PROVIDERS = ["openai", "anthropic", "google", "local"]
+    PROVIDERS = ["openai", "anthropic", "google", "moonshot", "local"]
     
     def __init__(
         self, 
@@ -77,6 +77,7 @@ class LLMConnectionValidator(BaseValidator):
             ("OPENAI_API_KEY", "openai"),
             ("ANTHROPIC_API_KEY", "anthropic"),
             ("GOOGLE_API_KEY", "google"),
+            ("MOONSHOT_API_KEY", "moonshot"),
         ]
         
         configured_providers = []
@@ -135,6 +136,14 @@ class LLMConnectionValidator(BaseValidator):
                 provider = LLMProvider(provider_name)
                 config = LLMConfig.from_env(provider)
                 
+                # 先检查配置是否有效（API key 是否已配置）
+                if not config.validate():
+                    self._skip(
+                        f"client_init_{provider_name}",
+                        f"{provider_name} API key not configured, skipping client init test"
+                    )
+                    continue
+                
                 # 尝试创建客户端
                 result, duration, error = self._measure_sync(
                     lambda: LLMClient(config)
@@ -183,74 +192,96 @@ class LLMConnectionValidator(BaseValidator):
                 )
                 continue
             
+            # 使用 shield 防止任务被取消时卡住
             try:
-                provider = LLMProvider(provider_name)
-                config = LLMConfig.from_env(provider)
-                
-                if not config.validate():
-                    self._skip(
-                        f"connection_{provider_name}",
-                        f"No API key configured for {provider_name}"
-                    )
-                    continue
-                
-                client = LLMClient(config)
-                
-                # 测试简单请求
-                try:
-                    result, duration, error = await self._measure_async(
-                        asyncio.wait_for(
-                            client.complete(self.TEST_PROMPTS["echo"]),
-                            timeout=self.timeout_seconds
-                        )
-                    )
-                    
-                    if error:
-                        if isinstance(error, asyncio.TimeoutError):
-                            self._error(
-                                f"connection_{provider_name}",
-                                f"Connection timeout ({self.timeout_seconds}s)",
-                                duration_ms=duration
-                            )
-                        else:
-                            self._error(
-                                f"connection_{provider_name}",
-                                f"Connection failed: {error}",
-                                duration_ms=duration
-                            )
-                    else:
-                        # 验证响应
-                        response_preview = result.content[:100] if result.content else ""
-                        self._success(
-                            f"connection_{provider_name}",
-                            f"Connection successful (latency: {result.latency_ms}ms)",
-                            {
-                                "model": result.model,
-                                "response_preview": response_preview,
-                                "tokens_used": result.total_tokens,
-                            },
-                            duration_ms=duration
-                        )
-                        
-                        # 额外检查响应质量
-                        if result.latency_ms > 10000:
-                            self._warning(
-                                f"latency_{provider_name}",
-                                f"High latency detected: {result.latency_ms}ms",
-                                {"threshold": 10000}
-                            )
-                
-                except Exception as e:
-                    self._error(
-                        f"connection_{provider_name}",
-                        f"Unexpected error: {e}"
-                    )
-            
+                await self._test_provider_connection(provider_name, LLMClient, LLMConfig, LLMProvider)
+            except asyncio.CancelledError:
+                self._skip(f"connection_{provider_name}", "Test cancelled")
+                raise  # 重新抛出以便上层处理
             except Exception as e:
                 self._error(
                     f"connection_{provider_name}",
                     f"Setup error: {e}"
                 )
+    
+    async def _test_provider_connection(self, provider_name: str, LLMClient, LLMConfig, LLMProvider):
+        """测试单个提供商的连接"""
+        try:
+            provider = LLMProvider(provider_name)
+            config = LLMConfig.from_env(provider)
+            
+            if not config.validate():
+                self._skip(
+                    f"connection_{provider_name}",
+                    f"No API key configured for {provider_name}"
+                )
+                return
+            
+            client = LLMClient(config)
+            
+            # 测试简单请求 - 使用更短的基础超时
+            test_timeout = min(self.timeout_seconds, 10)  # 最多10秒
+            
+            try:
+                # 在单独的线程中运行，以便更好地控制超时
+                result, duration, error = await self._measure_async(
+                    asyncio.wait_for(
+                        client.complete(self.TEST_PROMPTS["echo"]),
+                        timeout=test_timeout
+                    )
+                )
+                
+                if error:
+                    if isinstance(error, asyncio.TimeoutError):
+                        self._error(
+                            f"connection_{provider_name}",
+                            f"Connection timeout ({test_timeout}s)",
+                            duration_ms=duration
+                        )
+                    else:
+                        self._error(
+                            f"connection_{provider_name}",
+                            f"Connection failed: {error}",
+                            duration_ms=duration
+                        )
+                else:
+                    # 验证响应
+                    response_preview = result.content[:100] if result.content else ""
+                    self._success(
+                        f"connection_{provider_name}",
+                        f"Connection successful (latency: {result.latency_ms}ms)",
+                        {
+                            "model": result.model,
+                            "response_preview": response_preview,
+                            "tokens_used": result.total_tokens,
+                        },
+                        duration_ms=duration
+                    )
+                    
+                    # 额外检查响应质量
+                    if result.latency_ms > 10000:
+                        self._warning(
+                            f"latency_{provider_name}",
+                            f"High latency detected: {result.latency_ms}ms",
+                            {"threshold": 10000}
+                        )
+            
+            except asyncio.TimeoutError:
+                self._error(
+                    f"connection_{provider_name}",
+                    f"Connection timeout ({test_timeout}s)"
+                )
+            except Exception as e:
+                self._error(
+                    f"connection_{provider_name}",
+                    f"Unexpected error: {e}"
+                )
+        
+        except Exception as e:
+            self._error(
+                f"connection_{provider_name}",
+                f"Setup error: {e}"
+            )
     
     async def _test_local_connection(self):
         """测试本地 LLM 连接 (Ollama)"""
@@ -370,7 +401,7 @@ class LLMStabilityValidator(BaseValidator):
     
     def __init__(
         self,
-        provider: str = "openai",
+        provider: str = "moonshot",
         num_iterations: int = 5,
         delay_between_calls: float = 1.0,
     ):

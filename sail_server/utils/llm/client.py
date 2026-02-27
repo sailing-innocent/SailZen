@@ -71,6 +71,9 @@ class LLMConfig:
                 model=os.getenv("MOONSHOT_MODEL", "kimi-k2-5"),
                 api_key=os.getenv("MOONSHOT_API_KEY"),
                 api_base=os.getenv("MOONSHOT_API_BASE", "https://api.moonshot.cn/v1"),
+                temperature=1.0,  # Kimi K2.5 要求 temperature 必须为 1
+                max_tokens=16384,  # Kimi K2.5 支持 256K 上下文，设置较大的输出限制
+                timeout=120,  # 默认 120 秒超时，长文本分析需要更多时间
             )
         else:
             return cls(provider=provider)
@@ -270,11 +273,16 @@ class LLMClient:
     ) -> LLMResponse:
         """执行文本补全"""
         start_time = datetime.utcnow()
+        logger.info(f"[DEBUG] LLMClient.complete called: provider={self.config.provider.value}, "
+                   f"model={self.config.model}, max_tokens={self.config.max_tokens}, "
+                   f"prompt_length={len(prompt)}, system_length={len(system) if system else 0}")
         
         if self.config.provider == LLMProvider.EXTERNAL:
             raise ValueError("External mode does not support direct completion. Use generate_prompt_only() instead.")
         
         try:
+            provider_start = datetime.utcnow()
+            
             if self.config.provider == LLMProvider.MOCK:
                 response = await self._complete_mock(prompt, system)
             elif self.config.provider == LLMProvider.OPENAI:
@@ -290,12 +298,16 @@ class LLMClient:
             else:
                 raise ValueError(f"Unsupported provider: {self.config.provider}")
             
+            provider_duration = (datetime.utcnow() - provider_start).total_seconds()
             latency = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             response.latency_ms = latency
+            
+            logger.info(f"[DEBUG] LLMClient.complete finished: provider_duration={provider_duration:.2f}s, "
+                       f"total_latency={latency}ms, finish_reason={response.finish_reason}")
             return response
             
         except Exception as e:
-            logger.error(f"LLM completion failed: {e}")
+            logger.error(f"[DEBUG] LLM completion failed: {e}")
             raise
     
     async def _complete_openai(self, prompt: str, system: Optional[str]) -> LLMResponse:
@@ -332,21 +344,44 @@ class LLMClient:
     
     async def _complete_moonshot(self, prompt: str, system: Optional[str]) -> LLMResponse:
         """Moonshot (Kimi) API 调用 - 使用 OpenAI 兼容接口"""
+        logger.info(f"[DEBUG] Moonshot API call starting: model={self.config.model}, "
+                   f"max_tokens={self.config.max_tokens}, timeout={self.config.timeout}")
+        
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         
         loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self._client.chat.completions.create(
+        
+        def call_moonshot():
+            logger.info(f"[DEBUG] Moonshot: calling API in executor thread...")
+            start = datetime.utcnow()
+            result = self._client.chat.completions.create(
                 model=self.config.model,
                 messages=messages,
                 temperature=self.config.temperature,
                 max_tokens=self.config.max_tokens,
+                timeout=self.config.timeout,  # HTTP 请求超时
+                response_format={"type": "json_object"},  # 启用 JSON Mode
             )
-        )
+            duration = (datetime.utcnow() - start).total_seconds()
+            logger.info(f"[DEBUG] Moonshot: API call completed in {duration:.2f}s")
+            return result
+        
+        # 使用 wait_for 确保总体超时控制
+        try:
+            response = await asyncio.wait_for(
+                loop.run_in_executor(None, call_moonshot),
+                timeout=self.config.timeout + 5  # 额外 5 秒缓冲
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"[DEBUG] Moonshot: Overall timeout after {self.config.timeout + 5}s")
+            raise asyncio.TimeoutError(f"Moonshot API call timed out after {self.config.timeout + 5}s")
+        
+        logger.info(f"[DEBUG] Moonshot: response received, model={response.model}, "
+                   f"finish_reason={response.choices[0].finish_reason}, "
+                   f"tokens={response.usage.total_tokens if response.usage else 'N/A'}")
         
         return LLMResponse(
             content=response.choices[0].message.content,
