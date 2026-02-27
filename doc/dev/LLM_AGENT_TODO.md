@@ -786,8 +786,9 @@
 <!-- 更新此处的阶段状态 -->
 - [x] Phase 0: 代码调研与冻结 ✅
 - [x] Phase 1: 统一数据模型设计 ✅
-- [ ] Phase 2: 数据库迁移 🔄
-- [ ] Phase 3: LLM 网关封装
+- [x] Phase 2: 数据库迁移 ✅
+- [x] Phase 3: LLM 网关封装 ✅
+- [ ] Phase 4: 统一调度器实现 🔄
 - [ ] Phase 4: 统一调度器实现
 - [ ] Phase 5: Agent 抽象与 NovelAnalysisAgent
 - [ ] Phase 6: GeneralAgent 实现
@@ -813,3 +814,5 @@
 | 2026-02-26 | 1.0 | 初始版本 | AI Assistant |
 | 2026-02-26 | 1.1 | Phase 0 完成，产出调研报告、数据模型对比、API清单 | AI Assistant |
 | 2026-02-26 | 1.2 | Phase 1 完成，产出统一数据模型代码、DAO、单元测试 | AI Assistant |
+| 2026-02-27 | 1.3 | Phase 2 完成，产出数据库迁移脚本、验证脚本、回滚脚本 | AI Assistant |
+| 2026-02-27 | 1.4 | Phase 3 完成，产出 LLM Gateway、Provider 实现、单元测试 | AI Assistant |
