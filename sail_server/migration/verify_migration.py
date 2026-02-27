@@ -7,11 +7,15 @@
 # ---------------------------------
 #
 # 验证统一 Agent 系统数据库迁移的数据完整性
-# 使用方法: uv run sail_server/migration/verify_migration.py
+# 使用方法: 
+#   uv run sail_server/migration/verify_migration.py              # 默认从 .env.dev 读取
+#   uv run sail_server/migration/verify_migration.py --env prod   # 从 .env.prod 读取
+#   uv run sail_server/migration/verify_migration.py --database-url postgresql://...
 
 import os
 import sys
 import json
+import argparse
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass, asdict
@@ -22,6 +26,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
+from sail_server.utils.env import read_env
 
 
 @dataclass
@@ -52,6 +58,14 @@ class MigrationVerifier:
                 "POSTGRE_URI", 
                 "postgresql://postgres:postgres@localhost:5432/main"
             )
+        
+        # 将 postgresql:// 转换为 postgresql+psycopg:// 以使用 psycopg3
+        # 与 sail_server/db.py 保持一致
+        if database_url and database_url.startswith("postgresql://"):
+            database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+        
+        # 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题
+        os.environ["PGCLIENTENCODING"] = "UTF8"
         
         self.engine = create_engine(database_url)
         self.Session = sessionmaker(bind=self.engine)
@@ -534,12 +548,16 @@ class MigrationVerifier:
 
 def main():
     """主函数"""
-    import argparse
-    
     parser = argparse.ArgumentParser(description="验证统一 Agent 系统数据库迁移")
     parser.add_argument(
+        "--env",
+        choices=["dev", "prod", "debug"],
+        default="dev",
+        help="环境模式 (默认: dev, 从 .env.dev 读取配置)"
+    )
+    parser.add_argument(
         "--database-url",
-        help="数据库连接 URL (默认从 POSTGRE_URI 环境变量读取)"
+        help="数据库连接 URL (直接指定，优先级高于环境变量)"
     )
     parser.add_argument(
         "--verbose", "-v",
@@ -549,7 +567,18 @@ def main():
     
     args = parser.parse_args()
     
-    verifier = MigrationVerifier(args.database_url)
+    # 如果直接指定了 database-url，则不读取 env 文件
+    if args.database_url:
+        database_url = args.database_url
+    else:
+        # 根据 --env 参数读取对应的 .env 文件
+        read_env(args.env)
+        database_url = os.environ.get("POSTGRE_URI")
+        if not database_url:
+            print(f"错误: 未找到 POSTGRE_URI 环境变量，请检查 .env.{args.env} 文件")
+            sys.exit(1)
+    
+    verifier = MigrationVerifier(database_url)
     verifier.run_all_checks()
     success = verifier.print_report()
     

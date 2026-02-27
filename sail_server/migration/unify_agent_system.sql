@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS unified_agent_tasks (
     -- 配置参数 (原 agent_config / parameters)
     config JSONB DEFAULT '{}',
     
+    -- 创建者信息
+    created_by VARCHAR(255),
+    
     -- 时间戳
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     started_at TIMESTAMP,
@@ -195,6 +198,7 @@ INSERT INTO unified_agent_tasks (
     result_data,
     review_status,
     config,
+    created_by,
     created_at,
     started_at,
     completed_at
@@ -230,6 +234,7 @@ SELECT
     result_summary AS result_data,
     'pending' AS review_status,  -- 默认待审核，从 analysis_results 更新
     parameters AS config,
+    created_by,
     created_at,
     started_at,
     completed_at
@@ -290,6 +295,7 @@ INSERT INTO unified_agent_tasks (
     result_data,
     review_status,
     config,
+    created_by,
     created_at,
     started_at,
     completed_at,
@@ -323,6 +329,7 @@ SELECT
     NULL AS result_data,
     'pending' AS review_status,
     agent_config AS config,
+    NULL AS created_by,  -- agent_tasks 表没有 created_by 字段
     created_at,
     started_at,
     completed_at,
