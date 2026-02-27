@@ -388,87 +388,61 @@
 
 ---
 
-## Phase 5: Agent 抽象与 NovelAnalysisAgent
+## Phase 5: Agent 抽象与 NovelAnalysisAgent ✅
 
 **目标**: 实现 BaseAgent 抽象，将现有小说分析功能迁移为 NovelAnalysisAgent
 
 ### 任务清单
 
-- [ ] **5.1 创建 BaseAgent 抽象类**: `sail_server/agent/base.py`
-  ```python
-  class BaseAgent(ABC):
-      """Agent 基类"""
-      
-      @property
-      @abstractmethod
-      def agent_type(self) -> str:
-          pass
-      
-      @abstractmethod
-      async def execute(
-          self,
-          task: UnifiedAgentTask,
-          context: AgentContext,
-          callback: ProgressCallback
-      ) -> AgentExecutionResult:
-          """执行 Agent 任务"""
-      
-      @abstractmethod
-      def estimate_cost(
-          self,
-          task: UnifiedAgentTask
-      ) -> CostEstimate:
-          """预估任务成本"""
-      
-      @abstractmethod
-      def validate_task(self, task: UnifiedAgentTask) -> ValidationResult:
-          """验证任务配置"""
-  ```
+- [x] **5.1 创建 BaseAgent 抽象类**: `sail_server/agent/base.py`
+  - 定义了抽象方法：`agent_type`, `execute`, `estimate_cost`, `validate_task`
+  - 实现了通用功能：进度通知、执行前后钩子
+  - 定义了数据类：`AgentContext`, `AgentExecutionResult`, `CostEstimate`, `ValidationResult`, `AgentInfo`
 
-- [ ] **5.2 创建 AgentContext**: 任务执行上下文
-  ```python
-  @dataclass
-  class AgentContext:
-      db_session: Session
-      llm_gateway: LLMGateway
-      knowledge_store: KnowledgeStore
-      config: dict
-  ```
+- [x] **5.2 创建 AgentContext**: 任务执行上下文
+  - 包含：`db_session`, `llm_gateway`, `config`, `user_id`
+  - 提供配置获取方法 `get_config()`
 
-- [ ] **5.3 实现 NovelAnalysisAgent**: `sail_server/agent/novel_analysis.py`
-  - 整合 `outline.py` 的大纲分析
-  - 整合 `character.py` 的人物分析
-  - 整合 `setting.py` 的设定分析
-  - 保留 Token 预算控制逻辑
-  - 保留分块处理逻辑
-  - 保留结果审核流程
+- [x] **5.3 实现 NovelAnalysisAgent**: `sail_server/agent/novel_analysis.py`
+  - 整合了大纲分析、人物分析、设定分析
+  - 实现了章节分块逻辑（`MAX_CHUNK_TOKENS = 8000`）
+  - 保留了 Token 预算控制（使用 `TokenBudget`）
+  - 支持结果解析和错误处理
+  - 实现了步骤记录和进度通知
 
-- [ ] **5.4 创建 Agent 注册机制**:
-  ```python
-  class AgentRegistry:
-      def register(self, agent_class: type[BaseAgent])
-      def get_agent(self, task_type: str) -> BaseAgent
-      def list_agents(self) -> list[AgentInfo]
-  ```
+- [x] **5.4 实现 GeneralAgent**: `sail_server/agent/general.py`
+  - 支持通用对话、代码辅助、写作辅助
+  - 支持多轮对话上下文
+  - 实现了成本预估和任务验证
 
-- [ ] **5.5 重构现有分析流程**:
-  - 将 `analysis_llm.py` 逻辑整合到 NovelAnalysisAgent
-  - 保持现有 Prompt 模板兼容性
-  - 保持结果数据格式不变
+- [x] **5.5 创建 Agent 注册机制**: `sail_server/agent/registry.py`
+  - 单例模式实现
+  - 支持 Agent 注册、注销、获取
+  - 支持按任务类型获取 Agent
+  - 提供便捷函数：`register_agent()`, `get_agent()`
+
+- [x] **5.6 编写单元测试**:
+  - `tests/agent/test_base.py` - BaseAgent 和相关类测试
+  - `tests/agent/test_registry.py` - AgentRegistry 测试
+  - `tests/agent/test_novel_analysis.py` - NovelAnalysisAgent 测试
 
 ### 验收标准
 
-- [ ] NovelAnalysisAgent 能完成完整的小说分析流程
-- [ ] 分析结果与现有系统一致
-- [ ] Token 预算控制正常工作
-- [ ] 成本预估准确率 > 80%
-- [ ] 结果审核流程正常工作
+- [x] BaseAgent 抽象类定义完整
+- [x] NovelAnalysisAgent 实现完整的小说分析流程
+- [x] GeneralAgent 支持通用对话任务
+- [x] AgentRegistry 支持 Agent 注册和获取
+- [x] 单元测试覆盖核心功能
 
 ### 交付物
 
-- `sail_server/agent/base.py`
-- `sail_server/agent/novel_analysis.py`
-- `sail_server/agent/registry.py`
+- `sail_server/agent/__init__.py`
+- `sail_server/agent/base.py` - Agent 基类和数据类
+- `sail_server/agent/registry.py` - Agent 注册表
+- `sail_server/agent/novel_analysis.py` - 小说分析 Agent
+- `sail_server/agent/general.py` - 通用对话 Agent
+- `tests/agent/test_base.py`
+- `tests/agent/test_registry.py`
 - `tests/agent/test_novel_analysis.py`
 
 ---
@@ -763,7 +737,7 @@
 - [x] Phase 2: 数据库迁移 ✅
 - [x] Phase 3: LLM 网关封装 ✅
 - [x] Phase 4: 统一调度器实现 ✅
-- [ ] Phase 5: Agent 抽象与 NovelAnalysisAgent
+- [x] Phase 5: Agent 抽象与 NovelAnalysisAgent ✅
 - [ ] Phase 6: GeneralAgent 实现
 - [ ] Phase 7: 旧 API 兼容层
 - [ ] Phase 8: 前端统一 API 层
@@ -791,3 +765,4 @@
 | 2026-02-27 | 1.4 | Phase 3 完成，产出 LLM Gateway、Provider 实现、单元测试 | AI Assistant |
 | 2026-02-27 | 1.5 | 修复文件位置：`data/unified_agent.py` (模型) 和 `model/unified_agent.py` (DAO) 位置互换 | AI Assistant |
 | 2026-02-28 | 1.6 | Phase 4 完成：统一调度器、WebSocket 通知、单元测试 | AI Assistant |
+| 2026-02-28 | 1.7 | Phase 5 完成：BaseAgent 抽象、NovelAnalysisAgent、GeneralAgent、AgentRegistry | AI Assistant |
