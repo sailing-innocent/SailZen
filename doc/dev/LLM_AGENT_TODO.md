@@ -299,30 +299,30 @@
           """带降级的多提供商调用"""
   ```
 
-- [ ] **3.2 集成现有 LLMClient**: 复用 `analysis_llm.py` 的多提供商逻辑
+- [x] **3.2 集成现有 LLMClient**: 复用 `analysis_llm.py` 的多提供商逻辑
   - 提取 Provider 抽象接口
   - 实现 Google/OpenAI/Moonshot Provider
   - 统一错误处理
 
-- [ ] **3.3 实现成本追踪**: 
+- [x] **3.3 实现成本追踪**: 
   - 各 Provider Token 价格配置
   - 实时成本计算
   - 预算检查（执行前/执行中）
 
-- [ ] **3.4 实现请求缓存**: 
+- [x] **3.4 实现请求缓存**: 
   - 相同 Prompt 缓存结果
   - 缓存过期策略
   - 缓存命中率统计
 
-- [ ] **3.5 熔断机制**: 
+- [x] **3.5 熔断机制**: 
   - Provider 故障检测
   - 自动切换备用 Provider
   - 故障恢复检测
 
 ### 验收标准
 
-- [ ] 单元测试: 各 Provider 调用正常
-- [ ] 集成测试: 降级机制正常工作
+- [x] 单元测试: 各 Provider 调用正常
+- [x] 集成测试: 降级机制正常工作
 - [ ] 成本计算准确，与实际账单误差 < 1%
 - [ ] 预算超支时能正确拦截
 - [ ] 缓存命中率可监控
@@ -336,75 +336,55 @@
 
 ---
 
-## Phase 4: 统一调度器实现
+## Phase 4: 统一调度器实现 ✅
 
 **目标**: 实现统一的任务调度器，支持优先级队列和资源控制
 
 ### 任务清单
 
-- [ ] **4.1 创建 UnifiedAgentScheduler**: `sail_server/model/unified_scheduler.py`
-  ```python
-  class UnifiedAgentScheduler:
-      """统一 Agent 调度器"""
-      
-      def __init__(self):
-          self.task_queue: asyncio.PriorityQueue[TaskQueueItem]
-          self.running_tasks: dict[int, asyncio.Task]
-          self.max_concurrent: int = 5
-      
-      async def schedule_task(self, task_config: TaskConfig) -> UnifiedAgentTask:
-          """调度新任务"""
-          # 1. 检查预算
-          # 2. 检查资源限制
-          # 3. 创建任务记录
-          # 4. 加入队列或直接执行
-      
-      async def execute_task(self, task_id: int):
-          """执行任务"""
-          # 1. 获取 Agent 实例
-          # 2. 执行并监控
-          # 3. 更新状态和成本
-      
-      async def cancel_task(self, task_id: int) -> bool:
-          """取消任务"""
-      
-      async def get_task_progress(self, task_id: int) -> TaskProgress:
-          """获取任务进度"""
-  ```
+- [x] **4.1 创建 UnifiedAgentScheduler**: `sail_server/model/unified_scheduler.py`
+  - 实现了完整的调度器生命周期管理（start/stop）
+  - 实现了任务调度、执行、取消功能
+  - 实现了进度追踪和事件通知机制
+  - 实现了任务恢复机制（重启后恢复未完成任务）
 
-- [ ] **4.2 实现优先级队列**:
-  - 优先级策略: 用户类型 > 任务类型 > 提交时间
-  - 插队机制: 高优先级任务可抢占
-  - 队列持久化: 重启后恢复未执行任务
+- [x] **4.2 实现优先级队列**:
+  - 使用 `asyncio.PriorityQueue` 实现优先级队列
+  - 优先级策略: priority + 等待时间加成
+  - 插队机制: 高优先级任务可抢占（配置化）
+  - 队列持久化: 通过数据库状态恢复
 
-- [ ] **4.3 资源限制控制**:
-  - 并发任务数限制
-  - Token 消耗速率限制
-  - 单用户任务数限制
+- [x] **4.3 资源限制控制**:
+  - 并发任务数限制 (`max_concurrent_tasks`)
+  - Token 消耗速率限制 (`token_rate_limit_per_minute`)
+  - 单用户任务数限制 (`max_tasks_per_user`)
+  - 任务超时控制 (`task_timeout_seconds`)
 
-- [ ] **4.4 进度通知机制**:
-  - WebSocket 实时推送
-  - 事件类型: start/progress/completed/failed/cancelled
-  - 订阅/取消订阅
+- [x] **4.4 进度通知机制**:
+  - 创建了 `WebSocketManager` 管理连接和订阅
+  - 支持事件类型: started/progress/step/completed/failed/cancelled
+  - 支持任务级别订阅和全局订阅
+  - 创建了 `UnifiedSchedulerWithWebSocket` 集成调度器
 
-- [ ] **4.5 集成现有调度器功能**:
-  - 复用 `scheduler.py` 的时间管理
-  - 复用 `task_scheduler.py` 的任务状态管理
+- [x] **4.5 集成现有调度器功能**:
+  - 复用了 `scheduler.py` 的事件回调机制
+  - 复用了 `task_scheduler.py` 的任务状态管理
+  - 集成了 Phase 1 的 DAO 层
 
 ### 验收标准
 
-- [ ] 任务能按优先级正确排序执行
-- [ ] 并发任务数控制在限制内
-- [ ] WebSocket 进度通知实时到达
-- [ ] 任务取消能正确终止执行
-- [ ] 调度器重启后能恢复未完成任务
+- [x] 任务能按优先级正确排序执行
+- [x] 并发任务数控制在限制内
+- [x] WebSocket 进度通知实时到达
+- [x] 任务取消能正确终止执行
+- [x] 调度器重启后能恢复未完成任务
 
 ### 交付物
 
-- `sail_server/model/unified_scheduler.py`
-- `sail_server/model/task_queue.py`
-- `sail_server/utils/websocket_manager.py`
-- `tests/model/test_unified_scheduler.py`
+- `sail_server/model/unified_scheduler.py` - 统一调度器核心实现
+- `sail_server/model/unified_scheduler_ws.py` - WebSocket 集成版本
+- `sail_server/utils/websocket_manager.py` - WebSocket 连接管理器
+- `tests/model/test_unified_scheduler.py` - 单元测试
 
 ---
 
@@ -782,8 +762,7 @@
 - [x] Phase 1: 统一数据模型设计 ✅
 - [x] Phase 2: 数据库迁移 ✅
 - [x] Phase 3: LLM 网关封装 ✅
-- [ ] Phase 4: 统一调度器实现 🔄
-- [ ] Phase 4: 统一调度器实现
+- [x] Phase 4: 统一调度器实现 ✅
 - [ ] Phase 5: Agent 抽象与 NovelAnalysisAgent
 - [ ] Phase 6: GeneralAgent 实现
 - [ ] Phase 7: 旧 API 兼容层
@@ -811,3 +790,4 @@
 | 2026-02-27 | 1.3 | Phase 2 完成，产出数据库迁移脚本、验证脚本、回滚脚本 | AI Assistant |
 | 2026-02-27 | 1.4 | Phase 3 完成，产出 LLM Gateway、Provider 实现、单元测试 | AI Assistant |
 | 2026-02-27 | 1.5 | 修复文件位置：`data/unified_agent.py` (模型) 和 `model/unified_agent.py` (DAO) 位置互换 | AI Assistant |
+| 2026-02-28 | 1.6 | Phase 4 完成：统一调度器、WebSocket 通知、单元测试 | AI Assistant |
