@@ -33,7 +33,8 @@ class UnifiedTaskDAO:
     
     def create(self, data: UnifiedTaskData) -> UnifiedAgentTask:
         """创建任务"""
-        orm = data.to_orm()
+        # 明确不传递 ID，让数据库自动生成
+        orm = data.to_orm(for_update=False)
         self.db.add(orm)
         self.db.commit()
         self.db.refresh(orm)

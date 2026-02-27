@@ -16,10 +16,11 @@ import { useIsMobile } from '@/hooks/use-mobile'
 // Store
 import {
   useUnifiedAgentStore,
-  useTaskStats,
+} from '@/lib/store/unifiedAgentStore'
+import {
   type TaskType,
   type TaskStatus,
-} from '@/lib/store/unifiedAgentStore'
+} from '@/lib/api/unifiedAgent'
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -80,7 +81,7 @@ const StatusBadge: React.FC<{ status: TaskStatus; showIcon?: boolean }> = ({
   showIcon = true,
 }) => {
   const config: Record<
-    TaskStatus,
+    TaskStatus | 'unknown',
     { color: string; icon: React.ReactNode; label: string }
   > = {
     pending: {
@@ -108,9 +109,14 @@ const StatusBadge: React.FC<{ status: TaskStatus; showIcon?: boolean }> = ({
       icon: <XCircle className="w-3 h-3" />,
       label: '已取消',
     },
+    unknown: {
+      color: 'bg-gray-100 text-gray-800 border-gray-300',
+      icon: <Clock className="w-3 h-3" />,
+      label: '未知',
+    },
   }
 
-  const { color, icon, label } = config[status]
+  const { color, icon, label } = config[status] || config.unknown
 
   return (
     <span
@@ -168,19 +174,27 @@ const Sidebar: React.FC<{
   activeTab: WorkbenchTab
   onTabChange: (tab: WorkbenchTab) => void
 }> = ({ activeTab, onTabChange }) => {
-  const stats = useTaskStats()
+  // Use individual selectors to avoid creating new objects
+  const tasks = useUnifiedAgentStore((state) => state.tasks)
 
-  const menuItems: { id: WorkbenchTab; icon: React.ReactNode; label: string; badge?: number }[] = [
-    { id: 'quick', icon: <Zap className="w-4 h-4" />, label: '快速任务' },
-    { id: 'novel', icon: <BookOpen className="w-4 h-4" />, label: '小说分析' },
+  // Calculate stats from tasks directly to avoid hook issues
+  const pendingCount = React.useMemo(() => tasks.filter((t) => t.status === 'pending').length, [tasks])
+  const runningCount = React.useMemo(() => tasks.filter((t) => t.status === 'running').length, [tasks])
+  const totalCount = tasks.length
+  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualCost, 0), [tasks])
+  const activeTaskCount = pendingCount + runningCount
+
+  const menuItems = React.useMemo(() => [
+    { id: 'quick' as WorkbenchTab, icon: <Zap className="w-4 h-4" />, label: '快速任务' },
+    { id: 'novel' as WorkbenchTab, icon: <BookOpen className="w-4 h-4" />, label: '小说分析' },
     {
-      id: 'history',
+      id: 'history' as WorkbenchTab,
       icon: <History className="w-4 h-4" />,
       label: '任务历史',
-      badge: stats.running + stats.pending,
+      badge: activeTaskCount > 0 ? activeTaskCount : undefined,
     },
-    { id: 'settings', icon: <Settings className="w-4 h-4" />, label: '设置' },
-  ]
+    { id: 'settings' as WorkbenchTab, icon: <Settings className="w-4 h-4" />, label: '设置' },
+  ], [activeTaskCount])
 
   return (
     <Card className="h-full">
@@ -201,11 +215,10 @@ const Sidebar: React.FC<{
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                activeTab === item.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${activeTab === item.id
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                }`}
             >
               <div className="flex items-center gap-2">
                 {item.icon}
@@ -230,11 +243,11 @@ const Sidebar: React.FC<{
           <p className="text-xs font-medium text-muted-foreground">今日概览</p>
           <div className="grid grid-cols-2 gap-2">
             <div className="p-2 rounded-lg bg-muted">
-              <p className="text-lg font-bold">{stats.total}</p>
+              <p className="text-lg font-bold">{totalCount}</p>
               <p className="text-xs text-muted-foreground">总任务</p>
             </div>
             <div className="p-2 rounded-lg bg-muted">
-              <p className="text-lg font-bold">${stats.totalCost.toFixed(3)}</p>
+              <p className="text-lg font-bold">${totalCost.toFixed(3)}</p>
               <p className="text-xs text-muted-foreground">总成本</p>
             </div>
           </div>
@@ -249,7 +262,10 @@ const Sidebar: React.FC<{
 // ============================================================================
 
 const QuickTaskPanel: React.FC = () => {
-  const { createTask, isCreatingTask, agents, loadAgents } = useUnifiedAgentStore()
+  const createTask = useUnifiedAgentStore((state) => state.createTask)
+  const isCreatingTask = useUnifiedAgentStore((state) => state.isCreatingTask)
+  const agents = useUnifiedAgentStore((state) => state.agents)
+  const loadAgents = useUnifiedAgentStore((state) => state.loadAgents)
   const [selectedType, setSelectedType] = useState<TaskType>('general')
   const [prompt, setPrompt] = useState('')
   const [priority, setPriority] = useState(5)
@@ -315,16 +331,14 @@ const QuickTaskPanel: React.FC = () => {
               <button
                 key={type.type}
                 onClick={() => setSelectedType(type.type)}
-                className={`p-4 rounded-lg border text-left transition-all ${
-                  selectedType === type.type
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted hover:border-primary/30 hover:bg-muted/50'
-                }`}
+                className={`p-4 rounded-lg border text-left transition-all ${selectedType === type.type
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-primary/30 hover:bg-muted/50'
+                  }`}
               >
                 <div
-                  className={`p-2 rounded-lg w-fit mb-2 ${
-                    selectedType === type.type ? 'bg-primary/10' : 'bg-muted'
-                  }`}
+                  className={`p-2 rounded-lg w-fit mb-2 ${selectedType === type.type ? 'bg-primary/10' : 'bg-muted'
+                    }`}
                 >
                   {React.cloneElement(type.icon as React.ReactElement, {
                     className: `w-5 h-5 ${selectedType === type.type ? 'text-primary' : 'text-muted-foreground'}`,
@@ -410,7 +424,8 @@ const QuickTaskPanel: React.FC = () => {
 // ============================================================================
 
 const NovelAnalysisPanel: React.FC = () => {
-  const { createTask, isCreatingTask } = useUnifiedAgentStore()
+  const createTask = useUnifiedAgentStore((state) => state.createTask)
+  const isCreatingTask = useUnifiedAgentStore((state) => state.isCreatingTask)
   const [selectedAnalysis, setSelectedAnalysis] = useState<string>('outline_extraction')
 
   const analysisTypes: { value: string; icon: React.ReactNode; label: string; desc: string }[] = [
@@ -466,11 +481,10 @@ const NovelAnalysisPanel: React.FC = () => {
               <button
                 key={type.value}
                 onClick={() => setSelectedAnalysis(type.value)}
-                className={`p-4 rounded-lg border text-left transition-all ${
-                  selectedAnalysis === type.value
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted hover:border-primary/30'
-                }`}
+                className={`p-4 rounded-lg border text-left transition-all ${selectedAnalysis === type.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted hover:border-primary/30'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   {type.icon}
@@ -520,20 +534,28 @@ const NovelAnalysisPanel: React.FC = () => {
 // ============================================================================
 
 const TaskMonitorPanel: React.FC = () => {
-  const {
-    tasks,
-    currentTask,
-    currentTaskProgress,
-    loadTasks,
-    loadTask,
-    cancelTask,
-    deleteTask,
-    setTaskFilter,
-    taskFilter,
-    isLoading,
-  } = useUnifiedAgentStore()
+  const tasks = useUnifiedAgentStore((state) => state.tasks)
+  const currentTask = useUnifiedAgentStore((state) => state.currentTask)
+  const currentTaskProgress = useUnifiedAgentStore((state) => state.currentTaskProgress)
+  const loadTasks = useUnifiedAgentStore((state) => state.loadTasks)
+  const loadTask = useUnifiedAgentStore((state) => state.loadTask)
+  const cancelTask = useUnifiedAgentStore((state) => state.cancelTask)
+  const deleteTask = useUnifiedAgentStore((state) => state.deleteTask)
+  const setTaskFilter = useUnifiedAgentStore((state) => state.setTaskFilter)
+  const taskFilter = useUnifiedAgentStore((state) => state.taskFilter)
+  const isLoading = useUnifiedAgentStore((state) => state.isLoading)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
-  const stats = useTaskStats()
+
+  // Calculate stats directly to avoid hook issues
+  const stats = React.useMemo(() => {
+    return {
+      total: tasks.length,
+      pending: tasks.filter((t) => t.status === 'pending').length,
+      running: tasks.filter((t) => t.status === 'running').length,
+      completed: tasks.filter((t) => t.status === 'completed').length,
+      failed: tasks.filter((t) => t.status === 'failed').length,
+    }
+  }, [tasks])
 
   useEffect(() => {
     loadTasks()
@@ -635,11 +657,10 @@ const TaskMonitorPanel: React.FC = () => {
                     <div
                       key={task.id}
                       onClick={() => handleSelectTask(task.id)}
-                      className={`p-3 rounded-lg cursor-pointer transition-all border ${
-                        selectedTaskId === task.id
-                          ? 'border-primary bg-primary/5'
-                          : 'border-transparent hover:bg-muted'
-                      }`}
+                      className={`p-3 rounded-lg cursor-pointer transition-all border ${selectedTaskId === task.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-transparent hover:bg-muted'
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -770,15 +791,15 @@ const TaskMonitorPanel: React.FC = () => {
                     {(currentTask.status === 'completed' ||
                       currentTask.status === 'failed' ||
                       currentTask.status === 'cancelled') && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteTask(currentTask.id)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        删除任务
-                      </Button>
-                    )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteTask(currentTask.id)}
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          删除任务
+                        </Button>
+                      )}
                   </div>
                 </div>
               </ScrollArea>
@@ -795,15 +816,21 @@ const TaskMonitorPanel: React.FC = () => {
 // ============================================================================
 
 const CostDisplayPanel: React.FC = () => {
-  const { schedulerStatus, loadSchedulerStatus } = useUnifiedAgentStore()
-  const stats = useTaskStats()
+  // Use individual selectors to avoid creating new objects
+  const tasks = useUnifiedAgentStore((state) => state.tasks)
+  const schedulerStatus = useUnifiedAgentStore((state) => state.schedulerStatus)
+  const loadSchedulerStatus = useUnifiedAgentStore((state) => state.loadSchedulerStatus)
 
   useEffect(() => {
     loadSchedulerStatus()
   }, [loadSchedulerStatus])
 
+  // Calculate stats directly
+  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualCost, 0), [tasks])
+  const totalTokens = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualTokens, 0), [tasks])
+
   const budgetLimit = 10.0 // 示例预算限制
-  const budgetUsed = stats.totalCost
+  const budgetUsed = totalCost
   const budgetPercent = Math.min((budgetUsed / budgetLimit) * 100, 100)
 
   return (
@@ -833,11 +860,11 @@ const CostDisplayPanel: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-xs text-muted-foreground">总 Token 消耗</p>
-              <p className="text-xl font-bold">{stats.totalTokens.toLocaleString()}</p>
+              <p className="text-xl font-bold">{totalTokens.toLocaleString()}</p>
             </div>
             <div className="p-3 rounded-lg bg-muted">
               <p className="text-xs text-muted-foreground">总成本</p>
-              <p className="text-xl font-bold">${stats.totalCost.toFixed(3)}</p>
+              <p className="text-xl font-bold">${totalCost.toFixed(3)}</p>
             </div>
           </div>
         </CardContent>
@@ -879,13 +906,13 @@ const CostDisplayPanel: React.FC = () => {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">总 Token 消耗</span>
                 <span className="font-medium">
-                  {schedulerStatus.stats.totalTokensConsumed.toLocaleString()}
+                  {(schedulerStatus.stats.totalTokensConsumed || 0).toLocaleString()}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm mt-1">
                 <span className="text-muted-foreground">总成本</span>
                 <span className="font-medium">
-                  ${schedulerStatus.stats.totalCost.toFixed(3)}
+                  ${(schedulerStatus.stats.totalCost || 0).toFixed(3)}
                 </span>
               </div>
             </div>
@@ -901,7 +928,9 @@ const CostDisplayPanel: React.FC = () => {
 // ============================================================================
 
 const SettingsPanel: React.FC = () => {
-  const { useUnifiedAPI, setUseUnifiedAPI, reset } = useUnifiedAgentStore()
+  const useUnifiedAPI = useUnifiedAgentStore((state) => state.useUnifiedAPI)
+  const setUseUnifiedAPI = useUnifiedAgentStore((state) => state.setUseUnifiedAPI)
+  const reset = useUnifiedAgentStore((state) => state.reset)
 
   return (
     <div className="space-y-4">
@@ -964,14 +993,16 @@ const SettingsPanel: React.FC = () => {
 
 const AgentWorkbenchPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WorkbenchTab>('quick')
-  const { connectRealtimeUpdates, disconnectRealtimeUpdates, error, clearError } =
-    useUnifiedAgentStore()
+  const connectRealtimeUpdates = useUnifiedAgentStore((state) => state.connectRealtimeUpdates)
+  const disconnectRealtimeUpdates = useUnifiedAgentStore((state) => state.disconnectRealtimeUpdates)
+  const error = useUnifiedAgentStore((state) => state.error)
+  const clearError = useUnifiedAgentStore((state) => state.clearError)
   const isMobile = useIsMobile()
 
   useEffect(() => {
     connectRealtimeUpdates()
     return () => disconnectRealtimeUpdates()
-  }, [connectRealtimeUpdates, disconnectRealtimeUpdates])
+  }, [])
 
   return (
     <PageLayout>

@@ -8,6 +8,7 @@
  * 统一 Agent Store - 使用 Zustand 管理统一 Agent 状态
  */
 
+import React from 'react'
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import {
@@ -623,10 +624,13 @@ export function useTotalTaskCost(): number {
 
 /**
  * Hook to get task statistics
+ * Uses shallow comparison to prevent infinite re-renders
  */
 export function useTaskStats() {
-  return useUnifiedAgentStore((state) => {
-    const tasks = state.tasks
+  const tasks = useUnifiedAgentStore((state) => state.tasks)
+  
+  // Use useMemo to cache the result
+  return React.useMemo(() => {
     return {
       total: tasks.length,
       pending: tasks.filter((t) => t.status === 'pending').length,
@@ -637,5 +641,5 @@ export function useTaskStats() {
       totalCost: tasks.reduce((sum, t) => sum + t.actualCost, 0),
       totalTokens: tasks.reduce((sum, t) => sum + t.actualTokens, 0),
     }
-  })
+  }, [tasks])
 }

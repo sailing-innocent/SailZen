@@ -146,6 +146,22 @@ class SailServer:
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.analysis_compat import analysis_compat_router
         from sail_server.router.agent_compat import agent_compat_router
+        
+        # 自动注册 Agent
+        from sail_server.agent import auto_register_agents
+        auto_register_agents()
+        
+        # 修复数据库序列
+        try:
+            from sail_server.db import get_db_session
+            from sail_server.utils.db_utils import fix_all_sequences
+            db = next(get_db_session())
+            fix_results = fix_all_sequences(db)
+            for table, success in fix_results.items():
+                if not success:
+                    logger.warning(f"Failed to fix sequence for {table}")
+        except Exception as e:
+            logger.warning(f"Failed to fix sequences: {e}")
 
         self.api_router = Router(
             path=self.api_endpoint,

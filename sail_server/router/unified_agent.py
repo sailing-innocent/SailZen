@@ -359,7 +359,7 @@ class UnifiedAgentInfoController(Controller):
         
         return agent.agent_info.to_dict()
     
-    @get("/{agent_type:str}/estimate")
+    @post("/{agent_type:str}/estimate")
     async def estimate_task_cost(
         self,
         router_dependency: Generator[Session, None, None],

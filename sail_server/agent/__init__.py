@@ -15,7 +15,7 @@ from .base import (
     ProgressCallback,
     AgentInfo,
 )
-from .registry import AgentRegistry, get_agent_registry
+from .registry import AgentRegistry, get_agent_registry, auto_register_agents
 
 __all__ = [
     "BaseAgent",
@@ -27,4 +27,5 @@ __all__ = [
     "AgentInfo",
     "AgentRegistry",
     "get_agent_registry",
+    "auto_register_agents",
 ]

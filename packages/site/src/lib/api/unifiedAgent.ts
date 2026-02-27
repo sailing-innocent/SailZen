@@ -463,8 +463,8 @@ export class UnifiedAgentAPI {
   }
 
   // --------------------------------------------------------------------------
-// Private Transform Methods
-// --------------------------------------------------------------------------
+  // Private Transform Methods
+  // --------------------------------------------------------------------------
 
   private _transformTaskResponse(data: Record<string, unknown>): UnifiedTask {
     return {

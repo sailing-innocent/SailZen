@@ -36,7 +36,7 @@ class UnifiedAgentTask(ORMBase):
     """
     __tablename__ = "unified_agent_tasks"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     # =========================================================================
     # 任务分类
@@ -187,7 +187,7 @@ class UnifiedAgentStep(ORMBase):
     """
     __tablename__ = "unified_agent_steps"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     task_id: Mapped[int] = mapped_column(
         ForeignKey("unified_agent_tasks.id", ondelete="CASCADE"),
@@ -259,7 +259,7 @@ class UnifiedAgentEvent(ORMBase):
     """
     __tablename__ = "unified_agent_events"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     
     task_id: Mapped[int] = mapped_column(
         ForeignKey("unified_agent_tasks.id", ondelete="CASCADE"),
@@ -369,10 +369,14 @@ class UnifiedTaskData:
             step_count=step_count,
         )
     
-    def to_orm(self) -> UnifiedAgentTask:
-        """转换为 ORM 对象"""
+    def to_orm(self, for_update: bool = False) -> UnifiedAgentTask:
+        """转换为 ORM 对象
+        
+        Args:
+            for_update: 是否为更新操作。如果是更新，则包含 id；如果是创建，则不包含 id
+        """
         return UnifiedAgentTask(
-            id=self.id if self.id > 0 else None,
+            id=self.id if for_update and self.id and self.id > 0 else None,
             task_type=self.task_type,
             sub_type=self.sub_type,
             edition_id=self.edition_id,
