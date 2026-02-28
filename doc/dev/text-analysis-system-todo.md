@@ -1,0 +1,720 @@
+# SailZen 文本分析系统开发 TODO
+
+> 基于 `@doc/design/text-analysis-system.md` 的详细开发任务清单
+> 
+> **版本**: 1.0  
+> **日期**: 2025-02-28  
+> **状态**: 开发规划
+
+---
+
+## 📋 目录
+
+- [Phase 1: 基础框架 (MVP)](#phase-1-基础框架-mvp)
+- [Phase 2: 核心工作流](#phase-2-核心工作流)
+- [Phase 3: 高级功能](#phase-3-高级功能)
+- [Phase 4: 生态集成](#phase-4-生态集成)
+- [附录: 验证指标汇总](#附录-验证指标汇总)
+
+---
+
+## Phase 1: 基础框架 (MVP)
+
+### 阶段介绍
+
+构建文本分析系统的基础能力，包括文本范围选择、分析工作台页面和证据标注功能。此阶段完成后，用户可以在界面上选择文本范围并创建分析任务。
+
+**预计工期**: 2-3 周  
+**依赖**: 现有文本管理功能已完成
+
+---
+
+### 1.1 文本范围选择器组件
+
+#### 1.1.1 后端 API 开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **API: 范围预览** | 实现 `POST /api/v1/text/range/preview` 接口，返回选定范围的统计信息 | `sail_server/controller/text.py` | 接口返回正确的章节数、字数、预估token数 | API 文档 + 单元测试 |
+| **API: 范围内容获取** | 实现 `POST /api/v1/text/range/content` 接口，支持多种选择模式 | `sail_server/data/text.py` | 支持6种选择模式，返回正确的文本内容 | API 文档 + 单元测试 |
+| **Service: 范围解析器** | 实现 `TextRangeParser` 服务，处理各种范围选择逻辑 | 新建 `sail_server/service/range_selector.py` | 单测覆盖率 > 80%，支持边界情况处理 | Service 模块 + 测试用例 |
+| **DTO: 范围选择数据结构** | 定义 `TextRangeSelection` 数据类，支持所有选择模式 | `sail_server/data/analysis.py` | 数据结构完整，序列化/反序列化正确 | DTO 定义 + 验证测试 |
+
+**闭环验证**:
+```bash
+# 验证命令
+uv run pytest tests/server/test_range_selector.py -v
+
+# 预期输出
+# - 测试通过: 6种选择模式
+# - 测试通过: 边界情况处理
+# - 测试通过: Token预估准确性
+```
+
+#### 1.1.2 前端组件开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 目录树选择器** | 实现带复选框的目录树组件，支持展开/折叠 | `packages/site/src/components/chapter_reader.tsx` | 支持多选、全选、级联选择 | 组件 + Storybook |
+| **组件: 范围模式切换** | 实现6种选择模式的切换 UI | 新建 `packages/site/src/components/text_range_selector.tsx` | 模式切换流畅，状态保持正确 | 组件 + 单元测试 |
+| **组件: 范围统计面板** | 显示已选范围的字数、token预估 | 参考 `packages/site/src/components/statistics.tsx` | 实时更新，显示准确 | 组件 |
+| **Hook: 范围选择状态** | 实现 `useTextRangeSelection` hook | 新建 `packages/site/src/hooks/useTextRangeSelection.ts` | 状态管理正确，支持持久化 | Hook + 测试 |
+| **API Client: 范围相关** | 实现范围预览/内容获取的 API 调用 | `packages/site/src/lib/api/text.ts` | 类型安全，错误处理完善 | API 客户端 |
+
+**闭环验证**:
+```bash
+# 验证命令
+cd packages/site
+pnpm test text_range_selector
+
+# 预期输出
+# - 组件渲染测试通过
+# - 用户交互测试通过
+# - 状态管理测试通过
+```
+
+**输出产物**:
+- `packages/site/src/components/text_range_selector.tsx`
+- `packages/site/src/hooks/useTextRangeSelection.ts`
+- `packages/site/src/lib/api/text_range.ts`
+
+---
+
+### 1.2 分析工作台页面
+
+#### 1.2.1 后端 API 开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **API: 分析统计** | 实现 `GET /api/v1/analysis/stats/{edition_id}` 接口 | `sail_server/controller/analysis.py` | 返回正确的任务/结果/证据统计 | API 实现 + 测试 |
+| **API: 批量结果获取** | 实现按类型批量获取分析结果的接口 | `sail_server/model/analysis/` | 支持分页、筛选、排序 | API 实现 + 测试 |
+| **Service: 分析聚合** | 实现 `AnalysisAggregator` 服务，聚合各类分析数据 | 新建 `sail_server/service/analysis_aggregator.py` | 查询性能 < 500ms | Service 模块 |
+
+#### 1.2.2 前端页面开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **页面: 分析工作台** | 实现 Analysis Hub 主页面 | `packages/site/src/pages/text.tsx` | 布局符合设计稿，响应式正确 | 页面组件 |
+| **组件: 分析结果面板** | 实现可切换的结果展示面板 | 新建 `packages/site/src/components/analysis_result_panel.tsx` | 支持大纲/人物/设定/关系/证据切换 | 组件 |
+| **组件: 任务队列面板** | 显示当前运行的任务列表 | 参考 `packages/site/src/components/agent_monitor.tsx` | 实时更新，支持取消操作 | 组件 |
+| **组件: 分析导航栏** | 作品切换、功能导航 | 参考 `packages/site/src/components/pagebar.tsx` | 导航流畅，状态同步正确 | 组件 |
+| **Store: 分析状态** | Zustand store 管理分析相关状态 | `packages/site/src/lib/store/` | 状态管理清晰，支持持久化 | Store 模块 |
+
+**闭环验证**:
+```bash
+# 验证命令
+cd packages/site
+pnpm build
+pnpm test analysis
+
+# 预期输出
+# - 构建成功
+# - 所有测试通过
+# - 页面可正常访问 /analysis
+```
+
+**输出产物**:
+- `packages/site/src/pages/analysis.tsx`
+- `packages/site/src/components/analysis_result_panel.tsx`
+- `packages/site/src/components/analysis_task_queue.tsx`
+- `packages/site/src/lib/store/analysisStore.ts`
+
+---
+
+### 1.3 证据标注功能
+
+#### 1.3.1 后端 API 开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **API: 证据 CRUD** | 实现证据的增删改查接口 | `sail_server/controller/analysis.py` `EvidenceController` | CRUD 操作完整，验证正确 | API 实现 + 测试 |
+| **API: 章节证据获取** | 实现 `GET /api/v1/analysis/evidence/chapter/{node_id}` | `sail_server/model/analysis/evidence.py` | 返回指定章节的所有证据 | API 实现 + 测试 |
+| **API: 目标证据获取** | 实现 `GET /api/v1/analysis/evidence/target/{type}/{id}` | `sail_server/model/analysis/evidence.py` | 支持多种目标类型查询 | API 实现 + 测试 |
+| **Model: 证据扩展** | 扩展证据模型，支持更多元数据 | `sail_server/data/analysis.py` `TextEvidence` | 模型字段完整，迁移正确 | 模型更新 + 迁移脚本 |
+
+#### 1.3.2 前端组件开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 文本高亮** | 实现可高亮显示证据的文本组件 | 新建 `packages/site/src/components/evidence_highlighter.tsx` | 支持多种高亮样式，性能良好 | 组件 |
+| **组件: 证据标注工具栏** | 文本选择后的标注操作栏 | 新建 `packages/site/src/components/evidence_toolbar.tsx` | 操作流畅，位置正确 | 组件 |
+| **组件: 证据卡片** | 显示单个证据的详细信息 | 新建 `packages/site/src/components/evidence_card.tsx` | 信息完整，支持编辑删除 | 组件 |
+| **Hook: 文本选择** | 实现 `useTextSelection` hook | 新建 `packages/site/src/hooks/useTextSelection.ts` | 准确获取选中文本位置 | Hook |
+| **集成: 阅读器证据标注** | 在 ChapterReader 中集成证据标注 | `packages/site/src/components/chapter_reader.tsx` | 可在阅读器中标注证据 | 功能集成 |
+
+**闭环验证**:
+```bash
+# 验证命令
+# 1. 后端测试
+uv run pytest tests/server/test_evidence.py -v
+
+# 2. 前端测试
+cd packages/site
+pnpm test evidence
+
+# 3. 集成测试
+# 打开阅读器，选择文本，添加证据，验证保存和显示
+```
+
+**输出产物**:
+- `packages/site/src/components/evidence_highlighter.tsx`
+- `packages/site/src/components/evidence_toolbar.tsx`
+- `packages/site/src/components/evidence_card.tsx`
+- `packages/site/src/hooks/useTextSelection.ts`
+
+---
+
+### Phase 1 验收标准
+
+| 检查项 | 验收标准 | 验证方式 |
+|--------|----------|----------|
+| 文本范围选择 | 支持6种模式，选择准确，统计显示正确 | 单元测试 + 手工测试 |
+| 分析工作台 | 页面布局完整，导航流畅，结果面板可切换 | 手工测试 |
+| 证据标注 | 可在阅读器中标注证据，高亮显示正确 | 手工测试 |
+| API 完整性 | 所有新增 API 有单元测试，覆盖率 > 70% | 测试报告 |
+| 代码质量 | 通过 lint 检查，无 TypeScript 错误 | CI 检查 |
+
+---
+
+## Phase 2: 核心工作流
+
+### 阶段介绍
+
+实现文本分析的核心工作流，包括大纲提取、人物检测、设定管理和关系图谱。此阶段完成后，系统具备完整的 AI 辅助分析能力。
+
+**预计工期**: 3-4 周  
+**依赖**: Phase 1 完成
+
+---
+
+### 2.1 大纲提取工作流
+
+#### 2.1.1 后端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Prompt: 大纲提取模板** | 优化大纲提取的 Prompt 模板 | `sail_server/utils/llm/prompts.py` | 输出格式稳定，可解析 | Prompt 模板 |
+| **Service: 大纲提取器** | 实现 `OutlineExtractor` 服务 | 新建 `sail_server/service/outline_extractor.py` | 支持分块处理，结果可合并 | Service 模块 |
+| **API: 大纲提取任务** | 创建大纲提取专用任务接口 | `sail_server/controller/analysis.py` | 支持配置粒度、类型等参数 | API 实现 |
+| **Model: 大纲结果解析** | 实现 LLM 输出到大纲节点的解析 | `sail_server/model/analysis/outline.py` | 解析准确，错误处理完善 | 模型方法 |
+| **Feature: 证据自动关联** | 提取时自动关联文本证据 | `sail_server/model/analysis/evidence.py` | 证据位置准确 | 功能实现 |
+
+#### 2.1.2 前端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 大纲提取配置** | 提取参数配置面板 | 新建 `packages/site/src/components/outline_extraction_config.tsx` | 配置项完整，验证正确 | 组件 |
+| **组件: 大纲树展示** | 可编辑的大纲树组件 | 新建 `packages/site/src/components/outline_tree.tsx` | 支持拖拽、编辑、删除 | 组件 |
+| **组件: 大纲节点编辑器** | 大纲节点的详细编辑 | 新建 `packages/site/src/components/outline_node_editor.tsx` | 字段完整，保存正确 | 组件 |
+| **组件: 提取结果审核** | AI 提取结果的审核界面 | 新建 `packages/site/src/components/outline_review_panel.tsx` | 支持批准/拒绝/修改 | 组件 |
+| **页面: 大纲管理** | 大纲管理专用页面 | 新建 `packages/site/src/pages/outline.tsx` | 功能完整，用户体验良好 | 页面 |
+
+**闭环验证**:
+```bash
+# 验证步骤
+1. 选择文本范围
+2. 配置提取参数（粒度、类型）
+3. 执行提取任务
+4. 审核提取结果
+5. 保存到数据库
+6. 验证大纲树显示正确
+
+# 预期指标
+- 提取准确率 > 70%
+- 任务完成时间 < 30s (单章)
+- 用户审核通过率 > 80%
+```
+
+**输出产物**:
+- `sail_server/service/outline_extractor.py`
+- `sail_server/prompts/outline_extraction_v2.yaml`
+- `packages/site/src/components/outline_tree.tsx`
+- `packages/site/src/pages/outline.tsx`
+
+---
+
+### 2.2 人物检测与档案构建
+
+#### 2.2.1 后端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Prompt: 人物检测模板** | 人物检测专用 Prompt | `sail_server/utils/llm/prompts.py` | 识别人物准确 | Prompt 模板 |
+| **Service: 人物检测器** | 实现 `CharacterDetector` 服务 | 新建 `sail_server/service/character_detector.py` | 检测准确，别名合并正确 | Service 模块 |
+| **Service: 人物画像构建** | 实现 `CharacterProfiler` 服务 | 新建 `sail_server/service/character_profiler.py` | 属性提取完整 | Service 模块 |
+| **API: 人物批量导入** | 支持批量导入人物结果 | `sail_server/controller/analysis.py` | 批量操作性能良好 | API 实现 |
+| **Feature: 人物去重合并** | 自动识别并合并重复人物 | `sail_server/model/analysis/character.py` | 去重准确率 > 85% | 功能实现 |
+
+#### 2.2.2 前端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 人物列表** | 人物卡片列表展示 | 新建 `packages/site/src/components/character_list.tsx` | 支持筛选、排序 | 组件 |
+| **组件: 人物档案卡片** | 人物详细信息展示 | 新建 `packages/site/src/components/character_profile_card.tsx` | 信息完整，布局美观 | 组件 |
+| **组件: 人物属性编辑器** | 人物属性的增删改 | 新建 `packages/site/src/components/character_attribute_editor.tsx` | 支持多种属性类型 | 组件 |
+| **组件: 人物检测配置** | 人物检测任务配置 | 新建 `packages/site/src/components/character_detection_config.tsx` | 配置项合理 | 组件 |
+| **页面: 人物管理** | 人物管理专用页面 | 新建 `packages/site/src/pages/characters.tsx` | 功能完整 | 页面 |
+
+**闭环验证**:
+```bash
+# 验证步骤
+1. 选择文本范围
+2. 执行人物检测任务
+3. 审核检测到的人物
+4. 完善人物属性
+5. 验证人物档案完整
+
+# 预期指标
+- 人物检测召回率 > 80%
+- 角色分类准确率 > 75%
+- 别名合并准确率 > 85%
+```
+
+**输出产物**:
+- `sail_server/service/character_detector.py`
+- `sail_server/service/character_profiler.py`
+- `packages/site/src/components/character_list.tsx`
+- `packages/site/src/pages/characters.tsx`
+
+---
+
+### 2.3 设定提取与管理
+
+#### 2.3.1 后端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Prompt: 设定提取模板** | 设定提取专用 Prompt | `sail_server/utils/llm/prompts.py` | 支持多种设定类型 | Prompt 模板 |
+| **Service: 设定提取器** | 实现 `SettingExtractor` 服务 | 新建 `sail_server/service/setting_extractor.py` | 提取准确，分类正确 | Service 模块 |
+| **API: 设定层级管理** | 设定层级关系 CRUD | `sail_server/controller/analysis.py` | 层级操作正确 | API 实现 |
+| **Feature: 设定关系图** | 构建设定之间的关系图 | `sail_server/model/analysis/setting.py` | 关系提取合理 | 功能实现 |
+
+#### 2.3.2 前端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 设定分类视图** | 按类型分类展示设定 | 新建 `packages/site/src/components/setting_category_view.tsx` | 分类清晰，导航方便 | 组件 |
+| **组件: 设定详情卡片** | 设定详细信息展示 | 新建 `packages/site/src/components/setting_detail_card.tsx` | 信息完整 | 组件 |
+| **组件: 设定关系图** | 设定关系可视化 | 新建 `packages/site/src/components/setting_relation_graph.tsx` | 使用力导向图展示 | 组件 |
+| **页面: 设定管理** | 设定管理专用页面 | 新建 `packages/site/src/pages/settings.tsx` | 功能完整 | 页面 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 设定提取准确率 > 70%
+- 设定分类准确率 > 80%
+- 关系提取合理率 > 75%
+```
+
+**输出产物**:
+- `sail_server/service/setting_extractor.py`
+- `packages/site/src/components/setting_relation_graph.tsx`
+- `packages/site/src/pages/settings.tsx`
+
+---
+
+### 2.4 关系图谱可视化
+
+#### 2.4.1 后端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **API: 关系图数据** | 实现关系图数据接口 | `sail_server/controller/analysis.py` `get_relation_graph` | 返回节点和边数据 | API 实现 |
+| **Service: 关系聚合** | 聚合人物和设定关系 | 新建 `sail_server/service/relation_aggregator.py` | 关系数据完整 | Service 模块 |
+
+#### 2.4.2 前端开发
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 关系图谱** | 使用 D3/ECharts 实现关系图 | 新建 `packages/site/src/components/relation_graph.tsx` | 支持缩放、拖拽、点击 | 组件 |
+| **组件: 图谱控制器** | 图谱的筛选、布局控制 | 新建 `packages/site/src/components/graph_controller.tsx` | 筛选功能完整 | 组件 |
+| **组件: 节点详情面板** | 点击节点显示详情 | 新建 `packages/site/src/components/graph_node_panel.tsx` | 信息展示正确 | 组件 |
+| **页面: 关系图谱** | 关系图谱专用页面 | 新建 `packages/site/src/pages/relation_graph.tsx` | 性能良好，交互流畅 | 页面 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 图谱渲染节点数 > 100 不卡顿
+- 首次渲染时间 < 2s
+- 交互响应时间 < 100ms
+```
+
+**输出产物**:
+- `packages/site/src/components/relation_graph.tsx`
+- `packages/site/src/pages/relation_graph.tsx`
+
+---
+
+### 2.5 Context 工程优化
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: ContextBuilder** | 实现智能 Context 构建 | 新建 `sail_server/service/context_builder.py` | Token 使用效率 > 85% | Service 模块 |
+| **Service: 智能分块** | 实现语义感知的分块策略 | `sail_server/model/analysis/task_scheduler.py` | 分块合理，上下文连贯 | Service 模块 |
+| **Feature: Token 预算管理** | 实现 Token 预算分配 | 新建 `sail_server/utils/token_budget.py` | 不超出模型限制 | 工具模块 |
+| **Feature: 上下文缓存** | 缓存已分析的上下文 | 新建 `sail_server/utils/context_cache.py` | 缓存命中率 > 60% | 工具模块 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- Token 利用率 > 85%
+- 上下文相关性 > 80%
+- 缓存命中率 > 60%
+```
+
+**输出产物**:
+- `sail_server/service/context_builder.py`
+- `sail_server/utils/token_budget.py`
+
+---
+
+### Phase 2 验收标准
+
+| 检查项 | 验收标准 | 验证方式 |
+|--------|----------|----------|
+| 大纲提取 | 支持多种粒度提取，结果可编辑保存 | 手工测试 + 准确率评估 |
+| 人物检测 | 检测召回率 > 80%，档案构建完整 | 测试集评估 |
+| 设定管理 | 设定分类准确，关系图可视化 | 手工测试 |
+| 关系图谱 | 支持 100+ 节点流畅渲染 | 性能测试 |
+| Context 工程 | Token 利用率 > 85% | 日志分析 |
+
+---
+
+## Phase 3: 高级功能
+
+### 阶段介绍
+
+实现高级分析功能，包括一致性检查、人物弧光追踪、多版本对比等。此阶段完成后，系统具备专业的创作辅助能力。
+
+**预计工期**: 3-4 周  
+**依赖**: Phase 2 完成
+
+---
+
+### 3.1 一致性检查引擎
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: 一致性检查器** | 实现 `ConsistencyChecker` 服务 | 新建 `sail_server/service/consistency_checker.py` | 检测准确率 > 75% | Service 模块 |
+| **Prompt: 一致性检测** | 一致性检测专用 Prompt | 新建 `sail_server/prompts/consistency_check.yaml` | 检测类型覆盖全面 | Prompt 模板 |
+| **Feature: 属性冲突检测** | 检测人物/设定属性冲突 | `sail_server/service/consistency_checker.py` | 冲突识别准确 | 功能实现 |
+| **Feature: 时间线检查** | 检测时间线逻辑错误 | `sail_server/service/consistency_checker.py` | 时序错误识别准确 | 功能实现 |
+| **Feature: 能力一致性** | 检测人物能力前后一致 | `sail_server/service/consistency_checker.py` | 能力变化追踪正确 | 功能实现 |
+| **API: 一致性报告** | 生成一致性检查报告 | 新建 API | 报告清晰，建议合理 | API 实现 |
+| **组件: 一致性报告面板** | 展示检查结果 | 新建 `packages/site/src/components/consistency_report.tsx` | 问题分级显示 | 组件 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 一致性检测准确率 > 75%
+- 误报率 < 20%
+- 检查覆盖: 属性/时间线/能力/地点
+```
+
+**输出产物**:
+- `sail_server/service/consistency_checker.py`
+- `packages/site/src/components/consistency_report.tsx`
+
+---
+
+### 3.2 人物弧光追踪
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: 弧光追踪器** | 实现 `ArcTracker` 服务 | 新建 `sail_server/service/arc_tracker.py` | 弧光识别准确 | Service 模块 |
+| **Prompt: 弧光分析** | 人物弧光分析 Prompt | 新建 `sail_server/prompts/arc_analysis.yaml` | 弧光类型识别准确 | Prompt 模板 |
+| **Feature: 弧光可视化** | 人物成长曲线可视化 | 新建 `packages/site/src/components/arc_timeline.tsx` | 时间轴展示清晰 | 组件 |
+| **Feature: 转折点标记** | 标记人物关键转折点 | `sail_server/model/analysis/character.py` | 转折点位置准确 | 功能实现 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 弧光识别准确率 > 70%
+- 转折点定位准确率 > 75%
+```
+
+**输出产物**:
+- `sail_server/service/arc_tracker.py`
+- `packages/site/src/components/arc_timeline.tsx`
+
+---
+
+### 3.3 多版本对比分析
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: 版本对比器** | 实现 `EditionComparer` 服务 | 新建 `sail_server/service/edition_comparer.py` | 差异识别准确 | Service 模块 |
+| **Feature: 文本差异** | 章节级别文本对比 | `sail_server/service/edition_comparer.py` | 差异高亮准确 | 功能实现 |
+| **Feature: 结构差异** | 大纲/人物结构对比 | `sail_server/service/edition_comparer.py` | 结构变化识别正确 | 功能实现 |
+| **组件: 版本对比视图** | 左右对比展示 | 新建 `packages/site/src/components/edition_diff_view.tsx` | 对比清晰，操作方便 | 组件 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 文本差异识别准确率 > 95%
+- 结构差异识别准确率 > 85%
+```
+
+**输出产物**:
+- `sail_server/service/edition_comparer.py`
+- `packages/site/src/components/edition_diff_view.tsx`
+
+---
+
+### 3.4 协作分析 (多人审核)
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Model: 审核记录** | 扩展审核记录模型 | `sail_server/data/analysis.py` | 支持多人审核 | 模型更新 |
+| **Feature: 审核分配** | 任务分配给不同审核者 | 新建 `sail_server/service/review_assigner.py` | 分配逻辑合理 | 功能实现 |
+| **Feature: 审核评论** | 支持审核评论和讨论 | 新建 API | 评论功能完整 | API 实现 |
+| **组件: 审核工作流** | 审核状态流转 UI | 新建 `packages/site/src/components/review_workflow.tsx` | 工作流清晰 | 组件 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 支持并发审核
+- 审核状态流转正确
+```
+
+**输出产物**:
+- `sail_server/service/review_assigner.py`
+- `packages/site/src/components/review_workflow.tsx`
+
+---
+
+### 3.5 创作辅助建议
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: 创作建议器** | 实现 `WritingAdvisor` 服务 | 新建 `sail_server/service/writing_advisor.py` | 建议质量合理 | Service 模块 |
+| **Prompt: 续写建议** | 续写建议 Prompt | 新建 `sail_server/prompts/writing_advice.yaml` | 建议符合上下文 | Prompt 模板 |
+| **Feature: 情节建议** | 基于大纲的情节发展建议 | `sail_server/service/writing_advisor.py` | 建议合理 | 功能实现 |
+| **Feature: 人物建议** | 人物行为一致性建议 | `sail_server/service/writing_advisor.py` | 建议符合人设 | 功能实现 |
+| **组件: 建议面板** | 展示 AI 建议 | 新建 `packages/site/src/components/writing_suggestions.tsx` | 建议展示清晰 | 组件 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 建议采纳率 > 50%
+- 建议相关性 > 70%
+```
+
+**输出产物**:
+- `sail_server/service/writing_advisor.py`
+- `packages/site/src/components/writing_suggestions.tsx`
+
+---
+
+### Phase 3 验收标准
+
+| 检查项 | 验收标准 | 验证方式 |
+|--------|----------|----------|
+| 一致性检查 | 检测准确率 > 75%，误报率 < 20% | 测试集评估 |
+| 人物弧光 | 弧光识别准确率 > 70% | 测试集评估 |
+| 版本对比 | 差异识别准确率 > 95% | 测试集评估 |
+| 协作分析 | 支持多人并发审核 | 压力测试 |
+| 创作辅助 | 建议采纳率 > 50% | 用户反馈 |
+
+---
+
+## Phase 4: 生态集成
+
+### 阶段介绍
+
+将文本分析系统与外部工具和平台集成，包括 VSCode 插件、导出功能和 API 开放。
+
+**预计工期**: 2-3 周  
+**依赖**: Phase 3 完成
+
+---
+
+### 4.1 VSCode 插件集成
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Extension: 基础架构** | VSCode 插件基础架构 | `packages/vscode_plugin/` | 插件可正常加载 | 插件框架 |
+| **Feature: 文本同步** | 插件与后端文本同步 | 新建 | 同步及时准确 | 功能实现 |
+| **Feature: 分析结果展示** | 在 VSCode 中展示分析结果 | 新建 | 展示清晰 | 功能实现 |
+| **Feature: 证据高亮** | 在编辑器中高亮证据 | 新建 | 高亮准确 | 功能实现 |
+| **Feature: 快捷标注** | 编辑器中快捷添加证据 | 新建 | 操作便捷 | 功能实现 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 插件启动时间 < 3s
+- 文本同步延迟 < 1s
+- 分析结果展示流畅
+```
+
+**输出产物**:
+- `packages/vscode_plugin/src/analysis/` 模块
+
+---
+
+### 4.2 导出功能
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Service: Markdown 导出** | 导出分析结果为 Markdown | 新建 `sail_server/service/export_markdown.py` | 格式正确 | Service 模块 |
+| **Service: Word 导出** | 导出分析结果为 Word | 新建 `sail_server/service/export_word.py` | 格式正确 | Service 模块 |
+| **Service: JSON 导出** | 导出原始数据为 JSON | 新建 `sail_server/service/export_json.py` | 数据完整 | Service 模块 |
+| **API: 导出接口** | 实现导出 API | 新建 API | 支持多种格式 | API 实现 |
+| **组件: 导出面板** | 导出配置和下载 UI | 新建 `packages/site/src/components/export_panel.tsx` | 操作便捷 | 组件 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 导出格式正确率 100%
+- 导出时间 < 10s (大型项目)
+```
+
+**输出产物**:
+- `sail_server/service/export_*.py`
+- `packages/site/src/components/export_panel.tsx`
+
+---
+
+### 4.3 第三方 LLM 接入
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Provider: 新 LLM 适配** | 适配新的 LLM 提供商 | `sail_server/utils/llm/providers/` | 适配完整 | Provider 模块 |
+| **Feature: 模型切换** | 支持动态切换模型 | `sail_server/utils/llm/client.py` | 切换流畅 | 功能实现 |
+| **Feature: 模型评测** | 不同模型的效果评测 | 新建 `tests/llm_integration/` | 评测报告完整 | 评测工具 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- 支持 3+ 种 LLM 提供商
+- 模型切换时间 < 1s
+```
+
+---
+
+### 4.4 API 开放平台
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **Feature: API 密钥管理** | 实现 API 密钥管理 | 新建 | 密钥安全 | 功能实现 |
+| **Feature: 访问控制** | API 访问权限控制 | 新建 | 权限控制正确 | 功能实现 |
+| **Feature: 使用统计** | API 调用统计 | 新建 | 统计准确 | 功能实现 |
+| **文档: API 文档** | 编写 OpenAPI 文档 | 新建 | 文档完整 | 文档 |
+
+**闭环验证**:
+```bash
+# 预期指标
+- API 可用性 > 99%
+- 响应时间 < 500ms
+```
+
+---
+
+### Phase 4 验收标准
+
+| 检查项 | 验收标准 | 验证方式 |
+|--------|----------|----------|
+| VSCode 插件 | 插件功能完整，可正常使用 | 手工测试 |
+| 导出功能 | 支持 Markdown/Word/JSON 导出 | 手工测试 |
+| LLM 接入 | 支持 3+ 种 LLM 提供商 | 集成测试 |
+| API 开放 | API 文档完整，访问控制正确 | 安全测试 |
+
+---
+
+## 附录: 验证指标汇总
+
+### A.1 功能验证指标
+
+| 功能模块 | 关键指标 | 目标值 | 验证方法 |
+|----------|----------|--------|----------|
+| 文本范围选择 | 选择模式支持 | 6种 | 单元测试 |
+| 大纲提取 | 提取准确率 | > 70% | 测试集评估 |
+| 人物检测 | 召回率 | > 80% | 测试集评估 |
+| 人物分类 | 准确率 | > 75% | 测试集评估 |
+| 设定提取 | 准确率 | > 70% | 测试集评估 |
+| 关系图谱 | 渲染性能 | 100+节点 | 性能测试 |
+| 一致性检查 | 检测准确率 | > 75% | 测试集评估 |
+| 一致性检查 | 误报率 | < 20% | 测试集评估 |
+| 人物弧光 | 识别准确率 | > 70% | 测试集评估 |
+| 版本对比 | 差异识别率 | > 95% | 测试集评估 |
+
+### A.2 性能验证指标
+
+| 指标项 | 目标值 | 验证方法 |
+|--------|--------|----------|
+| API 响应时间 (P95) | < 500ms | 压力测试 |
+| 页面加载时间 | < 2s | Lighthouse |
+| 图谱渲染时间 (100节点) | < 2s | 性能测试 |
+| 任务执行时间 (单章) | < 30s | 日志分析 |
+| Token 利用率 | > 85% | 日志分析 |
+| 缓存命中率 | > 60% | 日志分析 |
+
+### A.3 代码质量指标
+
+| 指标项 | 目标值 | 验证方法 |
+|--------|--------|----------|
+| 单元测试覆盖率 | > 70% | Coverage 报告 |
+| TypeScript 严格模式 | 无错误 | tsc --strict |
+| Lint 检查 | 无警告 | ESLint |
+| 代码重复率 | < 5% | SonarQube |
+
+### A.4 用户体验指标
+
+| 指标项 | 目标值 | 验证方法 |
+|--------|--------|----------|
+| 任务完成率 | > 90% | 用户测试 |
+| 功能发现率 | > 80% | 用户测试 |
+| 用户满意度 | > 4.0/5 | 问卷调查 |
+
+---
+
+## B. 快速参考
+
+### B.1 常用开发命令
+
+```bash
+# 后端开发
+uv run pytest tests/server/ -v                    # 运行后端测试
+uv run server.py --dev                            # 启动开发服务器
+
+# 前端开发
+cd packages/site
+pnpm dev                                          # 启动开发服务器
+pnpm test                                         # 运行测试
+pnpm build                                        # 构建生产版本
+
+# 数据库迁移
+uv run sail_server/migration/verify_migration.py  # 验证迁移
+```
+
+### B.2 关键文件位置
+
+| 类型 | 路径 | 说明 |
+|------|------|------|
+| 后端控制器 | `sail_server/controller/` | API 接口实现 |
+| 后端模型 | `sail_server/data/` | 数据模型定义 |
+| 后端服务 | `sail_server/service/` | 业务逻辑实现 |
+| LLM 工具 | `sail_server/utils/llm/` | LLM 相关工具 |
+| 前端页面 | `packages/site/src/pages/` | 页面组件 |
+| 前端组件 | `packages/site/src/components/` | 可复用组件 |
+| 前端 API | `packages/site/src/lib/api/` | API 客户端 |
+| 前端状态 | `packages/site/src/lib/store/` | 状态管理 |
+
+### B.3 调试技巧
+
+```bash
+# 后端调试
+# 1. 设置断点
+# 2. 使用 VSCode 调试配置
+# 3. 或使用 pdb
+import pdb; pdb.set_trace()
+
+# 前端调试
+# 1. React DevTools 查看组件状态
+# 2. Redux DevTools 查看 Store 状态
+# 3. Network 面板查看 API 调用
+```
+
+---
+
+*文档结束*
