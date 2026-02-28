@@ -322,23 +322,23 @@ export const useUnifiedAgentStore = create<UnifiedAgentState>()(
             },
             (error) => {
               console.log('[UnifiedAgentStore] WebSocket error, will retry...')
+            },
+            () => {
+              // onOpen
+              set({ wsConnected: true })
+            },
+            () => {
+              // onClose
+              set({ wsConnection: null, wsConnected: false })
+              // Try to reconnect after a delay
+              setTimeout(() => {
+                const current = get()
+                if (!current.wsConnection && current.useUnifiedAPI) {
+                  get().connectRealtimeUpdates()
+                }
+              }, 3000)
             }
           )
-
-          ws.onopen = () => {
-            set({ wsConnected: true })
-          }
-
-          ws.onclose = () => {
-            set({ wsConnection: null, wsConnected: false })
-            // Try to reconnect after a delay
-            setTimeout(() => {
-              const current = get()
-              if (!current.wsConnection && current.useUnifiedAPI) {
-                get().connectRealtimeUpdates()
-              }
-            }, 3000)
-          }
 
           set({ wsConnection: ws })
 

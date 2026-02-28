@@ -92,6 +92,8 @@ class TaskResponse:
     created_at: str
     started_at: Optional[str]
     completed_at: Optional[str]
+    error_message: Optional[str] = None
+    result_data: Optional[Dict[str, Any]] = None
     
     @classmethod
     def from_data(cls, data: UnifiedTaskData) -> "TaskResponse":
@@ -111,6 +113,8 @@ class TaskResponse:
             created_at=data.created_at.isoformat() if data.created_at else None,
             started_at=data.started_at.isoformat() if data.started_at else None,
             completed_at=data.completed_at.isoformat() if data.completed_at else None,
+            error_message=data.error_message,
+            result_data=data.result_data,
         )
 
 
@@ -197,27 +201,27 @@ class UnifiedTaskController(Controller):
             config=data.config,
         )
         
-        # 保存到数据库
-        dao = UnifiedTaskDAO(db)
-        orm = dao.create(task_data)
-        
-        # 调度任务
+        # 调度任务（内部会创建任务记录并加入队列）
         scheduler = self._get_scheduler()
-        task_data.id = orm.id
-        task_data.created_at = orm.created_at
         
         # 启动调度器（如果未运行）
         if not scheduler.is_running():
             await scheduler.start()
         
         # 调度任务
-        await scheduler.schedule_task(task_data)
+        result_data = await scheduler.schedule_task(task_data)
         
-        # 获取步骤数
-        step_dao = UnifiedStepDAO(db)
-        step_count = step_dao.get_next_step_number(orm.id) - 1
+        # 发送 task_created 事件通知客户端
+        ws_manager = get_websocket_manager()
+        await ws_manager.notify_task_created(
+            result_data.id,
+            {
+                "task_type": result_data.task_type,
+                "status": result_data.status,
+                "priority": result_data.priority,
+            }
+        )
         
-        result_data = UnifiedTaskData.from_orm(orm, step_count)
         return TaskResponse.from_data(result_data)
     
     @get("")
@@ -386,6 +390,12 @@ class UnifiedAgentInfoController(Controller):
         
         estimate = agent.estimate_cost(task)
         return estimate.to_dict()
+    
+    @get("/config/llm")
+    async def get_llm_config(self) -> Dict[str, Any]:
+        """获取 LLM 配置信息（供前端使用）"""
+        from sail_server.utils.llm.available_providers import to_frontend_config
+        return to_frontend_config()
 
 
 class UnifiedSchedulerController(Controller):
@@ -437,24 +447,25 @@ class TaskProgressWebSocket(WebsocketListener):
     """任务进度 WebSocket"""
     path = "/ws/tasks"
     
-    async def on_accept(self, socket: WebSocket[Any, Any, Any]) -> None:
+    async def on_accept(self, socket: WebSocket) -> None:
         """连接建立时"""
+        self.socket = socket
         self.ws_manager = get_websocket_manager()
         self.client_id = f"ws_{id(socket)}"
         
         await self.ws_manager.connect(
             self.client_id,
-            lambda msg: socket.send_text(msg)
+            lambda msg: asyncio.create_task(socket.send_text(msg))
         )
         
         logger.info(f"WebSocket client {self.client_id} connected")
     
-    async def on_disconnect(self, socket: WebSocket[Any, Any, Any]) -> None:
+    async def on_disconnect(self, socket: WebSocket) -> None:
         """连接断开时"""
         await self.ws_manager.disconnect(self.client_id)
         logger.info(f"WebSocket client {self.client_id} disconnected")
     
-    async def on_receive(self, socket: WebSocket[Any, Any, Any], data: str) -> None:
+    async def on_receive(self, data: str) -> None:
         """收到消息时"""
         await self.ws_manager.handle_message(self.client_id, data)
 

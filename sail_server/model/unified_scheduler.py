@@ -276,10 +276,18 @@ class UnifiedAgentScheduler:
     
     async def _scheduler_loop(self):
         """主调度循环"""
+        logger.info("Scheduler loop started")
+        loop_count = 0
+        
         while self._running:
             try:
+                loop_count += 1
+                if loop_count % 10 == 0:  # 每10次循环记录一次日志
+                    logger.debug(f"Scheduler loop iteration {loop_count}, queue size: {self._task_queue.qsize()}, running tasks: {len(self._running_tasks)}")
+                
                 # 检查资源限制
                 if not self._resource_usage.can_accept_new_task(self.config):
+                    logger.debug(f"Resource limit reached, waiting... (running: {self._resource_usage.running_tasks})")
                     await asyncio.sleep(self.config.poll_interval_seconds)
                     continue
                 
@@ -289,6 +297,7 @@ class UnifiedAgentScheduler:
                         self._task_queue.get(),
                         timeout=self.config.poll_interval_seconds
                     )
+                    logger.info(f"Got task from queue: task_id={item.task_id}, priority={item.priority}")
                 except asyncio.TimeoutError:
                     continue
                 
@@ -297,28 +306,40 @@ class UnifiedAgentScheduler:
                     dao = UnifiedTaskDAO(db)
                     task = dao.get_by_id(item.task_id)
                     
-                    if not task or task.status != TaskStatus.PENDING:
-                        # 任务已被取消或完成，跳过
+                    if not task:
+                        logger.warning(f"Task {item.task_id} not found in database, skipping")
                         continue
+                    
+                    if task.status not in [TaskStatus.PENDING, TaskStatus.SCHEDULED]:
+                        logger.info(f"Task {item.task_id} status is '{task.status}', not pending/scheduled, skipping")
+                        continue
+                    
+                    logger.info(f"Task {item.task_id} is valid (status={task.status}), checking resource limits...")
                     
                     # 检查并发限制
                     if len(self._running_tasks) >= self.config.max_concurrent_tasks:
+                        logger.info(f"Max concurrent tasks reached ({len(self._running_tasks)}/{self.config.max_concurrent_tasks})")
                         # 如果启用了抢占且当前任务优先级更高
                         if (self.config.enable_priority_preemption and 
                             item.priority <= TaskPriority.HIGH):
+                            logger.info(f"Trying to preempt lower priority task for high priority task {item.task_id}")
                             await self._preempt_lowest_priority_task()
                         else:
                             # 重新放回队列
+                            logger.info(f"Re-queueing task {item.task_id}")
                             await self._task_queue.put(item)
                             await asyncio.sleep(self.config.poll_interval_seconds)
                             continue
                     
                     # 启动任务执行
+                    logger.info(f"Starting task execution: task_id={item.task_id}")
                     await self._start_task_execution(task.id)
                 
             except Exception as e:
-                logger.error(f"Scheduler loop error: {e}")
+                logger.error(f"Scheduler loop error: {e}", exc_info=True)
                 await asyncio.sleep(self.config.poll_interval_seconds)
+        
+        logger.info("Scheduler loop stopped")
     
     async def _cleanup_loop(self):
         """清理循环 - 处理超时任务等"""
@@ -421,11 +442,14 @@ class UnifiedAgentScheduler:
         Returns:
             UnifiedTaskData: 创建的任务
         """
+        logger.info(f"Scheduling task: type={task_data.task_type}, priority={task_data.priority}")
+        
         with self.db_factory() as db:
             dao = UnifiedTaskDAO(db)
             
             # 创建任务记录
             orm = dao.create(task_data)
+            logger.info(f"Task record created: id={orm.id}, status={orm.status}")
             
             # 创建队列项
             item = TaskQueueItem(
@@ -437,14 +461,18 @@ class UnifiedAgentScheduler:
                 created_at=orm.created_at,
                 task_type=orm.task_type,
             )
+            logger.info(f"Task queue item created: task_id={item.task_id}, priority_score={item.priority_score}")
             
             if immediate and self._resource_usage.can_accept_new_task(self.config):
                 # 立即执行
+                logger.info(f"Starting task {orm.id} immediately")
                 await self._start_task_execution(orm.id)
             else:
                 # 加入队列
+                logger.info(f"Adding task {orm.id} to queue (queue size before: {self._task_queue.qsize()})")
                 await self._task_queue.put(item)
                 dao.mark_as_scheduled(orm.id)
+                logger.info(f"Task {orm.id} added to queue, status set to 'scheduled'")
             
             self._stats["total_scheduled"] += 1
             
@@ -456,6 +484,8 @@ class UnifiedAgentScheduler:
     
     async def _start_task_execution(self, task_id: int):
         """开始执行任务"""
+        logger.info(f"Starting task execution: task_id={task_id}")
+        
         async with self._lock:
             # 创建执行 Task
             exec_task = asyncio.create_task(
@@ -464,6 +494,7 @@ class UnifiedAgentScheduler:
             )
             self._running_tasks[task_id] = exec_task
             self._resource_usage.running_tasks += 1
+            logger.info(f"Task {task_id} added to running tasks (total running: {len(self._running_tasks)})")
         
         # 更新数据库状态
         with self.db_factory() as db:
@@ -477,6 +508,7 @@ class UnifiedAgentScheduler:
                     "created_at": task.created_at,
                     "task_type": task.task_type,
                 }
+                logger.info(f"Task {task_id} marked as running in database")
         
         # 发送事件
         self._emit_event(TaskProgressEvent(
@@ -484,11 +516,14 @@ class UnifiedAgentScheduler:
             event_type="started",
             data={"timestamp": datetime.utcnow().isoformat()}
         ))
+        logger.info(f"Task {task_id} started event emitted")
     
     async def _execute_task_wrapper(self, task_id: int):
         """任务执行包装器（处理异常和清理）"""
+        logger.info(f"Task wrapper started: task_id={task_id}")
         try:
             await self._execute_task(task_id)
+            logger.info(f"Task wrapper completed successfully: task_id={task_id}")
         except asyncio.CancelledError:
             logger.info(f"Task {task_id} was cancelled")
             with self.db_factory() as db:
@@ -502,7 +537,7 @@ class UnifiedAgentScheduler:
             ))
             raise
         except Exception as e:
-            logger.error(f"Task {task_id} failed: {e}")
+            logger.error(f"Task {task_id} failed: {e}", exc_info=True)
             with self.db_factory() as db:
                 dao = UnifiedTaskDAO(db)
                 dao.mark_as_failed(task_id, str(e), error_code="EXECUTION_ERROR")
@@ -519,10 +554,12 @@ class UnifiedAgentScheduler:
             ))
         finally:
             # 清理
+            logger.info(f"Cleaning up task {task_id}")
             async with self._lock:
                 self._running_tasks.pop(task_id, None)
                 self._running_task_info.pop(task_id, None)
                 self._resource_usage.running_tasks -= 1
+                logger.info(f"Task {task_id} cleaned up from running tasks")
     
     async def _execute_task(self, task_id: int):
         """
@@ -530,6 +567,8 @@ class UnifiedAgentScheduler:
         
         默认实现：创建一个简单的执行步骤，实际应由 Agent 实现
         """
+        logger.info(f"Executing task: task_id={task_id}")
+        
         with self.db_factory() as db:
             dao = UnifiedTaskDAO(db)
             step_dao = UnifiedStepDAO(db)
@@ -539,8 +578,11 @@ class UnifiedAgentScheduler:
             if not task:
                 raise ValueError(f"Task not found: {task_id}")
             
+            logger.info(f"Task {task_id} found: type={task.task_type}, status={task.status}")
+            
             # 创建开始步骤
             step_number = step_dao.get_next_step_number(task_id)
+            logger.info(f"Creating step {step_number} for task {task_id}")
             step = step_dao.create(
                 task_id=task_id,
                 step_number=step_number,
@@ -548,16 +590,19 @@ class UnifiedAgentScheduler:
                 title="Task Started",
                 content=f"Starting {task.task_type} task",
             )
+            logger.info(f"Step created: step_id={step.id}")
             
             # 记录事件
-            event_dao.create(
+            event = event_dao.create(
                 task_id=task_id,
                 event_type="task_started",
                 event_data={"step_id": step.id}
             )
+            logger.info(f"Event created: event_id={event.id}")
             
             # 更新进度
             dao.update_progress(task_id, 10, "executing")
+            logger.info(f"Task {task_id} progress updated to 10%")
             
             # 发送进度事件
             self._emit_event(TaskProgressEvent(
@@ -568,12 +613,15 @@ class UnifiedAgentScheduler:
             
             # TODO: 这里应该调用具体的 Agent 执行
             # 目前只是模拟执行
+            logger.info(f"Task {task_id}: simulating execution (sleep 1s)...")
             await asyncio.sleep(1)
             
             # 完成步骤
+            step_number += 1
+            logger.info(f"Creating completion step {step_number} for task {task_id}")
             step_dao.create(
                 task_id=task_id,
-                step_number=step_number + 1,
+                step_number=step_number,
                 step_type=StepType.COMPLETION,
                 title="Task Completed",
                 content="Task execution completed",
@@ -581,6 +629,7 @@ class UnifiedAgentScheduler:
             
             # 标记完成
             dao.mark_as_completed(task_id, result_data={"message": "Task completed"})
+            logger.info(f"Task {task_id} marked as completed")
             
             # 记录事件
             event_dao.create(
@@ -600,6 +649,7 @@ class UnifiedAgentScheduler:
                     "timestamp": datetime.utcnow().isoformat()
                 }
             ))
+            logger.info(f"Task {task_id} execution completed")
     
     async def cancel_task(self, task_id: int, reason: str = "user_request") -> bool:
         """

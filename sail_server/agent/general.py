@@ -145,10 +145,18 @@ class GeneralAgent(BaseAgent):
             # 4. 调用 LLM
             self._notify_progress(callback, 50, "calling_llm", "Calling LLM...")
             
+            # 默认使用 moonshot kimi-k2.5
+            provider = task.llm_provider or config.get("llm_provider", "moonshot")
+            model = task.llm_model or config.get("llm_model", "kimi-k2.5")
+            
+            # Kimi K2.5 只支持 temperature=1
+            is_kimi_k25 = model == "kimi-k2.5"
+            temperature = 1.0 if is_kimi_k25 else config.get("temperature", 0.7)
+            
             llm_config = LLMExecutionConfig(
-                provider=task.llm_provider or config.get("llm_provider", "openai"),
-                model=task.llm_model or config.get("llm_model", "gpt-4o-mini"),
-                temperature=config.get("temperature", 0.7),
+                provider=provider,
+                model=model,
+                temperature=temperature,
                 max_tokens=config.get("max_tokens", 2000),
                 system_prompt=system_prompt if not conversation_history else None,
             )

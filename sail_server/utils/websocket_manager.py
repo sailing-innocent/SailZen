@@ -369,6 +369,14 @@ class WebSocketManager:
     # 任务事件推送
     # ========================================================================
     
+    async def notify_task_created(self, task_id: int, data: Dict[str, Any] = None):
+        """通知任务创建"""
+        await self.send_to_task_subscribers(task_id, WSMessage(
+            type="task_created",
+            task_id=task_id,
+            data=data or {}
+        ))
+    
     async def notify_task_started(self, task_id: int, data: Dict[str, Any] = None):
         """通知任务开始"""
         await self.send_to_task_subscribers(task_id, WSMessage(
@@ -476,6 +484,9 @@ class WebSocketManager:
                 task_id = message.task_id
                 if task_id:
                     await self.subscribe_task(client_id, task_id)
+                else:
+                    # 没有指定 task_id，订阅所有事件
+                    await self.subscribe_all(client_id)
             
             elif message.type == "unsubscribe":
                 task_id = message.task_id

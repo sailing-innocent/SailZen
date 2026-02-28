@@ -72,6 +72,7 @@ export interface UnifiedTask {
   completedAt?: string
   cancelledAt?: string
   errorMessage?: string
+  resultData?: Record<string, unknown>
 }
 
 export interface TaskProgress {
@@ -145,6 +146,24 @@ export interface SchedulerStatus {
     totalTokensConsumed: number
     totalCost: number
   }
+}
+
+export interface LLMProviderInfo {
+  name: string
+  displayName: string
+  defaultModel: string
+  availableModels: string[]
+  description: string
+}
+
+export interface LLMConfig {
+  providers: LLMProviderInfo[]
+  defaultProvider: string
+  recommendations: Record<string, {
+    provider: string
+    model: string
+    description: string
+  }>
 }
 
 // ============================================================================
@@ -337,6 +356,15 @@ export class UnifiedAgentAPI {
     return this._transformCostEstimate(data)
   }
 
+  /**
+   * 获取 LLM 配置信息
+   */
+  async getLLMConfig(): Promise<LLMConfig> {
+    const res = await fetch(`${this.baseUrl}/agents/config/llm`)
+    if (!res.ok) throw new Error(`Failed to get LLM config: ${res.statusText}`)
+    return await res.json()
+  }
+
   // --------------------------------------------------------------------------
   // Scheduler APIs
   // --------------------------------------------------------------------------
@@ -381,11 +409,15 @@ export class UnifiedAgentAPI {
    * 连接 WebSocket 实时流
    * @param onEvent 事件回调
    * @param onError 错误回调
+   * @param onOpen 连接成功回调
+   * @param onClose 连接关闭回调
    * @returns WebSocket 实例
    */
   connectRealtimeStream(
     onEvent: (event: AgentEvent) => void,
-    onError?: (error: Event) => void
+    onError?: (error: Event) => void,
+    onOpen?: () => void,
+    onClose?: () => void
   ): WebSocket {
     // Build WebSocket URL
     let wsUrl: string
@@ -408,6 +440,7 @@ export class UnifiedAgentAPI {
         timestamp: new Date().toISOString(),
       }
       ws.send(JSON.stringify(subscribeMsg))
+      onOpen?.()
     }
 
     ws.onmessage = (event) => {
@@ -429,6 +462,7 @@ export class UnifiedAgentAPI {
 
     ws.onclose = () => {
       console.log('[UnifiedAgentAPI] WebSocket connection closed')
+      onClose?.()
     }
 
     return ws
@@ -484,6 +518,7 @@ export class UnifiedAgentAPI {
       completedAt: data.completed_at as string | undefined,
       cancelledAt: data.cancelled_at as string | undefined,
       errorMessage: data.error_message as string | undefined,
+      resultData: data.result_data as Record<string, unknown> | undefined,
     }
   }
 

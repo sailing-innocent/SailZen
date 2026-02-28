@@ -73,6 +73,62 @@ import {
 type WorkbenchTab = 'quick' | 'novel' | 'history' | 'settings'
 
 // ============================================================================
+// Task Result Display Component
+// ============================================================================
+
+const TaskResultDisplay: React.FC<{ resultData: Record<string, unknown> }> = ({ resultData }) => {
+  // 提取响应内容
+  const response = resultData.response as string | undefined
+  const usage = resultData.usage as Record<string, number> | undefined
+  const model = resultData.model as string | undefined
+  const finishReason = resultData.finish_reason as string | undefined
+
+  if (!response && !usage) {
+    return (
+      <pre className="text-xs text-muted-foreground overflow-auto max-h-[200px]">
+        {JSON.stringify(resultData, null, 2)}
+      </pre>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 模型信息 */}
+      {model && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded">{model}</span>
+          {finishReason && finishReason !== 'stop' && (
+            <span className="text-amber-600">({finishReason})</span>
+          )}
+        </div>
+      )}
+
+      {/* 响应内容 */}
+      {response && (
+        <div className="bg-white rounded p-3 border">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{response}</p>
+        </div>
+      )}
+
+      {/* Token 使用情况 */}
+      {usage && (
+        <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2 border-t">
+          {usage.prompt_tokens !== undefined && (
+            <span>输入: {usage.prompt_tokens.toLocaleString()} tokens</span>
+          )}
+          {usage.completion_tokens !== undefined && (
+            <span>输出: {usage.completion_tokens.toLocaleString()} tokens</span>
+          )}
+          {usage.total_tokens !== undefined && (
+            <span>总计: {usage.total_tokens.toLocaleString()} tokens</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
 // Status Badge Component
 // ============================================================================
 
@@ -776,7 +832,24 @@ const TaskMonitorPanel: React.FC = () => {
                   {/* Error Message */}
                   {currentTask.errorMessage && (
                     <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                      <p className="text-xs text-muted-foreground mb-1">错误信息</p>
                       <p className="text-sm text-destructive">{currentTask.errorMessage}</p>
+                    </div>
+                  )}
+
+                  {/* Task Result */}
+                  {(() => {
+                    console.log('[TaskDetail] Task status:', currentTask.status)
+                    console.log('[TaskDetail] Task resultData:', currentTask.resultData)
+                    return null
+                  })()}
+                  {currentTask.resultData && currentTask.status === 'completed' && (
+                    <div className="p-3 rounded-lg bg-green-50 border border-green-200">
+                      <p className="text-xs text-green-600 mb-2 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        执行结果
+                      </p>
+                      <TaskResultDisplay resultData={currentTask.resultData} />
                     </div>
                   )}
 
@@ -820,6 +893,9 @@ const CostDisplayPanel: React.FC = () => {
   const tasks = useUnifiedAgentStore((state) => state.tasks)
   const schedulerStatus = useUnifiedAgentStore((state) => state.schedulerStatus)
   const loadSchedulerStatus = useUnifiedAgentStore((state) => state.loadSchedulerStatus)
+  const startScheduler = useUnifiedAgentStore((state) => state.startScheduler)
+  const stopScheduler = useUnifiedAgentStore((state) => state.stopScheduler)
+  const isLoading = useUnifiedAgentStore((state) => state.isLoading)
 
   useEffect(() => {
     loadSchedulerStatus()
@@ -832,6 +908,16 @@ const CostDisplayPanel: React.FC = () => {
   const budgetLimit = 10.0 // 示例预算限制
   const budgetUsed = totalCost
   const budgetPercent = Math.min((budgetUsed / budgetLimit) * 100, 100)
+
+  const handleToggleScheduler = async () => {
+    if (schedulerStatus?.isRunning) {
+      await stopScheduler()
+    } else {
+      await startScheduler()
+    }
+    // 刷新状态
+    await loadSchedulerStatus()
+  }
 
   return (
     <div className="space-y-4">
@@ -883,6 +969,35 @@ const CostDisplayPanel: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Scheduler Control Button */}
+            <div className="mb-4">
+              <Button
+                variant={schedulerStatus.isRunning ? 'outline' : 'default'}
+                size="sm"
+                className="w-full"
+                disabled={isLoading}
+                onClick={handleToggleScheduler}
+              >
+                {isLoading ? (
+                  <RotateCw className="w-4 h-4 animate-spin mr-2" />
+                ) : schedulerStatus.isRunning ? (
+                  <PauseCircle className="w-4 h-4 mr-2" />
+                ) : (
+                  <PlayCircle className="w-4 h-4 mr-2" />
+                )}
+                {isLoading
+                  ? '处理中...'
+                  : schedulerStatus.isRunning
+                    ? '停止调度器'
+                    : '启动调度器'}
+              </Button>
+              {!schedulerStatus.isRunning && (
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  调度器停止时，新任务不会自动执行
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="p-2 rounded-lg bg-muted">
                 <p className="text-xs text-muted-foreground">总任务</p>

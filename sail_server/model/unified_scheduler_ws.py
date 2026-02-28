@@ -17,12 +17,14 @@ from sail_server.model.unified_scheduler import (
     UnifiedAgentScheduler,
     SchedulerConfig,
     TaskProgressEvent,
-    ProgressCallback,
 )
 from sail_server.utils.websocket_manager import (
     WebSocketManager,
     get_websocket_manager,
 )
+from sail_server.agent import get_agent_registry, AgentContext
+from sail_server.agent.base import ProgressUpdate
+from sail_server.utils.llm.gateway import create_default_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +103,12 @@ class UnifiedSchedulerWithWebSocket(UnifiedAgentScheduler):
     
     async def _execute_task(self, task_id: int):
         """
-        执行任务（带 WebSocket 通知）
+        执行任务（带 WebSocket 通知和 LLM 调用）
         
-        重写父类方法，添加更详细的步骤通知
+        重写父类方法，调用具体的 Agent 执行
         """
+        logger.info(f"[UnifiedSchedulerWithWebSocket] Executing task: task_id={task_id}")
+        
         from sail_server.data.unified_agent import (
             TaskStatus,
             StepType,
@@ -124,8 +128,11 @@ class UnifiedSchedulerWithWebSocket(UnifiedAgentScheduler):
             if not task:
                 raise ValueError(f"Task not found: {task_id}")
             
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Task {task_id} found: type={task.task_type}")
+            
             # 创建开始步骤
             step_number = step_dao.get_next_step_number(task_id)
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Creating step {step_number} for task {task_id}")
             step = step_dao.create(
                 task_id=task_id,
                 step_number=step_number,
@@ -133,113 +140,135 @@ class UnifiedSchedulerWithWebSocket(UnifiedAgentScheduler):
                 title="Task Started",
                 content=f"Starting {task.task_type} task",
             )
-            
-            # 发送步骤事件
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="step",
-                data={
-                    "step_number": step_number,
-                    "step_type": StepType.THOUGHT,
-                    "title": "Task Started",
-                }
-            ))
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Step created: step_id={step.id}")
             
             # 记录事件
-            event_dao.create(
+            event = event_dao.create(
                 task_id=task_id,
                 event_type="task_started",
                 event_data={"step_id": step.id}
             )
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Event created: event_id={event.id}")
             
             # 更新进度
             dao.update_progress(task_id, 10, "executing")
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Task {task_id} progress updated to 10%")
             
-            # 发送进度事件
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="progress",
-                data={"progress": 10, "phase": "executing"}
-            ))
+            # 获取 Agent
+            registry = get_agent_registry()
+            agent = registry.get_agent_for_task(task.task_type)
             
-            # TODO: 这里应该调用具体的 Agent 执行
-            # 目前只是模拟执行，实际应由子类或 Agent 实现
-            import asyncio
-            await asyncio.sleep(1)
+            if not agent:
+                logger.error(f"[UnifiedSchedulerWithWebSocket] No agent found for task type: {task.task_type}")
+                raise ValueError(f"No agent found for task type: {task.task_type}")
             
-            # 模拟中间步骤
-            step_number += 1
-            step_dao.create(
-                task_id=task_id,
-                step_number=step_number,
-                step_type=StepType.ACTION,
-                title="Processing",
-                content="Processing task data",
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Using agent: {agent.agent_type}")
+            
+            # 创建 Agent 上下文（使用默认网关，自动注册所有可用的 provider）
+            llm_gateway = create_default_gateway()
+            context = AgentContext(
+                db_session=db,
+                llm_gateway=llm_gateway,
+                config={},
             )
             
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="step",
-                data={
-                    "step_number": step_number,
-                    "step_type": StepType.ACTION,
-                    "title": "Processing",
-                }
-            ))
+            # 定义进度回调
+            def progress_callback(update: ProgressUpdate):
+                logger.info(f"[UnifiedSchedulerWithWebSocket] Task {task_id} progress: {update.progress}% - {update.phase} - {update.message}")
+                dao.update_progress(task_id, update.progress, update.phase)
+                self._emit_event(TaskProgressEvent(
+                    task_id=task_id,
+                    event_type="progress",
+                    data={"progress": update.progress, "phase": update.phase, "message": update.message}
+                ))
             
-            dao.update_progress(task_id, 50, "processing")
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="progress",
-                data={"progress": 50, "phase": "processing"}
-            ))
+            # 调用 Agent 执行
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Calling agent.execute for task {task_id}")
+            result = await agent.execute(task, context, progress_callback)
             
-            await asyncio.sleep(1)
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Agent execution result: success={result.success}")
             
-            # 完成步骤
-            step_number += 1
-            step_dao.create(
-                task_id=task_id,
-                step_number=step_number,
-                step_type=StepType.COMPLETION,
-                title="Task Completed",
-                content="Task execution completed successfully",
-            )
+            if result.success:
+                # 创建完成步骤
+                step_number += 1
+                step_content = result.result_data.get("response", "Task completed") if result.result_data else "Task completed"
+                step_dao.create(
+                    task_id=task_id,
+                    step_number=step_number,
+                    step_type=StepType.COMPLETION,
+                    title="Task Completed",
+                    content=step_content[:500],  # 限制长度
+                )
+                
+                # 标记完成
+                dao.mark_as_completed(task_id, result_data=result.result_data)
+                logger.info(f"[UnifiedSchedulerWithWebSocket] Task {task_id} marked as completed")
+                
+                # 记录事件
+                event_dao.create(
+                    task_id=task_id,
+                    event_type="task_completed",
+                    event_data={
+                        "result": "success",
+                        "total_tokens": result.total_tokens,
+                        "total_cost": result.total_cost,
+                    }
+                )
+                
+                self._stats["total_completed"] += 1
+                
+                # 发送完成事件
+                self._emit_event(TaskProgressEvent(
+                    task_id=task_id,
+                    event_type="completed",
+                    data={
+                        "progress": 100,
+                        "result": "success",
+                        "response": step_content[:200],  # 简要响应
+                    }
+                ))
+            else:
+                # 执行失败
+                logger.error(f"[UnifiedSchedulerWithWebSocket] Task {task_id} failed: {result.error_message}")
+                
+                # 创建错误步骤
+                step_number += 1
+                step_dao.create(
+                    task_id=task_id,
+                    step_number=step_number,
+                    step_type=StepType.ERROR,
+                    title="Task Failed",
+                    content=result.error_message or "Unknown error",
+                )
+                
+                # 标记失败
+                dao.mark_as_failed(task_id, result.error_message or "Unknown error", result.error_code)
+                
+                # 记录事件
+                event_dao.create(
+                    task_id=task_id,
+                    event_type="task_failed",
+                    event_data={
+                        "error": result.error_message,
+                        "error_code": result.error_code,
+                    }
+                )
+                
+                self._stats["total_failed"] += 1
+                
+                # 发送失败事件
+                self._emit_event(TaskProgressEvent(
+                    task_id=task_id,
+                    event_type="failed",
+                    data={
+                        "error": result.error_message,
+                        "error_code": result.error_code,
+                    }
+                ))
+                
+                raise ValueError(f"Task execution failed: {result.error_message}")
             
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="step",
-                data={
-                    "step_number": step_number,
-                    "step_type": StepType.COMPLETION,
-                    "title": "Task Completed",
-                }
-            ))
-            
-            # 标记完成
-            dao.mark_as_completed(task_id, result_data={
-                "message": "Task completed",
-                "task_type": task.task_type,
-            })
-            
-            # 记录事件
-            event_dao.create(
-                task_id=task_id,
-                event_type="task_completed",
-                event_data={"result": "success"}
-            )
-            
-            self._stats["total_completed"] += 1
-            
-            # 发送完成事件
-            self._emit_event(TaskProgressEvent(
-                task_id=task_id,
-                event_type="completed",
-                data={
-                    "progress": 100,
-                    "result": "success",
-                }
-            ))
+            logger.info(f"[UnifiedSchedulerWithWebSocket] Task {task_id} execution completed")
 
 
 # ============================================================================
