@@ -53,3 +53,28 @@ GET  /api/v1/agent/tasks/{id}/progress # 获取进度
 POST /api/v1/agent/tasks/{id}/cancel  # 取消任务
 WS   /api/v1/agent/events             # 实时事件流
 ```
+
+## More
+
+- [ ] **10.1 Prompt 模板管理 UI**
+  - 页面: `/agent-workbench/templates`
+  - 模板列表/搜索
+  - YAML 编辑器
+  - 变量预览
+  - 测试执行
+
+- [ ] **10.2 成本仪表盘**
+  - 今日/本周/本月 Token 消耗
+  - 成本按 Provider 分布
+  - 任务类型成本占比
+  - 预算预警
+
+- [ ] **10.3 知识库集成**
+  - 查询已分析的人物
+  - 查询已分析的设定
+  - 获取情节摘要
+
+- [ ] **10.4 Agent 记忆机制**
+  - 跨任务记忆
+  - 用户偏好学习
+  - 上下文保持
