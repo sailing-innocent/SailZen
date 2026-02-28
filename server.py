@@ -19,13 +19,14 @@ from sail_server.utils.env import read_env
 
 # 检查命令行参数来加载正确的环境
 import sys
-if "--dev" in sys.argv or "--debug" in sys.argv:
+if "--dev" in sys.argv:
     read_env("dev")
-elif "--prod" in sys.argv:
-    read_env("prod")
+elif "--debug" in sys.argv:
+    read_env("debug")
 else:
-    # 默认加载 dev 环境
-    read_env("dev")
+    # 默认加载 prod 环境（生产环境）
+    # 使用 --dev 或 --debug 参数来加载开发/调试环境
+    read_env("prod")
 
 from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
@@ -273,16 +274,22 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sail Server")
-    parser.add_argument("--dev", action="store_true", help="Run in development mode")
-    parser.add_argument("--prod", action="store_true", help="Run in production mode")
+    parser.add_argument("--dev", action="store_true", help="Run in development mode (loads .env.dev)")
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode (loads .env.debug)")
+    parser.add_argument("--prod", action="store_true", help="Run in production mode (loads .env.prod)")
     args = parser.parse_args()
 
-    # 环境变量已在模块导入时加载，这里不需要重复加载
-    # 但如果需要覆盖，可以在这里重新加载
+    # 环境变量已在模块导入时加载，这里处理覆盖逻辑
+    # 默认已加载 prod，如果需要其他环境，在这里重新加载
     if args.prod:
+        # 默认已经是 prod，不需要重新加载
+        pass
+    elif args.debug:
         from sail_server.utils.env import read_env
-        read_env("prod")
-        # 重新设置日志以应用新的环境变量
+        read_env("debug")
         setup_logging()
+    elif args.dev:
+        # 已经在模块导入时加载了 dev，不需要重复加载
+        pass
     
     main()
