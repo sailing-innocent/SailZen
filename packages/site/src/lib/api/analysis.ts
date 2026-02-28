@@ -411,7 +411,13 @@ export async function api_create_setting(
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/setting/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...data, edition_id: editionId }),
+    body: JSON.stringify({ 
+      edition_id: editionId,
+      canonical_name: data.name,
+      setting_type: data.setting_type,
+      description: data.description,
+      importance: data.importance,
+    }),
   })
   if (!response.ok) {
     throw new Error(`Failed to create setting: ${response.statusText}`)

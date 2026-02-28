@@ -120,12 +120,16 @@ export default function CharacterPanel({ editionId }: CharacterPanelProps) {
     if (!newCharacter.canonical_name.trim()) return
 
     try {
-      const created = await api_create_character({
-        edition_id: editionId,
-        canonical_name: newCharacter.canonical_name,
-        role_type: newCharacter.role_type,
-        description: newCharacter.description || undefined,
-      })
+      const result = await api_create_character(
+        editionId,
+        {
+          canonical_name: newCharacter.canonical_name,
+          role_type: newCharacter.role_type,
+          description: newCharacter.description || undefined,
+        }
+      )
+      // Handle backend response format: {success: true, data: {...}}
+      const created = result.data || result
       setCharacters([created, ...characters])
       setCreateDialogOpen(false)
       setNewCharacter({ canonical_name: '', role_type: 'supporting', description: '' })

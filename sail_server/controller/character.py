@@ -26,7 +26,9 @@ from sail_server.model.analysis.character import (
     add_character_relation_impl,
     get_character_relations_impl,
     delete_character_relation_impl,
+    get_character_profile_impl,
 )
+from sail_server.model.analysis.relation import get_relation_graph_impl
 
 
 class CharacterController(Controller):
@@ -201,3 +203,25 @@ class CharacterController(Controller):
         """删除人物关系"""
         success = delete_character_relation_impl(db, relation_id)
         return {"success": success}
+    
+    @get("/{character_id:int}/profile")
+    async def get_character_profile(
+        self,
+        character_id: int,
+        db: Session,
+    ) -> Dict[str, Any]:
+        """获取人物档案"""
+        result = get_character_profile_impl(db, character_id)
+        if not result:
+            return {"success": False, "error": "Character profile not found"}
+        return {"success": True, "data": result}
+    
+    @get("/edition/{edition_id:int}/relation-graph")
+    async def get_relation_graph(
+        self,
+        edition_id: int,
+        db: Session,
+    ) -> Dict[str, Any]:
+        """获取版本的关系图"""
+        result = get_relation_graph_impl(db, edition_id)
+        return {"success": True, "data": result}

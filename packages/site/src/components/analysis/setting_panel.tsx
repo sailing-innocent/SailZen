@@ -144,14 +144,17 @@ export default function SettingPanel({ editionId }: SettingPanelProps) {
     if (!newSetting.canonical_name.trim()) return
 
     try {
-      const created = await api_create_setting({
-        edition_id: editionId,
-        setting_type: newSetting.setting_type,
-        canonical_name: newSetting.canonical_name,
-        category: newSetting.category || undefined,
-        description: newSetting.description || undefined,
-        importance: newSetting.importance,
-      })
+      const result = await api_create_setting(
+        editionId,
+        {
+          name: newSetting.canonical_name,
+          setting_type: newSetting.setting_type,
+          description: newSetting.description || undefined,
+          importance: newSetting.importance,
+        }
+      )
+      // Handle backend response format: {success: true, data: {...}}
+      const created = result.data || result
       setSettings([created, ...settings])
       setCreateDialogOpen(false)
       setNewSetting({

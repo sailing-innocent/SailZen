@@ -240,3 +240,21 @@ def delete_character_relation_impl(db: Session, relation_id: int) -> bool:
     db.delete(relation)
     db.commit()
     return True
+
+
+def get_character_profile_impl(db: Session, character_id: int) -> Optional[Dict[str, Any]]:
+    """获取人物档案"""
+    character = db.query(Character).filter(Character.id == character_id).first()
+    if not character:
+        return None
+    
+    # 构建档案数据
+    profile = {
+        "character": CharacterData.read_from_orm(character),
+        "aliases": [CharacterAliasData.read_from_orm(a) for a in character.aliases],
+        "attributes": [CharacterAttributeData.read_from_orm(a) for a in character.attributes],
+        "arcs": [],  # TODO: 实现人物弧线
+        "relations": [],  # TODO: 实现关系查询
+    }
+    
+    return profile

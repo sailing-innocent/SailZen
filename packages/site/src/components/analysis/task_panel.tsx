@@ -124,7 +124,7 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
     loadProviders()
   }, [loadTasks, loadProviders])
   
-  // 创建任务
+  // 创建任务并立即开始执行
   const handleCreateTask = async () => {
     try {
       setCreating(true)
@@ -140,10 +140,63 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
       setShowCreateDialog(false)
       setSelectedTask(task)
       setActiveTab('execute')
+      
+      // 自动开始执行：生成计划并启动任务
+      await autoStartTask(task)
     } catch (err) {
       console.error('Failed to create task:', err)
     } finally {
       setCreating(false)
+    }
+  }
+  
+  // 自动启动任务（生成计划 + 执行）
+  const autoStartTask = async (task: AnalysisTask) => {
+    try {
+      setExecuting(true)
+      
+      // 1. 生成执行计划
+      const planResult = await api_create_task_plan(task.id, 'llm_direct')
+      if (!planResult.success || !planResult.plan) {
+        console.error('Failed to create execution plan')
+        setExecuting(false)
+        return
+      }
+      setExecutionPlan(planResult.plan)
+      
+      // 2. 初始化进度
+      setTaskProgress({
+        task_id: task.id,
+        status: 'running',
+        current_step: 'starting',
+        total_chunks: planResult.plan.chunks.length || 0,
+        completed_chunks: 0,
+      })
+      
+      // 3. 启动异步任务
+      const startResult = await api_execute_task_async(task.id, {
+        mode: 'llm_direct',
+        llm_provider: selectedProvider,
+        temperature: 0.3,
+      })
+      
+      if (!startResult.success) {
+        setTaskProgress(prev => prev ? { 
+          ...prev, 
+          status: 'failed', 
+          error: startResult.error || 'Failed to start task' 
+        } : null)
+        setExecuting(false)
+        return
+      }
+      
+      // 4. 开始轮询进度
+      pollProgressUntilComplete(task.id)
+      
+    } catch (err) {
+      console.error('Failed to auto-start task:', err)
+      setTaskProgress(prev => prev ? { ...prev, status: 'failed', error: String(err) } : null)
+      setExecuting(false)
     }
   }
   

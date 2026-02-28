@@ -663,30 +663,79 @@ class TaskController(Controller):
 
 
 # ============================================================================
-# Progress Controller (Stub)
+# Progress Controller
 # ============================================================================
 
 class ProgressController(Controller):
-    """进度控制器（桩实现）"""
+    """进度控制器"""
     path = "/progress"
     
     @get("/{task_id:int}")
     async def get_progress(
         self,
         task_id: int,
+        router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> Dict[str, Any]:
         """获取任务进度"""
-        # 模拟进度数据
+        from sail_server.model.unified_scheduler_ws import get_unified_scheduler_with_ws
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        
+        scheduler = get_unified_scheduler_with_ws()
+        progress = scheduler.get_task_progress(task_id)
+        
+        if not progress:
+            # 从数据库获取任务状态
+            db = next(router_dependency)
+            dao = UnifiedTaskDAO(db)
+            task = dao.get_by_id(task_id)
+            
+            if not task:
+                raise NotFoundException(detail=f"Task with ID {task_id} not found")
+            
+            # 转换状态
+            status_map = {
+                "pending": "pending",
+                "scheduled": "pending",
+                "running": "running",
+                "paused": "pending",
+                "completed": "completed",
+                "failed": "failed",
+                "cancelled": "cancelled",
+            }
+            
+            return {
+                "success": True,
+                "progress": {
+                    "task_id": str(task_id),
+                    "status": status_map.get(task.status, "unknown"),
+                    "current_step": "unknown",
+                    "total_chunks": 0,
+                    "completed_chunks": 0,
+                    "current_chunk_info": None,
+                }
+            }
+        
+        # 转换进度格式
+        status_map = {
+            "pending": "pending",
+            "scheduled": "pending",
+            "running": "running",
+            "paused": "pending",
+            "completed": "completed",
+            "failed": "failed",
+            "cancelled": "cancelled",
+        }
+        
         return {
             "success": True,
             "progress": {
-                "task_id": str(task_id),
-                "status": "running",
-                "current_step": "processing_chunk",
-                "total_chunks": 5,
-                "completed_chunks": 2,
-                "current_chunk_info": "第3章",
+                "task_id": str(progress.task_id),
+                "status": status_map.get(progress.status, "unknown"),
+                "current_step": progress.current_phase or "unknown",
+                "total_chunks": progress.total_steps or 0,
+                "completed_chunks": progress.current_step or 0,
+                "current_chunk_info": None,
             }
         }
 

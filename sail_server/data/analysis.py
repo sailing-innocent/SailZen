@@ -522,133 +522,6 @@ class RelationGraphData:
 
 
 # ============================================================================
-# Setting Types (DTOs for model/analysis/setting.py)
-# ============================================================================
-
-@dataclass
-class SettingData:
-    """设定数据 DTO"""
-    id: Optional[int] = None
-    edition_id: int = 0
-    name: str = ""
-    setting_type: str = "item"  # item, location, organization, concept, magic_system, creature, event_type
-    description: Optional[str] = None
-    importance: str = "minor"  # critical, major, minor, background
-    first_appearance_node_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    def create_orm(self) -> 'Outline':
-        """创建 ORM 对象"""
-        # 注意：Outline 类在当前文件底部定义，这里使用延迟导入避免循环导入
-        # 当此方法被调用时，Outline 类已经定义完成
-        import sys
-        current_module = sys.modules[__name__]
-        Outline = getattr(current_module, 'Outline')
-        return Outline(
-            edition_id=self.edition_id,
-            title=self.name,
-            outline_type=self.outline_type,
-            description=self.description,
-            status="draft",
-            source="extraction",
-        )
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'SettingData':
-        return cls(
-            id=orm_obj.id,
-            edition_id=orm_obj.edition_id,
-            name=orm_obj.name,
-            setting_type=orm_obj.setting_type,
-            description=orm_obj.description,
-            importance=orm_obj.importance,
-            first_appearance_node_id=orm_obj.first_appearance_node_id,
-            created_at=orm_obj.created_at,
-            updated_at=orm_obj.updated_at,
-        )
-
-
-@dataclass
-class SettingAttributeData:
-    """设定属性数据 DTO"""
-    id: Optional[int] = None
-    setting_id: int = 0
-    key: str = ""
-    value: str = ""
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'SettingAttributeData':
-        return cls(
-            id=orm_obj.id,
-            setting_id=orm_obj.setting_id,
-            key=orm_obj.key,
-            value=orm_obj.value,
-            description=orm_obj.description,
-            created_at=orm_obj.created_at,
-            updated_at=orm_obj.updated_at,
-        )
-
-
-@dataclass
-class SettingRelationData:
-    """设定关系数据 DTO"""
-    id: Optional[int] = None
-    source_setting_id: int = 0
-    target_setting_id: int = 0
-    relation_type: str = ""
-    description: Optional[str] = None
-    strength: Optional[float] = None
-    created_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'SettingRelationData':
-        return cls(
-            id=orm_obj.id,
-            source_setting_id=orm_obj.source_setting_id,
-            target_setting_id=orm_obj.target_setting_id,
-            relation_type=orm_obj.relation_type,
-            description=orm_obj.description,
-            strength=orm_obj.strength,
-            created_at=orm_obj.created_at,
-        )
-
-
-@dataclass
-class CharacterSettingLinkData:
-    """人物设定关联数据 DTO"""
-    id: Optional[int] = None
-    character_id: int = 0
-    setting_id: int = 0
-    link_type: str = "owner"  # owner, user, creator, victim, other
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'CharacterSettingLinkData':
-        return cls(
-            id=orm_obj.id,
-            character_id=orm_obj.character_id,
-            setting_id=orm_obj.setting_id,
-            link_type=orm_obj.link_type,
-            description=orm_obj.description,
-            created_at=orm_obj.created_at,
-        )
-
-
-@dataclass
-class SettingDetail:
-    """设定详情"""
-    setting: SettingData
-    attributes: List[SettingAttributeData]
-    related_settings: List[SettingRelationData]
-    related_characters: List[CharacterSettingLinkData]
-
-
-# ============================================================================
 # Outline Types (DTOs for model/analysis/outline.py)
 # ============================================================================
 
@@ -1154,6 +1027,37 @@ class SettingRelationData:
             description=orm_obj.description,
             created_at=orm_obj.created_at,
         )
+
+
+@dataclass
+class CharacterSettingLinkData:
+    """人物设定关联数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    setting_id: int = 0
+    link_type: str = "owner"  # owner, user, creator, victim, other
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterSettingLinkData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            setting_id=orm_obj.setting_id,
+            link_type=orm_obj.link_type,
+            description=orm_obj.description,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class SettingDetail:
+    """设定详情"""
+    setting: SettingData
+    attributes: List[SettingAttributeData]
+    related_settings: List[SettingRelationData]
+    related_characters: List[CharacterSettingLinkData]
 
 
 # ============================================================================
