@@ -42,7 +42,9 @@ import {
   api_get_budget_analysis,
   api_consume_budget,
   api_link_transaction_to_budget,
+  api_link_transactions_batch,
   api_unlink_transaction_from_budget,
+  type BatchLinkResult,
 } from '@lib/api/money'
 
 export interface AccountsState {
@@ -264,6 +266,7 @@ export interface BudgetsState {
   deleteBudget: (id: number) => Promise<boolean>
   consumeBudget: (id: number, consume: BudgetConsumeProps) => Promise<TransactionData>
   linkTransaction: (budget_id: number, transaction_id: number) => Promise<TransactionData>
+  linkTransactionsBatch: (budget_id: number, transaction_ids: number[]) => Promise<BatchLinkResult>
   unlinkTransaction: (transaction_id: number) => Promise<TransactionData>
   getBudgetStats: (params?: BudgetStatsParams) => Promise<BudgetStats>
   getBudgetAnalysis: (id: number) => Promise<BudgetAnalysis>
@@ -351,6 +354,20 @@ export const useBudgetsStore: UseBoundStore<StoreApi<BudgetsState>> = create<Bud
       set({ isLoading: false })
     }
     return transaction
+  },
+  linkTransactionsBatch: async (budget_id: number, transaction_ids: number[]): Promise<BatchLinkResult> => {
+    const result = await api_link_transactions_batch(budget_id, transaction_ids)
+    // Refresh budgets to update remaining amounts
+    set((state: BudgetsState) => {
+      return { ...state, isLoading: true }
+    })
+    try {
+      const budgets = await api_get_budgets()
+      set({ budgets: budgets, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+    }
+    return result
   },
   unlinkTransaction: async (transaction_id: number): Promise<TransactionData> => {
     const transaction = await api_unlink_transaction_from_budget(transaction_id)

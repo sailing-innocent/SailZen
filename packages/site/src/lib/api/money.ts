@@ -322,6 +322,29 @@ const api_link_transaction_to_budget = async (budget_id: number, transaction_id:
   return response.json()
 }
 
+interface BatchLinkResult {
+  success: number[]
+  failed: { id: number; error: string }[]
+  total: number
+  success_count: number
+  failed_count: number
+}
+
+const api_link_transactions_batch = async (budget_id: number, transaction_ids: number[]): Promise<BatchLinkResult> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/${budget_id}/link-batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ transaction_ids }),
+  })
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Failed to link transactions batch' }))
+    throw new Error(errorData.detail || 'Failed to link transactions batch')
+  }
+  return response.json()
+}
+
 const api_unlink_transaction_from_budget = async (transaction_id: number): Promise<TransactionData> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/budget/unlink/${transaction_id}`, {
     method: 'DELETE',
@@ -463,6 +486,7 @@ export {
   api_get_budget_analysis,
   api_consume_budget,
   api_link_transaction_to_budget,
+  api_link_transactions_batch,
   api_unlink_transaction_from_budget,
   // Budget Items
   api_get_budget_items,
@@ -475,3 +499,5 @@ export {
   // Unified budget creation
   api_create_budget_with_items,
 }
+
+export type { BatchLinkResult }

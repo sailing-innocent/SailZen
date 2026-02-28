@@ -830,6 +830,69 @@ class BudgetController(Controller):
             request.logger.error(f"Error linking transaction: {e}")
             raise HTTPException(status_code=500, detail=f"Error linking transaction: {str(e)}")
 
+    @post("/{budget_id:int}/link-batch", dto=None, return_dto=None)
+    async def link_transactions_batch(
+        self,
+        budget_id: int,
+        data: dict,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """
+        Batch link multiple transactions to a budget.
+        
+        Request Body:
+        {
+            "transaction_ids": [int]  # List of transaction IDs to link
+        }
+        
+        Returns:
+        {
+            "success": [int],        # Successfully linked transaction IDs
+            "failed": [{"id": int, "error": str}],  # Failed transactions with error messages
+            "total": int,            # Total number of transactions processed
+            "success_count": int,    # Number of successful links
+            "failed_count": int      # Number of failed links
+        }
+        """
+        try:
+            db = next(router_dependency)
+            transaction_ids = data.get("transaction_ids", [])
+            
+            if not transaction_ids or not isinstance(transaction_ids, list):
+                raise HTTPException(status_code=400, detail="transaction_ids must be a non-empty list")
+            
+            success = []
+            failed = []
+            
+            for transaction_id in transaction_ids:
+                try:
+                    link_transaction_impl(db, budget_id, transaction_id)
+                    success.append(transaction_id)
+                except ValueError as e:
+                    failed.append({"id": transaction_id, "error": str(e)})
+                except Exception as e:
+                    failed.append({"id": transaction_id, "error": f"Unexpected error: {str(e)}"})
+            
+            request.logger.info(
+                f"Batch link transactions: budget_id={budget_id}, "
+                f"total={len(transaction_ids)}, success={len(success)}, failed={len(failed)}"
+            )
+            
+            return {
+                "success": success,
+                "failed": failed,
+                "total": len(transaction_ids),
+                "success_count": len(success),
+                "failed_count": len(failed),
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            request.logger.error(f"Error in batch link transactions: {e}")
+            raise HTTPException(status_code=500, detail=f"Error in batch link transactions: {str(e)}")
+
     @delete("/unlink/{transaction_id:int}", status_code=200)
     async def unlink_transaction(
         self,

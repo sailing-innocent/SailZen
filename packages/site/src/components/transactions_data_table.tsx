@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { type TransactionsState, useTransactionsStore, useServerStore, useAccountsStore } from '@lib/store'
-import { TransactionColumns, type TransactionDisplayProps } from './transaction_column'
+import { type TransactionsState, useTransactionsStore, useServerStore, useAccountsStore, useBudgetsStore } from '@lib/store'
+import { TransactionColumns as BaseTransactionColumns, type TransactionDisplayProps } from './transaction_column'
 import { DataTable } from '@components/data_table'
 import { Button } from '@components/ui/button'
 import TransactionFiltersComponent, { type TransactionFilters, type TransactionTypeFilter } from './transaction_filters'
@@ -9,12 +9,18 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useDebouncedValue } from '@/hooks/use-debounce'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import TransactionAddCard from './transaction_add_card'
-
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Link2, X } from 'lucide-react'
+import type { BudgetData } from '@lib/data/money'
 
 import {
   type PaginationState,
+  type ColumnDef,
 } from '@tanstack/react-table'
 
 const TransactionsDataTable: React.FC = () => {
@@ -34,6 +40,13 @@ const TransactionsDataTable: React.FC = () => {
     pageIndex: 0,
     pageSize: isMobile ? 5 : 10,
   }))
+
+  // 批量选择相关状态
+  const [selectedTransactions, setSelectedTransactions] = React.useState<Set<number>>(new Set())
+  const [isBatchLinkDialogOpen, setIsBatchLinkDialogOpen] = React.useState(false)
+  const [selectedBudgetId, setSelectedBudgetId] = React.useState<string>('')
+  const [isLinking, setIsLinking] = React.useState(false)
+  const [linkResult, setLinkResult] = React.useState<{ success: number; failed: number; errors: string[] } | null>(null)
 
   // 保存当前分页状态，用于数据更新时恢复
   const savedPaginationRef = React.useRef<PaginationState>(pagination)
@@ -66,6 +79,14 @@ const TransactionsDataTable: React.FC = () => {
     }))
   )
 
+  const { budgets, fetchBudgets, linkTransactionsBatch } = useBudgetsStore(
+    useShallow((state) => ({
+      budgets: state.budgets,
+      fetchBudgets: state.fetchBudgets,
+      linkTransactionsBatch: state.linkTransactionsBatch,
+    }))
+  )
+
   const serverHealth = useServerStore((state) => state.serverHealth)
   const accountsLoading = useAccountsStore((state) => state.isLoading)
 
@@ -79,6 +100,14 @@ const TransactionsDataTable: React.FC = () => {
     setDataUpdated(true)
     fetchTransactions(maxTransactions)
   }, [fetchTransactions, serverHealth, accountsLoading, dataUpdated, maxTransactions])
+
+  // 加载预算列表（用于批量链接）
+  useEffect(() => {
+    if (!serverHealth) {
+      return
+    }
+    fetchBudgets()
+  }, [fetchBudgets, serverHealth])
 
   // 性能优化：合并账户相关的选择器
   const { getOptions, accounts: accountsData } = useAccountsStore(
@@ -195,6 +224,8 @@ const TransactionsDataTable: React.FC = () => {
       fromAccountId: undefined,
       toAccountId: undefined,
     })
+    // 清空选择
+    setSelectedTransactions(new Set())
   }
 
   const handleAddTransaction = React.useCallback(async (transaction: any) => {
@@ -208,6 +239,73 @@ const TransactionsDataTable: React.FC = () => {
     setIsAddDialogOpen(false)
   }, [])
 
+  // 处理单个选择
+  const handleSelectTransaction = (transactionId: number, checked: boolean) => {
+    setSelectedTransactions(prev => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(transactionId)
+      } else {
+        newSet.delete(transactionId)
+      }
+      return newSet
+    })
+  }
+
+  // 处理全选（仅当前页）
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = filteredTransactions.map(t => t.id)
+      setSelectedTransactions(new Set(allIds))
+    } else {
+      setSelectedTransactions(new Set())
+    }
+  }
+
+  // 处理批量链接
+  const handleBatchLink = async () => {
+    if (!selectedBudgetId || selectedTransactions.size === 0) {
+      return
+    }
+    
+    setIsLinking(true)
+    setLinkResult(null)
+    
+    try {
+      const result = await linkTransactionsBatch(parseInt(selectedBudgetId), Array.from(selectedTransactions))
+      
+      setLinkResult({
+        success: result.success_count,
+        failed: result.failed_count,
+        errors: result.failed.map(f => `交易 #${f.id}: ${f.error}`),
+      })
+      
+      // 如果全部成功，清空选择
+      if (result.failed_count === 0) {
+        setSelectedTransactions(new Set())
+        setTimeout(() => {
+          setIsBatchLinkDialogOpen(false)
+          setLinkResult(null)
+          setSelectedBudgetId('')
+        }, 1500)
+      }
+    } catch (error) {
+      setLinkResult({
+        success: 0,
+        failed: selectedTransactions.size,
+        errors: [error instanceof Error ? error.message : '未知错误'],
+      })
+    } finally {
+      setIsLinking(false)
+    }
+  }
+
+  // 关闭对话框时重置状态
+  const handleCloseBatchLinkDialog = () => {
+    setIsBatchLinkDialogOpen(false)
+    setSelectedBudgetId('')
+    setLinkResult(null)
+  }
 
   // 性能优化：使用 Map 进行 O(1) 查找，预解析标签避免重复 split()
   const transactionsDisplay: TransactionDisplayProps[] = useMemo(() => {
@@ -233,6 +331,37 @@ const TransactionsDataTable: React.FC = () => {
 
   // 稳定化数据引用，避免不必要的重新渲染
   const stableTransactionsDisplay = useMemo(() => transactionsDisplay, [transactionsDisplay])
+
+  // 构建带选择框的列定义
+  const columnsWithSelection = useMemo<ColumnDef<TransactionDisplayProps>[]>(() => {
+    const selectionColumn: ColumnDef<TransactionDisplayProps> = {
+      id: 'select',
+      header: () => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={selectedTransactions.size > 0 && selectedTransactions.size === filteredTransactions.length}
+            onCheckedChange={(checked) => handleSelectAll(!!checked)}
+            aria-label="全选"
+          />
+        </div>
+      ),
+      cell: ({ row }) => {
+        const transaction = row.original
+        const isSelected = selectedTransactions.has(transaction.id)
+        return (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => handleSelectTransaction(transaction.id, !!checked)}
+              aria-label={`选择交易 #${transaction.id}`}
+            />
+          </div>
+        )
+      },
+      size: 40,
+    }
+    return [selectionColumn, ...BaseTransactionColumns]
+  }, [selectedTransactions, filteredTransactions.length])
 
   return (
     <Card className="w-full">
@@ -274,11 +403,44 @@ const TransactionsDataTable: React.FC = () => {
               />
             </DialogContent>
           </Dialog>
+          
+          {/* 批量链接按钮 */}
+          <Button
+            variant="secondary"
+            className={`${isMobile ? 'w-full' : ''}`}
+            disabled={selectedTransactions.size === 0}
+            onClick={() => setIsBatchLinkDialogOpen(true)}
+          >
+            <Link2 className="h-4 w-4 mr-2" />
+            批量链接预算
+            {selectedTransactions.size > 0 && (
+              <Badge variant="outline" className="ml-2 bg-primary/10">
+                {selectedTransactions.size}
+              </Badge>
+            )}
+          </Button>
+          
+          {selectedTransactions.size > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedTransactions(new Set())}
+              className={`${isMobile ? 'w-full' : ''}`}
+            >
+              <X className="h-4 w-4 mr-2" />
+              清空选择 ({selectedTransactions.size})
+            </Button>
+          )}
         </div>
 
         {/* 结果摘要 */}
         <div className={`mb-4 text-gray-600 ${isMobile ? 'text-sm' : 'text-sm'}`}>
           显示 {transactionsDisplay.length} / {transactions.length} 条交易记录
+          {selectedTransactions.size > 0 && (
+            <span className="ml-2 text-primary font-medium">
+              (已选择 {selectedTransactions.size} 条)
+            </span>
+          )}
         </div>
 
         {/* 数据表格 */}
@@ -287,13 +449,106 @@ const TransactionsDataTable: React.FC = () => {
             {isLoading ? '正在加载交易记录...' : '正在加载账户数据...'}
           </div>
         ) : stableTransactionsDisplay.length > 0 ? (
-          <DataTable columns={TransactionColumns} data={stableTransactionsDisplay} pagination={pagination} setPagination={stableSetPagination} keepPaginationOnDataChange={true} />
+          <DataTable columns={columnsWithSelection} data={stableTransactionsDisplay} pagination={pagination} setPagination={stableSetPagination} keepPaginationOnDataChange={true} />
         ) : transactions.length > 0 ? (
           <div className={`text-center py-8 ${isMobile ? 'text-sm' : ''}`}>没有符合当前筛选条件的交易记录</div>
         ) : (
           <div className={`text-center py-8 ${isMobile ? 'text-sm' : ''}`}>暂无交易记录</div>
         )}
       </CardContent>
+
+      {/* 批量链接预算对话框 */}
+      <Dialog open={isBatchLinkDialogOpen} onOpenChange={handleCloseBatchLinkDialog}>
+        <DialogContent className={`${isMobile ? 'max-h-[85vh] overflow-y-auto p-4' : 'sm:max-w-lg'}`}>
+          <DialogHeader>
+            <DialogTitle>批量链接到预算</DialogTitle>
+            <DialogDescription>
+              将选中的 {selectedTransactions.size} 条交易记录链接到指定预算
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="budget-select">选择预算</Label>
+              <Select
+                value={selectedBudgetId}
+                onValueChange={setSelectedBudgetId}
+                disabled={isLinking}
+              >
+                <SelectTrigger id="budget-select">
+                  <SelectValue placeholder="请选择一个预算..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {budgets.map((budget) => (
+                    <SelectItem key={budget.id} value={budget.id.toString()}>
+                      {budget.name} (¥{budget.total_amount})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* 选中的交易摘要 */}
+            <div className="space-y-2">
+              <Label>已选择的交易</Label>
+              <div className="max-h-32 overflow-y-auto border rounded-md p-2 space-y-1">
+                {Array.from(selectedTransactions).slice(0, 10).map((id) => {
+                  const transaction = transactions.find(t => t.id === id)
+                  if (!transaction) return null
+                  return (
+                    <div key={id} className="text-sm text-muted-foreground flex justify-between">
+                      <span>#{id} {transaction.description || '(无描述)'}</span>
+                      <span>¥{transaction.value}</span>
+                    </div>
+                  )
+                })}
+                {selectedTransactions.size > 10 && (
+                  <div className="text-sm text-muted-foreground text-center">
+                    ...还有 {selectedTransactions.size - 10} 条
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* 链接结果 */}
+            {linkResult && (
+              <div className={`p-3 rounded-md ${linkResult.failed === 0 ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+                <div className="text-sm font-medium mb-1">
+                  {linkResult.failed === 0 ? '✓ 链接成功' : '⚠ 部分链接失败'}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  成功: {linkResult.success} 条, 失败: {linkResult.failed} 条
+                </div>
+                {linkResult.errors.length > 0 && (
+                  <div className="mt-2 text-xs text-red-600 max-h-24 overflow-y-auto">
+                    {linkResult.errors.map((error, idx) => (
+                      <div key={idx}>{error}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className={`${isMobile ? 'flex-col gap-2' : ''}`}>
+            <Button
+              variant="outline"
+              onClick={handleCloseBatchLinkDialog}
+              disabled={isLinking}
+              className={isMobile ? 'w-full' : ''}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleBatchLink}
+              disabled={!selectedBudgetId || isLinking}
+              className={isMobile ? 'w-full' : ''}
+            >
+              {isLinking ? '链接中...' : '确认链接'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
