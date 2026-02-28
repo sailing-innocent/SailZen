@@ -3,6 +3,14 @@
  * @brief Novel Analysis Page - Entry point for outline, character, and setting analysis
  * @author sailing-innocent
  * @date 2025-02-28
+ * 
+ * 布局说明:
+ * - 顶部: 标题栏 + 作品/版本选择器
+ * - 统计概览: 4个统计卡片
+ * - 主体区域: 左右两栏布局
+ *   - 左侧 (2/3): 文本范围选择器 (宽版)
+ *   - 右侧 (1/3): 任务队列 + 分析结果
+ * - 下方: 标签页内容区 (任务/人物/设定/大纲管理)
  */
 
 import { useState, useEffect } from 'react'
@@ -19,17 +27,19 @@ import {
   FileText, 
   Users, 
   Settings, 
-  Share2, 
   Activity,
   BarChart3,
   BookOpen,
+  Layers,
+  Target,
 } from 'lucide-react'
 
 import { api_get_works } from '@lib/api/text'
 import { api_get_editions_by_work } from '@lib/api/text'
+import { api_get_chapter_list } from '@lib/api/text'
 import { useAnalysisStore } from '@lib/store/analysisStore'
 
-import type { Work, Edition } from '@lib/data/text'
+import type { Work, Edition, ChapterListItem } from '@lib/data/text'
 
 // Components
 import TextRangeSelector from '@components/text_range_selector'
@@ -46,6 +56,7 @@ export default function AnalysisPage() {
   // Local state
   const [works, setWorks] = useState<Work[]>([])
   const [editions, setEditions] = useState<Edition[]>([])
+  const [chapters, setChapters] = useState<ChapterListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('tasks')
 
@@ -111,6 +122,24 @@ export default function AnalysisPage() {
     }
   }, [selectedEditionId])
 
+  // Load chapters when edition changes
+  useEffect(() => {
+    if (!selectedEditionId) {
+      setChapters([])
+      return
+    }
+
+    const fetchChapters = async () => {
+      try {
+        const data = await api_get_chapter_list(selectedEditionId)
+        setChapters(data)
+      } catch (err) {
+        console.error('Failed to load chapters:', err)
+      }
+    }
+    fetchChapters()
+  }, [selectedEditionId])
+
   // Get selected work and edition
   const selectedWork = works.find(w => w.id === selectedWorkId)
   const selectedEdition = editions.find(e => e.id === selectedEditionId)
@@ -142,7 +171,7 @@ export default function AnalysisPage() {
 
   return (
     <PageLayout>
-      <div className="space-y-4 px-2 md:px-0">
+      <div className="space-y-6 px-2 md:px-0">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -214,7 +243,7 @@ export default function AnalysisPage() {
             <Card>
               <CardHeader className="py-3 px-4">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <Layers className="w-4 h-4 text-muted-foreground" />
                   <CardDescription>大纲节点</CardDescription>
                 </div>
                 <CardTitle className="text-2xl">{stats.evidence?.outline_node || 0}</CardTitle>
@@ -234,85 +263,131 @@ export default function AnalysisPage() {
           </div>
         )}
 
-        {/* Main Content */}
+        {/* Main Content - Wide Layout */}
         {selectedEdition && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left Sidebar - Range Selector */}
-            <div className="lg:col-span-1 space-y-4">
-              <TextRangeSelector
-                editionId={selectedEdition.id}
-                chapters={[]} // TODO: Load chapters
-                selectedMode={rangeSelection?.mode || 'full_edition'}
-                onModeChange={(mode) => {
-                  if (selectedEditionId) {
-                    setRangeSelection({
-                      edition_id: selectedEditionId,
-                      mode,
-                    })
-                  }
-                }}
-                selectedIndices={rangeSelection?.chapter_indices || []}
-                onSelectedIndicesChange={(indices) => {
-                  if (selectedEditionId) {
-                    setRangeSelection({
-                      edition_id: selectedEditionId,
-                      mode: 'multi_chapter',
-                      chapter_indices: indices,
-                    })
-                  }
-                }}
-                chapterCount={rangePreview?.chapterCount || 0}
-                totalChars={rangePreview?.totalChars || 0}
-                estimatedTokens={rangePreview?.estimatedTokens || 0}
-                selectedChapters={rangePreview?.selectedChapters || []}
-                warnings={rangePreview?.warnings || []}
-                isLoading={isPreviewLoading}
-              />
+          <>
+            {/* Section 1: Range Selector (Wide) + Task Queue */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Left: Text Range Selector (2/3 width) */}
+              <div className="lg:col-span-2">
+                <TextRangeSelector
+                  editionId={selectedEdition.id}
+                  chapters={chapters}
+                  selectedMode={rangeSelection?.mode || 'full_edition'}
+                  onModeChange={(mode) => {
+                    if (selectedEditionId) {
+                      setRangeSelection({
+                        edition_id: selectedEditionId,
+                        mode,
+                      })
+                    }
+                  }}
+                  selectedChapterIndex={rangeSelection?.chapter_index}
+                  onSelectedChapterChange={(index) => {
+                    if (selectedEditionId) {
+                      setRangeSelection({
+                        edition_id: selectedEditionId,
+                        mode: 'single_chapter',
+                        chapter_index: index,
+                      })
+                    }
+                  }}
+                  selectedIndices={rangeSelection?.chapter_indices || []}
+                  onSelectedIndicesChange={(indices) => {
+                    if (selectedEditionId) {
+                      setRangeSelection({
+                        edition_id: selectedEditionId,
+                        mode: 'multi_chapter',
+                        chapter_indices: indices,
+                      })
+                    }
+                  }}
+                  startIndex={rangeSelection?.start_index}
+                  onStartIndexChange={(index) => {
+                    if (selectedEditionId) {
+                      setRangeSelection({
+                        edition_id: selectedEditionId,
+                        mode: rangeSelection?.mode === 'chapter_range' ? 'chapter_range' : 'current_to_end',
+                        start_index: index,
+                        end_index: rangeSelection?.end_index,
+                      })
+                    }
+                  }}
+                  endIndex={rangeSelection?.end_index}
+                  onEndIndexChange={(index) => {
+                    if (selectedEditionId) {
+                      setRangeSelection({
+                        edition_id: selectedEditionId,
+                        mode: 'chapter_range',
+                        start_index: rangeSelection?.start_index,
+                        end_index: index,
+                      })
+                    }
+                  }}
+                  chapterCount={rangePreview?.chapterCount || 0}
+                  totalChars={rangePreview?.totalChars || 0}
+                  estimatedTokens={rangePreview?.estimatedTokens || 0}
+                  selectedChapters={rangePreview?.selectedChapters || []}
+                  warnings={rangePreview?.warnings || []}
+                  isLoading={isPreviewLoading}
+                />
+              </div>
 
-              {/* Task Queue */}
-              <AnalysisTaskQueue
-                tasks={tasks}
-                onSelect={(task) => console.log('Selected task:', task)}
-              />
-            </div>
-
-            {/* Right Content - Tabs */}
-            <div className="lg:col-span-2">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="tasks">任务管理</TabsTrigger>
-                  <TabsTrigger value="characters">人物管理</TabsTrigger>
-                  <TabsTrigger value="settings">设定管理</TabsTrigger>
-                  <TabsTrigger value="outline">大纲分析</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="tasks" className="mt-4">
-                  <TaskPanel editionId={selectedEdition.id} />
-                </TabsContent>
-                
-                <TabsContent value="characters" className="mt-4">
-                  <CharacterPanel editionId={selectedEdition.id} />
-                </TabsContent>
-                
-                <TabsContent value="settings" className="mt-4">
-                  <SettingPanel editionId={selectedEdition.id} />
-                </TabsContent>
-                
-                <TabsContent value="outline" className="mt-4">
-                  <OutlinePanel editionId={selectedEdition.id} />
-                </TabsContent>
-              </Tabs>
-
-              {/* Analysis Results Panel */}
-              <div className="mt-4">
-                <AnalysisResultPanel
-                  results={[]}
-                  onApprove={(id) => console.log('Approve:', id)}
-                  onReject={(id) => console.log('Reject:', id)}
+              {/* Right: Task Queue (1/3 width) */}
+              <div className="lg:col-span-1">
+                <AnalysisTaskQueue
+                  tasks={tasks}
+                  onSelect={(task) => console.log('Selected task:', task)}
                 />
               </div>
             </div>
-          </div>
+
+            {/* Section 2: Analysis Results */}
+            <AnalysisResultPanel
+              results={[]}
+              onApprove={(id) => console.log('Approve:', id)}
+              onReject={(id) => console.log('Reject:', id)}
+            />
+
+            {/* Section 3: Management Tabs */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Target className="w-5 h-5" />
+                  分析管理
+                </CardTitle>
+                <CardDescription>
+                  管理人物、设定、大纲和分析任务
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="tasks">任务管理</TabsTrigger>
+                    <TabsTrigger value="characters">人物管理</TabsTrigger>
+                    <TabsTrigger value="settings">设定管理</TabsTrigger>
+                    <TabsTrigger value="outline">大纲分析</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="tasks" className="mt-4">
+                    <TaskPanel editionId={selectedEdition.id} />
+                  </TabsContent>
+                  
+                  <TabsContent value="characters" className="mt-4">
+                    <CharacterPanel editionId={selectedEdition.id} />
+                  </TabsContent>
+                  
+                  <TabsContent value="settings" className="mt-4">
+                    <SettingPanel editionId={selectedEdition.id} />
+                  </TabsContent>
+                  
+                  <TabsContent value="outline" className="mt-4">
+                    <OutlinePanel editionId={selectedEdition.id} />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
     </PageLayout>

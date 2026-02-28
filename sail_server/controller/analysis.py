@@ -380,9 +380,8 @@ class AnalysisStatsController(Controller):
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
         
-        # 从证据存储中统计
-        evidence_controller = EvidenceController()
-        all_evidence = list(evidence_controller._evidence_store.values())
+        # 从证据存储中统计（使用类变量直接访问）
+        all_evidence = list(EvidenceController._evidence_store.values())
         edition_evidence = [ev for ev in all_evidence if ev.edition_id == edition_id]
         
         # 统计证据类型
@@ -408,3 +407,258 @@ class AnalysisStatsController(Controller):
             evidence=evidence_stats,
             last_updated=datetime.now().isoformat(),
         )
+
+
+# ============================================================================
+# Task Controller (Stub)
+# ============================================================================
+
+class TaskController(Controller):
+    """任务控制器（桩实现）"""
+    path = "/task"
+    
+    # 内存存储（临时实现）
+    _tasks: Dict[int, Dict] = {}
+    _task_counter: int = 0
+    
+    @post("/")
+    async def create_task(
+        self,
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        """创建分析任务"""
+        TaskController._task_counter += 1
+        task_id = TaskController._task_counter
+        
+        task = {
+            "id": task_id,
+            "edition_id": data.get("edition_id"),
+            "task_type": data.get("task_type"),
+            "status": "pending",
+            "target_scope": data.get("target_scope", "full"),
+            "target_node_ids": data.get("target_node_ids", []),
+            "parameters": data.get("parameters", {}),
+            "created_at": datetime.now().isoformat(),
+            "result_count": 0,
+        }
+        TaskController._tasks[task_id] = task
+        request.logger.info(f"Created task {task_id}")
+        return task
+    
+    @get("/")
+    async def list_tasks(
+        self,
+        edition_id: Optional[int] = None,
+        status: Optional[str] = None,
+        request: Request = None,
+    ) -> List[Dict[str, Any]]:
+        """获取任务列表"""
+        tasks = list(TaskController._tasks.values())
+        
+        if edition_id:
+            tasks = [t for t in tasks if t.get("edition_id") == edition_id]
+        if status:
+            tasks = [t for t in tasks if t.get("status") == status]
+        
+        return tasks
+    
+    @get("/{task_id:int}")
+    async def get_task(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """获取任务详情"""
+        task = TaskController._tasks.get(task_id)
+        if not task:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        return task
+    
+    @post("/{task_id:int}/cancel")
+    async def cancel_task(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """取消任务"""
+        task = TaskController._tasks.get(task_id)
+        if not task:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        
+        task["status"] = "cancelled"
+        return {"success": True, "message": f"Task {task_id} cancelled"}
+    
+    @delete("/{task_id:int}", status_code=200)
+    async def delete_task(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """删除任务"""
+        if task_id not in TaskController._tasks:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        
+        del TaskController._tasks[task_id]
+        return {"success": True, "message": f"Task {task_id} deleted"}
+    
+    @post("/{task_id:int}/plan")
+    async def create_task_plan(
+        self,
+        task_id: int,
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        """创建任务执行计划"""
+        task = TaskController._tasks.get(task_id)
+        if not task:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        
+        # 模拟执行计划
+        plan = {
+            "chunks": [
+                {"index": 0, "node_ids": [1, 2, 3], "estimated_tokens": 1500},
+                {"index": 1, "node_ids": [4, 5, 6], "estimated_tokens": 2000},
+            ],
+            "total_estimated_tokens": 3500,
+            "estimated_cost_usd": 0.05,
+            "prompt_template_id": "default_analysis",
+        }
+        return {"success": True, "plan": plan}
+    
+    @post("/{task_id:int}/execute")
+    async def execute_task(
+        self,
+        task_id: int,
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        """执行任务"""
+        task = TaskController._tasks.get(task_id)
+        if not task:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        
+        task["status"] = "running"
+        return {"success": True}
+    
+    @post("/{task_id:int}/apply")
+    async def apply_results(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """应用任务结果"""
+        task = TaskController._tasks.get(task_id)
+        if not task:
+            raise NotFoundException(detail=f"Task with ID {task_id} not found")
+        
+        return {"applied": 5, "failed": 0}
+
+
+# ============================================================================
+# Progress Controller (Stub)
+# ============================================================================
+
+class ProgressController(Controller):
+    """进度控制器（桩实现）"""
+    path = "/progress"
+    
+    @get("/{task_id:int}")
+    async def get_progress(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """获取任务进度"""
+        # 模拟进度数据
+        return {
+            "success": True,
+            "progress": {
+                "task_id": str(task_id),
+                "status": "running",
+                "current_step": "processing_chunk",
+                "total_chunks": 5,
+                "completed_chunks": 2,
+                "current_chunk_info": "第3章",
+            }
+        }
+
+
+# ============================================================================
+# Result Controller (Stub)
+# ============================================================================
+
+class ResultController(Controller):
+    """结果控制器（桩实现）"""
+    path = "/result"
+    
+    @get("/{task_id:int}")
+    async def get_results(
+        self,
+        task_id: int,
+        request: Request,
+    ) -> List[Dict[str, Any]]:
+        """获取任务结果"""
+        # 模拟结果数据
+        return [
+            {
+                "id": 1,
+                "task_id": str(task_id),
+                "result_type": "character",
+                "result_data": {"name": "主角", "role": "protagonist"},
+                "confidence": 0.95,
+                "review_status": "pending",
+            },
+            {
+                "id": 2,
+                "task_id": str(task_id),
+                "result_type": "setting",
+                "result_data": {"name": "主城", "type": "location"},
+                "confidence": 0.88,
+                "review_status": "approved",
+            },
+        ]
+    
+    @post("/{result_id:int}/verify")
+    async def verify_result(
+        self,
+        result_id: int,
+        data: Dict[str, Any],
+        request: Request,
+    ) -> Dict[str, Any]:
+        """审核结果"""
+        status = data.get("status", "pending")
+        return {"success": True, "message": f"Result {result_id} status updated to {status}"}
+
+
+# ============================================================================
+# LLM Provider Controller (Stub)
+# ============================================================================
+
+class LLMProviderController(Controller):
+    """LLM 提供商控制器（桩实现）"""
+    path = "/llm-providers"
+    
+    @get("/")
+    async def get_providers(
+        self,
+        request: Request,
+    ) -> Dict[str, Any]:
+        """获取 LLM 提供商列表"""
+        return {
+            "success": True,
+            "providers": [
+                {
+                    "id": "mock",
+                    "name": "Mock Provider",
+                    "description": "模拟提供商，用于测试",
+                    "models": ["mock-model"],
+                },
+                {
+                    "id": "openai",
+                    "name": "OpenAI",
+                    "description": "GPT 模型",
+                    "models": ["gpt-4", "gpt-3.5-turbo"],
+                },
+            ]
+        }

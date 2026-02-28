@@ -12,6 +12,10 @@ from sail_server.controller.analysis import (
     TextRangeController,
     EvidenceController,
     AnalysisStatsController,
+    TaskController,
+    ProgressController,
+    ResultController,
+    LLMProviderController,
 )
 from sail_server.db import get_db_dependency
 
@@ -23,5 +27,9 @@ analysis_router = Router(
         TextRangeController,
         EvidenceController,
         AnalysisStatsController,
+        TaskController,
+        ProgressController,
+        ResultController,
+        LLMProviderController,
     ],
 )
