@@ -325,6 +325,15 @@ class OutlineExtractionRequest:
 
 
 @dataclass
+class OutlineEvidence:
+    """大纲证据"""
+    text: str
+    chapter_title: Optional[str] = None
+    start_fragment: Optional[str] = None
+    end_fragment: Optional[str] = None
+
+
+@dataclass
 class ExtractedOutlineNode:
     """提取的大纲节点"""
     id: str
@@ -335,7 +344,7 @@ class ExtractedOutlineNode:
     sort_index: int
     parent_id: Optional[str] = None
     characters: List[str] = field(default_factory=list)
-    evidence: Optional[Dict[str, Any]] = None
+    evidence_list: List[OutlineEvidence] = field(default_factory=list)
 
 
 @dataclass

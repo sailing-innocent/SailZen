@@ -5,12 +5,12 @@
  * @date 2025-02-28
  * 
  * 布局说明:
- * - 顶部: 标题栏 + 作品/版本选择器
- * - 统计概览: 4个统计卡片
- * - 主体区域: 左右两栏布局
- *   - 左侧 (2/3): 文本范围选择器 (宽版)
- *   - 右侧 (1/3): 任务队列 + 分析结果
- * - 下方: 标签页内容区 (任务/人物/设定/大纲管理)
+ * - 顶部: 标题栏 + 作品/版本选择器 + 紧凑统计概览
+ * - 主体区域: 标签页内容区
+ *   - 任务管理: 文本范围选择器 + 任务创建/监控
+ *   - 人物管理: 人物列表和分析
+ *   - 设定管理: 设定列表和分析
+ *   - 大纲分析: 大纲列表、AI提取、树形编辑器
  */
 
 import { useState, useEffect } from 'react'
@@ -22,16 +22,15 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
   FileText, 
   Users, 
   Settings, 
-  Activity,
-  BarChart3,
   BookOpen,
   Layers,
   Target,
+  Sparkles,
+  Activity,
 } from 'lucide-react'
 
 import { api_get_works } from '@lib/api/text'
@@ -43,8 +42,6 @@ import type { Work, Edition, ChapterListItem } from '@lib/data/text'
 
 // Components
 import TextRangeSelector from '@components/text_range_selector'
-import AnalysisResultPanel from '@components/analysis_result_panel'
-import AnalysisTaskQueue from '@components/analysis_task_queue'
 
 // Sub-components
 import CharacterPanel from '@components/analysis/character_panel'
@@ -65,7 +62,6 @@ export default function AnalysisPage() {
     selectedWorkId,
     selectedEditionId,
     stats,
-    tasks,
     rangeSelection,
     rangePreview,
     isPreviewLoading,
@@ -171,227 +167,193 @@ export default function AnalysisPage() {
 
   return (
     <PageLayout>
-      <div className="space-y-6 px-2 md:px-0">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="w-6 h-6" />
-            <h1 className="text-xl md:text-2xl font-bold">作品分析工作台</h1>
-          </div>
-          
-          {/* Work and Edition Selector */}
-          <div className="flex flex-wrap gap-2">
-            <Select
-              value={selectedWorkId?.toString()}
-              onValueChange={(value) => setSelectedWork(parseInt(value))}
-            >
-              <SelectTrigger className="w-48">
-                <BookOpen className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="选择作品" />
-              </SelectTrigger>
-              <SelectContent>
-                {works.map((work) => (
-                  <SelectItem key={work.id} value={work.id.toString()}>
-                    {work.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <div className="space-y-4 px-2 md:px-0">
+        {/* Header: Title + Selectors + Compact Stats */}
+        <div className="flex flex-col gap-4">
+          {/* Top Row: Title and Selectors */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Target className="w-6 h-6" />
+              <h1 className="text-xl md:text-2xl font-bold">作品分析工作台</h1>
+            </div>
             
-            {editions.length > 0 && (
+            {/* Work and Edition Selector */}
+            <div className="flex flex-wrap gap-2">
               <Select
-                value={selectedEditionId?.toString()}
-                onValueChange={(value) => setSelectedEdition(parseInt(value))}
+                value={selectedWorkId?.toString()}
+                onValueChange={(value) => setSelectedWork(parseInt(value))}
               >
-                <SelectTrigger className="w-40">
-                  <FileText className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="选择版本" />
+                <SelectTrigger className="w-48">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="选择作品" />
                 </SelectTrigger>
                 <SelectContent>
-                  {editions.map((edition) => (
-                    <SelectItem key={edition.id} value={edition.id.toString()}>
-                      {edition.edition_name || `版本 ${edition.ingest_version}`}
+                  {works.map((work) => (
+                    <SelectItem key={work.id} value={work.id.toString()}>
+                      {work.title}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            )}
+              
+              {editions.length > 0 && (
+                <Select
+                  value={selectedEditionId?.toString()}
+                  onValueChange={(value) => setSelectedEdition(parseInt(value))}
+                >
+                  <SelectTrigger className="w-40">
+                    <FileText className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="选择版本" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {editions.map((edition) => (
+                      <SelectItem key={edition.id} value={edition.id.toString()}>
+                        {edition.edition_name || `版本 ${edition.ingest_version}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
+
+          {/* Compact Stats Bar */}
+          {stats && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted-foreground">当前版本统计:</span>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                人物 {stats.evidence?.character || 0}
+              </Badge>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Settings className="w-3 h-3" />
+                设定 {stats.evidence?.setting || 0}
+              </Badge>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                大纲节点 {stats.evidence?.outline_node || 0}
+              </Badge>
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Activity className="w-3 h-3" />
+                任务 {Object.values(stats.tasks || {}).reduce((a, b) => a + b, 0)}
+              </Badge>
+            </div>
+          )}
         </div>
 
-        {/* Stats Overview */}
-        {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  <CardDescription>人物</CardDescription>
-                </div>
-                <CardTitle className="text-2xl">{stats.evidence?.character || 0}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-muted-foreground" />
-                  <CardDescription>设定</CardDescription>
-                </div>
-                <CardTitle className="text-2xl">{stats.evidence?.setting || 0}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-muted-foreground" />
-                  <CardDescription>大纲节点</CardDescription>
-                </div>
-                <CardTitle className="text-2xl">{stats.evidence?.outline_node || 0}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-muted-foreground" />
-                  <CardDescription>分析任务</CardDescription>
-                </div>
-                <CardTitle className="text-2xl">
-                  {Object.values(stats.tasks || {}).reduce((a, b) => a + b, 0)}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-          </div>
-        )}
+        <Separator />
 
-        {/* Main Content - Wide Layout */}
+        {/* Main Content: Tabs */}
         {selectedEdition && (
-          <>
-            {/* Section 1: Range Selector (Wide) + Task Queue */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Left: Text Range Selector (2/3 width) */}
-              <div className="lg:col-span-2">
-                <TextRangeSelector
-                  editionId={selectedEdition.id}
-                  chapters={chapters}
-                  selectedMode={rangeSelection?.mode || 'full_edition'}
-                  onModeChange={(mode) => {
-                    if (selectedEditionId) {
-                      setRangeSelection({
-                        edition_id: selectedEditionId,
-                        mode,
-                      })
-                    }
-                  }}
-                  selectedChapterIndex={rangeSelection?.chapter_index}
-                  onSelectedChapterChange={(index) => {
-                    if (selectedEditionId) {
-                      setRangeSelection({
-                        edition_id: selectedEditionId,
-                        mode: 'single_chapter',
-                        chapter_index: index,
-                      })
-                    }
-                  }}
-                  selectedIndices={rangeSelection?.chapter_indices || []}
-                  onSelectedIndicesChange={(indices) => {
-                    if (selectedEditionId) {
-                      setRangeSelection({
-                        edition_id: selectedEditionId,
-                        mode: 'multi_chapter',
-                        chapter_indices: indices,
-                      })
-                    }
-                  }}
-                  startIndex={rangeSelection?.start_index}
-                  onStartIndexChange={(index) => {
-                    if (selectedEditionId) {
-                      setRangeSelection({
-                        edition_id: selectedEditionId,
-                        mode: rangeSelection?.mode === 'chapter_range' ? 'chapter_range' : 'current_to_end',
-                        start_index: index,
-                        end_index: rangeSelection?.end_index,
-                      })
-                    }
-                  }}
-                  endIndex={rangeSelection?.end_index}
-                  onEndIndexChange={(index) => {
-                    if (selectedEditionId) {
-                      setRangeSelection({
-                        edition_id: selectedEditionId,
-                        mode: 'chapter_range',
-                        start_index: rangeSelection?.start_index,
-                        end_index: index,
-                      })
-                    }
-                  }}
-                  chapterCount={rangePreview?.chapterCount || 0}
-                  totalChars={rangePreview?.totalChars || 0}
-                  estimatedTokens={rangePreview?.estimatedTokens || 0}
-                  selectedChapters={rangePreview?.selectedChapters || []}
-                  warnings={rangePreview?.warnings || []}
-                  isLoading={isPreviewLoading}
-                />
-              </div>
-
-              {/* Right: Task Queue (1/3 width) */}
-              <div className="lg:col-span-1">
-                <AnalysisTaskQueue
-                  tasks={tasks}
-                  onSelect={(task) => console.log('Selected task:', task)}
-                />
-              </div>
-            </div>
-
-            {/* Section 2: Analysis Results */}
-            <AnalysisResultPanel
-              results={[]}
-              onApprove={(id) => console.log('Approve:', id)}
-              onReject={(id) => console.log('Reject:', id)}
-            />
-
-            {/* Section 3: Management Tabs */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Target className="w-5 h-5" />
-                  分析管理
-                </CardTitle>
-                <CardDescription>
-                  管理人物、设定、大纲和分析任务
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="tasks">任务管理</TabsTrigger>
-                    <TabsTrigger value="characters">人物管理</TabsTrigger>
-                    <TabsTrigger value="settings">设定管理</TabsTrigger>
-                    <TabsTrigger value="outline">大纲分析</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="tasks" className="mt-4">
-                    <TaskPanel editionId={selectedEdition.id} />
-                  </TabsContent>
-                  
-                  <TabsContent value="characters" className="mt-4">
-                    <CharacterPanel 
-                      editionId={selectedEdition.id} 
-                      workTitle={selectedWork?.title || ''}
-                      rangeSelection={rangeSelection || undefined}
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="settings" className="mt-4">
-                    <SettingPanel editionId={selectedEdition.id} />
-                  </TabsContent>
-                  
-                  <TabsContent value="outline" className="mt-4">
-                    <OutlinePanel editionId={selectedEdition.id} />
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="tasks" className="flex items-center gap-1">
+                <Target className="w-4 h-4" />
+                <span className="hidden sm:inline">分析任务</span>
+                <span className="sm:hidden">任务</span>
+              </TabsTrigger>
+              <TabsTrigger value="characters" className="flex items-center gap-1">
+                <Users className="w-4 h-4" />
+                <span className="hidden sm:inline">人物管理</span>
+                <span className="sm:hidden">人物</span>
+              </TabsTrigger>
+              <TabsTrigger value="settings" className="flex items-center gap-1">
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">设定管理</span>
+                <span className="sm:hidden">设定</span>
+              </TabsTrigger>
+              <TabsTrigger value="outline" className="flex items-center gap-1">
+                <Sparkles className="w-4 h-4" />
+                <span className="hidden sm:inline">大纲分析</span>
+                <span className="sm:hidden">大纲</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* Tasks Tab: Range Selector + Task Management */}
+            <TabsContent value="tasks" className="mt-4 space-y-4">
+              <TextRangeSelector
+                editionId={selectedEdition.id}
+                chapters={chapters}
+                selectedMode={rangeSelection?.mode || 'full_edition'}
+                onModeChange={(mode) => {
+                  if (selectedEditionId) {
+                    setRangeSelection({
+                      edition_id: selectedEditionId,
+                      mode,
+                    })
+                  }
+                }}
+                selectedChapterIndex={rangeSelection?.chapter_index}
+                onSelectedChapterChange={(index) => {
+                  if (selectedEditionId) {
+                    setRangeSelection({
+                      edition_id: selectedEditionId,
+                      mode: 'single_chapter',
+                      chapter_index: index,
+                    })
+                  }
+                }}
+                selectedIndices={rangeSelection?.chapter_indices || []}
+                onSelectedIndicesChange={(indices) => {
+                  if (selectedEditionId) {
+                    setRangeSelection({
+                      edition_id: selectedEditionId,
+                      mode: 'multi_chapter',
+                      chapter_indices: indices,
+                    })
+                  }
+                }}
+                startIndex={rangeSelection?.start_index}
+                onStartIndexChange={(index) => {
+                  if (selectedEditionId) {
+                    setRangeSelection({
+                      edition_id: selectedEditionId,
+                      mode: rangeSelection?.mode === 'chapter_range' ? 'chapter_range' : 'current_to_end',
+                      start_index: index,
+                      end_index: rangeSelection?.end_index,
+                    })
+                  }
+                }}
+                endIndex={rangeSelection?.end_index}
+                onEndIndexChange={(index) => {
+                  if (selectedEditionId) {
+                    setRangeSelection({
+                      edition_id: selectedEditionId,
+                      mode: 'chapter_range',
+                      start_index: rangeSelection?.start_index,
+                      end_index: index,
+                    })
+                  }
+                }}
+                chapterCount={rangePreview?.chapterCount || 0}
+                totalChars={rangePreview?.totalChars || 0}
+                estimatedTokens={rangePreview?.estimatedTokens || 0}
+                selectedChapters={rangePreview?.selectedChapters || []}
+                warnings={rangePreview?.warnings || []}
+                isLoading={isPreviewLoading}
+              />
+              <TaskPanel editionId={selectedEdition.id} />
+            </TabsContent>
+            
+            {/* Characters Tab */}
+            <TabsContent value="characters" className="mt-4">
+              <CharacterPanel 
+                editionId={selectedEdition.id} 
+                workTitle={selectedWork?.title || ''}
+                rangeSelection={rangeSelection || undefined}
+              />
+            </TabsContent>
+            
+            {/* Settings Tab */}
+            <TabsContent value="settings" className="mt-4">
+              <SettingPanel editionId={selectedEdition.id} />
+            </TabsContent>
+            
+            {/* Outline Tab */}
+            <TabsContent value="outline" className="mt-4">
+              <OutlinePanel editionId={selectedEdition.id} />
+            </TabsContent>
+          </Tabs>
         )}
       </div>
     </PageLayout>

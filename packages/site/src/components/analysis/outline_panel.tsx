@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useAnalysisStore } from '@lib/store/analysisStore'
 import { Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -254,14 +255,18 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     poll()
   }
 
+  // Access global store for refreshing stats
+  const { loadStats } = useAnalysisStore()
+
   const handleSaveExtractionResult = async () => {
     if (!extractionTaskId) return
     try {
       const result = await api_save_outline_extraction_result(extractionTaskId)
       if (result.success) {
         alert(`保存成功！\n大纲 ID: ${result.outline_id}\n节点数: ${result.nodes_created}`)
-        // Refresh outlines
+        // Refresh outlines and stats
         fetchOutlines()
+        loadStats(editionId)
         setShowExtraction(false)
         setExtractionResult(null)
       }

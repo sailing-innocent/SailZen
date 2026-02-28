@@ -11,7 +11,7 @@ from litestar import Controller, get, post, delete
 from litestar.exceptions import NotFoundException, ClientException
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sail_server.data.analysis import (
     Outline,
@@ -39,7 +39,7 @@ class OutlineResponse:
 @dataclass
 class OutlineTreeResponse:
     """大纲树响应"""
-    outline_id: str
+    outline: OutlineResponse
     nodes: List[OutlineNodeResponse]
 
 
@@ -53,6 +53,8 @@ class OutlineNodeResponse:
     title: str
     summary: Optional[str]
     sort_index: int
+    children: List['OutlineNodeResponse'] = field(default_factory=list)
+    events: List[Dict[str, Any]] = field(default_factory=list)
     created_at: Optional[str] = None
 
 
@@ -204,27 +206,62 @@ class OutlineController(Controller):
         if not outline:
             raise NotFoundException(detail=f"Outline {outline_id} not found")
         
-        nodes = db.query(OutlineNode).filter(
+        # 获取所有节点
+        all_nodes = db.query(OutlineNode).filter(
             OutlineNode.outline_id == int(outline_id)
         ).order_by(OutlineNode.sort_index).all()
         
-        node_responses = [
-            OutlineNodeResponse(
-                id=str(node.id),
-                outline_id=str(node.outline_id),
-                parent_id=str(node.parent_id) if node.parent_id else None,
-                node_type=node.node_type,
-                title=node.title,
-                summary=node.summary,
-                sort_index=node.sort_index,
-                created_at=node.created_at.isoformat() if node.created_at else None,
-            )
-            for node in nodes
-        ]
+        # 获取所有事件
+        all_events = db.query(OutlineEvent).filter(
+            OutlineEvent.outline_node_id.in_([n.id for n in all_nodes])
+        ).all()
+        
+        events_by_node = {}
+        for event in all_events:
+            if event.outline_node_id not in events_by_node:
+                events_by_node[event.outline_node_id] = []
+            events_by_node[event.outline_node_id].append({
+                "id": str(event.id),
+                "event_type": event.event_type,
+                "title": event.title or "",
+                "description": event.description,
+            })
+        
+        # 构建树形结构
+        def build_tree(nodes: List[OutlineNode], parent_id: Optional[int] = None) -> List[OutlineNodeResponse]:
+            result = []
+            for node in nodes:
+                if node.parent_id == parent_id:
+                    children = build_tree(nodes, node.id)
+                    node_events = events_by_node.get(node.id, [])
+                    
+                    result.append(OutlineNodeResponse(
+                        id=str(node.id),
+                        outline_id=str(node.outline_id),
+                        parent_id=str(node.parent_id) if node.parent_id else None,
+                        node_type=node.node_type,
+                        title=node.title,
+                        summary=node.summary,
+                        sort_index=node.sort_index,
+                        children=children,
+                        events=node_events,
+                        created_at=node.created_at.isoformat() if node.created_at else None,
+                    ))
+            return result
+        
+        tree_nodes = build_tree(all_nodes)
         
         return OutlineTreeResponse(
-            outline_id=outline_id,
-            nodes=node_responses,
+            outline=OutlineResponse(
+                id=str(outline.id),
+                edition_id=str(outline.edition_id),
+                title=outline.title,
+                outline_type=outline.outline_type,
+                description=outline.description,
+                created_at=outline.created_at.isoformat() if outline.created_at else None,
+                updated_at=outline.updated_at.isoformat() if outline.updated_at else None,
+            ),
+            nodes=tree_nodes,
         )
     
     @post("/node")

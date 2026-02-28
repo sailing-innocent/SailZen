@@ -150,7 +150,15 @@ class ExtractionCheckpoint:
                 "sort_index": node.sort_index,
                 "parent_id": node.parent_id,
                 "characters": node.characters,
-                "evidence": node.evidence,
+                "evidence_list": [
+                    {
+                        "text": e.text,
+                        "chapter_title": e.chapter_title,
+                        "start_fragment": e.start_fragment,
+                        "end_fragment": e.end_fragment,
+                    }
+                    for e in (node.evidence_list or [])
+                ],
             }
             node_dicts.append(node_dict)
             self.accumulated_nodes.append(node_dict)

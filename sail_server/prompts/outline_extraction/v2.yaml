@@ -64,11 +64,14 @@ user_prompt_template: |
         "parent_id": null,
         "sort_index": 0,
         "characters": ["人物1", "人物2"],
-        "evidence": {
-          "text": "关键原文引用（50-200字）",
-          "start_offset": 0,
-          "end_offset": 100
-        }
+        "evidence_list": [
+          {
+            "text": "关键原文引用（50-200字）",
+            "chapter_title": "章节标题，如'第一章 初遇'",
+            "start_fragment": "证据开始部分的原文片段（20-30字），用于定位",
+            "end_fragment": "证据结束部分的原文片段（20-30字），用于定位"
+          }
+        ]
       }
     ],
     "turning_points": [
@@ -147,18 +150,23 @@ output_schema:
             items:
               type: string
             description: "涉及的人物列表"
-          evidence:
-            type: object
-            properties:
-              text:
-                type: string
-                description: "关键原文引用（50-200字）"
-              start_offset:
-                type: integer
-                description: "原文起始偏移"
-              end_offset:
-                type: integer
-                description: "原文结束偏移"
+          evidence_list:
+            type: array
+            items:
+              type: object
+              properties:
+                text:
+                  type: string
+                  description: "关键原文引用（50-200字）"
+                chapter_title:
+                  type: string
+                  description: "章节标题"
+                start_fragment:
+                  type: string
+                  description: "证据开始部分的原文片段（20-30字）"
+                end_fragment:
+                  type: string
+                  description: "证据结束部分的原文片段（20-30字）"
         required: ["id", "node_type", "title", "summary", "significance", "sort_index"]
     turning_points:
       type: array
@@ -219,11 +227,14 @@ example_output: |
         "parent_id": null,
         "sort_index": 0,
         "characters": ["李明", "王芳"],
-        "evidence": {
-          "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。",
-          "start_offset": 0,
-          "end_offset": 50
-        }
+        "evidence_list": [
+          {
+            "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。",
+            "chapter_title": "第一章 初遇",
+            "start_fragment": "李明走在回家的路上",
+            "end_fragment": "有一个人倒在地上。"
+          }
+        ]
       },
       {
         "id": "node_2",
@@ -234,11 +245,14 @@ example_output: |
         "parent_id": "node_1",
         "sort_index": 0,
         "characters": ["李明", "王芳"],
-        "evidence": {
-          "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。他快步上前...",
-          "start_offset": 0,
-          "end_offset": 80
-        }
+        "evidence_list": [
+          {
+            "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。他快步上前...",
+            "chapter_title": "第一章 初遇",
+            "start_fragment": "李明走在回家的路上",
+            "end_fragment": "他快步上前..."
+          }
+        ]
       },
       {
         "id": "node_3",

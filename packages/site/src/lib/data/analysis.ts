@@ -501,7 +501,7 @@ export interface OutlineTreeNode {
 
 export interface OutlineTree {
   outline: Outline
-  root_nodes: OutlineTreeNode[]
+  nodes: OutlineTreeNode[]
 }
 
 export interface OutlineEvent {

@@ -32,6 +32,7 @@ from sail_server.data.analysis import (
     TextRangeSelection,
     OutlineExtractionConfig,
     ExtractedOutlineNode,
+    OutlineEvidence,
     OutlineExtractionResult,
 )
 from sail_server.model.analysis.outline import (
@@ -723,6 +724,22 @@ class OutlineExtractor:
             outline_nodes_data = data.get("outline_nodes", [])
             logger.info(f"[_parse_extraction_result] Found {len(outline_nodes_data)} outline nodes in response")
             for i, node_data in enumerate(outline_nodes_data):
+                # 解析证据列表
+                evidence_list = []
+                evidence_list_data = node_data.get("evidence_list", [])
+                # 兼容旧格式的单个 evidence
+                if not evidence_list_data and node_data.get("evidence"):
+                    evidence_list_data = [node_data.get("evidence")]
+                
+                for evidence_data in evidence_list_data:
+                    if evidence_data and evidence_data.get("text"):
+                        evidence_list.append(OutlineEvidence(
+                            text=evidence_data.get("text", ""),
+                            chapter_title=evidence_data.get("chapter_title"),
+                            start_fragment=evidence_data.get("start_fragment"),
+                            end_fragment=evidence_data.get("end_fragment"),
+                        ))
+                
                 node = ExtractedOutlineNode(
                     id=node_data.get("id", ""),
                     node_type=node_data.get("node_type", "scene"),
@@ -732,11 +749,11 @@ class OutlineExtractor:
                     sort_index=node_data.get("sort_index", 0),
                     parent_id=node_data.get("parent_id"),
                     characters=node_data.get("characters", []),
-                    evidence=node_data.get("evidence"),
+                    evidence_list=evidence_list,
                 )
                 nodes.append(node)
                 if i < 3:  # 只记录前3个节点的详细信息
-                    logger.info(f"[_parse_extraction_result] Node {i}: type={node.node_type}, title='{node.title[:50]}...'")
+                    logger.info(f"[_parse_extraction_result] Node {i}: type={node.node_type}, title='{node.title[:50]}...', evidence_count={len(evidence_list)}")
             
             # 解析转折点
             turning_points = []
@@ -904,13 +921,14 @@ class OutlineExtractor:
                 node_id_map[node.id] = node_data.id
                 created_count += 1
                 
-                # 3. 创建证据关联
-                if node.evidence and node.evidence.get("text"):
-                    self._create_evidence_for_node(
-                        edition_id=edition_id,
-                        outline_node_id=node_data.id,
-                        evidence_data=node.evidence,
-                    )
+                # 3. 创建证据关联（支持多个证据）
+                for evidence in node.evidence_list:
+                    if evidence.text:
+                        self._create_evidence_for_node(
+                            edition_id=edition_id,
+                            outline_node_id=node_data.id,
+                            evidence=evidence,
+                        )
         
         # 4. 创建转折点事件
         event_count = 0
@@ -936,31 +954,88 @@ class OutlineExtractor:
         self,
         edition_id: int,
         outline_node_id: int,
-        evidence_data: Dict[str, Any],
+        evidence: OutlineEvidence,
     ):
-        """为节点创建文本证据"""
+        """为节点创建文本证据
+        
+        使用 chapter_title 和文本片段来定位正确的章节
+        """
         try:
-            # 查找包含该文本的章节
-            text = evidence_data.get("text", "")
-            start_offset = evidence_data.get("start_offset", 0)
-            end_offset = evidence_data.get("end_offset", len(text))
+            from sail_server.data.text import DocumentNode
             
-            # 简化实现：不关联具体章节，只保存证据内容
-            # 实际实现中应该根据 offset 查找对应的 node_id
-            add_text_evidence_impl(
-                db=self.db,
-                edition_id=edition_id,
-                node_id=0,  # 简化处理
-                target_type="outline_node",
-                target_id=outline_node_id,
-                start_char=start_offset,
-                end_char=end_offset,
-                text_snippet=text[:200],
-                evidence_type="outline_extraction",
-                source="llm_extraction",
-            )
+            text = evidence.text
+            chapter_title = evidence.chapter_title or ""
+            start_fragment = evidence.start_fragment or ""
+            end_fragment = evidence.end_fragment or ""
+            
+            # 首先尝试通过章节标题查找
+            node_id = None
+            if chapter_title:
+                # 尝试精确匹配标题
+                chapter_node = self.db.query(DocumentNode).filter(
+                    DocumentNode.edition_id == edition_id,
+                    DocumentNode.node_type == "chapter",
+                    DocumentNode.title == chapter_title
+                ).first()
+                
+                if chapter_node:
+                    node_id = chapter_node.id
+                else:
+                    # 尝试模糊匹配（标题包含关系）
+                    chapter_node = self.db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == edition_id,
+                        DocumentNode.node_type == "chapter",
+                        DocumentNode.title.ilike(f"%{chapter_title}%")
+                    ).first()
+                    
+                    if chapter_node:
+                        node_id = chapter_node.id
+            
+            # 如果标题匹配失败，尝试通过文本片段查找
+            if not node_id and (start_fragment or end_fragment):
+                # 查找包含该文本片段的章节
+                search_fragment = start_fragment or end_fragment
+                
+                # 获取所有章节
+                chapters = self.db.query(DocumentNode).filter(
+                    DocumentNode.edition_id == edition_id,
+                    DocumentNode.node_type == "chapter"
+                ).all()
+                
+                for chapter in chapters:
+                    if chapter.raw_text and search_fragment in chapter.raw_text:
+                        node_id = chapter.id
+                        break
+            
+            # 如果还是找不到，使用第一个章节
+            if not node_id:
+                first_chapter = self.db.query(DocumentNode).filter(
+                    DocumentNode.edition_id == edition_id,
+                    DocumentNode.node_type == "chapter"
+                ).order_by(DocumentNode.sort_index).first()
+                
+                if first_chapter:
+                    node_id = first_chapter.id
+            
+            if node_id:
+                add_text_evidence_impl(
+                    db=self.db,
+                    edition_id=edition_id,
+                    node_id=node_id,
+                    target_type="outline_node",
+                    target_id=outline_node_id,
+                    start_char=0,
+                    end_char=len(text),
+                    text_snippet=text[:200],
+                    evidence_type="outline_extraction",
+                    source="llm_extraction",
+                )
+                logger.info(f"Created evidence for outline_node {outline_node_id} linked to document_node {node_id}")
+            else:
+                logger.warning(f"Could not find suitable document node for edition {edition_id}, skipping evidence creation")
+                
         except Exception as e:
-            logger.error(f"Failed to create evidence: {e}")
+            logger.error(f"Failed to create evidence: {e}", exc_info=True)
     
     def cancel(self):
         """取消当前任务"""

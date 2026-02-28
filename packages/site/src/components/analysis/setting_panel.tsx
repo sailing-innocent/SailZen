@@ -106,11 +106,18 @@ export default function SettingPanel({ editionId }: SettingPanelProps) {
 
   const fetchTypeStats = async () => {
     try {
-      const result = await api_get_setting_types(editionId)
-      // Handle backend response format: {success: true, types: [...], labels: {...}}
-      setTypeStats(result.labels || result)
+      const result = await api_get_setting_types()
+      // API returns { types: SettingType[], labels: Record<SettingType, string> }
+      // Convert to array format for UI
+      const statsArray = result.types.map(type => ({
+        type,
+        count: 0 // Count will be calculated from settings data
+      }))
+      setTypeStats(statsArray)
     } catch (err) {
       console.error('Failed to load type stats:', err)
+      // Fallback to empty array to prevent reduce error
+      setTypeStats([])
     }
   }
 

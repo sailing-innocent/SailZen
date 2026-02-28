@@ -25,6 +25,7 @@ from sail_server.data.analysis import (
     OutlineExtractionResult,
     OutlineExtractionResponse,
     ExtractedOutlineNode,
+    OutlineEvidence,
     TextRangeSelection,
 )
 from sail_server.service.outline_extractor import (
@@ -515,7 +516,15 @@ class OutlineExtractionController(Controller):
                     sort_index=node.sort_index,
                     parent_id=node.parent_id,
                     characters=node.characters,
-                    evidence=node.evidence,
+                    evidence_list=[
+                        OutlineEvidence(
+                            text=e.text,
+                            chapter_title=e.chapter_title,
+                            start_fragment=e.start_fragment,
+                            end_fragment=e.end_fragment,
+                        )
+                        for e in (node.evidence_list or [])
+                    ],
                 )
                 for node in result_data.nodes
             ]
@@ -694,9 +703,10 @@ class OutlineExtractionController(Controller):
             ]
             
             sample_evidence = [
-                node.evidence.get("text", "")[:100] + "..."
+                evidence.text[:100] + "..."
                 for node in result.nodes[:5]
-                if node.evidence
+                for evidence in (node.evidence_list or [])
+                if evidence.text
             ]
             
             return OutlinePreviewResponse(
