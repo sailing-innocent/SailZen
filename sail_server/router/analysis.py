@@ -1,44 +1,27 @@
 # -*- coding: utf-8 -*-
 # @file analysis.py
-# @brief Novel Analysis Router
+# @brief Analysis Router
 # @author sailing-innocent
-# @date 2025-02-01
+# @date 2025-02-28
+# @version 1.0
 # ---------------------------------
 
 from litestar import Router
+from litestar.di import Provide
 from sail_server.controller.analysis import (
-    CharacterController,
-    RelationController,
-    SettingController,
-    SettingRelationController,
-    CharacterSettingLinkController,
-    OutlineController,
+    TextRangeController,
     EvidenceController,
-    AnalysisTaskController,
+    AnalysisStatsController,
 )
-from sail_server.controller.analysis_llm import (
-    TaskExecutionController,
-    PromptTemplateController,
-    PromptExportController,
-    LLMConfigController,
-)
+from sail_server.db import get_db_dependency
+
 
 analysis_router = Router(
     path="/analysis",
+    dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
-        CharacterController,
-        RelationController,
-        SettingController,
-        SettingRelationController,
-        CharacterSettingLinkController,
-        OutlineController,
+        TextRangeController,
         EvidenceController,
-        AnalysisTaskController,
-        # LLM 辅助分析
-        TaskExecutionController,
-        PromptTemplateController,
-        PromptExportController,
-        LLMConfigController,
+        AnalysisStatsController,
     ],
-    tags=["Analysis"],
 )

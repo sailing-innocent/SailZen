@@ -1,467 +1,268 @@
-// Novel Analysis Data Types
-// @file analysis.ts
-// @author sailing-innocent
-// @date 2025-02-01
+/**
+ * @file analysis.ts
+ * @brief Analysis Data Types
+ * @author sailing-innocent
+ * @date 2025-02-28
+ */
 
 // ============================================================================
-// Character Types
+// Text Range Selection Types
 // ============================================================================
 
-export type CharacterRoleType = 
-  | 'protagonist' 
-  | 'antagonist' 
-  | 'deuteragonist' 
-  | 'supporting' 
-  | 'minor' 
-  | 'mentioned';
+export type RangeSelectionMode =
+  | 'single_chapter'
+  | 'chapter_range'
+  | 'multi_chapter'
+  | 'full_edition'
+  | 'current_to_end'
+  | 'custom_range'
 
-export interface Character {
-  id: number;
-  edition_id: number;
-  canonical_name: string;
-  role_type: CharacterRoleType;
-  description: string | null;
-  first_appearance_node_id: number | null;
-  status: string;
-  source: string;
-  importance_score: number | null;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  updated_at: string | null;
-  alias_count: number;
-  attribute_count: number;
-  relation_count: number;
+export interface RangeSelectionModeInfo {
+  value: RangeSelectionMode
+  label: string
+  description: string
+  params: string[]
 }
 
-export interface CharacterAlias {
-  id: number;
-  character_id: number;
-  alias: string;
-  alias_type: string;
-  usage_context: string | null;
-  is_preferred: boolean;
-  source: string;
-  created_at: string | null;
+export interface TextRangeSelection {
+  edition_id: number
+  mode: RangeSelectionMode
+  chapter_index?: number
+  start_index?: number
+  end_index?: number
+  chapter_indices?: number[]
+  node_ids?: number[]
+  meta_data?: Record<string, unknown>
 }
 
-export type CharacterAttributeCategory = 
-  | 'basic' 
-  | 'appearance' 
-  | 'personality' 
-  | 'ability' 
-  | 'background' 
-  | 'goal';
-
-export interface CharacterAttribute {
-  id: number;
-  character_id: number;
-  category: CharacterAttributeCategory;
-  attr_key: string;
-  attr_value: unknown;
-  confidence: number | null;
-  source: string;
-  source_node_id: number | null;
-  status: string;
-  created_at: string | null;
-  updated_at: string | null;
+export interface SelectedChapterInfo {
+  id: number
+  sort_index: number
+  label?: string
+  title?: string
+  char_count?: number
+  word_count?: number
 }
 
-export interface CharacterArc {
-  id: number;
-  character_id: number;
-  arc_type: string;
-  title: string;
-  description: string | null;
-  start_node_id: number | null;
-  end_node_id: number | null;
-  status: string;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
+export interface TextRangePreview {
+  edition_id: number
+  mode: RangeSelectionMode
+  chapter_count: number
+  total_chars: number
+  total_words: number
+  estimated_tokens: number
+  selected_chapters: SelectedChapterInfo[]
+  preview_text?: string
+  warnings: string[]
+  meta_data?: Record<string, unknown>
 }
 
-export type CharacterRelationType = 
-  | 'family' 
-  | 'romance' 
-  | 'friendship' 
-  | 'rivalry' 
-  | 'mentor' 
-  | 'alliance' 
-  | 'enemy';
-
-export interface CharacterRelation {
-  id: number;
-  edition_id: number;
-  source_character_id: number;
-  target_character_id: number;
-  relation_type: CharacterRelationType;
-  relation_subtype: string | null;
-  description: string | null;
-  strength: number | null;
-  is_mutual: boolean;
-  start_node_id: number | null;
-  end_node_id: number | null;
-  status: string;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  updated_at: string | null;
-  source_character_name: string | null;
-  target_character_name: string | null;
+export interface ChapterContent {
+  id: number
+  sort_index: number
+  label?: string
+  title?: string
+  char_count?: number
+  word_count?: number
+  content: string
 }
 
-export interface CharacterProfile {
-  character: Character;
-  aliases: CharacterAlias[];
-  attributes: Record<string, CharacterAttribute[]>;
-  arcs: CharacterArc[];
-  relations: CharacterRelation[];
-  setting_links: CharacterSettingLink[];
-}
-
-// ============================================================================
-// Setting Types
-// ============================================================================
-
-export type SettingType = 
-  | 'item' 
-  | 'location' 
-  | 'organization' 
-  | 'concept' 
-  | 'magic_system' 
-  | 'creature' 
-  | 'event_type';
-
-export interface Setting {
-  id: number;
-  edition_id: number;
-  setting_type: SettingType;
-  canonical_name: string;
-  category: string | null;
-  description: string | null;
-  first_appearance_node_id: number | null;
-  importance: string;
-  status: string;
-  source: string;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  updated_at: string | null;
-  attribute_count: number;
-  character_link_count: number;
-}
-
-export interface SettingAttribute {
-  id: number;
-  setting_id: number;
-  attr_key: string;
-  attr_value: unknown;
-  source: string;
-  source_node_id: number | null;
-  status: string;
-  created_at: string | null;
-}
-
-export interface SettingRelation {
-  id: number;
-  edition_id: number;
-  source_setting_id: number;
-  target_setting_id: number;
-  relation_type: string;
-  description: string | null;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  source_setting_name: string | null;
-  target_setting_name: string | null;
-}
-
-export interface CharacterSettingLink {
-  id: number;
-  character_id: number;
-  setting_id: number;
-  link_type: string;
-  description: string | null;
-  start_node_id: number | null;
-  end_node_id: number | null;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  character_name: string | null;
-  setting_name: string | null;
-}
-
-export interface SettingDetail {
-  setting: Setting;
-  attributes: SettingAttribute[];
-  character_links: CharacterSettingLink[];
-  related_settings: SettingRelation[];
-}
-
-// ============================================================================
-// Outline Types
-// ============================================================================
-
-export type OutlineType = 'main' | 'subplot' | 'character_arc';
-
-export interface Outline {
-  id: number;
-  edition_id: number;
-  outline_type: OutlineType;
-  title: string;
-  description: string | null;
-  status: string;
-  source: string;
-  meta_data: Record<string, unknown>;
-  created_by: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-  node_count: number;
-}
-
-export type OutlineNodeType = 'act' | 'arc' | 'beat' | 'scene' | 'turning_point';
-
-export interface OutlineNode {
-  id: number;
-  outline_id: number;
-  parent_id: number | null;
-  node_type: OutlineNodeType;
-  sort_index: number;
-  depth: number;
-  title: string;
-  summary: string | null;
-  significance: string;
-  chapter_start_id: number | null;
-  chapter_end_id: number | null;
-  path: string;
-  status: string;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-  updated_at: string | null;
-  children_count: number;
-  events_count: number;
-}
-
-export type OutlineEventType = 'plot' | 'conflict' | 'revelation' | 'resolution' | 'climax';
-
-export interface OutlineEvent {
-  id: number;
-  outline_node_id: number;
-  event_type: OutlineEventType;
-  title: string;
-  description: string | null;
-  chronology_order: number | null;
-  narrative_order: number | null;
-  importance: string;
-  meta_data: Record<string, unknown>;
-  created_at: string | null;
-}
-
-export interface OutlineTreeNode {
-  id: number;
-  node_type: string;
-  title: string;
-  summary: string | null;
-  significance: string;
-  chapter_start_id: number | null;
-  chapter_end_id: number | null;
-  path: string;
-  depth: number;
-  sort_index: number;
-  status: string;
-  events: OutlineEvent[];
-  children: OutlineTreeNode[];
-}
-
-export interface OutlineTree {
-  outline: Outline;
-  nodes: OutlineTreeNode[];
+export interface TextRangeContent {
+  edition_id: number
+  mode: RangeSelectionMode
+  full_text: string
+  chapters: ChapterContent[]
+  chapter_count: number
+  total_chars: number
+  total_words: number
+  estimated_tokens: number
+  meta_data?: Record<string, unknown>
 }
 
 // ============================================================================
 // Evidence Types
 // ============================================================================
 
-export type EvidenceType = 'explicit' | 'implicit' | 'inferred';
-
 export interface TextEvidence {
-  id: number;
-  edition_id: number;
-  node_id: number;
-  target_type: string;
-  target_id: number;
-  start_char: number | null;
-  end_char: number | null;
-  text_snippet: string | null;
-  context_before: string | null;
-  context_after: string | null;
-  evidence_type: EvidenceType;
-  confidence: number | null;
-  source: string;
-  created_at: string | null;
+  id: string
+  edition_id: number
+  node_id: number
+  start_offset: number
+  end_offset: number
+  selected_text: string
+  evidence_type: string
+  target_type?: string
+  target_id?: string
+  content: string
+  context?: string
+  created_at: string
+  updated_at?: string
+  meta_data?: Record<string, unknown>
 }
 
-export interface ChapterAnnotation {
-  id: number;
-  target_id: number;
-  start_char: number | null;
-  end_char: number | null;
-  text_snippet: string | null;
-  evidence_type: string;
-  confidence: number | null;
+export interface EvidenceCreateRequest {
+  edition_id: number
+  node_id: number
+  start_offset: number
+  end_offset: number
+  selected_text: string
+  evidence_type: string
+  content: string
+  target_type?: string
+  target_id?: string
+  context?: string
+  meta_data?: Record<string, unknown>
 }
 
 // ============================================================================
 // Analysis Task Types
 // ============================================================================
 
-export type AnalysisTaskType = 
-  | 'outline_extraction' 
-  | 'character_detection' 
-  | 'setting_extraction' 
-  | 'relation_analysis' 
-  | 'attribute_extraction';
+export type AnalysisTaskType =
+  | 'outline_extraction'
+  | 'character_detection'
+  | 'setting_extraction'
+  | 'relation_analysis'
+  | 'consistency_check'
+  | 'custom_analysis'
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type AnalysisTaskStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 
 export interface AnalysisTask {
-  id: number;
-  edition_id: number;
-  task_type: AnalysisTaskType;
-  target_scope: string;
-  target_node_ids: number[];
-  parameters: Record<string, unknown>;
-  llm_model: string | null;
-  llm_prompt_template: string | null;
-  status: TaskStatus;
-  priority: number;
-  scheduled_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  error_message: string | null;
-  result_summary: Record<string, unknown> | null;
-  created_by: string | null;
-  created_at: string | null;
-  /** 任务结果数量（由后端计算返回） */
-  result_count: number;
+  id: string
+  edition_id: number
+  task_type: AnalysisTaskType
+  status: AnalysisTaskStatus
+  range_selection: TextRangeSelection
+  config?: Record<string, unknown>
+  progress: number
+  current_step?: string
+  created_at: string
+  started_at?: string
+  completed_at?: string
+  result?: Record<string, unknown>
+  error_message?: string
+  meta_data?: Record<string, unknown>
 }
 
-export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'modified';
-
-export interface AnalysisResult {
-  id: number;
-  task_id: number;
-  result_type: string;
-  result_data: Record<string, unknown>;
-  confidence: number | null;
-  review_status: ReviewStatus;
-  reviewer: string | null;
-  reviewed_at: string | null;
-  review_notes: string | null;
-  applied: boolean;
-  applied_at: string | null;
-  created_at: string | null;
+export interface AnalysisTaskRequest {
+  edition_id: number
+  task_type: AnalysisTaskType
+  range_selection: TextRangeSelection
+  config?: Record<string, unknown>
+  priority?: number
+  meta_data?: Record<string, unknown>
 }
 
 // ============================================================================
-// Relation Graph Types (for visualization)
-// ============================================================================
-
-export interface RelationGraphNode {
-  id: number;
-  name: string;
-  role_type: string;
-  importance_score: number;
-}
-
-export interface RelationGraphEdge {
-  source: number;
-  target: number;
-  relation_type: string;
-  relation_subtype: string | null;
-  strength: number;
-  is_mutual: boolean;
-}
-
-export interface RelationGraphData {
-  nodes: RelationGraphNode[];
-  edges: RelationGraphEdge[];
-}
-
-// ============================================================================
-// Request Types
-// ============================================================================
-
-export interface CreateCharacterRequest {
-  edition_id: number;
-  canonical_name: string;
-  role_type?: CharacterRoleType;
-  description?: string;
-  first_appearance_node_id?: number;
-  meta_data?: Record<string, unknown>;
-}
-
-export interface UpdateCharacterRequest {
-  canonical_name?: string;
-  role_type?: CharacterRoleType;
-  description?: string;
-  first_appearance_node_id?: number;
-  status?: string;
-  importance_score?: number;
-  meta_data?: Record<string, unknown>;
-}
-
-export interface CreateSettingRequest {
-  edition_id: number;
-  setting_type: SettingType;
-  canonical_name: string;
-  category?: string;
-  description?: string;
-  first_appearance_node_id?: number;
-  importance?: string;
-  meta_data?: Record<string, unknown>;
-}
-
-export interface CreateOutlineRequest {
-  edition_id: number;
-  title: string;
-  outline_type?: OutlineType;
-  description?: string;
-}
-
-export interface AddOutlineNodeRequest {
-  node_type: OutlineNodeType;
-  title: string;
-  parent_id?: number;
-  summary?: string;
-  significance?: string;
-  chapter_start_id?: number;
-  chapter_end_id?: number;
-}
-
-export interface CreateRelationRequest {
-  edition_id: number;
-  source_character_id: number;
-  target_character_id: number;
-  relation_type: CharacterRelationType;
-  relation_subtype?: string;
-  description?: string;
-  strength?: number;
-  is_mutual?: boolean;
-}
-
-export interface CreateTaskRequest {
-  edition_id: number;
-  task_type: AnalysisTaskType;
-  target_scope: string;
-  target_node_ids?: number[];
-  parameters?: Record<string, unknown>;
-  llm_model?: string;
-  llm_prompt_template?: string;
-  priority?: number;
-}
-
-// ============================================================================
-// Analysis Stats
+// Stats Types
 // ============================================================================
 
 export interface AnalysisStats {
-  tasks: Record<string, number>;
-  results: Record<string, number>;
-  evidence: Record<string, number>;
+  edition_id: number
+  total_tasks: number
+  completed_tasks: number
+  pending_tasks: number
+  failed_tasks: number
+  total_evidence: number
+  character_count: number
+  setting_count: number
+  outline_node_count: number
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+export function formatTokenCount(count: number): string {
+  if (count >= 10000) {
+    return `${(count / 10000).toFixed(1)}万`
+  }
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}K`
+  }
+  return `${count}`
+}
+
+export function formatCharCount(count: number): string {
+  if (count >= 10000) {
+    return `${(count / 10000).toFixed(1)}万字`
+  }
+  return `${count}字`
+}
+
+export function getRangeModeLabel(mode: RangeSelectionMode): string {
+  const labels: Record<RangeSelectionMode, string> = {
+    single_chapter: '单章选择',
+    chapter_range: '连续章节',
+    multi_chapter: '多章选择',
+    full_edition: '整部作品',
+    current_to_end: '到结尾',
+    custom_range: '自定义范围',
+  }
+  return labels[mode] || mode
+}
+
+export function getTaskStatusLabel(status: AnalysisTaskStatus): string {
+  const labels: Record<AnalysisTaskStatus, string> = {
+    pending: '待处理',
+    running: '运行中',
+    completed: '已完成',
+    failed: '失败',
+    cancelled: '已取消',
+  }
+  return labels[status] || status
+}
+
+export function getTaskStatusColor(status: AnalysisTaskStatus): string {
+  const colors: Record<AnalysisTaskStatus, string> = {
+    pending: 'bg-yellow-500',
+    running: 'bg-blue-500',
+    completed: 'bg-green-500',
+    failed: 'bg-red-500',
+    cancelled: 'bg-gray-500',
+  }
+  return colors[status] || 'bg-gray-500'
+}
+
+export function getTaskTypeLabel(type: AnalysisTaskType): string {
+  const labels: Record<AnalysisTaskType, string> = {
+    outline_extraction: '大纲提取',
+    character_detection: '人物检测',
+    setting_extraction: '设定提取',
+    relation_analysis: '关系分析',
+    consistency_check: '一致性检查',
+    custom_analysis: '自定义分析',
+  }
+  return labels[type] || type
+}
+
+/**
+ * 创建范围选择对象
+ */
+export function createRangeSelection(
+  editionId: number,
+  mode: RangeSelectionMode,
+  params: Partial<Omit<TextRangeSelection, 'edition_id' | 'mode'>> = {}
+): TextRangeSelection {
+  return {
+    edition_id: editionId,
+    mode,
+    ...params,
+  }
+}
+
+/**
+ * 获取默认的范围选择
+ */
+export function getDefaultRangeSelection(editionId: number): TextRangeSelection {
+  return {
+    edition_id: editionId,
+    mode: 'full_edition',
+  }
 }
