@@ -16,7 +16,7 @@ npm-debug.log*
 .nyc_output
 /lib
 /lib_test
-
+.cache
 
 # Editor directories and files
 

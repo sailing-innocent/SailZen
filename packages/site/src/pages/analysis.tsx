@@ -374,7 +374,11 @@ export default function AnalysisPage() {
                   </TabsContent>
                   
                   <TabsContent value="characters" className="mt-4">
-                    <CharacterPanel editionId={selectedEdition.id} />
+                    <CharacterPanel 
+                      editionId={selectedEdition.id} 
+                      workTitle={selectedWork?.title || ''}
+                      rangeSelection={rangeSelection || undefined}
+                    />
                   </TabsContent>
                   
                   <TabsContent value="settings" className="mt-4">

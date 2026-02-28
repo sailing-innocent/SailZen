@@ -1,0 +1,358 @@
+id: character_detection_v2
+name: "人物识别与档案构建 - 增强版"
+description: "从章节内容中识别人物，构建完整的人物档案，包括名称、别名、角色类型、属性特征、关系网络和首次出场信息"
+task_type: character_detection
+version: "2.0"
+
+system_prompt: |
+  你是一位专业的文学分析师和人物塑造专家，擅长从小说中深度分析人物形象。
+  你的任务是从给定的章节内容中识别所有人物，并构建结构化的人物档案。
+  
+  分析原则：
+  1. 识别人物时要考虑全名、昵称、尊称、头衔等不同称呼形式
+  2. 判断同一人物的不同称呼，进行合并
+  3. 评估人物在故事中的重要性和角色定位
+  4. 提取人物的外貌、性格、能力、背景等多维度属性
+  5. 识别人物之间的关系
+  6. 记录人物的首次出场和关键行为
+  
+  请严格按照要求的 JSON 格式输出分析结果，必须是一个合法的 JSON Object。
+  不要输出任何解释性文字，只输出 JSON。
+  确保输出完整，不要被截断。
+
+user_prompt_template: |
+  ## 任务：识别小说中的人物并构建人物档案
+  
+  ### 背景信息
+  - 作品名称：{{work_title}}
+  - 章节范围：{{chapter_range}}
+  {{#if known_characters}}
+  - 已知人物：{{#each known_characters}}{{#if @index}}, {{/if}}{{this}}{{/each}}
+  {{/if}}
+  
+  ### 章节内容
+  {{chapter_contents}}
+  
+  ### 分析要求
+  
+  #### 1. 人物识别
+  - 识别所有在文本中明确出现或被提及的人物
+  - 包括主要角色、次要角色、仅被提及的角色
+  - 注意人物的不同称呼形式（全名、昵称、尊称等）
+  
+  #### 2. 角色分类
+  根据人物在故事中的重要性分类：
+  - **protagonist**（主角）：故事的核心人物，主要视角或推动情节发展的关键角色
+  - **deuteragonist**（二号主角）：仅次于主角的重要人物，与主角有密切互动
+  - **supporting**（配角）：有一定戏份，对情节有推动作用的次要角色
+  - **minor**（龙套）：出场较少，功能性的角色
+  - **mentioned**（提及）：仅被其他人物提及，未实际出场的角色
+  
+  #### 3. 属性提取
+  为每个人物提取以下类别的属性：
+  - **appearance**（外貌）：身高、体型、面容、服饰、特征等
+  - **personality**（性格）：性格特点、情绪倾向、行为模式等
+  - **ability**（能力）：技能、特长、武力、智力、特殊能力等
+  - **background**（背景）：身份、职业、出身、经历等
+  - **relationship**（关系）：与其他人物的关系描述
+  
+  #### 4. 别名识别
+  识别人物的所有称呼形式：
+  - **nickname**（昵称）：如"小李"、"阿强"
+  - **title**（头衔/尊称）：如"王经理"、"李大人"
+  - **courtesy_name**（字/号）：如"李白，字太白"
+  - **other**（其他）：其他特殊称呼
+  
+  #### 5. 关系识别
+  识别人物之间的以下关系类型：
+  - **family**（家族）：亲属关系
+  - **friend**（朋友）：友好关系
+  - **enemy**（敌对）：敌对或竞争关系
+  - **romantic**（恋爱）：恋爱或婚姻关系
+  - **professional**（职业）：职业上的关系
+  - **other**（其他）：其他关系
+  
+  ### 输出格式
+  请以 JSON 格式输出，结构如下：
+  
+  ```json
+  {
+    "characters": [
+      {
+        "canonical_name": "人物标准名称（最常用的全称）",
+        "aliases": [
+          {
+            "alias": "别名",
+            "alias_type": "nickname|title|courtesy_name|other"
+          }
+        ],
+        "role_type": "protagonist|deuteragonist|supporting|minor|mentioned",
+        "role_confidence": 0.9,
+        "first_appearance": {
+          "chapter": "第X章",
+          "text": "人物首次出现的完整句子",
+          "context": "出场时的情境描述"
+        },
+        "description": "人物的整体描述摘要",
+        "attributes": [
+          {
+            "category": "appearance|personality|ability|background|relationship",
+            "key": "属性名称",
+            "value": "属性值",
+            "confidence": 0.85,
+            "source_text": "原文依据"
+          }
+        ],
+        "relations": [
+          {
+            "target_name": "关系目标人物名称",
+            "relation_type": "family|friend|enemy|romantic|professional|other",
+            "description": "关系描述",
+            "evidence": "原文依据"
+          }
+        ],
+        "key_actions": ["关键行为1", "关键行为2"],
+        "mention_count": 10
+      }
+    ],
+    "metadata": {
+      "total_characters": 5,
+      "protagonist_count": 1,
+      "deuteragonist_count": 1,
+      "supporting_count": 2,
+      "minor_count": 1,
+      "mentioned_count": 0
+    }
+  }
+  ```
+
+output_schema:
+  type: object
+  properties:
+    characters:
+      type: array
+      items:
+        type: object
+        properties:
+          canonical_name:
+            type: string
+            description: "人物的标准名称"
+          aliases:
+            type: array
+            items:
+              type: object
+              properties:
+                alias:
+                  type: string
+                alias_type:
+                  type: string
+                  enum: ["nickname", "title", "courtesy_name", "other"]
+          role_type:
+            type: string
+            enum: ["protagonist", "deuteragonist", "supporting", "minor", "mentioned"]
+          role_confidence:
+            type: number
+            description: "角色分类置信度"
+          first_appearance:
+            type: object
+            properties:
+              chapter:
+                type: string
+              text:
+                type: string
+              context:
+                type: string
+          description:
+            type: string
+          attributes:
+            type: array
+            items:
+              type: object
+              properties:
+                category:
+                  type: string
+                  enum: ["appearance", "personality", "ability", "background", "relationship"]
+                key:
+                  type: string
+                value:
+                  type: string
+                confidence:
+                  type: number
+                source_text:
+                  type: string
+          relations:
+            type: array
+            items:
+              type: object
+              properties:
+                target_name:
+                  type: string
+                relation_type:
+                  type: string
+                  enum: ["family", "friend", "enemy", "romantic", "professional", "other"]
+                description:
+                  type: string
+                evidence:
+                  type: string
+          key_actions:
+            type: array
+            items:
+              type: string
+          mention_count:
+            type: integer
+        required: ["canonical_name", "role_type"]
+    metadata:
+      type: object
+      properties:
+        total_characters:
+          type: integer
+        protagonist_count:
+          type: integer
+        deuteragonist_count:
+          type: integer
+        supporting_count:
+          type: integer
+        minor_count:
+          type: integer
+        mentioned_count:
+          type: integer
+  required: ["characters", "metadata"]
+
+example_input: |
+  work_title: 示例小说
+  chapter_range: 第1-3章
+  chapter_contents: |
+    ## 第1章 初遇
+    
+    李明是个普通的上班族，今年二十八岁，身材中等，戴着一副黑框眼镜。他性格内敛，不善言辞，但工作认真负责。
+    "小李，这份报告你看一下。"王经理把文件递给他。王经理今年四十多岁，是部门的主管，为人严厉但公正。
+    李明接过文件，仔细阅读起来。他的办公桌上摆着一盆绿植，那是他精心照料的宝贝。
+    
+    ## 第2章 冲突
+    
+    张华是李明的同事，也是他的大学室友。张华性格开朗外向，与李明形成鲜明对比。
+    "明子，晚上一起去喝酒？"张华拍了拍李明的肩膀。
+    "不了，我晚上还要加班。"李明推了推眼镜。
+    王经理从办公室走出来："小张，你那份方案做得怎么样了？"
+    
+    ## 第3章 转机
+    
+    新来的实习生小刘给部门带来了活力。刘婷婷，大家都叫她婷婷，是个刚毕业的大学生，聪明伶俐。
+    "李哥，这个表格怎么做？"婷婷拿着笔记本请教李明。
+    李明耐心地给她讲解，张华在一旁打趣："李明，你对小师妹很照顾啊。"
+
+example_output: |
+  {
+    "characters": [
+      {
+        "canonical_name": "李明",
+        "aliases": [
+          {"alias": "小李", "alias_type": "nickname"},
+          {"alias": "明子", "alias_type": "nickname"}
+        ],
+        "role_type": "protagonist",
+        "role_confidence": 0.95,
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": "李明是个普通的上班族，今年二十八岁，身材中等，戴着一副黑框眼镜。",
+          "context": "作为主角首次出场，介绍其基本情况和外貌"
+        },
+        "description": "二十八岁的普通上班族，性格内敛不善言辞但工作认真负责",
+        "attributes": [
+          {"category": "appearance", "key": "年龄", "value": "28岁", "confidence": 1.0, "source_text": "今年二十八岁"},
+          {"category": "appearance", "key": "体型", "value": "身材中等", "confidence": 0.9, "source_text": "身材中等"},
+          {"category": "appearance", "key": "配饰", "value": "戴黑框眼镜", "confidence": 0.9, "source_text": "戴着一副黑框眼镜"},
+          {"category": "personality", "key": "性格", "value": "内敛，不善言辞", "confidence": 0.85, "source_text": "性格内敛，不善言辞"},
+          {"category": "personality", "key": "工作态度", "value": "认真负责", "confidence": 0.85, "source_text": "工作认真负责"},
+          {"category": "background", "key": "职业", "value": "上班族", "confidence": 0.9, "source_text": "普通的上班族"}
+        ],
+        "relations": [
+          {"target_name": "王经理", "relation_type": "professional", "description": "上下级关系，王经理是李明的主管", "evidence": "王经理把文件递给他"},
+          {"target_name": "张华", "relation_type": "friend", "description": "大学室友，同事关系", "evidence": "张华是李明的同事，也是他的大学室友"}
+        ],
+        "key_actions": ["接过文件阅读", "耐心给婷婷讲解", "拒绝喝酒邀请选择加班"],
+        "mention_count": 8
+      },
+      {
+        "canonical_name": "王经理",
+        "aliases": [],
+        "role_type": "supporting",
+        "role_confidence": 0.8,
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": ""小李，这份报告你看一下。"王经理把文件递给他。",
+          "context": "作为李明的上级出场"
+        },
+        "description": "四十多岁的部门主管，为人严厉但公正",
+        "attributes": [
+          {"category": "background", "key": "职位", "value": "部门主管", "confidence": 0.9, "source_text": "是部门的主管"},
+          {"category": "appearance", "key": "年龄", "value": "四十多岁", "confidence": 0.9, "source_text": "今年四十多岁"},
+          {"category": "personality", "key": "管理风格", "value": "严厉但公正", "confidence": 0.8, "source_text": "为人严厉但公正"}
+        ],
+        "relations": [
+          {"target_name": "李明", "relation_type": "professional", "description": "李明的直属上司", "evidence": "王经理把文件递给他"},
+          {"target_name": "张华", "relation_type": "professional", "description": "张华的直属上司", "evidence": "王经理从办公室走出来询问小张的方案"}
+        ],
+        "key_actions": ["给李明分配任务", "询问张华方案进度"],
+        "mention_count": 3
+      },
+      {
+        "canonical_name": "张华",
+        "aliases": [
+          {"alias": "小张", "alias_type": "nickname"}
+        ],
+        "role_type": "deuteragonist",
+        "role_confidence": 0.85,
+        "first_appearance": {
+          "chapter": "第2章",
+          "text": "张华是李明的同事，也是他的大学室友。",
+          "context": "作为李明的好友出场"
+        },
+        "description": "李明的同事和大学室友，性格开朗外向",
+        "attributes": [
+          {"category": "personality", "key": "性格", "value": "开朗外向", "confidence": 0.9, "source_text": "张华性格开朗外向"},
+          {"category": "background", "key": "职业", "value": "上班族", "confidence": 0.8, "source_text": "李明的同事"},
+          {"category": "background", "key": "教育背景", "value": "与李明是大学室友", "confidence": 0.9, "source_text": "也是他的大学室友"}
+        ],
+        "relations": [
+          {"target_name": "李明", "relation_type": "friend", "description": "大学室友，同事，性格互补的好友", "evidence": "张华是李明的同事，也是他的大学室友"},
+          {"target_name": "王经理", "relation_type": "professional", "description": "上下级关系", "evidence": "王经理询问小张的方案"}
+        ],
+        "key_actions": ["邀请李明喝酒", "打趣李明照顾婷婷"],
+        "mention_count": 4
+      },
+      {
+        "canonical_name": "刘婷婷",
+        "aliases": [
+          {"alias": "婷婷", "alias_type": "nickname"},
+          {"alias": "小刘", "alias_type": "nickname"}
+        ],
+        "role_type": "supporting",
+        "role_confidence": 0.75,
+        "first_appearance": {
+          "chapter": "第3章",
+          "text": "刘婷婷，大家都叫她婷婷，是个刚毕业的大学生，聪明伶俐。",
+          "context": "作为新实习生出场"
+        },
+        "description": "刚毕业的大学生实习生，聪明伶俐，称呼李明为李哥",
+        "attributes": [
+          {"category": "background", "key": "身份", "value": "实习生", "confidence": 0.9, "source_text": "新来的实习生"},
+          {"category": "background", "key": "教育", "value": "刚毕业的大学生", "confidence": 0.9, "source_text": "是个刚毕业的大学生"},
+          {"category": "personality", "key": "特点", "value": "聪明伶俐", "confidence": 0.8, "source_text": "聪明伶俐"}
+        ],
+        "relations": [
+          {"target_name": "李明", "relation_type": "professional", "description": "向李明请教工作，称呼李哥", "evidence": ""李哥，这个表格怎么做？""}
+        ],
+        "key_actions": ["向李明请教表格制作"],
+        "mention_count": 3
+      }
+    ],
+    "metadata": {
+      "total_characters": 4,
+      "protagonist_count": 1,
+      "deuteragonist_count": 1,
+      "supporting_count": 2,
+      "minor_count": 0,
+      "mentioned_count": 0
+    }
+  }

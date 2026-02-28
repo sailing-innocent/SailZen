@@ -529,8 +529,21 @@ class SettingData:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     
-    def create_orm(self):
-        pass
+    def create_orm(self) -> 'Outline':
+        """创建 ORM 对象"""
+        # 注意：Outline 类在当前文件底部定义，这里使用延迟导入避免循环导入
+        # 当此方法被调用时，Outline 类已经定义完成
+        import sys
+        current_module = sys.modules[__name__]
+        Outline = getattr(current_module, 'Outline')
+        return Outline(
+            edition_id=self.edition_id,
+            title=self.name,
+            outline_type=self.outline_type,
+            description=self.description,
+            status="draft",
+            source="extraction",
+        )
     
     @classmethod
     def read_from_orm(cls, orm_obj) -> 'SettingData':
@@ -632,10 +645,10 @@ class SettingDetail:
 
 @dataclass
 class OutlineData:
-    """大纲数据 DTO"""
+    """大纲数据 DTO - 字段与 ORM 保持一致"""
     id: Optional[int] = None
     edition_id: int = 0
-    name: str = ""
+    title: str = ""  # 与 ORM 字段保持一致
     outline_type: str = "main"  # main, subplot, character_arc, theme
     description: Optional[str] = None
     root_node_id: Optional[int] = None
@@ -643,25 +656,39 @@ class OutlineData:
     updated_at: Optional[datetime] = None
     node_count: int = 0
     
-    def create_orm(self):
-        pass
+    def create_orm(self) -> 'Outline':
+        """创建 ORM 对象"""
+        # 注意：Outline 类在当前文件底部定义，这里使用延迟导入避免循环导入
+        import sys
+        current_module = sys.modules[__name__]
+        Outline = getattr(current_module, 'Outline')
+        return Outline(
+            edition_id=self.edition_id,
+            title=self.title,
+            outline_type=self.outline_type,
+            description=self.description,
+            status="draft",
+            source="extraction",
+        )
     
     @classmethod
     def read_from_orm(cls, orm_obj, node_count: int = 0) -> 'OutlineData':
+        """从 ORM 对象创建 DTO"""
         return cls(
             id=orm_obj.id,
             edition_id=orm_obj.edition_id,
-            name=orm_obj.name,
+            title=orm_obj.title,
             outline_type=orm_obj.outline_type,
             description=orm_obj.description,
-            root_node_id=orm_obj.root_node_id,
+            root_node_id=orm_obj.meta_data.get("root_node_id") if orm_obj.meta_data else None,
             created_at=orm_obj.created_at,
             updated_at=orm_obj.updated_at,
             node_count=node_count,
         )
     
     def update_orm(self, orm_obj):
-        orm_obj.name = self.name
+        """更新 ORM 对象"""
+        orm_obj.title = self.title
         orm_obj.description = self.description
 
 
@@ -866,11 +893,373 @@ class AnalysisResultData:
 
 
 # ============================================================================
+# Character DTOs
+# ============================================================================
+
+@dataclass
+class CharacterData:
+    """人物数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    canonical_name: str = ""
+    role_type: str = "supporting"  # protagonist, antagonist, deuteragonist, supporting, minor
+    description: Optional[str] = None
+    first_appearance_node_id: Optional[int] = None
+    status: str = "draft"
+    source: str = "manual"
+    importance_score: Optional[float] = None
+    aliases: List['CharacterAliasData'] = field(default_factory=list)
+    attributes: List['CharacterAttributeData'] = field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    def create_orm(self) -> 'Character':
+        """创建 ORM 对象"""
+        import sys
+        current_module = sys.modules[__name__]
+        Character = getattr(current_module, 'Character')
+        return Character(
+            edition_id=self.edition_id,
+            canonical_name=self.canonical_name,
+            role_type=self.role_type,
+            description=self.description,
+            first_appearance_node_id=self.first_appearance_node_id,
+            status=self.status,
+            source=self.source,
+            importance_score=self.importance_score,
+        )
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterData':
+        """从 ORM 对象创建 DTO"""
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            canonical_name=orm_obj.canonical_name,
+            role_type=orm_obj.role_type or "supporting",
+            description=orm_obj.description,
+            first_appearance_node_id=orm_obj.first_appearance_node_id,
+            status=orm_obj.status or "draft",
+            source=orm_obj.source or "manual",
+            importance_score=orm_obj.importance_score,
+            aliases=[CharacterAliasData.read_from_orm(a) for a in orm_obj.aliases] if hasattr(orm_obj, 'aliases') else [],
+            attributes=[CharacterAttributeData.read_from_orm(a) for a in orm_obj.attributes] if hasattr(orm_obj, 'attributes') else [],
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class CharacterAliasData:
+    """人物别名数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    alias: str = ""
+    alias_type: str = "nickname"  # nickname, title, formal, diminutive
+    usage_context: Optional[str] = None
+    is_preferred: bool = False
+    source: str = "manual"
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterAliasData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            alias=orm_obj.alias,
+            alias_type=orm_obj.alias_type or "nickname",
+            usage_context=orm_obj.usage_context,
+            is_preferred=orm_obj.is_preferred or False,
+            source=orm_obj.source or "manual",
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class CharacterAttributeData:
+    """人物属性数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    category: Optional[str] = None  # physical, personality, background, ability
+    attr_key: str = ""
+    attr_value: str = ""
+    confidence: Optional[float] = None
+    source: str = "manual"
+    source_node_id: Optional[int] = None
+    status: str = "pending"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterAttributeData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            category=orm_obj.category,
+            attr_key=orm_obj.attr_key,
+            attr_value=orm_obj.attr_value,
+            confidence=orm_obj.confidence,
+            source=orm_obj.source or "manual",
+            source_node_id=orm_obj.source_node_id,
+            status=orm_obj.status or "pending",
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class CharacterRelationData:
+    """人物关系数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    source_character_id: int = 0
+    target_character_id: int = 0
+    relation_type: str = ""  # family, friend, enemy, romantic, professional
+    relation_subtype: Optional[str] = None
+    description: Optional[str] = None
+    strength: Optional[float] = None
+    is_mutual: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterRelationData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            source_character_id=orm_obj.source_character_id,
+            target_character_id=orm_obj.target_character_id,
+            relation_type=orm_obj.relation_type,
+            relation_subtype=orm_obj.relation_subtype,
+            description=orm_obj.description,
+            strength=orm_obj.strength,
+            is_mutual=orm_obj.is_mutual if orm_obj.is_mutual is not None else True,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+# ============================================================================
+# Setting DTOs
+# ============================================================================
+
+@dataclass
+class SettingData:
+    """设定数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    setting_type: str = "item"  # item, location, organization, concept, magic_system, creature, event_type
+    canonical_name: str = ""
+    category: Optional[str] = None
+    description: Optional[str] = None
+    first_appearance_node_id: Optional[int] = None
+    importance: str = "normal"  # critical, major, normal, minor
+    status: str = "draft"
+    source: str = "manual"
+    attributes: List['SettingAttributeData'] = field(default_factory=list)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    def create_orm(self) -> 'Setting':
+        """创建 ORM 对象"""
+        import sys
+        current_module = sys.modules[__name__]
+        Setting = getattr(current_module, 'Setting')
+        return Setting(
+            edition_id=self.edition_id,
+            setting_type=self.setting_type,
+            canonical_name=self.canonical_name,
+            category=self.category,
+            description=self.description,
+            first_appearance_node_id=self.first_appearance_node_id,
+            importance=self.importance,
+            status=self.status,
+            source=self.source,
+        )
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingData':
+        """从 ORM 对象创建 DTO"""
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            setting_type=orm_obj.setting_type,
+            canonical_name=orm_obj.canonical_name,
+            category=orm_obj.category,
+            description=orm_obj.description,
+            first_appearance_node_id=orm_obj.first_appearance_node_id,
+            importance=orm_obj.importance or "normal",
+            status=orm_obj.status or "draft",
+            source=orm_obj.source or "manual",
+            attributes=[SettingAttributeData.read_from_orm(a) for a in orm_obj.attributes] if hasattr(orm_obj, 'attributes') else [],
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class SettingAttributeData:
+    """设定属性数据 DTO"""
+    id: Optional[int] = None
+    setting_id: int = 0
+    attr_key: str = ""
+    attr_value: str = ""
+    source: str = "manual"
+    source_node_id: Optional[int] = None
+    status: str = "pending"
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingAttributeData':
+        return cls(
+            id=orm_obj.id,
+            setting_id=orm_obj.setting_id,
+            attr_key=orm_obj.attr_key,
+            attr_value=orm_obj.attr_value,
+            source=orm_obj.source or "manual",
+            source_node_id=orm_obj.source_node_id,
+            status=orm_obj.status or "pending",
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class SettingRelationData:
+    """设定关系数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    source_setting_id: int = 0
+    target_setting_id: int = 0
+    relation_type: str = ""  # contains, belongs_to, produces, requires, opposes
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingRelationData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            source_setting_id=orm_obj.source_setting_id,
+            target_setting_id=orm_obj.target_setting_id,
+            relation_type=orm_obj.relation_type,
+            description=orm_obj.description,
+            created_at=orm_obj.created_at,
+        )
+
+
+# ============================================================================
+# Character Detection Types
+# ============================================================================
+
+@dataclass
+class CharacterDetectionConfig:
+    """人物检测配置"""
+    detect_aliases: bool = True
+    detect_attributes: bool = True
+    detect_relations: bool = True
+    min_confidence: float = 0.5
+    max_characters: int = 100
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    temperature: float = 0.3
+    prompt_template_id: str = "character_detection_v2"
+
+
+@dataclass
+class CharacterDetectionRequest:
+    """人物检测请求"""
+    edition_id: int
+    range_selection: TextRangeSelection
+    config: CharacterDetectionConfig = field(default_factory=CharacterDetectionConfig)
+    work_title: str = ""
+    known_characters: List[str] = field(default_factory=list)
+
+
+@dataclass
+class DetectedCharacterAlias:
+    """检测到的别名"""
+    alias: str
+    alias_type: str = "other"  # nickname, title, courtesy_name, other
+
+
+@dataclass
+class DetectedCharacterAttribute:
+    """检测到的属性"""
+    category: str  # appearance, personality, ability, background, relationship
+    key: str
+    value: str
+    confidence: Optional[float] = None
+    source_text: Optional[str] = None
+
+
+@dataclass
+class DetectedCharacterRelation:
+    """检测到的人物关系"""
+    target_name: str
+    relation_type: str  # family, friend, enemy, romantic, professional, other
+    description: Optional[str] = None
+    evidence: Optional[str] = None
+
+
+@dataclass
+class DetectedCharacter:
+    """检测到的人物"""
+    canonical_name: str
+    aliases: List[DetectedCharacterAlias] = field(default_factory=list)
+    role_type: str = "supporting"  # protagonist, deuteragonist, supporting, minor, mentioned
+    role_confidence: float = 0.5
+    first_appearance: Optional[Dict[str, str]] = None
+    description: str = ""
+    attributes: List[DetectedCharacterAttribute] = field(default_factory=list)
+    relations: List[DetectedCharacterRelation] = field(default_factory=list)
+    key_actions: List[str] = field(default_factory=list)
+    mention_count: int = 0
+
+
+@dataclass
+class CharacterDetectionResult:
+    """人物检测结果"""
+    characters: List[DetectedCharacter]
+    metadata: Dict[str, Any]
+    raw_response: Optional[str] = None
+
+
+@dataclass
+class CharacterDetectionResponse:
+    """人物检测响应"""
+    success: bool
+    task_id: Optional[str] = None
+    result: Optional[CharacterDetectionResult] = None
+    message: str = ""
+    error: Optional[str] = None
+
+
+@dataclass
+class CharacterMergeCandidate:
+    """人物合并候选"""
+    character1_id: int
+    character2_id: int
+    character1_name: str
+    character2_name: str
+    similarity_score: float
+    merge_reason: str
+    suggested_action: str  # merge, review, ignore
+
+
+@dataclass
+class CharacterDeduplicationResult:
+    """人物去重结果"""
+    merged_groups: List[List[int]]
+    merge_candidates: List[CharacterMergeCandidate]
+    statistics: Dict[str, Any]
+
+
+# ============================================================================
 # SQLAlchemy ORM Imports
 # ============================================================================
 
 from sqlalchemy import (
-    Column, Integer, String, Text, TIMESTAMP, ForeignKey, func, Float
+    Column, Integer, String, Text, TIMESTAMP, ForeignKey, func, Float, Boolean
 )
 from sqlalchemy.orm import relationship
 from sail_server.data.orm import ORMBase
@@ -944,66 +1333,199 @@ class OutlineEvent(ORMBase):
     node = relationship("OutlineNode", back_populates="events")
 
 
-# 其他分析模块的 ORM 占位符（后续实现）
-@dataclass
-class _ORMPlaceholder:
-    """ORM 模型占位符基类"""
-    id: Optional[int] = None
+# ============================================================================
+# Character ORM Models
+# ============================================================================
 
-class Character(_ORMPlaceholder):
-    """人物 ORM 占位符"""
-    pass
+class Character(ORMBase):
+    """人物 ORM 模型"""
+    __tablename__ = "characters"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    canonical_name = Column(String, nullable=False)
+    role_type = Column(String, nullable=True, default="supporting")  # protagonist, antagonist, deuteragonist, supporting, minor
+    description = Column(Text, nullable=True)
+    first_appearance_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="draft")
+    source = Column(String, nullable=True, default="manual")
+    importance_score = Column(Float, nullable=True)
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # 关联
+    aliases = relationship("CharacterAlias", back_populates="character", cascade="all, delete-orphan")
+    attributes = relationship("CharacterAttribute", back_populates="character", cascade="all, delete-orphan")
+    arcs = relationship("CharacterArc", back_populates="character", cascade="all, delete-orphan")
 
-class CharacterAlias(_ORMPlaceholder):
-    """人物别名 ORM 占位符"""
-    pass
 
-class CharacterAttribute(_ORMPlaceholder):
-    """人物属性 ORM 占位符"""
-    pass
+class CharacterAlias(ORMBase):
+    """人物别名 ORM 模型"""
+    __tablename__ = "character_aliases"
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    alias = Column(String, nullable=False)
+    alias_type = Column(String, nullable=True, default="nickname")  # nickname, title, formal, diminutive
+    usage_context = Column(String, nullable=True)
+    is_preferred = Column(Boolean, nullable=True, default=False)
+    source = Column(String, nullable=True, default="manual")
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # 关联
+    character = relationship("Character", back_populates="aliases")
 
-class CharacterArc(_ORMPlaceholder):
-    """人物弧光 ORM 占位符"""
-    pass
 
-class CharacterRelation(_ORMPlaceholder):
-    """人物关系 ORM 占位符"""
-    pass
+class CharacterAttribute(ORMBase):
+    """人物属性 ORM 模型"""
+    __tablename__ = "character_attributes"
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    category = Column(String, nullable=True)  # physical, personality, background, ability, etc.
+    attr_key = Column(String, nullable=False)
+    attr_value = Column(Text, nullable=False)
+    confidence = Column(Float, nullable=True)
+    source = Column(String, nullable=True, default="manual")
+    source_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="pending")
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # 关联
+    character = relationship("Character", back_populates="attributes")
 
-class Setting(_ORMPlaceholder):
-    """设定 ORM 占位符"""
-    pass
 
-class SettingAttribute(_ORMPlaceholder):
-    """设定属性 ORM 占位符"""
-    pass
+class CharacterArc(ORMBase):
+    """人物弧光 ORM 模型"""
+    __tablename__ = "character_arcs"
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    arc_type = Column(String, nullable=True)  # growth, fall, redemption, tragic, etc.
+    title = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="draft")
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # 关联
+    character = relationship("Character", back_populates="arcs")
 
-class SettingRelation(_ORMPlaceholder):
-    """设定关系 ORM 占位符"""
-    pass
 
-class CharacterSettingLink(_ORMPlaceholder):
-    """人物设定关联 ORM 占位符"""
-    pass
+class CharacterRelation(ORMBase):
+    """人物关系 ORM 模型"""
+    __tablename__ = "character_relations"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    source_character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    target_character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    relation_type = Column(String, nullable=False)  # family, friend, enemy, romantic, professional, etc.
+    relation_subtype = Column(String, nullable=True)  # parent, sibling, spouse, etc.
+    description = Column(Text, nullable=True)
+    strength = Column(Float, nullable=True)  # 关系强度 0-1
+    is_mutual = Column(Boolean, nullable=True, default=True)
+    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="draft")
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
 
-@dataclass 
-class TextEvidence:
-    """文本证据 ORM 占位符"""
-    id: Optional[int] = None
-    edition_id: int = 0
-    node_id: int = 0
-    target_type: str = ""
-    target_id: int = 0
-    start_offset: int = 0
-    end_offset: int = 0
-    selected_text: str = ""
-    content: str = ""
-    context: Optional[str] = None
-    evidence_type: str = "explicit"
-    confidence: Optional[float] = None
-    source: str = "manual"
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+
+# ============================================================================
+# Setting ORM Models
+# ============================================================================
+
+class Setting(ORMBase):
+    """设定 ORM 模型"""
+    __tablename__ = "novel_settings"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    setting_type = Column(String, nullable=False)  # item, location, organization, concept, magic_system, creature, event_type
+    canonical_name = Column(String, nullable=False)
+    category = Column(String, nullable=True)  # 子分类
+    description = Column(Text, nullable=True)
+    first_appearance_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    importance = Column(String, nullable=True, default="normal")  # critical, major, normal, minor
+    status = Column(String, nullable=True, default="draft")
+    source = Column(String, nullable=True, default="manual")
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # 关联
+    attributes = relationship("SettingAttribute", back_populates="setting", cascade="all, delete-orphan")
+
+
+class SettingAttribute(ORMBase):
+    """设定属性 ORM 模型"""
+    __tablename__ = "setting_attributes"
+    
+    id = Column(Integer, primary_key=True)
+    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    attr_key = Column(String, nullable=False)
+    attr_value = Column(Text, nullable=False)
+    source = Column(String, nullable=True, default="manual")
+    source_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="pending")
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # 关联
+    setting = relationship("Setting", back_populates="attributes")
+
+
+class SettingRelation(ORMBase):
+    """设定关系 ORM 模型"""
+    __tablename__ = "setting_relations"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    source_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    target_setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    relation_type = Column(String, nullable=False)  # contains, belongs_to, produces, requires, opposes
+    description = Column(Text, nullable=True)
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+
+class CharacterSettingLink(ORMBase):
+    """人物-设定关联 ORM 模型"""
+    __tablename__ = "character_setting_links"
+    
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id", ondelete="CASCADE"), nullable=False)
+    setting_id = Column(Integer, ForeignKey("novel_settings.id", ondelete="CASCADE"), nullable=False)
+    link_type = Column(String, nullable=False)  # owns, belongs_to, created, uses, guards
+    description = Column(Text, nullable=True)
+    start_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    end_node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+class TextEvidence(ORMBase):
+    """文本证据 ORM 模型"""
+    __tablename__ = "text_evidence"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    node_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="CASCADE"), nullable=False)
+    target_type = Column(String, nullable=False)  # outline_node | character | setting | etc.
+    target_id = Column(Integer, nullable=False)
+    start_char = Column(Integer, nullable=True)
+    end_char = Column(Integer, nullable=True)
+    text_snippet = Column(Text, nullable=True)
+    context_before = Column(Text, nullable=True)
+    context_after = Column(Text, nullable=True)
+    evidence_type = Column(String, nullable=True, default="explicit")
+    confidence = Column(Float, nullable=True)
+    source = Column(String, nullable=True, default="manual")
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
 @dataclass
 class AnalysisTask:

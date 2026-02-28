@@ -87,11 +87,14 @@ export default function SettingPanel({ editionId }: SettingPanelProps) {
     setError(null)
     try {
       const settingType = activeType === 'all' ? undefined : activeType
-      const data = await api_get_settings_by_edition(editionId, settingType)
+      const result = await api_get_settings_by_edition(editionId, settingType)
+      
+      // Handle backend response format: {success: true, data: [...]}
+      const settingList = result.data || result || []
       
       const filtered = searchKeyword
-        ? data.filter(s => s.canonical_name.toLowerCase().includes(searchKeyword.toLowerCase()))
-        : data
+        ? settingList.filter((s: Setting) => s.canonical_name.toLowerCase().includes(searchKeyword.toLowerCase()))
+        : settingList
       
       setSettings(filtered)
     } catch (err) {
@@ -103,8 +106,9 @@ export default function SettingPanel({ editionId }: SettingPanelProps) {
 
   const fetchTypeStats = async () => {
     try {
-      const data = await api_get_setting_types(editionId)
-      setTypeStats(data)
+      const result = await api_get_setting_types(editionId)
+      // Handle backend response format: {success: true, types: [...], labels: {...}}
+      setTypeStats(result.labels || result)
     } catch (err) {
       console.error('Failed to load type stats:', err)
     }

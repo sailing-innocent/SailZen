@@ -14,6 +14,19 @@ import time
 from typing import Any
 from datetime import datetime
 
+# 首先加载环境变量（必须在日志配置之前）
+from sail_server.utils.env import read_env
+
+# 检查命令行参数来加载正确的环境
+import sys
+if "--dev" in sys.argv or "--debug" in sys.argv:
+    read_env("dev")
+elif "--prod" in sys.argv:
+    read_env("prod")
+else:
+    # 默认加载 dev 环境
+    read_env("dev")
+
 from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
@@ -21,14 +34,12 @@ from litestar.openapi import OpenAPIConfig
 # 导入新的日志体系
 from sail_server.utils.logging_config import setup_logging, get_logger
 
-# 设置日志（必须在其他导入之前）
+# 设置日志（环境变量已加载）
 setup_logging()
 logger = get_logger("sail_server")
 
 from litestar.config.cors import CORSConfig
 from litestar.logging import LoggingConfig
-
-from sail_server.utils.env import read_env
 
 import argparse
 
@@ -263,10 +274,15 @@ def main():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sail Server")
     parser.add_argument("--dev", action="store_true", help="Run in development mode")
+    parser.add_argument("--prod", action="store_true", help="Run in production mode")
     args = parser.parse_args()
 
-    if args.dev:
-        read_env("dev")
-    else:
+    # 环境变量已在模块导入时加载，这里不需要重复加载
+    # 但如果需要覆盖，可以在这里重新加载
+    if args.prod:
+        from sail_server.utils.env import read_env
         read_env("prod")
+        # 重新设置日志以应用新的环境变量
+        setup_logging()
+    
     main()

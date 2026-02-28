@@ -868,7 +868,7 @@ class OutlineExtractor:
         # 1. 创建大纲
         outline_data = OutlineData(
             edition_id=edition_id,
-            name=f"自动提取 - {config.outline_type}",
+            title=f"自动提取 - {config.outline_type}",
             outline_type=config.outline_type,
             description=f"通过 LLM 自动提取的大纲，粒度：{config.granularity}",
         )

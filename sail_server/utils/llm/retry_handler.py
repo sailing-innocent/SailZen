@@ -266,10 +266,12 @@ class LLMRetryHandler:
                     f"retrying in {delay:.2f}s..."
                 )
                 
-                # 调用回调
+                # 调用回调（支持同步和异步回调）
                 if on_retry:
                     try:
-                        on_retry(attempt, delay, rate_limit_info)
+                        result = on_retry(attempt, delay, rate_limit_info)
+                        if asyncio.iscoroutine(result):
+                            await result
                     except Exception as callback_error:
                         logger.warning(f"Retry callback failed: {callback_error}")
                 

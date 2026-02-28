@@ -19,6 +19,9 @@ from sail_server.controller.analysis import (
 )
 from sail_server.controller.outline_extraction import OutlineExtractionController
 from sail_server.controller.outline import OutlineController
+from sail_server.controller.character import CharacterController
+from sail_server.controller.character_detection import CharacterDetectionController
+from sail_server.controller.setting import SettingController
 from sail_server.db import get_db_dependency
 
 
@@ -35,5 +38,8 @@ analysis_router = Router(
         LLMProviderController,
         OutlineExtractionController,
         OutlineController,
+        CharacterController,
+        CharacterDetectionController,
+        SettingController,
     ],
 )

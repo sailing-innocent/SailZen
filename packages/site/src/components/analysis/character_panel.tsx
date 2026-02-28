@@ -78,14 +78,17 @@ export default function CharacterPanel({ editionId }: CharacterPanelProps) {
     setError(null)
     try {
       const roleType = roleFilter === 'all' ? undefined : roleFilter
-      const data = await api_get_characters_by_edition(editionId, roleType)
+      const result = await api_get_characters_by_edition(editionId, roleType)
+      
+      // Handle backend response format: {success: true, data: [...]}
+      const characterList = result.data || result || []
       
       // Filter by search keyword
       const filtered = searchKeyword
-        ? data.filter(c => 
+        ? characterList.filter((c: Character) => 
             c.canonical_name.toLowerCase().includes(searchKeyword.toLowerCase())
           )
-        : data
+        : characterList
       
       setCharacters(filtered)
     } catch (err) {

@@ -10,9 +10,9 @@
 
 ## 📊 当前进度
 
-**当前阶段**: Phase 2.1 - 大纲提取工作流 ✅  
-**完成度**: 100% (Phase 1.x & 2.1 已完成)  
-**最后更新**: 2025-02-28
+**当前阶段**: Phase 2.2 - 人物检测与档案构建 ✅  
+**完成度**: 100% (Phase 1.x & 2.1 & 2.2 已完成)  
+**最后更新**: 2025-03-01
 
 ### 已完成任务
 
@@ -840,30 +840,126 @@ cd packages/site && pnpm tsc --noEmit --skipLibCheck
 
 ---
 
-### 2.2 人物检测与档案构建
+### 2.2 人物检测与档案构建 ✅
 
-#### 2.2.1 后端开发
+**状态**: 已完成  
+**完成日期**: 2025-03-01
 
-| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
-|------|------|----------|----------|----------|
-| **Prompt: 人物检测模板** | 人物检测专用 Prompt | `sail_server/utils/llm/prompts.py` | 识别人物准确 | Prompt 模板 |
-| **Service: 人物检测器** | 实现 `CharacterDetector` 服务 | 新建 `sail_server/service/character_detector.py` | 检测准确，别名合并正确 | Service 模块 |
-| **Service: 人物画像构建** | 实现 `CharacterProfiler` 服务 | 新建 `sail_server/service/character_profiler.py` | 属性提取完整 | Service 模块 |
-| **API: 人物批量导入** | 支持批量导入人物结果 | `sail_server/controller/analysis.py` | 批量操作性能良好 | API 实现 |
-| **Feature: 人物去重合并** | 自动识别并合并重复人物 | `sail_server/model/analysis/character.py` | 去重准确率 > 85% | 功能实现 |
-
-#### 2.2.2 前端开发
+#### 2.2.1 后端开发 ✅
 
 | 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
 |------|------|----------|----------|----------|
-| **组件: 人物列表** | 人物卡片列表展示 | 新建 `packages/site/src/components/character_list.tsx` | 支持筛选、排序 | 组件 |
-| **组件: 人物档案卡片** | 人物详细信息展示 | 新建 `packages/site/src/components/character_profile_card.tsx` | 信息完整，布局美观 | 组件 |
-| **组件: 人物属性编辑器** | 人物属性的增删改 | 新建 `packages/site/src/components/character_attribute_editor.tsx` | 支持多种属性类型 | 组件 |
-| **组件: 人物检测配置** | 人物检测任务配置 | 新建 `packages/site/src/components/character_detection_config.tsx` | 配置项合理 | 组件 |
-| **页面: 人物管理** | 人物管理专用页面 | 新建 `packages/site/src/pages/characters.tsx` | 功能完整 | 页面 |
+| **Prompt: 人物检测模板 V2** ✅ | 人物检测增强版 Prompt | `sail_server/prompts/character_detection/v2.yaml` | 识别人物准确，支持属性提取 | Prompt 模板 |
+| **Service: 人物检测器** ✅ | 实现 `CharacterDetector` 服务 | `sail_server/service/character_detector.py` | 检测准确，别名合并正确 | Service 模块 |
+| **Service: 人物画像构建** ✅ | 实现 `CharacterProfiler` 服务 | `sail_server/service/character_profiler.py` | 属性提取完整，支持去重合并 | Service 模块 |
+| **API: 人物批量导入** ✅ | 支持批量导入人物结果 | `sail_server/controller/character_detection.py` | 批量操作性能良好 | API 实现 |
+| **Feature: 人物去重合并** ✅ | 自动识别并合并重复人物 | `sail_server/service/character_profiler.py` | 去重准确率 > 85% | 功能实现 |
 
-**闭环验证**:
+**实现详情**:
+
+1. **人物检测 Prompt V2** (`sail_server/prompts/character_detection/v2.yaml`)
+   - 支持人物识别和档案构建
+   - 角色分类（主角/二号主角/配角/龙套/提及）
+   - 属性提取（外貌/性格/能力/背景/关系）
+   - 别名识别（昵称/头衔/字/号）
+   - 关系识别（家族/朋友/敌对/恋爱/职业）
+   - 结构化 JSON 输出格式
+
+2. **CharacterDetector 服务** (`sail_server/service/character_detector.py`)
+   - 支持单块和分块检测
+   - 自动分块策略（按章节边界）
+   - 结果合并和去重
+   - 进度回调支持
+   - 检查点恢复机制
+   - LLM 调用重试机制
+
+3. **CharacterProfiler 服务** (`sail_server/service/character_profiler.py`)
+   - 从检测结果构建人物档案
+   - 人物去重和合并
+   - 属性整合
+   - 关系映射
+   - 相似度计算
+
+4. **API 控制器** (`sail_server/controller/character_detection.py`)
+   - `POST /` - 创建检测任务
+   - `POST /preview` - 预览检测
+   - `POST /task/{task_id}/save` - 保存结果
+   - `GET /deduplicate/{edition_id}` - 获取去重候选
+   - `POST /merge` - 合并人物
+   - `POST /batch-import` - 批量导入
+
+5. **数据类型** (`sail_server/data/analysis.py`)
+   - `CharacterDetectionConfig` - 检测配置
+   - `CharacterDetectionRequest` - 检测请求
+   - `DetectedCharacter` - 检测到的人物
+   - `CharacterDetectionResult` - 检测结果
+   - `CharacterMergeCandidate` - 合并候选
+   - `CharacterDeduplicationResult` - 去重结果
+
+#### 2.2.2 前端开发 ✅
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 人物检测配置** ✅ | 检测参数配置面板 | `packages/site/src/components/character_detection_config.tsx` | 配置项完整，验证正确 | 组件 |
+| **组件: 人物列表** ✅ | 人物卡片列表展示 | `packages/site/src/components/character_list.tsx` | 支持筛选、排序 | 组件 |
+| **组件: 人物档案卡片** ✅ | 人物详细信息展示 | `packages/site/src/components/character_profile_card.tsx` | 信息完整，布局美观 | 组件 |
+| **组件: 人物属性编辑器** ✅ | 人物属性的增删改 | `packages/site/src/components/character_attribute_editor.tsx` | 支持多种属性类型 | 组件 |
+| **页面: 人物管理** ✅ | 人物管理专用页面 | `packages/site/src/components/character_panel.tsx` | 功能完整 | 页面 |
+
+**实现详情**:
+
+1. **CharacterDetectionConfigPanel** (`packages/site/src/components/character_detection_config.tsx`)
+   - 检测选项配置（别名/属性/关系）
+   - 高级设置（置信度/最大数量）
+   - 提示词模板选择
+   - 预览和开始检测按钮
+
+2. **CharacterList** (`packages/site/src/components/character_list.tsx`)
+   - 人物卡片列表
+   - 搜索和过滤（按角色类型）
+   - 排序功能（按名称/角色/更新）
+   - 角色类型徽章和图标
+   - 操作菜单（合并/删除）
+
+3. **CharacterProfileCard** (`packages/site/src/components/character_profile_card.tsx`)
+   - 人物头像和基本信息
+   - 别名标签展示
+   - 标签页切换（概览/属性/关系）
+   - 属性分类展示
+   - 关系列表
+
+4. **CharacterAttributeEditor** (`packages/site/src/components/character_attribute_editor.tsx`)
+   - 属性添加对话框
+   - 属性分类选择
+   - 置信度设置
+   - 属性列表展示
+   - 编辑和删除功能
+
+5. **CharacterPanel** (`packages/site/src/components/character_panel.tsx`)
+   - 标签页切换（列表/检测/结果）
+   - 人物列表和详情联动
+   - AI 检测配置和执行
+   - 检测结果审核
+   - 保存到数据库
+
+6. **API 客户端** (`packages/site/src/lib/api/character_detection.ts`)
+   - `api_create_character_detection()`
+   - `api_preview_character_detection()`
+   - `api_save_detection_result()`
+   - `api_get_deduplication_candidates()`
+   - `api_merge_characters()`
+   - `api_batch_import_characters()`
+
+**闭环验证** ✅:
 ```bash
+# 后端模块导入测试
+uv run python -c "from sail_server.service.character_detector import CharacterDetector; print('OK')"
+uv run python -c "from sail_server.service.character_profiler import CharacterProfiler; print('OK')"
+
+# 前端类型检查
+cd packages/site && pnpm tsc --noEmit --skipLibCheck
+# 结果: 无编译错误
+
 # 验证步骤
 1. 选择文本范围
 2. 执行人物检测任务
@@ -878,10 +974,18 @@ cd packages/site && pnpm tsc --noEmit --skipLibCheck
 ```
 
 **输出产物**:
-- `sail_server/service/character_detector.py`
-- `sail_server/service/character_profiler.py`
-- `packages/site/src/components/character_list.tsx`
-- `packages/site/src/pages/characters.tsx`
+- ✅ `sail_server/prompts/character_detection/v2.yaml`
+- ✅ `sail_server/service/character_detector.py`
+- ✅ `sail_server/service/character_profiler.py`
+- ✅ `sail_server/controller/character_detection.py`
+- ✅ `sail_server/data/analysis.py` (更新)
+- ✅ `packages/site/src/components/character_detection_config.tsx`
+- ✅ `packages/site/src/components/character_list.tsx`
+- ✅ `packages/site/src/components/character_profile_card.tsx`
+- ✅ `packages/site/src/components/character_attribute_editor.tsx`
+- ✅ `packages/site/src/components/character_panel.tsx`
+- ✅ `packages/site/src/lib/api/character_detection.ts`
+- ✅ `packages/site/src/lib/data/analysis.ts` (更新)
 
 ---
 
@@ -903,7 +1007,7 @@ cd packages/site && pnpm tsc --noEmit --skipLibCheck
 | **组件: 设定分类视图** | 按类型分类展示设定 | 新建 `packages/site/src/components/setting_category_view.tsx` | 分类清晰，导航方便 | 组件 |
 | **组件: 设定详情卡片** | 设定详细信息展示 | 新建 `packages/site/src/components/setting_detail_card.tsx` | 信息完整 | 组件 |
 | **组件: 设定关系图** | 设定关系可视化 | 新建 `packages/site/src/components/setting_relation_graph.tsx` | 使用力导向图展示 | 组件 |
-| **页面: 设定管理** | 设定管理专用页面 | 新建 `packages/site/src/pages/settings.tsx` | 功能完整 | 页面 |
+| **页面: 设定管理** | 设定管理专用页面 | 新建 `packages/site/src/components/setting_panel.tsx` | 功能完整 | 页面 |
 
 **闭环验证**:
 ```bash

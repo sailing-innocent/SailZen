@@ -274,6 +274,10 @@ class LoggingManager:
         api_logger = logging.getLogger("api_debug")
         api_logger.setLevel(logging.DEBUG)
         
+        # 避免重复添加 handler
+        if api_logger.handlers:
+            return
+        
         handler = logging.handlers.RotatingFileHandler(
             self.log_dir / "api_requests.log",
             maxBytes=10*1024*1024,
@@ -290,6 +294,10 @@ class LoggingManager:
         llm_logger = logging.getLogger("llm_debug")
         llm_logger.setLevel(logging.DEBUG)
         
+        # 避免重复添加 handler
+        if llm_logger.handlers:
+            return
+        
         handler = logging.handlers.RotatingFileHandler(
             self.log_dir / "llm_debug.log",
             maxBytes=10*1024*1024,
@@ -305,6 +313,10 @@ class LoggingManager:
         """设置数据库查询日志"""
         db_logger = logging.getLogger("sqlalchemy.engine")
         db_logger.setLevel(logging.DEBUG)
+        
+        # 避免重复添加 handler
+        if db_logger.handlers:
+            return
         
         handler = logging.handlers.RotatingFileHandler(
             self.log_dir / "db_queries.log",

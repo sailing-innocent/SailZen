@@ -580,6 +580,109 @@ export interface LLMProvidersResponse {
 }
 
 // ============================================================================
+// Character Detection Types
+// ============================================================================
+
+export interface CharacterDetectionConfig {
+  detect_aliases: boolean
+  detect_attributes: boolean
+  detect_relations: boolean
+  min_confidence: number
+  max_characters: number
+  llm_provider?: string
+  llm_model?: string
+  temperature: number
+  prompt_template_id: string
+}
+
+export interface CharacterDetectionRequest {
+  edition_id: number
+  range_selection: TextRangeSelection
+  config: CharacterDetectionConfig
+  work_title?: string
+  known_characters?: string[]
+}
+
+export interface DetectedCharacterAlias {
+  alias: string
+  alias_type: 'nickname' | 'title' | 'courtesy_name' | 'other'
+}
+
+export interface DetectedCharacterAttribute {
+  category: 'appearance' | 'personality' | 'ability' | 'background' | 'relationship'
+  key: string
+  value: string
+  confidence?: number
+  source_text?: string
+}
+
+export interface DetectedCharacterRelation {
+  target_name: string
+  relation_type: 'family' | 'friend' | 'enemy' | 'romantic' | 'professional' | 'other'
+  description?: string
+  evidence?: string
+}
+
+export interface DetectedCharacter {
+  canonical_name: string
+  aliases: DetectedCharacterAlias[]
+  role_type: CharacterRoleType
+  role_confidence: number
+  first_appearance?: {
+    chapter: string
+    text: string
+    context: string
+  }
+  description: string
+  attributes: DetectedCharacterAttribute[]
+  relations: DetectedCharacterRelation[]
+  key_actions: string[]
+  mention_count: number
+}
+
+export interface CharacterDetectionResult {
+  characters: DetectedCharacter[]
+  metadata: {
+    total_characters: number
+    protagonist_count: number
+    deuteragonist_count: number
+    supporting_count: number
+    minor_count: number
+    mentioned_count: number
+  }
+  raw_response?: string
+}
+
+export interface CharacterDetectionResponse {
+  success: boolean
+  task_id?: string
+  result?: CharacterDetectionResult
+  message: string
+  error?: string
+}
+
+export interface CharacterMergeCandidate {
+  character1_id: number
+  character2_id: number
+  character1_name: string
+  character2_name: string
+  similarity_score: number
+  merge_reason: string
+  suggested_action: 'merge' | 'review' | 'ignore'
+}
+
+export interface CharacterDeduplicationResult {
+  merged_groups: number[][]
+  merge_candidates: CharacterMergeCandidate[]
+  statistics: {
+    total_characters: number
+    high_confidence_duplicates: number
+    medium_confidence_duplicates: number
+    total_candidates: number
+  }
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

@@ -13,8 +13,8 @@ import logging
 
 from typing import Union, Tuple
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+# 使用统一的日志配置，不在这里设置 basicConfig
+# logging 配置由 sail_server.utils.logging_config 统一管理
 logger = logging.getLogger(__name__)
 
 # ------------------------------------------------
