@@ -223,3 +223,51 @@ class EvidenceCreateRequest:
     target_id: Optional[str] = None
     context: Optional[str] = None
     meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+# ============================================================================
+# Compatibility Types (for analysis_compat.py)
+# ============================================================================
+
+@dataclass
+class AnalysisTaskData:
+    """分析任务数据（兼容旧格式）"""
+    id: str
+    edition_id: int
+    task_type: AnalysisTaskType
+    status: AnalysisTaskStatus
+    range_selection: TextRangeSelection
+    config: Dict[str, Any] = field(default_factory=dict)
+    priority: int = 0
+    progress: int = 0
+    current_step: Optional[str] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AnalysisResult:
+    """分析结果（兼容旧格式）"""
+    id: int
+    task_id: str
+    result_type: str
+    result_data: Dict[str, Any]
+    confidence: Optional[float] = None
+    review_status: str = "pending"  # pending, approved, rejected
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: Optional[datetime] = None
+    meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class AnalysisResultData:
+    """分析结果数据（兼容旧格式）"""
+    result_type: str
+    content: Dict[str, Any]
+    confidence: Optional[float] = None
+    evidence_ids: List[str] = field(default_factory=list)
+    meta_data: Dict[str, Any] = field(default_factory=dict)

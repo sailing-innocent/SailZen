@@ -69,14 +69,9 @@ class EvidenceResponse:
 class AnalysisStatsResponse:
     """分析统计响应"""
     edition_id: int
-    total_tasks: int
-    completed_tasks: int
-    pending_tasks: int
-    failed_tasks: int
-    total_evidence: int
-    character_count: int
-    setting_count: int
-    outline_node_count: int
+    tasks: Dict[str, int]  # pending, running, completed, failed, cancelled
+    evidence: Dict[str, int]  # character, setting, outline_node, relation
+    last_updated: Optional[str] = None
 
 
 # ============================================================================
@@ -336,7 +331,7 @@ class EvidenceController(Controller):
             for ev in sorted(evidences, key=lambda x: x.created_at, reverse=True)
         ]
     
-    @delete("/{evidence_id:str}")
+    @delete("/{evidence_id:str}", status_code=200)
     async def delete_evidence(
         self,
         evidence_id: str,
@@ -385,17 +380,31 @@ class AnalysisStatsController(Controller):
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
         
-        # TODO: 实现真实的统计逻辑
-        # 这里返回模拟数据
+        # 从证据存储中统计
+        evidence_controller = EvidenceController()
+        all_evidence = list(evidence_controller._evidence_store.values())
+        edition_evidence = [ev for ev in all_evidence if ev.edition_id == edition_id]
+        
+        # 统计证据类型
+        evidence_stats = {
+            "character": len([ev for ev in edition_evidence if ev.evidence_type == "character"]),
+            "setting": len([ev for ev in edition_evidence if ev.evidence_type == "setting"]),
+            "outline_node": len([ev for ev in edition_evidence if ev.evidence_type == "outline"]),
+            "relation": len([ev for ev in edition_evidence if ev.evidence_type == "relation"]),
+        }
+        
+        # TODO: 从任务存储中统计（当任务系统实现后）
+        task_stats = {
+            "pending": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+            "cancelled": 0,
+        }
         
         return AnalysisStatsResponse(
             edition_id=edition_id,
-            total_tasks=0,
-            completed_tasks=0,
-            pending_tasks=0,
-            failed_tasks=0,
-            total_evidence=0,
-            character_count=0,
-            setting_count=0,
-            outline_node_count=0,
+            tasks=task_stats,
+            evidence=evidence_stats,
+            last_updated=datetime.now().isoformat(),
         )

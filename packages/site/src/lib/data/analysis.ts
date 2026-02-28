@@ -165,14 +165,241 @@ export interface AnalysisTaskRequest {
 
 export interface AnalysisStats {
   edition_id: number
-  total_tasks: number
-  completed_tasks: number
-  pending_tasks: number
-  failed_tasks: number
-  total_evidence: number
-  character_count: number
-  setting_count: number
-  outline_node_count: number
+  tasks: {
+    pending: number
+    running: number
+    completed: number
+    failed: number
+    cancelled: number
+  }
+  evidence: {
+    character: number
+    setting: number
+    outline_node: number
+    relation: number
+  }
+  last_updated?: string
+}
+
+// ============================================================================
+// Character Types
+// ============================================================================
+
+export type CharacterRoleType = 'protagonist' | 'antagonist' | 'deuteragonist' | 'supporting' | 'minor' | 'mentioned'
+
+export interface Character {
+  id: string
+  edition_id: number
+  canonical_name: string
+  role_type: CharacterRoleType
+  description?: string
+  aliases: CharacterAlias[]
+  attributes: CharacterAttribute[]
+  created_at: string
+  updated_at?: string
+}
+
+export interface CharacterAlias {
+  id: string
+  character_id: string
+  alias: string
+  alias_type: 'nickname' | 'title' | 'courtesy_name' | 'other'
+  created_at: string
+}
+
+export type CharacterAttributeCategory = 'appearance' | 'personality' | 'ability' | 'background' | 'relationship' | 'other'
+
+export interface CharacterAttribute {
+  id: string
+  character_id: string
+  category: CharacterAttributeCategory
+  key: string
+  value: string
+  confidence?: number
+  evidence_ids: string[]
+  created_at: string
+  updated_at?: string
+}
+
+export interface CharacterProfile {
+  character: Character
+  stats: {
+    mention_count: number
+    first_appearance?: string
+    last_appearance?: string
+  }
+  relations: CharacterRelation[]
+}
+
+export interface CharacterRelation {
+  id: string
+  source_id: string
+  target_id: string
+  relation_type: string
+  description?: string
+  strength?: number
+}
+
+// ============================================================================
+// Relation Graph Types
+// ============================================================================
+
+export interface RelationGraphData {
+  nodes: RelationNode[]
+  edges: RelationEdge[]
+}
+
+export interface RelationNode {
+  id: string
+  type: 'character' | 'setting' | 'outline_node'
+  label: string
+  data?: Record<string, unknown>
+}
+
+export interface RelationEdge {
+  id: string
+  source: string
+  target: string
+  type: string
+  label?: string
+  strength?: number
+}
+
+// ============================================================================
+// Setting Types
+// ============================================================================
+
+export type SettingType = 'item' | 'location' | 'organization' | 'concept' | 'magic_system' | 'creature' | 'event_type'
+
+export interface Setting {
+  id: string
+  edition_id: number
+  name: string
+  setting_type: SettingType
+  description?: string
+  importance: 'critical' | 'major' | 'minor' | 'background'
+  first_appearance?: string
+  attributes: SettingAttribute[]
+  created_at: string
+  updated_at?: string
+}
+
+export interface SettingAttribute {
+  id: string
+  setting_id: string
+  key: string
+  value: string
+  description?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface SettingDetail {
+  setting: Setting
+  stats: {
+    mention_count: number
+    related_characters: string[]
+    related_settings: string[]
+  }
+}
+
+// ============================================================================
+// Outline Types
+// ============================================================================
+
+export type OutlineType = 'main' | 'subplot' | 'character_arc'
+export type OutlineNodeType = 'act' | 'chapter' | 'scene' | 'event' | 'beat'
+
+export interface Outline {
+  id: string
+  edition_id: number
+  name: string
+  outline_type: OutlineType
+  description?: string
+  root_node_id?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface OutlineTreeNode {
+  id: string
+  outline_id: string
+  parent_id?: string
+  node_type: OutlineNodeType
+  title: string
+  content?: string
+  sort_index: number
+  children: OutlineTreeNode[]
+  evidence_ids: string[]
+  created_at: string
+  updated_at?: string
+}
+
+export interface OutlineTree {
+  outline: Outline
+  root_nodes: OutlineTreeNode[]
+}
+
+export interface OutlineEvent {
+  id: string
+  node_id: string
+  event_type: string
+  description: string
+  characters_involved: string[]
+  settings_involved: string[]
+  created_at: string
+}
+
+// ============================================================================
+// Task Types (for task_panel.tsx)
+// ============================================================================
+
+export interface CreateTaskRequest {
+  edition_id: number
+  task_type: string
+  target_scope: string
+  target_node_ids: number[]
+  parameters?: Record<string, unknown>
+  priority?: number
+}
+
+export interface AnalysisResult {
+  id: number
+  task_id: string
+  result_type: string
+  result_data: Record<string, unknown>
+  confidence?: number
+  review_status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+  updated_at?: string
+}
+
+export interface TaskProgress {
+  task_id: string
+  status: string
+  current_step: string
+  total_chunks: number
+  completed_chunks: number
+  current_chunk_info?: string
+  error?: string
+}
+
+export interface TaskExecutionPlan {
+  chunks: Array<{
+    index: number
+    node_ids: number[]
+    estimated_tokens: number
+  }>
+  total_estimated_tokens: number
+  estimated_cost_usd: number
+  prompt_template_id: string
+}
+
+export interface LLMProvider {
+  id: string
+  name: string
+  description?: string
+  models: string[]
 }
 
 // ============================================================================
