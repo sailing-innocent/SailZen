@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
+from sail_server.data.types import JSONB
+
 
 # ============================================================================
 # Text Range Selection Types
@@ -292,3 +294,750 @@ class AnalysisResultData:
     confidence: Optional[float] = None
     evidence_ids: List[str] = field(default_factory=list)
     meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+# ============================================================================
+# Outline Extraction Types
+# ============================================================================
+
+@dataclass
+class OutlineExtractionConfig:
+    """大纲提取配置"""
+    granularity: str = "scene"  # act | arc | scene | beat
+    outline_type: str = "main"  # main | subplot | character_arc | theme
+    extract_turning_points: bool = True
+    extract_characters: bool = True
+    max_nodes: int = 50
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    temperature: float = 0.3
+    prompt_template_id: str = "outline_extraction_v2"
+
+
+@dataclass
+class OutlineExtractionRequest:
+    """大纲提取请求"""
+    edition_id: int
+    range_selection: TextRangeSelection
+    config: OutlineExtractionConfig = field(default_factory=OutlineExtractionConfig)
+    work_title: str = ""
+    known_characters: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ExtractedOutlineNode:
+    """提取的大纲节点"""
+    id: str
+    node_type: str
+    title: str
+    summary: str
+    significance: str
+    sort_index: int
+    parent_id: Optional[str] = None
+    characters: List[str] = field(default_factory=list)
+    evidence: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class OutlineExtractionResult:
+    """大纲提取结果"""
+    nodes: List[ExtractedOutlineNode]
+    metadata: Dict[str, Any]
+    turning_points: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class OutlineExtractionResponse:
+    """大纲提取响应"""
+    success: bool
+    task_id: Optional[str] = None
+    result: Optional[OutlineExtractionResult] = None
+    message: str = ""
+    error: Optional[str] = None
+
+
+# ============================================================================
+# Character Types (DTOs for model/analysis/character.py)
+# ============================================================================
+
+@dataclass
+class CharacterData:
+    """人物数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    canonical_name: str = ""
+    role_type: str = "supporting"  # protagonist, antagonist, deuteragonist, supporting, minor, mentioned
+    description: Optional[str] = None
+    first_appearance_node_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    def create_orm(self):
+        """创建 ORM 对象（简化实现）"""
+        pass
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj, alias_count: int = 0, attribute_count: int = 0, relation_count: int = 0) -> 'CharacterData':
+        """从 ORM 对象读取"""
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            canonical_name=orm_obj.canonical_name,
+            role_type=orm_obj.role_type,
+            description=orm_obj.description,
+            first_appearance_node_id=orm_obj.first_appearance_node_id,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+    
+    def update_orm(self, orm_obj):
+        """更新 ORM 对象"""
+        orm_obj.canonical_name = self.canonical_name
+        orm_obj.role_type = self.role_type
+        orm_obj.description = self.description
+
+
+@dataclass
+class CharacterAliasData:
+    """人物别名数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    alias: str = ""
+    alias_type: str = "other"  # nickname, title, courtesy_name, other
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterAliasData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            alias=orm_obj.alias,
+            alias_type=orm_obj.alias_type,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class CharacterAttributeData:
+    """人物属性数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    category: str = "other"  # appearance, personality, ability, background, relationship, other
+    key: str = ""
+    value: str = ""
+    confidence: Optional[float] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterAttributeData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            category=orm_obj.category,
+            key=orm_obj.key,
+            value=orm_obj.value,
+            confidence=orm_obj.confidence,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class CharacterArcData:
+    """人物弧光数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    arc_name: str = ""
+    arc_type: str = "growth"  # growth, fall, redemption, tragedy, other
+    description: Optional[str] = None
+    start_chapter_id: Optional[int] = None
+    end_chapter_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterArcData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            arc_name=orm_obj.arc_name,
+            arc_type=orm_obj.arc_type,
+            description=orm_obj.description,
+            start_chapter_id=orm_obj.start_chapter_id,
+            end_chapter_id=orm_obj.end_chapter_id,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class CharacterRelationData:
+    """人物关系数据 DTO"""
+    id: Optional[int] = None
+    source_character_id: int = 0
+    target_character_id: int = 0
+    relation_type: str = ""
+    description: Optional[str] = None
+    strength: Optional[float] = None
+    is_mutual: bool = False
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterRelationData':
+        return cls(
+            id=orm_obj.id,
+            source_character_id=orm_obj.source_character_id,
+            target_character_id=orm_obj.target_character_id,
+            relation_type=orm_obj.relation_type,
+            description=orm_obj.description,
+            strength=orm_obj.strength,
+            is_mutual=orm_obj.is_mutual,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class CharacterProfile:
+    """人物档案"""
+    character: CharacterData
+    aliases: List[CharacterAliasData]
+    attributes: List[CharacterAttributeData]
+    arcs: List[CharacterArcData]
+    relations: List[CharacterRelationData]
+
+
+@dataclass
+class RelationGraphData:
+    """关系图谱数据"""
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+
+
+# ============================================================================
+# Setting Types (DTOs for model/analysis/setting.py)
+# ============================================================================
+
+@dataclass
+class SettingData:
+    """设定数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    name: str = ""
+    setting_type: str = "item"  # item, location, organization, concept, magic_system, creature, event_type
+    description: Optional[str] = None
+    importance: str = "minor"  # critical, major, minor, background
+    first_appearance_node_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    def create_orm(self):
+        pass
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            name=orm_obj.name,
+            setting_type=orm_obj.setting_type,
+            description=orm_obj.description,
+            importance=orm_obj.importance,
+            first_appearance_node_id=orm_obj.first_appearance_node_id,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class SettingAttributeData:
+    """设定属性数据 DTO"""
+    id: Optional[int] = None
+    setting_id: int = 0
+    key: str = ""
+    value: str = ""
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingAttributeData':
+        return cls(
+            id=orm_obj.id,
+            setting_id=orm_obj.setting_id,
+            key=orm_obj.key,
+            value=orm_obj.value,
+            description=orm_obj.description,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class SettingRelationData:
+    """设定关系数据 DTO"""
+    id: Optional[int] = None
+    source_setting_id: int = 0
+    target_setting_id: int = 0
+    relation_type: str = ""
+    description: Optional[str] = None
+    strength: Optional[float] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'SettingRelationData':
+        return cls(
+            id=orm_obj.id,
+            source_setting_id=orm_obj.source_setting_id,
+            target_setting_id=orm_obj.target_setting_id,
+            relation_type=orm_obj.relation_type,
+            description=orm_obj.description,
+            strength=orm_obj.strength,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class CharacterSettingLinkData:
+    """人物设定关联数据 DTO"""
+    id: Optional[int] = None
+    character_id: int = 0
+    setting_id: int = 0
+    link_type: str = "owner"  # owner, user, creator, victim, other
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'CharacterSettingLinkData':
+        return cls(
+            id=orm_obj.id,
+            character_id=orm_obj.character_id,
+            setting_id=orm_obj.setting_id,
+            link_type=orm_obj.link_type,
+            description=orm_obj.description,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class SettingDetail:
+    """设定详情"""
+    setting: SettingData
+    attributes: List[SettingAttributeData]
+    related_settings: List[SettingRelationData]
+    related_characters: List[CharacterSettingLinkData]
+
+
+# ============================================================================
+# Outline Types (DTOs for model/analysis/outline.py)
+# ============================================================================
+
+@dataclass
+class OutlineData:
+    """大纲数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    name: str = ""
+    outline_type: str = "main"  # main, subplot, character_arc, theme
+    description: Optional[str] = None
+    root_node_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    node_count: int = 0
+    
+    def create_orm(self):
+        pass
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj, node_count: int = 0) -> 'OutlineData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            name=orm_obj.name,
+            outline_type=orm_obj.outline_type,
+            description=orm_obj.description,
+            root_node_id=orm_obj.root_node_id,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+            node_count=node_count,
+        )
+    
+    def update_orm(self, orm_obj):
+        orm_obj.name = self.name
+        orm_obj.description = self.description
+
+
+@dataclass
+class OutlineNodeData:
+    """大纲节点数据 DTO"""
+    id: Optional[int] = None
+    outline_id: int = 0
+    parent_id: Optional[int] = None
+    node_type: str = "scene"  # act, arc, scene, beat, event
+    title: str = ""
+    summary: Optional[str] = None
+    significance: str = "normal"  # critical, major, normal, minor
+    chapter_start_id: Optional[int] = None
+    chapter_end_id: Optional[int] = None
+    path: str = ""
+    depth: int = 0
+    sort_index: int = 0
+    status: str = "draft"  # draft, reviewed, approved
+    meta_data: Dict[str, Any] = field(default_factory=dict)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj, children_count: int = 0, events_count: int = 0) -> 'OutlineNodeData':
+        return cls(
+            id=orm_obj.id,
+            outline_id=orm_obj.outline_id,
+            parent_id=orm_obj.parent_id,
+            node_type=orm_obj.node_type,
+            title=orm_obj.title,
+            summary=orm_obj.summary,
+            significance=orm_obj.significance,
+            chapter_start_id=orm_obj.chapter_start_id,
+            chapter_end_id=orm_obj.chapter_end_id,
+            path=orm_obj.path,
+            depth=orm_obj.depth,
+            sort_index=orm_obj.sort_index,
+            status=orm_obj.status,
+            meta_data=orm_obj.meta_data or {},
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+@dataclass
+class OutlineEventData:
+    """大纲事件数据 DTO"""
+    id: Optional[int] = None
+    outline_node_id: int = 0
+    event_type: str = "plot"  # plot, conflict, revelation, resolution, climax
+    title: str = ""
+    description: Optional[str] = None
+    chronology_order: Optional[float] = None
+    narrative_order: Optional[int] = None
+    importance: str = "normal"  # critical, major, normal, minor
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'OutlineEventData':
+        return cls(
+            id=orm_obj.id,
+            outline_node_id=orm_obj.outline_node_id,
+            event_type=orm_obj.event_type,
+            title=orm_obj.title,
+            description=orm_obj.description,
+            chronology_order=orm_obj.chronology_order,
+            narrative_order=orm_obj.narrative_order,
+            importance=orm_obj.importance,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class OutlineTree:
+    """大纲树结构"""
+    outline: OutlineData
+    nodes: List[Dict[str, Any]]
+
+
+# ============================================================================
+# Evidence Types (DTOs for model/analysis/evidence.py)
+# ============================================================================
+
+@dataclass
+class TextEvidenceData:
+    """文本证据数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    node_id: int = 0
+    target_type: str = ""  # character, setting, outline_node, etc.
+    target_id: int = 0
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
+    text_snippet: Optional[str] = None
+    context_before: Optional[str] = None
+    context_after: Optional[str] = None
+    evidence_type: str = "explicit"  # explicit, implicit, inferred
+    confidence: Optional[float] = None
+    source: str = "manual"  # manual, llm_extraction
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'TextEvidenceData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            node_id=orm_obj.node_id,
+            target_type=orm_obj.target_type,
+            target_id=orm_obj.target_id,
+            start_char=orm_obj.start_char,
+            end_char=orm_obj.end_char,
+            text_snippet=orm_obj.text_snippet,
+            context_before=orm_obj.context_before,
+            context_after=orm_obj.context_after,
+            evidence_type=orm_obj.evidence_type,
+            confidence=orm_obj.confidence,
+            source=orm_obj.source,
+            created_at=orm_obj.created_at,
+        )
+
+
+@dataclass
+class AnalysisTaskData:
+    """分析任务数据 DTO"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    task_type: str = ""  # outline_extraction, character_detection, etc.
+    status: str = "pending"  # pending, running, completed, failed, cancelled
+    target_scope: str = "full"  # full, selected, custom
+    target_node_ids: Optional[List[int]] = None
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_prompt_template: Optional[str] = None
+    priority: int = 5
+    result_summary: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    
+    def create_orm(self):
+        pass
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj, result_count: int = 0) -> 'AnalysisTaskData':
+        return cls(
+            id=orm_obj.id,
+            edition_id=orm_obj.edition_id,
+            task_type=orm_obj.task_type,
+            status=orm_obj.status,
+            target_scope=orm_obj.target_scope,
+            target_node_ids=orm_obj.target_node_ids,
+            parameters=orm_obj.parameters or {},
+            llm_provider=orm_obj.llm_provider,
+            llm_model=orm_obj.llm_model,
+            llm_prompt_template=orm_obj.llm_prompt_template,
+            priority=orm_obj.priority,
+            result_summary=orm_obj.result_summary,
+            error_message=orm_obj.error_message,
+            created_at=orm_obj.created_at,
+            started_at=orm_obj.started_at,
+            completed_at=orm_obj.completed_at,
+        )
+
+
+@dataclass
+class AnalysisResultData:
+    """分析结果数据 DTO"""
+    id: Optional[int] = None
+    task_id: int = 0
+    result_type: str = ""  # character, setting, outline_node, etc.
+    result_data: Dict[str, Any] = field(default_factory=dict)
+    confidence: Optional[float] = None
+    review_status: str = "pending"  # pending, approved, rejected
+    reviewer: Optional[str] = None
+    review_notes: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    applied: bool = False
+    applied_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def read_from_orm(cls, orm_obj) -> 'AnalysisResultData':
+        return cls(
+            id=orm_obj.id,
+            task_id=orm_obj.task_id,
+            result_type=orm_obj.result_type,
+            result_data=orm_obj.result_data or {},
+            confidence=orm_obj.confidence,
+            review_status=orm_obj.review_status,
+            reviewer=orm_obj.reviewer,
+            review_notes=orm_obj.review_notes,
+            reviewed_at=orm_obj.reviewed_at,
+            applied=orm_obj.applied,
+            applied_at=orm_obj.applied_at,
+            created_at=orm_obj.created_at,
+            updated_at=orm_obj.updated_at,
+        )
+
+
+# ============================================================================
+# SQLAlchemy ORM Imports
+# ============================================================================
+
+from sqlalchemy import (
+    Column, Integer, String, Text, TIMESTAMP, ForeignKey, func, Float
+)
+from sqlalchemy.orm import relationship
+from sail_server.data.orm import ORMBase
+
+# ============================================================================
+# ORM Model Classes
+# ============================================================================
+
+class Outline(ORMBase):
+    """大纲 ORM 模型"""
+    __tablename__ = "outlines"
+    
+    id = Column(Integer, primary_key=True)
+    edition_id = Column(Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String, nullable=False)
+    outline_type = Column(String, nullable=False, default="main")
+    description = Column(Text, nullable=True)
+    status = Column(String, nullable=True, default="draft")
+    source = Column(String, nullable=True, default="manual")
+    meta_data = Column(JSONB, default={})
+    created_by = Column(String, nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # 关联
+    nodes = relationship("OutlineNode", back_populates="outline", cascade="all, delete-orphan")
+
+
+class OutlineNode(ORMBase):
+    """大纲节点 ORM 模型"""
+    __tablename__ = "outline_nodes"
+    
+    id = Column(Integer, primary_key=True)
+    outline_id = Column(Integer, ForeignKey("outlines.id", ondelete="CASCADE"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=True)
+    node_type = Column(String, nullable=False, default="chapter")
+    sort_index = Column(Integer, nullable=False, default=0)
+    depth = Column(Integer, nullable=False, default=0)
+    path = Column(String, nullable=True)
+    title = Column(String, nullable=False)
+    summary = Column(Text, nullable=True)
+    significance = Column(String, nullable=True, default="normal")
+    chapter_start_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    chapter_end_id = Column(Integer, ForeignKey("document_nodes.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=True, default="draft")
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # 关联
+    outline = relationship("Outline", back_populates="nodes")
+    events = relationship("OutlineEvent", back_populates="node", cascade="all, delete-orphan")
+
+
+class OutlineEvent(ORMBase):
+    """大纲事件 ORM 模型"""
+    __tablename__ = "outline_events"
+    
+    id = Column(Integer, primary_key=True)
+    outline_node_id = Column(Integer, ForeignKey("outline_nodes.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    description = Column(Text, nullable=True)
+    chronology_order = Column(Float, nullable=True)
+    narrative_order = Column(Integer, nullable=True)
+    importance = Column(String, nullable=True, default="normal")
+    meta_data = Column(JSONB, default={})
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    
+    # 关联
+    node = relationship("OutlineNode", back_populates="events")
+
+
+# 其他分析模块的 ORM 占位符（后续实现）
+@dataclass
+class _ORMPlaceholder:
+    """ORM 模型占位符基类"""
+    id: Optional[int] = None
+
+class Character(_ORMPlaceholder):
+    """人物 ORM 占位符"""
+    pass
+
+class CharacterAlias(_ORMPlaceholder):
+    """人物别名 ORM 占位符"""
+    pass
+
+class CharacterAttribute(_ORMPlaceholder):
+    """人物属性 ORM 占位符"""
+    pass
+
+class CharacterArc(_ORMPlaceholder):
+    """人物弧光 ORM 占位符"""
+    pass
+
+class CharacterRelation(_ORMPlaceholder):
+    """人物关系 ORM 占位符"""
+    pass
+
+class Setting(_ORMPlaceholder):
+    """设定 ORM 占位符"""
+    pass
+
+class SettingAttribute(_ORMPlaceholder):
+    """设定属性 ORM 占位符"""
+    pass
+
+class SettingRelation(_ORMPlaceholder):
+    """设定关系 ORM 占位符"""
+    pass
+
+class CharacterSettingLink(_ORMPlaceholder):
+    """人物设定关联 ORM 占位符"""
+    pass
+
+@dataclass 
+class TextEvidence:
+    """文本证据 ORM 占位符"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    node_id: int = 0
+    target_type: str = ""
+    target_id: int = 0
+    start_offset: int = 0
+    end_offset: int = 0
+    selected_text: str = ""
+    content: str = ""
+    context: Optional[str] = None
+    evidence_type: str = "explicit"
+    confidence: Optional[float] = None
+    source: str = "manual"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+@dataclass
+class AnalysisTask:
+    """分析任务 ORM 占位符"""
+    id: Optional[int] = None
+    edition_id: int = 0
+    task_type: str = ""
+    status: str = "pending"
+    target_scope: str = "full"
+    target_node_ids: Optional[List[int]] = None
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_prompt_template: Optional[str] = None
+    priority: int = 5
+    result_summary: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+@dataclass
+class AnalysisResult:
+    """分析结果 ORM 占位符"""
+    id: Optional[int] = None
+    task_id: int = 0
+    result_type: str = ""
+    result_data: Dict[str, Any] = field(default_factory=dict)
+    confidence: Optional[float] = None
+    review_status: str = "pending"
+    reviewer: Optional[str] = None
+    review_notes: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    applied: bool = False
+    applied_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

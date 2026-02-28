@@ -14,6 +14,7 @@ import type {
   EvidenceUpdateRequest,
   TextEvidence,
   AnalysisStats,
+  LLMProvidersResponse,
 } from '@lib/data/analysis'
 import { SERVER_URL, API_BASE } from './config'
 
@@ -538,7 +539,12 @@ export async function api_create_outline(
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...data, edition_id: editionId }),
+    body: JSON.stringify({ 
+      title: data.name,
+      outline_type: data.outline_type,
+      description: data.description,
+      edition_id: editionId 
+    }),
   })
   if (!response.ok) {
     throw new Error(`Failed to create outline: ${response.statusText}`)
@@ -588,10 +594,17 @@ export async function api_add_outline_node(
     sort_index?: number
   }
 ): Promise<OutlineTreeNode> {
-  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/${outlineId}/node`, {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/node`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      outline_id: outlineId,
+      parent_id: data.parent_id,
+      node_type: data.node_type,
+      title: data.title,
+      summary: data.content,
+      sort_index: data.sort_index ?? 0,
+    }),
   })
   if (!response.ok) {
     throw new Error(`Failed to add outline node: ${response.statusText}`)
@@ -623,14 +636,18 @@ export async function api_add_outline_event(
   data: {
     event_type: string
     description: string
-    characters_involved?: string[]
-    settings_involved?: string[]
+    significance?: string
   }
 ): Promise<{ id: string; event_type: string; description: string }> {
-  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/node/${nodeId}/event`, {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/event`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      node_id: nodeId,
+      event_type: data.event_type,
+      description: data.description,
+      significance: data.significance,
+    }),
   })
   if (!response.ok) {
     throw new Error(`Failed to add outline event: ${response.statusText}`)
@@ -819,12 +836,141 @@ export async function api_cancel_running_task(taskId: number): Promise<void> {
 
 /**
  * 获取 LLM 提供商列表
- * @returns 提供商列表
+ * @returns 提供商列表及配置信息
  */
-export async function api_get_llm_providers(): Promise<{ success: boolean; providers: LLMProvider[] }> {
+export async function api_get_llm_providers(): Promise<LLMProvidersResponse> {
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/llm-providers`)
   if (!response.ok) {
     throw new Error(`Failed to get LLM providers: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+// ============================================================================
+// Outline Extraction API
+// ============================================================================
+
+import type {
+  OutlineExtractionRequest,
+  OutlineExtractionTask,
+  OutlineExtractionProgress,
+  OutlineExtractionResponse,
+  OutlinePreviewResponse,
+} from '@lib/data/analysis'
+
+/**
+ * 创建大纲提取任务
+ * @param data 提取请求
+ * @returns 任务信息
+ */
+export async function api_create_outline_extraction_task(
+  data: OutlineExtractionRequest
+): Promise<OutlineExtractionTask> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to create outline extraction task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 获取大纲提取任务进度
+ * @param taskId 任务ID
+ * @returns 进度信息
+ */
+export async function api_get_outline_extraction_progress(
+  taskId: string
+): Promise<OutlineExtractionProgress> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}`)
+  if (!response.ok) {
+    throw new Error(`Failed to get task progress: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 获取大纲提取任务详细状态（包含检查点信息）
+ * @param taskId 任务ID
+ * @returns 详细状态
+ */
+export async function api_get_outline_extraction_detailed_status(
+  taskId: string
+): Promise<import('@lib/data/analysis').OutlineExtractionDetailedStatus> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/detailed`)
+  if (!response.ok) {
+    throw new Error(`Failed to get task detailed status: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 恢复失败或暂停的任务
+ * @param taskId 任务ID
+ * @returns 恢复结果
+ */
+export async function api_resume_outline_extraction_task(
+  taskId: string
+): Promise<import('@lib/data/analysis').ResumeTaskResponse> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/resume`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to resume task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 获取大纲提取任务结果
+ * @param taskId 任务ID
+ * @returns 提取结果
+ */
+export async function api_get_outline_extraction_result(
+  taskId: string
+): Promise<OutlineExtractionResponse> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/result`)
+  if (!response.ok) {
+    throw new Error(`Failed to get task result: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 保存大纲提取结果
+ * @param taskId 任务ID
+ * @returns 保存结果
+ */
+export async function api_save_outline_extraction_result(
+  taskId: string
+): Promise<{ success: boolean; outline_id?: number; nodes_created?: number; message?: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/save`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to save extraction result: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 预览大纲提取效果
+ * @param data 提取请求
+ * @returns 预览结果
+ */
+export async function api_preview_outline_extraction(
+  data: OutlineExtractionRequest
+): Promise<OutlinePreviewResponse> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to preview outline extraction: ${response.statusText}`)
   }
   return response.json()
 }

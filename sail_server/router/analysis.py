@@ -17,6 +17,8 @@ from sail_server.controller.analysis import (
     ResultController,
     LLMProviderController,
 )
+from sail_server.controller.outline_extraction import OutlineExtractionController
+from sail_server.controller.outline import OutlineController
 from sail_server.db import get_db_dependency
 
 
@@ -31,5 +33,7 @@ analysis_router = Router(
         ProgressController,
         ResultController,
         LLMProviderController,
+        OutlineExtractionController,
+        OutlineController,
     ],
 )

@@ -13,12 +13,79 @@ import os
 import json
 import asyncio
 import logging
+import logging.handlers
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List, AsyncIterator
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# Debug Logger Setup
+# ============================================================================
+
+def setup_debug_logger() -> logging.Logger:
+    """设置专门的 LLM 调试日志记录器
+    
+    在 dev/debug 模式下，会记录详细的 API 调用信息到文件
+    """
+    debug_logger = logging.getLogger("llm_debug")
+    
+    # 检查是否已配置
+    if debug_logger.handlers:
+        return debug_logger
+    
+    debug_logger.setLevel(logging.DEBUG)
+    
+    # 从环境变量获取日志级别和路径
+    log_level = os.getenv("LLM_LOG_LEVEL", "INFO").upper()
+    log_path = os.getenv("LLM_LOG_PATH", "logs/llm_debug.log")
+    
+    # 确保日志目录存在
+    os.makedirs(os.path.dirname(log_path) if os.path.dirname(log_path) else "logs", exist_ok=True)
+    
+    # 文件处理器 - 记录所有详细日志
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_path,
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(getattr(logging, log_level, logging.INFO))
+    
+    # 详细格式
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s\n%(message)s\n" + "="*80
+    )
+    file_handler.setFormatter(formatter)
+    debug_logger.addHandler(file_handler)
+    
+    return debug_logger
+
+# 全局调试日志记录器
+llm_debug = setup_debug_logger()
+
+
+def log_api_call(func_name: str, **kwargs):
+    """记录 API 调用详情"""
+    if os.getenv("LLM_DEBUG", "false").lower() == "true":
+        llm_debug.info(f"[API CALL] {func_name}\nParams: {json.dumps(kwargs, indent=2, default=str)}")
+
+
+def log_api_response(func_name: str, duration: float, response: Any, error: Optional[str] = None):
+    """记录 API 响应详情"""
+    if os.getenv("LLM_DEBUG", "false").lower() == "true":
+        data = {
+            "function": func_name,
+            "duration_seconds": round(duration, 2),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        if error:
+            data["error"] = error
+        else:
+            data["response"] = str(response)[:2000]  # 限制长度
+        llm_debug.info(f"[API RESPONSE] {json.dumps(data, indent=2, default=str)}")
 
 
 class LLMProvider(Enum):
@@ -27,6 +94,7 @@ class LLMProvider(Enum):
     ANTHROPIC = "anthropic"
     GOOGLE = "google"         # Google Gemini
     MOONSHOT = "moonshot"     # Moonshot (Kimi K2.5)
+    DEEPSEEK = "deepseek"     # DeepSeek
     LOCAL = "local"           # 本地 Ollama 等
     EXTERNAL = "external"     # 仅生成 Prompt，不调用 API
     MOCK = "mock"             # 模拟模式，用于测试和演示
@@ -74,6 +142,16 @@ class LLMConfig:
                 temperature=1.0,  # Kimi K2.5 要求 temperature 必须为 1
                 max_tokens=16384,  # Kimi K2.5 支持 256K 上下文，设置较大的输出限制
                 timeout=120,  # 默认 120 秒超时，长文本分析需要更多时间
+            )
+        elif provider == LLMProvider.DEEPSEEK:
+            return cls(
+                provider=provider,
+                model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                api_base=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com"),
+                temperature=0.7,
+                max_tokens=4096,  # DeepSeek API 限制 max_tokens <= 8192
+                timeout=120,
             )
         else:
             return cls(provider=provider)
@@ -249,6 +327,18 @@ class LLMClient:
                 logger.warning("OpenAI package not installed, using external mode")
                 self.config.provider = LLMProvider.EXTERNAL
                 
+        elif self.config.provider == LLMProvider.DEEPSEEK:
+            try:
+                from openai import OpenAI
+                # DeepSeek 使用 OpenAI 兼容 API
+                self._client = OpenAI(
+                    api_key=self.config.api_key,
+                    base_url=self.config.api_base or "https://api.deepseek.com",
+                )
+            except ImportError:
+                logger.warning("OpenAI package not installed, using external mode")
+                self.config.provider = LLMProvider.EXTERNAL
+                
         elif self.config.provider == LLMProvider.GOOGLE:
             try:
                 # 使用新的 google.genai 包 (google-genai)
@@ -293,6 +383,8 @@ class LLMClient:
                 response = await self._complete_moonshot(prompt, system)
             elif self.config.provider == LLMProvider.GOOGLE:
                 response = await self._complete_google(prompt, system)
+            elif self.config.provider == LLMProvider.DEEPSEEK:
+                response = await self._complete_deepseek(prompt, system)
             elif self.config.provider == LLMProvider.LOCAL:
                 response = await self._complete_local(prompt, system)
             else:
@@ -344,7 +436,9 @@ class LLMClient:
     
     async def _complete_moonshot(self, prompt: str, system: Optional[str]) -> LLMResponse:
         """Moonshot (Kimi) API 调用 - 使用 OpenAI 兼容接口"""
-        logger.info(f"[DEBUG] Moonshot API call starting: model={self.config.model}, "
+        call_id = f"moonshot_{datetime.utcnow().strftime('%H%M%S')}_{id(prompt) % 10000}"
+        
+        logger.info(f"[DEBUG] [{call_id}] Moonshot API call starting: model={self.config.model}, "
                    f"max_tokens={self.config.max_tokens}, timeout={self.config.timeout}")
         
         messages = []
@@ -352,34 +446,60 @@ class LLMClient:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
         
+        # 记录详细调用信息到调试日志
+        log_api_call("_complete_moonshot",
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    timeout=self.config.timeout,
+                    messages_count=len(messages),
+                    prompt_preview=prompt[:500] + "..." if len(prompt) > 500 else prompt)
+        
         loop = asyncio.get_event_loop()
         
         def call_moonshot():
-            logger.info(f"[DEBUG] Moonshot: calling API in executor thread...")
+            logger.info(f"[DEBUG] [{call_id}] Moonshot: calling API in executor thread...")
+            llm_debug.debug(f"[{call_id}] HTTP Request: POST https://api.moonshot.cn/v1/chat/completions")
+            llm_debug.debug(f"[{call_id}] Request Headers: {{'Authorization': 'Bearer ***', 'Content-Type': 'application/json'}}")
+            llm_debug.debug(f"[{call_id}] Request Body (truncated): {json.dumps({'model': self.config.model, 'messages': messages, 'temperature': self.config.temperature, 'max_tokens': self.config.max_tokens}, ensure_ascii=False)[:1000]}")
+            
             start = datetime.utcnow()
-            result = self._client.chat.completions.create(
-                model=self.config.model,
-                messages=messages,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-                timeout=self.config.timeout,  # HTTP 请求超时
-                response_format={"type": "json_object"},  # 启用 JSON Mode
-            )
-            duration = (datetime.utcnow() - start).total_seconds()
-            logger.info(f"[DEBUG] Moonshot: API call completed in {duration:.2f}s")
-            return result
+            try:
+                result = self._client.chat.completions.create(
+                    model=self.config.model,
+                    messages=messages,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    timeout=self.config.timeout,  # HTTP 请求超时
+                    response_format={"type": "json_object"},  # 启用 JSON Mode
+                )
+                duration = (datetime.utcnow() - start).total_seconds()
+                logger.info(f"[DEBUG] [{call_id}] Moonshot: API call completed in {duration:.2f}s")
+                log_api_response("_complete_moonshot", duration, result)
+                return result
+            except Exception as e:
+                duration = (datetime.utcnow() - start).total_seconds()
+                logger.error(f"[DEBUG] [{call_id}] Moonshot: API call failed after {duration:.2f}s: {e}")
+                log_api_response("_complete_moonshot", duration, None, error=str(e))
+                raise
         
         # 使用 wait_for 确保总体超时控制
         try:
+            logger.info(f"[DEBUG] [{call_id}] Moonshot: waiting for executor (timeout={self.config.timeout + 5}s)...")
             response = await asyncio.wait_for(
                 loop.run_in_executor(None, call_moonshot),
                 timeout=self.config.timeout + 5  # 额外 5 秒缓冲
             )
+            logger.info(f"[DEBUG] [{call_id}] Moonshot: executor returned successfully")
         except asyncio.TimeoutError:
-            logger.error(f"[DEBUG] Moonshot: Overall timeout after {self.config.timeout + 5}s")
+            logger.error(f"[DEBUG] [{call_id}] Moonshot: Overall timeout after {self.config.timeout + 5}s")
+            log_api_response("_complete_moonshot", self.config.timeout + 5, None, error="Timeout")
             raise asyncio.TimeoutError(f"Moonshot API call timed out after {self.config.timeout + 5}s")
+        except Exception as e:
+            logger.error(f"[DEBUG] [{call_id}] Moonshot: Executor raised exception: {e}")
+            raise
         
-        logger.info(f"[DEBUG] Moonshot: response received, model={response.model}, "
+        logger.info(f"[DEBUG] [{call_id}] Moonshot: response received, model={response.model}, "
                    f"finish_reason={response.choices[0].finish_reason}, "
                    f"tokens={response.usage.total_tokens if response.usage else 'N/A'}")
         
@@ -387,6 +507,94 @@ class LLMClient:
             content=response.choices[0].message.content,
             model=response.model,
             provider="moonshot",
+            usage={
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens,
+            },
+            finish_reason=response.choices[0].finish_reason,
+            raw_response=response.model_dump() if hasattr(response, 'model_dump') else None,
+        )
+    
+    async def _complete_deepseek(self, prompt: str, system: Optional[str]) -> LLMResponse:
+        """DeepSeek API 调用 - 使用 OpenAI 兼容接口"""
+        call_id = f"deepseek_{datetime.utcnow().strftime('%H%M%S')}_{id(prompt) % 10000}"
+        
+        logger.info(f"[DEBUG] [{call_id}] DeepSeek API call starting: model={self.config.model}, "
+                   f"max_tokens={self.config.max_tokens}, timeout={self.config.timeout}")
+        
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        
+        # 记录详细调用信息到调试日志
+        log_api_call("_complete_deepseek",
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    timeout=self.config.timeout,
+                    messages_count=len(messages),
+                    prompt_preview=prompt[:500] + "..." if len(prompt) > 500 else prompt)
+        
+        loop = asyncio.get_event_loop()
+        
+        def call_deepseek():
+            logger.info(f"[DEBUG] [{call_id}] DeepSeek: calling API in executor thread...")
+            llm_debug.debug(f"[{call_id}] HTTP Request: POST https://api.deepseek.com/chat/completions")
+            llm_debug.debug(f"[{call_id}] Request Headers: {{'Authorization': 'Bearer ***', 'Content-Type': 'application/json'}}")
+            llm_debug.debug(f"[{call_id}] Request Body (truncated): {json.dumps({'model': self.config.model, 'messages': messages, 'temperature': self.config.temperature, 'max_tokens': self.config.max_tokens}, ensure_ascii=False)[:1000]}")
+            
+            start = datetime.utcnow()
+            try:
+                # 构建调用参数
+                call_kwargs = {
+                    "model": self.config.model,
+                    "messages": messages,
+                    "max_tokens": self.config.max_tokens,
+                    "timeout": self.config.timeout,
+                }
+                
+                # 如果模型是 deepseek-reasoner (R1)，移除 temperature 参数
+                # R1 模型不支持 temperature 参数
+                if "reasoner" not in self.config.model.lower():
+                    call_kwargs["temperature"] = self.config.temperature
+                
+                result = self._client.chat.completions.create(**call_kwargs)
+                duration = (datetime.utcnow() - start).total_seconds()
+                logger.info(f"[DEBUG] [{call_id}] DeepSeek: API call completed in {duration:.2f}s")
+                log_api_response("_complete_deepseek", duration, result)
+                return result
+            except Exception as e:
+                duration = (datetime.utcnow() - start).total_seconds()
+                logger.error(f"[DEBUG] [{call_id}] DeepSeek: API call failed after {duration:.2f}s: {e}")
+                log_api_response("_complete_deepseek", duration, None, error=str(e))
+                raise
+        
+        # 使用 wait_for 确保总体超时控制
+        try:
+            logger.info(f"[DEBUG] [{call_id}] DeepSeek: waiting for executor (timeout={self.config.timeout + 5}s)...")
+            response = await asyncio.wait_for(
+                loop.run_in_executor(None, call_deepseek),
+                timeout=self.config.timeout + 5  # 额外 5 秒缓冲
+            )
+            logger.info(f"[DEBUG] [{call_id}] DeepSeek: executor returned successfully")
+        except asyncio.TimeoutError:
+            logger.error(f"[DEBUG] [{call_id}] DeepSeek: Overall timeout after {self.config.timeout + 5}s")
+            log_api_response("_complete_deepseek", self.config.timeout + 5, None, error="Timeout")
+            raise asyncio.TimeoutError(f"DeepSeek API call timed out after {self.config.timeout + 5}s")
+        except Exception as e:
+            logger.error(f"[DEBUG] [{call_id}] DeepSeek: Executor raised exception: {e}")
+            raise
+        
+        logger.info(f"[DEBUG] [{call_id}] DeepSeek: response received, model={response.model}, "
+                   f"finish_reason={response.choices[0].finish_reason}, "
+                   f"tokens={response.usage.total_tokens if response.usage else 'N/A'}")
+        
+        return LLMResponse(
+            content=response.choices[0].message.content,
+            model=response.model,
+            provider="deepseek",
             usage={
                 "prompt_tokens": response.usage.prompt_tokens,
                 "completion_tokens": response.usage.completion_tokens,

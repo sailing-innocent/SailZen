@@ -1,0 +1,272 @@
+id: outline_extraction_v2
+name: "大纲提取 - 增强版"
+description: "从章节内容中提取结构化大纲，支持多粒度分析和层级结构生成"
+task_type: outline_extraction
+version: "2.0"
+
+system_prompt: |
+  你是一位专业的小说结构分析师，擅长从文本中提取情节大纲和故事结构。
+  
+  你的任务是：
+  1. 分析给定文本的情节发展，识别关键情节点
+  2. 构建层级化的大纲结构（幕 -> 弧 -> 场景 -> 节拍）
+  3. 标注每个节点的类型、重要性和涉及人物
+  4. 提取支持性原文证据
+  
+  输出要求：
+  - 必须输出合法的 JSON 格式
+  - 不要输出任何解释性文字
+  - 确保所有必填字段都有值
+  - 节点之间保持正确的层级关系
+  - 证据必须准确对应原文
+
+user_prompt_template: |
+  ## 任务：从小说文本中提取结构化大纲
+  
+  ### 分析参数
+  - 作品名称：{{work_title}}
+  - 章节范围：{{chapter_range}}
+  - 分析粒度：{{granularity}}
+  - 大纲类型：{{outline_type}}
+  {{#if extract_turning_points}}
+  - 提取转折点：是
+  {{/if}}
+  {{#if extract_characters}}
+  - 关联人物：是
+  {{/if}}
+  
+  ### 已知信息
+  {{#if known_characters}}
+  - 已知人物：{{#each known_characters}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
+  {{/if}}
+  {{#if existing_outline}}
+  - 已有大纲：{{existing_outline}}
+  {{/if}}
+  
+  ### 待分析文本
+  ```
+  {{chapter_contents}}
+  ```
+  
+  ### 输出格式说明
+  
+  请输出以下 JSON 结构：
+  
+  ```json
+  {
+    "outline_nodes": [
+      {
+        "id": "node_1",
+        "node_type": "act|arc|scene|beat|turning_point",
+        "title": "节点标题（简洁概括，10-30字）",
+        "summary": "详细描述（50-150字）",
+        "significance": "critical|major|normal|minor",
+        "parent_id": null,
+        "sort_index": 0,
+        "characters": ["人物1", "人物2"],
+        "evidence": {
+          "text": "关键原文引用（50-200字）",
+          "start_offset": 0,
+          "end_offset": 100
+        }
+      }
+    ],
+    "turning_points": [
+      {
+        "node_id": "node_1",
+        "turning_point_type": "inciting_incident|rising_action|climax|falling_action|resolution|midpoint|plot_point",
+        "description": "转折点描述"
+      }
+    ],
+    "metadata": {
+      "total_nodes": 5,
+      "max_depth": 2,
+      "chapter_coverage": "第1章-第3章",
+      "analysis_confidence": 0.85
+    }
+  }
+  ```
+  
+  ### 节点类型说明
+  - **act**：幕（大的故事阶段，如第一幕、第二幕）
+  - **arc**：情节弧（完整的情节线，如主角成长弧）
+  - **scene**：场景（具体的场景，如战斗场景、对话场景）
+  - **beat**：节拍（最小的情节单位，如一个动作、一个反应）
+  - **turning_point**：转折点（关键的情节点，如触发事件、中点反转）
+  
+  ### 重要性级别
+  - **critical**：关键 - 影响整个故事走向
+  - **major**：主要 - 重要的情节发展
+  - **normal**：普通 - 一般性情节
+  - **minor**：次要 - 补充性内容
+  
+  ### 层级结构规则
+  1. 幕（act）可以包含多个弧（arc）
+  2. 弧（arc）可以包含多个场景（scene）
+  3. 场景（scene）可以包含多个节拍（beat）
+  4. 转折点（turning_point）可以是独立的，也可以关联到其他节点
+  
+  ### 注意事项
+  1. 确保节点之间有正确的 parent_id 关系
+  2. sort_index 表示同级节点之间的顺序
+  3. 根节点的 parent_id 为 null
+  4. 证据的文本必须准确对应原文内容
+  5. 人物名称使用标准名称，不要使用别名
+
+output_schema:
+  type: object
+  properties:
+    outline_nodes:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: "节点临时ID"
+          node_type:
+            type: string
+            enum: ["act", "arc", "scene", "beat", "turning_point"]
+          title:
+            type: string
+            description: "节点标题（10-30字）"
+          summary:
+            type: string
+            description: "详细描述（50-150字）"
+          significance:
+            type: string
+            enum: ["critical", "major", "normal", "minor"]
+          parent_id:
+            type: ["string", "null"]
+            description: "父节点ID，根节点为null"
+          sort_index:
+            type: integer
+            description: "同级节点排序索引"
+          characters:
+            type: array
+            items:
+              type: string
+            description: "涉及的人物列表"
+          evidence:
+            type: object
+            properties:
+              text:
+                type: string
+                description: "关键原文引用（50-200字）"
+              start_offset:
+                type: integer
+                description: "原文起始偏移"
+              end_offset:
+                type: integer
+                description: "原文结束偏移"
+        required: ["id", "node_type", "title", "summary", "significance", "sort_index"]
+    turning_points:
+      type: array
+      items:
+        type: object
+        properties:
+          node_id:
+            type: string
+            description: "关联的节点ID"
+          turning_point_type:
+            type: string
+            enum: ["inciting_incident", "rising_action", "climax", "falling_action", "resolution", "midpoint", "plot_point"]
+          description:
+            type: string
+            description: "转折点描述"
+      required: ["node_id", "turning_point_type"]
+    metadata:
+      type: object
+      properties:
+        total_nodes:
+          type: integer
+        max_depth:
+          type: integer
+        chapter_coverage:
+          type: string
+        analysis_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+  required: ["outline_nodes", "metadata"]
+
+example_input: |
+  work_title: "示例小说"
+  chapter_range: "第1章-第2章"
+  granularity: "scene"
+  outline_type: "main"
+  extract_turning_points: true
+  extract_characters: true
+  known_characters: ["李明", "王芳"]
+  chapter_contents: |
+    第一章 初遇
+    
+    李明走在回家的路上，突然看见前方有一个人倒在地上。他快步上前，发现是一位年轻女子...
+    
+    第二章 相识
+    
+    经过那次救助，李明得知女子名叫王芳。两人开始频繁接触...
+
+example_output: |
+  {
+    "outline_nodes": [
+      {
+        "id": "node_1",
+        "node_type": "act",
+        "title": "第一幕：缘起",
+        "summary": "故事的开端，主角李明偶然救助了王芳，两人命运开始交织。",
+        "significance": "critical",
+        "parent_id": null,
+        "sort_index": 0,
+        "characters": ["李明", "王芳"],
+        "evidence": {
+          "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。",
+          "start_offset": 0,
+          "end_offset": 50
+        }
+      },
+      {
+        "id": "node_2",
+        "node_type": "scene",
+        "title": "李明救助路人",
+        "summary": "李明在回家途中发现王芳倒地，出于善心上前救助。",
+        "significance": "major",
+        "parent_id": "node_1",
+        "sort_index": 0,
+        "characters": ["李明", "王芳"],
+        "evidence": {
+          "text": "李明走在回家的路上，突然看见前方有一个人倒在地上。他快步上前...",
+          "start_offset": 0,
+          "end_offset": 80
+        }
+      },
+      {
+        "id": "node_3",
+        "node_type": "turning_point",
+        "title": "触发事件：命运相遇",
+        "summary": "这次救助成为两人关系发展的起点。",
+        "significance": "critical",
+        "parent_id": "node_2",
+        "sort_index": 0,
+        "characters": ["李明", "王芳"],
+        "evidence": {
+          "text": "经过那次救助，李明得知女子名叫王芳。",
+          "start_offset": 100,
+          "end_offset": 150
+        }
+      }
+    ],
+    "turning_points": [
+      {
+        "node_id": "node_3",
+        "turning_point_type": "inciting_incident",
+        "description": "主角与关键人物相遇，故事正式开始"
+      }
+    ],
+    "metadata": {
+      "total_nodes": 3,
+      "max_depth": 2,
+      "chapter_coverage": "第1章-第2章",
+      "analysis_confidence": 0.88
+    }
+  }

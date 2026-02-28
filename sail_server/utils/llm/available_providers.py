@@ -23,7 +23,27 @@ class ProviderInfo:
     description: str = ""
     
 
+# ============================================================================
+# 默认 LLM 配置（项目全局默认）
+# ============================================================================
+
+# 默认 Provider 和模型（用于大纲提取等分析任务）
+DEFAULT_LLM_PROVIDER = "moonshot"
+DEFAULT_LLM_MODEL = "kimi-k2.5"
+
+# 默认 LLM 配置参数
+# 注意：Kimi K2.5 要求 temperature 必须为 1
+DEFAULT_LLM_CONFIG = {
+    "provider": DEFAULT_LLM_PROVIDER,
+    "model": DEFAULT_LLM_MODEL,
+    "temperature": 1.0,  # Kimi K2.5 要求 temperature 必须为 1
+    "max_tokens": 4000,
+}
+
+# ============================================================================
 # 当前可用的 Provider 配置
+# ============================================================================
+
 AVAILABLE_PROVIDERS: Dict[str, ProviderInfo] = {
     "moonshot": ProviderInfo(
         name="moonshot",
@@ -77,10 +97,34 @@ AVAILABLE_PROVIDERS: Dict[str, ProviderInfo] = {
         requires_api_key=True,
         description="Google Gemini 系列模型",
     ),
+    "deepseek": ProviderInfo(
+        name="deepseek",
+        display_name="DeepSeek",
+        default_model="deepseek-chat",
+        available_models=[
+            "deepseek-chat",
+            "deepseek-reasoner",
+        ],
+        requires_api_key=True,
+        description="DeepSeek 系列模型 - 高性价比中文模型",
+    ),
 }
 
 # 默认使用的 Provider（优先级）
-DEFAULT_PROVIDER_PRIORITY = ["moonshot", "openai", "anthropic", "google"]
+# 候补序列：当默认 Provider 不可用时，按此顺序尝试
+DEFAULT_PROVIDER_PRIORITY = ["moonshot", "deepseek", "openai", "anthropic", "google"]
+
+# 候补 Provider 序列（用于故障转移）
+# 当主 Provider 失败时，按此顺序尝试其他 Provider
+FALLBACK_PROVIDER_CHAIN = ["deepseek", "openai", "anthropic", "google", "moonshot"]
+
+# 任务类型特定的候补序列
+TASK_FALLBACK_CHAINS = {
+    "novel_analysis": ["deepseek", "moonshot", "openai", "anthropic", "google"],
+    "general": ["deepseek", "openai", "anthropic", "google", "moonshot"],
+    "code": ["deepseek", "openai", "anthropic", "google", "moonshot"],
+    "writing": ["deepseek", "moonshot", "openai", "anthropic", "google"],
+}
 
 # 任务类型推荐的模型配置
 TASK_TYPE_RECOMMENDATIONS = {
@@ -127,6 +171,40 @@ def get_default_model(provider: str) -> str:
 def get_recommendation(task_type: str) -> Dict[str, str]:
     """获取任务类型的推荐配置"""
     return TASK_TYPE_RECOMMENDATIONS.get(task_type, TASK_TYPE_RECOMMENDATIONS["general"])
+
+
+def get_fallback_chain(task_type: str = None) -> List[str]:
+    """获取候补 Provider 序列
+    
+    Args:
+        task_type: 任务类型，如果提供则返回任务特定的候补序列
+        
+    Returns:
+        按优先级排序的 Provider 名称列表
+    """
+    if task_type and task_type in TASK_FALLBACK_CHAINS:
+        return TASK_FALLBACK_CHAINS[task_type]
+    return FALLBACK_PROVIDER_CHAIN
+
+
+def get_next_fallback_provider(current_provider: str, task_type: str = None, attempted: List[str] = None) -> Optional[str]:
+    """获取下一个候补 Provider
+    
+    Args:
+        current_provider: 当前失败的 Provider
+        task_type: 任务类型
+        attempted: 已经尝试过的 Provider 列表
+        
+    Returns:
+        下一个应该尝试的 Provider 名称，如果没有可用的则返回 None
+    """
+    attempted = attempted or []
+    chain = get_fallback_chain(task_type)
+    
+    for provider in chain:
+        if provider != current_provider and provider not in attempted:
+            return provider
+    return None
 
 
 def to_frontend_config() -> Dict[str, any]:

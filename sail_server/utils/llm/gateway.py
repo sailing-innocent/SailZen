@@ -25,6 +25,7 @@ from .providers import (
     AnthropicProvider,
     GoogleProvider,
     MoonshotProvider,
+    DeepseekProvider,
 )
 from .pricing import TokenPricing, PricingRegistry, calculate_cost, estimate_cost
 
@@ -263,6 +264,7 @@ class LLMGateway:
                 "anthropic": AnthropicProvider,
                 "google": GoogleProvider,
                 "moonshot": MoonshotProvider,
+                "deepseek": DeepseekProvider,
             }
             provider_class = provider_map.get(provider_name)
             
@@ -539,6 +541,18 @@ def create_default_gateway() -> LLMGateway:
                 model=os.getenv("MOONSHOT_MODEL", "kimi-k2-5"),
                 api_key=os.getenv("MOONSHOT_API_KEY"),
                 api_base=os.getenv("MOONSHOT_API_BASE"),
+            )
+        )
+    
+    # 注册 DeepSeek
+    if os.getenv("DEEPSEEK_API_KEY"):
+        gateway.register_provider(
+            "deepseek",
+            ProviderConfig(
+                provider_name="deepseek",
+                model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+                api_key=os.getenv("DEEPSEEK_API_KEY"),
+                api_base=os.getenv("DEEPSEEK_API_BASE"),
             )
         )
     

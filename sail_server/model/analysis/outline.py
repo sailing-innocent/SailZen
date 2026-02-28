@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from sail_server.data.analysis import (
-    Outline, OutlineNode, OutlineEvent,
     OutlineData, OutlineNodeData, OutlineEventData,
     OutlineTree,
 )
+from sail_server.data.analysis import Outline, OutlineNode, OutlineEvent
 
 
 # ============================================================================

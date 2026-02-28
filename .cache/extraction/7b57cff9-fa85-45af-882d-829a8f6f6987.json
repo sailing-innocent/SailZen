@@ -1,0 +1,33 @@
+{
+  "task_id": "7b57cff9-fa85-45af-882d-829a8f6f6987",
+  "edition_id": 6,
+  "created_at": "2026-02-28T22:11:42.804657",
+  "updated_at": "2026-02-28T22:11:42.805617",
+  "phase": "batch_started",
+  "progress_percent": 0,
+  "current_step": "batch_0",
+  "message": "Processing batch 1/1",
+  "total_batches": 1,
+  "current_batch": 0,
+  "completed_batches": [],
+  "failed_batches": [],
+  "accumulated_nodes": [],
+  "accumulated_turning_points": [],
+  "batch_checkpoints": {},
+  "config": {
+    "granularity": "scene",
+    "outline_type": "main",
+    "extract_turning_points": true,
+    "extract_characters": true
+  },
+  "range_selection": {
+    "mode": "full_edition",
+    "edition_id": 6
+  },
+  "work_title": "",
+  "known_characters": [],
+  "last_error": null,
+  "last_error_type": null,
+  "retry_count": 0,
+  "metadata": {}
+}

@@ -88,7 +88,7 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
   const [executing, setExecuting] = useState(false)
   const [taskProgress, setTaskProgress] = useState<TaskProgress | null>(null)
   const [providers, setProviders] = useState<LLMProvider[]>([])
-  const [selectedProvider, setSelectedProvider] = useState('mock')
+  const [selectedProvider, setSelectedProvider] = useState<string>('')
   
   // 加载任务列表
   const loadTasks = useCallback(async () => {
@@ -109,11 +109,15 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
       const data = await api_get_llm_providers()
       if (data.success) {
         setProviders(data.providers)
+        // 设置默认 Provider
+        if (data.default_provider && !selectedProvider) {
+          setSelectedProvider(data.default_provider)
+        }
       }
     } catch (err) {
       console.error('Failed to load providers:', err)
     }
-  }, [])
+  }, [selectedProvider])
   
   useEffect(() => {
     loadTasks()
@@ -400,9 +404,9 @@ export default function TaskPanel({ editionId }: TaskPanelProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                  {selectedProvider === 'mock' && (
+                  {!selectedProvider && (
                     <p className="text-sm text-muted-foreground mt-1">
-                      Mock 模式将使用模拟数据，适合测试和演示
+                      请选择 LLM 提供商
                     </p>
                   )}
                 </div>

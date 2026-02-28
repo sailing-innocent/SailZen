@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
       '@components': resolve(__dirname, 'src/components'),
       '@pages': resolve(__dirname, 'src/pages'),
       '@shaders': resolve(__dirname, 'src/shaders'),
+      '@hooks': resolve(__dirname, 'src/hooks'),
     },
   },
   define: {

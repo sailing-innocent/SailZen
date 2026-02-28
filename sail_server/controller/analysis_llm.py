@@ -256,6 +256,28 @@ class TaskExecutionController(Controller):
                     api_key=data.llm_api_key,
                     temperature=data.temperature,
                 )
+            elif data.llm_provider:
+                # 从环境变量读取 API key
+                try:
+                    provider = LLMProvider(data.llm_provider)
+                    config = LLMConfig.from_env(provider)
+                    # 如果环境变量中没有 API key，则回退到 Mock
+                    if not config.api_key:
+                        logger.warning(f"No API key found for provider {data.llm_provider} in environment, falling back to mock")
+                        config = LLMConfig(
+                            provider=LLMProvider.MOCK,
+                            model="mock-model",
+                            temperature=data.temperature,
+                        )
+                    else:
+                        config.temperature = data.temperature
+                except ValueError as e:
+                    logger.warning(f"Failed to create config for provider {data.llm_provider}: {e}, falling back to mock")
+                    config = LLMConfig(
+                        provider=LLMProvider.MOCK,
+                        model="mock-model",
+                        temperature=data.temperature,
+                    )
             else:
                 # 默认使用 Mock 模式
                 config = LLMConfig(
@@ -303,13 +325,13 @@ class TaskExecutionController(Controller):
                 
                 # 配置 LLM
                 if mode == TaskExecutionMode.LLM_DIRECT:
-                    if data.llm_provider == "mock" or not data.llm_api_key:
+                    if data.llm_provider == "mock":
                         config = LLMConfig(
                             provider=LLMProvider.MOCK,
                             model="mock-model",
                             temperature=data.temperature,
                         )
-                    else:
+                    elif data.llm_api_key:
                         try:
                             provider = LLMProvider(data.llm_provider or "openai")
                         except ValueError:
@@ -318,6 +340,35 @@ class TaskExecutionController(Controller):
                             provider=provider,
                             model=data.llm_model or "gpt-4",
                             api_key=data.llm_api_key,
+                            temperature=data.temperature,
+                        )
+                    elif data.llm_provider:
+                        # 从环境变量读取 API key
+                        try:
+                            provider = LLMProvider(data.llm_provider)
+                            config = LLMConfig.from_env(provider)
+                            # 如果环境变量中没有 API key，则回退到 Mock
+                            if not config.api_key:
+                                logger.warning(f"No API key found for provider {data.llm_provider} in environment, falling back to mock")
+                                config = LLMConfig(
+                                    provider=LLMProvider.MOCK,
+                                    model="mock-model",
+                                    temperature=data.temperature,
+                                )
+                            else:
+                                config.temperature = data.temperature
+                        except ValueError as e:
+                            logger.warning(f"Failed to create config for provider {data.llm_provider}: {e}, falling back to mock")
+                            config = LLMConfig(
+                                provider=LLMProvider.MOCK,
+                                model="mock-model",
+                                temperature=data.temperature,
+                            )
+                    else:
+                        # 默认使用 Mock 模式
+                        config = LLMConfig(
+                            provider=LLMProvider.MOCK,
+                            model="mock-model",
                             temperature=data.temperature,
                         )
                     runner.set_llm_config(config)

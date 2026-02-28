@@ -124,6 +124,161 @@ export interface EvidenceUpdateRequest {
 }
 
 // ============================================================================
+// Outline Extraction Types
+// ============================================================================
+
+export type OutlineGranularity = 'act' | 'arc' | 'scene' | 'beat'
+export type OutlineExtractionType = 'main' | 'subplot' | 'character_arc' | 'theme'
+
+export interface OutlineExtractionConfig {
+  granularity: OutlineGranularity
+  outline_type: OutlineExtractionType
+  extract_turning_points: boolean
+  extract_characters: boolean
+  max_nodes: number
+  llm_provider?: string
+  llm_model?: string
+  temperature: number
+  prompt_template_id: string
+}
+
+export interface OutlineExtractionRequest {
+  edition_id: number
+  range_selection: TextRangeSelection
+  config: OutlineExtractionConfig
+  work_title?: string
+  known_characters?: string[]
+}
+
+export interface ExtractedOutlineNode {
+  id: string
+  node_type: OutlineNodeType
+  title: string
+  summary: string
+  significance: 'critical' | 'major' | 'normal' | 'minor'
+  sort_index: number
+  parent_id?: string
+  characters?: string[]
+  evidence?: {
+    text: string
+    start_offset: number
+    end_offset: number
+  }
+}
+
+export interface OutlineExtractionResult {
+  nodes: ExtractedOutlineNode[]
+  metadata: Record<string, unknown>
+  turning_points?: Array<{
+    node_id: string
+    turning_point_type: string
+    description: string
+  }>
+}
+
+export interface OutlineExtractionResponse {
+  success: boolean
+  task_id?: string
+  result?: OutlineExtractionResult
+  message: string
+  error?: string
+}
+
+export interface OutlineExtractionTask {
+  task_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  message: string
+  created_at: string
+}
+
+export interface RateLimitInfo {
+  limit_type: string
+  current_usage: number
+  limit: number
+  usage_percent: number
+  reset_time?: string
+  retry_after?: number
+  detected_at: string
+}
+
+export interface ExtractionErrorInfo {
+  type: string
+  message: string
+  is_retryable: boolean
+  retry_count: number
+  rate_limit_info?: RateLimitInfo
+  suggestion: string
+}
+
+export interface OutlineExtractionProgress {
+  task_id: string
+  current_step: string
+  progress_percent: number
+  message: string
+  chunk_index?: number
+  total_chunks?: number
+  batch_index?: number
+  total_batches?: number
+  // 新增：重试和错误信息
+  is_retrying?: boolean
+  retry_attempt?: number
+  retry_delay?: number
+  rate_limit_info?: RateLimitInfo
+  error_info?: ExtractionErrorInfo
+}
+
+export interface OutlineExtractionDetailedStatus {
+  task_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'paused'
+  phase: string
+  progress_percent: number
+  current_step: string
+  message: string
+  // 批次信息
+  total_batches: number
+  completed_batches: number[]
+  failed_batches: number[]
+  current_batch: number
+  // 结果统计
+  total_nodes: number
+  total_turning_points: number
+  // 错误信息
+  last_error?: string
+  last_error_type?: string
+  retry_count: number
+  // 恢复信息
+  is_recovered: boolean
+  recovered_from?: string
+  // 时间戳
+  created_at?: string
+  started_at?: string
+  completed_at?: string
+  updated_at?: string
+}
+
+export interface ResumeTaskResponse {
+  success: boolean
+  task_id: string
+  message: string
+  resumed_from_batch: number
+  total_batches: number
+}
+
+export interface OutlinePreviewResponse {
+  preview_nodes: Array<{
+    id: string
+    node_type: string
+    title: string
+    summary: string
+    significance: string
+    parent_id?: string
+  }>
+  total_nodes: number
+  estimated_tokens: number
+  sample_evidence: string[]
+}
+
+// ============================================================================
 // Analysis Task Types
 // ============================================================================
 
@@ -322,7 +477,7 @@ export type OutlineNodeType = 'act' | 'chapter' | 'scene' | 'event' | 'beat'
 export interface Outline {
   id: string
   edition_id: number
-  name: string
+  title: string
   outline_type: OutlineType
   description?: string
   root_node_id?: string
@@ -407,8 +562,21 @@ export interface TaskExecutionPlan {
 export interface LLMProvider {
   id: string
   name: string
+  display_name: string
   description?: string
   models: string[]
+  default_model: string
+  requires_api_key: boolean
+}
+
+/** LLM Providers API 响应 */
+export interface LLMProvidersResponse {
+  success: boolean
+  providers: LLMProvider[]
+  default_provider: string | null
+  default_priority: string[]
+  fallback_chain: string[]
+  task_fallback_chains: Record<string, string[]>
 }
 
 // ============================================================================

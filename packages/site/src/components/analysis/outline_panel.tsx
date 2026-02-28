@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { Sparkles } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -44,8 +45,20 @@ import {
   api_add_outline_node,
   api_delete_outline_node,
   api_add_outline_event,
+  api_get_llm_providers,
 } from '@lib/api/analysis'
-import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType } from '@lib/data/analysis'
+import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType, LLMProvider } from '@lib/data/analysis'
+
+// Outline Extraction imports
+import { OutlineExtractionConfigPanel } from '@components/outline_extraction_config'
+import { OutlineReviewPanel } from '@components/outline_review_panel'
+import {
+  api_create_outline_extraction_task,
+  api_get_outline_extraction_progress,
+  api_get_outline_extraction_result,
+  api_save_outline_extraction_result,
+} from '@lib/api/analysis'
+import type { OutlineExtractionConfig, OutlineExtractionResult, OutlineExtractionProgress } from '@lib/data/analysis'
 
 interface OutlinePanelProps {
   editionId: number
@@ -95,6 +108,25 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     description: '',
   })
 
+  // Extraction state
+  const [showExtraction, setShowExtraction] = useState(false)
+  const [extractionConfig, setExtractionConfig] = useState<OutlineExtractionConfig>({
+    granularity: 'scene',
+    outline_type: 'main',
+    extract_turning_points: true,
+    extract_characters: true,
+    max_nodes: 50,
+    temperature: 0.3,
+    prompt_template_id: 'outline_extraction_v2',
+  })
+  const [providers, setProviders] = useState<LLMProvider[]>([])
+  const [defaultProvider, setDefaultProvider] = useState<string>('')
+  const [extractionTaskId, setExtractionTaskId] = useState<string | null>(null)
+  const [extractionProgress, setExtractionProgress] = useState<OutlineExtractionProgress | null>(null)
+  const [extractionResult, setExtractionResult] = useState<OutlineExtractionResult | null>(null)
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [selectedResultNodes, setSelectedResultNodes] = useState<string[]>([])
+
   const fetchOutlines = async () => {
     setLoading(true)
     setError(null)
@@ -108,8 +140,24 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     }
   }
 
+  // 加载 LLM Provider 列表
+  const loadProviders = async () => {
+    try {
+      const data = await api_get_llm_providers()
+      if (data.success) {
+        setProviders(data.providers)
+        if (data.default_provider) {
+          setDefaultProvider(data.default_provider)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load providers:', err)
+    }
+  }
+
   useEffect(() => {
     fetchOutlines()
+    loadProviders()
   }, [editionId])
 
   const handleSelectOutline = async (outline: Outline) => {
@@ -155,6 +203,73 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     }
   }
 
+  // Extraction handlers
+  const handleStartExtraction = async () => {
+    setIsExtracting(true)
+    setExtractionResult(null)
+    setError(null)
+
+    try {
+      const task = await api_create_outline_extraction_task({
+        edition_id: editionId,
+        range_selection: {
+          edition_id: editionId,
+          mode: 'full_edition',
+        },
+        config: extractionConfig,
+      })
+      setExtractionTaskId(task.task_id)
+
+      // Start polling for progress
+      pollExtractionProgress(task.task_id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建提取任务失败')
+      setIsExtracting(false)
+    }
+  }
+
+  const pollExtractionProgress = async (taskId: string) => {
+    const poll = async () => {
+      try {
+        const progress = await api_get_outline_extraction_progress(taskId)
+        setExtractionProgress(progress)
+
+        if (progress.progress_percent >= 100) {
+          // Get result
+          const result = await api_get_outline_extraction_result(taskId)
+          if (result.success && result.result) {
+            setExtractionResult(result.result)
+            setSelectedResultNodes(result.result.nodes.map((n) => n.id))
+          }
+          setIsExtracting(false)
+        } else {
+          // Continue polling
+          setTimeout(() => poll(), 2000)
+        }
+      } catch (err) {
+        console.error('Failed to get progress:', err)
+        setIsExtracting(false)
+      }
+    }
+    poll()
+  }
+
+  const handleSaveExtractionResult = async () => {
+    if (!extractionTaskId) return
+    try {
+      const result = await api_save_outline_extraction_result(extractionTaskId)
+      if (result.success) {
+        alert(`保存成功！\n大纲 ID: ${result.outline_id}\n节点数: ${result.nodes_created}`)
+        // Refresh outlines
+        fetchOutlines()
+        setShowExtraction(false)
+        setExtractionResult(null)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '保存失败')
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -182,17 +297,59 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     )
   }
 
+  // Show extraction interface
+  if (showExtraction) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">AI 大纲提取</h3>
+          <Button variant="outline" onClick={() => setShowExtraction(false)}>
+            返回列表
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <OutlineExtractionConfigPanel
+            config={extractionConfig}
+            onConfigChange={setExtractionConfig}
+            onStart={handleStartExtraction}
+            isProcessing={isExtracting}
+            providers={providers}
+            defaultProvider={defaultProvider}
+          />
+          <OutlineReviewPanel
+            result={extractionResult}
+            progress={extractionProgress}
+            isProcessing={isExtracting}
+            selectedNodeIds={selectedResultNodes}
+            onSelectionChange={setSelectedResultNodes}
+            onSave={handleSaveExtractionResult}
+            onRetry={() => {
+              setExtractionResult(null)
+              setExtractionProgress(null)
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex justify-between">
         <h3 className="text-lg font-semibold">大纲列表</h3>
-        
-        {/* Create Dialog */}
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>新建大纲</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowExtraction(true)}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            AI 提取
+          </Button>
+
+          {/* Create Dialog */}
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>新建大纲</Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>新建大纲</DialogTitle>
@@ -238,6 +395,7 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      </div>
       </div>
 
       {/* Error message */}
@@ -379,7 +537,7 @@ function OutlineTreeEditor({ tree, onBack, onUpdate }: OutlineTreeEditorProps) {
             </Button>
           </div>
         </div>
-        
+
         {node.summary && (
           <p className="text-sm text-muted-foreground ml-3 mb-1" style={{ marginLeft: indent + 12 }}>
             {node.summary}

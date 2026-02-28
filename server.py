@@ -18,13 +18,14 @@ from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
 
-import logging
-from litestar.config.cors import CORSConfig
+# 导入新的日志体系
+from sail_server.utils.logging_config import setup_logging, get_logger
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("sail_server")
+# 设置日志（必须在其他导入之前）
+setup_logging()
+logger = get_logger("sail_server")
+
+from litestar.config.cors import CORSConfig
 from litestar.logging import LoggingConfig
 
 from sail_server.utils.env import read_env
@@ -54,45 +55,10 @@ class SailServer:
             "/necessity",
         ]
         self.api_router = None
-        self.debug = os.environ.get("DEV_MODE", "false").lower() == "true"
-        log_file_raw = os.environ.get("SERVER_LOG_FILE")
-        # Validate and normalize log file path early
-        if log_file_raw and log_file_raw.strip():
-            try:
-                self.log_file = os.path.abspath(
-                    os.path.expanduser(log_file_raw.strip())
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Invalid log file path '{log_file_raw}': {e}. Using console logging."
-                )
-                self.log_file = None
-        else:
-            self.log_file = None
-
-    def _create_custom_rotating_handler(self):
-        """Create a custom rotating file handler with timestamp-based backup naming."""
-        import logging.handlers
-
-        class TimestampRotatingFileHandler(logging.handlers.RotatingFileHandler):
-            def doRollover(self):
-                if self.stream:
-                    self.stream.close()
-                    self.stream = None
-
-                # Generate timestamp for backup file
-                save_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-                backup_name = f"{self.baseFilename}.bk.{save_time}"
-
-                # Rename current log file to backup
-                if os.path.exists(self.baseFilename):
-                    os.rename(self.baseFilename, backup_name)
-
-                # Open new log file
-                if not self.delay:
-                    self.stream = self._open()
-
-        return TimestampRotatingFileHandler
+        # 调试模式由 LOG_MODE 环境变量控制
+        self.debug = os.environ.get("LOG_MODE", "prod") in ("dev", "debug")
+        # 新的日志体系自动处理日志文件，不需要手动设置
+        self.log_file = None
 
     def init(self):
         @get("/health")
@@ -155,11 +121,11 @@ class SailServer:
         try:
             from sail_server.db import get_db_session
             from sail_server.utils.db_utils import fix_all_sequences
-            db = next(get_db_session())
-            fix_results = fix_all_sequences(db)
-            for table, success in fix_results.items():
-                if not success:
-                    logger.warning(f"Failed to fix sequence for {table}")
+            with get_db_session() as db:
+                fix_results = fix_all_sequences(db)
+                for table, success in fix_results.items():
+                    if not success:
+                        logger.warning(f"Failed to fix sequence for {table}")
         except Exception as e:
             logger.warning(f"Failed to fix sequences: {e}")
 
@@ -194,111 +160,13 @@ class SailServer:
             }
         }
 
+        # 使用最小化的 Litestar 日志配置（因为我们已经通过 logging_config 设置了）
         logging_config = LoggingConfig(
-            root={"level": "INFO", "handlers": handlers},
+            root={"level": "INFO", "handlers": []},
             handlers={},
-            formatters=formatters,
+            formatters={},
             log_exceptions="always",
         )
-
-        # Setup file handler manually if log file is specified
-        # Note: log_file path is already normalized in __init__
-        if self.log_file and self.log_file.strip():
-            try:
-                # Ensure the log file directory exists
-                log_dir = os.path.dirname(self.log_file)
-                if log_dir:
-                    # Create directory with proper error handling
-                    try:
-                        os.makedirs(log_dir, mode=0o755, exist_ok=True)
-                        # Verify directory was created and is writable
-                        if not os.path.exists(log_dir):
-                            raise OSError(f"Directory creation failed: {log_dir}")
-                        if not os.path.isdir(log_dir):
-                            raise OSError(
-                                f"Path exists but is not a directory: {log_dir}"
-                            )
-                        if not os.access(log_dir, os.W_OK):
-                            raise OSError(f"Directory is not writable: {log_dir}")
-                    except OSError as e:
-                        logger.error(
-                            f"Cannot create or access log directory {log_dir}: {e}. Falling back to console logging."
-                        )
-                        self.log_file = None
-                else:
-                    # If no directory specified, use current directory
-                    logger.warning(
-                        f"No directory specified for log file: {self.log_file}"
-                    )
-
-            except Exception as e:
-                logger.error(
-                    f"Error setting up log file directory: {e}. Falling back to console logging.",
-                    exc_info=True,
-                )
-                self.log_file = None
-
-        if self.log_file and self.log_file.strip():
-
-            def setup_file_handler():
-                """Set up custom rotating file handler after Litestar configures logging."""
-                import logging.handlers
-
-                try:
-                    # Ensure directory exists right before creating handler
-                    log_dir = os.path.dirname(self.log_file)
-                    if log_dir:
-                        try:
-                            os.makedirs(log_dir, exist_ok=True)
-                            # Verify directory was created and is writable
-                            if not os.path.exists(log_dir):
-                                raise OSError(
-                                    f"Failed to create log directory: {log_dir}"
-                                )
-                            if not os.access(log_dir, os.W_OK):
-                                raise OSError(
-                                    f"Log directory is not writable: {log_dir}"
-                                )
-                        except OSError as e:
-                            logger.error(
-                                f"Cannot create or access log directory {log_dir}: {e}. Using console logging only."
-                            )
-                            return
-
-                    root_logger = logging.getLogger()
-
-                    # Remove any existing file handlers to avoid duplicates
-                    for handler in root_logger.handlers[:]:
-                        if isinstance(
-                            handler,
-                            (logging.handlers.RotatingFileHandler, logging.FileHandler),
-                        ):
-                            root_logger.removeHandler(handler)
-                            handler.close()
-
-                    # Add our custom rotating handler
-                    custom_handler = self._create_custom_rotating_handler()(
-                        filename=self.log_file,
-                        maxBytes=512 * 1024,  # 512KB
-                        backupCount=0,  # We handle backups manually
-                    )
-                    custom_handler.setLevel(logging.INFO)
-                    custom_handler.setFormatter(
-                        logging.Formatter(
-                            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                        )
-                    )
-                    root_logger.addHandler(custom_handler)
-                    logger.info(f"File logging configured: {self.log_file}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to configure file handler: {e}. Using console logging only.",
-                        exc_info=True,
-                    )
-                    # Don't raise - allow server to continue with console logging
-
-            # Store the setup function to call after app initialization
-            self._setup_file_handler = setup_file_handler
 
         cors_config = CORSConfig(allow_origins=["*"], allow_methods=["*"])
 
@@ -347,15 +215,6 @@ class SailServer:
             else:
                 raise
 
-        # Setup file handler after Litestar configures logging
-        if self.log_file and hasattr(self, "_setup_file_handler"):
-            try:
-                self._setup_file_handler()
-            except Exception as e:
-                logger.error(
-                    f"Failed to setup file handler: {e}. Server will continue with console logging."
-                )
-
     async def on_startup(self):
         logger.info("Server starting up...")
         # 启动 Agent 调度器
@@ -376,25 +235,14 @@ class SailServer:
         logger.info(f"Server running on {self.host}:{self.port}")
         import uvicorn
 
-        # Configure uvicorn to use our logging setup
-        uvicorn_config = {
-            "host": self.host,
-            "port": self.port,
-            "log_level": "info",
-            "access_log": False,
-            "use_colors": False,  # Disable colors for file logging
-        }
-
-        # If we have a log file, disable uvicorn's default logging
-        if self.log_file:
-            uvicorn_config.update(
-                {
-                    "log_config": None,  # Disable uvicorn's logging config
-                    "access_log": False,
-                }
-            )
-
-        uvicorn.run(self.app, **uvicorn_config)
+        # 使用新的日志体系，禁用 uvicorn 的默认日志
+        uvicorn.run(
+            self.app,
+            host=self.host,
+            port=self.port,
+            log_config=None,  # 使用我们的日志配置
+            access_log=False,
+        )
 
 
 def main():

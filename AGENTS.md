@@ -357,6 +357,197 @@ AI 驱动的智能文本导入工具：
 - 异常章节检测
 - 人机确认界面
 
+## Logging System
+
+### 日志体系概述
+
+项目使用统一的日志配置体系，支持多种模式和详细程度的日志记录。
+
+**日志配置文件**: `sail_server/utils/logging_config.py`
+
+### 日志模式
+
+通过 `LOG_MODE` 环境变量控制：
+
+| 模式 | 说明 | 日志级别 | 输出目标 |
+|------|------|----------|----------|
+| `prod` | 生产模式 | INFO | 控制台(WARN+) + 文件(JSON) |
+| `dev` | 开发模式 | INFO | 控制台(彩色) + 文件 + 错误日志 |
+| `debug` | 调试模式 | DEBUG | 所有目标 + 详细调试文件 |
+
+### 环境变量
+
+```bash
+# 日志模式 (prod, dev, debug)
+LOG_MODE=debug
+
+# 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+LOG_LEVEL=DEBUG
+
+# 日志目录 (默认: logs)
+LOG_DIR=logs
+
+# 启用 LLM 详细调试
+LLM_DEBUG=true
+
+# 启用 API 请求/响应日志
+API_DEBUG=true
+
+# 启用数据库查询日志
+DB_DEBUG=true
+```
+
+### 日志文件结构
+
+在 `debug` 模式下，会生成以下日志文件：
+
+```
+logs/
+├── sailzen.log              # 主日志（人类可读）
+├── sailzen.json.log         # 主日志（JSON格式，便于分析）
+├── error.log                # 错误日志（ERROR级别以上）
+├── llm_debug.log            # LLM API 调用详情
+├── api_requests.log         # HTTP 请求/响应详情
+└── db_queries.log           # 数据库查询详情
+```
+
+### 使用日志工具
+
+```python
+from sail_server.utils.logging_config import get_logger, log_api_request, log_api_response
+
+# 获取日志记录器
+logger = get_logger("my_module")
+logger.info("Something happened")
+logger.debug("Debug info: %s", data)
+
+# 记录 API 请求/响应（仅在 API_DEBUG=true 时记录）
+log_api_request("POST", "/api/v1/analysis", body={"key": "value"})
+log_api_response("/api/v1/analysis", 200, 0.5, body={"result": "ok"})
+```
+
+### 调试 LLM 调用
+
+在 `debug` 模式下，LLM 调用会记录：
+- 请求参数（模型、温度、max_tokens 等）
+- 请求体预览（前500字符）
+- HTTP 请求详情
+- 响应内容（截断）
+- 调用耗时
+- 错误详情
+
+查看 LLM 调试日志：
+```bash
+tail -f logs/llm_debug.log
+```
+
+## LLM Configuration Guide
+
+### 调试日志
+
+在开发和调试 LLM 相关功能时，可以启用详细的 API 调用日志：
+
+**环境变量配置**:
+```bash
+# 启用详细调试日志
+LLM_DEBUG=true
+
+# 设置日志级别 (DEBUG, INFO, WARNING, ERROR)
+LLM_LOG_LEVEL=DEBUG
+
+# 设置日志文件路径
+LLM_LOG_PATH=logs/llm_debug.log
+```
+
+**日志内容示例**:
+```
+2026-02-28 20:38:37 - llm_debug - INFO
+[API CALL] _complete_moonshot
+Params: {
+  "model": "kimi-k2.5",
+  "temperature": 1.0,
+  "max_tokens": 4000,
+  "messages_count": 2,
+  "prompt_preview": "请分析以下文本的大纲结构..."
+}
+================================================================================
+
+2026-02-28 20:38:45 - llm_debug - INFO
+[API RESPONSE] {
+  "function": "_complete_moonshot",
+  "duration_seconds": 8.5,
+  "timestamp": "2026-02-28T20:38:45.123456",
+  "response": "{\"outline_nodes\": [...], ...}"
+}
+================================================================================
+```
+
+**日志文件位置**: 默认在项目根目录的 `logs/llm_debug.log`
+
+### 默认 LLM 配置
+
+项目使用集中式 LLM 配置管理，默认配置位于：
+
+**文件**: `sail_server/utils/llm/available_providers.py`
+
+```python
+# 默认 Provider 和模型
+DEFAULT_LLM_PROVIDER = "moonshot"
+DEFAULT_LLM_MODEL = "kimi-k2.5"
+
+# 默认 LLM 配置参数
+DEFAULT_LLM_CONFIG = {
+    "provider": DEFAULT_LLM_PROVIDER,
+    "model": DEFAULT_LLM_MODEL,
+    "temperature": 0.7,
+    "max_tokens": 4000,
+}
+```
+
+### 使用默认配置
+
+在开发新的 LLM 功能时，**必须**使用上述默认配置，而不是硬编码：
+
+```python
+# ✅ 正确做法
+from sail_server.utils.llm.available_providers import (
+    DEFAULT_LLM_PROVIDER,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_LLM_CONFIG,
+)
+
+config = LLMConfig(
+    provider=LLMProvider(DEFAULT_LLM_PROVIDER),
+    model=DEFAULT_LLM_MODEL,
+    max_tokens=DEFAULT_LLM_CONFIG["max_tokens"],
+)
+
+# ❌ 错误做法 - 硬编码
+config = LLMConfig(
+    provider=LLMProvider.OPENAI,
+    model="gpt-4o-mini",
+    max_tokens=4000,
+)
+```
+
+### 可用的 Provider
+
+| Provider | 默认模型 | 特点 |
+|----------|----------|------|
+| moonshot | kimi-k2.5 | 支持长文本，推荐用于小说分析 |
+| openai | gpt-4o-mini | 通用能力强 |
+| anthropic | claude-3-haiku | 上下文理解好 |
+| google | gemini-2.0-flash | 速度快 |
+
+### 修改默认配置
+
+如需修改项目全局默认 LLM，只需修改 `available_providers.py` 中的常量：
+
+```python
+DEFAULT_LLM_PROVIDER = "openai"  # 改为其他 provider
+DEFAULT_LLM_MODEL = "gpt-4o"     # 改为其他模型
+```
+
 ## Notes for AI Agents
 
 - 这是一个个人项目，注释中英文混杂

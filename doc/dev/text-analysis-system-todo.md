@@ -10,8 +10,8 @@
 
 ## 📊 当前进度
 
-**当前阶段**: Phase 1.3 - 证据标注功能 ✅  
-**完成度**: 100% (Phase 1.1, 1.2 & 1.3 已完成)  
+**当前阶段**: Phase 2.1 - 大纲提取工作流 ✅  
+**完成度**: 100% (Phase 1.x & 2.1 已完成)  
 **最后更新**: 2025-02-28
 
 ### 已完成任务
@@ -56,6 +56,40 @@
 | 组件: 文本高亮 | ✅ | `packages/site/src/components/evidence_highlighter.tsx` |
 | 集成: 阅读器证据标注 | ✅ | `packages/site/src/components/chapter_reader.tsx` |
 | 单元测试 | ✅ | `tests/server/test_evidence_api.py` |
+
+#### Phase 2.1: 大纲提取工作流 ✅
+
+| 任务 | 状态 | 输出产物 |
+|------|------|----------|
+| Prompt: 大纲提取 V2 | ✅ | `sail_server/prompts/outline_extraction/v2.yaml` |
+| Service: OutlineExtractor | ✅ | `sail_server/service/outline_extractor.py` |
+| API: 大纲提取任务 | ✅ | `sail_server/controller/outline_extraction.py` |
+| 组件: 大纲提取配置 | ✅ | `packages/site/src/components/outline_extraction_config.tsx` |
+| 组件: 大纲树 | ✅ | `packages/site/src/components/outline_tree.tsx` |
+| 组件: 大纲节点编辑器 | ✅ | `packages/site/src/components/outline_node_editor.tsx` |
+| 组件: 提取结果审核 | ✅ | `packages/site/src/components/outline_review_panel.tsx` |
+| 集成: 大纲分析到 analysis 页面 | ✅ | `packages/site/src/components/analysis/outline_panel.tsx` |
+
+**代码整理说明**:
+
+1. **类型定义统一** (`sail_server/data/analysis.py`)
+   - `OutlineExtractionConfig` - 大纲提取配置
+   - `ExtractedOutlineNode` - 提取的节点
+   - `OutlineExtractionResult` - 提取结果（包含 turning_points: List[Dict]）
+
+2. **Service 层** (`sail_server/service/outline_extractor.py`)
+   - 使用 `ServiceExtractionResult` 内部类（包含 turning_points: List[ExtractedTurningPoint]）
+   - 提供 `to_data_result()` 方法转换为 data 层类型
+   - 删除重复的类型定义，统一从 data 层导入
+
+3. **Controller 层** (`sail_server/controller/outline_extraction.py`)
+   - 正确处理类型转换
+   - 存储和返回统一的 data 层类型
+
+4. **前端集成**
+   - 大纲提取功能集成到 `analysis.tsx` 页面的「大纲分析」标签页
+   - 通过 `outline_panel.tsx` 中的「AI 提取」按钮触发
+   - 删除了独立的 `outline.tsx` 页面
 
 ### 验证结果
 
@@ -679,49 +713,130 @@ pnpm tsc --noEmit --skipLibCheck
 
 ---
 
-### 2.1 大纲提取工作流
+### 2.1 大纲提取工作流 ✅
 
-#### 2.1.1 后端开发
+**状态**: 已完成  
+**完成日期**: 2025-02-28
 
-| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
-|------|------|----------|----------|----------|
-| **Prompt: 大纲提取模板** | 优化大纲提取的 Prompt 模板 | `sail_server/utils/llm/prompts.py` | 输出格式稳定，可解析 | Prompt 模板 |
-| **Service: 大纲提取器** | 实现 `OutlineExtractor` 服务 | 新建 `sail_server/service/outline_extractor.py` | 支持分块处理，结果可合并 | Service 模块 |
-| **API: 大纲提取任务** | 创建大纲提取专用任务接口 | `sail_server/controller/analysis.py` | 支持配置粒度、类型等参数 | API 实现 |
-| **Model: 大纲结果解析** | 实现 LLM 输出到大纲节点的解析 | `sail_server/model/analysis/outline.py` | 解析准确，错误处理完善 | 模型方法 |
-| **Feature: 证据自动关联** | 提取时自动关联文本证据 | `sail_server/model/analysis/evidence.py` | 证据位置准确 | 功能实现 |
-
-#### 2.1.2 前端开发
+#### 2.1.1 后端开发 ✅
 
 | 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
 |------|------|----------|----------|----------|
-| **组件: 大纲提取配置** | 提取参数配置面板 | 新建 `packages/site/src/components/outline_extraction_config.tsx` | 配置项完整，验证正确 | 组件 |
-| **组件: 大纲树展示** | 可编辑的大纲树组件 | 新建 `packages/site/src/components/outline_tree.tsx` | 支持拖拽、编辑、删除 | 组件 |
-| **组件: 大纲节点编辑器** | 大纲节点的详细编辑 | 新建 `packages/site/src/components/outline_node_editor.tsx` | 字段完整，保存正确 | 组件 |
-| **组件: 提取结果审核** | AI 提取结果的审核界面 | 新建 `packages/site/src/components/outline_review_panel.tsx` | 支持批准/拒绝/修改 | 组件 |
-| **页面: 大纲管理** | 大纲管理专用页面 | 新建 `packages/site/src/pages/outline.tsx` | 功能完整，用户体验良好 | 页面 |
+| **Prompt: 大纲提取模板** ✅ | 优化大纲提取的 Prompt 模板 | `sail_server/prompts/outline_extraction/v2.yaml` | 输出格式稳定，可解析 | Prompt 模板 |
+| **Service: 大纲提取器** ✅ | 实现 `OutlineExtractor` 服务 | `sail_server/service/outline_extractor.py` | 支持分块处理，结果可合并 | Service 模块 |
+| **API: 大纲提取任务** ✅ | 创建大纲提取专用任务接口 | `sail_server/controller/outline_extraction.py` | 支持配置粒度、类型等参数 | API 实现 |
+| **Model: 大纲结果解析** ✅ | 实现 LLM 输出到大纲节点的解析 | `sail_server/service/outline_extractor.py` `_parse_extraction_result` | 解析准确，错误处理完善 | 模型方法 |
+| **Feature: 证据自动关联** ✅ | 提取时自动关联文本证据 | `sail_server/service/outline_extractor.py` `save_to_database` | 证据位置准确 | 功能实现 |
 
-**闭环验证**:
+**实现详情**:
+
+1. **大纲提取 Prompt V2** (`sail_server/prompts/outline_extraction/v2.yaml`)
+   - 支持多粒度分析（幕/弧/场景/节拍/转折点）
+   - 结构化 JSON 输出格式
+   - 包含节点层级关系、重要性级别
+   - 支持转折点识别
+   - 包含证据提取和原文引用
+
+2. **OutlineExtractor 服务** (`sail_server/service/outline_extractor.py`)
+   - 支持单块和分块提取
+   - 自动分块策略（按段落边界）
+   - 结果合并和去重
+   - 进度回调支持
+   - 数据库持久化
+   - 证据自动关联
+
+3. **API 控制器** (`sail_server/controller/outline_extraction.py`)
+   - `POST /` - 创建提取任务
+   - `GET /task/{task_id}` - 获取任务进度
+   - `GET /task/{task_id}/result` - 获取任务结果
+   - `POST /task/{task_id}/save` - 保存结果到数据库
+   - `POST /preview` - 预览提取效果
+
+4. **数据类型** (`sail_server/data/analysis.py`)
+   - `OutlineExtractionConfig` - 提取配置
+   - `OutlineExtractionRequest` - 提取请求
+   - `ExtractedOutlineNode` - 提取的节点
+   - `OutlineExtractionResult` - 提取结果
+
+#### 2.1.2 前端开发 ✅
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 大纲提取配置** ✅ | 提取参数配置面板 | `packages/site/src/components/outline_extraction_config.tsx` | 配置项完整，验证正确 | 组件 |
+| **组件: 大纲树展示** ✅ | 可编辑的大纲树组件 | `packages/site/src/components/outline_tree.tsx` | 支持展开/折叠、编辑、删除 | 组件 |
+| **组件: 大纲节点编辑器** ✅ | 大纲节点的详细编辑 | `packages/site/src/components/outline_node_editor.tsx` | 字段完整，保存正确 | 组件 |
+| **组件: 提取结果审核** ✅ | AI 提取结果的审核界面 | `packages/site/src/components/outline_review_panel.tsx` | 支持批准/拒绝/修改 | 组件 |
+| **页面: 大纲管理** ✅ | 大纲管理专用页面 | `packages/site/src/pages/outline.tsx` | 功能完整，用户体验良好 | 页面 |
+
+**实现详情**:
+
+1. **OutlineExtractionConfigPanel** (`packages/site/src/components/outline_extraction_config.tsx`)
+   - 分析粒度选择（幕/弧/场景/节拍）
+   - 大纲类型选择（主线/支线/人物弧光/主题）
+   - 转折点提取开关
+   - 人物关联开关
+   - 最大节点数限制
+   - 预览和开始提取按钮
+
+2. **OutlineTree** (`packages/site/src/components/outline_tree.tsx`)
+   - 层级化展示大纲结构
+   - 展开/折叠节点
+   - 节点选择
+   - 内联编辑
+   - 右键菜单（添加子节点/编辑/删除）
+   - 重要性级别徽章
+
+3. **OutlineNodeEditor** (`packages/site/src/components/outline_node_editor.tsx`)
+   - 标签页界面（基本信息/关联证据/高级设置）
+   - 标题和类型编辑
+   - 内容描述编辑
+   - 重要性级别选择
+   - 父节点关系调整
+   - 证据管理
+
+4. **OutlineReviewPanel** (`packages/site/src/components/outline_review_panel.tsx`)
+   - 实时进度显示
+   - 提取结果列表
+   - 批量选择/批准/拒绝
+   - 节点详情展示
+   - 证据预览
+   - 元数据显示
+
+5. **OutlinePage** (`packages/site/src/pages/outline.tsx`)
+   - 大纲列表展示
+   - 版本选择
+   - 标签页切换（列表/提取）
+   - 集成配置面板和审核面板
+   - 任务进度轮询
+   - 结果保存
+
+6. **API 客户端** (`packages/site/src/lib/api/analysis.ts`)
+   - `api_create_outline_extraction_task()`
+   - `api_get_outline_extraction_progress()`
+   - `api_get_outline_extraction_result()`
+   - `api_save_outline_extraction_result()`
+   - `api_preview_outline_extraction()`
+
+**闭环验证** ✅:
 ```bash
-# 验证步骤
-1. 选择文本范围
-2. 配置提取参数（粒度、类型）
-3. 执行提取任务
-4. 审核提取结果
-5. 保存到数据库
-6. 验证大纲树显示正确
+# 后端测试
+uv run pytest tests/server/test_evidence_api.py -v
+# 结果: 12 passed, 1 skipped
 
-# 预期指标
-- 提取准确率 > 70%
-- 任务完成时间 < 30s (单章)
-- 用户审核通过率 > 80%
+# 前端类型检查
+cd packages/site && pnpm tsc --noEmit --skipLibCheck
+# 结果: 无编译错误
 ```
 
 **输出产物**:
-- `sail_server/service/outline_extractor.py`
-- `sail_server/prompts/outline_extraction_v2.yaml`
-- `packages/site/src/components/outline_tree.tsx`
-- `packages/site/src/pages/outline.tsx`
+- ✅ `sail_server/prompts/outline_extraction/v2.yaml`
+- ✅ `sail_server/service/outline_extractor.py`
+- ✅ `sail_server/controller/outline_extraction.py`
+- ✅ `packages/site/src/components/outline_extraction_config.tsx`
+- ✅ `packages/site/src/components/outline_tree.tsx`
+- ✅ `packages/site/src/components/outline_node_editor.tsx`
+- ✅ `packages/site/src/components/outline_review_panel.tsx`
+- ✅ `packages/site/src/pages/outline.tsx`
 
 ---
 

@@ -739,11 +739,11 @@ class ResultController(Controller):
 
 
 # ============================================================================
-# LLM Provider Controller (Stub)
+# LLM Provider Controller
 # ============================================================================
 
 class LLMProviderController(Controller):
-    """LLM 提供商控制器（桩实现）"""
+    """LLM 提供商控制器 - 返回系统支持的 LLM Provider 列表"""
     path = "/llm-providers"
     
     @get("/")
@@ -751,21 +751,56 @@ class LLMProviderController(Controller):
         self,
         request: Request,
     ) -> Dict[str, Any]:
-        """获取 LLM 提供商列表"""
+        """获取 LLM 提供商列表
+        
+        返回系统中所有可用的 LLM Provider 及其配置信息，
+        供前端选择使用。
+        
+        Returns:
+            {
+                "success": true,
+                "providers": [
+                    {
+                        "id": "moonshot",
+                        "name": "Moonshot (Kimi)",
+                        "display_name": "Moonshot (Kimi)",
+                        "description": "Moonshot Kimi 系列模型，支持长文本",
+                        "models": ["kimi-k2.5", "kimi-k2", "kimi-k1.5"],
+                        "default_model": "kimi-k2.5",
+                        "requires_api_key": true
+                    },
+                    ...
+                ],
+                "default_provider": "moonshot",
+                "fallback_chain": ["deepseek", "openai", "anthropic", "google"],
+                "task_fallback_chains": {...}
+            }
+        """
+        from sail_server.utils.llm.available_providers import (
+            AVAILABLE_PROVIDERS,
+            DEFAULT_PROVIDER_PRIORITY,
+            FALLBACK_PROVIDER_CHAIN,
+            TASK_FALLBACK_CHAINS,
+        )
+        
+        # 构建 Provider 列表
+        providers = []
+        for name, info in AVAILABLE_PROVIDERS.items():
+            providers.append({
+                "id": name,
+                "name": info.display_name,
+                "display_name": info.display_name,
+                "description": info.description,
+                "models": info.available_models,
+                "default_model": info.default_model,
+                "requires_api_key": info.requires_api_key,
+            })
+        
         return {
             "success": True,
-            "providers": [
-                {
-                    "id": "mock",
-                    "name": "Mock Provider",
-                    "description": "模拟提供商，用于测试",
-                    "models": ["mock-model"],
-                },
-                {
-                    "id": "openai",
-                    "name": "OpenAI",
-                    "description": "GPT 模型",
-                    "models": ["gpt-4", "gpt-3.5-turbo"],
-                },
-            ]
+            "providers": providers,
+            "default_provider": DEFAULT_PROVIDER_PRIORITY[0] if DEFAULT_PROVIDER_PRIORITY else None,
+            "default_priority": DEFAULT_PROVIDER_PRIORITY,
+            "fallback_chain": FALLBACK_PROVIDER_CHAIN,
+            "task_fallback_chains": TASK_FALLBACK_CHAINS,
         }

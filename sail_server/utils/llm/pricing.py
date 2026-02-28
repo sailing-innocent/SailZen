@@ -188,6 +188,27 @@ MOONSHOT_PRICING: Dict[str, TokenPricing] = {
 }
 
 # ============================================================================
+# DeepSeek Pricing (https://platform.deepseek.com/api-docs/pricing)
+# 价格单位: 美元/1K tokens (按汇率 7.2 换算)
+# ============================================================================
+DEEPSEEK_PRICING: Dict[str, TokenPricing] = {
+    "deepseek-chat": TokenPricing(
+        input_price=0.00014,     # ¥0.001 / 7.2 (缓存命中) 或 ¥0.004 / 7.2 (缓存未命中)
+        output_price=0.00083,    # ¥0.006 / 7.2
+        context_length=64000,    # 默认 64K，最大支持 128K
+        tier=ModelTier.CHEAP,
+        description="DeepSeek-V3.2 - 通用对话模型"
+    ),
+    "deepseek-reasoner": TokenPricing(
+        input_price=0.00078,     # ¥0.004 / 7.2 (缓存命中) 或 ¥0.016 / 7.2 (缓存未命中)
+        output_price=0.00278,    # ¥0.020 / 7.2
+        context_length=64000,    # 默认 64K，最大支持 128K
+        tier=ModelTier.STANDARD,
+        description="DeepSeek-R1 - 推理模型（思维链）"
+    ),
+}
+
+# ============================================================================
 # 本地模型定价（估算）
 # ============================================================================
 LOCAL_PRICING: Dict[str, TokenPricing] = {
@@ -218,6 +239,7 @@ class PricingRegistry:
         cls._prices.update(ANTHROPIC_PRICING)
         cls._prices.update(GOOGLE_PRICING)
         cls._prices.update(MOONSHOT_PRICING)
+        cls._prices.update(DEEPSEEK_PRICING)
         cls._prices.update(LOCAL_PRICING)
     
     @classmethod

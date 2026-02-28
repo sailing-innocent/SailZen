@@ -11,6 +11,7 @@ from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .google_provider import GoogleProvider
 from .moonshot_provider import MoonshotProvider
+from .deepseek_provider import DeepseekProvider
 
 __all__ = [
     'BaseProvider',
@@ -21,4 +22,5 @@ __all__ = [
     'AnthropicProvider',
     'GoogleProvider',
     'MoonshotProvider',
+    'DeepseekProvider',
 ]
