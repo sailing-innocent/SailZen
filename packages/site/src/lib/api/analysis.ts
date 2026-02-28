@@ -11,6 +11,7 @@ import type {
   TextRangeContent,
   RangeSelectionModeInfo,
   EvidenceCreateRequest,
+  EvidenceUpdateRequest,
   TextEvidence,
   AnalysisStats,
 } from '@lib/data/analysis'
@@ -141,6 +142,27 @@ export async function api_get_target_evidence(
   )
   if (!response.ok) {
     throw new Error(`Failed to get target evidence: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 更新证据
+ * @param evidenceId 证据ID
+ * @param data 更新数据
+ * @returns 更新后的证据
+ */
+export async function api_update_evidence(
+  evidenceId: string,
+  data: EvidenceUpdateRequest
+): Promise<TextEvidence> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/evidence/${evidenceId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to update evidence: ${response.statusText}`)
   }
   return response.json()
 }

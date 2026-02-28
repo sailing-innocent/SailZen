@@ -18,6 +18,8 @@ from sail_server.data.analysis import (
     TextRangeContent,
     RangeSelectionMode,
     EvidenceCreateRequest,
+    EvidenceUpdateRequest,
+    EvidenceListResponse,
     TextEvidence,
 )
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
@@ -61,7 +63,13 @@ class EvidenceResponse:
     evidence_type: str
     content: str
     selected_text: str
-    created_at: str
+    start_offset: int
+    end_offset: int
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    context: Optional[str] = None
+    created_at: str = ""
+    updated_at: Optional[str] = None
     message: str = "操作成功"
 
 
@@ -209,11 +217,12 @@ class EvidenceController(Controller):
             - start_offset: 起始偏移
             - end_offset: 结束偏移
             - selected_text: 选中的文本
-            - evidence_type: 证据类型
+            - evidence_type: 证据类型 (character, setting, outline, relation, etc.)
             - content: 证据内容
             - target_type: 目标类型（可选）
             - target_id: 目标ID（可选）
             - context: 上下文（可选）
+            - meta_data: 元数据（可选）
         """
         db = next(router_dependency)
         
@@ -225,6 +234,7 @@ class EvidenceController(Controller):
         
         # 创建证据
         evidence_id = str(uuid.uuid4())
+        now = datetime.now()
         evidence = TextEvidence(
             id=evidence_id,
             edition_id=data.edition_id,
@@ -237,8 +247,9 @@ class EvidenceController(Controller):
             target_id=data.target_id,
             content=data.content,
             context=data.context,
-            created_at=datetime.now(),
-            meta_data=data.meta_data,
+            created_at=now,
+            updated_at=None,
+            meta_data=data.meta_data or {},
         )
         
         # 存储证据
@@ -253,7 +264,13 @@ class EvidenceController(Controller):
             evidence_type=evidence.evidence_type,
             content=evidence.content,
             selected_text=evidence.selected_text,
+            start_offset=evidence.start_offset,
+            end_offset=evidence.end_offset,
+            target_type=evidence.target_type,
+            target_id=evidence.target_id,
+            context=evidence.context,
             created_at=evidence.created_at.isoformat(),
+            updated_at=None,
             message="证据创建成功"
         )
     
@@ -275,7 +292,69 @@ class EvidenceController(Controller):
             evidence_type=evidence.evidence_type,
             content=evidence.content,
             selected_text=evidence.selected_text,
-            created_at=evidence.created_at.isoformat(),
+            start_offset=evidence.start_offset,
+            end_offset=evidence.end_offset,
+            target_type=evidence.target_type,
+            target_id=evidence.target_id,
+            context=evidence.context,
+            created_at=evidence.created_at.isoformat() if evidence.created_at else "",
+            updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
+        )
+    
+    @post("/{evidence_id:str}")
+    async def update_evidence(
+        self,
+        evidence_id: str,
+        data: EvidenceUpdateRequest,
+        request: Request,
+    ) -> EvidenceResponse:
+        """更新证据
+        
+        Request Body:
+            - content: 证据内容（可选）
+            - evidence_type: 证据类型（可选）
+            - target_type: 目标类型（可选）
+            - target_id: 目标ID（可选）
+            - context: 上下文（可选）
+            - meta_data: 元数据（可选）
+        """
+        evidence = self._evidence_store.get(evidence_id)
+        if not evidence:
+            raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
+        
+        # 更新字段
+        if data.content is not None:
+            evidence.content = data.content
+        if data.evidence_type is not None:
+            evidence.evidence_type = data.evidence_type
+        if data.target_type is not None:
+            evidence.target_type = data.target_type
+        if data.target_id is not None:
+            evidence.target_id = data.target_id
+        if data.context is not None:
+            evidence.context = data.context
+        if data.meta_data is not None:
+            evidence.meta_data = data.meta_data
+        
+        evidence.updated_at = datetime.now()
+        
+        request.logger.info(f"Updated evidence {evidence_id}")
+        
+        return EvidenceResponse(
+            id=evidence.id,
+            edition_id=evidence.edition_id,
+            node_id=evidence.node_id,
+            evidence_type=evidence.evidence_type,
+            content=evidence.content,
+            selected_text=evidence.selected_text,
+            start_offset=evidence.start_offset,
+            end_offset=evidence.end_offset,
+            target_type=evidence.target_type,
+            target_id=evidence.target_id,
+            context=evidence.context,
+            created_at=evidence.created_at.isoformat() if evidence.created_at else "",
+            updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
+            message="证据更新成功"
         )
     
     @get("/chapter/{node_id:int}")
@@ -285,7 +364,12 @@ class EvidenceController(Controller):
         request: Request,
         evidence_type: Optional[str] = None,
     ) -> List[EvidenceResponse]:
-        """获取指定章节的所有证据"""
+        """获取指定章节的所有证据
+        
+        Args:
+            node_id: 节点ID（章节ID）
+            evidence_type: 证据类型过滤（可选）
+        """
         evidences = [
             ev for ev in self._evidence_store.values()
             if ev.node_id == node_id
@@ -300,9 +384,15 @@ class EvidenceController(Controller):
                 evidence_type=ev.evidence_type,
                 content=ev.content,
                 selected_text=ev.selected_text,
-                created_at=ev.created_at.isoformat(),
+                start_offset=ev.start_offset,
+                end_offset=ev.end_offset,
+                target_type=ev.target_type,
+                target_id=ev.target_id,
+                context=ev.context,
+                created_at=ev.created_at.isoformat() if ev.created_at else "",
+                updated_at=ev.updated_at.isoformat() if ev.updated_at else None,
             )
-            for ev in sorted(evidences, key=lambda x: x.created_at, reverse=True)
+            for ev in sorted(evidences, key=lambda x: (x.start_offset, x.created_at or datetime.min))
         ]
     
     @get("/target/{target_type:str}/{target_id:str}")
@@ -312,7 +402,12 @@ class EvidenceController(Controller):
         target_id: str,
         request: Request,
     ) -> List[EvidenceResponse]:
-        """获取指定目标的所有证据"""
+        """获取指定目标的所有证据
+        
+        Args:
+            target_type: 目标类型 (character, setting, outline_node, etc.)
+            target_id: 目标ID
+        """
         evidences = [
             ev for ev in self._evidence_store.values()
             if ev.target_type == target_type and ev.target_id == target_id
@@ -326,9 +421,15 @@ class EvidenceController(Controller):
                 evidence_type=ev.evidence_type,
                 content=ev.content,
                 selected_text=ev.selected_text,
-                created_at=ev.created_at.isoformat(),
+                start_offset=ev.start_offset,
+                end_offset=ev.end_offset,
+                target_type=ev.target_type,
+                target_id=ev.target_id,
+                context=ev.context,
+                created_at=ev.created_at.isoformat() if ev.created_at else "",
+                updated_at=ev.updated_at.isoformat() if ev.updated_at else None,
             )
-            for ev in sorted(evidences, key=lambda x: x.created_at, reverse=True)
+            for ev in sorted(evidences, key=lambda x: x.created_at or datetime.min, reverse=True)
         ]
     
     @delete("/{evidence_id:str}", status_code=200)
@@ -351,7 +452,13 @@ class EvidenceController(Controller):
             evidence_type=evidence.evidence_type,
             content=evidence.content,
             selected_text=evidence.selected_text,
-            created_at=evidence.created_at.isoformat(),
+            start_offset=evidence.start_offset,
+            end_offset=evidence.end_offset,
+            target_type=evidence.target_type,
+            target_id=evidence.target_id,
+            context=evidence.context,
+            created_at=evidence.created_at.isoformat() if evidence.created_at else "",
+            updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
             message="证据删除成功"
         )
 

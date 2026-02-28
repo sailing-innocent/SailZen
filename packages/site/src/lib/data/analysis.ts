@@ -114,6 +114,15 @@ export interface EvidenceCreateRequest {
   meta_data?: Record<string, unknown>
 }
 
+export interface EvidenceUpdateRequest {
+  content?: string
+  evidence_type?: string
+  target_type?: string
+  target_id?: string
+  context?: string
+  meta_data?: Record<string, unknown>
+}
+
 // ============================================================================
 // Analysis Task Types
 // ============================================================================

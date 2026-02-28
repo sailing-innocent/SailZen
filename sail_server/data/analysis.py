@@ -225,6 +225,27 @@ class EvidenceCreateRequest:
     meta_data: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class EvidenceUpdateRequest:
+    """更新证据请求"""
+    content: Optional[str] = None
+    evidence_type: Optional[str] = None
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+    context: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class EvidenceListResponse:
+    """证据列表响应"""
+    evidences: List[TextEvidence]
+    total: int
+    node_id: Optional[int] = None
+    target_type: Optional[str] = None
+    target_id: Optional[str] = None
+
+
 # ============================================================================
 # Compatibility Types (for analysis_compat.py)
 # ============================================================================
