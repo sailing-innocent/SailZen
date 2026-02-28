@@ -1148,6 +1148,85 @@ class SettingRelationData:
 
 
 # ============================================================================
+# Setting Extraction Types
+# ============================================================================
+
+@dataclass
+class SettingExtractionConfig:
+    """设定提取配置"""
+    setting_types: List[str] = field(default_factory=lambda: [
+        "item", "location", "organization", "concept", "magic_system", "creature", "event_type"
+    ])
+    min_importance: str = "background"  # critical, major, minor, background
+    extract_relations: bool = True
+    extract_attributes: bool = True
+    max_settings: int = 100
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    temperature: float = 0.3
+    prompt_template_id: str = "setting_extraction_v1"
+
+
+@dataclass
+class SettingExtractionRequest:
+    """设定提取请求"""
+    edition_id: int
+    range_selection: TextRangeSelection
+    config: SettingExtractionConfig = field(default_factory=SettingExtractionConfig)
+    work_title: str = ""
+    known_settings: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ExtractedSettingAttribute:
+    """提取的设定属性"""
+    key: str
+    value: str
+    description: Optional[str] = None
+
+
+@dataclass
+class ExtractedSettingRelation:
+    """提取的设定关系"""
+    target_name: str
+    relation_type: str  # contains, belongs_to, produces, requires, opposes
+    description: Optional[str] = None
+
+
+@dataclass
+class ExtractedSetting:
+    """提取的设定"""
+    canonical_name: str
+    setting_type: str  # item, location, organization, concept, magic_system, creature, event_type
+    category: str = ""
+    importance: str = "minor"  # critical, major, minor, background
+    first_appearance: Optional[Dict[str, str]] = None
+    description: str = ""
+    attributes: List[ExtractedSettingAttribute] = field(default_factory=list)
+    relations: List[ExtractedSettingRelation] = field(default_factory=list)
+    key_scenes: List[str] = field(default_factory=list)
+    mention_count: int = 0
+
+
+@dataclass
+class SettingExtractionResult:
+    """设定提取结果"""
+    settings: List[ExtractedSetting]
+    metadata: Dict[str, Any]
+    raw_response: Optional[str] = None
+
+
+@dataclass
+class SettingExtractionResponse:
+    """设定提取响应"""
+    success: bool
+    task_id: Optional[str] = None
+    result: Optional[SettingExtractionResult] = None
+    message: str = ""
+    error: Optional[str] = None
+
+
+# ============================================================================
 # Character Detection Types
 # ============================================================================
 

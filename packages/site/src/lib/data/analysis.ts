@@ -580,6 +580,69 @@ export interface LLMProvidersResponse {
 }
 
 // ============================================================================
+// Setting Extraction Types
+// ============================================================================
+
+export interface SettingExtractionConfig {
+  setting_types: string[]
+  min_importance: 'critical' | 'major' | 'minor' | 'background'
+  extract_relations: boolean
+  extract_attributes: boolean
+  max_settings: number
+  llm_provider?: string
+  llm_model?: string
+  temperature: number
+  prompt_template_id: string
+}
+
+export interface ExtractedSettingAttribute {
+  key: string
+  value: string
+  description?: string
+}
+
+export interface ExtractedSettingRelation {
+  target_name: string
+  relation_type: 'contains' | 'belongs_to' | 'produces' | 'requires' | 'opposes'
+  description?: string
+}
+
+export interface ExtractedSetting {
+  canonical_name: string
+  setting_type: SettingType
+  category: string
+  importance: 'critical' | 'major' | 'minor' | 'background'
+  first_appearance?: {
+    chapter: string
+    text: string
+    context: string
+  }
+  description: string
+  attributes: ExtractedSettingAttribute[]
+  relations: ExtractedSettingRelation[]
+  key_scenes: string[]
+  mention_count: number
+}
+
+export interface SettingExtractionResult {
+  settings: ExtractedSetting[]
+  metadata: {
+    total_settings: number
+    by_type: Record<string, number>
+    by_importance: Record<string, number>
+  }
+  raw_response?: string
+}
+
+export interface SettingExtractionResponse {
+  success: boolean
+  task_id?: string
+  result?: SettingExtractionResult
+  message: string
+  error?: string
+}
+
+// ============================================================================
 // Character Detection Types
 // ============================================================================
 

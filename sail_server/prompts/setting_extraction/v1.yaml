@@ -1,0 +1,482 @@
+id: setting_extraction_v1
+name: "设定提取 - 基础版"
+description: "从章节内容中提取小说中的设定元素，包括物品、地点、组织、概念、能力体系等"
+task_type: setting_extraction
+version: "1.0"
+
+system_prompt: |
+  你是一位专业的世界观设定分析师，擅长从小说中识别和提取各种设定元素。
+  你的任务是从给定的章节内容中识别所有重要的设定，并进行分类和详细描述。
+  
+  分析原则：
+  1. 识别所有类型的设定元素（物品、地点、组织、概念、能力体系等）
+  2. 判断设定的重要性和在故事中的作用
+  3. 提取设定的详细属性和特征
+  4. 识别设定之间的关系
+  5. 记录设定的首次出现和关键使用场景
+  
+  请严格按照要求的 JSON 格式输出分析结果，必须是一个合法的 JSON Object。
+  不要输出任何解释性文字，只输出 JSON。
+  确保输出完整，不要被截断。
+
+user_prompt_template: |
+  ## 任务：提取小说中的设定元素
+  
+  ### 背景信息
+  - 作品名称：{{work_title}}
+  - 章节范围：{{chapter_range}}
+  {{#if known_settings}}
+  - 已知设定：{{#each known_settings}}{{#if @index}}, {{/if}}{{this}}{{/each}}
+  {{/if}}
+  
+  ### 章节内容
+  {{chapter_contents}}
+  
+  ### 分析要求
+  
+  #### 1. 设定类型
+  识别以下类型的设定元素：
+  - **item**（物品）：武器、装备、道具、宝物、日常用品等
+  - **location**（地点）：城市、建筑、场景、地域、世界等
+  - **organization**（组织）：门派、家族、势力、公司、团队等
+  - **concept**（概念）：理念、规则、制度、文化、信仰等
+  - **magic_system**（能力体系）：功法、魔法、异能、科技体系等
+  - **creature**（生物）：特殊生物、种族、怪物、灵兽等
+  - **event_type**（事件类型）：特定类型的事件、仪式、活动等
+  
+  #### 2. 重要性分级
+  根据设定在故事中的作用分级：
+  - **critical**（核心）：对情节发展有关键影响的设定
+  - **major**（重要）：经常出现的次要设定
+  - **minor**（次要）：偶尔出现的功能性设定
+  - **background**（背景）：仅作为背景提及的设定
+  
+  #### 3. 属性提取
+  为每个设定提取相关属性：
+  - 对于物品：材质、功能、外观、来源等
+  - 对于地点：位置、规模、特征、历史等
+  - 对于组织：性质、规模、宗旨、成员等
+  - 对于概念：内涵、影响、相关群体等
+  - 对于能力体系：原理、等级、限制、效果等
+  
+  #### 4. 关系识别
+  识别设定之间的关系：
+  - **contains**（包含）：地点包含子地点，组织包含成员
+  - **belongs_to**（属于）：物品属于人物，人物属于组织
+  - **produces**（产生）：组织产生物品，地点产生资源
+  - **requires**（需要）：能力需要物品，仪式需要地点
+  - **opposes**（对立）：组织对立，概念冲突
+  
+  ### 输出格式
+  请以 JSON 格式输出，结构如下：
+  
+  ```json
+  {
+    "settings": [
+      {
+        "canonical_name": "设定的标准名称",
+        "setting_type": "item|location|organization|concept|magic_system|creature|event_type",
+        "category": "子分类（如武器、城市、门派等）",
+        "importance": "critical|major|minor|background",
+        "first_appearance": {
+          "chapter": "第X章",
+          "text": "设定首次出现的完整句子",
+          "context": "出场时的情境描述"
+        },
+        "description": "设定的整体描述",
+        "attributes": [
+          {
+            "key": "属性名称",
+            "value": "属性值",
+            "description": "属性说明"
+          }
+        ],
+        "relations": [
+          {
+            "target_name": "关联设定名称",
+            "relation_type": "contains|belongs_to|produces|requires|opposes",
+            "description": "关系描述"
+          }
+        ],
+        "key_scenes": ["关键场景1", "关键场景2"],
+        "mention_count": 5
+      }
+    ],
+    "metadata": {
+      "total_settings": 10,
+      "by_type": {
+        "item": 3,
+        "location": 2,
+        "organization": 2,
+        "concept": 1,
+        "magic_system": 1,
+        "creature": 0,
+        "event_type": 1
+      },
+      "by_importance": {
+        "critical": 2,
+        "major": 3,
+        "minor": 3,
+        "background": 2
+      }
+    }
+  }
+  ```
+
+output_schema:
+  type: object
+  properties:
+    settings:
+      type: array
+      items:
+        type: object
+        properties:
+          canonical_name:
+            type: string
+            description: "设定的标准名称"
+          setting_type:
+            type: string
+            enum: ["item", "location", "organization", "concept", "magic_system", "creature", "event_type"]
+          category:
+            type: string
+            description: "子分类"
+          importance:
+            type: string
+            enum: ["critical", "major", "minor", "background"]
+          first_appearance:
+            type: object
+            properties:
+              chapter:
+                type: string
+              text:
+                type: string
+              context:
+                type: string
+          description:
+            type: string
+          attributes:
+            type: array
+            items:
+              type: object
+              properties:
+                key:
+                  type: string
+                value:
+                  type: string
+                description:
+                  type: string
+          relations:
+            type: array
+            items:
+              type: object
+              properties:
+                target_name:
+                  type: string
+                relation_type:
+                  type: string
+                  enum: ["contains", "belongs_to", "produces", "requires", "opposes"]
+                description:
+                  type: string
+          key_scenes:
+            type: array
+            items:
+              type: string
+          mention_count:
+            type: integer
+        required: ["canonical_name", "setting_type", "importance"]
+    metadata:
+      type: object
+      properties:
+        total_settings:
+          type: integer
+        by_type:
+          type: object
+          properties:
+            item:
+              type: integer
+            location:
+              type: integer
+            organization:
+              type: integer
+            concept:
+              type: integer
+            magic_system:
+              type: integer
+            creature:
+              type: integer
+            event_type:
+              type: integer
+        by_importance:
+          type: object
+          properties:
+            critical:
+              type: integer
+            major:
+              type: integer
+            minor:
+              type: integer
+            background:
+              type: integer
+  required: ["settings", "metadata"]
+
+example_input: |
+  work_title: 修仙世界
+  chapter_range: 第1-3章
+  chapter_contents: |
+    ## 第1章 入门
+    
+    青云宗是东域最大的修仙门派，坐落在青云山脉之巅。宗门有七大主峰，每峰都有一位峰主。
+    李明手持入门令牌，站在山门前。令牌是青铜打造，正面刻着"青云"二字，背面是弟子编号。
+    "这是你的储物袋，内有十块灵石和一本《基础心法》。"执事弟子递给他一个灰色布袋。
+    
+    ## 第2章 修炼
+    
+    灵石是修仙界的通用货币，内含灵气可供修炼。分为下品、中品、上品、极品四个等级。
+    《基础心法》是青云宗入门功法，共九层。修炼到三层可御剑飞行，六层可辟谷，九层可筑基。
+    修炼室位于外门弟子居所地下，内有聚灵阵可提升修炼速度。
+    
+    ## 第3章 试炼
+    
+    外门弟子每月需参加一次猎妖试炼，前往青云山脉猎杀妖兽获取材料。
+    妖兽内丹可用于炼丹，皮毛骨骼可炼器。妖兽分为一至九阶，对应修士的九大境界。
+    炼丹房位于主峰，由丹堂长老管理。只有内门弟子才能使用地火炼丹。
+
+example_output: |
+  {
+    "settings": [
+      {
+        "canonical_name": "青云宗",
+        "setting_type": "organization",
+        "category": "修仙门派",
+        "importance": "critical",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": "青云宗是东域最大的修仙门派，坐落在青云山脉之巅。",
+          "context": "介绍主角加入的门派"
+        },
+        "description": "东域最大的修仙门派，有七大主峰，是故事的主要舞台",
+        "attributes": [
+          {"key": "地位", "value": "东域最大修仙门派", "description": "在东域的地位"},
+          {"key": "位置", "value": "青云山脉之巅", "description": "地理位置"},
+          {"key": "规模", "value": "七大主峰", "description": "门派规模"}
+        ],
+        "relations": [
+          {"target_name": "青云山脉", "relation_type": "belongs_to", "description": "宗门位于山脉中"},
+          {"target_name": "《基础心法》", "relation_type": "produces", "description": "宗门传承功法"}
+        ],
+        "key_scenes": ["主角入门", "分配资源"],
+        "mention_count": 5
+      },
+      {
+        "canonical_name": "青云山脉",
+        "setting_type": "location",
+        "category": "山脉",
+        "importance": "major",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": "青云宗是东域最大的修仙门派，坐落在青云山脉之巅。",
+          "context": "介绍门派位置"
+        },
+        "description": "东域著名山脉，青云宗所在地，也是外门弟子试炼的场所",
+        "attributes": [
+          {"key": "位置", "value": "东域", "description": "地理位置"},
+          {"key": "特征", "value": "高耸入云", "description": "山脉特征"}
+        ],
+        "relations": [
+          {"target_name": "青云宗", "relation_type": "contains", "description": "山脉包含宗门"}
+        ],
+        "key_scenes": ["宗门所在地", "猎妖试炼"],
+        "mention_count": 3
+      },
+      {
+        "canonical_name": "入门令牌",
+        "setting_type": "item",
+        "category": "令牌",
+        "importance": "minor",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": "李明手持入门令牌，站在山门前。",
+          "context": "主角入门的凭证"
+        },
+        "description": "青云宗弟子身份凭证，青铜打造，刻有宗门名称和弟子编号",
+        "attributes": [
+          {"key": "材质", "value": "青铜", "description": "制作材料"},
+          {"key": "正面", "value": "青云二字", "description": "正面刻字"},
+          {"key": "背面", "value": "弟子编号", "description": "背面内容"}
+        ],
+        "relations": [],
+        "key_scenes": ["入门登记"],
+        "mention_count": 1
+      },
+      {
+        "canonical_name": "储物袋",
+        "setting_type": "item",
+        "category": "储物法宝",
+        "importance": "major",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": ""这是你的储物袋，内有十块灵石和一本《基础心法》。"执事弟子递给他一个灰色布袋。",
+          "context": "发放给新弟子的装备"
+        },
+        "description": "修仙者常用的储物法宝，内部有独立空间可存放物品",
+        "attributes": [
+          {"key": "外观", "value": "灰色布袋", "description": "外观描述"},
+          {"key": "功能", "value": "储存物品", "description": "主要功能"},
+          {"key": "内含", "value": "十块灵石、一本《基础心法》", "description": "初始内容"}
+        ],
+        "relations": [
+          {"target_name": "灵石", "relation_type": "contains", "description": "袋内有灵石"},
+          {"target_name": "《基础心法》", "relation_type": "contains", "description": "袋内有功法"}
+        ],
+        "key_scenes": ["发放装备"],
+        "mention_count": 1
+      },
+      {
+        "canonical_name": "灵石",
+        "setting_type": "item",
+        "category": "货币/资源",
+        "importance": "critical",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": ""这是你的储物袋，内有十块灵石和一本《基础心法》。"",
+          "context": "作为修炼资源发放"
+        },
+        "description": "修仙界的通用货币，内含灵气可供修炼，分为下中上极四品",
+        "attributes": [
+          {"key": "功能", "value": "货币、修炼资源", "description": "主要用途"},
+          {"key": "等级", "value": "下品、中品、上品、极品", "description": "品质分级"},
+          {"key": "特性", "value": "内含灵气", "description": "核心特性"}
+        ],
+        "relations": [],
+        "key_scenes": ["资源分配", "修炼"],
+        "mention_count": 2
+      },
+      {
+        "canonical_name": "《基础心法》",
+        "setting_type": "magic_system",
+        "category": "功法",
+        "importance": "major",
+        "first_appearance": {
+          "chapter": "第1章",
+          "text": ""这是你的储物袋，内有十块灵石和一本《基础心法》。"",
+          "context": "入门功法"
+        },
+        "description": "青云宗入门功法，共九层，修炼至高层可获得神通",
+        "attributes": [
+          {"key": "层数", "value": "九层", "description": "功法层数"},
+          {"key": "三层效果", "value": "御剑飞行", "description": "第三层能力"},
+          {"key": "六层效果", "value": "辟谷", "description": "第六层能力"},
+          {"key": "九层效果", "value": "筑基", "description": "第九层能力"}
+        ],
+        "relations": [
+          {"target_name": "青云宗", "relation_type": "belongs_to", "description": "宗门传承功法"}
+        ],
+        "key_scenes": ["功法介绍", "修炼"],
+        "mention_count": 2
+      },
+      {
+        "canonical_name": "修炼室",
+        "setting_type": "location",
+        "category": "建筑",
+        "importance": "minor",
+        "first_appearance": {
+          "chapter": "第2章",
+          "text": "修炼室位于外门弟子居所地下，内有聚灵阵可提升修炼速度。",
+          "context": "介绍修炼场所"
+        },
+        "description": "外门弟子修炼场所，位于地下，布置有聚灵阵",
+        "attributes": [
+          {"key": "位置", "value": "外门弟子居所地下", "description": "具体位置"},
+          {"key": "设施", "value": "聚灵阵", "description": "特殊设施"},
+          {"key": "功能", "value": "提升修炼速度", "description": "主要功能"}
+        ],
+        "relations": [
+          {"target_name": "聚灵阵", "relation_type": "contains", "description": "室内有聚灵阵"}
+        ],
+        "key_scenes": ["修炼"],
+        "mention_count": 1
+      },
+      {
+        "canonical_name": "聚灵阵",
+        "setting_type": "concept",
+        "category": "阵法",
+        "importance": "background",
+        "first_appearance": {
+          "chapter": "第2章",
+          "text": "修炼室位于外门弟子居所地下，内有聚灵阵可提升修炼速度。",
+          "context": "作为修炼室设施提及"
+        },
+        "description": "可聚集灵气的阵法，用于提升修炼效率",
+        "attributes": [
+          {"key": "功能", "value": "聚集灵气", "description": "阵法功能"},
+          {"key": "效果", "value": "提升修炼速度", "description": "使用效果"}
+        ],
+        "relations": [
+          {"target_name": "修炼室", "relation_type": "belongs_to", "description": "布置在修炼室"}
+        ],
+        "key_scenes": [],
+        "mention_count": 1
+      },
+      {
+        "canonical_name": "猎妖试炼",
+        "setting_type": "event_type",
+        "category": "试炼活动",
+        "importance": "major",
+        "first_appearance": {
+          "chapter": "第3章",
+          "text": "外门弟子每月需参加一次猎妖试炼，前往青云山脉猎杀妖兽获取材料。",
+          "context": "介绍弟子试炼制度"
+        },
+        "description": "外门弟子每月必须参加的试炼活动，猎杀妖兽获取材料",
+        "attributes": [
+          {"key": "频率", "value": "每月一次", "description": "举办频率"},
+          {"key": "参与者", "value": "外门弟子", "description": "参与人员"},
+          {"key": "地点", "value": "青云山脉", "description": "活动地点"},
+          {"key": "目的", "value": "猎杀妖兽获取材料", "description": "活动目的"}
+        ],
+        "relations": [
+          {"target_name": "青云山脉", "relation_type": "requires", "description": "需要山脉场地"}
+        ],
+        "key_scenes": ["试炼介绍"],
+        "mention_count": 1
+      },
+      {
+        "canonical_name": "妖兽",
+        "setting_type": "creature",
+        "category": "生物",
+        "importance": "major",
+        "first_appearance": {
+          "chapter": "第3章",
+          "text": "外门弟子每月需参加一次猎妖试炼，前往青云山脉猎杀妖兽获取材料。",
+          "context": "作为试炼对象"
+        },
+        "description": "修仙界的野兽，有内丹可炼丹，皮毛骨骼可炼器，分一至九阶",
+        "attributes": [
+          {"key": "用途", "value": "炼丹、炼器", "description": "利用价值"},
+          {"key": "等级", "value": "一至九阶", "description": "实力分级"},
+          {"key": "对应", "value": "修士九大境界", "description": "等级对应关系"}
+        ],
+        "relations": [],
+        "key_scenes": ["试炼介绍"],
+        "mention_count": 2
+      }
+    ],
+    "metadata": {
+      "total_settings": 10,
+      "by_type": {
+        "item": 3,
+        "location": 2,
+        "organization": 1,
+        "concept": 1,
+        "magic_system": 1,
+        "creature": 1,
+        "event_type": 1
+      },
+      "by_importance": {
+        "critical": 2,
+        "major": 4,
+        "minor": 3,
+        "background": 1
+      }
+    }
+  }

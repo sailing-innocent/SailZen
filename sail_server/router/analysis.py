@@ -22,6 +22,7 @@ from sail_server.controller.outline import OutlineController
 from sail_server.controller.character import CharacterController
 from sail_server.controller.character_detection import CharacterDetectionController
 from sail_server.controller.setting import SettingController
+from sail_server.controller.setting_extraction import SettingExtractionController
 from sail_server.db import get_db_dependency
 
 
@@ -41,5 +42,6 @@ analysis_router = Router(
         CharacterController,
         CharacterDetectionController,
         SettingController,
+        SettingExtractionController,
     ],
 )

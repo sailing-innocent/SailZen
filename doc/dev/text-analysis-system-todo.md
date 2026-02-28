@@ -10,8 +10,8 @@
 
 ## 📊 当前进度
 
-**当前阶段**: Phase 2.2 - 人物检测与档案构建 ✅  
-**完成度**: 100% (Phase 1.x & 2.1 & 2.2 已完成)  
+**当前阶段**: Phase 2.3 - 设定提取与管理 ✅  
+**完成度**: 100% (Phase 1.x & 2.1 & 2.2 & 2.3 已完成)  
 **最后更新**: 2025-03-01
 
 ### 已完成任务
@@ -989,28 +989,114 @@ cd packages/site && pnpm tsc --noEmit --skipLibCheck
 
 ---
 
-### 2.3 设定提取与管理
+### 2.3 设定提取与管理 ✅
 
-#### 2.3.1 后端开发
+**状态**: 已完成  
+**完成日期**: 2025-03-01
 
-| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
-|------|------|----------|----------|----------|
-| **Prompt: 设定提取模板** | 设定提取专用 Prompt | `sail_server/utils/llm/prompts.py` | 支持多种设定类型 | Prompt 模板 |
-| **Service: 设定提取器** | 实现 `SettingExtractor` 服务 | 新建 `sail_server/service/setting_extractor.py` | 提取准确，分类正确 | Service 模块 |
-| **API: 设定层级管理** | 设定层级关系 CRUD | `sail_server/controller/analysis.py` | 层级操作正确 | API 实现 |
-| **Feature: 设定关系图** | 构建设定之间的关系图 | `sail_server/model/analysis/setting.py` | 关系提取合理 | 功能实现 |
-
-#### 2.3.2 前端开发
+#### 2.3.1 后端开发 ✅
 
 | 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
 |------|------|----------|----------|----------|
-| **组件: 设定分类视图** | 按类型分类展示设定 | 新建 `packages/site/src/components/setting_category_view.tsx` | 分类清晰，导航方便 | 组件 |
-| **组件: 设定详情卡片** | 设定详细信息展示 | 新建 `packages/site/src/components/setting_detail_card.tsx` | 信息完整 | 组件 |
-| **组件: 设定关系图** | 设定关系可视化 | 新建 `packages/site/src/components/setting_relation_graph.tsx` | 使用力导向图展示 | 组件 |
-| **页面: 设定管理** | 设定管理专用页面 | 新建 `packages/site/src/components/setting_panel.tsx` | 功能完整 | 页面 |
+| **Prompt: 设定提取模板** ✅ | 设定提取专用 Prompt | `sail_server/prompts/setting_extraction/v1.yaml` | 支持7种设定类型 | Prompt 模板 |
+| **Service: 设定提取器** ✅ | 实现 `SettingExtractor` 服务 | `sail_server/service/setting_extractor.py` | 提取准确，分类正确 | Service 模块 |
+| **API: 设定层级管理** ✅ | 设定层级关系 CRUD | `sail_server/controller/setting_extraction.py` | 层级操作正确 | API 实现 |
+| **Feature: 设定关系图** ✅ | 构建设定之间的关系图 | `sail_server/controller/setting_extraction.py` | 关系提取合理 | 功能实现 |
 
-**闭环验证**:
+**实现详情**:
+
+1. **设定提取 Prompt V1** (`sail_server/prompts/setting_extraction/v1.yaml`)
+   - 支持7种设定类型：物品、地点、组织、概念、能力体系、生物、事件类型
+   - 重要性分级：核心/重要/次要/背景
+   - 属性提取和关系识别
+   - 结构化 JSON 输出格式
+
+2. **SettingExtractor 服务** (`sail_server/service/setting_extractor.py`)
+   - 多类型设定识别
+   - 分块处理长文本
+   - 结果合并和去重
+   - 进度回调支持
+   - LLM 调用重试机制
+
+3. **API 控制器** (`sail_server/controller/setting_extraction.py`)
+   - `POST /` - 创建提取任务
+   - `POST /preview` - 预览提取
+   - `POST /task/{task_id}/save` - 保存结果
+   - `GET /relations/{edition_id}` - 获取关系图数据
+   - `POST /relations` - 创建设定关系
+
+4. **数据类型** (`sail_server/data/analysis.py`)
+   - `SettingExtractionConfig` - 提取配置
+   - `ExtractedSetting` - 提取的设定
+   - `SettingExtractionResult` - 提取结果
+
+#### 2.3.2 前端开发 ✅
+
+| 任务 | 描述 | 参考代码 | 验证指标 | 输出产物 |
+|------|------|----------|----------|----------|
+| **组件: 设定分类视图** ✅ | 按类型分类展示设定 | `packages/site/src/components/setting_category_view.tsx` | 分类清晰，导航方便 | 组件 |
+| **组件: 设定详情卡片** ✅ | 设定详细信息展示 | `packages/site/src/components/setting_detail_card.tsx` | 信息完整 | 组件 |
+| **组件: 设定关系图** ✅ | 设定关系可视化 | `packages/site/src/components/setting_relation_graph.tsx` | 使用力导向图展示 | 组件 |
+| **页面: 设定管理** ✅ | 设定管理专用页面 | `packages/site/src/components/setting_panel.tsx` | 功能完整 | 页面 |
+
+**实现详情**:
+
+1. **SettingExtractionConfigPanel** (`packages/site/src/components/setting_extraction_config.tsx`)
+   - 设定类型多选（7种类型）
+   - 提取选项配置（属性/关系）
+   - 重要性过滤
+   - 预览和开始提取按钮
+
+2. **SettingCategoryView** (`packages/site/src/components/setting_category_view.tsx`)
+   - 按类型分类展示
+   - 类型标签页切换
+   - 搜索过滤
+   - 重要性徽章
+
+3. **SettingDetailCard** (`packages/site/src/components/setting_detail_card.tsx`)
+   - 设定类型图标和颜色
+   - 重要性标识
+   - 标签页切换（概览/属性/关联）
+   - 统计信息展示
+
+4. **SettingRelationGraph** (`packages/site/src/components/setting_relation_graph.tsx`)
+   - Canvas 力导向图
+   - 缩放和平移
+   - 类型颜色区分
+   - 重要性大小区分
+   - 类型过滤
+   - 图例显示
+
+5. **SettingPanel** (`packages/site/src/components/setting_panel.tsx`)
+   - 标签页切换（列表/提取/结果/关系图）
+   - 设定列表和详情联动
+   - AI 提取配置和执行
+   - 关系图可视化
+   - 保存到数据库
+
+6. **API 客户端** (`packages/site/src/lib/api/setting_extraction.ts`)
+   - `api_create_setting_extraction()`
+   - `api_preview_setting_extraction()`
+   - `api_save_setting_extraction_result()`
+   - `api_get_setting_relations()`
+   - `api_create_setting_relation()`
+
+**闭环验证** ✅:
 ```bash
+# 后端模块导入测试
+uv run python -c "from sail_server.service.setting_extractor import SettingExtractor; print('OK')"
+
+# 前端类型检查
+cd packages/site && pnpm tsc --noEmit --skipLibCheck
+# 结果: 无编译错误
+
+# 验证步骤
+1. 选择文本范围
+2. 执行设定提取任务
+3. 审核提取到的设定
+4. 查看设定关系图
+5. 验证设定分类正确
+
 # 预期指标
 - 设定提取准确率 > 70%
 - 设定分类准确率 > 80%
@@ -1018,9 +1104,17 @@ cd packages/site && pnpm tsc --noEmit --skipLibCheck
 ```
 
 **输出产物**:
-- `sail_server/service/setting_extractor.py`
-- `packages/site/src/components/setting_relation_graph.tsx`
-- `packages/site/src/pages/settings.tsx`
+- ✅ `sail_server/prompts/setting_extraction/v1.yaml`
+- ✅ `sail_server/service/setting_extractor.py`
+- ✅ `sail_server/controller/setting_extraction.py`
+- ✅ `sail_server/data/analysis.py` (更新)
+- ✅ `packages/site/src/components/setting_extraction_config.tsx`
+- ✅ `packages/site/src/components/setting_category_view.tsx`
+- ✅ `packages/site/src/components/setting_detail_card.tsx`
+- ✅ `packages/site/src/components/setting_relation_graph.tsx`
+- ✅ `packages/site/src/components/setting_panel.tsx`
+- ✅ `packages/site/src/lib/api/setting_extraction.ts`
+- ✅ `packages/site/src/lib/data/analysis.ts` (更新)
 
 ---
 
