@@ -12,13 +12,99 @@ SQLAlchemy ORM 模型包
 Phase 2 重构目标：将 ORM 模型从 data/ 层迁移至此
 
 当前迁移状态：
-- [ ] analysis 模块（进行中）
-- [ ] finance 模块（待开始）
-- [ ] health 模块（待开始）
-- [ ] text 模块（待开始）
-- [ ] 其他模块（待开始）
+- [x] analysis 模块
+- [x] finance 模块（保留在原位置，无 ORM 类需要迁移）
+- [x] health 模块
+- [x] history 模块
+- [x] life 模块
+- [x] necessity 模块
+- [x] project 模块
+- [x] text 模块
+- [x] unified_agent 模块
 """
 
 from sail_server.data.orm import ORMBase
 
-__all__ = ["ORMBase"]
+# Analysis Models
+from sail_server.infrastructure.orm.analysis import (
+    Outline, OutlineNode, OutlineEvent,
+    Character, CharacterAlias, CharacterAttribute, CharacterArc, CharacterRelation,
+    Setting, SettingAttribute, SettingRelation, CharacterSettingLink,
+    TextEvidence,
+    AnalysisTask, AnalysisResult,
+)
+
+# Health Models
+from sail_server.infrastructure.orm.health import (
+    Weight, BodySize, Exercise, WeightPlan,
+)
+
+# Text Models
+from sail_server.infrastructure.orm.text import (
+    Work, Edition, DocumentNode, IngestJob,
+)
+
+# Project Models
+from sail_server.infrastructure.orm.project import (
+    Project, Mission,
+)
+
+# Necessity Models
+from sail_server.infrastructure.orm.necessity import (
+    ResidenceType, ContainerType, ItemType, ItemState,
+    JourneyStatus, JourneyItemStatus, ReplenishmentSource,
+    Residence, Container, ItemCategory, Item, Inventory,
+    Journey, JourneyItem, Consumption, Replenishment,
+)
+
+# History Models
+from sail_server.infrastructure.orm.history import (
+    HistoryEvent,
+)
+
+# Life Models
+from sail_server.infrastructure.orm.life import (
+    ServiceAccount,
+)
+
+# Unified Agent Models
+from sail_server.infrastructure.orm.unified_agent import (
+    UnifiedAgentTask, UnifiedAgentStep, UnifiedAgentEvent,
+)
+
+__all__ = [
+    # Base
+    "ORMBase",
+    
+    # Analysis
+    "Outline", "OutlineNode", "OutlineEvent",
+    "Character", "CharacterAlias", "CharacterAttribute", "CharacterArc", "CharacterRelation",
+    "Setting", "SettingAttribute", "SettingRelation", "CharacterSettingLink",
+    "TextEvidence",
+    "AnalysisTask", "AnalysisResult",
+    
+    # Health
+    "Weight", "BodySize", "Exercise", "WeightPlan",
+    
+    # Text
+    "Work", "Edition", "DocumentNode", "IngestJob",
+    
+    # Project
+    "Project", "Mission",
+    
+    # Necessity Enums
+    "ResidenceType", "ContainerType", "ItemType", "ItemState",
+    "JourneyStatus", "JourneyItemStatus", "ReplenishmentSource",
+    # Necessity Models
+    "Residence", "Container", "ItemCategory", "Item", "Inventory",
+    "Journey", "JourneyItem", "Consumption", "Replenishment",
+    
+    # History
+    "HistoryEvent",
+    
+    # Life
+    "ServiceAccount",
+    
+    # Unified Agent
+    "UnifiedAgentTask", "UnifiedAgentStep", "UnifiedAgentEvent",
+]

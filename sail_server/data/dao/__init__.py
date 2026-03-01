@@ -18,13 +18,20 @@ Phase 4 重构目标：将数据访问逻辑从 Model 层提取到 DAO 层
 4. 支持依赖注入
 
 当前迁移状态：
-- [x] finance 模块
 - [x] analysis 模块
-- [ ] 其他模块
+- [x] finance 模块
+- [x] health 模块
+- [x] history 模块
+- [x] life 模块
+- [x] necessity 模块
+- [x] project 模块
+- [x] text 模块
+- [x] unified_agent 模块
 """
 
 from .base import BaseDAO
-from .finance import AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
+
+# Analysis
 from .analysis import (
     CharacterDAO, CharacterAliasDAO, CharacterAttributeDAO,
     OutlineDAO, OutlineNodeDAO, OutlineEventDAO,
@@ -32,13 +39,57 @@ from .analysis import (
     TextEvidenceDAO,
 )
 
+# Finance
+from .finance import AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
+
+# Health
+from .health import WeightDAO, BodySizeDAO, ExerciseDAO, WeightPlanDAO
+
+# Text
+from .text import WorkDAO, EditionDAO, DocumentNodeDAO, IngestJobDAO
+
+# Project
+from .project import ProjectDAO, MissionDAO
+
+# Necessity
+from .necessity import (
+    ResidenceDAO, ContainerDAO, ItemCategoryDAO, ItemDAO,
+    InventoryDAO, JourneyDAO, JourneyItemDAO,
+)
+
+# History
+from .history import HistoryEventDAO
+
+# Life
+from .life import ServiceAccountDAO
+
+# Unified Agent
+from .unified_agent import (
+    UnifiedAgentTaskDAO, UnifiedAgentStepDAO, UnifiedAgentEventDAO
+)
+
 __all__ = [
     "BaseDAO",
-    # Finance
-    "AccountDAO", "TransactionDAO", "BudgetDAO", "BudgetItemDAO",
     # Analysis
     "CharacterDAO", "CharacterAliasDAO", "CharacterAttributeDAO",
     "OutlineDAO", "OutlineNodeDAO", "OutlineEventDAO",
     "SettingDAO", "SettingAttributeDAO",
     "TextEvidenceDAO",
+    # Finance
+    "AccountDAO", "TransactionDAO", "BudgetDAO", "BudgetItemDAO",
+    # Health
+    "WeightDAO", "BodySizeDAO", "ExerciseDAO", "WeightPlanDAO",
+    # Text
+    "WorkDAO", "EditionDAO", "DocumentNodeDAO", "IngestJobDAO",
+    # Project
+    "ProjectDAO", "MissionDAO",
+    # Necessity
+    "ResidenceDAO", "ContainerDAO", "ItemCategoryDAO",
+    "ItemDAO", "InventoryDAO", "JourneyDAO", "JourneyItemDAO",
+    # History
+    "HistoryEventDAO",
+    # Life
+    "ServiceAccountDAO",
+    # Unified Agent
+    "UnifiedAgentTaskDAO", "UnifiedAgentStepDAO", "UnifiedAgentEventDAO",
 ]

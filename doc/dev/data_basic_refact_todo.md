@@ -202,44 +202,62 @@ from sail_server.data.analysis import TextEvidenceORM
 
 ### Phase 2: ORM 模型拆分 (v0.2.6) ✅ 已完成
 
-**目标**: 将 ORM 模型从 `data/analysis.py` 拆分出来
+**目标**: 将 ORM 模型从 `data/` 层拆分出来
 
 **完成日期**: 2026-03-01
 
 **修改摘要**:
 - 创建了新的 ORM 目录结构 `sail_server/infrastructure/orm/`
-- 创建了 `analysis` 子模块，包含 5 个 ORM 文件
-- 所有 ORM 类已迁移到新位置
-- 保持 `analysis.py` 中的 ORM 类定义（向后兼容）
+- 迁移了所有模块的 ORM 类：
+  - `analysis` - 大纲、人物、设定、证据
+  - `health` - 体重、身体尺寸、运动、体重计划
+  - `text` - 作品、版本、文档节点、导入任务
+  - `project` - 项目、任务
+  - `necessity` - 住所、容器、物品、库存、行程
+  - `history` - 历史事件
+  - `life` - 服务账户
+  - `unified_agent` - 统一任务、步骤、事件
+- 保持原文件中的 ORM 类定义（向后兼容）
 - 所有测试通过
 
 **新建文件**:
-- `sail_server/infrastructure/__init__.py`
-- `sail_server/infrastructure/orm/__init__.py`
-- `sail_server/infrastructure/orm/analysis/__init__.py`
-- `sail_server/infrastructure/orm/analysis/outline.py` - Outline, OutlineNode, OutlineEvent
-- `sail_server/infrastructure/orm/analysis/character.py` - Character, CharacterAlias, CharacterAttribute, CharacterArc, CharacterRelation
-- `sail_server/infrastructure/orm/analysis/setting.py` - Setting, SettingAttribute, SettingRelation, CharacterSettingLink
-- `sail_server/infrastructure/orm/analysis/evidence.py` - TextEvidence
-- `sail_server/infrastructure/orm/analysis/task.py` - AnalysisTask, AnalysisResult (占位符)
+- `sail_server/infrastructure/orm/` - ORM 模型包
+  - `analysis/` - 分析模块（outline, character, setting, evidence, task）
+  - `health.py` - 健康模块
+  - `text.py` - 文本模块
+  - `project.py` - 项目模块
+  - `necessity.py` - 物资模块
+  - `history.py` - 历史模块
+  - `life.py` - 生活服务模块
+  - `unified_agent.py` - 统一 Agent 模块
 
 **新的导入方式**:
 ```python
 # 推荐：从新位置导入 ORM 模型
-from sail_server.infrastructure.orm.analysis import (
-    Outline, OutlineNode, OutlineEvent,
-    Character, CharacterAlias, CharacterAttribute,
-    Setting, SettingAttribute, TextEvidence,
+from sail_server.infrastructure.orm import (
+    # analysis
+    Outline, Character, Setting, TextEvidence,
+    # health
+    Weight, BodySize, Exercise, WeightPlan,
+    # text
+    Work, Edition, DocumentNode,
+    # project
+    Project, Mission,
+    # necessity
+    Item, Inventory, Journey,
+    # ... 其他模型
 )
 
 # 向后兼容：仍然可以从原位置导入
-from sail_server.data.analysis import Outline, Character, Setting, TextEvidence
+from sail_server.data.analysis import Character, Setting
+from sail_server.data.health import Weight, BodySize
+# ... 其他原位置导入
 ```
 
 **注意事项**:
-- `analysis.py` 中的 ORM 类定义暂时保留，确保向后兼容
-- 新的代码建议从 `infrastructure.orm.analysis` 导入
-- 在 Phase 3 完成后，将移除 `analysis.py` 中的 ORM 类定义
+- 原文件中的 ORM 类定义暂时保留，确保向后兼容
+- 新的代码建议从 `infrastructure.orm` 导入
+- 在 Phase 5 完成后，将移除原文件中的 ORM 类定义
 
 ---
 
@@ -297,15 +315,30 @@ from sail_server.data.analysis import CharacterData
 
 **修改摘要**:
 - 创建了 DAO 基类 `BaseDAO`，提供通用 CRUD 操作
-- 实现了 finance 模块 DAO（AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO）
-- 实现了 analysis 模块 DAO（CharacterDAO, OutlineDAO, SettingDAO, TextEvidenceDAO 等）
+- 实现了所有模块的 DAO：
+  - `analysis` - CharacterDAO, OutlineDAO, SettingDAO, TextEvidenceDAO 等
+  - `finance` - AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
+  - `health` - WeightDAO, BodySizeDAO, ExerciseDAO, WeightPlanDAO
+  - `text` - WorkDAO, EditionDAO, DocumentNodeDAO, IngestJobDAO
+  - `project` - ProjectDAO, MissionDAO
+  - `necessity` - ItemDAO, InventoryDAO, JourneyDAO 等
+  - `history` - HistoryEventDAO
+  - `life` - ServiceAccountDAO
+  - `unified_agent` - UnifiedAgentTaskDAO, UnifiedAgentStepDAO, UnifiedAgentEventDAO
 - 所有测试通过
 
 **新建文件**:
 - `sail_server/data/dao/__init__.py`
 - `sail_server/data/dao/base.py` - DAO 基类
-- `sail_server/data/dao/finance.py` - 财务 DAO
 - `sail_server/data/dao/analysis.py` - 分析 DAO
+- `sail_server/data/dao/finance.py` - 财务 DAO
+- `sail_server/data/dao/health.py` - 健康 DAO
+- `sail_server/data/dao/text.py` - 文本 DAO
+- `sail_server/data/dao/project.py` - 项目 DAO
+- `sail_server/data/dao/necessity.py` - 物资 DAO
+- `sail_server/data/dao/history.py` - 历史 DAO
+- `sail_server/data/dao/life.py` - 生活服务 DAO
+- `sail_server/data/dao/unified_agent.py` - 统一 Agent DAO
 
 **DAO 基类功能**:
 - `get_by_id()` - 通过 ID 获取
@@ -317,10 +350,12 @@ from sail_server.data.analysis import CharacterData
 - `exists()` - 检查存在
 - `filter_by()` - 条件查询
 
-**具体 DAO 功能**:
+**具体 DAO 功能示例**:
 - `CharacterDAO`: `get_by_edition()`, `get_with_relations()`, `search_by_name()`
 - `OutlineDAO`: `get_by_edition()`, `get_with_nodes()`
 - `TextEvidenceDAO`: `get_by_edition()`, `get_by_node()`, `get_by_target()`, `count_by_target_type()`
+- `WorkDAO`: `get_by_slug()`, `search_by_title()`
+- `ProjectDAO`: `get_active_projects()`, `get_by_state()`
 
 **使用示例**:
 ```python
