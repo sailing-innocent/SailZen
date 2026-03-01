@@ -12,14 +12,15 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, post, get, delete, Request
 from litestar.exceptions import NotFoundException, ClientException
 
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     TextRangePreview,
     TextRangeContent,
     RangeSelectionMode,
-    EvidenceCreateRequest,
-    EvidenceUpdateRequest,
-    EvidenceListResponse,
+    TextEvidenceCreateRequest,
+    TextEvidenceResponse as EvidenceResponse,
+)
+from sail_server.data.analysis import (
     TextEvidenceDTO,
 )
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
@@ -234,7 +235,26 @@ class EvidenceController(Controller):
         # 创建证据
         evidence_id = str(uuid.uuid4())
         now = datetime.now()
-        evidence = TextEvidenceDTO(
+        from dataclasses import dataclass, field as dc_field
+        
+        @dataclass
+        class TempEvidence:
+            id: str
+            edition_id: int
+            node_id: int
+            start_offset: int
+            end_offset: int
+            selected_text: str
+            evidence_type: str
+            content: str
+            target_type: Optional[str] = None
+            target_id: Optional[str] = None
+            context: Optional[str] = None
+            created_at: any = None
+            updated_at: any = None
+            meta_data: dict = dc_field(default_factory=dict)
+        
+        evidence = TempEvidence(
             id=evidence_id,
             edition_id=data.edition_id,
             node_id=data.node_id,
@@ -248,7 +268,7 @@ class EvidenceController(Controller):
             context=data.context,
             created_at=now,
             updated_at=None,
-            meta_data=data.meta_data or {},
+            meta_data={},
         )
         
         # 存储证据

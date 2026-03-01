@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.data.finance import Account, Transaction, Budget, BudgetItem
+from sail_server.infrastructure.orm.finance import Account, Transaction, Budget, BudgetItem
 from sail_server.data.dao.base import BaseDAO
 
 

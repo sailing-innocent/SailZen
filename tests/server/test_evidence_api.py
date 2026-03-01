@@ -8,10 +8,9 @@
 
 import pytest
 from datetime import datetime
-from sail_server.data.analysis import (
-    TextEvidenceDTO,
-    EvidenceCreateRequest,
-    EvidenceUpdateRequest,
+from sail_server.application.dto.analysis import (
+    TextEvidenceCreateRequest as EvidenceCreateRequest,
+    TextEvidenceResponse as EvidenceUpdateRequest,
 )
 from sail_server.controller.analysis import EvidenceController, EvidenceResponse
 

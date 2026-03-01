@@ -86,6 +86,20 @@ class TextRangePreview(BaseModel):
     warnings: List[str] = Field(default_factory=list, description="警告信息")
 
 
+class TextRangeContent(BaseModel):
+    """文本范围内容"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    edition_id: int = Field(description="版本ID")
+    mode: RangeSelectionMode = Field(description="选择模式")
+    full_text: str = Field(description="完整文本")
+    chapter_count: int = Field(description="章节数")
+    total_chars: int = Field(description="总字符数")
+    total_words: int = Field(description="总词数")
+    estimated_tokens: int = Field(description="预估token数")
+    chapters: List[Dict[str, Any]] = Field(default_factory=list, description="章节内容列表")
+
+
 # ============================================================================
 # Analysis Task DTOs
 # ============================================================================
@@ -238,30 +252,33 @@ class TextEvidenceBase(BaseModel):
     
     edition_id: int = Field(description="版本ID")
     node_id: int = Field(description="节点ID")
-    target_type: str = Field(description="目标类型")
-    target_id: int = Field(description="目标ID")
-    text_snippet: Optional[str] = Field(default=None, description="文本片段")
     evidence_type: str = Field(default="explicit", description="证据类型")
-    confidence: Optional[float] = Field(default=None, description="置信度")
 
 
 class TextEvidenceCreateRequest(TextEvidenceBase):
     """创建文本证据请求"""
-    start_char: Optional[int] = Field(default=None, description="起始字符")
-    end_char: Optional[int] = Field(default=None, description="结束字符")
-    context_before: Optional[str] = Field(default=None, description="前文")
-    context_after: Optional[str] = Field(default=None, description="后文")
+    start_offset: int = Field(description="起始偏移")
+    end_offset: int = Field(description="结束偏移")
+    selected_text: str = Field(description="选中的文本")
+    content: str = Field(description="证据内容")
+    target_type: Optional[str] = Field(default=None, description="目标类型")
+    target_id: Optional[str] = Field(default=None, description="目标ID")
+    context: Optional[str] = Field(default=None, description="上下文")
 
 
 class TextEvidenceResponse(TextEvidenceBase):
     """文本证据响应"""
-    id: int = Field(description="证据ID")
-    start_char: Optional[int] = Field(default=None, description="起始字符")
-    end_char: Optional[int] = Field(default=None, description="结束字符")
-    context_before: Optional[str] = Field(default=None, description="前文")
-    context_after: Optional[str] = Field(default=None, description="后文")
-    source: str = Field(default="manual", description="来源")
-    created_at: datetime = Field(description="创建时间")
+    id: str = Field(description="证据ID")
+    start_offset: int = Field(description="起始偏移")
+    end_offset: int = Field(description="结束偏移")
+    selected_text: str = Field(description="选中的文本")
+    content: str = Field(description="证据内容")
+    target_type: Optional[str] = Field(default=None, description="目标类型")
+    target_id: Optional[str] = Field(default=None, description="目标ID")
+    context: Optional[str] = Field(default=None, description="上下文")
+    created_at: str = Field(description="创建时间")
+    updated_at: Optional[str] = Field(default=None, description="更新时间")
+    message: str = Field(default="操作成功", description="消息")
 
 
 class TextEvidenceListResponse(BaseModel):

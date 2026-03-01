@@ -13,7 +13,7 @@ Phase 2 重构目标：将 ORM 模型从 data/ 层迁移至此
 
 当前迁移状态：
 - [x] analysis 模块
-- [x] finance 模块（保留在原位置，无 ORM 类需要迁移）
+- [x] finance 模块
 - [x] health 模块
 - [x] history 模块
 - [x] life 模块
@@ -67,6 +67,11 @@ from sail_server.infrastructure.orm.life import (
     ServiceAccount,
 )
 
+# Finance Models
+from sail_server.infrastructure.orm.finance import (
+    Account, Transaction, Budget, BudgetItem,
+)
+
 # Unified Agent Models
 from sail_server.infrastructure.orm.unified_agent import (
     UnifiedAgentTask, UnifiedAgentStep, UnifiedAgentEvent,
@@ -104,6 +109,9 @@ __all__ = [
     
     # Life
     "ServiceAccount",
+    
+    # Finance
+    "Account", "Transaction", "Budget", "BudgetItem",
     
     # Unified Agent
     "UnifiedAgentTask", "UnifiedAgentStep", "UnifiedAgentEvent",

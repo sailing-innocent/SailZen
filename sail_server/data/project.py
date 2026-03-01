@@ -1,35 +1,53 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, BigInteger, TIMESTAMP, func
-from sail_server.data.types import JSONB
-from .orm import ORMBase
-from sqlalchemy.orm import relationship
-from sail_server.utils.time_utils import QuarterBiWeekTime
-from sail_server.utils.money import Money
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, date
+# -*- coding: utf-8 -*-
+# @file project.py
+# @brief The Project Data Storage
+# @author sailing-innocent
+# @date 2025-04-21
+# @version 2.0
+# ---------------------------------
+
+"""
+项目管理模块数据层
+
+ORM 模型已从 infrastructure.orm.project 迁移
+DTO 模型已从 application.dto.project 迁移
+
+此文件保留向后兼容的导出、状态机枚举和遗留的 dataclass DTOs
+（因为 controller 层仍使用 Litestar DataclassDTO）
+"""
+
 import json
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
-from msgspec import Struct
 
-LAST_TIMESTAMP_LIFE = date(2199, 1, 1)
-MINIMUM_TIME_REQUIREMENT = timedelta(minutes=20)  # 20 minutes
+# 从 infrastructure.orm 导入 ORM 模型
+from sail_server.infrastructure.orm.project import (
+    Project,
+    Mission,
+)
+
+# 从 application.dto 导入 Pydantic DTOs
+from sail_server.application.dto.project import (
+    ProjectBase,
+    ProjectCreateRequest,
+    ProjectUpdateRequest,
+    ProjectResponse,
+    ProjectListResponse,
+    MissionBase,
+    MissionCreateRequest,
+    MissionUpdateRequest,
+    MissionResponse,
+    MissionListResponse,
+    MissionTreeResponse,
+)
 
 
 # -----------------------------------------
-# Long-Term Project Management
+# Project State Machine (保留在此，因为是业务逻辑)
 # -----------------------------------------
-class Project(ORMBase):
-    __tablename__ = "projects"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    description = Column(String)
-    state = Column(Integer)  # Project State
-    start_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
-    end_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
-    ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
-    mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
-
-
 class ProjectState:
+    """项目状态机"""
     # Project State Machine
     # -----------------------------------------------------
     # INVALID -> VALID -> PREPARE -> TRACKING ---> DONE
@@ -91,26 +109,63 @@ class ProjectState:
         return self._state
 
 
+# -----------------------------------------
+# Mission State Machine (保留在此，因为是业务逻辑)
+# -----------------------------------------
+class MissionState:
+    """任务状态机"""
+    # Mission State Machine
+    # -----------------------------------------------------
+    # PENDING -> READY -> DOING ---> DONE
+    #  ^                  |    |
+    #  |                  |    v
+    #  <------------------    CANCEL
+    # ------------------------------------------------------
+    PENDING = 0
+    READY = 1
+    DOING = 2
+    DONE = 3
+    CANCELED = 4
+
+    def __init__(self, state: int = PENDING):
+        self._state = state
+
+    def pending(self):
+        self._state = self.PENDING
+
+    def ready(self):
+        self._state = self.READY
+
+    def doing(self):
+        self._state = self.DOING
+
+    def done(self):
+        self._state = self.DONE
+
+    def cancel(self):
+        self._state = self.CANCELED
+
+    def get_state(self) -> int:
+        return self._state
+
+
+# ============================================================================
+# Legacy Dataclass DTOs (保留以兼容现有 controller)
+# TODO: 迁移到 Pydantic DTOs 后删除
+# ============================================================================
+
 @dataclass
 class ProjectData:
-    """
-    The Project Data
-    """
-
+    """项目数据 (legacy dataclass)"""
     id: int = field(default=None)
     name: str = field(default="")
     description: str = field(default="")
     state: int = field(default_factory=lambda: ProjectState().get_state())
-    # Project Start and End Time is QuarterBiWeekTime (YYYYQQWW format)
     start_time_qbw: int = field(
-        default_factory=lambda: QuarterBiWeekTime.from_datetime(
-            datetime.now()
-        ).to_db_int()
+        default_factory=lambda: 0  # TODO: import QuarterBiWeekTime if needed
     )
     end_time_qbw: int = field(
-        default_factory=lambda: QuarterBiWeekTime.from_datetime(
-            datetime.now() + timedelta(days=14)
-        ).to_db_int()
+        default_factory=lambda: 0  # TODO: import QuarterBiWeekTime if needed
     )
     ctime: datetime = field(default_factory=lambda: datetime.now())
     mtime: datetime = field(default_factory=lambda: datetime.now())
@@ -176,76 +231,9 @@ class ProjectData:
         project.mtime = datetime.now()
 
 
-# -----------------------------------------
-# Mission Management in Tree Structure (left-right structure)
-# -----------------------------------------
-class Mission(ORMBase):
-    __tablename__ = "missions"
-    id = Column(Integer, primary_key=True)
-    # basic Mission info
-    name = Column(String)
-    description = Column(String)
-    parent_id = Column(
-        Integer, ForeignKey("missions.id"), nullable=True, default=None
-    )  # parent node id, null means no parent required
-    state = Column(Integer)  # 0: pending 1: ready 2: doing 3: done 4: cancel
-    ddl = Column(TIMESTAMP)  # deadline in timestamp in seconds
-    project_id = Column(
-        Integer, ForeignKey("projects.id"), nullable=True, default=None
-    )  # project id, null means no project
-
-    # end basic Mission info
-
-    # Internal use only, do not use in query
-    # --------------------------------------
-    # 在构建树结构时我们只会指定parent_id，执行查找前会检查距离上一个checkpoint之间是否有插入/删除操作，如果有，需要刷新lft和rgt
-    # 辅助前序遍历方法，如果A节点是B节点的父节点，则A节点的lft小于B节点的lft，A节点的rgt大于B节点的rgt
-    lft = Column(Integer)
-    rgt = Column(Integer)
-    tree_id = Column(Integer)  # tree id, used for differentiate different trees
-    ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
-    mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
-    # end internal use only
-
-
-class MissionState:
-    # Mission State Machine
-    # -----------------------------------------------------
-    # PENDING -> READY -> DOING ---> DONE
-    #  ^                  |    |
-    #  |                  |    v
-    #  <------------------    CANCEL
-    # ------------------------------------------------------
-    PENDING = 0
-    READY = 1
-    DOING = 2
-    DONE = 3
-    CANCELED = 4
-
-    def __init__(self, state: int = PENDING):
-        self._state = state
-
-    def pending(self):
-        self._state = self.PENDING
-
-    def ready(self):
-        self._state = self.READY
-
-    def doing(self):
-        self._state = self.DOING
-
-    def done(self):
-        self._state = self.DONE
-
-    def cancel(self):
-        self._state = self.CANCELED
-
-    def get_state(self) -> int:
-        return self._state
-
-
 @dataclass
 class MissionData:
+    """任务数据 (legacy dataclass)"""
     id: int = field(default=None)
     name: str = field(default="")
     description: str = field(default="")
@@ -256,7 +244,7 @@ class MissionData:
     mtime: datetime = field(default_factory=lambda: datetime.now())
     ddl: datetime = field(
         default_factory=lambda: datetime.now() + timedelta(days=14)
-    )  # two weeks by default
+    )
 
     @classmethod
     def read_from_orm(cls, orm: Mission):
@@ -305,8 +293,33 @@ class MissionData:
             "description": self.description,
             "parent_id": self.parent_id,
             "project_id": self.project_id,
-            "state": self.state.get_state(),
+            "state": self.state,
             "ctime": self.ctime,
             "mtime": self.mtime,
             "ddl": self.ddl,
         }
+
+
+__all__ = [
+    # State Machines
+    "ProjectState",
+    "MissionState",
+    # ORM Models
+    "Project",
+    "Mission",
+    # Pydantic DTOs
+    "ProjectBase",
+    "ProjectCreateRequest",
+    "ProjectUpdateRequest",
+    "ProjectResponse",
+    "ProjectListResponse",
+    "MissionBase",
+    "MissionCreateRequest",
+    "MissionUpdateRequest",
+    "MissionResponse",
+    "MissionListResponse",
+    "MissionTreeResponse",
+    # Legacy Dataclass DTOs
+    "ProjectData",
+    "MissionData",
+]

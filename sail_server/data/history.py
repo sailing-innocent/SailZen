@@ -3,46 +3,46 @@
 # @brief The History Events Data Storage
 # @author sailing-innocent
 # @date 2025-10-12
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, func, Text
-from sail_server.data.types import JSONB, ARRAY
-from .orm import ORMBase
+"""
+历史事件模块数据层
+
+ORM 模型已从 infrastructure.orm.history 迁移
+DTO 模型已从 application.dto.history 迁移
+
+此文件保留向后兼容的导出和遗留的 dataclass DTOs
+（因为 controller 层仍使用 Litestar DataclassDTO）
+"""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+# 从 infrastructure.orm 导入 ORM 模型
+from sail_server.infrastructure.orm.history import (
+    HistoryEvent,
+)
 
-class HistoryEvent(ORMBase):
-    """
-    历史事件表
-    用于记录和组织历史事件，支持嵌套结构和关联检索
-    """
+# 从 application.dto 导入 Pydantic DTOs
+from sail_server.application.dto.history import (
+    HistoryEventBase,
+    HistoryEventCreateRequest,
+    HistoryEventUpdateRequest,
+    HistoryEventResponse,
+    HistoryEventListResponse,
+)
 
-    __tablename__ = "history_events"
 
-    id = Column(Integer, primary_key=True)
-    receive_time = Column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )  # 接收消息的时间
-    title = Column(String, nullable=False)  # 事件标题
-    description = Column(Text, nullable=False)  # 事件描述
-    rar_tags = Column(ARRAY(String), default=[])  # 手动标注的标签
-    tags = Column(ARRAY(String), default=[])  # 机器处理后用于检索的标签
-    start_time = Column(TIMESTAMP, nullable=True)  # 估计的开始时间
-    end_time = Column(TIMESTAMP, nullable=True)  # 估计的结束时间
-    related_events = Column(ARRAY(Integer), default=[])  # 相关事件的ID列表
-    parent_event = Column(Integer, nullable=True)  # 父事件ID
-    details = Column(JSONB, default={})  # 更多细节信息
-
+# ============================================================================
+# Legacy Dataclass DTOs (保留以兼容现有 controller)
+# TODO: 迁移到 Pydantic DTOs 后删除
+# ============================================================================
 
 @dataclass
 class HistoryEventData:
-    """
-    历史事件数据传输对象
-    """
-
+    """历史事件数据传输对象 (legacy dataclass)"""
     title: str
     description: str
     id: int = field(default=-1)
@@ -97,3 +97,17 @@ class HistoryEventData:
         event.related_events = self.related_events
         event.parent_event = self.parent_event
         event.details = self.details
+
+
+__all__ = [
+    # ORM Models
+    "HistoryEvent",
+    # Pydantic DTOs
+    "HistoryEventBase",
+    "HistoryEventCreateRequest",
+    "HistoryEventUpdateRequest",
+    "HistoryEventResponse",
+    "HistoryEventListResponse",
+    # Legacy Dataclass DTOs
+    "HistoryEventData",
+]

@@ -5,12 +5,8 @@
 # @date 2025-05-22
 # @version 1.0
 # ---------------------------------
-from sail_server.data.finance import (
-    Account,
-    AccountData,
-    TransactionState,
-    TransactionData,
-)
+from sail_server.infrastructure.orm.finance import Account
+from sail_server.data.finance import AccountData, TransactionData, AccountState, TransactionState
 from sail_server.utils.money import Money
 import logging
 from datetime import datetime

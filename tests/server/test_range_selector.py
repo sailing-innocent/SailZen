@@ -16,7 +16,7 @@ from sail_server.service.range_selector import (
     create_range_selection,
     suggest_optimal_range,
 )
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     TextRangePreview,
     TextRangeContent,

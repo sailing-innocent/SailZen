@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 
 from sail_server.data.text import DocumentNode, Edition
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     TextRangePreview,
     TextRangeContent,
