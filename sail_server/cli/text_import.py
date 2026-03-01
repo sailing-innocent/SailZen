@@ -262,7 +262,7 @@ def do_import(content: str, chapters: List[Tuple[str, str, int, int]],
     返回: (work_id, edition_id, chapter_count)
     """
     from sail_server.db import Database
-    from sail_server.data.text import TextImportRequest
+    from sail_server.model.text import TextImportRequest
     from sail_server.model.text import import_text_impl
     
     # 创建导入请求

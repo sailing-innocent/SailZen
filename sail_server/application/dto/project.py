@@ -19,6 +19,102 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 # ============================================================================
+# Project State Classes
+# ============================================================================
+
+class ProjectState:
+    """项目状态管理类"""
+    INVALID = 0   # 无效
+    VALID = 1     # 有效
+    PREPARE = 2   # 准备中
+    TRACKING = 3  # 跟踪中
+    PENDING = 4   # 挂起
+    DONE = 5      # 完成
+    CANCELED = 6  # 取消
+
+    STATE_MAP = {
+        INVALID: "无效",
+        VALID: "有效",
+        PREPARE: "准备中",
+        TRACKING: "跟踪中",
+        PENDING: "挂起",
+        DONE: "完成",
+        CANCELED: "取消",
+    }
+
+    def __init__(self, state: int):
+        self.state = state
+
+    def get_state(self) -> int:
+        return self.state
+
+    def valid(self):
+        self.state = self.VALID
+
+    def prepare(self):
+        self.state = self.PREPARE
+
+    def tracking(self):
+        self.state = self.TRACKING
+
+    def pending(self):
+        self.state = self.PENDING
+
+    def done(self):
+        self.state = self.DONE
+
+    def cancel(self):
+        self.state = self.CANCELED
+
+    def restore(self):
+        self.state = self.VALID
+
+    def __str__(self):
+        return self.STATE_MAP.get(self.state, "未知")
+
+
+class MissionState:
+    """任务状态管理类"""
+    PENDING = 0   # 待处理
+    READY = 1     # 就绪
+    DOING = 2     # 进行中
+    DONE = 3      # 完成
+    CANCELED = 4  # 取消
+
+    STATE_MAP = {
+        PENDING: "待处理",
+        READY: "就绪",
+        DOING: "进行中",
+        DONE: "完成",
+        CANCELED: "取消",
+    }
+
+    def __init__(self, state: int):
+        self.state = state
+
+    def get_state(self) -> int:
+        return self.state
+
+    def pending(self):
+        self.state = self.PENDING
+
+    def ready(self):
+        self.state = self.READY
+
+    def doing(self):
+        self.state = self.DOING
+
+    def done(self):
+        self.state = self.DONE
+
+    def cancel(self):
+        self.state = self.CANCELED
+
+    def __str__(self):
+        return self.STATE_MAP.get(self.state, "未知")
+
+
+# ============================================================================
 # Project DTOs
 # ============================================================================
 

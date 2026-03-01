@@ -9,7 +9,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sail_server.data.history import HistoryEvent
+from sail_server.infrastructure.orm.history import HistoryEvent
 from sail_server.application.dto.history import (
     HistoryEventCreateRequest,
     HistoryEventUpdateRequest,

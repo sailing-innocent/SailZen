@@ -14,7 +14,6 @@ from sail_server.infrastructure.orm.analysis import (
     AnalysisTask,
     AnalysisResult,
 )
-from sail_server.data.text import DocumentNode
 
 # 使用 Pydantic DTOs
 from sail_server.application.dto.analysis import (

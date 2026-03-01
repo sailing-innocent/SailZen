@@ -20,11 +20,9 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from sail_server.data.analysis import (
-    AnalysisTask, AnalysisResult,
-    AnalysisTaskData, AnalysisResultData,
-)
-from sail_server.data.text import DocumentNode
+from sail_server.infrastructure.orm.analysis import AnalysisTask, AnalysisResult
+from sail_server.application.dto.analysis import AnalysisTaskData, AnalysisResultData
+from sail_server.infrastructure.orm.text import DocumentNode
 from sail_server.utils.llm import LLMClient, LLMConfig, LLMProvider, PromptTemplateManager, get_template_manager
 
 logger = logging.getLogger(__name__)
@@ -442,7 +440,7 @@ class AnalysisTaskRunner:
         logger.info(f"[DEBUG] Starting LLM processing for chunk {chunk.index}: {chunk.chapter_range}")
         
         # 获取作品信息
-        from sail_server.data.text import Edition, Work
+        from sail_server.infrastructure.orm.text import Edition, Work
         edition = db.query(Edition).filter(Edition.id == task.edition_id).first()
         work_title = "Unknown"
         if edition:
@@ -612,7 +610,7 @@ class AnalysisTaskRunner:
     ) -> List[Dict[str, Any]]:
         """生成分块的 Prompt（不调用 LLM）"""
         # 获取作品信息
-        from sail_server.data.text import Edition, Work
+        from sail_server.infrastructure.orm.text import Edition, Work
         edition = db.query(Edition).filter(Edition.id == task.edition_id).first()
         work_title = "Unknown"
         if edition:

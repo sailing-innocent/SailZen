@@ -20,7 +20,8 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from sail_server.db import provide_db_session, get_db_session
-from sail_server.data.analysis import AnalysisTaskData, AnalysisResultData, AnalysisTask
+from sail_server.application.dto.analysis import AnalysisTaskData, AnalysisResultData
+from sail_server.infrastructure.orm.analysis import AnalysisTask
 from sail_server.model.analysis.task_scheduler import (
     TaskExecutionMode,
     TaskExecutionPlan,
@@ -644,7 +645,7 @@ class PromptExportController(Controller):
         format: str = "json"
     ) -> Dict[str, Any]:
         """获取任务的所有导出 Prompt"""
-        from sail_server.data.analysis import AnalysisResult
+        from sail_server.infrastructure.orm.analysis import AnalysisResult
         
         results = db.query(AnalysisResult).filter(
             AnalysisResult.task_id == task_id,
@@ -701,7 +702,7 @@ class PromptExportController(Controller):
         format: str = "markdown"
     ) -> Dict[str, Any]:
         """下载任务的所有 Prompt（返回合并的文本）"""
-        from sail_server.data.analysis import AnalysisResult, AnalysisTask
+        from sail_server.infrastructure.orm.analysis import AnalysisResult, AnalysisTask
         
         task = db.query(AnalysisTask).filter(AnalysisTask.id == task_id).first()
         if not task:

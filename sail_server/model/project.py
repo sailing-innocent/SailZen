@@ -9,11 +9,9 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sail_server.data.project import (
+from sail_server.infrastructure.orm.project import (
     Project,
-    ProjectState,
     Mission,
-    MissionState,
 )
 from sail_server.application.dto.project import (
     ProjectCreateRequest,
@@ -22,6 +20,8 @@ from sail_server.application.dto.project import (
     MissionCreateRequest,
     MissionUpdateRequest,
     MissionResponse,
+    ProjectState,
+    MissionState,
 )
 from sail_server.utils.time_utils import QuarterBiWeekTime
 

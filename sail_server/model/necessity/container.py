@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.data.necessity import (
+from sail_server.infrastructure.orm.necessity import (
     Container,
 )
 from sail_server.application.dto.necessity import (

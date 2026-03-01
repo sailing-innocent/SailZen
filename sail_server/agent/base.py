@@ -16,7 +16,8 @@ from datetime import datetime
 from enum import Enum
 from sqlalchemy.orm import Session
 
-from sail_server.data.unified_agent import UnifiedAgentTask, TaskStatus
+from sail_server.infrastructure.orm.unified_agent import UnifiedAgentTask
+from sail_server.application.dto.unified_agent import TaskStatus
 from sail_server.utils.llm.gateway import LLMGateway
 
 

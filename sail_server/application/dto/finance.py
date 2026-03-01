@@ -212,3 +212,67 @@ class BudgetListResponse(BaseModel):
     """预算列表响应"""
     budgets: List[BudgetResponse]
     total: int
+
+
+# ============================================================================
+# Legacy Data DTOs (for backward compatibility)
+# ============================================================================
+
+class AccountData(BaseModel):
+    """账户数据 DTO (向后兼容)"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int = Field(default=0, description="账户ID")
+    name: str = Field(default="", description="账户名称")
+    description: str = Field(default="", description="账户描述")
+    balance: str = Field(default="0.0", description="账户余额")
+    state: int = Field(default=0, description="账户状态")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
+
+
+class TransactionData(BaseModel):
+    """交易数据 DTO (向后兼容)"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int = Field(default=0, description="交易ID")
+    from_acc_id: int = Field(default=0, description="转出账户ID")
+    to_acc_id: int = Field(default=0, description="转入账户ID")
+    value: str = Field(default="0.0", description="交易金额")
+    prev_value: str = Field(default="0.0", description="交易前金额")
+    description: str = Field(default="", description="交易描述")
+    tags: str = Field(default="", description="交易标签")
+    state: int = Field(default=0, description="交易状态")
+    budget_id: Optional[int] = Field(default=None, description="关联预算ID")
+    htime: float = Field(default=0.0, description="发生时间戳")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
+
+
+class BudgetItemData(BaseModel):
+    """预算子项数据 DTO (向后兼容)"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int = Field(default=0, description="子项ID")
+    budget_id: int = Field(default=0, description="预算ID")
+    name: str = Field(default="", description="子项名称")
+    item_type: int = Field(default=0, description="子项类型")
+    status: int = Field(default=0, description="子项状态")
+    direction: int = Field(default=0, description="方向")
+    amount: str = Field(default="0.0", description="金额")
+    period_months: int = Field(default=1, description="周期月数")
+    start_time: float = Field(default=0.0, description="开始时间戳")
+    end_time: float = Field(default=0.0, description="结束时间戳")
+
+
+class BudgetData(BaseModel):
+    """预算数据 DTO (向后兼容)"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int = Field(default=0, description="预算ID")
+    name: str = Field(default="", description="预算名称")
+    description: str = Field(default="", description="预算描述")
+    start_time: float = Field(default=0.0, description="开始时间戳")
+    end_time: float = Field(default=0.0, description="结束时间戳")
+    status: int = Field(default=0, description="预算状态")
+    items: List[BudgetItemData] = Field(default_factory=list, description="预算子项")

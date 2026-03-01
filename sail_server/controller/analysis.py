@@ -225,7 +225,7 @@ class EvidenceController(Controller):
         db = next(router_dependency)
         
         # 验证节点存在
-        from sail_server.data.text import DocumentNode
+        from sail_server.infrastructure.orm.text import DocumentNode
         node = db.query(DocumentNode).filter(DocumentNode.id == data.node_id).first()
         if not node:
             raise NotFoundException(detail=f"Node with ID {data.node_id} not found")
@@ -500,7 +500,7 @@ class AnalysisStatsController(Controller):
         db = next(router_dependency)
         
         # 验证版本存在
-        from sail_server.data.text import Edition
+        from sail_server.infrastructure.orm.text import Edition
         edition = db.query(Edition).filter(Edition.id == edition_id).first()
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")

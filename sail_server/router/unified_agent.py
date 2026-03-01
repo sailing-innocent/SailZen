@@ -23,10 +23,10 @@ from litestar.connection import WebSocket
 from litestar.types import WebSocketScope, WebSocketReceiveMessage, WebSocketSendMessage, Scope, Receive, Send
 
 from sail_server.db import get_db_dependency, get_db_session
-from sail_server.data.unified_agent import (
-    UnifiedAgentTask,
+from sail_server.infrastructure.orm.unified_agent import UnifiedAgentTask
+from sail_server.application.dto.unified_agent import (
     UnifiedTaskData,
-    UnifiedTaskCreateRequest,
+    UnifiedAgentTaskCreateRequest as UnifiedTaskCreateRequest,
     UnifiedTaskProgress,
     TaskStatus,
     TaskType,

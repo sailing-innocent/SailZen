@@ -15,8 +15,54 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field, ConfigDict
+
+
+# ============================================================================
+# Task Status & Type Constants
+# ============================================================================
+
+class TaskStatus:
+    """任务状态常量"""
+    PENDING = "pending"           # 待处理
+    SCHEDULED = "scheduled"       # 已调度
+    RUNNING = "running"           # 运行中
+    PAUSED = "paused"             # 已暂停
+    COMPLETED = "completed"       # 已完成
+    FAILED = "failed"             # 失败
+    CANCELLED = "cancelled"       # 已取消
+
+
+class TaskType:
+    """任务类型常量"""
+    NOVEL_ANALYSIS = "novel_analysis"  # 小说分析
+    CODE = "code"                      # 代码任务
+    WRITING = "writing"                # 写作任务
+    GENERAL = "general"                # 通用任务
+    DATA = "data"                      # 数据处理任务
+
+
+class TaskSubType:
+    """任务子类型常量"""
+    OUTLINE_EXTRACTION = "outline_extraction"    # 大纲提取
+    CHARACTER_DETECTION = "character_detection"  # 人物检测
+    SETTING_DETECTION = "setting_detection"      # 设定检测
+    RELATION_ANALYSIS = "relation_analysis"      # 关系分析
+    SUMMARY_GENERATION = "summary_generation"    # 摘要生成
+    SETTING_EXTRACTION = "setting_extraction"
+    PLOT_ANALYSIS = "plot_analysis"
+
+class StepType:
+    """步骤类型常量"""
+    THOUGHT = "thought"                # 思考
+    ACTION = "action"                  # 行动
+    OBSERVATION = "observation"        # 观察
+    LLM_CALL = "llm_call"              # LLM调用
+    DATA_PROCESSING = "data_processing"  # 数据处理
+    ERROR = "error"                    # 错误
+    COMPLETION = "completion"          # 完成
 
 
 # ============================================================================
@@ -181,6 +227,90 @@ class UnifiedAgentEventListResponse(BaseModel):
     """统一 Agent 事件列表响应"""
     events: List[UnifiedAgentEventResponse]
     total: int
+
+
+# ============================================================================
+# Unified Task Data & Progress (for internal use)
+# ============================================================================
+
+@dataclass
+class UnifiedTaskData:
+    """统一任务数据对象 (用于调度器内部传递)"""
+    task_type: str
+    sub_type: Optional[str] = None
+    edition_id: Optional[int] = None
+    target_node_ids: Optional[List[int]] = None
+    target_scope: Optional[str] = None
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    prompt_template_id: Optional[str] = None
+    priority: int = 5
+    config: Dict[str, Any] = field(default_factory=dict)
+    
+    # 以下字段在创建后填充
+    id: Optional[int] = None
+    status: str = "pending"
+    progress: int = 0
+    current_phase: Optional[str] = None
+    error_message: Optional[str] = None
+    error_code: Optional[str] = None
+    estimated_tokens: Optional[int] = None
+    actual_tokens: int = 0
+    estimated_cost: Optional[float] = None
+    actual_cost: float = 0.0
+    result_data: Optional[Dict[str, Any]] = None
+    review_status: str = "pending"
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    @classmethod
+    def from_orm(cls, orm: Any, step_count: int = 0) -> "UnifiedTaskData":
+        """从 ORM 模型创建"""
+        return cls(
+            id=orm.id,
+            task_type=orm.task_type,
+            sub_type=orm.sub_type,
+            edition_id=orm.edition_id,
+            target_node_ids=orm.target_node_ids,
+            target_scope=orm.target_scope,
+            llm_provider=orm.llm_provider,
+            llm_model=orm.llm_model,
+            prompt_template_id=orm.prompt_template_id,
+            priority=orm.priority,
+            config=orm.config or {},
+            status=orm.status,
+            progress=orm.progress,
+            current_phase=orm.current_phase,
+            error_message=orm.error_message,
+            error_code=orm.error_code,
+            estimated_tokens=orm.estimated_tokens,
+            actual_tokens=orm.actual_tokens,
+            estimated_cost=float(orm.estimated_cost) if orm.estimated_cost else None,
+            actual_cost=float(orm.actual_cost) if orm.actual_cost else 0.0,
+            result_data=orm.result_data,
+            review_status=orm.review_status,
+            created_at=orm.created_at,
+            started_at=orm.started_at,
+            completed_at=orm.completed_at,
+            updated_at=orm.updated_at,
+        )
+
+
+@dataclass
+class UnifiedTaskProgress:
+    """统一任务进度对象"""
+    task_id: int
+    status: str
+    progress: int
+    current_phase: Optional[str] = None
+    current_step: Optional[int] = None
+    total_steps: Optional[int] = None
+    estimated_remaining_seconds: Optional[int] = None
+    error_message: Optional[str] = None
+    actual_tokens: int = 0
+    actual_cost: float = 0.0
 
 
 # ============================================================================

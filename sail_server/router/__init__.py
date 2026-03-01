@@ -14,7 +14,6 @@ from .necessity import router as necessity_router
 from .project import router as project_router
 from .text import router as text_router
 from .unified_agent import unified_agent_router
-from .analysis_compat import analysis_compat_router
 
 __all__ = [
     "analysis_router",
@@ -25,5 +24,4 @@ __all__ = [
     "project_router",
     "text_router",
     "unified_agent_router",
-    "analysis_compat_router",
 ]

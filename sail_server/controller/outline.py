@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Generator
 from dataclasses import dataclass, field
 
-from sail_server.data.analysis import (
+from sail_server.infrastructure.orm.analysis import (
     Outline,
     OutlineNode,
     OutlineEvent,

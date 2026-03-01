@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.data.health import (
+from sail_server.infrastructure.orm.health import (
     Weight,
     Exercise,
     WeightPlan,

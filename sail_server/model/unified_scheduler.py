@@ -20,18 +20,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy.orm import Session
 
-from sail_server.data.unified_agent import (
+from sail_server.infrastructure.orm.unified_agent import (
     UnifiedAgentTask,
     UnifiedAgentStep,
     UnifiedAgentEvent,
-    TaskStatus,
-    StepType,
 )
 from sail_server.application.dto.unified_agent import (
     UnifiedAgentTaskCreateRequest,
     UnifiedAgentTaskResponse,
     UnifiedTaskProgressResponse,
     UnifiedTaskResultResponse,
+    TaskStatus,
+    StepType,
 )
 from sail_server.model.unified_agent import (
     UnifiedTaskDAO,

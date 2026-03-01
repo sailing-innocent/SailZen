@@ -109,7 +109,7 @@ class UnifiedSchedulerWithWebSocket(UnifiedAgentScheduler):
         """
         logger.info(f"[UnifiedSchedulerWithWebSocket] Executing task: task_id={task_id}")
         
-        from sail_server.data.unified_agent import (
+        from sail_server.application.dto.unified_agent import (
             TaskStatus,
             StepType,
         )

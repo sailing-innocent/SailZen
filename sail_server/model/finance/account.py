@@ -6,7 +6,11 @@
 # @version 1.0
 # ---------------------------------
 from sail_server.infrastructure.orm.finance import Account
-from sail_server.data.finance import AccountData, TransactionData, AccountState, TransactionState
+from sail_server.application.dto.finance import AccountData, TransactionData, AccountStateEnum, TransactionStateEnum
+
+# 向后兼容的别名
+AccountState = AccountStateEnum
+TransactionState = TransactionStateEnum
 from sail_server.utils.money import Money
 import logging
 from datetime import datetime

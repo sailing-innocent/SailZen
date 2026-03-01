@@ -16,8 +16,12 @@
 """
 
 from sail_server.infrastructure.orm.finance import Budget, BudgetItem, Transaction
-from sail_server.data.finance import BudgetDirection, ItemType, ItemStatus
-from sail_server.application.dto.finance import BudgetData, BudgetItemData, TransactionData
+from sail_server.application.dto.finance import BudgetData, BudgetItemData, TransactionData, BudgetDirectionEnum, ItemTypeEnum, ItemStatusEnum
+
+# 向后兼容的别名
+BudgetDirection = BudgetDirectionEnum
+ItemType = ItemTypeEnum
+ItemStatus = ItemStatusEnum
 from sail_server.utils.finance_helpers import _htime, _htime_inv
 from sail_server.utils.money import Money
 from datetime import datetime

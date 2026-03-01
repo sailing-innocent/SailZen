@@ -16,7 +16,7 @@ from litestar.exceptions import HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
-from sail_server.data.analysis import TextRangeSelection
+from sail_server.application.dto.analysis import TextRangeSelection
 from sail_server.service.character_detector import (
     CharacterDetector,
     CharacterDetectionResult as ServiceDetectionResult,

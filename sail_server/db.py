@@ -16,14 +16,14 @@ import functools
 from sail_server.infrastructure.orm.orm_base import ORMBase
 
 # import all ORM models
-import sail_server.data.health
-import sail_server.data.finance
-import sail_server.data.life
-import sail_server.data.project
-import sail_server.data.history
-import sail_server.data.text
-import sail_server.data.necessity
-import sail_server.data.analysis
+from sail_server.infrastructure.orm import health
+from sail_server.infrastructure.orm import finance
+from sail_server.infrastructure.orm import life
+from sail_server.infrastructure.orm import project
+from sail_server.infrastructure.orm import history
+from sail_server.infrastructure.orm import text
+from sail_server.infrastructure.orm import necessity
+from sail_server.infrastructure.orm import analysis
 import os
 
 # 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题

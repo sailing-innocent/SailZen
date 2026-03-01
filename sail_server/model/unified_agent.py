@@ -11,12 +11,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, func
 
-from sail_server.data.unified_agent import (
+from sail_server.infrastructure.orm.unified_agent import (
     UnifiedAgentTask,
     UnifiedAgentStep,
     UnifiedAgentEvent,
-    TaskStatus,
 )
+from sail_server.application.dto.unified_agent import TaskStatus
 from sail_server.application.dto.unified_agent import (
     UnifiedAgentTaskCreateRequest,
     UnifiedAgentTaskResponse,
