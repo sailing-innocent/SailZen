@@ -18,11 +18,9 @@ from sail_server.application.dto.analysis import (
     TextRangeContent,
     RangeSelectionMode,
     TextEvidenceCreateRequest,
-    TextEvidenceResponse as EvidenceResponse,
+    TextEvidenceResponse ,
 )
-from sail_server.data.analysis import (
-    TextEvidenceDTO,
-)
+
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
 
 from sqlalchemy.orm import Session
@@ -200,7 +198,7 @@ class EvidenceController(Controller):
     """证据控制器"""
     path = "/evidence"
     
-    _evidence_store: Dict[str, TextEvidenceDTO] = {}
+    _evidence_store: Dict[str, TextEvidenceResponse] = {}
     
     @post("/")
     async def create_evidence(

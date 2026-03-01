@@ -28,7 +28,7 @@ from sail_server.utils.llm.available_providers import (
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,
 )
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     OutlineExtractionConfig,
     ExtractedOutlineNode,

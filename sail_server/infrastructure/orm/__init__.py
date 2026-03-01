@@ -9,21 +9,9 @@
 """
 SQLAlchemy ORM 模型包
 
-Phase 2 重构目标：将 ORM 模型从 data/ 层迁移至此
-
-当前迁移状态：
-- [x] analysis 模块
-- [x] finance 模块
-- [x] health 模块
-- [x] history 模块
-- [x] life 模块
-- [x] necessity 模块
-- [x] project 模块
-- [x] text 模块
-- [x] unified_agent 模块
 """
 
-from sail_server.data.orm import ORMBase
+from sail_server.infrastructure.orm.orm_base import ORMBase
 
 # Analysis Models
 from sail_server.infrastructure.orm.analysis import (

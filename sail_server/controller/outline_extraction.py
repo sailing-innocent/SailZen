@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-from sail_server.data.analysis import TextRangeSelection
+from sail_server.application.dto.analysis import TextRangeSelection
+
 from sail_server.service.outline_extractor import (
     OutlineExtractor,
     ServiceExtractionResult,

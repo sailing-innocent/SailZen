@@ -13,7 +13,7 @@ from sqlalchemy import MetaData
 from typing import Generator
 import functools
 
-from sail_server.data.orm import ORMBase
+from sail_server.infrastructure.orm.orm_base import ORMBase
 
 # import all ORM models
 import sail_server.data.health

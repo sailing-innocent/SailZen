@@ -23,8 +23,7 @@ from sqlalchemy import (
     ForeignKey,
 )
 from sqlalchemy.orm import relationship
-
-from sail_server.data.orm import ORMBase
+from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.data.types import JSONB
 
 
