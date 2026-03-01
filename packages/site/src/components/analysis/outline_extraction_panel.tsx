@@ -76,13 +76,16 @@ import type {
 interface OutlineExtractionPanelProps {
   editionId: number
   workTitle?: string
+  onComplete?: (result: OutlineExtractionResult) => void
+  onSave?: () => void
+  onClose?: () => void
 }
 
 // ============================================================================
 // Main Component
 // ============================================================================
 
-export default function OutlineExtractionPanel({ editionId, workTitle }: OutlineExtractionPanelProps) {
+export default function OutlineExtractionPanel({ editionId, workTitle, onComplete, onSave, onClose }: OutlineExtractionPanelProps) {
   // ==========================================================================
   // State
   // ==========================================================================
@@ -184,7 +187,7 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
       if (storedTaskId) {
         // Verify task status
         const task = await api_get_unified_outline_task(storedTaskId)
-        if (task && ['pending', 'running', 'paused'].includes(task.status)) {
+        if (task && ['pending', 'running', 'paused', 'completed'].includes(task.status)) {
           setTaskId(storedTaskId)
           setCurrentTask(task)
           setProgress({
@@ -194,15 +197,20 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
             message: '',
           })
           
-          // If running, reconnect WebSocket
+          // If running, reconnect WebSocket and open panel
           if (task.status === 'running') {
             setIsProcessing(true)
+            setIsOpen(true)  // Open the panel to show progress
             connectWebSocket(storedTaskId)
           }
           
-          // If completed, load result
-          if (task.status === 'completed' && task.resultData?.extraction_result) {
-            setResult(task.resultData.extraction_result)
+          // If completed, load result directly
+          if (task.status === 'completed') {
+            setIsProcessing(false)
+            setIsOpen(true)  // Open the panel to show results
+            if (task.resultData?.extraction_result) {
+              setResult(task.resultData.extraction_result)
+            }
           }
           
           return
@@ -246,6 +254,8 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
           setIsProcessing(false)
           clearOutlineTaskFromStorage(editionId)
           loadStats(editionId)
+          // 调用 onComplete 回调通知父组件
+          onComplete?.(resultData)
         }
       },
       (taskId, errorMsg) => {
@@ -267,7 +277,7 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
     ws.onopen = () => {
       subscribeToOutlineTask(ws, targetTaskId)
     }
-  }, [editionId, loadStats])
+  }, [editionId, loadStats, onComplete])
 
   // ==========================================================================
   // Task Actions
@@ -316,13 +326,34 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
   const handleResumeTask = async (recoveryInfo: TaskRecoveryInfo) => {
     setShowRecoveryDialog(false)
     setTaskId(recoveryInfo.taskId)
-    setIsProcessing(true)
     setError(null)
     
     try {
       // Load current task state
       const task = await api_get_unified_outline_task(recoveryInfo.taskId)
       setCurrentTask(task)
+      
+      // If task is completed, load result directly
+      if (task.status === 'completed') {
+        setIsProcessing(false)
+        setIsOpen(true)  // Open the panel to show results
+        if (task.resultData?.extraction_result) {
+          setResult(task.resultData.extraction_result)
+          setProgress({
+            task_id: String(recoveryInfo.taskId),
+            current_step: 'completed',
+            progress_percent: 100,
+            message: '任务已完成',
+          })
+        }
+        // Save to localStorage for reference
+        saveOutlineTaskToStorage(editionId, recoveryInfo.taskId)
+        return
+      }
+      
+      // For pending/running/paused/failed tasks
+      setIsProcessing(true)
+      setIsOpen(true)  // Open the panel
       
       // If task is paused or failed, resume it
       if (task.status === 'paused' || task.status === 'failed') {
@@ -332,7 +363,7 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
       // Save to localStorage
       saveOutlineTaskToStorage(editionId, recoveryInfo.taskId)
       
-      // Connect WebSocket
+      // Connect WebSocket for real-time updates
       connectWebSocket(recoveryInfo.taskId)
       
     } catch (err) {
@@ -416,6 +447,9 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
       // Clear storage
       clearOutlineTaskFromStorage(editionId)
       
+      // 调用 onSave 回调通知父组件
+      onSave?.()
+      
       // Reset and close
       setTaskId(null)
       setCurrentTask(null)
@@ -423,6 +457,9 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
       setCheckpoint(null)
       setResult(null)
       setIsOpen(false)
+      
+      // 调用 onClose 回调
+      onClose?.()
     } catch (err) {
       console.error('Failed to save result:', err)
       alert(`保存失败：${err instanceof Error ? err.message : '未知错误'}`)

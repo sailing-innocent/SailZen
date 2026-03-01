@@ -411,24 +411,35 @@ export function connectOutlineExtractionWebSocket(
       
       switch (event.eventType) {
         case 'task_progress':
-          const progressData = event.data as { progress?: number; current_phase?: string }
+          const progressData = event.data as { progress?: number; current_phase?: string; phase?: string }
           onProgress(taskId, {
             task_id: String(taskId),
-            current_step: progressData.current_phase || 'processing',
+            current_step: progressData.current_phase || progressData.phase || 'processing',
             progress_percent: progressData.progress || 0,
             message: '',
           })
           break
           
         case 'task_completed':
-          const resultData = (event.data as { result_data?: { extraction_result?: OutlineExtractionResult } })?.result_data
-          if (resultData?.extraction_result) {
-            onComplete(taskId, resultData.extraction_result)
-          }
+          // WebSocket 完成事件只包含简要信息，需要从 API 获取完整结果
+          // 异步获取任务详情以获取 extraction_result
+          api_get_unified_outline_task(taskId).then(task => {
+            const extractionResult = task.resultData?.extraction_result
+            if (extractionResult) {
+              onComplete(taskId, extractionResult)
+            } else {
+              console.warn('[OutlineExtraction] Task completed but no extraction_result found')
+            }
+          }).catch(err => {
+            console.error('[OutlineExtraction] Failed to get task result:', err)
+            onError(taskId, '获取任务结果失败')
+          })
           break
           
         case 'task_failed':
-          const errorMsg = (event.data as { error_message?: string })?.error_message || '任务失败'
+          const errorMsg = (event.data as { error_message?: string; error?: string })?.error_message 
+            || (event.data as { error?: string })?.error 
+            || '任务失败'
           onError(taskId, errorMsg)
           break
           
@@ -511,7 +522,7 @@ export function clearOutlineTaskFromStorage(editionId: number): void {
 // ============================================================================
 
 /**
- * 保存大纲提取结果到数据库
+ * 保存大纲提取结果到数据库（Unified Agent 版本）
  * 
  * @param taskId 任务ID
  * @param nodeIds 可选，要保存的节点ID列表。如果不提供，保存所有节点
@@ -528,9 +539,10 @@ export async function api_save_outline_result(
   nodes_created?: number
   events_created?: number
 }> {
-  const baseUrl = unifiedAgentAPI['baseUrl'] || '/api/v1'
+  // Unified Agent 使用 outline-extraction-v2 路径
+  const baseUrl = (get_url() || '') + '/api/v1/outline-extraction-v2'
   
-  const response = await fetch(`${baseUrl}/outline-extraction/task/${taskId}/save`, {
+  const response = await fetch(`${baseUrl}/task/${taskId}/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(nodeIds ? { node_ids: nodeIds } : {}),

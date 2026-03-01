@@ -771,7 +771,8 @@ class NovelAnalysisAgent(BaseAgent):
                 "node_ids": result.node_ids,
             })
         
-        return {
+        # 构建标准结果格式
+        compiled = {
             "sub_type": sub_type,
             "total_results": len(results),
             "results_by_type": by_type,
@@ -784,6 +785,60 @@ class NovelAnalysisAgent(BaseAgent):
                 }
                 for r in results
             ],
+        }
+        
+        # 为 outline_extraction 子类型生成 extraction_result 格式
+        if sub_type == TaskSubType.OUTLINE_EXTRACTION:
+            extraction_result = self._compile_outline_results(results)
+            compiled["extraction_result"] = extraction_result
+        
+        return compiled
+    
+    def _compile_outline_results(
+        self,
+        results: List[AnalysisResult]
+    ) -> Dict[str, Any]:
+        """编译大纲提取结果为前端期望的格式"""
+        nodes = []
+        turning_points = []
+        
+        # 从 outline_node 类型的结果中提取节点
+        outline_results = [r for r in results if r.result_type == "outline_node"]
+        for i, result in enumerate(outline_results):
+            data = result.data
+            node = {
+                "id": f"extracted_{i}",
+                "node_type": data.get("node_type", "scene"),
+                "title": data.get("title", ""),
+                "summary": data.get("summary", ""),
+                "significance": data.get("significance", "normal"),
+                "sort_index": i,
+                "characters": data.get("characters", []),
+                "evidence_list": [],
+                "review_status": "pending",
+            }
+            # 添加证据
+            if data.get("evidence"):
+                node["evidence_list"].append({
+                    "text": data["evidence"],
+                    "chapter_title": "",
+                    "start_fragment": "",
+                    "end_fragment": "",
+                })
+            nodes.append(node)
+        
+        # 从 chunk_summary 类型的结果中提取总结
+        summaries = [r.data.get("summary", "") for r in results if r.result_type == "chunk_summary"]
+        
+        return {
+            "nodes": nodes,
+            "turning_points": turning_points,
+            "metadata": {
+                "total_nodes": len(nodes),
+                "total_turning_points": len(turning_points),
+                "chunk_summaries": summaries,
+                "compiled_at": datetime.utcnow().isoformat(),
+            }
         }
     
     async def _create_step(

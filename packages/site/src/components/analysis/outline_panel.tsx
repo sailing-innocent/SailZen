@@ -207,6 +207,8 @@ export default function OutlinePanel({ editionId, workTitle }: OutlinePanelProps
       <OutlineExtractionPanel
         editionId={editionId}
         workTitle={workTitle}
+        onSave={handleExtractionComplete}
+        onClose={() => setShowExtraction(false)}
       />
     )
   }

@@ -403,22 +403,22 @@ class OutlineExtractionUnifiedController(Controller):
             extraction_config = config_data.get("extraction_config", {})
             
             # 导入必要的模块
-            from sail_server.service.outline_extractor import OutlineExtractor, ServiceExtractionResult
-            from sail_server.service.outline_extractor_types import ExtractedNode, ExtractedTurningPoint, Evidence
+            from sail_server.service.outline_extractor import OutlineExtractor, ServiceExtractionResult, ExtractedTurningPoint
+            from sail_server.application.dto.analysis import ExtractedOutlineNode, OutlineEvidence
             
             # 重建 ServiceExtractionResult
             extracted_nodes = []
             for node_dict in nodes:
                 evidence_list = []
                 for ev in node_dict.get("evidence_list", []):
-                    evidence_list.append(Evidence(
+                    evidence_list.append(OutlineEvidence(
                         text=ev.get("text", ""),
                         chapter_title=ev.get("chapter_title", ""),
                         start_fragment=ev.get("start_fragment", ""),
                         end_fragment=ev.get("end_fragment", ""),
                     ))
                 
-                extracted_nodes.append(ExtractedNode(
+                extracted_nodes.append(ExtractedOutlineNode(
                     id=node_dict.get("id", ""),
                     node_type=node_dict.get("node_type", "scene"),
                     title=node_dict.get("title", ""),
