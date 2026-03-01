@@ -7,7 +7,6 @@
 # ---------------------------------
 
 from .analysis import analysis_router
-from .agent import router as agent_router
 from .finance import router as finance_router
 from .health import router as health_router
 from .history import router as history_router
@@ -20,7 +19,6 @@ from .agent_compat import agent_compat_router
 
 __all__ = [
     "analysis_router",
-    "agent_router",
     "finance_router",
     "health_router",
     "history_router",

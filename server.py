@@ -103,7 +103,6 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
-        from sail_server.router.agent import router as agent_router
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.analysis_compat import analysis_compat_router
         from sail_server.router.agent_compat import agent_compat_router
@@ -136,8 +135,6 @@ class SailServer:
                 text_router,
                 necessity_router,
                 analysis_router,
-                agent_router,
-                # 新的统一 Agent 路由
                 unified_agent_router,
                 # 兼容层路由
                 analysis_compat_router,
@@ -210,21 +207,9 @@ class SailServer:
 
     async def on_startup(self):
         logger.info("Server starting up...")
-        # 启动 Agent 调度器
-        logger.info("Start Agent Scheduler...")
-        from sail_server.agent import get_agent_scheduler
-        scheduler = get_agent_scheduler()
-        await scheduler.start()
-        logger.info("Agent scheduler started")
 
     async def on_shutdown(self):
         logger.info("Server shutting down...")
-        # 停止 Agent 调度器
-        logger.info("Shutdown Agent Scheduler...")
-        from sail_server.agent import get_agent_scheduler
-        scheduler = get_agent_scheduler()
-        await scheduler.stop()
-        logger.info("Agent scheduler stopped")
 
     def run(self):
         logger.info(f"Server running on {self.host}:{self.port}")

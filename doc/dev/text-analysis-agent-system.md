@@ -60,7 +60,6 @@
 | `QuickTemplates` | 快速模板选择（代码审查、数据分析等） | 可复用 |
 
 #### 使用 Store
-- `useAgentStore` → `packages/site/src/lib/store/agentStore.ts`
 
 #### 核心 API
 ```typescript

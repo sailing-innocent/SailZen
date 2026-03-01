@@ -1141,9 +1141,6 @@ const AgentWorkbenchPage: React.FC = () => {
                   统一的 AI 任务管理中心
                 </p>
               </div>
-
-              {/* Cost Display - Mobile Only */}
-              {isMobile && <CostDisplayPanel />}
             </div>
 
             {/* Error Alert */}
@@ -1162,19 +1159,12 @@ const AgentWorkbenchPage: React.FC = () => {
             {/* Content Grid */}
             <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-3'}`}>
               {/* Main Panel */}
-              <div className={isMobile ? '' : 'col-span-2'}>
+              <div className={isMobile ? '' : 'col-span-3'}>
                 {activeTab === 'quick' && <QuickTaskPanel />}
                 {activeTab === 'novel' && <NovelAnalysisPanel />}
                 {activeTab === 'history' && <TaskMonitorPanel />}
                 {activeTab === 'settings' && <SettingsPanel />}
               </div>
-
-              {/* Right Panel - Cost & Status */}
-              {!isMobile && activeTab !== 'settings' && (
-                <div className="space-y-4">
-                  <CostDisplayPanel />
-                </div>
-              )}
             </div>
           </div>
         </div>

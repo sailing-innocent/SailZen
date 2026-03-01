@@ -395,21 +395,21 @@ export const useUnifiedAgentStore = create<UnifiedAgentState>()(
                 tasks: state.tasks.map((t) =>
                   t.id === event.taskId
                     ? {
-                        ...t,
-                        progress: (event.data.progress as number) ?? t.progress,
-                        status: (event.data.status as UnifiedTask['status']) ?? t.status,
-                      }
+                      ...t,
+                      progress: (event.data.progress as number) ?? t.progress,
+                      status: (event.data.status as UnifiedTask['status']) ?? t.status,
+                    }
                     : t
                 ),
                 currentTask:
                   state.currentTask?.id === event.taskId
                     ? {
-                        ...state.currentTask,
-                        progress: (event.data.progress as number) ?? state.currentTask.progress,
-                        status:
-                          (event.data.status as UnifiedTask['status']) ??
-                          state.currentTask.status,
-                      }
+                      ...state.currentTask,
+                      progress: (event.data.progress as number) ?? state.currentTask.progress,
+                      status:
+                        (event.data.status as UnifiedTask['status']) ??
+                        state.currentTask.status,
+                    }
                     : state.currentTask,
               }))
               break
@@ -446,22 +446,22 @@ export const useUnifiedAgentStore = create<UnifiedAgentState>()(
                 tasks: state.tasks.map((t) =>
                   t.id === event.taskId
                     ? {
-                        ...t,
-                        actualTokens: (event.data.actual_tokens as number) ?? t.actualTokens,
-                        actualCost: (event.data.actual_cost as number) ?? t.actualCost,
-                      }
+                      ...t,
+                      actualTokens: (event.data.actual_tokens as number) ?? t.actualTokens,
+                      actualCost: (event.data.actual_cost as number) ?? t.actualCost,
+                    }
                     : t
                 ),
                 currentTask:
                   state.currentTask?.id === event.taskId
                     ? {
-                        ...state.currentTask,
-                        actualTokens:
-                          (event.data.actual_tokens as number) ??
-                          state.currentTask.actualTokens,
-                        actualCost:
-                          (event.data.actual_cost as number) ?? state.currentTask.actualCost,
-                      }
+                      ...state.currentTask,
+                      actualTokens:
+                        (event.data.actual_tokens as number) ??
+                        state.currentTask.actualTokens,
+                      actualCost:
+                        (event.data.actual_cost as number) ?? state.currentTask.actualCost,
+                    }
                     : state.currentTask,
               }))
               break
@@ -628,7 +628,7 @@ export function useTotalTaskCost(): number {
  */
 export function useTaskStats() {
   const tasks = useUnifiedAgentStore((state) => state.tasks)
-  
+
   // Use useMemo to cache the result
   return React.useMemo(() => {
     return {
