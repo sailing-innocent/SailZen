@@ -95,6 +95,7 @@ SailZen/
 
 包必须按以下依赖顺序构建：
 
+笔记项目
 1. `@saili/common-all` - 基础类型和工具 (无内部依赖)
 2. `@saili/common-server` - 依赖 `common-all`
 3. `@saili/unified` - 依赖 `common-all`
@@ -102,7 +103,9 @@ SailZen/
 5. `@saili/api-server` - 依赖 `common-all`, `common-server`, `engine-server`, `unified`
 6. `@saili/dendron-plugin-views` - 依赖 `common-all`
 7. `sail-zen-vscode` - 依赖以上所有
-8. `sail-site` - Web 前端，依赖 API
+
+此外前后端项目比较独立
+- `sail-site` - Web 前端
 
 ## Build Commands
 
@@ -222,21 +225,6 @@ uv run pytest -m "current"
 - `.env.dev` - 开发环境
 - `.env.prod` - 生产环境
 - `.env.debug` - 调试环境
-
-必需的环境变量：
-```bash
-SERVER_PORT=4399
-SERVER_HOST=0.0.0.0
-API_ENDPOINT=/api/v1
-SERVER_LOG_FILE=/path/to/server.log
-POSTGRE_URI=postgresql:///main
-
-# LLM Provider Keys (至少一个)
-OPENAI_API_KEY=...
-GOOGLE_API_KEY=...
-MOONSHOT_API_KEY=...
-ANTHROPIC_API_KEY=...
-```
 
 ### Windows PowerShell 注意事项
 

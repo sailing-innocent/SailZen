@@ -30,8 +30,8 @@ class WSMessage:
     """WebSocket 消息"""
     type: str  # event | progress | error | ping | pong
     task_id: Optional[int] = None
-    data: Dict[str, Any] = None
-    timestamp: str = None
+    data: Dict[str, Any] = {}
+    timestamp: str = ""
     
     def __post_init__(self):
         if self.data is None:
@@ -64,7 +64,7 @@ class ClientInfo:
     """客户端信息"""
     client_id: str
     connected_at: datetime
-    subscribed_tasks: Set[int] = None
+    subscribed_tasks: Set[int]
     
     def __post_init__(self):
         if self.subscribed_tasks is None:
