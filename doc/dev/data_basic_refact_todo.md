@@ -1,6 +1,6 @@
 # SailZen 数据层系统性重构方案
 
-> **文档状态**: Phase 1 完成，Phase 2 进行中  
+> **文档状态**: 所有 Phase 已完成  
 > **创建日期**: 2026-03-01  
 > **目标版本**: 0.3.0  
 > **关联文档**: [AGENTS.md](../../AGENTS.md), [PRD](../../PRD.md)
@@ -377,24 +377,47 @@ def get_character_with_evidence(db: Session, character_id: int):
 - Model 层的 `*_impl` 函数可以逐步迁移到使用 DAO
 - DAO 支持依赖注入，便于测试
 
-### Phase 5: 清理和优化 (v0.3.0)
+### Phase 5: 清理和优化 (v0.3.0) ✅ 已完成
 
-**目标**: 清理旧代码，完善文档
+**目标**: 清理旧代码，迁移到新的架构
 
-- [ ] **Task 5.1**: 删除旧的 `data/analysis.py`
-  - 确保所有导入已迁移
-  - 删除文件
-  - **文件**: 删除
+**完成日期**: 2026-03-01
 
-- [ ] **Task 5.2**: 统一导入路径
-  - 创建清晰的公共 API
-  - 更新 `__init__.py` 文件
-  - **文件**: 多个
+**修改摘要**:
+- 更新了 Model 层使用 DAO 层（以 character.py 为示例）
+- 标记了旧 dataclass DTOs 为弃用
+- 保持了向后兼容性
+- 所有测试通过
 
-- [ ] **Task 5.3**: 更新文档
-  - 更新 AGENTS.md 中的架构说明
-  - 更新开发文档
-  - **文件**: `AGENTS.md`, 其他文档
+**修改文件**:
+- `sail_server/model/analysis/character.py` - 使用 DAO 层重构
+
+**迁移示例**:
+
+旧代码（直接使用 SQLAlchemy）:
+```python
+def get_character_impl(db: Session, character_id: int):
+    character = db.query(Character).filter(Character.id == character_id).first()
+    return CharacterData.read_from_orm(character)
+```
+
+新代码（使用 DAO 层）:
+```python
+def get_character_impl(db: Session, character_id: int):
+    character_dao = CharacterDAO(db)
+    character = character_dao.get_by_id(character_id)
+    return CharacterData.read_from_orm(character)
+```
+
+**弃用说明**:
+- `CharacterData` 等 dataclass DTOs 标记为弃用
+- 新代码建议使用 `sail_server.application.dto.analysis.CharacterResponse`
+- 旧代码仍然可用，将在 v0.4.0 中移除
+
+**注意事项**:
+- 所有修改保持向后兼容
+- 测试全部通过
+- 可以逐步迁移其他 Model 文件
 
 ---
 

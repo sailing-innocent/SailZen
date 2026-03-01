@@ -661,7 +661,11 @@ class AnalysisResultData:
 
 @dataclass
 class CharacterData:
-    """人物数据 DTO"""
+    """人物数据 DTO
+    
+    注意: 此类将在 Phase 5 完成后移除。
+    新代码请使用 sail_server.application.dto.analysis.CharacterResponse
+    """
     id: Optional[int] = None
     edition_id: int = 0
     canonical_name: str = ""

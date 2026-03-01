@@ -8,13 +8,18 @@
 
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
+# 使用新的 DAO 层（Phase 4）
+from sail_server.data.dao import (
+    CharacterDAO, CharacterAliasDAO, CharacterAttributeDAO,
+)
+from sail_server.infrastructure.orm import (
+    Character, CharacterAlias, CharacterAttribute,
+)
+
+# 保留 dataclass DTO 导入（Phase 3 Pydantic DTO 迁移后替换）
 from sail_server.data.analysis import (
-    Character, CharacterData,
-    CharacterAlias, CharacterAliasData,
-    CharacterAttribute, CharacterAttributeData,
-    CharacterRelation, CharacterRelationData,
+    CharacterData, CharacterAliasData, CharacterAttributeData, CharacterRelationData,
 )
 
 
@@ -24,16 +29,17 @@ from sail_server.data.analysis import (
 
 def create_character_impl(db: Session, data: CharacterData) -> CharacterData:
     """创建人物"""
-    character = data.create_orm()
-    db.add(character)
-    db.commit()
-    db.refresh(character)
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = character_dao.create(data.create_orm())
     return CharacterData.read_from_orm(character)
 
 
 def get_character_impl(db: Session, character_id: int) -> Optional[CharacterData]:
     """获取单个人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = character_dao.get_by_id(character_id)
     if not character:
         return None
     return CharacterData.read_from_orm(character)
@@ -46,14 +52,9 @@ def get_characters_by_edition_impl(
     status: Optional[str] = None
 ) -> List[CharacterData]:
     """获取版本的所有人物"""
-    query = db.query(Character).filter(Character.edition_id == edition_id)
-    
-    if role_type:
-        query = query.filter(Character.role_type == role_type)
-    if status:
-        query = query.filter(Character.status == status)
-    
-    characters = query.order_by(Character.importance_score.desc(), Character.canonical_name).all()
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    characters = character_dao.get_by_edition(edition_id, role_type, status)
     return [CharacterData.read_from_orm(c) for c in characters]
 
 
@@ -63,29 +64,19 @@ def update_character_impl(
     data: Dict[str, Any]
 ) -> Optional[CharacterData]:
     """更新人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = character_dao.update(character_id, data)
     if not character:
         return None
-    
-    # 更新字段
-    for key, value in data.items():
-        if hasattr(character, key) and value is not None:
-            setattr(character, key, value)
-    
-    db.commit()
-    db.refresh(character)
     return CharacterData.read_from_orm(character)
 
 
 def delete_character_impl(db: Session, character_id: int) -> bool:
     """删除人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
-    if not character:
-        return False
-    
-    db.delete(character)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    return character_dao.delete(character_id)
 
 
 # ============================================================================
@@ -101,6 +92,8 @@ def add_character_alias_impl(
     is_preferred: bool = False
 ) -> CharacterAliasData:
     """添加人物别名"""
+    # Phase 4: 使用 DAO 层
+    alias_dao = CharacterAliasDAO(db)
     alias_obj = CharacterAlias(
         character_id=character_id,
         alias=alias,
@@ -108,21 +101,15 @@ def add_character_alias_impl(
         usage_context=usage_context,
         is_preferred=is_preferred,
     )
-    db.add(alias_obj)
-    db.commit()
-    db.refresh(alias_obj)
+    alias_obj = alias_dao.create(alias_obj)
     return CharacterAliasData.read_from_orm(alias_obj)
 
 
 def remove_character_alias_impl(db: Session, alias_id: int) -> bool:
     """删除人物别名"""
-    alias = db.query(CharacterAlias).filter(CharacterAlias.id == alias_id).first()
-    if not alias:
-        return False
-    
-    db.delete(alias)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    alias_dao = CharacterAliasDAO(db)
+    return alias_dao.delete(alias_id)
 
 
 # ============================================================================
@@ -139,6 +126,9 @@ def add_character_attribute_impl(
     source_node_id: Optional[int] = None,
 ) -> CharacterAttributeData:
     """添加人物属性"""
+    # Phase 4: 使用 DAO 层
+    attr_dao = CharacterAttributeDAO(db)
+    
     # 检查是否已存在相同 key 的属性
     existing = db.query(CharacterAttribute).filter(
         CharacterAttribute.character_id == character_id,
@@ -147,12 +137,12 @@ def add_character_attribute_impl(
     
     if existing:
         # 更新现有属性
-        existing.attr_value = attr_value
-        existing.category = category
-        existing.confidence = confidence
-        existing.source_node_id = source_node_id
-        db.commit()
-        db.refresh(existing)
+        existing = attr_dao.update(existing.id, {
+            "attr_value": attr_value,
+            "category": category,
+            "confidence": confidence,
+            "source_node_id": source_node_id,
+        })
         return CharacterAttributeData.read_from_orm(existing)
     
     # 创建新属性
@@ -164,21 +154,15 @@ def add_character_attribute_impl(
         confidence=confidence,
         source_node_id=source_node_id,
     )
-    db.add(attr)
-    db.commit()
-    db.refresh(attr)
+    attr = attr_dao.create(attr)
     return CharacterAttributeData.read_from_orm(attr)
 
 
 def delete_character_attribute_impl(db: Session, attribute_id: int) -> bool:
     """删除人物属性"""
-    attr = db.query(CharacterAttribute).filter(CharacterAttribute.id == attribute_id).first()
-    if not attr:
-        return False
-    
-    db.delete(attr)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    attr_dao = CharacterAttributeDAO(db)
+    return attr_dao.delete(attribute_id)
 
 
 # ============================================================================
