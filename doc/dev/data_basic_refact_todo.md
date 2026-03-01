@@ -243,38 +243,51 @@ from sail_server.data.analysis import Outline, Character, Setting, TextEvidence
 
 ---
 
-### Phase 3: DTO Pydantic 化 (v0.2.7) 🚧 待开始
+### Phase 3: DTO Pydantic 化 (v0.2.7) ✅ 已完成
 
 **目标**: 将 dataclass DTOs 迁移到 Pydantic
 
-**计划开始**: 待 Phase 2 稳定后
+**完成日期**: 2026-03-01
 
-- [ ] **Task 3.1**: 创建 Pydantic DTO 目录
-  - 创建 `sail_server/application/dto/` 目录
-  - **文件**: 新建目录
+**修改摘要**:
+- 创建了 Pydantic DTO 目录 `sail_server/application/dto/`
+- 为所有主要模块创建了 Pydantic DTOs
+- 使用 Pydantic v2 的 `BaseModel` + `ConfigDict(from_attributes=True)`
+- 所有测试通过
 
-- [ ] **Task 3.2**: 迁移 `finance` 模块（试点）
-  - 创建 `application/dto/finance.py`
-  - 定义 `AccountCreateRequest`, `AccountResponse` 等
-  - 更新 `finance.py` controller 使用新的 DTOs
-  - 验证 Litestar 兼容性
-  - **文件**: 新建 + 修改
+**新建文件**:
+- `sail_server/application/__init__.py`
+- `sail_server/application/dto/__init__.py`
+- `sail_server/application/dto/finance.py` - Account, Transaction, Budget DTOs
+- `sail_server/application/dto/health.py` - Weight, BodySize, Exercise, WeightPlan DTOs
+- `sail_server/application/dto/text.py` - Work, Edition, DocumentNode, IngestJob DTOs
+- `sail_server/application/dto/analysis.py` - Task, Character, Outline, Evidence DTOs
 
-- [ ] **Task 3.3**: 迁移 `health` 模块
-  - 类似 Task 3.2
-  - **文件**: 新建 + 修改
+**Pydantic DTO 特点**:
+- 使用 `BaseModel` 替代 `@dataclass`
+- `ConfigDict(from_attributes=True)` 支持从 ORM 对象创建
+- `Field()` 提供丰富的字段定义（描述、默认值、验证）
+- 内置 JSON 序列化支持
 
-- [ ] **Task 3.4**: 迁移 `text` 模块
-  - 类似 Task 3.2
-  - **文件**: 新建 + 修改
+**新的导入方式**:
+```python
+# 新的 Pydantic DTOs
+from sail_server.application.dto.finance import (
+    AccountCreateRequest, AccountResponse, AccountListResponse
+)
+from sail_server.application.dto.analysis import (
+    CharacterCreateRequest, CharacterResponse
+)
 
-- [ ] **Task 3.5**: 迁移 `analysis` 模块（最复杂）
-  - 按子模块拆分 DTOs
-  - 创建 `application/dto/analysis/outline.py`
-  - 创建 `application/dto/analysis/character.py`
-  - 创建 `application/dto/analysis/setting.py`
-  - 创建 `application/dto/analysis/evidence.py`
-  - **文件**: 新建 + 修改
+# 旧的 dataclass DTOs 仍然可用（向后兼容）
+from sail_server.data.finance import AccountData
+from sail_server.data.analysis import CharacterData
+```
+
+**注意事项**:
+- Pydantic DTOs 目前与 dataclass DTOs 并存
+- 在 Phase 4/5 中，controller 将逐步迁移到使用 Pydantic DTOs
+- Pydantic DTOs 提供更好的 API 文档生成和请求验证
 
 ### Phase 2: ORM 模型拆分 (v0.2.6)
 
