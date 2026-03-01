@@ -525,68 +525,6 @@ class UnifiedTaskStep(Base):
     created_at, started_at, completed_at
 ```
 
-### 5.2 旧版 Agent 数据模型
-
-**文件**: `sail_server/data/agent.py`
-
-```python
-class UserPrompt(Base):
-    """用户 Prompt 模型"""
-    __tablename__ = "user_prompts"
-    
-    id: Mapped[int] = mapped_column(primary_key=True)
-    content: Mapped[str]                      # Prompt 内容
-    prompt_type: Mapped[str]                  # 类型
-    context: Mapped[Optional[dict]]           # 上下文
-    priority: Mapped[int]
-    status: Mapped[str]                       # pending/scheduled/processing/completed/failed/cancelled
-    session_id: Mapped[Optional[str]]
-    parent_prompt_id: Mapped[Optional[int]]
-    created_at, scheduled_at, started_at, completed_at
-
-class AgentTask(Base):
-    """Agent 任务模型"""
-    __tablename__ = "agent_tasks"
-    
-    id: Mapped[int] = mapped_column(primary_key=True)
-    prompt_id: Mapped[int]
-    agent_type: Mapped[str]
-    agent_config: Mapped[Optional[dict]]
-    status: Mapped[str]                       # created/preparing/running/paused/completed/failed/cancelled
-    progress: Mapped[int]
-    error_message: Mapped[Optional[str]]
-    error_code: Mapped[Optional[str]]
-    created_at, started_at, updated_at, completed_at
-
-class AgentStep(Base):
-    """Agent 步骤模型"""
-    __tablename__ = "agent_steps"
-    
-    id: Mapped[int] = mapped_column(primary_key=True)
-    task_id: Mapped[int]
-    step_number: Mapped[int]
-    step_type: Mapped[str]                    # thought/action/observation/error/completion
-    title: Mapped[Optional[str]]
-    content: Mapped[Optional[str]]
-    content_summary: Mapped[Optional[str]]
-    meta_data: Mapped[Optional[dict]]
-    created_at, duration_ms
-
-class AgentOutput(Base):
-    """Agent 输出模型"""
-    __tablename__ = "agent_outputs"
-    
-    id: Mapped[int] = mapped_column(primary_key=True)
-    task_id: Mapped[int]
-    output_type: Mapped[str]                  # text/code/file/json/error
-    content: Mapped[Optional[str]]
-    file_path: Mapped[Optional[str]]
-    meta_data: Mapped[Optional[dict]]
-    review_status: Mapped[str]                # pending/approved/rejected
-    reviewed_by, reviewed_at, review_notes
-    created_at
-```
-
 ### 5.3 前端 TypeScript 类型
 
 **统一 Agent 类型**: `packages/site/src/lib/api/unifiedAgent.ts`

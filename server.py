@@ -105,8 +105,7 @@ class SailServer:
         from sail_server.router.analysis import analysis_router
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.analysis_compat import analysis_compat_router
-        from sail_server.router.agent_compat import agent_compat_router
-        
+
         # 自动注册 Agent
         from sail_server.agent import auto_register_agents
         auto_register_agents()
@@ -138,7 +137,6 @@ class SailServer:
                 unified_agent_router,
                 # 兼容层路由
                 analysis_compat_router,
-                agent_compat_router,
             ],
         )
 
