@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
-# @file life.py
-# @brief Life Controller
+# @file project.py
+# @brief Project Controller
 # @author sailing-innocent
 # @date 2025-08-24
 # @version 1.0
 # ---------------------------------
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request, Response
 from litestar.exceptions import NotFoundException
 
-from sail_server.data.project import ProjectData, MissionData
+from sail_server.application.dto.project import (
+    ProjectCreateRequest,
+    ProjectUpdateRequest,
+    ProjectResponse,
+    MissionCreateRequest,
+    MissionUpdateRequest,
+    MissionResponse,
+)
 from sail_server.model.project import (
     create_project_impl,
     get_project_impl,
@@ -36,25 +41,7 @@ from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
 
 
-class ProjectDataWriteDTO(DataclassDTO[ProjectData]):
-    config = DTOConfig(
-        include={"name", "description", "start_time_qbw", "end_time_qbw"},
-    )
-
-
-class ProjectDataUpdateDTO(DataclassDTO[ProjectData]):
-    config = DTOConfig(
-        include={"name", "description", "start_time_qbw", "end_time_qbw"},
-    )
-
-
-class ProjectDataReadDTO(DataclassDTO[ProjectData]):
-    config = DTOConfig(exclude={"ctime", "mtime"})
-
-
 class ProjectController(Controller):
-    dto = ProjectDataWriteDTO
-    return_dto = ProjectDataReadDTO
     path = "/project"
 
     @get("")
@@ -64,7 +51,7 @@ class ProjectController(Controller):
         request: Request,
         skip: int = 0,
         limit: int = -1
-    ) -> List[ProjectData]:
+    ) -> List[ProjectResponse]:
         db = next(router_dependency)
         projects = get_projects_impl(db, skip, limit)
         request.logger.info(f"Get projects: {len(projects)}")
@@ -76,7 +63,7 @@ class ProjectController(Controller):
         project_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ProjectData:
+    ) -> ProjectResponse:
         """
         Get a project by its ID.
         """
@@ -90,10 +77,10 @@ class ProjectController(Controller):
     @post("/")
     async def create_project(
         self,
-        data: ProjectData,
+        data: ProjectCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ProjectData:
+    ) -> ProjectResponse:
         """
         Create a new project.
         """
@@ -106,10 +93,10 @@ class ProjectController(Controller):
     async def update_project(
         self,
         project_id: int,
-        data: ProjectData,
+        data: ProjectUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ProjectData:
+    ) -> ProjectResponse:
         """
         Update a project by its ID.
         """
@@ -126,7 +113,7 @@ class ProjectController(Controller):
         project_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ProjectData:
+    ) -> ProjectResponse:
         """
         Delete a project by its ID.
         """
@@ -138,25 +125,7 @@ class ProjectController(Controller):
         return project
 
 
-class MissionDataWriteDTO(DataclassDTO[MissionData]):
-    config = DTOConfig(
-        include={"name", "description", "parent_id", "project_id", "ddl"},
-    )
-
-
-class MissionDataUpdateDTO(DataclassDTO[MissionData]):
-    config = DTOConfig(
-        include={"name", "description", "parent_id", "project_id", "ddl"},
-    )
-
-
-class MissionDataReadDTO(DataclassDTO[MissionData]):
-    config = DTOConfig(exclude={"ctime", "mtime"})
-
-
 class MissionController(Controller):
-    dto = MissionDataWriteDTO
-    return_dto = MissionDataReadDTO
     path = "/mission"
 
     @get()
@@ -168,7 +137,7 @@ class MissionController(Controller):
         limit: int = -1,
         parent_id: Optional[int] = None,
         project_id: Optional[int] = None,
-    ) -> List[MissionData]:
+    ) -> List[MissionResponse]:
         """
         Get all missions with optional filtering by parent_id and project_id.
         """
@@ -183,7 +152,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """
         Get a mission by its ID.
         """
@@ -197,10 +166,10 @@ class MissionController(Controller):
     @post("/")
     async def create_mission(
         self,
-        data: MissionData,
+        data: MissionCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """
         Create a new mission.
         """
@@ -213,10 +182,10 @@ class MissionController(Controller):
     async def update_mission(
         self,
         mission_id: int,
-        data: MissionData,
+        data: MissionUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """
         Update a mission by its ID.
         """
@@ -233,7 +202,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """
         Delete a mission by its ID.
         """
@@ -253,7 +222,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Set mission state to PENDING."""
         db = next(router_dependency)
         mission = pending_mission_impl(db, mission_id)
@@ -268,7 +237,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Set mission state to READY."""
         db = next(router_dependency)
         mission = ready_mission_impl(db, mission_id)
@@ -283,7 +252,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Set mission state to DOING (start working)."""
         db = next(router_dependency)
         mission = doing_mission_impl(db, mission_id)
@@ -298,7 +267,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Set mission state to DONE (complete mission)."""
         db = next(router_dependency)
         mission = done_mission_impl(db, mission_id)
@@ -313,7 +282,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Set mission state to CANCELED."""
         db = next(router_dependency)
         mission = cancel_mission_impl(db, mission_id)
@@ -329,7 +298,7 @@ class MissionController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         days: int = 7,
-    ) -> MissionData:
+    ) -> MissionResponse:
         """Postpone mission deadline by specified days."""
         db = next(router_dependency)
         mission = postpone_mission_impl(db, mission_id, days)
@@ -347,7 +316,7 @@ class MissionController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         hours: int = 24,
-    ) -> List[MissionData]:
+    ) -> List[MissionResponse]:
         """Get missions with deadlines within specified hours."""
         db = next(router_dependency)
         missions = get_upcoming_missions_impl(db, hours)
@@ -359,7 +328,7 @@ class MissionController(Controller):
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> List[MissionData]:
+    ) -> List[MissionResponse]:
         """Get all overdue missions (past deadline, not done/canceled)."""
         db = next(router_dependency)
         missions = get_overdue_missions_impl(db)

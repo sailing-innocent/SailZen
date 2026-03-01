@@ -8,7 +8,11 @@
 
 from sail_server.data.necessity import (
     ItemCategory,
-    ItemCategoryData,
+)
+from sail_server.application.dto.necessity import (
+    ItemCategoryCreateRequest,
+    ItemCategoryUpdateRequest,
+    ItemCategoryResponse,
 )
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -28,22 +32,9 @@ __all__ = [
 ]
 
 
-def category_from_data(data: ItemCategoryData) -> ItemCategory:
-    """Convert ItemCategoryData to ItemCategory ORM object"""
-    return ItemCategory(
-        parent_id=data.parent_id,
-        name=data.name,
-        code=data.code,
-        icon=data.icon,
-        is_consumable=data.is_consumable,
-        default_unit=data.default_unit,
-        description=data.description,
-    )
-
-
-def data_from_category(category: ItemCategory) -> ItemCategoryData:
-    """Convert ItemCategory ORM object to ItemCategoryData"""
-    return ItemCategoryData(
+def _category_to_response(category: ItemCategory) -> ItemCategoryResponse:
+    """Convert ItemCategory ORM object to ItemCategoryResponse"""
+    return ItemCategoryResponse(
         id=category.id,
         parent_id=category.parent_id,
         name=category.name,
@@ -57,28 +48,36 @@ def data_from_category(category: ItemCategory) -> ItemCategoryData:
     )
 
 
-def create_category_impl(db: Session, data: ItemCategoryData) -> ItemCategoryData:
+def create_category_impl(db: Session, data: ItemCategoryCreateRequest) -> ItemCategoryResponse:
     """Create a new category"""
-    category = category_from_data(data)
+    category = ItemCategory(
+        parent_id=data.parent_id,
+        name=data.name,
+        code=data.code,
+        icon=data.icon,
+        is_consumable=data.is_consumable,
+        default_unit=data.default_unit,
+        description=data.description,
+    )
     db.add(category)
     db.commit()
     db.refresh(category)
-    return data_from_category(category)
+    return _category_to_response(category)
 
 
-def read_category_impl(db: Session, category_id: int) -> Optional[ItemCategoryData]:
+def read_category_impl(db: Session, category_id: int) -> Optional[ItemCategoryResponse]:
     """Read a category by ID"""
     category = db.query(ItemCategory).filter(ItemCategory.id == category_id).first()
     if category is None:
         return None
-    return data_from_category(category)
+    return _category_to_response(category)
 
 
 def read_categories_impl(
     db: Session,
     skip: int = 0,
     limit: int = -1,
-) -> List[ItemCategoryData]:
+) -> List[ItemCategoryResponse]:
     """Read all categories"""
     q = db.query(ItemCategory)
     
@@ -88,31 +87,36 @@ def read_categories_impl(
         q = q.limit(limit)
     
     categories = q.all()
-    return [data_from_category(c) for c in categories]
+    return [_category_to_response(c) for c in categories]
 
 
 def update_category_impl(
     db: Session,
     category_id: int,
-    data: ItemCategoryData,
-) -> Optional[ItemCategoryData]:
+    data: ItemCategoryUpdateRequest,
+) -> Optional[ItemCategoryResponse]:
     """Update a category"""
     category = db.query(ItemCategory).filter(ItemCategory.id == category_id).first()
     if category is None:
         return None
     
-    category.parent_id = data.parent_id
-    category.name = data.name
-    category.code = data.code
-    category.icon = data.icon
-    category.is_consumable = data.is_consumable
-    category.default_unit = data.default_unit
-    category.description = data.description
+    if data.name is not None:
+        category.name = data.name
+    if data.code is not None:
+        category.code = data.code
+    if data.icon is not None:
+        category.icon = data.icon
+    if data.is_consumable is not None:
+        category.is_consumable = data.is_consumable
+    if data.default_unit is not None:
+        category.default_unit = data.default_unit
+    if data.description is not None:
+        category.description = data.description
     category.mtime = datetime.now()
     
     db.commit()
     db.refresh(category)
-    return data_from_category(category)
+    return _category_to_response(category)
 
 
 def delete_category_impl(db: Session, category_id: int) -> Optional[dict]:
@@ -152,7 +156,7 @@ def get_category_tree_impl(db: Session) -> List[dict]:
     return tree
 
 
-def seed_default_categories_impl(db: Session) -> List[ItemCategoryData]:
+def seed_default_categories_impl(db: Session) -> List[ItemCategoryResponse]:
     """Seed default categories if not exists"""
     # Check if categories already exist
     existing = db.query(ItemCategory).first()
@@ -227,4 +231,4 @@ def seed_default_categories_impl(db: Session) -> List[ItemCategoryData]:
     
     db.commit()
     
-    return [data_from_category(c) for c in created]
+    return [_category_to_response(c) for c in created]

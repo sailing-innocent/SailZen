@@ -12,7 +12,10 @@ from litestar.di import Provide
 from sqlalchemy.orm import Session
 
 from sail_server.db import provide_db_session
-from sail_server.data.analysis import CharacterData
+from sail_server.application.dto.analysis import (
+    CharacterCreateRequest,
+    CharacterResponse,
+)
 from sail_server.model.analysis.character import (
     create_character_impl,
     get_character_impl,
@@ -39,13 +42,12 @@ class CharacterController(Controller):
     @post("/")
     async def create_character(
         self,
-        data: Dict[str, Any],
+        data: CharacterCreateRequest,
         db: Session,
     ) -> Dict[str, Any]:
         """创建人物"""
-        character_data = CharacterData(**data)
-        result = create_character_impl(db, character_data)
-        return {"success": True, "data": result}
+        result = create_character_impl(db, data)
+        return {"success": True, "data": CharacterResponse.model_validate(result).model_dump()}
     
     @get("/{character_id:int}")
     async def get_character(
@@ -57,7 +59,7 @@ class CharacterController(Controller):
         result = get_character_impl(db, character_id)
         if not result:
             return {"success": False, "error": "Character not found"}
-        return {"success": True, "data": result}
+        return {"success": True, "data": CharacterResponse.model_validate(result).model_dump()}
     
     @get("/edition/{edition_id:int}")
     async def get_characters_by_edition(
@@ -69,7 +71,7 @@ class CharacterController(Controller):
     ) -> Dict[str, Any]:
         """获取版本的所有人物"""
         results = get_characters_by_edition_impl(db, edition_id, role_type, status)
-        return {"success": True, "data": results}
+        return {"success": True, "data": [CharacterResponse.model_validate(r).model_dump() for r in results]}
     
     @post("/{character_id:int}")
     async def update_character(
@@ -82,7 +84,7 @@ class CharacterController(Controller):
         result = update_character_impl(db, character_id, data)
         if not result:
             return {"success": False, "error": "Character not found"}
-        return {"success": True, "data": result}
+        return {"success": True, "data": CharacterResponse.model_validate(result).model_dump()}
     
     @delete("/{character_id:int}", status_code=200)
     async def delete_character(

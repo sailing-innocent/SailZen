@@ -3,85 +3,124 @@
 # @brief The Text Content Model - Business Logic
 # @author sailing-innocent
 # @date 2025-01-29
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
 import re
 import hashlib
 from typing import Optional, List, Tuple
+from dataclasses import dataclass
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from sail_server.data.text import (
     Work, Edition, DocumentNode, IngestJob,
-    WorkData, EditionData, DocumentNodeData, DocumentNodeUpdateRequest, IngestJobData,
-    TextImportRequest, ChapterListItem
 )
+from sail_server.application.dto.text import (
+    WorkCreateRequest, WorkUpdateRequest, WorkResponse,
+    EditionCreateRequest, EditionUpdateRequest, EditionResponse,
+    DocumentNodeCreateRequest, DocumentNodeUpdateRequest, DocumentNodeResponse,
+    IngestJobCreateRequest, IngestJobResponse,
+)
+
+
+# ============================================================================
+# Chapter List Item (View-specific structure)
+# ============================================================================
+
+@dataclass
+class ChapterListItem:
+    """章节列表项 - 用于目录展示"""
+    id: int
+    sort_index: int
+    label: Optional[str]
+    title: Optional[str]
+    char_count: Optional[int]
+    path: str
+
+
+# ============================================================================
+# Text Import Request (Model-specific structure)
+# ============================================================================
+
+@dataclass
+class TextImportRequest:
+    """文本导入请求"""
+    work_title: str
+    work_author: Optional[str] = None
+    work_synopsis: Optional[str] = None
+    edition_name: Optional[str] = None
+    content: str = ""
+    language: str = "zh"
+    chapter_pattern: Optional[str] = None
+    meta_data: Optional[dict] = None
 
 
 # ============================================================================
 # Work CRUD Operations
 # ============================================================================
 
-def create_work_impl(db: Session, work_data: WorkData) -> WorkData:
+def create_work_impl(db: Session, work_data: WorkCreateRequest) -> WorkResponse:
     """创建作品"""
-    work = work_data.create_orm()
+    work = Work(
+        slug=work_data.slug,
+        title=work_data.title,
+        original_title=work_data.original_title,
+        author=work_data.author,
+        language_primary=work_data.language_primary,
+        work_type=work_data.work_type,
+        status=work_data.status,
+        synopsis=work_data.synopsis,
+        meta_data=work_data.meta_data or {},
+    )
     db.add(work)
     db.commit()
     db.refresh(work)
-    return WorkData.read_from_orm(work)
+    return WorkResponse.model_validate(work)
 
 
-def get_work_impl(db: Session, work_id: int) -> Optional[WorkData]:
+def get_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
     """获取单个作品"""
     work = db.query(Work).filter(Work.id == work_id).first()
     if not work:
         return None
-    
-    # 统计版本数和章节数
-    edition_count = db.query(func.count(Edition.id)).filter(Edition.work_id == work_id).scalar() or 0
-    chapter_count = db.query(func.count(DocumentNode.id)).join(Edition).filter(
-        Edition.work_id == work_id,
-        DocumentNode.node_type == 'chapter'
-    ).scalar() or 0
-    total_chars = db.query(func.sum(Edition.char_count)).filter(Edition.work_id == work_id).scalar() or 0
-    
-    return WorkData.read_from_orm(work, edition_count, chapter_count, total_chars)
+    return WorkResponse.model_validate(work)
 
 
-def get_works_impl(db: Session, skip: int = 0, limit: int = 20) -> List[WorkData]:
+def get_works_impl(db: Session, skip: int = 0, limit: int = 20) -> List[WorkResponse]:
     """获取作品列表"""
     works = db.query(Work).order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
-    result = []
-    for work in works:
-        edition_count = db.query(func.count(Edition.id)).filter(Edition.work_id == work.id).scalar() or 0
-        chapter_count = db.query(func.count(DocumentNode.id)).join(Edition).filter(
-            Edition.work_id == work.id,
-            DocumentNode.node_type == 'chapter'
-        ).scalar() or 0
-        total_chars = db.query(func.sum(Edition.char_count)).filter(Edition.work_id == work.id).scalar() or 0
-        result.append(WorkData.read_from_orm(work, edition_count, chapter_count, total_chars or 0))
-    return result
+    return [WorkResponse.model_validate(work) for work in works]
 
 
-def update_work_impl(db: Session, work_id: int, work_data: WorkData) -> Optional[WorkData]:
+def update_work_impl(db: Session, work_id: int, work_data: WorkUpdateRequest) -> Optional[WorkResponse]:
     """更新作品"""
     work = db.query(Work).filter(Work.id == work_id).first()
     if not work:
         return None
-    work_data.update_orm(work)
+    
+    # 仅更新传入的字段
+    if work_data.title is not None:
+        work.title = work_data.title
+    if work_data.author is not None:
+        work.author = work_data.author
+    if work_data.status is not None:
+        work.status = work_data.status
+    if work_data.synopsis is not None:
+        work.synopsis = work_data.synopsis
+    
     db.commit()
     db.refresh(work)
-    return WorkData.read_from_orm(work)
+    return WorkResponse.model_validate(work)
 
 
-def delete_work_impl(db: Session, work_id: int) -> Optional[WorkData]:
+def delete_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
     """删除作品"""
     work = db.query(Work).filter(Work.id == work_id).first()
     if not work:
         return None
-    work_data = WorkData.read_from_orm(work)
+    work_data = WorkResponse.model_validate(work)
     db.delete(work)
     db.commit()
     return work_data
@@ -91,59 +130,65 @@ def delete_work_impl(db: Session, work_id: int) -> Optional[WorkData]:
 # Edition CRUD Operations
 # ============================================================================
 
-def create_edition_impl(db: Session, edition_data: EditionData) -> EditionData:
+def create_edition_impl(db: Session, edition_data: EditionCreateRequest) -> EditionResponse:
     """创建版本"""
-    edition = edition_data.create_orm()
+    edition = Edition(
+        work_id=edition_data.work_id,
+        edition_name=edition_data.edition_name,
+        language=edition_data.language,
+        source_format=edition_data.source_format,
+        canonical=edition_data.canonical,
+        description=edition_data.description,
+        source_path=edition_data.source_path,
+        meta_data=edition_data.meta_data or {},
+    )
     db.add(edition)
     db.commit()
     db.refresh(edition)
-    return EditionData.read_from_orm(edition)
+    return EditionResponse.model_validate(edition)
 
 
-def get_edition_impl(db: Session, edition_id: int) -> Optional[EditionData]:
+def get_edition_impl(db: Session, edition_id: int) -> Optional[EditionResponse]:
     """获取单个版本"""
     edition = db.query(Edition).filter(Edition.id == edition_id).first()
     if not edition:
         return None
-    
-    chapter_count = db.query(func.count(DocumentNode.id)).filter(
-        DocumentNode.edition_id == edition_id,
-        DocumentNode.node_type == 'chapter'
-    ).scalar() or 0
-    
-    return EditionData.read_from_orm(edition, chapter_count)
+    return EditionResponse.model_validate(edition)
 
 
-def get_editions_by_work_impl(db: Session, work_id: int) -> List[EditionData]:
+def get_editions_by_work_impl(db: Session, work_id: int) -> List[EditionResponse]:
     """获取作品的所有版本"""
     editions = db.query(Edition).filter(Edition.work_id == work_id).order_by(Edition.ingest_version.desc()).all()
-    result = []
-    for edition in editions:
-        chapter_count = db.query(func.count(DocumentNode.id)).filter(
-            DocumentNode.edition_id == edition.id,
-            DocumentNode.node_type == 'chapter'
-        ).scalar() or 0
-        result.append(EditionData.read_from_orm(edition, chapter_count))
-    return result
+    return [EditionResponse.model_validate(edition) for edition in editions]
 
 
-def update_edition_impl(db: Session, edition_id: int, edition_data: EditionData) -> Optional[EditionData]:
+def update_edition_impl(db: Session, edition_id: int, edition_data: EditionUpdateRequest) -> Optional[EditionResponse]:
     """更新版本"""
     edition = db.query(Edition).filter(Edition.id == edition_id).first()
     if not edition:
         return None
-    edition_data.update_orm(edition)
+    
+    # 仅更新传入的字段
+    if edition_data.edition_name is not None:
+        edition.edition_name = edition_data.edition_name
+    if edition_data.canonical is not None:
+        edition.canonical = edition_data.canonical
+    if edition_data.status is not None:
+        edition.status = edition_data.status
+    if edition_data.description is not None:
+        edition.description = edition_data.description
+    
     db.commit()
     db.refresh(edition)
-    return EditionData.read_from_orm(edition)
+    return EditionResponse.model_validate(edition)
 
 
-def delete_edition_impl(db: Session, edition_id: int) -> Optional[EditionData]:
+def delete_edition_impl(db: Session, edition_id: int) -> Optional[EditionResponse]:
     """删除版本"""
     edition = db.query(Edition).filter(Edition.id == edition_id).first()
     if not edition:
         return None
-    edition_data = EditionData.read_from_orm(edition)
+    edition_data = EditionResponse.model_validate(edition)
     db.delete(edition)
     db.commit()
     return edition_data
@@ -153,17 +198,12 @@ def delete_edition_impl(db: Session, edition_id: int) -> Optional[EditionData]:
 # DocumentNode CRUD Operations
 # ============================================================================
 
-def get_document_node_impl(db: Session, node_id: int, include_content: bool = True) -> Optional[DocumentNodeData]:
+def get_document_node_impl(db: Session, node_id: int, include_content: bool = True) -> Optional[DocumentNodeResponse]:
     """获取单个文档节点"""
     node = db.query(DocumentNode).filter(DocumentNode.id == node_id).first()
     if not node:
         return None
-    
-    children_count = db.query(func.count(DocumentNode.id)).filter(
-        DocumentNode.parent_id == node_id
-    ).scalar() or 0
-    
-    return DocumentNodeData.read_from_orm(node, children_count, include_content)
+    return DocumentNodeResponse.model_validate(node)
 
 
 def get_chapter_list_impl(db: Session, edition_id: int) -> List[ChapterListItem]:
@@ -186,7 +226,7 @@ def get_chapter_list_impl(db: Session, edition_id: int) -> List[ChapterListItem]
     ]
 
 
-def get_chapter_content_impl(db: Session, edition_id: int, chapter_index: int) -> Optional[DocumentNodeData]:
+def get_chapter_content_impl(db: Session, edition_id: int, chapter_index: int) -> Optional[DocumentNodeResponse]:
     """获取指定章节的内容"""
     node = db.query(DocumentNode).filter(
         DocumentNode.edition_id == edition_id,
@@ -197,29 +237,27 @@ def get_chapter_content_impl(db: Session, edition_id: int, chapter_index: int) -
     if not node:
         return None
     
-    return DocumentNodeData.read_from_orm(node, 0, True)
+    return DocumentNodeResponse.model_validate(node)
 
 
-def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNodeUpdateRequest) -> Optional[DocumentNodeData]:
+def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNodeUpdateRequest) -> Optional[DocumentNodeResponse]:
     """更新文档节点（仅更新可编辑字段）"""
     node = db.query(DocumentNode).filter(DocumentNode.id == node_id).first()
     if not node:
         return None
 
     # 仅更新传入的字段
-    if update_data.label is not None:
-        node.label = update_data.label
     if update_data.title is not None:
         node.title = update_data.title
-    if update_data.raw_text is not None:
+    if update_data.content is not None:
         # 清理文本内容
-        cleaned_text = sanitize_text(update_data.raw_text)
+        cleaned_text = sanitize_text(update_data.content)
         node.raw_text = cleaned_text
         # 重新计算字符数
         node.char_count = len(cleaned_text)
         node.word_count = len(cleaned_text.split())
-    if update_data.meta_data:
-        node.meta_data = update_data.meta_data
+    if update_data.sort_order is not None:
+        node.sort_index = update_data.sort_order
 
     db.commit()
     db.refresh(node)
@@ -227,7 +265,7 @@ def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNo
     # 更新版本的总字符数
     _update_edition_stats(db, node.edition_id)
 
-    return DocumentNodeData.read_from_orm(node, 0, True)
+    return DocumentNodeResponse.model_validate(node)
 
 
 def _update_edition_stats(db: Session, edition_id: int):
@@ -320,7 +358,7 @@ def parse_chapters(content: str, pattern: Optional[str] = None) -> List[Tuple[st
     return chapters
 
 
-def import_text_impl(db: Session, request: TextImportRequest) -> Tuple[WorkData, EditionData, int]:
+def import_text_impl(db: Session, request: TextImportRequest) -> Tuple[WorkResponse, EditionResponse, int]:
     """
     导入文本内容
     
@@ -334,27 +372,35 @@ def import_text_impl(db: Session, request: TextImportRequest) -> Tuple[WorkData,
     返回: (work_data, edition_data, chapter_count)
     """
     # 1. 创建作品
-    work_data = WorkData(
+    import slugify
+    slug = slugify.slugify(request.work_title, lowercase=True, max_length=50)
+    
+    # 确保 slug 唯一
+    existing = db.query(Work).filter(Work.slug == slug).first()
+    if existing:
+        slug = f"{slug}-{int(datetime.now().timestamp())}"
+    
+    work = Work(
+        slug=slug,
         title=request.work_title,
         author=request.work_author,
         synopsis=request.work_synopsis,
         language_primary=request.language,
-        meta_data=request.meta_data,
+        meta_data=request.meta_data or {},
     )
-    work = work_data.create_orm()
     db.add(work)
     db.flush()  # 获取ID但不提交
     
     # 2. 创建版本
     content_hash = hashlib.sha256(request.content.encode('utf-8')).hexdigest()[:16]
-    edition_data = EditionData(
+    edition = Edition(
         work_id=work.id,
         edition_name=request.edition_name or "原始导入",
         language=request.language,
         source_checksum=content_hash,
-        status="draft",
+        status="active",
+        meta_data={},
     )
-    edition = edition_data.create_orm()
     db.add(edition)
     db.flush()
     
@@ -389,15 +435,14 @@ def import_text_impl(db: Session, request: TextImportRequest) -> Tuple[WorkData,
     # 5. 更新版本统计
     edition.char_count = total_chars
     edition.word_count = sum(len(c[1].split()) for c in chapters)
-    edition.status = 'active'
     
     db.commit()
     db.refresh(work)
     db.refresh(edition)
     
     return (
-        WorkData.read_from_orm(work, 1, len(chapters), total_chars),
-        EditionData.read_from_orm(edition, len(chapters)),
+        WorkResponse.model_validate(work),
+        EditionResponse.model_validate(edition),
         len(chapters)
     )
 
@@ -484,7 +529,7 @@ def append_chapters_impl(db: Session, edition_id: int, content: str, chapter_pat
 # Search and Query
 # ============================================================================
 
-def search_works_impl(db: Session, keyword: str, skip: int = 0, limit: int = 20) -> List[WorkData]:
+def search_works_impl(db: Session, keyword: str, skip: int = 0, limit: int = 20) -> List[WorkResponse]:
     """搜索作品"""
     works = db.query(Work).filter(
         (Work.title.ilike(f"%{keyword}%")) |
@@ -492,27 +537,17 @@ def search_works_impl(db: Session, keyword: str, skip: int = 0, limit: int = 20)
         (Work.synopsis.ilike(f"%{keyword}%"))
     ).order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
     
-    result = []
-    for work in works:
-        edition_count = db.query(func.count(Edition.id)).filter(Edition.work_id == work.id).scalar() or 0
-        chapter_count = db.query(func.count(DocumentNode.id)).join(Edition).filter(
-            Edition.work_id == work.id,
-            DocumentNode.node_type == 'chapter'
-        ).scalar() or 0
-        total_chars = db.query(func.sum(Edition.char_count)).filter(Edition.work_id == work.id).scalar() or 0
-        result.append(WorkData.read_from_orm(work, edition_count, chapter_count, total_chars or 0))
-    
-    return result
+    return [WorkResponse.model_validate(work) for work in works]
 
 
-def search_content_impl(db: Session, edition_id: int, keyword: str, skip: int = 0, limit: int = 50) -> List[DocumentNodeData]:
+def search_content_impl(db: Session, edition_id: int, keyword: str, skip: int = 0, limit: int = 50) -> List[DocumentNodeResponse]:
     """搜索版本中的内容"""
     nodes = db.query(DocumentNode).filter(
         DocumentNode.edition_id == edition_id,
         DocumentNode.raw_text.ilike(f"%{keyword}%")
     ).order_by(DocumentNode.sort_index).offset(skip).limit(limit).all()
     
-    return [DocumentNodeData.read_from_orm(node, 0, True) for node in nodes]
+    return [DocumentNodeResponse.model_validate(node) for node in nodes]
 
 
 # ============================================================================
@@ -520,7 +555,7 @@ def search_content_impl(db: Session, edition_id: int, keyword: str, skip: int = 
 # ============================================================================
 
 def insert_chapter_impl(db: Session, edition_id: int, sort_index: int, label: Optional[str],
-                        title: Optional[str], content: str, meta_data: dict = None) -> Optional[DocumentNodeData]:
+                        title: Optional[str], content: str, meta_data: dict = None) -> Optional[DocumentNodeResponse]:
     """
     向版本的指定位置插入新章节
     
@@ -592,4 +627,4 @@ def insert_chapter_impl(db: Session, edition_id: int, sort_index: int, label: Op
     db.commit()
     db.refresh(new_node)
     
-    return DocumentNodeData.read_from_orm(new_node, 0, True)
+    return DocumentNodeResponse.model_validate(new_node)

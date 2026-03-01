@@ -10,32 +10,91 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from sail_server.data.analysis import (
-    Setting, SettingData,
-    SettingAttribute, SettingAttributeData,
-    SettingRelation, SettingRelationData,
+from sail_server.infrastructure.orm.analysis import (
+    Setting, SettingAttribute, SettingRelation,
 )
+
+# 使用 Pydantic DTOs
+from sail_server.application.dto.analysis import (
+    SettingResponse, SettingCreateRequest,
+)
+
+
+# ============================================================================
+# Helper Functions for ORM to DTO Conversion
+# ============================================================================
+
+def _setting_to_response(setting: Setting) -> SettingResponse:
+    """将 Setting ORM 对象转换为 SettingResponse DTO"""
+    return SettingResponse(
+        id=setting.id,
+        edition_id=setting.edition_id,
+        setting_type=setting.setting_type,
+        canonical_name=setting.canonical_name,
+        category=setting.category,
+        description=setting.description,
+        first_appearance_node_id=setting.first_appearance_node_id,
+        importance=setting.importance or "normal",
+        status=setting.status or "draft",
+        source=setting.source or "manual",
+        created_at=setting.created_at,
+        updated_at=setting.updated_at,
+    )
+
+
+def _setting_attribute_to_dict(attr: SettingAttribute) -> Dict[str, Any]:
+    """将 SettingAttribute ORM 对象转换为字典"""
+    return {
+        "id": attr.id,
+        "setting_id": attr.setting_id,
+        "attr_key": attr.attr_key,
+        "attr_value": attr.attr_value,
+        "source": attr.source,
+        "source_node_id": attr.source_node_id,
+        "status": attr.status,
+        "created_at": attr.created_at,
+    }
+
+
+def _setting_relation_to_dict(relation: SettingRelation) -> Dict[str, Any]:
+    """将 SettingRelation ORM 对象转换为字典"""
+    return {
+        "id": relation.id,
+        "edition_id": relation.edition_id,
+        "source_setting_id": relation.source_setting_id,
+        "target_setting_id": relation.target_setting_id,
+        "relation_type": relation.relation_type,
+        "description": relation.description,
+        "created_at": relation.created_at,
+    }
 
 
 # ============================================================================
 # Setting CRUD Operations
 # ============================================================================
 
-def create_setting_impl(db: Session, data: SettingData) -> SettingData:
+def create_setting_impl(db: Session, data: SettingCreateRequest) -> SettingResponse:
     """创建设定"""
-    setting = data.create_orm()
+    setting = Setting(
+        edition_id=data.edition_id,
+        setting_type=data.setting_type,
+        canonical_name=data.canonical_name,
+        category=data.category,
+        description=data.description,
+        source="manual",
+    )
     db.add(setting)
     db.commit()
     db.refresh(setting)
-    return SettingData.read_from_orm(setting)
+    return _setting_to_response(setting)
 
 
-def get_setting_impl(db: Session, setting_id: int) -> Optional[SettingData]:
+def get_setting_impl(db: Session, setting_id: int) -> Optional[SettingResponse]:
     """获取单个设定"""
     setting = db.query(Setting).filter(Setting.id == setting_id).first()
     if not setting:
         return None
-    return SettingData.read_from_orm(setting)
+    return _setting_to_response(setting)
 
 
 def get_settings_by_edition_impl(
@@ -44,7 +103,7 @@ def get_settings_by_edition_impl(
     setting_type: Optional[str] = None,
     category: Optional[str] = None,
     status: Optional[str] = None
-) -> List[SettingData]:
+) -> List[SettingResponse]:
     """获取版本的所有设定"""
     query = db.query(Setting).filter(Setting.edition_id == edition_id)
     
@@ -56,14 +115,14 @@ def get_settings_by_edition_impl(
         query = query.filter(Setting.status == status)
     
     settings = query.order_by(Setting.importance.desc(), Setting.canonical_name).all()
-    return [SettingData.read_from_orm(s) for s in settings]
+    return [_setting_to_response(s) for s in settings]
 
 
 def update_setting_impl(
     db: Session, 
     setting_id: int, 
     data: Dict[str, Any]
-) -> Optional[SettingData]:
+) -> Optional[SettingResponse]:
     """更新设定"""
     setting = db.query(Setting).filter(Setting.id == setting_id).first()
     if not setting:
@@ -76,7 +135,7 @@ def update_setting_impl(
     
     db.commit()
     db.refresh(setting)
-    return SettingData.read_from_orm(setting)
+    return _setting_to_response(setting)
 
 
 def delete_setting_impl(db: Session, setting_id: int) -> bool:
@@ -100,7 +159,7 @@ def add_setting_attribute_impl(
     attr_key: str,
     attr_value: str,
     source_node_id: Optional[int] = None,
-) -> SettingAttributeData:
+) -> Dict[str, Any]:
     """添加设定属性"""
     # 检查是否已存在相同 key 的属性
     existing = db.query(SettingAttribute).filter(
@@ -114,7 +173,7 @@ def add_setting_attribute_impl(
         existing.source_node_id = source_node_id
         db.commit()
         db.refresh(existing)
-        return SettingAttributeData.read_from_orm(existing)
+        return _setting_attribute_to_dict(existing)
     
     # 创建新属性
     attr = SettingAttribute(
@@ -126,7 +185,7 @@ def add_setting_attribute_impl(
     db.add(attr)
     db.commit()
     db.refresh(attr)
-    return SettingAttributeData.read_from_orm(attr)
+    return _setting_attribute_to_dict(attr)
 
 
 def delete_setting_attribute_impl(db: Session, attribute_id: int) -> bool:
@@ -151,7 +210,7 @@ def add_setting_relation_impl(
     target_setting_id: int,
     relation_type: str,
     description: Optional[str] = None,
-) -> SettingRelationData:
+) -> Dict[str, Any]:
     """添加设定关系"""
     relation = SettingRelation(
         edition_id=edition_id,
@@ -163,14 +222,14 @@ def add_setting_relation_impl(
     db.add(relation)
     db.commit()
     db.refresh(relation)
-    return SettingRelationData.read_from_orm(relation)
+    return _setting_relation_to_dict(relation)
 
 
 def get_setting_relations_impl(
     db: Session,
     setting_id: int,
     relation_type: Optional[str] = None
-) -> List[SettingRelationData]:
+) -> List[Dict[str, Any]]:
     """获取设定的所有关系"""
     query = db.query(SettingRelation).filter(
         (SettingRelation.source_setting_id == setting_id) |
@@ -181,7 +240,7 @@ def get_setting_relations_impl(
         query = query.filter(SettingRelation.relation_type == relation_type)
     
     relations = query.all()
-    return [SettingRelationData.read_from_orm(r) for r in relations]
+    return [_setting_relation_to_dict(r) for r in relations]
 
 
 def delete_setting_relation_impl(db: Session, relation_id: int) -> bool:

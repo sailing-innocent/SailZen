@@ -243,6 +243,43 @@ class OutlineListResponse(BaseModel):
 
 
 # ============================================================================
+# Setting DTOs
+# ============================================================================
+
+class SettingBase(BaseModel):
+    """设定基础信息"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    edition_id: int = Field(description="版本ID")
+    setting_type: str = Field(description="设定类型")
+    canonical_name: str = Field(description="规范名称")
+    category: Optional[str] = Field(default=None, description="分类")
+    description: Optional[str] = Field(default=None, description="描述")
+
+
+class SettingCreateRequest(SettingBase):
+    """创建设定请求"""
+    pass
+
+
+class SettingResponse(SettingBase):
+    """设定响应"""
+    id: int = Field(description="设定ID")
+    first_appearance_node_id: Optional[int] = Field(default=None, description="首次出现节点ID")
+    importance: str = Field(default="normal", description="重要性")
+    status: str = Field(default="draft", description="状态")
+    source: str = Field(default="manual", description="来源")
+    created_at: datetime = Field(description="创建时间")
+    updated_at: datetime = Field(description="更新时间")
+
+
+class SettingListResponse(BaseModel):
+    """设定列表响应"""
+    settings: List[SettingResponse]
+    total: int
+
+
+# ============================================================================
 # Evidence DTOs
 # ============================================================================
 

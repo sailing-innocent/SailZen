@@ -6,11 +6,16 @@
 # @version 1.0
 # ---------------------------------
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 
-from sail_server.data.health import WeightData, ExerciseData, WeightPlanData, WeightAnalysisResult, WeightPlanProgress, WeightRecordWithStatus
+from sail_server.application.dto.health import (
+    WeightCreateRequest,
+    WeightResponse,
+    ExerciseCreateRequest,
+    ExerciseResponse,
+    WeightPlanCreateRequest,
+    WeightPlanResponse,
+)
 
 from sail_server.model.health import (
     read_weight_impl,
@@ -37,23 +42,10 @@ from datetime import datetime
 
 
 # ===================================================
-# Weight DTOs
-# ===================================================
-
-class WeightDataWriteDTO(DataclassDTO[WeightData]):
-    config = DTOConfig(exclude={"id"})
-
-
-class WeightDataReadDTO(DataclassDTO[WeightData]): ...
-
-
-# ===================================================
 # Weight Controller
 # ===================================================
 
 class WeightController(Controller):
-    dto = WeightDataWriteDTO
-    return_dto = WeightDataReadDTO
     path = "/weight"
 
     @get("/target")
@@ -62,7 +54,7 @@ class WeightController(Controller):
         date: str,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WeightData:
+    ) -> dict:
         """
         Get the target weight for a specific date.
         """
@@ -86,7 +78,7 @@ class WeightController(Controller):
         weight_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WeightData:
+    ) -> WeightResponse:
         """
         Get the weight data.
         """
@@ -107,7 +99,7 @@ class WeightController(Controller):
         limit: int = 10,
         start: float = None,  # timestamp as float in seconds
         end: float = None,  # timestamp as float in seconds
-    ) -> list[WeightData]:
+    ) -> list[WeightResponse]:
         """
         Get the weight data list.
         """
@@ -134,10 +126,10 @@ class WeightController(Controller):
     @post()
     async def create_weight(
         self,
-        data: WeightData,
+        data: WeightCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> WeightData:
+    ) -> WeightResponse:
         """
         Create a new weight data.
         """
@@ -158,13 +150,13 @@ class WeightController(Controller):
         start: float = None,  # timestamp as float in seconds
         end: float = None,
         model_type: str = "linear",  # 'linear' or 'polynomial'
-    ) -> WeightAnalysisResult:
+    ) -> dict:
         """
         Analyze weight trend and return model parameters with predictions.
         """
         db = next(router_dependency)
         result = analyze_weight_trend_impl(db, start, end, model_type)
-        request.logger.info(f"Weight analysis: slope={result.slope}, trend={result.current_trend}")
+        request.logger.info(f"Weight analysis: slope={result['slope']}, trend={result['current_trend']}")
         return result
 
     # GET /weight/prediction?target_time=&model_type=&start=&end=
@@ -188,26 +180,10 @@ class WeightController(Controller):
 
 
 # ===================================================
-# Weight Plan DTOs
-# ===================================================
-
-class WeightPlanWriteDTO(DataclassDTO[WeightPlanData]):
-    config = DTOConfig(exclude={"id", "created_at"})
-
-
-class WeightPlanReadDTO(DataclassDTO[WeightPlanData]): ...
-
-
-class WeightRecordWithStatusReadDTO(DataclassDTO[WeightRecordWithStatus]): ...
-
-
-# ===================================================
 # Weight Plan Controller
 # ===================================================
 
 class WeightPlanController(Controller):
-    dto = WeightPlanWriteDTO
-    return_dto = WeightPlanReadDTO
     path = "/weight/plan"
 
     @get()
@@ -215,7 +191,7 @@ class WeightPlanController(Controller):
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WeightPlanData | None:
+    ) -> WeightPlanResponse | None:
         """
         Get the active weight plan.
         """
@@ -229,10 +205,10 @@ class WeightPlanController(Controller):
     @post()
     async def create_weight_plan(
         self,
-        data: WeightPlanData,
+        data: WeightPlanCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> WeightPlanData:
+    ) -> WeightPlanResponse:
         """
         Create a new weight plan.
         """
@@ -247,19 +223,19 @@ class WeightPlanController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         plan_id: int | None = None,
-    ) -> WeightPlanProgress | None:
+    ) -> dict | None:
         """
         Get weight plan progress with daily predictions.
         Returns control rate and expected vs actual weights.
         """
         db = next(router_dependency)
         progress = get_weight_plan_progress_impl(db, plan_id)
-        request.logger.info(f"Weight plan progress: control_rate={progress.control_rate if progress else None}")
+        request.logger.info(f"Weight plan progress: control_rate={progress['control_rate'] if progress else None}")
         if progress is None:
             return None
         return progress
 
-    @get("/weights-with-status", return_dto=WeightRecordWithStatusReadDTO)
+    @get("/weights-with-status")
     async def get_weights_with_status(
         self,
         router_dependency: Generator[Session, None, None],
@@ -267,7 +243,7 @@ class WeightPlanController(Controller):
         start: float | None = None,
         end: float | None = None,
         plan_id: int | None = None,
-    ) -> list[WeightRecordWithStatus]:
+    ) -> list[dict]:
         """
         Get weight records with comparison status against plan.
         
@@ -283,23 +259,10 @@ class WeightPlanController(Controller):
 
 
 # ===================================================
-# Exercise DTOs
-# ===================================================
-
-class ExerciseDataWriteDTO(DataclassDTO[ExerciseData]):
-    config = DTOConfig(exclude={"id"})
-
-
-class ExerciseDataReadDTO(DataclassDTO[ExerciseData]): ...
-
-
-# ===================================================
 # Exercise Controller
 # ===================================================
 
 class ExerciseController(Controller):
-    dto = ExerciseDataWriteDTO
-    return_dto = ExerciseDataReadDTO
     path = "/exercise"
 
     @get("/{exercise_id:int}")
@@ -308,7 +271,7 @@ class ExerciseController(Controller):
         exercise_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ExerciseData:
+    ) -> ExerciseResponse:
         """
         Get the exercise record.
         """
@@ -327,7 +290,7 @@ class ExerciseController(Controller):
         limit: int = -1,
         start: float = None,
         end: float = None,
-    ) -> list[ExerciseData]:
+    ) -> list[ExerciseResponse]:
         """
         Get the exercise record list.
         """
@@ -338,10 +301,10 @@ class ExerciseController(Controller):
     @post()
     async def create_exercise(
         self,
-        data: ExerciseData,
+        data: ExerciseCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ExerciseData:
+    ) -> ExerciseResponse:
         """
         Create a new exercise record.
         """
@@ -356,10 +319,10 @@ class ExerciseController(Controller):
     async def update_exercise(
         self,
         exercise_id: int,
-        data: ExerciseData,
+        data: ExerciseCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ExerciseData:
+    ) -> ExerciseResponse:
         """
         Update an exercise record.
         """

@@ -24,12 +24,14 @@ from sail_server.data.unified_agent import (
     UnifiedAgentTask,
     UnifiedAgentStep,
     UnifiedAgentEvent,
-    UnifiedTaskData,
-    UnifiedStepData,
-    UnifiedTaskProgress,
-    UnifiedTaskResult,
     TaskStatus,
     StepType,
+)
+from sail_server.application.dto.unified_agent import (
+    UnifiedAgentTaskCreateRequest,
+    UnifiedAgentTaskResponse,
+    UnifiedTaskProgressResponse,
+    UnifiedTaskResultResponse,
 )
 from sail_server.model.unified_agent import (
     UnifiedTaskDAO,
@@ -429,9 +431,9 @@ class UnifiedAgentScheduler:
     
     async def schedule_task(
         self,
-        task_data: UnifiedTaskData,
+        task_data: UnifiedAgentTaskCreateRequest,
         immediate: bool = False
-    ) -> UnifiedTaskData:
+    ) -> UnifiedAgentTaskResponse:
         """
         调度新任务
         
@@ -440,7 +442,7 @@ class UnifiedAgentScheduler:
             immediate: 是否立即执行（忽略队列）
         
         Returns:
-            UnifiedTaskData: 创建的任务
+            UnifiedAgentTaskResponse: 创建的任务响应
         """
         logger.info(f"Scheduling task: type={task_data.task_type}, priority={task_data.priority}")
         
@@ -476,11 +478,8 @@ class UnifiedAgentScheduler:
             
             self._stats["total_scheduled"] += 1
             
-            # 获取步骤数
-            step_dao = UnifiedStepDAO(db)
-            step_count = step_dao.get_next_step_number(orm.id) - 1
-            
-            return UnifiedTaskData.from_orm(orm, step_count)
+            # 返回 Pydantic 响应模型
+            return UnifiedAgentTaskResponse.model_validate(orm)
     
     async def _start_task_execution(self, task_id: int):
         """开始执行任务"""
@@ -699,7 +698,7 @@ class UnifiedAgentScheduler:
         
         return False
     
-    def get_task_progress(self, task_id: int) -> Optional[UnifiedTaskProgress]:
+    def get_task_progress(self, task_id: int) -> Optional[UnifiedTaskProgressResponse]:
         """获取任务进度"""
         with self.db_factory() as db:
             dao = UnifiedTaskDAO(db)
@@ -717,7 +716,7 @@ class UnifiedAgentScheduler:
                 estimated_total = elapsed / (task.progress / 100)
                 estimated_remaining = int(estimated_total - elapsed)
             
-            return UnifiedTaskProgress(
+            return UnifiedTaskProgressResponse(
                 task_id=task.id,
                 status=task.status,
                 progress=task.progress,
@@ -727,7 +726,7 @@ class UnifiedAgentScheduler:
                 estimated_remaining_seconds=estimated_remaining,
                 error_message=task.error_message,
                 actual_tokens=task.actual_tokens,
-                actual_cost=float(task.actual_cost),
+                actual_cost=task.actual_cost,
                 started_at=task.started_at,
                 updated_at=task.updated_at,
             )

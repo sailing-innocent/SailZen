@@ -9,27 +9,95 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from sail_server.data.analysis import (
-    OutlineData, OutlineNodeData, OutlineEventData,
-    OutlineTree,
+from sail_server.infrastructure.orm.analysis import Outline, OutlineNode, OutlineEvent
+
+# 使用 Pydantic DTOs
+from sail_server.application.dto.analysis import (
+    OutlineResponse, OutlineCreateRequest,
+    OutlineNodeResponse, OutlineNodeCreateRequest,
 )
-from sail_server.data.analysis import Outline, OutlineNode, OutlineEvent
+
+
+# ============================================================================
+# Helper Functions for ORM to DTO Conversion
+# ============================================================================
+
+def _outline_to_response(outline: Outline, node_count: int = 0) -> OutlineResponse:
+    """将 Outline ORM 对象转换为 OutlineResponse DTO"""
+    return OutlineResponse(
+        id=outline.id,
+        edition_id=outline.edition_id,
+        title=outline.title,
+        outline_type=outline.outline_type,
+        description=outline.description,
+        status=outline.status or "draft",
+        source=outline.source or "manual",
+        node_count=node_count,
+        created_at=outline.created_at,
+        updated_at=outline.updated_at,
+    )
+
+
+def _outline_node_to_response(
+    node: OutlineNode,
+    children_count: int = 0,
+    events_count: int = 0
+) -> OutlineNodeResponse:
+    """将 OutlineNode ORM 对象转换为 OutlineNodeResponse DTO"""
+    return OutlineNodeResponse(
+        id=node.id,
+        outline_id=node.outline_id,
+        title=node.title,
+        node_type=node.node_type,
+        summary=node.summary,
+        significance=node.significance or "normal",
+        parent_id=node.parent_id,
+        depth=node.depth,
+        path=node.path or "",
+        sort_index=node.sort_index,
+        chapter_start_id=node.chapter_start_id,
+        chapter_end_id=node.chapter_end_id,
+        status=node.status or "draft",
+        created_at=node.created_at,
+        updated_at=node.updated_at,
+    )
+
+
+def _outline_event_to_dict(event: OutlineEvent) -> Dict[str, Any]:
+    """将 OutlineEvent ORM 对象转换为字典"""
+    return {
+        "id": event.id,
+        "outline_node_id": event.outline_node_id,
+        "event_type": event.event_type,
+        "title": event.title,
+        "description": event.description,
+        "chronology_order": event.chronology_order,
+        "narrative_order": event.narrative_order,
+        "importance": event.importance,
+        "created_at": event.created_at,
+    }
 
 
 # ============================================================================
 # Outline CRUD Operations
 # ============================================================================
 
-def create_outline_impl(db: Session, data: OutlineData) -> OutlineData:
+def create_outline_impl(db: Session, data: OutlineCreateRequest) -> OutlineResponse:
     """创建大纲"""
-    outline = data.create_orm()
+    outline = Outline(
+        edition_id=data.edition_id,
+        title=data.title,
+        outline_type=data.outline_type,
+        description=data.description,
+        source="manual",
+    )
     db.add(outline)
     db.commit()
     db.refresh(outline)
-    return OutlineData.read_from_orm(outline)
+    return _outline_to_response(outline)
 
 
-def get_outline_impl(db: Session, outline_id: int) -> Optional[OutlineData]:
+def get_outline_impl(db: Session, outline_id: int) -> Optional[OutlineResponse]:
     """获取单个大纲"""
     outline = db.query(Outline).filter(Outline.id == outline_id).first()
     if not outline:
@@ -39,10 +107,10 @@ def get_outline_impl(db: Session, outline_id: int) -> Optional[OutlineData]:
         OutlineNode.outline_id == outline_id
     ).scalar() or 0
     
-    return OutlineData.read_from_orm(outline, node_count)
+    return _outline_to_response(outline, node_count)
 
 
-def get_outlines_by_edition_impl(db: Session, edition_id: int) -> List[OutlineData]:
+def get_outlines_by_edition_impl(db: Session, edition_id: int) -> List[OutlineResponse]:
     """获取版本的所有大纲"""
     outlines = db.query(Outline).filter(
         Outline.edition_id == edition_id
@@ -53,21 +121,29 @@ def get_outlines_by_edition_impl(db: Session, edition_id: int) -> List[OutlineDa
         node_count = db.query(func.count(OutlineNode.id)).filter(
             OutlineNode.outline_id == outline.id
         ).scalar() or 0
-        result.append(OutlineData.read_from_orm(outline, node_count))
+        result.append(_outline_to_response(outline, node_count))
     
     return result
 
 
-def update_outline_impl(db: Session, outline_id: int, data: OutlineData) -> Optional[OutlineData]:
+def update_outline_impl(
+    db: Session, 
+    outline_id: int, 
+    data: Dict[str, Any]
+) -> Optional[OutlineResponse]:
     """更新大纲"""
     outline = db.query(Outline).filter(Outline.id == outline_id).first()
     if not outline:
         return None
     
-    data.update_orm(outline)
+    # 更新字段
+    for key, value in data.items():
+        if hasattr(outline, key) and value is not None:
+            setattr(outline, key, value)
+    
     db.commit()
     db.refresh(outline)
-    return OutlineData.read_from_orm(outline)
+    return _outline_to_response(outline)
 
 
 def delete_outline_impl(db: Session, outline_id: int) -> bool:
@@ -96,7 +172,7 @@ def add_outline_node_impl(
     chapter_start_id: Optional[int] = None,
     chapter_end_id: Optional[int] = None,
     meta_data: Optional[Dict[str, Any]] = None
-) -> Optional[OutlineNodeData]:
+) -> Optional[OutlineNodeResponse]:
     """添加大纲节点"""
     outline = db.query(Outline).filter(Outline.id == outline_id).first()
     if not outline:
@@ -152,10 +228,10 @@ def add_outline_node_impl(
     db.commit()
     db.refresh(node)
     
-    return OutlineNodeData.read_from_orm(node)
+    return _outline_node_to_response(node)
 
 
-def get_outline_node_impl(db: Session, node_id: int) -> Optional[OutlineNodeData]:
+def get_outline_node_impl(db: Session, node_id: int) -> Optional[OutlineNodeResponse]:
     """获取单个大纲节点"""
     node = db.query(OutlineNode).filter(OutlineNode.id == node_id).first()
     if not node:
@@ -169,28 +245,29 @@ def get_outline_node_impl(db: Session, node_id: int) -> Optional[OutlineNodeData
         OutlineEvent.outline_node_id == node_id
     ).scalar() or 0
     
-    return OutlineNodeData.read_from_orm(node, children_count, events_count)
+    return _outline_node_to_response(node, children_count, events_count)
 
 
-def update_outline_node_impl(db: Session, node_id: int, data: OutlineNodeData) -> Optional[OutlineNodeData]:
+def update_outline_node_impl(
+    db: Session, 
+    node_id: int, 
+    data: Dict[str, Any]
+) -> Optional[OutlineNodeResponse]:
     """更新大纲节点"""
     node = db.query(OutlineNode).filter(OutlineNode.id == node_id).first()
     if not node:
         return None
     
     # 只更新部分字段，不更新结构相关字段
-    node.title = data.title
-    node.summary = data.summary
-    node.significance = data.significance
-    node.chapter_start_id = data.chapter_start_id
-    node.chapter_end_id = data.chapter_end_id
-    node.status = data.status
-    node.meta_data = data.meta_data
+    updatable_fields = ["title", "summary", "significance", "chapter_start_id", "chapter_end_id", "status", "meta_data"]
+    for field in updatable_fields:
+        if field in data:
+            setattr(node, field, data[field])
     
     db.commit()
     db.refresh(node)
     
-    return OutlineNodeData.read_from_orm(node)
+    return _outline_node_to_response(node)
 
 
 def delete_outline_node_impl(db: Session, node_id: int) -> bool:
@@ -270,7 +347,11 @@ def _update_children_path(db: Session, parent_node: OutlineNode):
         _update_children_path(db, child)
 
 
-def get_outline_nodes_impl(db: Session, outline_id: int, parent_id: Optional[int] = None) -> List[OutlineNodeData]:
+def get_outline_nodes_impl(
+    db: Session, 
+    outline_id: int, 
+    parent_id: Optional[int] = None
+) -> List[OutlineNodeResponse]:
     """获取大纲的节点列表（按层级）"""
     query = db.query(OutlineNode).filter(OutlineNode.outline_id == outline_id)
     
@@ -291,7 +372,7 @@ def get_outline_nodes_impl(db: Session, outline_id: int, parent_id: Optional[int
             OutlineEvent.outline_node_id == node.id
         ).scalar() or 0
         
-        result.append(OutlineNodeData.read_from_orm(node, children_count, events_count))
+        result.append(_outline_node_to_response(node, children_count, events_count))
     
     return result
 
@@ -300,7 +381,7 @@ def get_outline_nodes_impl(db: Session, outline_id: int, parent_id: Optional[int
 # Outline Tree Operations
 # ============================================================================
 
-def get_outline_tree_impl(db: Session, outline_id: int) -> Optional[OutlineTree]:
+def get_outline_tree_impl(db: Session, outline_id: int) -> Optional[Dict[str, Any]]:
     """获取完整的大纲树结构"""
     outline = db.query(Outline).filter(Outline.id == outline_id).first()
     if not outline:
@@ -332,7 +413,7 @@ def get_outline_tree_impl(db: Session, outline_id: int) -> Optional[OutlineTree]
                     "depth": node.depth,
                     "sort_index": node.sort_index,
                     "status": node.status,
-                    "events": [OutlineEventData.read_from_orm(e).__dict__ for e in events],
+                    "events": [_outline_event_to_dict(e) for e in events],
                     "children": build_tree(nodes, node.id),
                 }
                 result.append(node_dict)
@@ -341,9 +422,12 @@ def get_outline_tree_impl(db: Session, outline_id: int) -> Optional[OutlineTree]
     tree_nodes = build_tree(all_nodes)
     
     node_count = len(all_nodes)
-    outline_data = OutlineData.read_from_orm(outline, node_count)
+    outline_data = _outline_to_response(outline, node_count)
     
-    return OutlineTree(outline=outline_data, nodes=tree_nodes)
+    return {
+        "outline": outline_data.model_dump(),
+        "nodes": tree_nodes,
+    }
 
 
 # ============================================================================
@@ -359,7 +443,7 @@ def add_outline_event_impl(
     chronology_order: Optional[float] = None,
     narrative_order: Optional[int] = None,
     importance: str = "normal"
-) -> Optional[OutlineEventData]:
+) -> Optional[Dict[str, Any]]:
     """添加大纲事件"""
     node = db.query(OutlineNode).filter(OutlineNode.id == node_id).first()
     if not node:
@@ -378,16 +462,16 @@ def add_outline_event_impl(
     db.commit()
     db.refresh(event)
     
-    return OutlineEventData.read_from_orm(event)
+    return _outline_event_to_dict(event)
 
 
-def get_node_events_impl(db: Session, node_id: int) -> List[OutlineEventData]:
+def get_node_events_impl(db: Session, node_id: int) -> List[Dict[str, Any]]:
     """获取节点的事件列表"""
     events = db.query(OutlineEvent).filter(
         OutlineEvent.outline_node_id == node_id
     ).order_by(OutlineEvent.chronology_order).all()
     
-    return [OutlineEventData.read_from_orm(e) for e in events]
+    return [_outline_event_to_dict(e) for e in events]
 
 
 def update_outline_event_impl(
@@ -398,7 +482,7 @@ def update_outline_event_impl(
     event_type: Optional[str] = None,
     chronology_order: Optional[float] = None,
     importance: Optional[str] = None
-) -> Optional[OutlineEventData]:
+) -> Optional[Dict[str, Any]]:
     """更新大纲事件"""
     event = db.query(OutlineEvent).filter(OutlineEvent.id == event_id).first()
     if not event:
@@ -418,7 +502,7 @@ def update_outline_event_impl(
     db.commit()
     db.refresh(event)
     
-    return OutlineEventData.read_from_orm(event)
+    return _outline_event_to_dict(event)
 
 
 def delete_outline_event_impl(db: Session, event_id: int) -> bool:
@@ -454,11 +538,11 @@ def link_node_to_chapters_impl(
     return True
 
 
-def get_nodes_by_chapter_impl(db: Session, chapter_id: int) -> List[OutlineNodeData]:
+def get_nodes_by_chapter_impl(db: Session, chapter_id: int) -> List[OutlineNodeResponse]:
     """获取与章节关联的大纲节点"""
     nodes = db.query(OutlineNode).filter(
         (OutlineNode.chapter_start_id <= chapter_id) &
         ((OutlineNode.chapter_end_id >= chapter_id) | (OutlineNode.chapter_end_id.is_(None)))
     ).order_by(OutlineNode.path).all()
     
-    return [OutlineNodeData.read_from_orm(n) for n in nodes]
+    return [_outline_node_to_response(n) for n in nodes]

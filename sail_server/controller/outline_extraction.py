@@ -8,10 +8,8 @@
 
 from __future__ import annotations
 from litestar import Controller, post, get
-from litestar.dto import DataclassDTO
 from litestar.exceptions import NotFoundException, ClientException
 from typing import Generator, List, Optional, Dict, Any
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 import uuid
@@ -20,22 +18,19 @@ import logging
 import json
 import os
 
+from pydantic import BaseModel, Field
+
 logger = logging.getLogger(__name__)
 
-from sail_server.data.analysis import (
-    OutlineExtractionRequest,
-    OutlineExtractionConfig,
-    OutlineExtractionResult,
-    OutlineExtractionResponse,
-    ExtractedOutlineNode,
-    OutlineEvidence,
-    TextRangeSelection,
-)
+from sail_server.data.analysis import TextRangeSelection
 from sail_server.service.outline_extractor import (
     OutlineExtractor,
     ServiceExtractionResult,
     ExtractionProgress,
     ExtractionErrorInfo,
+    OutlineExtractionConfig,
+    ExtractedOutlineNode,
+    OutlineEvidence,
 )
 from sail_server.service.extraction_cache import (
     get_cache_manager, ExtractionPhase
@@ -45,112 +40,105 @@ from sail_server.db import get_db_session
 
 
 # ============================================================================
-# DTOs
+# Local Pydantic Models for API
 # ============================================================================
 
-class OutlineExtractionRequestDTO(DataclassDTO[OutlineExtractionRequest]):
-    """大纲提取请求 DTO"""
-    pass
+class OutlineExtractionRequest(BaseModel):
+    """大纲提取请求"""
+    edition_id: int = Field(description="版本ID")
+    range_selection: TextRangeSelection = Field(description="文本范围选择")
+    config: OutlineExtractionConfig = Field(description="提取配置")
+    work_title: str = Field(default="", description="作品标题")
+    known_characters: Optional[List[str]] = Field(default=None, description="已知人物列表")
 
 
-class OutlineExtractionResponseDTO(DataclassDTO[OutlineExtractionResponse]):
-    """大纲提取响应 DTO"""
-    pass
+class OutlineExtractionResult(BaseModel):
+    """大纲提取结果"""
+    nodes: List[ExtractedOutlineNode] = Field(default_factory=list, description="提取的节点")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
+    turning_points: List[Dict[str, Any]] = Field(default_factory=list, description="转折点")
 
 
-# ============================================================================
-# Response Models
-# ============================================================================
+class OutlineExtractionResponse(BaseModel):
+    """大纲提取响应"""
+    success: bool = Field(description="是否成功")
+    task_id: Optional[str] = Field(default=None, description="任务ID")
+    result: Optional[OutlineExtractionResult] = Field(default=None, description="提取结果")
+    message: str = Field(default="", description="消息")
+    error: Optional[str] = Field(default=None, description="错误信息")
 
-@dataclass
-class OutlineExtractionTaskResponse:
+
+class OutlineExtractionTaskResponse(BaseModel):
     """大纲提取任务响应"""
-    task_id: str
-    status: str
-    message: str
-    created_at: str
+    task_id: str = Field(description="任务ID")
+    status: str = Field(description="状态")
+    message: str = Field(description="消息")
+    created_at: str = Field(description="创建时间")
 
 
-@dataclass
-class OutlineExtractionProgressResponse:
+class OutlineExtractionProgressResponse(BaseModel):
     """大纲提取进度响应"""
-    task_id: str
-    current_step: str
-    progress_percent: int
-    message: str
-    chunk_index: Optional[int] = None
-    total_chunks: Optional[int] = None
-    batch_index: Optional[int] = None
-    total_batches: Optional[int] = None
-    
-    # 新增：重试和错误信息
-    is_retrying: bool = False
-    retry_attempt: int = 0
-    retry_delay: float = 0.0
-    rate_limit_info: Optional[Dict[str, Any]] = None
-    error_info: Optional[Dict[str, Any]] = None
+    task_id: str = Field(description="任务ID")
+    current_step: str = Field(description="当前步骤")
+    progress_percent: int = Field(description="进度百分比")
+    message: str = Field(description="消息")
+    chunk_index: Optional[int] = Field(default=None, description="当前块索引")
+    total_chunks: Optional[int] = Field(default=None, description="总块数")
+    batch_index: Optional[int] = Field(default=None, description="当前批次索引")
+    total_batches: Optional[int] = Field(default=None, description="总批次数")
+    is_retrying: bool = Field(default=False, description="是否重试中")
+    retry_attempt: int = Field(default=0, description="重试次数")
+    retry_delay: float = Field(default=0.0, description="重试延迟")
+    rate_limit_info: Optional[Dict[str, Any]] = Field(default=None, description="速率限制信息")
+    error_info: Optional[Dict[str, Any]] = Field(default=None, description="错误信息")
 
 
-@dataclass
-class OutlineExtractionDetailedStatus:
+class OutlineExtractionDetailedStatus(BaseModel):
     """大纲提取详细状态"""
-    task_id: str
-    status: str
-    phase: str
-    progress_percent: int
-    current_step: str
-    message: str
-    
-    # 批次信息
-    total_batches: int
-    completed_batches: List[int]
-    failed_batches: List[int]
-    current_batch: int
-    
-    # 结果统计
-    total_nodes: int
-    total_turning_points: int
-    
-    # 错误信息
-    last_error: Optional[str] = None
-    last_error_type: Optional[str] = None
-    retry_count: int = 0
-    
-    # 恢复信息
-    is_recovered: bool = False
-    recovered_from: Optional[str] = None
-    
-    # 时间戳
-    created_at: Optional[str] = None
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    task_id: str = Field(description="任务ID")
+    status: str = Field(description="状态")
+    phase: str = Field(description="阶段")
+    progress_percent: int = Field(description="进度百分比")
+    current_step: str = Field(description="当前步骤")
+    message: str = Field(description="消息")
+    total_batches: int = Field(description="总批次数")
+    completed_batches: List[int] = Field(default_factory=list, description="已完成批次")
+    failed_batches: List[int] = Field(default_factory=list, description="失败批次")
+    current_batch: int = Field(description="当前批次")
+    total_nodes: int = Field(description="总节点数")
+    total_turning_points: int = Field(description="总转折点数")
+    last_error: Optional[str] = Field(default=None, description="最后错误")
+    last_error_type: Optional[str] = Field(default=None, description="最后错误类型")
+    retry_count: int = Field(default=0, description="重试次数")
+    is_recovered: bool = Field(default=False, description="是否已恢复")
+    recovered_from: Optional[str] = Field(default=None, description="恢复来源")
+    created_at: Optional[str] = Field(default=None, description="创建时间")
+    started_at: Optional[str] = Field(default=None, description="开始时间")
+    completed_at: Optional[str] = Field(default=None, description="完成时间")
+    updated_at: Optional[str] = Field(default=None, description="更新时间")
 
 
-@dataclass
-class OutlinePreviewResponse:
+class OutlinePreviewResponse(BaseModel):
     """大纲预览响应"""
-    preview_nodes: List[Dict[str, Any]]
-    total_nodes: int
-    estimated_tokens: int
-    sample_evidence: List[str]
+    preview_nodes: List[Dict[str, Any]] = Field(default_factory=list, description="预览节点")
+    total_nodes: int = Field(description="总节点数")
+    estimated_tokens: int = Field(description="预估token数")
+    sample_evidence: List[str] = Field(default_factory=list, description="示例证据")
 
 
-@dataclass
-class ResumeTaskResponse:
+class ResumeTaskResponse(BaseModel):
     """恢复任务响应"""
-    success: bool
-    task_id: str
-    message: str
-    resumed_from_batch: int = 0
-    total_batches: int = 0
+    success: bool = Field(description="是否成功")
+    task_id: str = Field(description="任务ID")
+    message: str = Field(description="消息")
+    resumed_from_batch: int = Field(default=0, description="恢复批次")
+    total_batches: int = Field(default=0, description="总批次数")
 
 
-@dataclass
-class CheckpointListResponse:
+class CheckpointListResponse(BaseModel):
     """检查点列表响应"""
-    checkpoints: List[Dict[str, Any]]
-    total: int
+    checkpoints: List[Dict[str, Any]] = Field(default_factory=list, description="检查点列表")
+    total: int = Field(description="总数")
 
 
 # ============================================================================
@@ -420,7 +408,7 @@ class OutlineExtractionController(Controller):
     """
     path = "/outline-extraction"
     
-    @post("/", dto=OutlineExtractionRequestDTO)
+    @post("/")
     async def create_extraction_task(
         self,
         data: OutlineExtractionRequest,
@@ -833,11 +821,8 @@ class OutlineExtractionController(Controller):
             extractor = OutlineExtractor(db)
             
             # 执行提取（预览模式限制节点数）
-            preview_config = OutlineExtractionConfig(
-                granularity=data.config.granularity,
-                outline_type=data.config.outline_type,
-                max_nodes=10,  # 预览模式限制节点数
-            )
+            from dataclasses import replace
+            preview_config = replace(data.config, max_nodes=10)
             result = await extractor.extract(
                 edition_id=data.edition_id,
                 range_selection=data.range_selection,
@@ -1152,6 +1137,6 @@ class OutlineExtractionController(Controller):
 
 __all__ = [
     "OutlineExtractionController",
-    "OutlineExtractionRequestDTO",
-    "OutlineExtractionResponseDTO",
+    "OutlineExtractionRequest",
+    "OutlineExtractionResponse",
 ]

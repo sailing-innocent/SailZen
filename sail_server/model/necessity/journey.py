@@ -8,13 +8,18 @@
 
 from sail_server.data.necessity import (
     Journey,
-    JourneyData,
     JourneyItem,
-    JourneyItemData,
     JourneyStatus,
     JourneyItemStatus,
     Inventory,
     Residence,
+)
+from sail_server.application.dto.necessity import (
+    JourneyCreateRequest,
+    JourneyUpdateRequest,
+    JourneyResponse,
+    JourneyItemCreateRequest,
+    JourneyItemResponse,
 )
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -40,77 +45,13 @@ __all__ = [
 ]
 
 
-def _timestamp_to_datetime(ts: Optional[float]) -> Optional[datetime]:
-    """Convert timestamp to datetime"""
-    if ts is None or ts <= 0:
-        return None
-    try:
-        return datetime.fromtimestamp(ts)
-    except (ValueError, OSError):
-        return None
-
-
-def _datetime_to_timestamp(dt: Optional[datetime]) -> Optional[float]:
-    """Convert datetime to timestamp"""
-    if dt is None:
-        return None
-    try:
-        return dt.timestamp()
-    except (ValueError, OSError):
-        return None
-
-
-def journey_from_data(data: JourneyData) -> Journey:
-    """Convert JourneyData to Journey ORM object"""
-    return Journey(
-        from_residence_id=data.from_residence_id,
-        to_residence_id=data.to_residence_id,
-        depart_time=_timestamp_to_datetime(data.depart_time),
-        arrive_time=_timestamp_to_datetime(data.arrive_time),
-        status=data.status,
-        transport_mode=data.transport_mode,
-        notes=data.notes,
-    )
-
-
-def data_from_journey(
-    journey: Journey,
-    include_items: bool = False,
-) -> JourneyData:
-    """Convert Journey ORM object to JourneyData"""
-    data = JourneyData(
-        id=journey.id,
-        from_residence_id=journey.from_residence_id,
-        to_residence_id=journey.to_residence_id,
-        depart_time=_datetime_to_timestamp(journey.depart_time),
-        arrive_time=_datetime_to_timestamp(journey.arrive_time),
-        status=journey.status,
-        transport_mode=journey.transport_mode or "",
-        notes=journey.notes or "",
-        ctime=journey.ctime,
-        mtime=journey.mtime,
-    )
-    
-    # Add residence names
-    if journey.from_residence:
-        data.from_residence_name = journey.from_residence.name
-    if journey.to_residence:
-        data.to_residence_name = journey.to_residence.name
-    
-    # Add journey items if requested
-    if include_items and journey.items:
-        data.items = [data_from_journey_item(item) for item in journey.items]
-    
-    return data
-
-
-def data_from_journey_item(journey_item: JourneyItem) -> JourneyItemData:
-    """Convert JourneyItem ORM object to JourneyItemData"""
-    data = JourneyItemData(
+def _journey_item_to_response(journey_item: JourneyItem) -> JourneyItemResponse:
+    """Convert JourneyItem ORM object to JourneyItemResponse"""
+    return JourneyItemResponse(
         id=journey_item.id,
         journey_id=journey_item.journey_id,
         item_id=journey_item.item_id,
-        quantity=str(journey_item.quantity or 1),
+        quantity=journey_item.quantity or Decimal("1"),
         is_return=journey_item.is_return or False,
         from_container_id=journey_item.from_container_id,
         to_container_id=journey_item.to_container_id,
@@ -118,33 +59,62 @@ def data_from_journey_item(journey_item: JourneyItem) -> JourneyItemData:
         notes=journey_item.notes or "",
         ctime=journey_item.ctime,
         mtime=journey_item.mtime,
+        item_name=journey_item.item.name if journey_item.item else "",
+    )
+
+
+def _journey_to_response(
+    journey: Journey,
+    include_items: bool = False,
+) -> JourneyResponse:
+    """Convert Journey ORM object to JourneyResponse"""
+    response = JourneyResponse(
+        id=journey.id,
+        from_residence_id=journey.from_residence_id,
+        to_residence_id=journey.to_residence_id,
+        depart_time=journey.depart_time,
+        arrive_time=journey.arrive_time,
+        status=journey.status,
+        transport_mode=journey.transport_mode or "",
+        notes=journey.notes or "",
+        ctime=journey.ctime,
+        mtime=journey.mtime,
+        from_residence_name=journey.from_residence.name if journey.from_residence else "",
+        to_residence_name=journey.to_residence.name if journey.to_residence else "",
     )
     
-    if journey_item.item:
-        data.item_name = journey_item.item.name
-    
-    return data
+    # Note: items are not part of JourneyResponse, but can be fetched separately
+    # or returned as part of a different response structure
+    return response
 
 
-def create_journey_impl(db: Session, data: JourneyData) -> JourneyData:
+def create_journey_impl(db: Session, data: JourneyCreateRequest) -> JourneyResponse:
     """Create a new journey"""
-    journey = journey_from_data(data)
+    journey = Journey(
+        from_residence_id=data.from_residence_id,
+        to_residence_id=data.to_residence_id,
+        depart_time=data.depart_time,
+        arrive_time=data.arrive_time,
+        status=data.status,
+        transport_mode=data.transport_mode,
+        notes=data.notes,
+    )
     db.add(journey)
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey)
+    return _journey_to_response(journey)
 
 
 def read_journey_impl(
     db: Session,
     journey_id: int,
     include_items: bool = True,
-) -> Optional[JourneyData]:
+) -> Optional[JourneyResponse]:
     """Read a journey by ID"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
         return None
-    return data_from_journey(journey, include_items=include_items)
+    return _journey_to_response(journey, include_items=include_items)
 
 
 def read_journeys_impl(
@@ -154,7 +124,7 @@ def read_journeys_impl(
     status: Optional[int] = None,
     from_residence_id: Optional[int] = None,
     to_residence_id: Optional[int] = None,
-) -> List[JourneyData]:
+) -> List[JourneyResponse]:
     """Read journeys with optional filtering"""
     q = db.query(Journey)
     
@@ -173,31 +143,34 @@ def read_journeys_impl(
         q = q.limit(limit)
     
     journeys = q.all()
-    return [data_from_journey(j) for j in journeys]
+    return [_journey_to_response(j) for j in journeys]
 
 
 def update_journey_impl(
     db: Session,
     journey_id: int,
-    data: JourneyData,
-) -> Optional[JourneyData]:
+    data: JourneyUpdateRequest,
+) -> Optional[JourneyResponse]:
     """Update a journey"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
         return None
     
-    journey.from_residence_id = data.from_residence_id
-    journey.to_residence_id = data.to_residence_id
-    journey.depart_time = _timestamp_to_datetime(data.depart_time)
-    journey.arrive_time = _timestamp_to_datetime(data.arrive_time)
-    journey.status = data.status
-    journey.transport_mode = data.transport_mode
-    journey.notes = data.notes
+    if data.depart_time is not None:
+        journey.depart_time = data.depart_time
+    if data.arrive_time is not None:
+        journey.arrive_time = data.arrive_time
+    if data.status is not None:
+        journey.status = data.status
+    if data.transport_mode is not None:
+        journey.transport_mode = data.transport_mode
+    if data.notes is not None:
+        journey.notes = data.notes
     journey.mtime = datetime.now()
     
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey)
+    return _journey_to_response(journey)
 
 
 def delete_journey_impl(db: Session, journey_id: int) -> Optional[dict]:
@@ -216,7 +189,7 @@ def _get_portable_residence(db: Session) -> Optional[Residence]:
     return db.query(Residence).filter(Residence.is_portable == True).first()
 
 
-def start_journey_impl(db: Session, journey_id: int) -> JourneyData:
+def start_journey_impl(db: Session, journey_id: int) -> JourneyResponse:
     """Start a journey - move items to portable residence"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
@@ -268,10 +241,10 @@ def start_journey_impl(db: Session, journey_id: int) -> JourneyData:
     
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
-def complete_journey_impl(db: Session, journey_id: int) -> JourneyData:
+def complete_journey_impl(db: Session, journey_id: int) -> JourneyResponse:
     """Complete a journey - move items to destination"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
@@ -324,10 +297,10 @@ def complete_journey_impl(db: Session, journey_id: int) -> JourneyData:
     
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
-def cancel_journey_impl(db: Session, journey_id: int) -> JourneyData:
+def cancel_journey_impl(db: Session, journey_id: int) -> JourneyResponse:
     """Cancel a journey"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
@@ -371,14 +344,14 @@ def cancel_journey_impl(db: Session, journey_id: int) -> JourneyData:
     
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
 def add_journey_item_impl(
     db: Session,
     journey_id: int,
-    data: JourneyItemData,
-) -> JourneyData:
+    data: JourneyItemCreateRequest,
+) -> JourneyResponse:
     """Add an item to a journey"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
@@ -390,7 +363,7 @@ def add_journey_item_impl(
     journey_item = JourneyItem(
         journey_id=journey_id,
         item_id=data.item_id,
-        quantity=Decimal(data.quantity),
+        quantity=data.quantity,
         is_return=data.is_return,
         from_container_id=data.from_container_id,
         to_container_id=data.to_container_id,
@@ -400,14 +373,14 @@ def add_journey_item_impl(
     db.add(journey_item)
     db.commit()
     db.refresh(journey)
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
 def remove_journey_item_impl(
     db: Session,
     journey_id: int,
     item_id: int,
-) -> JourneyData:
+) -> JourneyResponse:
     """Remove an item from a journey"""
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
     if journey is None:
@@ -426,14 +399,14 @@ def remove_journey_item_impl(
         db.commit()
     
     db.refresh(journey)
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
 def pack_journey_item_impl(
     db: Session,
     journey_id: int,
     item_id: int,
-) -> JourneyData:
+) -> JourneyResponse:
     """Mark a journey item as packed"""
     journey_item = db.query(JourneyItem).filter(
         JourneyItem.journey_id == journey_id,
@@ -449,14 +422,14 @@ def pack_journey_item_impl(
     db.commit()
     
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)
 
 
 def unpack_journey_item_impl(
     db: Session,
     journey_id: int,
     item_id: int,
-) -> JourneyData:
+) -> JourneyResponse:
     """Mark a journey item as unpacked"""
     journey_item = db.query(JourneyItem).filter(
         JourneyItem.journey_id == journey_id,
@@ -472,4 +445,4 @@ def unpack_journey_item_impl(
     db.commit()
     
     journey = db.query(Journey).filter(Journey.id == journey_id).first()
-    return data_from_journey(journey, include_items=True)
+    return _journey_to_response(journey, include_items=True)

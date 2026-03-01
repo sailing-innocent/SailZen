@@ -8,7 +8,11 @@
 
 from sail_server.data.necessity import (
     Container,
-    ContainerData,
+)
+from sail_server.application.dto.necessity import (
+    ContainerCreateRequest,
+    ContainerUpdateRequest,
+    ContainerResponse,
 )
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -28,21 +32,9 @@ __all__ = [
 ]
 
 
-def container_from_data(data: ContainerData) -> Container:
-    """Convert ContainerData to Container ORM object"""
-    return Container(
-        residence_id=data.residence_id,
-        parent_id=data.parent_id,
-        name=data.name,
-        type=data.type,
-        description=data.description,
-        capacity=data.capacity,
-    )
-
-
-def data_from_container(container: Container) -> ContainerData:
-    """Convert Container ORM object to ContainerData"""
-    return ContainerData(
+def _container_to_response(container: Container) -> ContainerResponse:
+    """Convert Container ORM object to ContainerResponse"""
+    return ContainerResponse(
         id=container.id,
         residence_id=container.residence_id,
         parent_id=container.parent_id,
@@ -55,28 +47,35 @@ def data_from_container(container: Container) -> ContainerData:
     )
 
 
-def create_container_impl(db: Session, data: ContainerData) -> ContainerData:
+def create_container_impl(db: Session, data: ContainerCreateRequest) -> ContainerResponse:
     """Create a new container"""
-    container = container_from_data(data)
+    container = Container(
+        residence_id=data.residence_id,
+        parent_id=data.parent_id,
+        name=data.name,
+        type=data.type,
+        description=data.description,
+        capacity=data.capacity,
+    )
     db.add(container)
     db.commit()
     db.refresh(container)
-    return data_from_container(container)
+    return _container_to_response(container)
 
 
-def read_container_impl(db: Session, container_id: int) -> Optional[ContainerData]:
+def read_container_impl(db: Session, container_id: int) -> Optional[ContainerResponse]:
     """Read a container by ID"""
     container = db.query(Container).filter(Container.id == container_id).first()
     if container is None:
         return None
-    return data_from_container(container)
+    return _container_to_response(container)
 
 
 def read_containers_impl(
     db: Session,
     skip: int = 0,
     limit: int = -1,
-) -> List[ContainerData]:
+) -> List[ContainerResponse]:
     """Read all containers"""
     q = db.query(Container)
     
@@ -86,39 +85,41 @@ def read_containers_impl(
         q = q.limit(limit)
     
     containers = q.all()
-    return [data_from_container(c) for c in containers]
+    return [_container_to_response(c) for c in containers]
 
 
 def read_containers_by_residence_impl(
     db: Session,
     residence_id: int,
-) -> List[ContainerData]:
+) -> List[ContainerResponse]:
     """Read all containers in a residence"""
     containers = db.query(Container).filter(Container.residence_id == residence_id).all()
-    return [data_from_container(c) for c in containers]
+    return [_container_to_response(c) for c in containers]
 
 
 def update_container_impl(
     db: Session,
     container_id: int,
-    data: ContainerData,
-) -> Optional[ContainerData]:
+    data: ContainerUpdateRequest,
+) -> Optional[ContainerResponse]:
     """Update a container"""
     container = db.query(Container).filter(Container.id == container_id).first()
     if container is None:
         return None
     
-    container.residence_id = data.residence_id
-    container.parent_id = data.parent_id
-    container.name = data.name
-    container.type = data.type
-    container.description = data.description
-    container.capacity = data.capacity
+    if data.name is not None:
+        container.name = data.name
+    if data.type is not None:
+        container.type = data.type
+    if data.description is not None:
+        container.description = data.description
+    if data.capacity is not None:
+        container.capacity = data.capacity
     container.mtime = datetime.now()
     
     db.commit()
     db.refresh(container)
-    return data_from_container(container)
+    return _container_to_response(container)
 
 
 def delete_container_impl(db: Session, container_id: int) -> Optional[dict]:

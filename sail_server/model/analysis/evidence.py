@@ -9,11 +9,94 @@ from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from sail_server.data.analysis import (
-    TextEvidenceData, AnalysisTaskData, AnalysisResultData,
+from sail_server.infrastructure.orm.analysis import (
+    TextEvidence,
+    AnalysisTask,
+    AnalysisResult,
 )
-from sail_server.data.analysis import TextEvidence as TextEvidenceORM
 from sail_server.data.text import DocumentNode
+
+# 使用 Pydantic DTOs
+from sail_server.application.dto.analysis import (
+    TextEvidenceResponse,
+    AnalysisTaskResponse,
+)
+
+
+# ============================================================================
+# Helper Functions for ORM to DTO Conversion
+# ============================================================================
+
+def _text_evidence_to_response(evidence: TextEvidence) -> TextEvidenceResponse:
+    """将 TextEvidence ORM 对象转换为 TextEvidenceResponse DTO"""
+    return TextEvidenceResponse(
+        id=str(evidence.id),
+        edition_id=evidence.edition_id,
+        node_id=evidence.node_id,
+        evidence_type=evidence.evidence_type or "explicit",
+        start_offset=evidence.start_char or 0,
+        end_offset=evidence.end_char or 0,
+        selected_text=evidence.text_snippet or "",
+        content=evidence.text_snippet or "",
+        target_type=evidence.target_type,
+        target_id=str(evidence.target_id) if evidence.target_id else None,
+        context=evidence.context_before,
+        created_at=str(evidence.created_at) if evidence.created_at else "",
+    )
+
+
+def _analysis_task_to_response(
+    task: AnalysisTask,
+    result_count: int = 0
+) -> AnalysisTaskResponse:
+    """将 AnalysisTask dataclass 对象转换为 AnalysisTaskResponse DTO"""
+    from sail_server.application.dto.analysis import AnalysisTaskStatus, AnalysisTaskType
+    
+    # 将字符串状态转换为枚举
+    try:
+        status = AnalysisTaskStatus(task.status)
+    except ValueError:
+        status = AnalysisTaskStatus.PENDING
+    
+    # 将字符串任务类型转换为枚举
+    try:
+        task_type = AnalysisTaskType(task.task_type)
+    except ValueError:
+        task_type = AnalysisTaskType.CUSTOM_ANALYSIS
+    
+    return AnalysisTaskResponse(
+        id=task.id or 0,
+        edition_id=task.edition_id,
+        task_type=task_type,
+        priority=task.priority,
+        status=status,
+        progress=0,  # TODO: 计算进度
+        current_step=None,
+        result_summary=task.result_summary,
+        error_message=task.error_message,
+        created_at=task.created_at or __import__('datetime').datetime.utcnow(),
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+    )
+
+
+def _analysis_result_to_dict(result: AnalysisResult) -> Dict[str, Any]:
+    """将 AnalysisResult dataclass 对象转换为字典"""
+    return {
+        "id": result.id,
+        "task_id": result.task_id,
+        "result_type": result.result_type,
+        "result_data": result.result_data,
+        "confidence": result.confidence,
+        "review_status": result.review_status,
+        "reviewer": result.reviewer,
+        "review_notes": result.review_notes,
+        "reviewed_at": result.reviewed_at,
+        "applied": result.applied,
+        "applied_at": result.applied_at,
+        "created_at": result.created_at,
+        "updated_at": result.updated_at,
+    }
 
 
 # ============================================================================
@@ -34,9 +117,9 @@ def add_text_evidence_impl(
     evidence_type: str = "explicit",
     confidence: Optional[float] = None,
     source: str = "manual"
-) -> TextEvidenceData:
+) -> TextEvidenceResponse:
     """添加文本证据"""
-    evidence = TextEvidenceORM(
+    evidence = TextEvidence(
         edition_id=edition_id,
         node_id=node_id,
         target_type=target_type,
@@ -54,35 +137,35 @@ def add_text_evidence_impl(
     db.commit()
     db.refresh(evidence)
     
-    return TextEvidenceData.read_from_orm(evidence)
+    return _text_evidence_to_response(evidence)
 
 
 def get_evidence_for_target_impl(
     db: Session, 
     target_type: str, 
     target_id: int
-) -> List[TextEvidenceData]:
+) -> List[TextEvidenceResponse]:
     """获取目标的所有证据"""
-    evidences = db.query(TextEvidenceORM).filter(
-        TextEvidenceORM.target_type == target_type,
-        TextEvidenceORM.target_id == target_id
-    ).order_by(TextEvidenceORM.node_id, TextEvidenceORM.start_char).all()
+    evidences = db.query(TextEvidence).filter(
+        TextEvidence.target_type == target_type,
+        TextEvidence.target_id == target_id
+    ).order_by(TextEvidence.node_id, TextEvidence.start_char).all()
     
-    return [TextEvidenceData.read_from_orm(e) for e in evidences]
+    return [_text_evidence_to_response(e) for e in evidences]
 
 
-def get_evidence_for_node_impl(db: Session, node_id: int) -> List[TextEvidenceData]:
+def get_evidence_for_node_impl(db: Session, node_id: int) -> List[TextEvidenceResponse]:
     """获取章节的所有证据"""
-    evidences = db.query(TextEvidenceORM).filter(
-        TextEvidenceORM.node_id == node_id
-    ).order_by(TextEvidenceORM.start_char).all()
+    evidences = db.query(TextEvidence).filter(
+        TextEvidence.node_id == node_id
+    ).order_by(TextEvidence.start_char).all()
     
-    return [TextEvidenceData.read_from_orm(e) for e in evidences]
+    return [_text_evidence_to_response(e) for e in evidences]
 
 
 def delete_text_evidence_impl(db: Session, evidence_id: int) -> bool:
     """删除文本证据"""
-    evidence = db.query(TextEvidenceORM).filter(TextEvidenceORM.id == evidence_id).first()
+    evidence = db.query(TextEvidence).filter(TextEvidence.id == evidence_id).first()
     if not evidence:
         return False
     
@@ -93,9 +176,9 @@ def delete_text_evidence_impl(db: Session, evidence_id: int) -> bool:
 
 def get_chapter_annotations_impl(db: Session, node_id: int) -> Dict[str, List[Dict[str, Any]]]:
     """获取章节的所有标注（按类型分组）"""
-    evidences = db.query(TextEvidenceORM).filter(
-        TextEvidenceORM.node_id == node_id
-    ).order_by(TextEvidenceORM.start_char).all()
+    evidences = db.query(TextEvidence).filter(
+        TextEvidence.node_id == node_id
+    ).order_by(TextEvidence.start_char).all()
     
     result: Dict[str, List[Dict[str, Any]]] = {}
     
@@ -120,17 +203,36 @@ def get_chapter_annotations_impl(db: Session, node_id: int) -> Dict[str, List[Di
 # Analysis Task Operations
 # ============================================================================
 
-def create_analysis_task_impl(db: Session, data: AnalysisTaskData) -> AnalysisTaskData:
+def create_analysis_task_impl(
+    db: Session, 
+    edition_id: int,
+    task_type: str,
+    priority: int = 5,
+    parameters: Optional[Dict[str, Any]] = None,
+    llm_provider: Optional[str] = None,
+    llm_model: Optional[str] = None,
+) -> AnalysisTaskResponse:
     """创建分析任务"""
-    task = data.create_orm()
+    from datetime import datetime
+    
+    task = AnalysisTask(
+        edition_id=edition_id,
+        task_type=task_type,
+        status="pending",
+        priority=priority,
+        parameters=parameters or {},
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        created_at=datetime.utcnow(),
+    )
     db.add(task)
     db.commit()
     db.refresh(task)
     
-    return AnalysisTaskData.read_from_orm(task)
+    return _analysis_task_to_response(task)
 
 
-def get_analysis_task_impl(db: Session, task_id: int) -> Optional[AnalysisTaskData]:
+def get_analysis_task_impl(db: Session, task_id: int) -> Optional[AnalysisTaskResponse]:
     """获取分析任务"""
     task = db.query(AnalysisTask).filter(AnalysisTask.id == task_id).first()
     if not task:
@@ -140,7 +242,7 @@ def get_analysis_task_impl(db: Session, task_id: int) -> Optional[AnalysisTaskDa
         AnalysisResult.task_id == task_id
     ).scalar() or 0
     
-    return AnalysisTaskData.read_from_orm(task, result_count)
+    return _analysis_task_to_response(task, result_count)
 
 
 def get_tasks_by_edition_impl(
@@ -150,7 +252,7 @@ def get_tasks_by_edition_impl(
     task_type: Optional[str] = None,
     skip: int = 0,
     limit: int = 50
-) -> List[AnalysisTaskData]:
+) -> List[AnalysisTaskResponse]:
     """获取版本的分析任务列表"""
     query = db.query(AnalysisTask).filter(AnalysisTask.edition_id == edition_id)
     
@@ -167,18 +269,18 @@ def get_tasks_by_edition_impl(
         result_count = db.query(func.count(AnalysisResult.id)).filter(
             AnalysisResult.task_id == task.id
         ).scalar() or 0
-        result.append(AnalysisTaskData.read_from_orm(task, result_count))
+        result.append(_analysis_task_to_response(task, result_count))
     
     return result
 
 
-def get_pending_tasks_impl(db: Session, limit: int = 10) -> List[AnalysisTaskData]:
+def get_pending_tasks_impl(db: Session, limit: int = 10) -> List[AnalysisTaskResponse]:
     """获取待执行的任务"""
     tasks = db.query(AnalysisTask).filter(
         AnalysisTask.status == 'pending'
     ).order_by(AnalysisTask.priority.desc(), AnalysisTask.created_at).limit(limit).all()
     
-    return [AnalysisTaskData.read_from_orm(task) for task in tasks]
+    return [_analysis_task_to_response(task) for task in tasks]
 
 
 def update_task_status_impl(
@@ -234,7 +336,7 @@ def save_analysis_results_impl(
     db: Session, 
     task_id: int, 
     results: List[Dict[str, Any]]
-) -> List[AnalysisResultData]:
+) -> List[Dict[str, Any]]:
     """保存分析结果"""
     saved = []
     
@@ -247,7 +349,7 @@ def save_analysis_results_impl(
         )
         db.add(result)
         db.flush()
-        saved.append(AnalysisResultData.read_from_orm(result))
+        saved.append(_analysis_result_to_dict(result))
     
     db.commit()
     return saved
@@ -257,7 +359,7 @@ def get_task_results_impl(
     db: Session, 
     task_id: int,
     review_status: Optional[str] = None
-) -> List[AnalysisResultData]:
+) -> List[Dict[str, Any]]:
     """获取任务的分析结果"""
     query = db.query(AnalysisResult).filter(AnalysisResult.task_id == task_id)
     
@@ -266,7 +368,7 @@ def get_task_results_impl(
     
     results = query.order_by(AnalysisResult.created_at).all()
     
-    return [AnalysisResultData.read_from_orm(r) for r in results]
+    return [_analysis_result_to_dict(r) for r in results]
 
 
 def approve_result_impl(db: Session, result_id: int, reviewer: str) -> bool:
@@ -284,7 +386,12 @@ def approve_result_impl(db: Session, result_id: int, reviewer: str) -> bool:
     return True
 
 
-def reject_result_impl(db: Session, result_id: int, reviewer: str, notes: Optional[str] = None) -> bool:
+def reject_result_impl(
+    db: Session, 
+    result_id: int, 
+    reviewer: str, 
+    notes: Optional[str] = None
+) -> bool:
     """拒绝分析结果"""
     result = db.query(AnalysisResult).filter(AnalysisResult.id == result_id).first()
     if not result:
@@ -305,7 +412,7 @@ def modify_result_impl(
     result_id: int, 
     modified_data: Dict[str, Any],
     reviewer: str
-) -> Optional[AnalysisResultData]:
+) -> Optional[Dict[str, Any]]:
     """修改并应用分析结果"""
     result = db.query(AnalysisResult).filter(AnalysisResult.id == result_id).first()
     if not result:
@@ -320,7 +427,7 @@ def modify_result_impl(
     db.commit()
     db.refresh(result)
     
-    return AnalysisResultData.read_from_orm(result)
+    return _analysis_result_to_dict(result)
 
 
 def apply_result_impl(db: Session, result_id: int) -> bool:
@@ -397,11 +504,11 @@ def get_analysis_stats_impl(db: Session, edition_id: int) -> Dict[str, Any]:
     
     # 证据统计
     evidence_stats = db.query(
-        TextEvidenceORM.target_type,
-        func.count(TextEvidenceORM.id)
+        TextEvidence.target_type,
+        func.count(TextEvidence.id)
     ).filter(
-        TextEvidenceORM.edition_id == edition_id
-    ).group_by(TextEvidenceORM.target_type).all()
+        TextEvidence.edition_id == edition_id
+    ).group_by(TextEvidence.target_type).all()
     
     return {
         "tasks": {s[0]: s[1] for s in task_stats},

@@ -9,14 +9,10 @@
 """
 生活服务模块数据层
 
-ORM 模型已从 infrastructure.orm.life 迁移
-DTO 模型已从 application.dto.life 迁移
-
-此文件保留向后兼容的导出和遗留的 dataclass DTOs
-（因为 controller 层仍使用 Litestar DataclassDTO）
+此模块仅用于重新导出 ORM 模型和 Pydantic DTOs：
+- ORM 模型来自 infrastructure.orm.life
+- Pydantic DTOs 来自 application.dto.life
 """
-
-from dataclasses import dataclass, field
 
 # 从 infrastructure.orm 导入 ORM 模型
 from sail_server.infrastructure.orm.life import (
@@ -32,24 +28,6 @@ from sail_server.application.dto.life import (
     ServiceAccountListResponse,
 )
 
-
-# ============================================================================
-# Legacy Dataclass DTOs (保留以兼容现有 controller)
-# TODO: 迁移到 Pydantic DTOs 后删除
-# ============================================================================
-
-@dataclass
-class ServiceAccountData:
-    """服务账户数据 (legacy dataclass)"""
-    id: int = field(default=None)
-    name: str = field(default="")
-    entry: str = field(default="")
-    username: str = field(default="")
-    password: str = field(default="")
-    desp: str = field(default="")
-    expire_time: int = field(default=0)
-
-
 __all__ = [
     # ORM Models
     "ServiceAccount",
@@ -59,6 +37,4 @@ __all__ = [
     "ServiceAccountUpdateRequest",
     "ServiceAccountResponse",
     "ServiceAccountListResponse",
-    # Legacy Dataclass DTOs
-    "ServiceAccountData",
 ]

@@ -8,25 +8,20 @@
 
 import logging
 from typing import Optional, List, Dict, Any
-from dataclasses import asdict
 from datetime import datetime
 
 from litestar import Controller, post, get
 from litestar.di import Provide
 from litestar.exceptions import HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
-from sail_server.data.analysis import (
-    TextRangeSelection,
-    SettingExtractionConfig,
-    SettingData,
-    SettingAttributeData,
-    SettingRelationData,
-)
+from sail_server.data.analysis import TextRangeSelection
 from sail_server.service.setting_extractor import (
     SettingExtractor,
     SettingExtractionResult as ServiceExtractionResult,
     ExtractedSetting,
+    SettingExtractionConfig,
 )
 from sail_server.model.analysis.setting import (
     Setting,
@@ -35,6 +30,43 @@ from sail_server.model.analysis.setting import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Local Pydantic Models for API
+# ============================================================================
+
+class SettingAttributeData(BaseModel):
+    """设定属性数据"""
+    key: str = Field(description="键")
+    value: str = Field(description="值")
+
+
+class SettingRelationData(BaseModel):
+    """设定关系数据"""
+    target_name: str = Field(description="目标名称")
+    relation_type: str = Field(description="关系类型")
+    description: Optional[str] = Field(default=None, description="描述")
+
+
+class ExtractedSettingItem(BaseModel):
+    """提取的设定项（API用）"""
+    canonical_name: str = Field(description="规范名称")
+    setting_type: str = Field(description="设定类型")
+    category: Optional[str] = Field(default=None, description="分类")
+    importance: str = Field(default="minor", description="重要性")
+    first_appearance: Optional[Dict[str, str]] = Field(default=None, description="首次出现")
+    description: str = Field(default="", description="描述")
+    attributes: List[Dict[str, str]] = Field(default_factory=list, description="属性")
+    relations: List[Dict[str, str]] = Field(default_factory=list, description="关系")
+    key_scenes: List[str] = Field(default_factory=list, description="关键场景")
+    mention_count: int = Field(default=0, description="提及次数")
+
+
+class SettingExtractionResult(BaseModel):
+    """设定提取结果"""
+    settings: List[ExtractedSettingItem] = Field(default_factory=list, description="设定列表")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
 
 
 # ============================================================================
@@ -133,7 +165,7 @@ class SettingExtractionController(Controller):
             return {
                 "success": True,
                 "task_id": task_id,
-                "result": response_result,
+                "result": response_result.model_dump(),
                 "message": f"成功提取 {len(result.settings)} 个设定",
             }
             
@@ -485,24 +517,24 @@ class SettingExtractionController(Controller):
     def _convert_to_response_result(
         self,
         service_result: ServiceExtractionResult,
-    ) -> Dict[str, Any]:
+    ) -> SettingExtractionResult:
         """转换服务层结果到响应格式"""
         settings = []
         for setting in service_result.settings:
-            settings.append({
-                "canonical_name": setting.canonical_name,
-                "setting_type": setting.setting_type,
-                "category": setting.category,
-                "importance": setting.importance,
-                "first_appearance": setting.first_appearance,
-                "description": setting.description,
-                "attributes": setting.attributes,
-                "relations": setting.relations,
-                "key_scenes": setting.key_scenes,
-                "mention_count": setting.mention_count,
-            })
+            settings.append(ExtractedSettingItem(
+                canonical_name=setting.canonical_name,
+                setting_type=setting.setting_type,
+                category=setting.category,
+                importance=setting.importance,
+                first_appearance=setting.first_appearance,
+                description=setting.description,
+                attributes=setting.attributes,
+                relations=setting.relations,
+                key_scenes=setting.key_scenes,
+                mention_count=setting.mention_count,
+            ))
         
-        return {
-            "settings": settings,
-            "metadata": service_result.metadata,
-        }
+        return SettingExtractionResult(
+            settings=settings,
+            metadata=service_result.metadata,
+        )

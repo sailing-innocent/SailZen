@@ -6,12 +6,14 @@
 # @version 1.0
 # ---------------------------------
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
 
-from sail_server.data.history import HistoryEventData
+from sail_server.application.dto.history import (
+    HistoryEventCreateRequest,
+    HistoryEventUpdateRequest,
+    HistoryEventResponse,
+)
 from sail_server.model.history import (
     create_event_impl,
     get_event_impl,
@@ -24,52 +26,10 @@ from sail_server.model.history import (
 )
 from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
-from datetime import datetime
-
-
-class HistoryEventDataWriteDTO(DataclassDTO[HistoryEventData]):
-    """创建历史事件时使用的DTO，只需要title和description"""
-    config = DTOConfig(
-        include={
-            "title",
-            "description",
-            "rar_tags",
-            "tags",
-            "start_time",
-            "end_time",
-            "related_events",
-            "parent_event",
-            "details",
-        },
-    )
-
-
-class HistoryEventDataUpdateDTO(DataclassDTO[HistoryEventData]):
-    """更新历史事件时使用的DTO"""
-    config = DTOConfig(
-        include={
-            "title",
-            "description",
-            "rar_tags",
-            "tags",
-            "start_time",
-            "end_time",
-            "related_events",
-            "parent_event",
-            "details",
-        },
-    )
-
-
-class HistoryEventDataReadDTO(DataclassDTO[HistoryEventData]):
-    """读取历史事件时使用的DTO"""
-    pass
 
 
 class HistoryEventController(Controller):
     """历史事件控制器"""
-    dto = HistoryEventDataWriteDTO
-    return_dto = HistoryEventDataReadDTO
     path = "/event"
 
     @get("")
@@ -81,7 +41,7 @@ class HistoryEventController(Controller):
         limit: int = 10,
         parent_id: Optional[int] = None,
         tags: Optional[str] = None,  # 逗号分隔的标签字符串
-    ) -> List[HistoryEventData]:
+    ) -> List[HistoryEventResponse]:
         """
         获取历史事件列表
         
@@ -116,7 +76,7 @@ class HistoryEventController(Controller):
         keyword: str,
         skip: int = 0,
         limit: int = 10,
-    ) -> List[HistoryEventData]:
+    ) -> List[HistoryEventResponse]:
         """
         通过关键词搜索历史事件
         
@@ -136,7 +96,7 @@ class HistoryEventController(Controller):
         event_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> HistoryEventData:
+    ) -> HistoryEventResponse:
         """
         根据ID获取单个历史事件
         """
@@ -153,7 +113,7 @@ class HistoryEventController(Controller):
         event_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> List[HistoryEventData]:
+    ) -> List[HistoryEventResponse]:
         """
         获取指定事件的所有子事件
         """
@@ -173,7 +133,7 @@ class HistoryEventController(Controller):
         event_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> List[HistoryEventData]:
+    ) -> List[HistoryEventResponse]:
         """
         获取与指定事件相关的所有事件
         """
@@ -190,10 +150,10 @@ class HistoryEventController(Controller):
     @post("/")
     async def create_event(
         self,
-        data: HistoryEventData,
+        data: HistoryEventCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> HistoryEventData:
+    ) -> HistoryEventResponse:
         """
         创建新的历史事件
         
@@ -208,10 +168,10 @@ class HistoryEventController(Controller):
     async def update_event(
         self,
         event_id: int,
-        data: HistoryEventData,
+        data: HistoryEventUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> HistoryEventData:
+    ) -> HistoryEventResponse:
         """
         更新历史事件
         
@@ -230,7 +190,7 @@ class HistoryEventController(Controller):
         event_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> HistoryEventData:
+    ) -> HistoryEventResponse:
         """
         删除历史事件
         """
@@ -240,4 +200,3 @@ class HistoryEventController(Controller):
         if not event:
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
         return event
-
