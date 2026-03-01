@@ -1,10 +1,26 @@
 # SailZen Project Guide for AI Agents
 
+> 📚 **重要文档**: 
+> - [产品需求文档 (PRD)](./doc/PRD.md) - 完整的产品功能需求
+> - [文档中心](./doc/README.md) - 所有文档的导航入口
+> - [重构计划](./doc/refact_todo.md) - 代码架构重构计划
+
 ## Project Overview
 
 SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。它由 TypeScript/JavaScript monorepo（前端/扩展）和 Python 后端（数据管理与 API 服务）组成。
 
 该项目基于 Dendron（分层笔记工具）扩展，增加了个人财务追踪、健康监测、项目管理、文本分析和必需品/库存管理等功能。
+
+### 核心功能模块
+
+| 模块 | 状态 | 文档 |
+|------|------|------|
+| 财务管理 | ✅ 已实现 | [设计文档](./doc/design/manager/life_budget.md) |
+| 项目管理 | ✅ 已实现 | [设计文档](./doc/design/manager/project.md) |
+| 健康管理 | 🔶 部分实现 | [设计文档](./doc/design/manager/health.md) |
+| 物资管理 | ✅ 已实现 | [设计文档](./doc/design/manager/necessity.md) |
+| 文本管理 | ✅ 已实现 | [设计文档](./doc/design/manager/text.md) |
+| AI文本分析 | ✅ 已实现 | [系统设计](./doc/design/text-analysis-system.md) |
 
 ## Technology Stack
 
