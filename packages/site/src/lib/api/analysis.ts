@@ -981,4 +981,57 @@ export async function api_preview_outline_extraction(
   return response.json()
 }
 
+// ============================================================================
+// Task Persistence & Recovery API
+// ============================================================================
+
+import type { OutlineExtractionTaskSummary, RecoverTaskViewResponse } from '@lib/data/analysis'
+
+/**
+ * 获取指定版本的所有大纲提取任务
+ * @param editionId 版本ID
+ * @returns 任务列表
+ */
+export async function api_get_edition_outline_tasks(
+  editionId: number
+): Promise<OutlineExtractionTaskSummary[]> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/tasks/edition/${editionId}`)
+  if (!response.ok) {
+    throw new Error(`Failed to get edition tasks: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 恢复任务查看（支持从检查点重建结果）
+ * @param taskId 任务ID
+ * @returns 任务结果或进度信息
+ */
+export async function api_recover_outline_task(
+  taskId: string
+): Promise<RecoverTaskViewResponse> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/recover`)
+  if (!response.ok) {
+    throw new Error(`Failed to recover task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 关闭并清理任务
+ * @param taskId 任务ID
+ * @returns 清理结果
+ */
+export async function api_dismiss_outline_task(
+  taskId: string
+): Promise<{ success: boolean; task_id: string; message: string }> {
+  const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline-extraction/task/${taskId}/dismiss`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to dismiss task: ${response.statusText}`)
+  }
+  return response.json()
+}
+
 
