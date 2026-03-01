@@ -45,6 +45,7 @@ from sail_server.utils.llm.available_providers import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_LLM_MODEL,
 )
+from sail_server.application.dto.analysis import RangeSelectionMode
 
 logger = logging.getLogger(__name__)
 
@@ -323,18 +324,80 @@ class NovelAnalysisAgent(BaseAgent):
         """准备章节分块"""
         db = context.db_session
         
+        # 从 config 中获取 range_selection
+        config = task.config or {}
+        range_selection = config.get("range_selection", {})
+        range_mode = range_selection.get("mode", "full_edition")
+        
+        logger.info(f"[_prepare_chunks] Task {task.id}: range_mode={range_mode}, edition_id={task.edition_id}")
+        
         # 获取目标章节
-        if task.target_node_ids:
-            nodes = db.query(DocumentNode).filter(
-                DocumentNode.id.in_(task.target_node_ids)
-            ).order_by(DocumentNode.sort_index).all()
-        elif task.edition_id:
-            nodes = db.query(DocumentNode).filter(
-                DocumentNode.edition_id == task.edition_id,
-                DocumentNode.node_type == 'chapter'
-            ).order_by(DocumentNode.sort_index).all()
-        else:
+        nodes = []
+        
+        if task.edition_id:
+            # 根据 range_selection 模式获取章节
+            if range_mode == RangeSelectionMode.SINGLE_CHAPTER.value:
+                chapter_index = range_selection.get("chapter_index")
+                logger.info(f"[_prepare_chunks] Single chapter mode: chapter_index={chapter_index}")
+                if chapter_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index == chapter_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CHAPTER_RANGE.value:
+                start_index = range_selection.get("start_index")
+                end_index = range_selection.get("end_index")
+                logger.info(f"[_prepare_chunks] Chapter range mode: start={start_index}, end={end_index}")
+                if start_index is not None and end_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index >= start_index,
+                        DocumentNode.sort_index <= end_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.MULTI_CHAPTER.value:
+                chapter_indices = range_selection.get("chapter_indices", [])
+                logger.info(f"[_prepare_chunks] Multi chapter mode: indices={chapter_indices}")
+                if chapter_indices:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index.in_(chapter_indices)
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CURRENT_TO_END.value:
+                start_index = range_selection.get("start_index")
+                logger.info(f"[_prepare_chunks] Current to end mode: start={start_index}")
+                if start_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index >= start_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CUSTOM_RANGE.value:
+                node_ids = range_selection.get("node_ids", [])
+                logger.info(f"[_prepare_chunks] Custom range mode: node_ids={node_ids}")
+                if node_ids:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.id.in_(node_ids)
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            else:  # FULL_EDITION or unknown
+                logger.info(f"[_prepare_chunks] Full edition mode: getting all chapters")
+                nodes = db.query(DocumentNode).filter(
+                    DocumentNode.edition_id == task.edition_id,
+                    DocumentNode.node_type == 'chapter'
+                ).order_by(DocumentNode.sort_index).all()
+        
+        if not nodes:
+            logger.warning(f"[_prepare_chunks] No nodes found for task {task.id}")
             return []
+        
+        logger.info(f"[_prepare_chunks] Found {len(nodes)} nodes for processing")
         
         if not nodes:
             return []
@@ -492,7 +555,7 @@ class NovelAnalysisAgent(BaseAgent):
                 rendered.user_prompt,
                 llm_config,
                 budget=TokenBudget(
-                    max_tokens=config.get("max_tokens_per_chunk", 50000),
+                    max_tokens=config.get("max_tokens_per_chunk", 100000),
                     max_cost=config.get("max_cost_per_chunk", 1.0),
                 )
             )

@@ -8,6 +8,9 @@
 from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.history import (
     HistoryEventCreateRequest,
@@ -65,7 +68,7 @@ class HistoryEventController(Controller):
             parent_id=parent_id, 
             tags=tag_list
         )
-        request.logger.info(f"Get events: {len(events)}")
+        logger.info(f"Get events: {len(events)}")
         return events
 
     @get("/search")
@@ -87,7 +90,7 @@ class HistoryEventController(Controller):
         """
         db = next(router_dependency)
         events = search_events_by_keyword_impl(db, keyword, skip, limit)
-        request.logger.info(f"Search events with keyword '{keyword}': {len(events)}")
+        logger.info(f"Search events with keyword '{keyword}': {len(events)}")
         return events
 
     @get("/{event_id:int}")
@@ -102,7 +105,7 @@ class HistoryEventController(Controller):
         """
         db = next(router_dependency)
         event = get_event_impl(db, event_id)
-        request.logger.info(f"Get event {event_id}: {event}")
+        logger.info(f"Get event {event_id}: {event}")
         if not event:
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
         return event
@@ -124,7 +127,7 @@ class HistoryEventController(Controller):
             raise NotFoundException(detail=f"Parent event with ID {event_id} not found")
         
         children = get_child_events_impl(db, event_id)
-        request.logger.info(f"Get child events for {event_id}: {len(children)}")
+        logger.info(f"Get child events for {event_id}: {len(children)}")
         return children
 
     @get("/{event_id:int}/related")
@@ -144,7 +147,7 @@ class HistoryEventController(Controller):
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
         
         related = get_related_events_impl(db, event_id)
-        request.logger.info(f"Get related events for {event_id}: {len(related)}")
+        logger.info(f"Get related events for {event_id}: {len(related)}")
         return related
 
     @post("/")
@@ -161,7 +164,7 @@ class HistoryEventController(Controller):
         """
         db = next(router_dependency)
         event = create_event_impl(db, data)
-        request.logger.info(f"Created event: {event.title}")
+        logger.info(f"Created event: {event.title}")
         return event
 
     @put("/{event_id:int}")
@@ -179,7 +182,7 @@ class HistoryEventController(Controller):
         """
         db = next(router_dependency)
         event = update_event_impl(db, event_id, data)
-        request.logger.info(f"Updated event {event_id}: {event}")
+        logger.info(f"Updated event {event_id}: {event}")
         if not event:
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
         return event
@@ -196,7 +199,7 @@ class HistoryEventController(Controller):
         """
         db = next(router_dependency)
         event = delete_event_impl(db, event_id)
-        request.logger.info(f"Deleted event {event_id}")
+        logger.info(f"Deleted event {event_id}")
         if not event:
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
         return event

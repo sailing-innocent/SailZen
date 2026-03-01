@@ -388,8 +388,15 @@ class TextRangeParser:
         Returns:
             内容结果
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"[RangeParser] Getting content for selection: mode={selection.mode}, edition_id={selection.edition_id}")
+        logger.info(f"[RangeParser] Selection details: chapter_index={selection.chapter_index}, start_index={selection.start_index}, end_index={selection.end_index}, chapter_indices={selection.chapter_indices}, node_ids={selection.node_ids}")
+        
         # 获取选中的章节
         chapters = self._get_selected_chapters(selection)
+        logger.info(f"[RangeParser] Selected {len(chapters)} chapters")
         
         # 获取版本语言
         edition = self._get_edition(selection.edition_id)

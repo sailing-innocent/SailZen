@@ -354,6 +354,128 @@ class OutlineExtractionUnifiedController(Controller):
                 "result": extraction_result,
                 "message": "大纲提取完成",
             }
+    
+    @post("/task/{task_id:int}/save")
+    async def save_extraction_result(
+        self,
+        task_id: int,
+        data: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """将提取结果保存到数据库
+        
+        Args:
+            task_id: 任务ID
+            data: 可选参数，包含要保存的节点ID列表（node_ids）
+                  如果提供，只保存指定的节点；否则保存所有节点
+        
+        Returns:
+            保存结果统计
+        """
+        with get_db_session() as db:
+            task_dao = UnifiedTaskDAO(db)
+            task = task_dao.get_by_id(task_id)
+            
+            if not task:
+                raise NotFoundException(detail=f"Task {task_id} not found")
+            
+            if task.status != "completed":
+                raise ClientException(detail=f"任务状态为 {task.status}，尚未完成，无法保存")
+            
+            # 获取任务结果
+            result_data = task.result_data or {}
+            extraction_result = result_data.get("extraction_result", {})
+            
+            if not extraction_result:
+                raise ClientException(detail="任务没有提取结果")
+            
+            # 获取要保存的节点列表
+            nodes = extraction_result.get("nodes", [])
+            if not nodes:
+                raise ClientException(detail="没有可保存的节点")
+            
+            # 如果指定了节点ID列表，只保存这些节点
+            node_ids_to_save = data.get("node_ids") if data else None
+            if node_ids_to_save:
+                nodes = [n for n in nodes if n.get("id") in node_ids_to_save]
+            
+            # 获取任务配置
+            config_data = task.config or {}
+            extraction_config = config_data.get("extraction_config", {})
+            
+            # 导入必要的模块
+            from sail_server.service.outline_extractor import OutlineExtractor, ServiceExtractionResult
+            from sail_server.service.outline_extractor_types import ExtractedNode, ExtractedTurningPoint, Evidence
+            
+            # 重建 ServiceExtractionResult
+            extracted_nodes = []
+            for node_dict in nodes:
+                evidence_list = []
+                for ev in node_dict.get("evidence_list", []):
+                    evidence_list.append(Evidence(
+                        text=ev.get("text", ""),
+                        chapter_title=ev.get("chapter_title", ""),
+                        start_fragment=ev.get("start_fragment", ""),
+                        end_fragment=ev.get("end_fragment", ""),
+                    ))
+                
+                extracted_nodes.append(ExtractedNode(
+                    id=node_dict.get("id", ""),
+                    node_type=node_dict.get("node_type", "scene"),
+                    title=node_dict.get("title", ""),
+                    summary=node_dict.get("summary", ""),
+                    significance=node_dict.get("significance", "normal"),
+                    sort_index=node_dict.get("sort_index", 0),
+                    parent_id=node_dict.get("parent_id"),
+                    characters=node_dict.get("characters", []),
+                    evidence_list=evidence_list,
+                ))
+            
+            turning_points = []
+            for tp_dict in extraction_result.get("turning_points", []):
+                turning_points.append(ExtractedTurningPoint(
+                    node_id=tp_dict.get("node_id", ""),
+                    turning_point_type=tp_dict.get("turning_point_type", ""),
+                    description=tp_dict.get("description", ""),
+                ))
+            
+            result = ServiceExtractionResult(
+                nodes=extracted_nodes,
+                turning_points=turning_points,
+                metadata=extraction_result.get("metadata", {}),
+            )
+            
+            # 创建配置对象
+            from sail_server.application.dto.analysis import OutlineExtractionConfig as ExtractionConfig
+            config = ExtractionConfig(
+                granularity=extraction_config.get("granularity", "scene"),
+                outline_type=extraction_config.get("outline_type", "main"),
+                extract_turning_points=extraction_config.get("extract_turning_points", True),
+                extract_characters=extraction_config.get("extract_characters", True),
+                max_nodes=extraction_config.get("max_nodes", 50),
+                temperature=extraction_config.get("temperature", 0.3),
+                llm_provider=extraction_config.get("llm_provider"),
+                llm_model=extraction_config.get("llm_model"),
+                prompt_template_id=extraction_config.get("prompt_template_id", "outline_extraction_v2"),
+            )
+            
+            # 保存到数据库
+            extractor = OutlineExtractor(db)
+            save_result = extractor.save_to_database(
+                edition_id=task.edition_id,
+                result=result,
+                config=config,
+            )
+            
+            logger.info(f"[SaveResult] Task {task_id}: saved {save_result['nodes_created']} nodes to outline {save_result['outline_id']}")
+            
+            return {
+                "success": True,
+                "task_id": task_id,
+                "message": "大纲已保存到数据库",
+                "outline_id": save_result["outline_id"],
+                "nodes_created": save_result["nodes_created"],
+                "events_created": save_result["events_created"],
+            }
 
 
 # ============================================================================

@@ -181,8 +181,17 @@ class UnifiedTaskController(Controller):
         """创建新任务"""
         db = next(router_dependency)
         
+        # 详细记录接收到的所有数据
+        logger.info("=" * 60)
         logger.info(f"[UnifiedTaskController] Creating task: type={data.task_type}, sub_type={data.sub_type}, edition_id={data.edition_id}")
+        logger.info(f"[UnifiedTaskController] target_node_ids={data.target_node_ids}, target_scope={data.target_scope}")
         logger.info(f"[UnifiedTaskController] LLM config from request: llm_provider={data.llm_provider}, llm_model={data.llm_model}")
+        
+        # 记录完整的 config 数据
+        config_data = data.config or {}
+        logger.info(f"[UnifiedTaskController] Full config data: {config_data}")
+        range_selection = config_data.get("range_selection", {})
+        logger.info(f"[UnifiedTaskController] Range selection from request: {range_selection}")
         
         # 验证任务类型
         registry = get_agent_registry()
@@ -457,9 +466,17 @@ class TaskProgressWebSocket(WebsocketListener):
         self.ws_manager = get_websocket_manager()
         self.client_id = f"ws_{id(socket)}"
         
+        async def _send_message(msg: str) -> None:
+            """发送消息，捕获连接断开异常"""
+            try:
+                await socket.send_text(msg)
+            except Exception:
+                # 连接已断开，忽略发送错误
+                pass
+        
         await self.ws_manager.connect(
             self.client_id,
-            lambda msg: asyncio.create_task(socket.send_text(msg))
+            lambda msg: asyncio.create_task(_send_message(msg))
         )
         
         logger.info(f"WebSocket client {self.client_id} connected")

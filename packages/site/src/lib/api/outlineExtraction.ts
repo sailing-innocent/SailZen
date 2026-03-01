@@ -93,6 +93,15 @@ export async function api_create_unified_outline_task(
   const llmModel = config.llm_model || 'kimi-k2.5'
   
   console.log(`[OutlineExtraction] Creating task with provider: ${llmProvider}, model: ${llmModel}`)
+  console.log(`[OutlineExtraction] Range selection:`, {
+    mode: rangeSelection.mode,
+    edition_id: rangeSelection.edition_id,
+    chapter_index: rangeSelection.chapter_index,
+    start_index: rangeSelection.start_index,
+    end_index: rangeSelection.end_index,
+    chapter_indices: rangeSelection.chapter_indices,
+    node_ids: rangeSelection.node_ids,
+  })
   
   const request: CreateTaskRequest = {
     taskType: 'novel_analysis',
@@ -495,6 +504,44 @@ export function getOutlineTaskFromStorage(editionId: number): number | null {
  */
 export function clearOutlineTaskFromStorage(editionId: number): void {
   localStorage.removeItem(`${STORAGE_KEY_PREFIX}${editionId}`)
+}
+
+// ============================================================================
+// Save Result API
+// ============================================================================
+
+/**
+ * 保存大纲提取结果到数据库
+ * 
+ * @param taskId 任务ID
+ * @param nodeIds 可选，要保存的节点ID列表。如果不提供，保存所有节点
+ * @returns 保存结果
+ */
+export async function api_save_outline_result(
+  taskId: number,
+  nodeIds?: string[]
+): Promise<{
+  success: boolean
+  task_id: number
+  message: string
+  outline_id?: number
+  nodes_created?: number
+  events_created?: number
+}> {
+  const baseUrl = unifiedAgentAPI['baseUrl'] || '/api/v1'
+  
+  const response = await fetch(`${baseUrl}/outline-extraction/task/${taskId}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(nodeIds ? { node_ids: nodeIds } : {}),
+  })
+  
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to save result: ${error}`)
+  }
+  
+  return await response.json()
 }
 
 // ============================================================================

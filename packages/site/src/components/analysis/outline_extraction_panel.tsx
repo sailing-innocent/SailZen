@@ -52,6 +52,7 @@ import {
   api_resume_unified_outline_task,
   api_cancel_unified_outline_task,
   api_delete_unified_outline_task,
+  api_save_outline_result,
   checkRecoverableTasks,
   autoRecoverLatestTask,
   connectOutlineExtractionWebSocket,
@@ -395,22 +396,37 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
       if (!confirmed) return
     }
     
-    // 保存到后端（这里应该调用 API 保存批准的节点）
-    // TODO: 调用 api_save_outline_result(taskId, approvedNodes)
-    
-    // 刷新统计
-    loadStats(editionId)
-    
-    // Clear storage
-    clearOutlineTaskFromStorage(editionId)
-    
-    // Reset and close
-    setTaskId(null)
-    setCurrentTask(null)
-    setProgress(null)
-    setCheckpoint(null)
-    setResult(null)
-    setIsOpen(false)
+    try {
+      // 调用 API 保存批准的节点
+      const saveResult = await api_save_outline_result(
+        taskId, 
+        approvedNodes.map(n => n.id)
+      )
+      
+      if (saveResult.success) {
+        alert(`保存成功！创建了 ${saveResult.nodes_created} 个节点${saveResult.events_created ? `，${saveResult.events_created} 个事件` : ''}。`)
+      } else {
+        alert(`保存失败：${saveResult.message}`)
+        return
+      }
+      
+      // 刷新统计
+      loadStats(editionId)
+      
+      // Clear storage
+      clearOutlineTaskFromStorage(editionId)
+      
+      // Reset and close
+      setTaskId(null)
+      setCurrentTask(null)
+      setProgress(null)
+      setCheckpoint(null)
+      setResult(null)
+      setIsOpen(false)
+    } catch (err) {
+      console.error('Failed to save result:', err)
+      alert(`保存失败：${err instanceof Error ? err.message : '未知错误'}`)
+    }
   }
 
   // 批准选中的节点
@@ -514,6 +530,28 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
           </Button>
         </div>
       </div>
+
+      {/* Range Selection Info */}
+      <Alert variant={rangeSelection ? "default" : "destructive"}>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          {rangeSelection ? (
+            <span>
+              当前选择: <strong>
+                {rangeSelection.mode === 'full_edition' && '整部作品'}
+                {rangeSelection.mode === 'single_chapter' && `第 ${(rangeSelection.chapter_index || 0) + 1} 章`}
+                {rangeSelection.mode === 'chapter_range' && `第 ${(rangeSelection.start_index || 0) + 1} 章 到 第 ${(rangeSelection.end_index || 0) + 1} 章`}
+                {rangeSelection.mode === 'multi_chapter' && `${rangeSelection.chapter_indices?.length || 0} 个章节`}
+                {rangeSelection.mode === 'current_to_end' && `从第 ${(rangeSelection.start_index || 0) + 1} 章到结尾`}
+                {rangeSelection.mode === 'custom_range' && '自定义范围'}
+              </strong>
+              {' '}(请在左侧"任务"标签页中更改范围选择)
+            </span>
+          ) : (
+            <span>未选择文本范围，请先切换到"任务"标签页选择范围</span>
+          )}
+        </AlertDescription>
+      </Alert>
 
       {/* Error Alert */}
       {error && (

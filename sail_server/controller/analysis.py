@@ -12,6 +12,9 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, post, get, delete, Request
 from litestar.contrib.pydantic import PydanticDTO
 from litestar.exceptions import NotFoundException, ClientException
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.analysis import (
     TextRangeSelection,
@@ -114,7 +117,7 @@ class TextRangeController(Controller):
         parser = TextRangeParser(db)
         
         result = parser.preview(data)
-        request.logger.info(
+        logger.info(
             f"Preview range for edition {data.edition_id}, mode {data.mode}, "
             f"chapters: {result.chapter_count}, tokens: {result.estimated_tokens}"
         )
@@ -138,7 +141,7 @@ class TextRangeController(Controller):
         parser = TextRangeParser(db)
         
         result = parser.get_content(data)
-        request.logger.info(
+        logger.info(
             f"Get content for edition {data.edition_id}, mode {data.mode}, "
             f"chapters: {result.chapter_count}, chars: {result.total_chars}"
         )
@@ -273,7 +276,7 @@ class EvidenceController(Controller):
         # 存储证据
         self._evidence_store[evidence_id] = evidence
         
-        request.logger.info(f"Created evidence {evidence_id} for node {data.node_id}")
+        logger.info(f"Created evidence {evidence_id} for node {data.node_id}")
         
         return EvidenceResponse(
             id=evidence_id,
@@ -357,7 +360,7 @@ class EvidenceController(Controller):
         
         evidence.updated_at = datetime.now()
         
-        request.logger.info(f"Updated evidence {evidence_id}")
+        logger.info(f"Updated evidence {evidence_id}")
         
         return EvidenceResponse(
             id=evidence.id,
@@ -462,7 +465,7 @@ class EvidenceController(Controller):
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
         
-        request.logger.info(f"Deleted evidence {evidence_id}")
+        logger.info(f"Deleted evidence {evidence_id}")
         
         return EvidenceResponse(
             id=evidence.id,
@@ -569,7 +572,7 @@ class TaskController(Controller):
             "result_count": 0,
         }
         TaskController._tasks[task_id] = task
-        request.logger.info(f"Created task {task_id}")
+        logger.info(f"Created task {task_id}")
         return task
     
     @get("/")

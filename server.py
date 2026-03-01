@@ -13,15 +13,10 @@ import hashlib
 import time
 from typing import Any
 from datetime import datetime
-from sail_server.utils.env import read_env
+
 from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
-
-# 导入新的日志体系
-from sail_server.utils.logging_config import setup_logging, get_logger
-logger = get_logger("sail_server")
-
 from litestar.config.cors import CORSConfig
 from litestar.logging import LoggingConfig
 
@@ -50,12 +45,14 @@ class SailServer:
             "/necessity",
         ]
         self.api_router = None
-        # 调试模式由 LOG_MODE 环境变量控制
-        self.debug = os.environ.get("LOG_MODE", "prod") in ("dev", "debug")
-        # 新的日志体系自动处理日志文件，不需要手动设置
+        self.debug = True
         self.log_file = None
 
     def init(self):
+        # 日志已在 main() 中初始化，直接获取 logger
+        from sail_server.utils.logging_config import get_logger
+        logger = get_logger("sail_server")
+        
         @get("/health")
         async def health_check(request: Request) -> dict[str, str]:
             return {"status": "ok"}
@@ -126,7 +123,6 @@ class SailServer:
             path=self.api_endpoint,
             route_handlers=[
                 health_check,
-                self.base_router,
                 health_router,
                 finance_router,
                 project_router,
@@ -139,21 +135,9 @@ class SailServer:
             ],
         )
 
-        # Setup logging configuration
-        handlers = ["queue_listener"]
-        formatters = {
-            "standard": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            }
-        }
-
-        # 使用最小化的 Litestar 日志配置（因为我们已经通过 logging_config 设置了）
-        logging_config = LoggingConfig(
-            root={"level": "INFO", "handlers": []},
-            handlers={},
-            formatters={},
-            log_exceptions="always",
-        )
+        # 使用 None 作为 logging_config，避免 Litestar 覆盖我们的日志配置
+        # 我们的日志配置已在 main() 中通过 setup_logging() 设置
+        logging_config = None
 
         cors_config = CORSConfig(allow_origins=["*"], allow_methods=["*"])
 
@@ -165,6 +149,11 @@ class SailServer:
             path="/api_docs",
         )
 
+        # 配置全局中间件
+        from litestar.middleware.base import DefineMiddleware
+        from sail_server.middleware.logging_middleware import logging_middleware_factory
+        middleware = [DefineMiddleware(logging_middleware_factory)]
+        
         try:
             self.app = Litestar(
                 route_handlers=[self.base_router, self.api_router],
@@ -175,34 +164,16 @@ class SailServer:
                 on_startup=[self.on_startup],
                 on_shutdown=[self.on_shutdown],
                 openapi_config=openapi_config,
+                middleware=middleware,
             )
         except Exception as e:
-            # If logging config fails, try without it
-            if "handler" in str(e).lower() or "logging" in str(e).lower():
-                logger.warning(
-                    f"Logging configuration error: {e}. Retrying with minimal logging config."
-                )
-                # Create a minimal logging config without any custom handlers
-                minimal_logging_config = LoggingConfig(
-                    root={"level": "INFO", "handlers": ["queue_listener"]},
-                    handlers={},
-                    formatters={},
-                    log_exceptions="always",
-                )
-                self.app = Litestar(
-                    route_handlers=[self.base_router, self.api_router],
-                    debug=self.debug,
-                    logging_config=minimal_logging_config,
-                    cors_config=cors_config,
-                    exception_handlers=exception_handlers,
-                    on_startup=[self.on_startup],
-                    on_shutdown=[self.on_shutdown],
-                    openapi_config=openapi_config,
-                )
-            else:
-                raise
+            # 如果初始化失败，记录错误并重新抛出
+            logger.error(f"Failed to initialize Litestar app: {e}")
+            raise
 
     async def on_startup(self):
+        from sail_server.utils.logging_config import get_logger
+        logger = get_logger("sail_server")
         logger.info("Server starting up...")
         
         # 执行大纲提取任务恢复
@@ -218,26 +189,35 @@ class SailServer:
             logger.warning(f"[Startup] Failed to recover outline extraction tasks: {e}")
 
     async def on_shutdown(self):
+        from sail_server.utils.logging_config import get_logger
+        logger = get_logger("sail_server")
         logger.info("Server shutting down...")
 
     def run(self):
+        from sail_server.utils.logging_config import get_logger
+        logger = get_logger("sail_server")
         logger.info(f"Server running on {self.host}:{self.port}")
         if not self.app:
             logger.error("App Not Initialized")
             return
         import uvicorn
 
-        # 使用新的日志体系，禁用 uvicorn 的默认日志
+        # 使用 uvicorn 运行服务器，保留 access_log 以便记录请求
         uvicorn.run(
             self.app,
             host=self.host,
             port=self.port,
-            log_config=None,  # 使用我们的日志配置
-            access_log=False,
+            log_config=None,  # 使用我们已配置的日志系统
+            access_log=True,  # 启用访问日志
         )
 
 
 def main():
+    # 先初始化日志配置，再获取 logger
+    from sail_server.utils.logging_config import setup_logging, get_logger
+    setup_logging()
+    logger = get_logger("sail_server")
+
     try:
         host = os.environ.get("SERVER_HOST", "0.0.0.0")
         port = int(os.environ.get("SERVER_PORT", 1974))
@@ -258,14 +238,13 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Run in debug mode")
     args = parser.parse_args()
 
+    from sail_server.utils.env import read_env
     
     if args.dev:
-        from sail_server.utils.env import read_env
         read_env("dev")
     elif args.debug:
         read_env("debug")
     else:
         read_env("prod")
 
-    setup_logging()      
     main()

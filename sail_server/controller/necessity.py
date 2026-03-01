@@ -11,6 +11,9 @@ from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
 from sqlalchemy.orm import Session
 from typing import Generator, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.necessity import (
     ResidenceCreateRequest,
@@ -133,7 +136,7 @@ class ResidenceController(Controller):
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error getting residence: {e}")
+            logger.error(f"Error getting residence: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @get()
@@ -160,7 +163,7 @@ class ResidenceController(Controller):
         if not data.name or not data.name.strip():
             raise HTTPException(status_code=400, detail="Residence name is required")
         residence = create_residence_impl(db, data)
-        request.logger.info(f"Created residence: {residence}")
+        logger.info(f"Created residence: {residence}")
         return residence
 
     @put("/{residence_id:int}")
@@ -176,7 +179,7 @@ class ResidenceController(Controller):
         residence = update_residence_impl(db, residence_id, data)
         if residence is None:
             raise HTTPException(status_code=404, detail="Residence not found")
-        request.logger.info(f"Updated residence: {residence}")
+        logger.info(f"Updated residence: {residence}")
         return residence
 
     @delete("/{residence_id:int}", status_code=200)
@@ -191,7 +194,7 @@ class ResidenceController(Controller):
         result = delete_residence_impl(db, residence_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Residence not found")
-        request.logger.info(f"Deleted residence: {residence_id}")
+        logger.info(f"Deleted residence: {residence_id}")
         return {"id": residence_id, "status": "success", "message": "Residence deleted"}
 
     @get("/portable")
@@ -275,7 +278,7 @@ class ContainerController(Controller):
         if data.residence_id <= 0:
             raise HTTPException(status_code=400, detail="Residence ID is required")
         container = create_container_impl(db, data)
-        request.logger.info(f"Created container: {container}")
+        logger.info(f"Created container: {container}")
         return container
 
     @put("/{container_id:int}")
@@ -291,7 +294,7 @@ class ContainerController(Controller):
         container = update_container_impl(db, container_id, data)
         if container is None:
             raise HTTPException(status_code=404, detail="Container not found")
-        request.logger.info(f"Updated container: {container}")
+        logger.info(f"Updated container: {container}")
         return container
 
     @delete("/{container_id:int}", status_code=200)
@@ -306,7 +309,7 @@ class ContainerController(Controller):
         result = delete_container_impl(db, container_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Container not found")
-        request.logger.info(f"Deleted container: {container_id}")
+        logger.info(f"Deleted container: {container_id}")
         return {"id": container_id, "status": "success", "message": "Container deleted"}
 
     @get("/tree/{residence_id:int}")
@@ -363,7 +366,7 @@ class CategoryController(Controller):
         if not data.name or not data.name.strip():
             raise HTTPException(status_code=400, detail="Category name is required")
         category = create_category_impl(db, data)
-        request.logger.info(f"Created category: {category}")
+        logger.info(f"Created category: {category}")
         return category
 
     @put("/{category_id:int}")
@@ -379,7 +382,7 @@ class CategoryController(Controller):
         category = update_category_impl(db, category_id, data)
         if category is None:
             raise HTTPException(status_code=404, detail="Category not found")
-        request.logger.info(f"Updated category: {category}")
+        logger.info(f"Updated category: {category}")
         return category
 
     @delete("/{category_id:int}", status_code=200)
@@ -394,7 +397,7 @@ class CategoryController(Controller):
         result = delete_category_impl(db, category_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Category not found")
-        request.logger.info(f"Deleted category: {category_id}")
+        logger.info(f"Deleted category: {category_id}")
         return {"id": category_id, "status": "success", "message": "Category deleted"}
 
     @get("/tree")
@@ -415,7 +418,7 @@ class CategoryController(Controller):
         """Seed default categories"""
         db = next(router_dependency)
         categories = seed_default_categories_impl(db)
-        request.logger.info(f"Seeded {len(categories)} categories")
+        logger.info(f"Seeded {len(categories)} categories")
         return categories
 
 
@@ -501,7 +504,7 @@ class ItemController(Controller):
         if not data.name or not data.name.strip():
             raise HTTPException(status_code=400, detail="Item name is required")
         item = create_item_impl(db, data)
-        request.logger.info(f"Created item: {item}")
+        logger.info(f"Created item: {item}")
         return item
 
     @put("/{item_id:int}")
@@ -517,7 +520,7 @@ class ItemController(Controller):
         item = update_item_impl(db, item_id, data)
         if item is None:
             raise HTTPException(status_code=404, detail="Item not found")
-        request.logger.info(f"Updated item: {item}")
+        logger.info(f"Updated item: {item}")
         return item
 
     @delete("/{item_id:int}", status_code=200)
@@ -532,7 +535,7 @@ class ItemController(Controller):
         result = delete_item_impl(db, item_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Item not found")
-        request.logger.info(f"Deleted item: {item_id}")
+        logger.info(f"Deleted item: {item_id}")
         return {"id": item_id, "status": "success", "message": "Item deleted"}
 
     @get("/search/")
@@ -624,7 +627,7 @@ class InventoryController(Controller):
         if data.residence_id <= 0:
             raise HTTPException(status_code=400, detail="Residence ID is required")
         inventory = create_inventory_impl(db, data)
-        request.logger.info(f"Created inventory: {inventory}")
+        logger.info(f"Created inventory: {inventory}")
         return inventory
 
     @put("/{inventory_id:int}")
@@ -640,7 +643,7 @@ class InventoryController(Controller):
         inventory = update_inventory_impl(db, inventory_id, data)
         if inventory is None:
             raise HTTPException(status_code=404, detail="Inventory not found")
-        request.logger.info(f"Updated inventory: {inventory}")
+        logger.info(f"Updated inventory: {inventory}")
         return inventory
 
     @delete("/{inventory_id:int}", status_code=200)
@@ -655,7 +658,7 @@ class InventoryController(Controller):
         result = delete_inventory_impl(db, inventory_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Inventory not found")
-        request.logger.info(f"Deleted inventory: {inventory_id}")
+        logger.info(f"Deleted inventory: {inventory_id}")
         return {"id": inventory_id, "status": "success", "message": "Inventory deleted"}
 
     @post("/{inventory_id:int}/consume")
@@ -672,7 +675,7 @@ class InventoryController(Controller):
             quantity = data.get("quantity", "0")
             reason = data.get("reason", "")
             inventory = record_consumption_impl(db, inventory_id, quantity, reason)
-            request.logger.info(f"Recorded consumption for inventory {inventory_id}")
+            logger.info(f"Recorded consumption for inventory {inventory_id}")
             return inventory
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -689,7 +692,7 @@ class InventoryController(Controller):
         db = next(router_dependency)
         try:
             inventory = record_replenishment_impl(db, inventory_id, data)
-            request.logger.info(f"Recorded replenishment for inventory {inventory_id}")
+            logger.info(f"Recorded replenishment for inventory {inventory_id}")
             return inventory
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -713,7 +716,7 @@ class InventoryController(Controller):
                 from_container_id=data.get("from_container_id"),
                 to_container_id=data.get("to_container_id"),
             )
-            request.logger.info(f"Transferred inventory: {result}")
+            logger.info(f"Transferred inventory: {result}")
             return result
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -792,7 +795,7 @@ class JourneyController(Controller):
         if data.to_residence_id <= 0:
             raise HTTPException(status_code=400, detail="To residence ID is required")
         journey = create_journey_impl(db, data)
-        request.logger.info(f"Created journey: {journey}")
+        logger.info(f"Created journey: {journey}")
         return journey
 
     @put("/{journey_id:int}")
@@ -808,7 +811,7 @@ class JourneyController(Controller):
         journey = update_journey_impl(db, journey_id, data)
         if journey is None:
             raise HTTPException(status_code=404, detail="Journey not found")
-        request.logger.info(f"Updated journey: {journey}")
+        logger.info(f"Updated journey: {journey}")
         return journey
 
     @delete("/{journey_id:int}", status_code=200)
@@ -823,7 +826,7 @@ class JourneyController(Controller):
         result = delete_journey_impl(db, journey_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Journey not found")
-        request.logger.info(f"Deleted journey: {journey_id}")
+        logger.info(f"Deleted journey: {journey_id}")
         return {"id": journey_id, "status": "success", "message": "Journey deleted"}
 
     @post("/{journey_id:int}/start")
@@ -837,7 +840,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = start_journey_impl(db, journey_id)
-            request.logger.info(f"Started journey: {journey_id}")
+            logger.info(f"Started journey: {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -853,7 +856,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = complete_journey_impl(db, journey_id)
-            request.logger.info(f"Completed journey: {journey_id}")
+            logger.info(f"Completed journey: {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -869,7 +872,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = cancel_journey_impl(db, journey_id)
-            request.logger.info(f"Cancelled journey: {journey_id}")
+            logger.info(f"Cancelled journey: {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -886,7 +889,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = add_journey_item_impl(db, journey_id, data)
-            request.logger.info(f"Added item to journey {journey_id}")
+            logger.info(f"Added item to journey {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -903,7 +906,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = remove_journey_item_impl(db, journey_id, item_id)
-            request.logger.info(f"Removed item {item_id} from journey {journey_id}")
+            logger.info(f"Removed item {item_id} from journey {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -920,7 +923,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = pack_journey_item_impl(db, journey_id, item_id)
-            request.logger.info(f"Packed item {item_id} in journey {journey_id}")
+            logger.info(f"Packed item {item_id} in journey {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -937,7 +940,7 @@ class JourneyController(Controller):
         db = next(router_dependency)
         try:
             journey = unpack_journey_item_impl(db, journey_id, item_id)
-            request.logger.info(f"Unpacked item {item_id} in journey {journey_id}")
+            logger.info(f"Unpacked item {item_id} in journey {journey_id}")
             return journey
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
