@@ -618,7 +618,7 @@ export function useHasRunningTasks(): boolean {
  */
 export function useTotalTaskCost(): number {
   return useUnifiedAgentStore((state) =>
-    state.tasks.reduce((sum, t) => sum + t.actualCost, 0)
+    state.tasks.reduce((sum, t) => sum + (t.actualCost || 0), 0)
   )
 }
 
@@ -638,8 +638,8 @@ export function useTaskStats() {
       completed: tasks.filter((t) => t.status === 'completed').length,
       failed: tasks.filter((t) => t.status === 'failed').length,
       cancelled: tasks.filter((t) => t.status === 'cancelled').length,
-      totalCost: tasks.reduce((sum, t) => sum + t.actualCost, 0),
-      totalTokens: tasks.reduce((sum, t) => sum + t.actualTokens, 0),
+      totalCost: tasks.reduce((sum, t) => sum + (t.actualCost || 0), 0),
+      totalTokens: tasks.reduce((sum, t) => sum + (t.actualTokens || 0), 0),
     }
   }, [tasks])
 }

@@ -124,9 +124,9 @@ class ProjectBase(BaseModel):
     
     name: str = Field(description="项目名称")
     description: str = Field(default="", description="项目描述")
-    state: int = Field(default=0, description="项目状态")
-    start_time_qbw: int = Field(description="开始时间(QBW格式)")
-    end_time_qbw: int = Field(description="结束时间(QBW格式)")
+    state: Optional[int] = Field(default=0, description="项目状态")
+    start_time_qbw: Optional[int] = Field(default=0, description="开始时间(QBW格式)")
+    end_time_qbw: Optional[int] = Field(default=0, description="结束时间(QBW格式)")
 
 
 class ProjectCreateRequest(BaseModel):
@@ -153,8 +153,8 @@ class ProjectUpdateRequest(BaseModel):
 class ProjectResponse(ProjectBase):
     """项目响应"""
     id: int = Field(description="项目ID")
-    ctime: datetime = Field(description="创建时间")
-    mtime: datetime = Field(description="修改时间")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
 
 
 class ProjectListResponse(BaseModel):

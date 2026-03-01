@@ -125,8 +125,14 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
   }, [work.id])
 
   // 加载章节内容
-  const loadChapter = async (index: number) => {
+  const loadChapter = async (arrayIndex: number) => {
     if (!edition) return
+
+    // 获取 sort_index 用于 API 调用
+    const chapterItem = chapters[arrayIndex]
+    if (!chapterItem) return
+    
+    const sortIndex = chapterItem.sort_index
 
     setContentLoading(true)
     setError(null)
@@ -134,9 +140,9 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
     setIsAnnotating(false)
     clearSelection()
     try {
-      const chapter = await api_get_chapter_content(edition.id, index)
+      const chapter = await api_get_chapter_content(edition.id, sortIndex)
       setCurrentChapter(chapter)
-      setCurrentIndex(index)
+      setCurrentIndex(arrayIndex)
       setEditTitle(chapter.title || '')
       setEditContent(chapter.raw_text || '')
 
@@ -186,13 +192,15 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
   // 导航
   const goToPrev = () => {
     if (currentIndex !== null && currentIndex > 0) {
-      loadChapter(currentIndex - 1)
+      const prevArrayIndex = currentIndex - 1
+      loadChapter(prevArrayIndex)
     }
   }
 
   const goToNext = () => {
     if (currentIndex !== null && currentIndex < chapters.length - 1) {
-      loadChapter(currentIndex + 1)
+      const nextArrayIndex = currentIndex + 1
+      loadChapter(nextArrayIndex)
     }
   }
 
@@ -323,21 +331,21 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
   }
 
   // 移动端目录选择处理
-  const handleMobileChapterSelect = (index: number) => {
-    loadChapter(index)
+  const handleMobileChapterSelect = (arrayIndex: number) => {
+    loadChapter(arrayIndex)
     setIsMobileTocOpen(false)
   }
 
   // 目录列表组件（复用）
-  const ChapterList = ({ onSelect }: { onSelect?: (idx: number) => void }) => (
+  const ChapterList = ({ onSelect }: { onSelect?: (arrayIdx: number) => void }) => (
     <ul className="divide-y">
-      {chapters.map((chapter, idx) => (
+      {chapters.map((chapter, arrayIdx) => (
         <li
           key={chapter.id}
           className={`px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${
-            currentIndex === idx ? 'bg-muted font-medium' : ''
+            currentIndex === arrayIdx ? 'bg-muted font-medium' : ''
           }`}
-          onClick={() => (onSelect ? onSelect(idx) : loadChapter(idx))}
+          onClick={() => (onSelect ? onSelect(arrayIdx) : loadChapter(arrayIdx))}
         >
           <div className="text-sm truncate">
             {chapter.label}

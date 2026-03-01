@@ -304,7 +304,9 @@ class WebSocketManager:
             self._stats["total_messages_sent"] += 1
             return True
         except Exception as e:
-            logger.error(f"Failed to send message to client {client_id}: {e}")
+            # 客户端断开连接，清理连接
+            logger.debug(f"Failed to send message to client {client_id}: {e}")
+            await self.disconnect(client_id)
             return False
     
     async def broadcast(self, message: WSMessage) -> int:

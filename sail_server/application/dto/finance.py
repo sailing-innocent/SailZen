@@ -20,6 +20,71 @@ from enum import IntEnum
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from sail_server.utils.state import StateBits
+
+
+# ============================================================================
+# State Classes (for model layer use)
+# ============================================================================
+
+class AccountState(StateBits):
+    """账户状态"""
+    def __init__(self, value: int):
+        super().__init__(value)
+        self.set_attrib_map({
+            "valid": 0,
+            "archived": 1,
+        })
+
+
+class TransactionState(StateBits):
+    """交易状态"""
+    def __init__(self, value: int):
+        super().__init__(value)
+        self.set_attrib_map({
+            "from_acc_valid": 0,
+            "to_acc_valid": 1,
+            "from_acc_updated": 2,
+            "to_acc_updated": 3,
+            "from_acc_changed": 4,
+            "to_acc_changed": 5,
+            "from_acc_deprecated": 6,
+            "to_acc_deprecated": 7,
+        })
+    
+    # Convenience methods for transaction state
+    def set_from_acc_valid(self): self.set_attrib("from_acc_valid")
+    def unset_from_acc_valid(self): self.unset_attrib("from_acc_valid")
+    def is_from_acc_valid(self): return self.is_attrib("from_acc_valid")
+    
+    def set_to_acc_valid(self): self.set_attrib("to_acc_valid")
+    def unset_to_acc_valid(self): self.unset_attrib("to_acc_valid")
+    def is_to_acc_valid(self): return self.is_attrib("to_acc_valid")
+    
+    def set_from_acc_updated(self): self.set_attrib("from_acc_updated")
+    def unset_from_acc_updated(self): self.unset_attrib("from_acc_updated")
+    def is_from_acc_updated(self): return self.is_attrib("from_acc_updated")
+    
+    def set_to_acc_updated(self): self.set_attrib("to_acc_updated")
+    def unset_to_acc_updated(self): self.unset_attrib("to_acc_updated")
+    def is_to_acc_updated(self): return self.is_attrib("to_acc_updated")
+    
+    def set_from_acc_changed(self): self.set_attrib("from_acc_changed")
+    def unset_from_acc_changed(self): self.unset_attrib("from_acc_changed")
+    def is_from_acc_changed(self): return self.is_attrib("from_acc_changed")
+    
+    def set_to_acc_changed(self): self.set_attrib("to_acc_changed")
+    def unset_to_acc_changed(self): self.unset_attrib("to_acc_changed")
+    def is_to_acc_changed(self): return self.is_attrib("to_acc_changed")
+    
+    def set_from_acc_deprecated(self): self.set_attrib("from_acc_deprecated")
+    def unset_from_acc_deprecated(self): self.unset_attrib("from_acc_deprecated")
+    def is_from_acc_deprecated(self): return self.is_attrib("from_acc_deprecated")
+    
+    def set_to_acc_deprecated(self): self.set_attrib("to_acc_deprecated")
+    def unset_to_acc_deprecated(self): self.unset_attrib("to_acc_deprecated")
+    def is_to_acc_deprecated(self): return self.is_attrib("to_acc_deprecated")
+
 
 # ============================================================================
 # Enums
@@ -88,11 +153,19 @@ class AccountUpdateRequest(BaseModel):
     state: Optional[int] = Field(default=None, description="账户状态")
 
 
+class AccountFixBalanceRequest(BaseModel):
+    """修复账户余额请求"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int = Field(description="账户ID")
+    balance: str = Field(description="目标余额")
+
+
 class AccountResponse(AccountBase):
     """账户响应"""
     id: int = Field(description="账户ID")
-    ctime: datetime = Field(description="创建时间")
-    mtime: datetime = Field(description="修改时间")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
 
 
 class AccountListResponse(BaseModel):
@@ -119,17 +192,20 @@ class TransactionBase(BaseModel):
 
 class TransactionCreateRequest(TransactionBase):
     """创建交易请求"""
-    pass
+    htime: Optional[float] = Field(default=None, description="发生时间戳，默认为当前时间")
 
 
 class TransactionUpdateRequest(BaseModel):
     """更新交易请求"""
     model_config = ConfigDict(from_attributes=True)
     
-    value: Optional[str] = Field(default=None, description="交易金额")
-    description: Optional[str] = Field(default=None, description="交易描述")
-    tags: Optional[str] = Field(default=None, description="交易标签")
-    state: Optional[int] = Field(default=None, description="交易状态")
+    from_acc_id: int = Field(description="转出账户ID")
+    to_acc_id: int = Field(description="转入账户ID")
+    value: str = Field(description="交易金额")
+    description: str = Field(default="", description="交易描述")
+    tags: str = Field(default="", description="交易标签")
+    budget_id: Optional[int] = Field(default=None, description="关联预算ID")
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
 
 
 class TransactionResponse(TransactionBase):
@@ -137,9 +213,9 @@ class TransactionResponse(TransactionBase):
     id: int = Field(description="交易ID")
     prev_value: str = Field(default="0.0", description="交易前金额")
     state: int = Field(description="交易状态")
-    htime: float = Field(description="发生时间戳")
-    ctime: datetime = Field(description="创建时间")
-    mtime: datetime = Field(description="修改时间")
+    htime: Optional[float] = Field(default=0.0, description="发生时间戳")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
 
 
 class TransactionListResponse(BaseModel):
@@ -183,13 +259,23 @@ class BudgetBase(BaseModel):
     
     name: str = Field(description="预算名称")
     description: str = Field(default="", description="预算描述")
-    start_time: float = Field(description="开始时间戳")
-    end_time: float = Field(description="结束时间戳")
+    start_time: Optional[float] = Field(default=None, description="开始时间戳")
+    end_time: Optional[float] = Field(default=None, description="结束时间戳")
     status: int = Field(default=0, description="预算状态")
 
 
-class BudgetCreateRequest(BudgetBase):
+class BudgetCreateRequest(BaseModel):
     """创建预算请求"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    name: str = Field(description="预算名称")
+    description: str = Field(default="", description="预算描述")
+    tags: str = Field(default="", description="标签")
+    start_date: Optional[float] = Field(default=None, description="开始日期")
+    end_date: Optional[float] = Field(default=None, description="结束日期")
+    total_amount: Optional[str] = Field(default=None, description="预算总金额（可选，会从子项计算）")
+    direction: int = Field(default=0, description="预算方向 (0=支出, 1=收入)")
+    htime: Optional[float] = Field(default=None, description="生效时间戳")
     items: Optional[List[BudgetItemCreateRequest]] = Field(default=None, description="预算子项")
 
 
@@ -205,7 +291,12 @@ class BudgetUpdateRequest(BaseModel):
 class BudgetResponse(BudgetBase):
     """预算响应"""
     id: int = Field(description="预算ID")
+    total_amount: str = Field(default="0.0", description="预算总金额")
+    direction: int = Field(default=0, description="预算方向 (0=支出, 1=收入)")
     items: List[BudgetItemResponse] = Field(default_factory=list, description="预算子项")
+    
+    # 允许从 BudgetData 转换（字段别名兼容）
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class BudgetListResponse(BaseModel):
@@ -244,7 +335,7 @@ class TransactionData(BaseModel):
     tags: str = Field(default="", description="交易标签")
     state: int = Field(default=0, description="交易状态")
     budget_id: Optional[int] = Field(default=None, description="关联预算ID")
-    htime: float = Field(default=0.0, description="发生时间戳")
+    htime: Optional[float] = Field(default=0.0, description="发生时间戳")
     ctime: Optional[datetime] = Field(default=None, description="创建时间")
     mtime: Optional[datetime] = Field(default=None, description="修改时间")
 
@@ -272,7 +363,13 @@ class BudgetData(BaseModel):
     id: int = Field(default=0, description="预算ID")
     name: str = Field(default="", description="预算名称")
     description: str = Field(default="", description="预算描述")
-    start_time: float = Field(default=0.0, description="开始时间戳")
-    end_time: float = Field(default=0.0, description="结束时间戳")
+    tags: str = Field(default="", description="标签")
+    start_date: Optional[float] = Field(default=None, description="开始日期")
+    end_date: Optional[float] = Field(default=None, description="结束日期")
+    total_amount: str = Field(default="0.0", description="预算总金额")
+    direction: int = Field(default=0, description="预算方向 (0=支出, 1=收入)")
+    htime: Optional[float] = Field(default=None, description="生效时间戳")
+    ctime: Optional[datetime] = Field(default=None, description="创建时间")
+    mtime: Optional[datetime] = Field(default=None, description="修改时间")
     status: int = Field(default=0, description="预算状态")
     items: List[BudgetItemData] = Field(default_factory=list, description="预算子项")

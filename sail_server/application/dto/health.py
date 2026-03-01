@@ -28,7 +28,7 @@ class WeightBase(BaseModel):
     
     value: float = Field(description="体重值 (kg)")
     tag: str = Field(default="raw", description="记录标签")
-    description: str = Field(default="", description="记录描述")
+    description: Optional[str] = Field(default="", description="记录描述")
 
 
 class WeightCreateRequest(WeightBase):
@@ -39,7 +39,7 @@ class WeightCreateRequest(WeightBase):
 class WeightResponse(WeightBase):
     """体重记录响应"""
     id: int = Field(description="记录ID")
-    htime: float = Field(description="发生时间戳")
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
 
 
 class WeightListResponse(BaseModel):

@@ -16,9 +16,24 @@ export class Money {
   // - Money("1000.00") - defaults to CNY
   // - Money(1000.00, "CNY")
   // - Money(1000.00) - defaults to CNY
-  constructor(value: string | number, currency?: string) {
+  // - Money(null/undefined/"") - defaults to 0
+  constructor(value: string | number | null | undefined, currency?: string) {
+    // Handle null/undefined
+    if (value === null || value === undefined) {
+      this._value = 0
+      this._currency = currency || 'CNY'
+      return
+    }
+
     if (typeof value === 'string') {
-      const parts = value.trim().split(/\s+/)
+      const trimmed = value.trim()
+      // Handle empty string
+      if (trimmed === '') {
+        this._value = 0
+        this._currency = currency || 'CNY'
+        return
+      }
+      const parts = trimmed.split(/\s+/)
       if (parts.length === 2) {
         // Format: "1000.00 CNY"
         this._value = parseFloat(parts[0])
@@ -37,7 +52,7 @@ export class Money {
     }
 
     if (isNaN(this._value)) {
-      throw new Error('Invalid money value')
+      this._value = 0
     }
   }
 

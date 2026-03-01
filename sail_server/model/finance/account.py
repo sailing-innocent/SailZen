@@ -6,11 +6,7 @@
 # @version 1.0
 # ---------------------------------
 from sail_server.infrastructure.orm.finance import Account
-from sail_server.application.dto.finance import AccountData, TransactionData, AccountStateEnum, TransactionStateEnum
-
-# 向后兼容的别名
-AccountState = AccountStateEnum
-TransactionState = TransactionStateEnum
+from sail_server.application.dto.finance import AccountData, TransactionData, AccountState, TransactionState
 from sail_server.utils.money import Money
 import logging
 from datetime import datetime
@@ -136,7 +132,7 @@ def update_account_balance_impl(db, account_id: int) -> AccountData:
     return read_from_account(account)
 
 
-def fix_account_balance_impl(db, fix: AccountData) -> AccountData:
+def fix_account_balance_impl(db, fix) -> AccountData:
     logging.info(f"fixing account balance for account {fix.id}")
     id = fix.id
     balance = Money(fix.balance)

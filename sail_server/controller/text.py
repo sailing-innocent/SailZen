@@ -18,6 +18,7 @@ from sail_server.application.dto.text import (
     EditionUpdateRequest,
     EditionResponse,
     DocumentNodeResponse,
+    DocumentNodeUpdateRequest,
 )
 from sail_server.model.text import (
     create_work_impl, get_work_impl, get_works_impl, update_work_impl, delete_work_impl,
@@ -360,7 +361,7 @@ class DocumentNodeController(Controller):
     async def update_node(
         self,
         node_id: int,
-        data: dict,
+        data: DocumentNodeUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> DocumentNodeResponse:

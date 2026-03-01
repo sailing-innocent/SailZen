@@ -57,6 +57,9 @@ class WorkResponse(WorkBase):
     meta_data: Dict[str, Any] = Field(default_factory=dict, description="元数据")
     created_at: datetime = Field(description="创建时间")
     updated_at: datetime = Field(description="更新时间")
+    edition_count: int = Field(default=0, description="版本数量")
+    chapter_count: int = Field(default=0, description="章节数量")
+    total_chars: int = Field(default=0, description="总字符数")
 
 
 class WorkListResponse(BaseModel):
@@ -128,7 +131,7 @@ class DocumentNodeBase(BaseModel):
     edition_id: int = Field(description="所属版本ID")
     node_type: str = Field(default="chapter", description="节点类型")
     title: str = Field(description="节点标题")
-    content: Optional[str] = Field(default=None, description="节点内容")
+    raw_text: Optional[str] = Field(default=None, description="节点内容")
     level: int = Field(default=1, description="层级")
 
 
@@ -144,7 +147,7 @@ class DocumentNodeUpdateRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
     title: Optional[str] = Field(default=None, description="节点标题")
-    content: Optional[str] = Field(default=None, description="节点内容")
+    raw_text: Optional[str] = Field(default=None, description="节点内容")
     sort_order: Optional[int] = Field(default=None, description="排序顺序")
 
 

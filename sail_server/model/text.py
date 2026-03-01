@@ -77,7 +77,46 @@ def create_work_impl(db: Session, work_data: WorkCreateRequest) -> WorkResponse:
     db.add(work)
     db.commit()
     db.refresh(work)
-    return WorkResponse.model_validate(work)
+    stats = _calculate_work_stats(db, work)
+    return WorkResponse(
+        id=work.id,
+        slug=work.slug,
+        title=work.title,
+        original_title=work.original_title,
+        author=work.author,
+        language_primary=work.language_primary,
+        work_type=work.work_type,
+        status=work.status,
+        synopsis=work.synopsis,
+        meta_data=work.meta_data or {},
+        created_at=work.created_at,
+        updated_at=work.updated_at,
+        **stats
+    )
+
+
+def _calculate_work_stats(db: Session, work: Work) -> dict:
+    """计算作品的统计信息"""
+    # 版本数量
+    edition_count = db.query(func.count(Edition.id)).filter(Edition.work_id == work.id).scalar() or 0
+    
+    # 章节数量和总字符数（所有版本的章节总和）
+    chapter_count = 0
+    total_chars = 0
+    
+    for edition in work.editions:
+        edition_chapters = db.query(func.count(DocumentNode.id)).filter(
+            DocumentNode.edition_id == edition.id,
+            DocumentNode.node_type == 'chapter'
+        ).scalar() or 0
+        chapter_count += edition_chapters
+        total_chars += edition.char_count or 0
+    
+    return {
+        "edition_count": edition_count,
+        "chapter_count": chapter_count,
+        "total_chars": total_chars,
+    }
 
 
 def get_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
@@ -85,13 +124,47 @@ def get_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
     work = db.query(Work).filter(Work.id == work_id).first()
     if not work:
         return None
-    return WorkResponse.model_validate(work)
+    
+    stats = _calculate_work_stats(db, work)
+    return WorkResponse(
+        id=work.id,
+        slug=work.slug,
+        title=work.title,
+        original_title=work.original_title,
+        author=work.author,
+        language_primary=work.language_primary,
+        work_type=work.work_type,
+        status=work.status,
+        synopsis=work.synopsis,
+        meta_data=work.meta_data or {},
+        created_at=work.created_at,
+        updated_at=work.updated_at,
+        **stats
+    )
 
 
 def get_works_impl(db: Session, skip: int = 0, limit: int = 20) -> List[WorkResponse]:
     """获取作品列表"""
     works = db.query(Work).order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
-    return [WorkResponse.model_validate(work) for work in works]
+    result = []
+    for work in works:
+        stats = _calculate_work_stats(db, work)
+        result.append(WorkResponse(
+            id=work.id,
+            slug=work.slug,
+            title=work.title,
+            original_title=work.original_title,
+            author=work.author,
+            language_primary=work.language_primary,
+            work_type=work.work_type,
+            status=work.status,
+            synopsis=work.synopsis,
+            meta_data=work.meta_data or {},
+            created_at=work.created_at,
+            updated_at=work.updated_at,
+            **stats
+        ))
+    return result
 
 
 def update_work_impl(db: Session, work_id: int, work_data: WorkUpdateRequest) -> Optional[WorkResponse]:
@@ -249,9 +322,9 @@ def update_document_node_impl(db: Session, node_id: int, update_data: DocumentNo
     # 仅更新传入的字段
     if update_data.title is not None:
         node.title = update_data.title
-    if update_data.content is not None:
+    if update_data.raw_text is not None:
         # 清理文本内容
-        cleaned_text = sanitize_text(update_data.content)
+        cleaned_text = sanitize_text(update_data.raw_text)
         node.raw_text = cleaned_text
         # 重新计算字符数
         node.char_count = len(cleaned_text)

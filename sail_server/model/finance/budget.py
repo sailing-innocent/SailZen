@@ -174,10 +174,11 @@ def create_budget_impl(db, data: BudgetData) -> BudgetData:
     db.flush()  # Get the budget ID
     
     # Create items if provided
-    for item_data in data.items:
-        item = budget_item_from_data(item_data)
-        item.budget_id = budget.id
-        db.add(item)
+    if data.items:
+        for item_data in data.items:
+            item = budget_item_from_data(item_data)
+            item.budget_id = budget.id
+            db.add(item)
     
     db.flush()
     

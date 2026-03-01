@@ -368,6 +368,7 @@ class OutlineExtractionConfig(BaseModel):
     temperature: float = Field(default=0.3, description="LLM温度")
     llm_provider: Optional[str] = Field(default=None, description="LLM提供商")
     llm_model: Optional[str] = Field(default=None, description="LLM模型")
+    prompt_template_id: Optional[str] = Field(default=None, description="提示词模板ID")
 
 
 class OutlineExtractionRequest(BaseModel):

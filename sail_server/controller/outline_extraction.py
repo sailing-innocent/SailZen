@@ -177,12 +177,21 @@ def _deserialize_datetime(dt_str: Optional[str]) -> Optional[datetime]:
 def _save_task_state(task_id: str, task_data: Dict[str, Any]) -> bool:
     """将任务状态持久化到磁盘"""
     try:
+        # 处理可能为 Pydantic 模型的字段
+        range_selection = task_data.get("range_selection")
+        if hasattr(range_selection, 'model_dump'):
+            range_selection = range_selection.model_dump()
+        
+        config = task_data.get("config")
+        if hasattr(config, 'model_dump'):
+            config = config.model_dump()
+        
         # 构建可序列化的状态数据
         state_data = {
             "id": task_data.get("id", task_id),
             "edition_id": task_data.get("edition_id"),
-            "range_selection": task_data.get("range_selection"),
-            "config": task_data.get("config"),
+            "range_selection": range_selection,
+            "config": config,
             "status": task_data.get("status", "unknown"),
             "phase": task_data.get("phase", ExtractionPhase.INITIALIZED.value),
             "progress": task_data.get("progress", 0),

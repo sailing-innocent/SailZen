@@ -69,8 +69,7 @@ def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
                 )
                 db.commit()
                 logger.info(f"Fixed sequence {sequence_name}: {curr_val} -> {new_val}")
-            else:
-                logger.debug(f"Sequence {sequence_name} is OK: {curr_val} > {max_id}")
+            # 序列正常时不输出日志，避免启动时过多日志
         else:
             logger.debug(f"Sequence {sequence_name} does not exist, skipping")
         

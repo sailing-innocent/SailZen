@@ -237,7 +237,7 @@ const Sidebar: React.FC<{
   const pendingCount = React.useMemo(() => tasks.filter((t) => t.status === 'pending').length, [tasks])
   const runningCount = React.useMemo(() => tasks.filter((t) => t.status === 'running').length, [tasks])
   const totalCount = tasks.length
-  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualCost, 0), [tasks])
+  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + (t.actualCost || 0), 0), [tasks])
   const activeTaskCount = pendingCount + runningCount
 
   const menuItems = React.useMemo(() => [

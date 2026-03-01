@@ -10,6 +10,7 @@ from __future__ import annotations
 from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar import Controller, post, get, delete, Request
+from litestar.contrib.pydantic import PydanticDTO
 from litestar.exceptions import NotFoundException, ClientException
 
 from sail_server.application.dto.analysis import (
@@ -18,7 +19,7 @@ from sail_server.application.dto.analysis import (
     TextRangeContent,
     RangeSelectionMode,
     TextEvidenceCreateRequest,
-    TextEvidenceResponse ,
+    TextEvidenceResponse,
 )
 
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
@@ -34,17 +35,17 @@ import uuid
 # DTOs
 # ============================================================================
 
-class TextRangeSelectionDTO(DataclassDTO[TextRangeSelection]):
+class TextRangeSelectionDTO(PydanticDTO[TextRangeSelection]):
     """文本范围选择 DTO"""
     pass
 
 
-class TextRangePreviewDTO(DataclassDTO[TextRangePreview]):
+class TextRangePreviewDTO(PydanticDTO[TextRangePreview]):
     """文本范围预览 DTO"""
     pass
 
 
-class TextRangeContentDTO(DataclassDTO[TextRangeContent]):
+class TextRangeContentDTO(PydanticDTO[TextRangeContent]):
     """文本范围内容 DTO"""
     pass
 
@@ -203,7 +204,7 @@ class EvidenceController(Controller):
     @post("/")
     async def create_evidence(
         self,
-        data: EvidenceCreateRequest,
+        data: TextEvidenceCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> EvidenceResponse:
@@ -323,7 +324,7 @@ class EvidenceController(Controller):
     async def update_evidence(
         self,
         evidence_id: str,
-        data: EvidenceUpdateRequest,
+        data: TextEvidenceCreateRequest,
         request: Request,
     ) -> EvidenceResponse:
         """更新证据

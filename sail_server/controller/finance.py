@@ -15,6 +15,7 @@ from sail_server.application.dto.finance import (
     AccountResponse,
     AccountCreateRequest,
     AccountUpdateRequest,
+    AccountFixBalanceRequest,
     TransactionResponse,
     TransactionCreateRequest,
     TransactionUpdateRequest,
@@ -175,7 +176,7 @@ class AccountController(Controller):
     @post("/fix_balance")
     async def fix_account_balance(
         self,
-        data: AccountUpdateRequest,
+        data: AccountFixBalanceRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
     ) -> AccountResponse:
@@ -604,7 +605,18 @@ class BudgetController(Controller):
             _tags=tag_list,
             tag_op=tag_op,
         )
-        return [BudgetResponse.model_validate(b) for b in budgets]
+        # Convert BudgetData to BudgetResponse (field name mapping)
+        return [BudgetResponse(
+            id=b.id,
+            name=b.name,
+            description=b.description,
+            start_time=b.start_date,
+            end_time=b.end_date,
+            status=b.status,
+            total_amount=b.total_amount,
+            direction=b.direction,
+            items=[],  # Items are not included in list view for performance
+        ) for b in budgets]
 
     @post()
     async def create_budget(
