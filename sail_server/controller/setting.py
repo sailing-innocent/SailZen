@@ -12,7 +12,10 @@ from litestar.di import Provide
 from sqlalchemy.orm import Session
 
 from sail_server.db import provide_db_session
-from sail_server.data.analysis import SettingData
+from sail_server.application.dto.analysis import (
+    SettingCreateRequest,
+    SettingResponse,
+)
 from sail_server.model.analysis.setting import (
     create_setting_impl,
     get_setting_impl,
@@ -36,13 +39,12 @@ class SettingController(Controller):
     @post("/")
     async def create_setting(
         self,
-        data: Dict[str, Any],
+        data: SettingCreateRequest,
         db: Session,
     ) -> Dict[str, Any]:
         """创建设定"""
-        setting_data = SettingData(**data)
-        result = create_setting_impl(db, setting_data)
-        return {"success": True, "data": result}
+        result = create_setting_impl(db, data)
+        return {"success": True, "data": SettingResponse.model_validate(result).model_dump()}
     
     @get("/{setting_id:int}")
     async def get_setting(
@@ -54,7 +56,7 @@ class SettingController(Controller):
         result = get_setting_impl(db, setting_id)
         if not result:
             return {"success": False, "error": "Setting not found"}
-        return {"success": True, "data": result}
+        return {"success": True, "data": SettingResponse.model_validate(result).model_dump()}
     
     @get("/edition/{edition_id:int}")
     async def get_settings_by_edition(
@@ -69,7 +71,7 @@ class SettingController(Controller):
         results = get_settings_by_edition_impl(
             db, edition_id, setting_type, category, status
         )
-        return {"success": True, "data": results}
+        return {"success": True, "data": [SettingResponse.model_validate(r).model_dump() for r in results]}
     
     @post("/{setting_id:int}")
     async def update_setting(
@@ -82,7 +84,7 @@ class SettingController(Controller):
         result = update_setting_impl(db, setting_id, data)
         if not result:
             return {"success": False, "error": "Setting not found"}
-        return {"success": True, "data": result}
+        return {"success": True, "data": SettingResponse.model_validate(result).model_dump()}
     
     @delete("/{setting_id:int}", status_code=200)
     async def delete_setting(

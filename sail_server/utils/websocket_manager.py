@@ -15,7 +15,7 @@ import asyncio
 import logging
 import json
 from typing import Dict, List, Set, Optional, Callable, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -30,12 +30,10 @@ class WSMessage:
     """WebSocket 消息"""
     type: str  # event | progress | error | ping | pong
     task_id: Optional[int] = None
-    data: Dict[str, Any] = None
-    timestamp: str = None
+    data: Dict[str, Any] = field(default_factory=dict)
+    timestamp: str = ""
     
     def __post_init__(self):
-        if self.data is None:
-            self.data = {}
         if self.timestamp is None:
             self.timestamp = datetime.utcnow().isoformat()
     
@@ -64,11 +62,7 @@ class ClientInfo:
     """客户端信息"""
     client_id: str
     connected_at: datetime
-    subscribed_tasks: Set[int] = None
-    
-    def __post_init__(self):
-        if self.subscribed_tasks is None:
-            self.subscribed_tasks = set()
+    subscribed_tasks: Set[int] = field(default_factory=set)
 
 
 # ============================================================================
@@ -310,7 +304,9 @@ class WebSocketManager:
             self._stats["total_messages_sent"] += 1
             return True
         except Exception as e:
-            logger.error(f"Failed to send message to client {client_id}: {e}")
+            # 客户端断开连接，清理连接
+            logger.debug(f"Failed to send message to client {client_id}: {e}")
+            await self.disconnect(client_id)
             return False
     
     async def broadcast(self, message: WSMessage) -> int:

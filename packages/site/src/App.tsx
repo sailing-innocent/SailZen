@@ -17,6 +17,7 @@ const AppRoutes: React.FC = () => {
   const [, setUrlParams] = React.useState<URLParams>({ path: undefined, content: undefined })
 
   useEffect(() => {
+
     fetchServerHealth() // fetch server health
     const redirectPath = searchParams?.get('path') ?? undefined
     const contentPath = searchParams.get('content') ?? undefined

@@ -28,8 +28,8 @@ from .base import (
     AgentInfo,
     ProgressUpdate,
 )
-from sail_server.data.unified_agent import (
-    UnifiedAgentTask,
+from sail_server.infrastructure.orm.unified_agent import UnifiedAgentTask
+from sail_server.application.dto.unified_agent import (
     TaskType,
     TaskSubType,
     StepType,
@@ -39,7 +39,7 @@ from sail_server.model.unified_agent import (
     UnifiedStepDAO,
     UnifiedEventDAO,
 )
-from sail_server.data.text import DocumentNode, Edition, Work
+from sail_server.infrastructure.orm.text import DocumentNode, Edition, Work
 from sail_server.utils.llm.gateway import LLMExecutionConfig, TokenBudget
 
 logger = logging.getLogger(__name__)

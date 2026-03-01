@@ -310,20 +310,22 @@ class LoggingManager:
         llm_logger.addHandler(handler)
     
     def _setup_db_logger(self):
-        """设置数据库查询日志"""
+        """设置数据库查询日志 - 仅输出到文件，不输出到控制台"""
         db_logger = logging.getLogger("sqlalchemy.engine")
-        db_logger.setLevel(logging.DEBUG)
         
         # 避免重复添加 handler
-        if db_logger.handlers:
+        if any(isinstance(h, logging.handlers.RotatingFileHandler) and "db_queries" in str(h.baseFilename) 
+               for h in db_logger.handlers):
             return
         
+        # 只在文件记录 DEBUG 级别，不影响控制台
         handler = logging.handlers.RotatingFileHandler(
             self.log_dir / "db_queries.log",
             maxBytes=10*1024*1024,
             backupCount=3,
             encoding="utf-8",
         )
+        handler.setLevel(logging.DEBUG)
         handler.setFormatter(logging.Formatter(
             "%(asctime)s - %(message)s"
         ))
@@ -331,17 +333,22 @@ class LoggingManager:
     
     def _set_third_party_levels(self):
         """设置第三方库的日志级别"""
-        # 降低噪音
+        # 降低噪音 - 这些库通常只在 WARNING 及以上级别输出到控制台
         logging.getLogger("uvicorn").setLevel(logging.WARNING)
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
         
-        # 根据模式调整
-        if self.log_mode == "debug":
+        # SQLAlchemy 日志级别控制
+        # 只在 DB_DEBUG=true 且明确需要时才输出到控制台
+        if self.log_mode == "debug" and os.getenv("DB_DEBUG", "false").lower() == "true":
             logging.getLogger("sqlalchemy.engine").setLevel(logging.DEBUG)
         else:
+            # 默认情况下 SQLAlchemy 只输出 WARNING 及以上到控制台
             logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+            # 同时抑制 sqlalchemy.pool 的日志
+            logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+            logging.getLogger("sqlalchemy.dialects").setLevel(logging.WARNING)
 
 
 # ============================================================================

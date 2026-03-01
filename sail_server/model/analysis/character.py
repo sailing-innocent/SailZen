@@ -8,35 +8,118 @@
 
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
-from sail_server.data.analysis import (
-    Character, CharacterData,
-    CharacterAlias, CharacterAliasData,
-    CharacterAttribute, CharacterAttributeData,
-    CharacterRelation, CharacterRelationData,
+# 使用新的 DAO 层（Phase 4）
+from sail_server.data.dao import (
+    CharacterDAO, CharacterAliasDAO, CharacterAttributeDAO,
 )
+from sail_server.infrastructure.orm.analysis import (
+    Character, CharacterAlias, CharacterAttribute, CharacterRelation,
+)
+
+# 使用 Pydantic DTOs
+from sail_server.application.dto.analysis import (
+    CharacterResponse, CharacterCreateRequest,
+)
+
+
+# ============================================================================
+# Helper Functions for ORM to DTO Conversion
+# ============================================================================
+
+def _character_to_response(character: Character) -> CharacterResponse:
+    """将 Character ORM 对象转换为 CharacterResponse DTO"""
+    return CharacterResponse(
+        id=character.id,
+        edition_id=character.edition_id,
+        canonical_name=character.canonical_name,
+        role_type=character.role_type or "supporting",
+        description=character.description,
+        first_appearance_node_id=character.first_appearance_node_id,
+        status=character.status or "draft",
+        source=character.source or "manual",
+        importance_score=character.importance_score,
+        created_at=character.created_at,
+        updated_at=character.updated_at,
+    )
+
+
+def _alias_to_dict(alias: CharacterAlias) -> Dict[str, Any]:
+    """将 CharacterAlias ORM 对象转换为字典"""
+    return {
+        "id": alias.id,
+        "character_id": alias.character_id,
+        "alias": alias.alias,
+        "alias_type": alias.alias_type,
+        "usage_context": alias.usage_context,
+        "is_preferred": alias.is_preferred,
+        "source": alias.source,
+        "created_at": alias.created_at,
+    }
+
+
+def _attribute_to_dict(attr: CharacterAttribute) -> Dict[str, Any]:
+    """将 CharacterAttribute ORM 对象转换为字典"""
+    return {
+        "id": attr.id,
+        "character_id": attr.character_id,
+        "category": attr.category,
+        "attr_key": attr.attr_key,
+        "attr_value": attr.attr_value,
+        "confidence": attr.confidence,
+        "source": attr.source,
+        "source_node_id": attr.source_node_id,
+        "status": attr.status,
+        "created_at": attr.created_at,
+        "updated_at": attr.updated_at,
+    }
+
+
+def _relation_to_dict(relation: CharacterRelation) -> Dict[str, Any]:
+    """将 CharacterRelation ORM 对象转换为字典"""
+    return {
+        "id": relation.id,
+        "edition_id": relation.edition_id,
+        "source_character_id": relation.source_character_id,
+        "target_character_id": relation.target_character_id,
+        "relation_type": relation.relation_type,
+        "relation_subtype": relation.relation_subtype,
+        "description": relation.description,
+        "strength": relation.strength,
+        "is_mutual": relation.is_mutual,
+        "status": relation.status,
+        "created_at": relation.created_at,
+        "updated_at": relation.updated_at,
+    }
 
 
 # ============================================================================
 # Character CRUD Operations
 # ============================================================================
 
-def create_character_impl(db: Session, data: CharacterData) -> CharacterData:
+def create_character_impl(db: Session, data: CharacterCreateRequest) -> CharacterResponse:
     """创建人物"""
-    character = data.create_orm()
-    db.add(character)
-    db.commit()
-    db.refresh(character)
-    return CharacterData.read_from_orm(character)
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = Character(
+        edition_id=data.edition_id,
+        canonical_name=data.canonical_name,
+        role_type=data.role_type,
+        description=data.description,
+        source="manual",
+    )
+    character = character_dao.create(character)
+    return _character_to_response(character)
 
 
-def get_character_impl(db: Session, character_id: int) -> Optional[CharacterData]:
+def get_character_impl(db: Session, character_id: int) -> Optional[CharacterResponse]:
     """获取单个人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = character_dao.get_by_id(character_id)
     if not character:
         return None
-    return CharacterData.read_from_orm(character)
+    return _character_to_response(character)
 
 
 def get_characters_by_edition_impl(
@@ -44,48 +127,33 @@ def get_characters_by_edition_impl(
     edition_id: int,
     role_type: Optional[str] = None,
     status: Optional[str] = None
-) -> List[CharacterData]:
+) -> List[CharacterResponse]:
     """获取版本的所有人物"""
-    query = db.query(Character).filter(Character.edition_id == edition_id)
-    
-    if role_type:
-        query = query.filter(Character.role_type == role_type)
-    if status:
-        query = query.filter(Character.status == status)
-    
-    characters = query.order_by(Character.importance_score.desc(), Character.canonical_name).all()
-    return [CharacterData.read_from_orm(c) for c in characters]
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    characters = character_dao.get_by_edition(edition_id, role_type, status)
+    return [_character_to_response(c) for c in characters]
 
 
 def update_character_impl(
     db: Session, 
     character_id: int, 
     data: Dict[str, Any]
-) -> Optional[CharacterData]:
+) -> Optional[CharacterResponse]:
     """更新人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    character = character_dao.update(character_id, data)
     if not character:
         return None
-    
-    # 更新字段
-    for key, value in data.items():
-        if hasattr(character, key) and value is not None:
-            setattr(character, key, value)
-    
-    db.commit()
-    db.refresh(character)
-    return CharacterData.read_from_orm(character)
+    return _character_to_response(character)
 
 
 def delete_character_impl(db: Session, character_id: int) -> bool:
     """删除人物"""
-    character = db.query(Character).filter(Character.id == character_id).first()
-    if not character:
-        return False
-    
-    db.delete(character)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    character_dao = CharacterDAO(db)
+    return character_dao.delete(character_id)
 
 
 # ============================================================================
@@ -99,8 +167,10 @@ def add_character_alias_impl(
     alias_type: str = "nickname",
     usage_context: Optional[str] = None,
     is_preferred: bool = False
-) -> CharacterAliasData:
+) -> Dict[str, Any]:
     """添加人物别名"""
+    # Phase 4: 使用 DAO 层
+    alias_dao = CharacterAliasDAO(db)
     alias_obj = CharacterAlias(
         character_id=character_id,
         alias=alias,
@@ -108,21 +178,15 @@ def add_character_alias_impl(
         usage_context=usage_context,
         is_preferred=is_preferred,
     )
-    db.add(alias_obj)
-    db.commit()
-    db.refresh(alias_obj)
-    return CharacterAliasData.read_from_orm(alias_obj)
+    alias_obj = alias_dao.create(alias_obj)
+    return _alias_to_dict(alias_obj)
 
 
 def remove_character_alias_impl(db: Session, alias_id: int) -> bool:
     """删除人物别名"""
-    alias = db.query(CharacterAlias).filter(CharacterAlias.id == alias_id).first()
-    if not alias:
-        return False
-    
-    db.delete(alias)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    alias_dao = CharacterAliasDAO(db)
+    return alias_dao.delete(alias_id)
 
 
 # ============================================================================
@@ -137,8 +201,11 @@ def add_character_attribute_impl(
     category: Optional[str] = None,
     confidence: Optional[float] = None,
     source_node_id: Optional[int] = None,
-) -> CharacterAttributeData:
+) -> Dict[str, Any]:
     """添加人物属性"""
+    # Phase 4: 使用 DAO 层
+    attr_dao = CharacterAttributeDAO(db)
+    
     # 检查是否已存在相同 key 的属性
     existing = db.query(CharacterAttribute).filter(
         CharacterAttribute.character_id == character_id,
@@ -147,13 +214,13 @@ def add_character_attribute_impl(
     
     if existing:
         # 更新现有属性
-        existing.attr_value = attr_value
-        existing.category = category
-        existing.confidence = confidence
-        existing.source_node_id = source_node_id
-        db.commit()
-        db.refresh(existing)
-        return CharacterAttributeData.read_from_orm(existing)
+        existing = attr_dao.update(existing.id, {
+            "attr_value": attr_value,
+            "category": category,
+            "confidence": confidence,
+            "source_node_id": source_node_id,
+        })
+        return _attribute_to_dict(existing)
     
     # 创建新属性
     attr = CharacterAttribute(
@@ -164,21 +231,15 @@ def add_character_attribute_impl(
         confidence=confidence,
         source_node_id=source_node_id,
     )
-    db.add(attr)
-    db.commit()
-    db.refresh(attr)
-    return CharacterAttributeData.read_from_orm(attr)
+    attr = attr_dao.create(attr)
+    return _attribute_to_dict(attr)
 
 
 def delete_character_attribute_impl(db: Session, attribute_id: int) -> bool:
     """删除人物属性"""
-    attr = db.query(CharacterAttribute).filter(CharacterAttribute.id == attribute_id).first()
-    if not attr:
-        return False
-    
-    db.delete(attr)
-    db.commit()
-    return True
+    # Phase 4: 使用 DAO 层
+    attr_dao = CharacterAttributeDAO(db)
+    return attr_dao.delete(attribute_id)
 
 
 # ============================================================================
@@ -195,7 +256,7 @@ def add_character_relation_impl(
     description: Optional[str] = None,
     strength: Optional[float] = None,
     is_mutual: bool = True,
-) -> CharacterRelationData:
+) -> Dict[str, Any]:
     """添加人物关系"""
     relation = CharacterRelation(
         edition_id=edition_id,
@@ -210,14 +271,14 @@ def add_character_relation_impl(
     db.add(relation)
     db.commit()
     db.refresh(relation)
-    return CharacterRelationData.read_from_orm(relation)
+    return _relation_to_dict(relation)
 
 
 def get_character_relations_impl(
     db: Session,
     character_id: int,
     relation_type: Optional[str] = None
-) -> List[CharacterRelationData]:
+) -> List[Dict[str, Any]]:
     """获取人物的所有关系"""
     query = db.query(CharacterRelation).filter(
         (CharacterRelation.source_character_id == character_id) |
@@ -228,7 +289,7 @@ def get_character_relations_impl(
         query = query.filter(CharacterRelation.relation_type == relation_type)
     
     relations = query.all()
-    return [CharacterRelationData.read_from_orm(r) for r in relations]
+    return [_relation_to_dict(r) for r in relations]
 
 
 def delete_character_relation_impl(db: Session, relation_id: int) -> bool:
@@ -250,9 +311,9 @@ def get_character_profile_impl(db: Session, character_id: int) -> Optional[Dict[
     
     # 构建档案数据
     profile = {
-        "character": CharacterData.read_from_orm(character),
-        "aliases": [CharacterAliasData.read_from_orm(a) for a in character.aliases],
-        "attributes": [CharacterAttributeData.read_from_orm(a) for a in character.attributes],
+        "character": _character_to_response(character),
+        "aliases": [_alias_to_dict(a) for a in character.aliases],
+        "attributes": [_attribute_to_dict(a) for a in character.attributes],
         "arcs": [],  # TODO: 实现人物弧线
         "relations": [],  # TODO: 实现关系查询
     }

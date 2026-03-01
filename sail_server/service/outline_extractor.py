@@ -28,7 +28,7 @@ from sail_server.utils.llm.available_providers import (
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,
 )
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     OutlineExtractionConfig,
     ExtractedOutlineNode,
@@ -880,7 +880,7 @@ class OutlineExtractor:
             保存结果统计
         """
         from sail_server.model.analysis.outline import create_outline_impl
-        from sail_server.data.analysis import OutlineData
+        from sail_server.application.dto.analysis import OutlineData
         
         # 1. 创建大纲
         outline_data = OutlineData(
@@ -961,7 +961,7 @@ class OutlineExtractor:
         使用 chapter_title 和文本片段来定位正确的章节
         """
         try:
-            from sail_server.data.text import DocumentNode
+            from sail_server.infrastructure.orm.text import DocumentNode
             
             text = evidence.text
             chapter_title = evidence.chapter_title or ""

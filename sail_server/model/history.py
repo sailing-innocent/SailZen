@@ -3,33 +3,74 @@
 # @brief The History Events Model
 # @author sailing-innocent
 # @date 2025-10-12
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
-from sail_server.data.history import HistoryEvent, HistoryEventData
 from datetime import datetime
 from typing import Optional, List
 
+from sail_server.infrastructure.orm.history import HistoryEvent
+from sail_server.application.dto.history import (
+    HistoryEventCreateRequest,
+    HistoryEventUpdateRequest,
+    HistoryEventResponse,
+)
 
-def create_event_impl(db, event_create: HistoryEventData):
+
+def _orm_to_response(event: HistoryEvent) -> HistoryEventResponse:
+    """
+    将 ORM 模型转换为响应 DTO
+    
+    Args:
+        event: HistoryEvent ORM 对象
+        
+    Returns:
+        HistoryEventResponse: 响应 DTO
+    """
+    return HistoryEventResponse(
+        id=event.id,
+        title=event.title,
+        description=event.description,
+        rar_tags=event.rar_tags or [],
+        tags=event.tags or [],
+        start_time=event.start_time,
+        end_time=event.end_time,
+        related_events=event.related_events or [],
+        parent_event=event.parent_event,
+        details=event.details or {},
+        receive_time=event.receive_time,
+    )
+
+
+def create_event_impl(db, event_create: HistoryEventCreateRequest) -> HistoryEventResponse:
     """
     创建新的历史事件
 
     Args:
         db: 数据库会话
-        event_create: 事件数据对象
+        event_create: 创建事件请求对象
 
     Returns:
-        HistoryEventData: 创建的事件数据
+        HistoryEventResponse: 创建的事件响应
     """
-    event = event_create.create_event()
+    event = HistoryEvent(
+        title=event_create.title,
+        description=event_create.description,
+        rar_tags=event_create.rar_tags,
+        tags=event_create.tags,
+        start_time=event_create.start_time,
+        end_time=event_create.end_time,
+        related_events=event_create.related_events,
+        parent_event=event_create.parent_event,
+        details=event_create.details,
+    )
     db.add(event)
     db.commit()
     db.refresh(event)
-    return HistoryEventData.read_from_orm(event)
+    return _orm_to_response(event)
 
 
-def get_event_impl(db, event_id: int):
+def get_event_impl(db, event_id: int) -> Optional[HistoryEventResponse]:
     """
     根据ID获取单个历史事件
 
@@ -38,12 +79,12 @@ def get_event_impl(db, event_id: int):
         event_id: 事件ID
 
     Returns:
-        HistoryEventData: 事件数据，如果不存在返回None
+        HistoryEventResponse: 事件响应，如果不存在返回None
     """
     event = db.query(HistoryEvent).filter(HistoryEvent.id == event_id).first()
     if not event:
         return None
-    return HistoryEventData.read_from_orm(event)
+    return _orm_to_response(event)
 
 
 def get_events_impl(
@@ -54,7 +95,7 @@ def get_events_impl(
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
     tags: Optional[List[str]] = None,
-):
+) -> List[HistoryEventResponse]:
     """
     获取历史事件列表，支持多种过滤条件
 
@@ -68,7 +109,7 @@ def get_events_impl(
         tags: 标签过滤
 
     Returns:
-        List[HistoryEventData]: 事件数据列表
+        List[HistoryEventResponse]: 事件响应列表
     """
     query = db.query(HistoryEvent)
 
@@ -99,10 +140,10 @@ def get_events_impl(
         query = query.limit(limit)
 
     events = query.all()
-    return [HistoryEventData.read_from_orm(event) for event in events]
+    return [_orm_to_response(event) for event in events]
 
 
-def get_child_events_impl(db, parent_id: int):
+def get_child_events_impl(db, parent_id: int) -> List[HistoryEventResponse]:
     """
     获取指定父事件的所有子事件
 
@@ -111,12 +152,12 @@ def get_child_events_impl(db, parent_id: int):
         parent_id: 父事件ID
 
     Returns:
-        List[HistoryEventData]: 子事件列表
+        List[HistoryEventResponse]: 子事件列表
     """
     return get_events_impl(db, parent_id=parent_id)
 
 
-def get_related_events_impl(db, event_id: int):
+def get_related_events_impl(db, event_id: int) -> List[HistoryEventResponse]:
     """
     获取与指定事件相关的所有事件
 
@@ -125,7 +166,7 @@ def get_related_events_impl(db, event_id: int):
         event_id: 事件ID
 
     Returns:
-        List[HistoryEventData]: 相关事件列表
+        List[HistoryEventResponse]: 相关事件列表
     """
     event = db.query(HistoryEvent).filter(HistoryEvent.id == event_id).first()
     if not event or not event.related_events:
@@ -135,32 +176,53 @@ def get_related_events_impl(db, event_id: int):
         db.query(HistoryEvent).filter(HistoryEvent.id.in_(event.related_events)).all()
     )
 
-    return [HistoryEventData.read_from_orm(e) for e in related]
+    return [_orm_to_response(e) for e in related]
 
 
-def update_event_impl(db, event_id: int, event_update: HistoryEventData):
+def update_event_impl(
+    db, event_id: int, event_update: HistoryEventUpdateRequest
+) -> Optional[HistoryEventResponse]:
     """
     更新历史事件
 
     Args:
         db: 数据库会话
         event_id: 事件ID
-        event_update: 更新的事件数据
+        event_update: 更新事件请求对象
 
     Returns:
-        HistoryEventData: 更新后的事件数据，如果不存在返回None
+        HistoryEventResponse: 更新后的事件响应，如果不存在返回None
     """
     event = db.query(HistoryEvent).filter(HistoryEvent.id == event_id).first()
     if not event:
         return None
 
-    event_update.update_event(event)
+    # 只更新提供的字段
+    if event_update.title is not None:
+        event.title = event_update.title
+    if event_update.description is not None:
+        event.description = event_update.description
+    if event_update.rar_tags is not None:
+        event.rar_tags = event_update.rar_tags
+    if event_update.tags is not None:
+        event.tags = event_update.tags
+    if event_update.start_time is not None:
+        event.start_time = event_update.start_time
+    if event_update.end_time is not None:
+        event.end_time = event_update.end_time
+    if event_update.related_events is not None:
+        event.related_events = event_update.related_events
+    if event_update.parent_event is not None:
+        event.parent_event = event_update.parent_event
+    if event_update.details is not None:
+        event.details = event_update.details
+
     db.commit()
     db.refresh(event)
-    return HistoryEventData.read_from_orm(event)
+    return _orm_to_response(event)
 
 
-def delete_event_impl(db, event_id: int):
+def delete_event_impl(db, event_id: int) -> Optional[HistoryEventResponse]:
     """
     删除历史事件
 
@@ -169,19 +231,21 @@ def delete_event_impl(db, event_id: int):
         event_id: 事件ID
 
     Returns:
-        HistoryEventData: 被删除的事件数据，如果不存在返回None
+        HistoryEventResponse: 被删除的事件响应，如果不存在返回None
     """
     event = db.query(HistoryEvent).filter(HistoryEvent.id == event_id).first()
     if not event:
         return None
 
-    event_data = HistoryEventData.read_from_orm(event)
+    event_data = _orm_to_response(event)
     db.delete(event)
     db.commit()
     return event_data
 
 
-def search_events_by_keyword_impl(db, keyword: str, skip: int = 0, limit: int = 10):
+def search_events_by_keyword_impl(
+    db, keyword: str, skip: int = 0, limit: int = 10
+) -> List[HistoryEventResponse]:
     """
     通过关键词搜索历史事件（在标题和描述中搜索）
 
@@ -192,7 +256,7 @@ def search_events_by_keyword_impl(db, keyword: str, skip: int = 0, limit: int = 
         limit: 返回的最大记录数
 
     Returns:
-        List[HistoryEventData]: 匹配的事件列表
+        List[HistoryEventResponse]: 匹配的事件列表
     """
     query = db.query(HistoryEvent).filter(
         (HistoryEvent.title.ilike(f"%{keyword}%"))
@@ -207,4 +271,4 @@ def search_events_by_keyword_impl(db, keyword: str, skip: int = 0, limit: int = 
         query = query.limit(limit)
 
     events = query.all()
-    return [HistoryEventData.read_from_orm(event) for event in events]
+    return [_orm_to_response(event) for event in events]

@@ -12,8 +12,17 @@
 import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects import postgresql
 
 logger = logging.getLogger(__name__)
+
+
+
+def show_sql(query):
+    """
+    Show the SQL query string.
+    """
+    print(query.statement.compile(compile_kwargs={"literal_binds": True},dialect=postgresql.dialect(paramstyle="named")))
 
 
 def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
@@ -52,7 +61,7 @@ def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
                 text(f"SELECT last_value FROM {sequence_name}")
             ).scalar()
             
-            if curr_val <= max_id:
+            if curr_val and curr_val <= max_id:
                 # 修复序列
                 new_val = max_id + 1
                 db.execute(
@@ -60,8 +69,7 @@ def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
                 )
                 db.commit()
                 logger.info(f"Fixed sequence {sequence_name}: {curr_val} -> {new_val}")
-            else:
-                logger.debug(f"Sequence {sequence_name} is OK: {curr_val} > {max_id}")
+            # 序列正常时不输出日志，避免启动时过多日志
         else:
             logger.debug(f"Sequence {sequence_name} does not exist, skipping")
         

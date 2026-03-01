@@ -23,7 +23,8 @@ from .base import (
     ProgressCallback,
     AgentInfo,
 )
-from sail_server.data.unified_agent import UnifiedAgentTask, TaskType, StepType
+from sail_server.infrastructure.orm.unified_agent import UnifiedAgentTask
+from sail_server.application.dto.unified_agent import TaskType, StepType
 from sail_server.utils.llm.gateway import LLMExecutionConfig, TokenBudget
 
 logger = logging.getLogger(__name__)

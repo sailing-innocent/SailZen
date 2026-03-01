@@ -16,7 +16,7 @@ from difflib import SequenceMatcher
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     CharacterData,
     CharacterAliasData,
     CharacterAttributeData,

@@ -7,14 +7,18 @@
 # ---------------------------------
 
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
 
-from sail_server.data.text import (
-    WorkData, EditionData, DocumentNodeData, DocumentNodeUpdateRequest,
-    TextImportRequest, ChapterListItem, ChapterInsertRequest
+from sail_server.application.dto.text import (
+    WorkCreateRequest,
+    WorkUpdateRequest,
+    WorkResponse,
+    EditionCreateRequest,
+    EditionUpdateRequest,
+    EditionResponse,
+    DocumentNodeResponse,
+    DocumentNodeUpdateRequest,
 )
 from sail_server.model.text import (
     create_work_impl, get_work_impl, get_works_impl, update_work_impl, delete_work_impl,
@@ -26,88 +30,57 @@ from sail_server.model.text import (
 
 from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field
 
 
 # ============================================================================
-# DTOs
+# Request/Response Models
 # ============================================================================
 
-class WorkDataWriteDTO(DataclassDTO[WorkData]):
-    """创建作品时使用的DTO"""
-    config = DTOConfig(
-        include={
-            "title", "original_title", "author", "language_primary",
-            "work_type", "status", "synopsis", "meta_data",
-        },
-    )
+class TextImportRequest(BaseModel):
+    """文本导入请求"""
+    title: str = Field(description="作品标题")
+    author: Optional[str] = Field(default=None, description="作者")
+    content: str = Field(description="文本内容")
+    chapter_pattern: Optional[str] = Field(default=None, description="章节匹配模式")
 
 
-class WorkDataReadDTO(DataclassDTO[WorkData]):
-    """读取作品时使用的DTO"""
-    pass
+class ChapterInsertRequest(BaseModel):
+    """插入章节请求"""
+    sort_index: int = Field(description="插入位置")
+    label: str = Field(description="章节标签")
+    title: str = Field(description="章节标题")
+    content: str = Field(description="章节内容")
+    meta_data: Optional[dict] = Field(default=None, description="元数据")
 
 
-class EditionDataWriteDTO(DataclassDTO[EditionData]):
-    """创建版本时使用的DTO"""
-    config = DTOConfig(
-        include={
-            "work_id", "edition_name", "language", "source_format",
-            "canonical", "description", "meta_data",
-        },
-    )
+class ChapterListItem(BaseModel):
+    """章节列表项"""
+    id: int = Field(description="节点ID")
+    sort_order: int = Field(description="排序顺序")
+    label: str = Field(description="章节标签")
+    title: str = Field(description="章节标题")
+    level: int = Field(description="层级")
 
 
-class EditionDataReadDTO(DataclassDTO[EditionData]):
-    """读取版本时使用的DTO"""
-    pass
-
-
-class DocumentNodeUpdateDTO(DataclassDTO[DocumentNodeUpdateRequest]):
-    """更新文档节点时使用的DTO"""
-    pass
-
-
-class ChapterInsertRequestDTO(DataclassDTO[ChapterInsertRequest]):
-    """插入章节请求DTO"""
-    pass
-
-
-class DocumentNodeDataReadDTO(DataclassDTO[DocumentNodeData]):
-    """读取文档节点时使用的DTO"""
-    pass
-
-
-class TextImportRequestDTO(DataclassDTO[TextImportRequest]):
-    """文本导入请求DTO"""
-    pass
-
-
-# ============================================================================
-# Response Models
-# ============================================================================
-
-@dataclass
-class ImportResponse:
+class ImportResponse(BaseModel):
     """导入响应"""
-    work: WorkData
-    edition: EditionData
+    work: WorkResponse
+    edition: EditionResponse
     chapter_count: int
     message: str = "导入成功"
 
 
-@dataclass
-class AppendResponse:
+class AppendResponse(BaseModel):
     """追加章节响应"""
     edition_id: int
     new_chapter_count: int
     message: str = "追加成功"
 
 
-@dataclass
-class ChapterInsertResponse:
+class ChapterInsertResponse(BaseModel):
     """插入章节响应"""
-    chapter: DocumentNodeData
+    chapter: DocumentNodeResponse
     message: str = "插入成功"
 
 
@@ -117,8 +90,6 @@ class ChapterInsertResponse:
 
 class WorkController(Controller):
     """作品管理控制器"""
-    dto = WorkDataWriteDTO
-    return_dto = WorkDataReadDTO
     path = "/work"
     
     @get("")
@@ -128,7 +99,7 @@ class WorkController(Controller):
         request: Request,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[WorkData]:
+    ) -> List[WorkResponse]:
         """获取作品列表"""
         db = next(router_dependency)
         works = get_works_impl(db, skip, limit)
@@ -143,7 +114,7 @@ class WorkController(Controller):
         keyword: str,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[WorkData]:
+    ) -> List[WorkResponse]:
         """搜索作品"""
         db = next(router_dependency)
         works = search_works_impl(db, keyword, skip, limit)
@@ -156,7 +127,7 @@ class WorkController(Controller):
         work_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WorkData:
+    ) -> WorkResponse:
         """获取单个作品"""
         db = next(router_dependency)
         work = get_work_impl(db, work_id)
@@ -168,10 +139,10 @@ class WorkController(Controller):
     @post("/")
     async def create_work(
         self,
-        data: WorkData,
+        data: WorkCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WorkData:
+    ) -> WorkResponse:
         """创建作品"""
         db = next(router_dependency)
         work = create_work_impl(db, data)
@@ -182,10 +153,10 @@ class WorkController(Controller):
     async def update_work(
         self,
         work_id: int,
-        data: WorkData,
+        data: WorkUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WorkData:
+    ) -> WorkResponse:
         """更新作品"""
         db = next(router_dependency)
         work = update_work_impl(db, work_id, data)
@@ -200,7 +171,7 @@ class WorkController(Controller):
         work_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> WorkData:
+    ) -> WorkResponse:
         """删除作品"""
         db = next(router_dependency)
         work = delete_work_impl(db, work_id)
@@ -216,8 +187,6 @@ class WorkController(Controller):
 
 class EditionController(Controller):
     """版本管理控制器"""
-    dto = EditionDataWriteDTO
-    return_dto = EditionDataReadDTO
     path = "/edition"
     
     @get("/{edition_id:int}")
@@ -226,7 +195,7 @@ class EditionController(Controller):
         edition_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> EditionData:
+    ) -> EditionResponse:
         """获取单个版本"""
         db = next(router_dependency)
         edition = get_edition_impl(db, edition_id)
@@ -241,7 +210,7 @@ class EditionController(Controller):
         work_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> List[EditionData]:
+    ) -> List[EditionResponse]:
         """获取作品的所有版本"""
         db = next(router_dependency)
         editions = get_editions_by_work_impl(db, work_id)
@@ -251,10 +220,10 @@ class EditionController(Controller):
     @post("/")
     async def create_edition(
         self,
-        data: EditionData,
+        data: EditionCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> EditionData:
+    ) -> EditionResponse:
         """创建版本"""
         db = next(router_dependency)
         edition = create_edition_impl(db, data)
@@ -265,10 +234,10 @@ class EditionController(Controller):
     async def update_edition(
         self,
         edition_id: int,
-        data: EditionData,
+        data: EditionUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> EditionData:
+    ) -> EditionResponse:
         """更新版本"""
         db = next(router_dependency)
         edition = update_edition_impl(db, edition_id, data)
@@ -283,7 +252,7 @@ class EditionController(Controller):
         edition_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> EditionData:
+    ) -> EditionResponse:
         """删除版本"""
         db = next(router_dependency)
         edition = delete_edition_impl(db, edition_id)
@@ -312,7 +281,7 @@ class EditionController(Controller):
         chapter_index: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> DocumentNodeData:
+    ) -> DocumentNodeResponse:
         """获取指定章节的内容"""
         db = next(router_dependency)
         chapter = get_chapter_content_impl(db, edition_id, chapter_index)
@@ -330,14 +299,14 @@ class EditionController(Controller):
         request: Request,
         skip: int = 0,
         limit: int = 50,
-    ) -> List[DocumentNodeData]:
+    ) -> List[DocumentNodeResponse]:
         """搜索版本中的内容"""
         db = next(router_dependency)
         results = search_content_impl(db, edition_id, keyword, skip, limit)
         request.logger.info(f"Search content in edition {edition_id} with keyword '{keyword}': {len(results)} results")
         return results
     
-    @post("/{edition_id:int}/chapter/insert", dto=ChapterInsertRequestDTO)
+    @post("/{edition_id:int}/chapter/insert")
     async def insert_chapter(
         self,
         edition_id: int,
@@ -370,7 +339,6 @@ class EditionController(Controller):
 
 class DocumentNodeController(Controller):
     """文档节点控制器"""
-    return_dto = DocumentNodeDataReadDTO
     path = "/node"
 
     @get("/{node_id:int}")
@@ -380,7 +348,7 @@ class DocumentNodeController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         include_content: bool = True,
-    ) -> DocumentNodeData:
+    ) -> DocumentNodeResponse:
         """获取单个文档节点"""
         db = next(router_dependency)
         node = get_document_node_impl(db, node_id, include_content)
@@ -389,14 +357,14 @@ class DocumentNodeController(Controller):
         request.logger.info(f"Get node {node_id}")
         return node
 
-    @put("/{node_id:int}", dto=DocumentNodeUpdateDTO)
+    @put("/{node_id:int}")
     async def update_node(
         self,
         node_id: int,
         data: DocumentNodeUpdateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> DocumentNodeData:
+    ) -> DocumentNodeResponse:
         """更新文档节点"""
         db = next(router_dependency)
         node = update_document_node_impl(db, node_id, data)

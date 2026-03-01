@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
 from enum import Enum
 
-from sail_server.data.analysis import ExtractedOutlineNode
+from sail_server.application.dto.analysis import ExtractedOutlineNode
 
 logger = logging.getLogger(__name__)
 

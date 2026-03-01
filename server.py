@@ -13,30 +13,13 @@ import hashlib
 import time
 from typing import Any
 from datetime import datetime
-
-# 首先加载环境变量（必须在日志配置之前）
 from sail_server.utils.env import read_env
-
-# 检查命令行参数来加载正确的环境
-import sys
-if "--dev" in sys.argv:
-    read_env("dev")
-elif "--debug" in sys.argv:
-    read_env("debug")
-else:
-    # 默认加载 prod 环境（生产环境）
-    # 使用 --dev 或 --debug 参数来加载开发/调试环境
-    read_env("prod")
-
 from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
 
 # 导入新的日志体系
 from sail_server.utils.logging_config import setup_logging, get_logger
-
-# 设置日志（环境变量已加载）
-setup_logging()
 logger = get_logger("sail_server")
 
 from litestar.config.cors import CORSConfig
@@ -120,11 +103,8 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
-        from sail_server.router.agent import router as agent_router
         from sail_server.router.unified_agent import unified_agent_router
-        from sail_server.router.analysis_compat import analysis_compat_router
-        from sail_server.router.agent_compat import agent_compat_router
-        
+
         # 自动注册 Agent
         from sail_server.agent import auto_register_agents
         auto_register_agents()
@@ -153,18 +133,11 @@ class SailServer:
                 text_router,
                 necessity_router,
                 analysis_router,
-                agent_router,
-                # 新的统一 Agent 路由
                 unified_agent_router,
-                # 兼容层路由
-                analysis_compat_router,
-                agent_compat_router,
             ],
         )
 
         # Setup logging configuration
-        # Note: We don't configure file handler through LoggingConfig to avoid
-        # "Unable to configure handler 'file'" errors. Instead, we set it up manually.
         handlers = ["queue_listener"]
         formatters = {
             "standard": {
@@ -229,22 +202,15 @@ class SailServer:
 
     async def on_startup(self):
         logger.info("Server starting up...")
-        # 启动 Agent 调度器
-        from sail_server.model.agent import get_agent_scheduler
-        scheduler = get_agent_scheduler()
-        await scheduler.start()
-        logger.info("Agent scheduler started")
 
     async def on_shutdown(self):
         logger.info("Server shutting down...")
-        # 停止 Agent 调度器
-        from sail_server.model.agent import get_agent_scheduler
-        scheduler = get_agent_scheduler()
-        await scheduler.stop()
-        logger.info("Agent scheduler stopped")
 
     def run(self):
         logger.info(f"Server running on {self.host}:{self.port}")
+        if not self.app:
+            logger.error("App Not Initialized")
+            return
         import uvicorn
 
         # 使用新的日志体系，禁用 uvicorn 的默认日志
@@ -274,22 +240,18 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sail Server")
-    parser.add_argument("--dev", action="store_true", help="Run in development mode (loads .env.dev)")
-    parser.add_argument("--debug", action="store_true", help="Run in debug mode (loads .env.debug)")
-    parser.add_argument("--prod", action="store_true", help="Run in production mode (loads .env.prod)")
+    parser.add_argument("--dev", action="store_true", help="Run in development mode")
+    parser.add_argument("--debug", action="store_true", help="Run in debug mode")
     args = parser.parse_args()
 
-    # 环境变量已在模块导入时加载，这里处理覆盖逻辑
-    # 默认已加载 prod，如果需要其他环境，在这里重新加载
-    if args.prod:
-        # 默认已经是 prod，不需要重新加载
-        pass
-    elif args.debug:
-        from sail_server.utils.env import read_env
-        read_env("debug")
-        setup_logging()
-    elif args.dev:
-        # 已经在模块导入时加载了 dev，不需要重复加载
-        pass
     
+    if args.dev:
+        from sail_server.utils.env import read_env
+        read_env("dev")
+    elif args.debug:
+        read_env("debug")
+    else:
+        read_env("prod")
+
+    setup_logging()      
     main()

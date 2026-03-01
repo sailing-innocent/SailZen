@@ -15,18 +15,14 @@
 4. 不再提供硬编码的业务模板函数，改为通用接口
 """
 
-from sail_server.data.finance import (
-    Budget,
-    BudgetData,
-    BudgetItem,
-    BudgetItemData,
-    BudgetDirection,
-    ItemType,
-    ItemStatus,
-    Transaction,
-    TransactionData,
-)
-from sail_server.data.finance import _htime, _htime_inv
+from sail_server.infrastructure.orm.finance import Budget, BudgetItem, Transaction
+from sail_server.application.dto.finance import BudgetData, BudgetItemData, TransactionData, BudgetDirectionEnum, ItemTypeEnum, ItemStatusEnum
+
+# 向后兼容的别名
+BudgetDirection = BudgetDirectionEnum
+ItemType = ItemTypeEnum
+ItemStatus = ItemStatusEnum
+from sail_server.utils.finance_helpers import _htime, _htime_inv
 from sail_server.utils.money import Money
 from datetime import datetime
 import logging
@@ -178,10 +174,11 @@ def create_budget_impl(db, data: BudgetData) -> BudgetData:
     db.flush()  # Get the budget ID
     
     # Create items if provided
-    for item_data in data.items:
-        item = budget_item_from_data(item_data)
-        item.budget_id = budget.id
-        db.add(item)
+    if data.items:
+        for item_data in data.items:
+            item = budget_item_from_data(item_data)
+            item.budget_id = budget.id
+            db.add(item)
     
     db.flush()
     

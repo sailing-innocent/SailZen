@@ -90,7 +90,7 @@ class AgentRegistry:
         # 创建一个临时实例来获取 agent_type
         try:
             temp_instance = agent_class.__new__(agent_class)
-            agent_type = agent_class.agent_type.fget(temp_instance) if hasattr(agent_class.agent_type, 'fget') else None
+            agent_type = agent_class.agent_type.fget(temp_instance) if hasattr(agent_class.agent_type, 'fget') else None # type: ignore
             
             # 如果无法从 property 获取，尝试直接实例化
             if agent_type is None:

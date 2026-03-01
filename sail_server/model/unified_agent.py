@@ -11,13 +11,15 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc, func
 
-from sail_server.data.unified_agent import (
+from sail_server.infrastructure.orm.unified_agent import (
     UnifiedAgentTask,
     UnifiedAgentStep,
     UnifiedAgentEvent,
-    UnifiedTaskData,
-    UnifiedStepData,
-    TaskStatus,
+)
+from sail_server.application.dto.unified_agent import TaskStatus
+from sail_server.application.dto.unified_agent import (
+    UnifiedAgentTaskCreateRequest,
+    UnifiedAgentTaskResponse,
 )
 
 
@@ -31,10 +33,21 @@ class UnifiedTaskDAO:
     # CRUD 操作
     # =========================================================================
     
-    def create(self, data: UnifiedTaskData) -> UnifiedAgentTask:
+    def create(self, data: UnifiedAgentTaskCreateRequest) -> UnifiedAgentTask:
         """创建任务"""
-        # 明确不传递 ID，让数据库自动生成
-        orm = data.to_orm(for_update=False)
+        # Inline the to_orm logic from the removed UnifiedTaskData
+        orm = UnifiedAgentTask(
+            task_type=data.task_type,
+            sub_type=data.sub_type,
+            edition_id=data.edition_id,
+            target_node_ids=data.target_node_ids,
+            target_scope=data.target_scope,
+            llm_provider=data.llm_provider,
+            llm_model=data.llm_model,
+            prompt_template_id=data.prompt_template_id,
+            priority=data.priority,
+            config=data.config,
+        )
         self.db.add(orm)
         self.db.commit()
         self.db.refresh(orm)

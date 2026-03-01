@@ -10,18 +10,18 @@ from __future__ import annotations
 from litestar.dto import DataclassDTO
 from litestar.dto.config import DTOConfig
 from litestar import Controller, post, get, delete, Request
+from litestar.contrib.pydantic import PydanticDTO
 from litestar.exceptions import NotFoundException, ClientException
 
-from sail_server.data.analysis import (
+from sail_server.application.dto.analysis import (
     TextRangeSelection,
     TextRangePreview,
     TextRangeContent,
     RangeSelectionMode,
-    EvidenceCreateRequest,
-    EvidenceUpdateRequest,
-    EvidenceListResponse,
-    TextEvidence,
+    TextEvidenceCreateRequest,
+    TextEvidenceResponse,
 )
+
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
 
 from sqlalchemy.orm import Session
@@ -35,17 +35,17 @@ import uuid
 # DTOs
 # ============================================================================
 
-class TextRangeSelectionDTO(DataclassDTO[TextRangeSelection]):
+class TextRangeSelectionDTO(PydanticDTO[TextRangeSelection]):
     """文本范围选择 DTO"""
     pass
 
 
-class TextRangePreviewDTO(DataclassDTO[TextRangePreview]):
+class TextRangePreviewDTO(PydanticDTO[TextRangePreview]):
     """文本范围预览 DTO"""
     pass
 
 
-class TextRangeContentDTO(DataclassDTO[TextRangeContent]):
+class TextRangeContentDTO(PydanticDTO[TextRangeContent]):
     """文本范围内容 DTO"""
     pass
 
@@ -199,13 +199,12 @@ class EvidenceController(Controller):
     """证据控制器"""
     path = "/evidence"
     
-    # 内存存储（临时实现，后续应使用数据库）
-    _evidence_store: Dict[str, TextEvidence] = {}
+    _evidence_store: Dict[str, TextEvidenceResponse] = {}
     
     @post("/")
     async def create_evidence(
         self,
-        data: EvidenceCreateRequest,
+        data: TextEvidenceCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> EvidenceResponse:
@@ -227,7 +226,7 @@ class EvidenceController(Controller):
         db = next(router_dependency)
         
         # 验证节点存在
-        from sail_server.data.text import DocumentNode
+        from sail_server.infrastructure.orm.text import DocumentNode
         node = db.query(DocumentNode).filter(DocumentNode.id == data.node_id).first()
         if not node:
             raise NotFoundException(detail=f"Node with ID {data.node_id} not found")
@@ -235,7 +234,26 @@ class EvidenceController(Controller):
         # 创建证据
         evidence_id = str(uuid.uuid4())
         now = datetime.now()
-        evidence = TextEvidence(
+        from dataclasses import dataclass, field as dc_field
+        
+        @dataclass
+        class TempEvidence:
+            id: str
+            edition_id: int
+            node_id: int
+            start_offset: int
+            end_offset: int
+            selected_text: str
+            evidence_type: str
+            content: str
+            target_type: Optional[str] = None
+            target_id: Optional[str] = None
+            context: Optional[str] = None
+            created_at: any = None
+            updated_at: any = None
+            meta_data: dict = dc_field(default_factory=dict)
+        
+        evidence = TempEvidence(
             id=evidence_id,
             edition_id=data.edition_id,
             node_id=data.node_id,
@@ -249,7 +267,7 @@ class EvidenceController(Controller):
             context=data.context,
             created_at=now,
             updated_at=None,
-            meta_data=data.meta_data or {},
+            meta_data={},
         )
         
         # 存储证据
@@ -282,6 +300,7 @@ class EvidenceController(Controller):
     ) -> EvidenceResponse:
         """获取单个证据"""
         evidence = self._evidence_store.get(evidence_id)
+        
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
         
@@ -305,7 +324,7 @@ class EvidenceController(Controller):
     async def update_evidence(
         self,
         evidence_id: str,
-        data: EvidenceUpdateRequest,
+        data: TextEvidenceCreateRequest,
         request: Request,
     ) -> EvidenceResponse:
         """更新证据
@@ -482,7 +501,7 @@ class AnalysisStatsController(Controller):
         db = next(router_dependency)
         
         # 验证版本存在
-        from sail_server.data.text import Edition
+        from sail_server.infrastructure.orm.text import Edition
         edition = db.query(Edition).filter(Edition.id == edition_id).first()
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")

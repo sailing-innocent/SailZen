@@ -8,26 +8,20 @@
 
 import logging
 from typing import Optional, List, Dict, Any
-from dataclasses import asdict
 from datetime import datetime
 
 from litestar import Controller, post, get
 from litestar.di import Provide
 from litestar.exceptions import HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, Field
 
-from sail_server.data.analysis import (
-    TextRangeSelection,
-    CharacterDetectionConfig,
-    CharacterDetectionRequest,
-    CharacterDetectionResult,
-    CharacterDetectionResponse,
-    CharacterDeduplicationResult,
-    CharacterMergeCandidate,
-)
+from sail_server.application.dto.analysis import TextRangeSelection
 from sail_server.service.character_detector import (
     CharacterDetector,
     CharacterDetectionResult as ServiceDetectionResult,
+    CharacterDetectionConfig,
+    DetectedCharacter,
 )
 from sail_server.service.character_profiler import (
     CharacterProfiler,
@@ -36,6 +30,80 @@ from sail_server.service.character_profiler import (
 from sail_server.db import g_db_func
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Local Pydantic Models for API
+# ============================================================================
+
+class DetectedCharacterAlias(BaseModel):
+    """检测到的角色别名"""
+    alias: str = Field(description="别名")
+    alias_type: str = Field(default="other", description="别名类型")
+
+
+class DetectedCharacterAttribute(BaseModel):
+    """检测到的角色属性"""
+    category: str = Field(default="other", description="类别")
+    key: str = Field(description="键")
+    value: str = Field(description="值")
+    confidence: Optional[float] = Field(default=None, description="置信度")
+    source_text: Optional[str] = Field(default=None, description="来源文本")
+
+
+class DetectedCharacterRelation(BaseModel):
+    """检测到的角色关系"""
+    target_name: str = Field(description="目标名称")
+    relation_type: str = Field(default="other", description="关系类型")
+    description: Optional[str] = Field(default=None, description="描述")
+    evidence: Optional[str] = Field(default=None, description="证据")
+
+
+class DetectedCharacterItem(BaseModel):
+    """检测到的角色（API响应用）"""
+    canonical_name: str = Field(description="规范名称")
+    aliases: List[DetectedCharacterAlias] = Field(default_factory=list, description="别名")
+    role_type: str = Field(default="supporting", description="角色类型")
+    role_confidence: float = Field(default=0.5, description="角色置信度")
+    first_appearance: Optional[Dict[str, str]] = Field(default=None, description="首次出现")
+    description: str = Field(default="", description="描述")
+    attributes: List[DetectedCharacterAttribute] = Field(default_factory=list, description="属性")
+    relations: List[DetectedCharacterRelation] = Field(default_factory=list, description="关系")
+    key_actions: List[str] = Field(default_factory=list, description="关键行动")
+    mention_count: int = Field(default=0, description="提及次数")
+
+
+class CharacterDetectionResult(BaseModel):
+    """人物检测结果"""
+    characters: List[DetectedCharacterItem] = Field(default_factory=list, description="角色列表")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="元数据")
+    raw_response: Optional[str] = Field(default=None, description="原始响应")
+
+
+class CharacterDetectionResponse(BaseModel):
+    """人物检测响应"""
+    success: bool = Field(description="是否成功")
+    task_id: Optional[str] = Field(default=None, description="任务ID")
+    result: Optional[CharacterDetectionResult] = Field(default=None, description="结果")
+    message: str = Field(default="", description="消息")
+    error: Optional[str] = Field(default=None, description="错误")
+
+
+class CharacterMergeCandidate(BaseModel):
+    """人物合并候选"""
+    character1_id: int = Field(description="角色1 ID")
+    character2_id: int = Field(description="角色2 ID")
+    character1_name: str = Field(description="角色1名称")
+    character2_name: str = Field(description="角色2名称")
+    similarity_score: float = Field(description="相似度分数")
+    merge_reason: str = Field(description="合并原因")
+    suggested_action: str = Field(description="建议操作")
+
+
+class CharacterDeduplicationResult(BaseModel):
+    """人物去重结果"""
+    merge_candidates: List[CharacterMergeCandidate] = Field(default_factory=list, description="合并候选")
+    statistics: Dict[str, Any] = Field(default_factory=dict, description="统计信息")
 
 
 # ============================================================================
@@ -439,13 +507,6 @@ class CharacterDetectionController(Controller):
         service_result: ServiceDetectionResult,
     ) -> CharacterDetectionResult:
         """转换服务层结果到响应格式"""
-        from sail_server.data.analysis import (
-            DetectedCharacter,
-            DetectedCharacterAlias,
-            DetectedCharacterAttribute,
-            DetectedCharacterRelation,
-        )
-        
         characters = []
         for char in service_result.characters:
             # 转换别名
@@ -480,7 +541,7 @@ class CharacterDetectionController(Controller):
                 for r in char.relations
             ]
             
-            characters.append(DetectedCharacter(
+            characters.append(DetectedCharacterItem(
                 canonical_name=char.canonical_name,
                 aliases=aliases,
                 role_type=char.role_type,

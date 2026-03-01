@@ -1,12 +1,6 @@
-from sail_server.data.finance import (
-    Account,
-    Transaction,
-    AccountState,
-    TransactionData,
-    AccountData,
-    TransactionState,
-)
-from sail_server.data.finance import _acc, _acc_inv, _htime, _htime_inv
+from sail_server.infrastructure.orm.finance import Account, Transaction
+from sail_server.application.dto.finance import TransactionData, AccountState, TransactionState
+from sail_server.utils.finance_helpers import _acc, _acc_inv, _htime, _htime_inv
 
 from sail_server.utils.money import Money
 from datetime import datetime
@@ -31,6 +25,8 @@ def trans_from_create(create: TransactionData):
     from_acc_id = _acc(create.from_acc_id)
     to_acc_id = _acc(create.to_acc_id)
     budget_id = create.budget_id if create.budget_id is not None else None
+    # Use current time if htime is None
+    htime_val = create.htime if create.htime is not None else datetime.now().timestamp()
     return Transaction(
         from_acc_id=from_acc_id,
         to_acc_id=to_acc_id,
@@ -40,7 +36,7 @@ def trans_from_create(create: TransactionData):
         description=create.description,
         tags=create.tags,
         state=init_state.value,
-        htime=_htime(create.htime),
+        htime=_htime(htime_val),
         ctime=datetime.now(),
         mtime=datetime.now(),
     )

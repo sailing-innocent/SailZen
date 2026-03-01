@@ -7,13 +7,24 @@
 # ---------------------------------
 
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
 from sail_server.utils.money import Money
 
-from sail_server.data.finance import AccountData, TransactionData, BudgetData
+from sail_server.application.dto.finance import (
+    AccountResponse,
+    AccountCreateRequest,
+    AccountUpdateRequest,
+    AccountFixBalanceRequest,
+    TransactionResponse,
+    TransactionCreateRequest,
+    TransactionUpdateRequest,
+    BudgetResponse,
+    BudgetCreateRequest,
+    BudgetUpdateRequest,
+    BudgetItemResponse,
+    BudgetItemCreateRequest,
+)
 from sail_server.model.finance.account import (
     read_account_impl,
     read_accounts_impl,
@@ -53,7 +64,6 @@ from sail_server.model.finance.budget import (
     record_refund_impl,
     advance_period_impl,
 )
-from sail_server.data.finance import BudgetItemData
 from sqlalchemy.orm import Session
 from typing import Generator, Union, Any
 from datetime import datetime
@@ -63,21 +73,7 @@ from datetime import datetime
 # -------------
 
 
-class AccountDataWriteDTO(DataclassDTO[AccountData]):
-    config = DTOConfig(exclude={"id", "balance", "state", "ctime", "mtime"})
-
-
-class AccountDataUpdateDTO(DataclassDTO[AccountData]):
-    config = DTOConfig(exclude={"state", "ctime", "mtime", "prev_value"})
-
-
-class AccountDataReadDTO(DataclassDTO[AccountData]):
-    config = DTOConfig(exclude={"ctime"})
-
-
 class AccountController(Controller):
-    dto = AccountDataWriteDTO
-    return_dto = AccountDataReadDTO
     path = "/account"
 
     @get("/{account_id:int}")
@@ -86,7 +82,7 @@ class AccountController(Controller):
         account_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> AccountData:
+    ) -> AccountResponse:
         """
         Get the account data.
         """
@@ -99,7 +95,7 @@ class AccountController(Controller):
             return None
         if account is None:
             return None
-        return account
+        return AccountResponse.model_validate(account)
 
     @get()
     async def get_account_list(
@@ -107,21 +103,21 @@ class AccountController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-    ) -> list[AccountData]:
+    ) -> list[AccountResponse]:
         """
         Get the account data list.
         """
         db = next(router_dependency)
         accounts = read_accounts_impl(db, skip, limit)
-        return accounts
+        return [AccountResponse.model_validate(acc) for acc in accounts]
 
     @post()
     async def create_account(
         self,
-        data: AccountData,
+        data: AccountCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> AccountData:
+    ) -> AccountResponse:
         """
         Create a new account data.
         """
@@ -134,20 +130,20 @@ class AccountController(Controller):
             request.logger.error("Account name is too long.")
             raise HTTPException(status_code=400, detail="Account name is too long.")
         else:
-            account = create_account_impl(db, AccountData(name=name))
+            account = create_account_impl(db, name)
         request.logger.info(f"Create account: {account}")
         if account is None:
             return None
 
-        return account
+        return AccountResponse.model_validate(account)
 
-    @get("/update_balance/{account_id:int}", dto=AccountDataUpdateDTO)
+    @get("/update_balance/{account_id:int}")
     async def update_account_balance(
         self,
         account_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> AccountData:
+    ) -> AccountResponse:
         """
         Update the account balance.
         """
@@ -157,7 +153,7 @@ class AccountController(Controller):
         if account is None:
             return None
 
-        return account
+        return AccountResponse.model_validate(account)
 
     @get("/recalc_balance/{account_id:int}")
     async def recalc_account_balance(
@@ -165,7 +161,7 @@ class AccountController(Controller):
         account_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> AccountData:
+    ) -> AccountResponse:
         """
         Recalculate the account balance.
         """
@@ -175,15 +171,15 @@ class AccountController(Controller):
         if account is None:
             return None
 
-        return account
+        return AccountResponse.model_validate(account)
 
-    @post("/fix_balance", dto=AccountDataUpdateDTO)
+    @post("/fix_balance")
     async def fix_account_balance(
         self,
-        data: AccountData,
+        data: AccountFixBalanceRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> AccountData:
+    ) -> AccountResponse:
         """
         Fix the account balance.
         """
@@ -193,7 +189,7 @@ class AccountController(Controller):
         if account is None:
             return None
 
-        return account
+        return AccountResponse.model_validate(account)
 
     @delete("/{account_id:int}", status_code=200)
     async def delete_account(
@@ -224,17 +220,7 @@ class AccountController(Controller):
 # -------------
 
 
-class TransactionDataWriteDTO(DataclassDTO[TransactionData]):
-    config = DTOConfig(exclude={"id", "prev_value", "state", "ctime", "mtime"})
-
-
-class TransactionDataReadDTO(DataclassDTO[TransactionData]):
-    config = DTOConfig(exclude={"ctime", "prev_value", "state", "ctime", "mtime"})
-
-
 class TransactionController(Controller):
-    dto = TransactionDataWriteDTO
-    return_dto = TransactionDataReadDTO
     path = "/transaction"
 
     @get("/{transaction_id:int}")
@@ -243,7 +229,7 @@ class TransactionController(Controller):
         transaction_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Get the transaction data.
         """
@@ -256,7 +242,7 @@ class TransactionController(Controller):
             return None
         if transaction is None:
             return None
-        return transaction
+        return TransactionResponse.model_validate(transaction)
 
 
 
@@ -266,15 +252,15 @@ class TransactionController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-    ) -> list[TransactionData]:
+    ) -> list[TransactionResponse]:
         """
         Get the transaction data list.
         """
         db = next(router_dependency)
         transactions = read_transactions_impl(db, skip, limit)
-        return transactions
+        return [TransactionResponse.model_validate(t) for t in transactions]
 
-    @get("/paginated/", return_dto=None)
+    @get("/paginated/")
     async def get_transaction_list_paginated(
         self,
         router_dependency: Generator[Session, None, None],
@@ -310,7 +296,7 @@ class TransactionController(Controller):
         Returns:
         - Paginated response:
           {
-            "data": List[TransactionData],
+            "data": List[TransactionResponse],
             "total": int,
             "page": int,
             "page_size": int,
@@ -346,6 +332,10 @@ class TransactionController(Controller):
                 sort_order=sort_order,
             )
             
+            # Convert transactions to Pydantic models
+            if "data" in result:
+                result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
+            
             request.logger.info(f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}")
             return result
             
@@ -356,10 +346,10 @@ class TransactionController(Controller):
     @post()
     async def create_transaction(
         self,
-        data: TransactionData,
+        data: TransactionCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Create a new transaction data.
         """
@@ -369,16 +359,16 @@ class TransactionController(Controller):
         if transaction is None:
             return None
 
-        return transaction
+        return TransactionResponse.model_validate(transaction)
 
     @put("/{transaction_id:int}")
     async def update_transaction(
         self,
         transaction_id: int,
-        data: TransactionData,
+        data: TransactionUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Update the transaction data.
         """
@@ -388,7 +378,7 @@ class TransactionController(Controller):
         if transaction is None:
             return None
 
-        return transaction
+        return TransactionResponse.model_validate(transaction)
 
     @delete("/{transaction_id:int}", status_code=200)
     async def delete_transaction(
@@ -413,7 +403,7 @@ class TransactionController(Controller):
             "message": f"Transaction {transaction_id} deleted successfully",
         }
 
-    @post("/stats/batch/", dto=None, return_dto=None)
+    @post("/stats/batch/")
     async def get_transaction_stats_batch(
         self,
         data: list[dict[str, Any]],
@@ -478,7 +468,7 @@ class TransactionController(Controller):
             request.logger.error(f"Error in batch stats: {e}")
             raise HTTPException(status_code=500, detail=f"Error in batch stats: {str(e)}")
 
-    @get("/stats/", return_dto=None)
+    @get("/stats/")
     async def get_transaction_stats(
         self,
         router_dependency: Generator[Session, None, None],
@@ -518,7 +508,7 @@ class TransactionController(Controller):
             "income_total": str,
             "expense_total": str,
             "net_total": str,
-            "data": List[TransactionData] (optional, only when return_list=True)
+            "data": List[TransactionResponse] (optional, only when return_list=True)
           }
         """
         try:
@@ -543,6 +533,10 @@ class TransactionController(Controller):
                 return_list=return_list,
             )
             
+            # Convert transactions to Pydantic models if present
+            if return_list and "data" in result:
+                result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
+            
             data_count = len(result.get("data", [])) if return_list else 0
             request.logger.info(f"Get transaction stats: total={result['total_count']}, income={result['income_count']}, expense={result['expense_count']}, data_items={data_count}")
             return result
@@ -557,25 +551,7 @@ class TransactionController(Controller):
 # -------------
 
 
-class BudgetDataWriteDTO(DataclassDTO[BudgetData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class BudgetDataUpdateDTO(DataclassDTO[BudgetData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class BudgetDataReadDTO(DataclassDTO[BudgetData]):
-    config = DTOConfig(exclude={"ctime"})
-
-
-class BudgetConsumeDTO(DataclassDTO[TransactionData]):
-    config = DTOConfig(exclude={"id", "prev_value", "state", "ctime", "mtime", "tags"})
-
-
 class BudgetController(Controller):
-    dto = BudgetDataWriteDTO
-    return_dto = BudgetDataReadDTO
     path = "/budget"
 
     @get("/{budget_id:int}")
@@ -584,7 +560,7 @@ class BudgetController(Controller):
         budget_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> BudgetData:
+    ) -> BudgetResponse:
         """
         Get the budget data.
         """
@@ -597,7 +573,7 @@ class BudgetController(Controller):
             raise HTTPException(status_code=404, detail=f"Budget not found: {str(e)}")
         if budget is None:
             raise HTTPException(status_code=404, detail="Budget not found")
-        return budget
+        return BudgetResponse.model_validate(budget)
 
     @get()
     async def get_budget_list(
@@ -609,7 +585,7 @@ class BudgetController(Controller):
         to_time: float | None = None,
         tags: str = "",
         tag_op: str = "and",
-    ) -> list[BudgetData]:
+    ) -> list[BudgetResponse]:
         """
         Get the budget data list.
         """
@@ -629,15 +605,26 @@ class BudgetController(Controller):
             _tags=tag_list,
             tag_op=tag_op,
         )
-        return budgets
+        # Convert BudgetData to BudgetResponse (field name mapping)
+        return [BudgetResponse(
+            id=b.id,
+            name=b.name,
+            description=b.description,
+            start_time=b.start_date,
+            end_time=b.end_date,
+            status=b.status,
+            total_amount=b.total_amount,
+            direction=b.direction,
+            items=[],  # Items are not included in list view for performance
+        ) for b in budgets]
 
     @post()
     async def create_budget(
         self,
-        data: BudgetData,
+        data: BudgetCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> BudgetData:
+    ) -> BudgetResponse:
         """
         Create a new budget data.
         Budget total_amount is computed from items automatically.
@@ -651,29 +638,20 @@ class BudgetController(Controller):
             request.logger.error("Budget name is too long.")
             raise HTTPException(status_code=400, detail="Budget name is too long.")
         
-        budget = create_budget_impl(db, BudgetData(
-            name=name,
-            total_amount=data.total_amount if data.total_amount else "0.0",
-            description=data.description if data.description else "",
-            tags=data.tags if data.tags else "",
-            start_date=data.start_date,
-            end_date=data.end_date,
-            htime=data.htime if data.htime and data.htime > 0 else datetime.now().timestamp(),
-            items=data.items if data.items else [],
-        ))
+        budget = create_budget_impl(db, data)
         request.logger.info(f"Create budget: {budget}")
         if budget is None:
             raise HTTPException(status_code=500, detail="Failed to create budget")
-        return budget
+        return BudgetResponse.model_validate(budget)
 
     @put("/{budget_id:int}")
     async def update_budget(
         self,
         budget_id: int,
-        data: BudgetData,
+        data: BudgetUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> BudgetData:
+    ) -> BudgetResponse:
         """
         Update the budget data.
         Budget total_amount is recomputed from items automatically.
@@ -684,19 +662,11 @@ class BudgetController(Controller):
             request.logger.error("Budget name cannot be empty.")
             raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
         
-        budget = update_budget_impl(db, budget_id, BudgetData(
-            name=name,
-            total_amount=data.total_amount if data.total_amount else "0.0",
-            description=data.description if data.description else "",
-            tags=data.tags if data.tags else "",
-            start_date=data.start_date,
-            end_date=data.end_date,
-            htime=data.htime if data.htime and data.htime > 0 else datetime.now().timestamp(),
-        ))
+        budget = update_budget_impl(db, budget_id, data)
         request.logger.info(f"Update budget: {budget}")
         if budget is None:
             raise HTTPException(status_code=404, detail="Budget not found")
-        return budget
+        return BudgetResponse.model_validate(budget)
 
     @delete("/{budget_id:int}", status_code=200)
     async def delete_budget(
@@ -716,7 +686,7 @@ class BudgetController(Controller):
         request.logger.info(f"Delete budget: {result}")
         return result
 
-    @get("/stats/", return_dto=None)
+    @get("/stats/")
     async def get_budget_stats(
         self,
         router_dependency: Generator[Session, None, None],
@@ -754,7 +724,7 @@ class BudgetController(Controller):
             request.logger.error(f"Error getting budget stats: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting budget stats: {str(e)}")
 
-    @get("/{budget_id:int}/analysis", return_dto=None)
+    @get("/{budget_id:int}/analysis")
     async def get_budget_analysis(
         self,
         budget_id: int,
@@ -777,14 +747,14 @@ class BudgetController(Controller):
             request.logger.error(f"Error getting budget analysis: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting budget analysis: {str(e)}")
 
-    @post("/{budget_id:int}/consume", dto=BudgetConsumeDTO)
+    @post("/{budget_id:int}/consume")
     async def consume_budget(
         self,
         budget_id: int,
-        data: TransactionData,
+        data: TransactionCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Consume budget by creating a transaction.
         """
@@ -797,7 +767,7 @@ class BudgetController(Controller):
             
             transaction = consume_budget_impl(db, budget_id, data)
             request.logger.info(f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}")
-            return transaction
+            return TransactionResponse.model_validate(transaction)
         except ValueError as e:
             request.logger.error(f"Error consuming budget: {e}")
             raise HTTPException(status_code=400, detail=str(e))
@@ -812,7 +782,7 @@ class BudgetController(Controller):
         transaction_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Link an existing transaction to a budget.
         """
@@ -822,7 +792,7 @@ class BudgetController(Controller):
             request.logger.info(
                 f"Link transaction: budget_id={budget_id}, transaction_id={transaction_id}"
             )
-            return transaction
+            return TransactionResponse.model_validate(transaction)
         except ValueError as e:
             request.logger.error(f"Error linking transaction: {e}")
             raise HTTPException(status_code=400, detail=str(e))
@@ -830,7 +800,7 @@ class BudgetController(Controller):
             request.logger.error(f"Error linking transaction: {e}")
             raise HTTPException(status_code=500, detail=f"Error linking transaction: {str(e)}")
 
-    @post("/{budget_id:int}/link-batch", dto=None, return_dto=None)
+    @post("/{budget_id:int}/link-batch")
     async def link_transactions_batch(
         self,
         budget_id: int,
@@ -899,7 +869,7 @@ class BudgetController(Controller):
         transaction_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> TransactionData:
+    ) -> TransactionResponse:
         """
         Unlink a transaction from its budget.
         """
@@ -907,7 +877,7 @@ class BudgetController(Controller):
             db = next(router_dependency)
             transaction = unlink_transaction_impl(db, transaction_id)
             request.logger.info(f"Unlink transaction: transaction_id={transaction_id}")
-            return transaction
+            return TransactionResponse.model_validate(transaction)
         except ValueError as e:
             request.logger.error(f"Error unlinking transaction: {e}")
             raise HTTPException(status_code=400, detail=str(e))
@@ -917,7 +887,7 @@ class BudgetController(Controller):
 
     # ============ Budget Items ============
 
-    @get("/{budget_id:int}/items", return_dto=None)
+    @get("/{budget_id:int}/items")
     async def get_budget_items(
         self,
         budget_id: int,
@@ -928,91 +898,55 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             items = read_items_impl(db, budget_id)
-            return [item.__dict__ for item in items]
+            return [BudgetItemResponse.model_validate(item).model_dump() for item in items]
         except Exception as e:
             request.logger.error(f"Error getting budget items: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @post("/{budget_id:int}/items", dto=None, return_dto=None)
+    @post("/{budget_id:int}/items")
     async def create_budget_item(
         self,
         budget_id: int,
-        data: dict,
+        data: BudgetItemCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> dict:
         """
         Create a new budget item.
-        
-        Body:
-        {
-            "name": "string",           # 子项名称
-            "description": "string",    # 描述（可选）
-            "direction": 0,             # 0: 支出, 1: 收入
-            "item_type": 0,             # 0: 固定金额, 1: 周期性金额
-            "amount": "0.0",            # 金额
-            "period_count": 1,          # 期数
-            "is_refundable": 0          # 是否可退还
-        }
         """
         try:
             db = next(router_dependency)
-            item_data = BudgetItemData(
-                budget_id=budget_id,
-                name=data.get("name", ""),
-                description=data.get("description", ""),
-                direction=data.get("direction", 0),
-                item_type=data.get("item_type", 0),
-                amount=data.get("amount", "0.0"),
-                period_count=data.get("period_count", 1),
-                is_refundable=data.get("is_refundable", 0),
-            )
-            item = create_item_impl(db, budget_id, item_data)
+            item = create_item_impl(db, budget_id, data)
             request.logger.info(f"Created budget item: {item.name}")
-            return item.__dict__
+            return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             request.logger.error(f"Error creating budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @put("/items/{item_id:int}", dto=None, return_dto=None)
+    @put("/items/{item_id:int}")
     async def update_budget_item(
         self,
         item_id: int,
-        data: dict,
+        data: BudgetItemCreateRequest,
         router_dependency: Generator[Session, None, None],
         request: Request,
     ) -> dict:
         """Update a budget item"""
         try:
             db = next(router_dependency)
-            item_data = BudgetItemData(
-                id=item_id,
-                budget_id=data.get("budget_id", -1),
-                name=data.get("name", ""),
-                description=data.get("description", ""),
-                direction=data.get("direction", 0),
-                item_type=data.get("item_type", 0),
-                amount=data.get("amount", "0.0"),
-                period_count=data.get("period_count", 1),
-                is_refundable=data.get("is_refundable", 0),
-                refund_amount=data.get("refund_amount", "0.0"),
-                current_period=data.get("current_period", 0),
-                status=data.get("status", 0),
-                due_date=data.get("due_date"),
-            )
-            item = update_item_impl(db, item_id, item_data)
+            item = update_item_impl(db, item_id, data)
             if item is None:
                 raise HTTPException(status_code=404, detail="Budget item not found")
-            return item.__dict__
+            return BudgetItemResponse.model_validate(item).model_dump()
         except HTTPException:
             raise
         except Exception as e:
             request.logger.error(f"Error updating budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @delete("/items/{item_id:int}", status_code=200, return_dto=None)
+    @delete("/items/{item_id:int}", status_code=200)
     async def delete_budget_item(
         self,
         item_id: int,
@@ -1032,7 +966,7 @@ class BudgetController(Controller):
             request.logger.error(f"Error deleting budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @post("/items/{item_id:int}/refund", dto=None, return_dto=None)
+    @post("/items/{item_id:int}/refund")
     async def record_item_refund(
         self,
         item_id: int,
@@ -1046,14 +980,14 @@ class BudgetController(Controller):
             refund_amount = data.get("refund_amount", "0.0")
             item = record_refund_impl(db, item_id, refund_amount)
             request.logger.info(f"Recorded refund for item {item_id}: {refund_amount}")
-            return item.__dict__
+            return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             request.logger.error(f"Error recording refund: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @post("/items/{item_id:int}/advance", return_dto=None)
+    @post("/items/{item_id:int}/advance")
     async def advance_item_period(
         self,
         item_id: int,
@@ -1065,14 +999,14 @@ class BudgetController(Controller):
             db = next(router_dependency)
             item = advance_period_impl(db, item_id)
             request.logger.info(f"Advanced item {item_id} to period {item.current_period}")
-            return item.__dict__
+            return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             request.logger.error(f"Error advancing period: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @get("/{budget_id:int}/detail", return_dto=None)
+    @get("/{budget_id:int}/detail")
     async def get_budget_with_items(
         self,
         budget_id: int,
@@ -1085,7 +1019,10 @@ class BudgetController(Controller):
             budget = read_budget_impl(db, budget_id, include_items=True)
             if budget is None:
                 raise HTTPException(status_code=404, detail="Budget not found")
-            return budget.__dict__
+            result = BudgetResponse.model_validate(budget).model_dump()
+            if hasattr(budget, 'items'):
+                result['items'] = [BudgetItemResponse.model_validate(item).model_dump() for item in budget.items]
+            return result
         except HTTPException:
             raise
         except Exception as e:

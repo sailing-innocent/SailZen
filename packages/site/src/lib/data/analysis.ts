@@ -264,6 +264,37 @@ export interface ResumeTaskResponse {
   total_batches: number
 }
 
+/** 大纲提取任务摘要（用于任务列表） */
+export interface OutlineExtractionTaskSummary {
+  task_id: string
+  edition_id: number
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  phase: string
+  progress: number
+  current_step: string
+  config?: OutlineExtractionConfig
+  error?: string
+  is_recovered?: boolean
+  created_at?: string
+  started_at?: string
+  completed_at?: string
+  // 检查点信息（如果有）
+  checkpoint_progress?: number
+  total_nodes?: number
+  total_turning_points?: number
+  total_batches?: number
+  completed_batches?: number
+}
+
+/** 恢复任务查看的响应 */
+export interface RecoverTaskViewResponse {
+  success: boolean
+  task_id?: string
+  result?: OutlineExtractionResult
+  message: string
+  error?: string
+}
+
 export interface OutlinePreviewResponse {
   preview_nodes: Array<{
     id: string

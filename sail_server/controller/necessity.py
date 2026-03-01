@@ -7,22 +7,34 @@
 # ---------------------------------
 
 from __future__ import annotations
-from litestar.dto import DataclassDTO
-from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
 from sqlalchemy.orm import Session
 from typing import Generator, Optional
 
-from sail_server.data.necessity import (
-    ResidenceData,
-    ContainerData,
-    ItemCategoryData,
-    ItemData,
-    InventoryData,
-    JourneyData,
-    JourneyItemData,
-    ReplenishmentData,
+from sail_server.application.dto.necessity import (
+    ResidenceCreateRequest,
+    ResidenceUpdateRequest,
+    ResidenceResponse,
+    ContainerCreateRequest,
+    ContainerUpdateRequest,
+    ContainerResponse,
+    ItemCategoryCreateRequest,
+    ItemCategoryUpdateRequest,
+    ItemCategoryResponse,
+    ItemCreateRequest,
+    ItemUpdateRequest,
+    ItemResponse,
+    InventoryCreateRequest,
+    InventoryUpdateRequest,
+    InventoryResponse,
+    JourneyCreateRequest,
+    JourneyUpdateRequest,
+    JourneyResponse,
+    JourneyItemCreateRequest,
+    JourneyItemResponse,
+    ReplenishmentCreateRequest,
+    ReplenishmentResponse,
 )
 
 from sail_server.model.necessity.residence import (
@@ -98,72 +110,10 @@ from sail_server.model.necessity.journey import (
 
 
 # -------------
-# DTOs
-# -------------
-
-class ResidenceWriteDTO(DataclassDTO[ResidenceData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class ResidenceReadDTO(DataclassDTO[ResidenceData]):
-    config = DTOConfig()
-
-
-class ContainerWriteDTO(DataclassDTO[ContainerData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class ContainerReadDTO(DataclassDTO[ContainerData]):
-    config = DTOConfig()
-
-
-class CategoryWriteDTO(DataclassDTO[ItemCategoryData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class CategoryReadDTO(DataclassDTO[ItemCategoryData]):
-    config = DTOConfig()
-
-
-class ItemWriteDTO(DataclassDTO[ItemData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime"})
-
-
-class ItemReadDTO(DataclassDTO[ItemData]):
-    config = DTOConfig()
-
-
-class InventoryWriteDTO(DataclassDTO[InventoryData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime", "item_name", "residence_name", "container_name"})
-
-
-class InventoryReadDTO(DataclassDTO[InventoryData]):
-    config = DTOConfig()
-
-
-class JourneyWriteDTO(DataclassDTO[JourneyData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime", "from_residence_name", "to_residence_name", "items"})
-
-
-class JourneyReadDTO(DataclassDTO[JourneyData]):
-    config = DTOConfig()
-
-
-class JourneyItemWriteDTO(DataclassDTO[JourneyItemData]):
-    config = DTOConfig(exclude={"id", "ctime", "mtime", "item_name"})
-
-
-class ReplenishmentWriteDTO(DataclassDTO[ReplenishmentData]):
-    config = DTOConfig(exclude={"id", "ctime"})
-
-
-# -------------
 # Residence Controller
 # -------------
 
 class ResidenceController(Controller):
-    dto = ResidenceWriteDTO
-    return_dto = ResidenceReadDTO
     path = "/residence"
 
     @get("/{residence_id:int}")
@@ -172,7 +122,7 @@ class ResidenceController(Controller):
         residence_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ResidenceData:
+    ) -> ResidenceResponse:
         """Get a residence by ID"""
         try:
             db = next(router_dependency)
@@ -193,7 +143,7 @@ class ResidenceController(Controller):
         skip: int = 0,
         limit: int = -1,
         residence_type: Optional[int] = None,
-    ) -> list[ResidenceData]:
+    ) -> list[ResidenceResponse]:
         """Get all residences"""
         db = next(router_dependency)
         return read_residences_impl(db, skip, limit, residence_type)
@@ -201,10 +151,10 @@ class ResidenceController(Controller):
     @post()
     async def create_residence(
         self,
-        data: ResidenceData,
+        data: ResidenceCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ResidenceData:
+    ) -> ResidenceResponse:
         """Create a new residence"""
         db = next(router_dependency)
         if not data.name or not data.name.strip():
@@ -217,10 +167,10 @@ class ResidenceController(Controller):
     async def update_residence(
         self,
         residence_id: int,
-        data: ResidenceData,
+        data: ResidenceUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ResidenceData:
+    ) -> ResidenceResponse:
         """Update a residence"""
         db = next(router_dependency)
         residence = update_residence_impl(db, residence_id, data)
@@ -244,11 +194,11 @@ class ResidenceController(Controller):
         request.logger.info(f"Deleted residence: {residence_id}")
         return {"id": residence_id, "status": "success", "message": "Residence deleted"}
 
-    @get("/portable", return_dto=ResidenceReadDTO)
+    @get("/portable")
     async def get_portable_residence(
         self,
         router_dependency: Generator[Session, None, None],
-    ) -> ResidenceData:
+    ) -> ResidenceResponse:
         """Get the portable (随身携带) residence"""
         db = next(router_dependency)
         residence = get_portable_residence_impl(db)
@@ -256,22 +206,22 @@ class ResidenceController(Controller):
             raise HTTPException(status_code=404, detail="Portable residence not found")
         return residence
 
-    @get("/{residence_id:int}/inventory", return_dto=None)
+    @get("/{residence_id:int}/inventory")
     async def get_residence_inventory(
         self,
         residence_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> list[InventoryData]:
+    ) -> list[InventoryResponse]:
         """Get all inventory in a residence"""
         db = next(router_dependency)
         return read_inventories_by_residence_impl(db, residence_id)
 
-    @get("/{residence_id:int}/low-stock", return_dto=None)
+    @get("/{residence_id:int}/low-stock")
     async def get_residence_low_stock(
         self,
         residence_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> list[InventoryData]:
+    ) -> list[InventoryResponse]:
         """Get low stock items in a residence"""
         db = next(router_dependency)
         return get_low_stock_impl(db, residence_id)
@@ -282,8 +232,6 @@ class ResidenceController(Controller):
 # -------------
 
 class ContainerController(Controller):
-    dto = ContainerWriteDTO
-    return_dto = ContainerReadDTO
     path = "/container"
 
     @get("/{container_id:int}")
@@ -291,7 +239,7 @@ class ContainerController(Controller):
         self,
         container_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> ContainerData:
+    ) -> ContainerResponse:
         """Get a container by ID"""
         db = next(router_dependency)
         container = read_container_impl(db, container_id)
@@ -306,7 +254,7 @@ class ContainerController(Controller):
         residence_id: Optional[int] = None,
         skip: int = 0,
         limit: int = -1,
-    ) -> list[ContainerData]:
+    ) -> list[ContainerResponse]:
         """Get containers, optionally filtered by residence"""
         db = next(router_dependency)
         if residence_id:
@@ -316,10 +264,10 @@ class ContainerController(Controller):
     @post()
     async def create_container(
         self,
-        data: ContainerData,
+        data: ContainerCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ContainerData:
+    ) -> ContainerResponse:
         """Create a new container"""
         db = next(router_dependency)
         if not data.name or not data.name.strip():
@@ -334,10 +282,10 @@ class ContainerController(Controller):
     async def update_container(
         self,
         container_id: int,
-        data: ContainerData,
+        data: ContainerUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ContainerData:
+    ) -> ContainerResponse:
         """Update a container"""
         db = next(router_dependency)
         container = update_container_impl(db, container_id, data)
@@ -361,7 +309,7 @@ class ContainerController(Controller):
         request.logger.info(f"Deleted container: {container_id}")
         return {"id": container_id, "status": "success", "message": "Container deleted"}
 
-    @get("/tree/{residence_id:int}", return_dto=None)
+    @get("/tree/{residence_id:int}")
     async def get_container_tree(
         self,
         residence_id: int,
@@ -377,8 +325,6 @@ class ContainerController(Controller):
 # -------------
 
 class CategoryController(Controller):
-    dto = CategoryWriteDTO
-    return_dto = CategoryReadDTO
     path = "/category"
 
     @get("/{category_id:int}")
@@ -386,7 +332,7 @@ class CategoryController(Controller):
         self,
         category_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemCategoryData:
+    ) -> ItemCategoryResponse:
         """Get a category by ID"""
         db = next(router_dependency)
         category = read_category_impl(db, category_id)
@@ -400,7 +346,7 @@ class CategoryController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-    ) -> list[ItemCategoryData]:
+    ) -> list[ItemCategoryResponse]:
         """Get all categories"""
         db = next(router_dependency)
         return read_categories_impl(db, skip, limit)
@@ -408,10 +354,10 @@ class CategoryController(Controller):
     @post()
     async def create_category(
         self,
-        data: ItemCategoryData,
+        data: ItemCategoryCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemCategoryData:
+    ) -> ItemCategoryResponse:
         """Create a new category"""
         db = next(router_dependency)
         if not data.name or not data.name.strip():
@@ -424,10 +370,10 @@ class CategoryController(Controller):
     async def update_category(
         self,
         category_id: int,
-        data: ItemCategoryData,
+        data: ItemCategoryUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemCategoryData:
+    ) -> ItemCategoryResponse:
         """Update a category"""
         db = next(router_dependency)
         category = update_category_impl(db, category_id, data)
@@ -451,7 +397,7 @@ class CategoryController(Controller):
         request.logger.info(f"Deleted category: {category_id}")
         return {"id": category_id, "status": "success", "message": "Category deleted"}
 
-    @get("/tree", return_dto=None)
+    @get("/tree")
     async def get_category_tree(
         self,
         router_dependency: Generator[Session, None, None],
@@ -460,12 +406,12 @@ class CategoryController(Controller):
         db = next(router_dependency)
         return get_category_tree_impl(db)
 
-    @post("/seed", return_dto=None)
+    @post("/seed")
     async def seed_categories(
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> list[ItemCategoryData]:
+    ) -> list[ItemCategoryResponse]:
         """Seed default categories"""
         db = next(router_dependency)
         categories = seed_default_categories_impl(db)
@@ -478,8 +424,6 @@ class CategoryController(Controller):
 # -------------
 
 class ItemController(Controller):
-    dto = ItemWriteDTO
-    return_dto = ItemReadDTO
     path = "/item"
 
     @get("/{item_id:int}")
@@ -487,7 +431,7 @@ class ItemController(Controller):
         self,
         item_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemData:
+    ) -> ItemResponse:
         """Get an item by ID"""
         db = next(router_dependency)
         item = read_item_impl(db, item_id)
@@ -505,7 +449,7 @@ class ItemController(Controller):
         item_type: Optional[int] = None,
         item_state: Optional[int] = None,
         tags: str = "",
-    ) -> list[ItemData]:
+    ) -> list[ItemResponse]:
         """Get items with optional filtering"""
         db = next(router_dependency)
         return read_items_impl(
@@ -516,7 +460,7 @@ class ItemController(Controller):
             tags=tags if tags else None,
         )
 
-    @get("/paginated/", return_dto=None)
+    @get("/paginated/")
     async def get_items_paginated(
         self,
         router_dependency: Generator[Session, None, None],
@@ -548,10 +492,10 @@ class ItemController(Controller):
     @post()
     async def create_item(
         self,
-        data: ItemData,
+        data: ItemCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemData:
+    ) -> ItemResponse:
         """Create a new item"""
         db = next(router_dependency)
         if not data.name or not data.name.strip():
@@ -564,10 +508,10 @@ class ItemController(Controller):
     async def update_item(
         self,
         item_id: int,
-        data: ItemData,
+        data: ItemUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> ItemData:
+    ) -> ItemResponse:
         """Update an item"""
         db = next(router_dependency)
         item = update_item_impl(db, item_id, data)
@@ -591,20 +535,20 @@ class ItemController(Controller):
         request.logger.info(f"Deleted item: {item_id}")
         return {"id": item_id, "status": "success", "message": "Item deleted"}
 
-    @get("/search/", return_dto=None)
+    @get("/search/")
     async def search_items(
         self,
         router_dependency: Generator[Session, None, None],
         keyword: str = "",
         limit: int = 20,
-    ) -> list[ItemData]:
+    ) -> list[ItemResponse]:
         """Search items by keyword"""
         db = next(router_dependency)
         if not keyword:
             return []
         return search_items_impl(db, keyword, limit)
 
-    @get("/expiring/", return_dto=None)
+    @get("/expiring/")
     async def get_expiring_items(
         self,
         router_dependency: Generator[Session, None, None],
@@ -614,22 +558,22 @@ class ItemController(Controller):
         db = next(router_dependency)
         return get_expiring_items_impl(db, days)
 
-    @get("/portable/", return_dto=None)
+    @get("/portable/")
     async def get_portable_items(
         self,
         router_dependency: Generator[Session, None, None],
         min_portability: int = 4,
-    ) -> list[ItemData]:
+    ) -> list[ItemResponse]:
         """Get portable items for travel"""
         db = next(router_dependency)
         return get_portable_items_impl(db, min_portability)
 
-    @get("/{item_id:int}/locations", return_dto=None)
+    @get("/{item_id:int}/locations")
     async def get_item_locations(
         self,
         item_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> list[InventoryData]:
+    ) -> list[InventoryResponse]:
         """Get all locations where an item is stored"""
         db = next(router_dependency)
         return read_inventories_by_item_impl(db, item_id)
@@ -640,8 +584,6 @@ class ItemController(Controller):
 # -------------
 
 class InventoryController(Controller):
-    dto = InventoryWriteDTO
-    return_dto = InventoryReadDTO
     path = "/inventory"
 
     @get("/{inventory_id:int}")
@@ -649,7 +591,7 @@ class InventoryController(Controller):
         self,
         inventory_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> InventoryData:
+    ) -> InventoryResponse:
         """Get an inventory record by ID"""
         db = next(router_dependency)
         inventory = read_inventory_impl(db, inventory_id)
@@ -663,7 +605,7 @@ class InventoryController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-    ) -> list[InventoryData]:
+    ) -> list[InventoryResponse]:
         """Get all inventory records"""
         db = next(router_dependency)
         return read_inventories_impl(db, skip, limit)
@@ -671,10 +613,10 @@ class InventoryController(Controller):
     @post()
     async def create_inventory(
         self,
-        data: InventoryData,
+        data: InventoryCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> InventoryData:
+    ) -> InventoryResponse:
         """Create a new inventory record"""
         db = next(router_dependency)
         if data.item_id <= 0:
@@ -689,10 +631,10 @@ class InventoryController(Controller):
     async def update_inventory(
         self,
         inventory_id: int,
-        data: InventoryData,
+        data: InventoryUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> InventoryData:
+    ) -> InventoryResponse:
         """Update an inventory record"""
         db = next(router_dependency)
         inventory = update_inventory_impl(db, inventory_id, data)
@@ -716,14 +658,14 @@ class InventoryController(Controller):
         request.logger.info(f"Deleted inventory: {inventory_id}")
         return {"id": inventory_id, "status": "success", "message": "Inventory deleted"}
 
-    @post("/{inventory_id:int}/consume", dto=None, return_dto=None)
+    @post("/{inventory_id:int}/consume")
     async def consume_inventory(
         self,
         inventory_id: int,
         data: dict,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> InventoryData:
+    ) -> InventoryResponse:
         """Record consumption for an inventory"""
         db = next(router_dependency)
         try:
@@ -735,14 +677,14 @@ class InventoryController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{inventory_id:int}/replenish", dto=ReplenishmentWriteDTO, return_dto=None)
+    @post("/{inventory_id:int}/replenish")
     async def replenish_inventory(
         self,
         inventory_id: int,
-        data: ReplenishmentData,
+        data: ReplenishmentCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> InventoryData:
+    ) -> InventoryResponse:
         """Record replenishment for an inventory"""
         db = next(router_dependency)
         try:
@@ -752,7 +694,7 @@ class InventoryController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/transfer", dto=None, return_dto=None)
+    @post("/transfer")
     async def transfer_inventory(
         self,
         data: dict,
@@ -776,17 +718,17 @@ class InventoryController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @get("/low-stock/", return_dto=None)
+    @get("/low-stock/")
     async def get_low_stock(
         self,
         router_dependency: Generator[Session, None, None],
         residence_id: Optional[int] = None,
-    ) -> list[InventoryData]:
+    ) -> list[InventoryResponse]:
         """Get low stock inventory"""
         db = next(router_dependency)
         return get_low_stock_impl(db, residence_id)
 
-    @get("/stats/", return_dto=None)
+    @get("/stats/")
     async def get_inventory_stats(
         self,
         router_dependency: Generator[Session, None, None],
@@ -802,8 +744,6 @@ class InventoryController(Controller):
 # -------------
 
 class JourneyController(Controller):
-    dto = JourneyWriteDTO
-    return_dto = JourneyReadDTO
     path = "/journey"
 
     @get("/{journey_id:int}")
@@ -811,7 +751,7 @@ class JourneyController(Controller):
         self,
         journey_id: int,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Get a journey by ID"""
         db = next(router_dependency)
         journey = read_journey_impl(db, journey_id, include_items=True)
@@ -828,7 +768,7 @@ class JourneyController(Controller):
         status: Optional[int] = None,
         from_residence_id: Optional[int] = None,
         to_residence_id: Optional[int] = None,
-    ) -> list[JourneyData]:
+    ) -> list[JourneyResponse]:
         """Get journeys with optional filtering"""
         db = next(router_dependency)
         return read_journeys_impl(
@@ -841,10 +781,10 @@ class JourneyController(Controller):
     @post()
     async def create_journey(
         self,
-        data: JourneyData,
+        data: JourneyCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Create a new journey"""
         db = next(router_dependency)
         if data.from_residence_id <= 0:
@@ -859,10 +799,10 @@ class JourneyController(Controller):
     async def update_journey(
         self,
         journey_id: int,
-        data: JourneyData,
+        data: JourneyUpdateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Update a journey"""
         db = next(router_dependency)
         journey = update_journey_impl(db, journey_id, data)
@@ -886,13 +826,13 @@ class JourneyController(Controller):
         request.logger.info(f"Deleted journey: {journey_id}")
         return {"id": journey_id, "status": "success", "message": "Journey deleted"}
 
-    @post("/{journey_id:int}/start", return_dto=None)
+    @post("/{journey_id:int}/start")
     async def start_journey(
         self,
         journey_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Start a journey"""
         db = next(router_dependency)
         try:
@@ -902,13 +842,13 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{journey_id:int}/complete", return_dto=None)
+    @post("/{journey_id:int}/complete")
     async def complete_journey(
         self,
         journey_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Complete a journey"""
         db = next(router_dependency)
         try:
@@ -918,13 +858,13 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{journey_id:int}/cancel", return_dto=None)
+    @post("/{journey_id:int}/cancel")
     async def cancel_journey(
         self,
         journey_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Cancel a journey"""
         db = next(router_dependency)
         try:
@@ -934,14 +874,14 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{journey_id:int}/items", dto=JourneyItemWriteDTO, return_dto=None)
+    @post("/{journey_id:int}/items")
     async def add_journey_item(
         self,
         journey_id: int,
-        data: JourneyItemData,
+        data: JourneyItemCreateRequest,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Add an item to a journey"""
         db = next(router_dependency)
         try:
@@ -951,14 +891,14 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @delete("/{journey_id:int}/items/{item_id:int}", status_code=200, return_dto=None)
+    @delete("/{journey_id:int}/items/{item_id:int}", status_code=200)
     async def remove_journey_item(
         self,
         journey_id: int,
         item_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Remove an item from a journey"""
         db = next(router_dependency)
         try:
@@ -968,14 +908,14 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{journey_id:int}/pack/{item_id:int}", return_dto=None)
+    @post("/{journey_id:int}/pack/{item_id:int}")
     async def pack_journey_item(
         self,
         journey_id: int,
         item_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Mark a journey item as packed"""
         db = next(router_dependency)
         try:
@@ -985,14 +925,14 @@ class JourneyController(Controller):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-    @post("/{journey_id:int}/unpack/{item_id:int}", return_dto=None)
+    @post("/{journey_id:int}/unpack/{item_id:int}")
     async def unpack_journey_item(
         self,
         journey_id: int,
         item_id: int,
         request: Request,
         router_dependency: Generator[Session, None, None],
-    ) -> JourneyData:
+    ) -> JourneyResponse:
         """Mark a journey item as unpacked"""
         db = next(router_dependency)
         try:

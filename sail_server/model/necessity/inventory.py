@@ -6,16 +6,22 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.data.necessity import (
+from sail_server.infrastructure.orm.necessity import (
     Inventory,
-    InventoryData,
     Consumption,
-    ConsumptionData,
     Replenishment,
-    ReplenishmentData,
     Item,
     Residence,
     Container,
+)
+from sail_server.application.dto.necessity import (
+    InventoryCreateRequest,
+    InventoryUpdateRequest,
+    InventoryResponse,
+    ConsumptionCreateRequest,
+    ConsumptionResponse,
+    ReplenishmentCreateRequest,
+    ReplenishmentResponse,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -42,67 +48,56 @@ __all__ = [
 ]
 
 
-def _str_to_decimal(s: str) -> Decimal:
-    """Convert string to Decimal safely"""
-    try:
-        return Decimal(s)
-    except:
-        return Decimal(0)
-
-
-def _decimal_to_str(d) -> str:
-    """Convert Decimal to string"""
-    if d is None:
-        return "0"
-    return str(d)
-
-
-def inventory_from_data(data: InventoryData) -> Inventory:
-    """Convert InventoryData to Inventory ORM object"""
-    return Inventory(
-        item_id=data.item_id,
-        residence_id=data.residence_id,
-        container_id=data.container_id,
-        quantity=_str_to_decimal(data.quantity),
-        unit=data.unit,
-        min_quantity=_str_to_decimal(data.min_quantity),
-        max_quantity=_str_to_decimal(data.max_quantity),
-        notes=data.notes,
-    )
-
-
-def data_from_inventory(
-    inventory: Inventory,
-    include_names: bool = True,
-) -> InventoryData:
-    """Convert Inventory ORM object to InventoryData"""
-    data = InventoryData(
+def _inventory_to_response(inventory: Inventory) -> InventoryResponse:
+    """Convert Inventory ORM object to InventoryResponse"""
+    return InventoryResponse(
         id=inventory.id,
         item_id=inventory.item_id,
         residence_id=inventory.residence_id,
         container_id=inventory.container_id,
-        quantity=_decimal_to_str(inventory.quantity),
+        quantity=inventory.quantity or Decimal("0"),
         unit=inventory.unit or "个",
-        min_quantity=_decimal_to_str(inventory.min_quantity),
-        max_quantity=_decimal_to_str(inventory.max_quantity),
-        last_check_time=inventory.last_check_time.timestamp() if inventory.last_check_time else None,
+        min_quantity=inventory.min_quantity or Decimal("0"),
+        max_quantity=inventory.max_quantity or Decimal("0"),
+        last_check_time=inventory.last_check_time,
         notes=inventory.notes or "",
         ctime=inventory.ctime,
         mtime=inventory.mtime,
+        item_name=inventory.item.name if inventory.item else "",
+        residence_name=inventory.residence.name if inventory.residence else "",
+        container_name=inventory.container.name if inventory.container else "",
     )
-    
-    if include_names:
-        if inventory.item:
-            data.item_name = inventory.item.name
-        if inventory.residence:
-            data.residence_name = inventory.residence.name
-        if inventory.container:
-            data.container_name = inventory.container.name
-    
-    return data
 
 
-def create_inventory_impl(db: Session, data: InventoryData) -> InventoryData:
+def _consumption_to_response(consumption: Consumption) -> ConsumptionResponse:
+    """Convert Consumption ORM object to ConsumptionResponse"""
+    return ConsumptionResponse(
+        id=consumption.id,
+        inventory_id=consumption.inventory_id,
+        quantity=consumption.quantity or Decimal("0"),
+        htime=consumption.htime,
+        reason=consumption.reason or "",
+        ctime=consumption.ctime,
+    )
+
+
+def _replenishment_to_response(replenishment: Replenishment) -> ReplenishmentResponse:
+    """Convert Replenishment ORM object to ReplenishmentResponse"""
+    return ReplenishmentResponse(
+        id=replenishment.id,
+        inventory_id=replenishment.inventory_id,
+        quantity=replenishment.quantity or Decimal("0"),
+        source=replenishment.source or 0,
+        source_residence_id=replenishment.source_residence_id,
+        cost=replenishment.cost or "",
+        transaction_id=replenishment.transaction_id,
+        htime=replenishment.htime,
+        notes=replenishment.notes or "",
+        ctime=replenishment.ctime,
+    )
+
+
+def create_inventory_impl(db: Session, data: InventoryCreateRequest) -> InventoryResponse:
     """Create a new inventory record"""
     # Check if inventory already exists for this item/residence/container combination
     existing = db.query(Inventory).filter(
@@ -115,32 +110,41 @@ def create_inventory_impl(db: Session, data: InventoryData) -> InventoryData:
     
     if existing:
         # Update existing inventory
-        existing.quantity = _str_to_decimal(existing.quantity) + _str_to_decimal(data.quantity)
+        existing.quantity = (existing.quantity or Decimal("0")) + data.quantity
         existing.mtime = datetime.now()
         db.commit()
         db.refresh(existing)
-        return data_from_inventory(existing)
+        return _inventory_to_response(existing)
     
-    inventory = inventory_from_data(data)
+    inventory = Inventory(
+        item_id=data.item_id,
+        residence_id=data.residence_id,
+        container_id=data.container_id,
+        quantity=data.quantity,
+        unit=data.unit,
+        min_quantity=data.min_quantity,
+        max_quantity=data.max_quantity,
+        notes=data.notes,
+    )
     db.add(inventory)
     db.commit()
     db.refresh(inventory)
-    return data_from_inventory(inventory)
+    return _inventory_to_response(inventory)
 
 
-def read_inventory_impl(db: Session, inventory_id: int) -> Optional[InventoryData]:
+def read_inventory_impl(db: Session, inventory_id: int) -> Optional[InventoryResponse]:
     """Read an inventory record by ID"""
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         return None
-    return data_from_inventory(inventory)
+    return _inventory_to_response(inventory)
 
 
 def read_inventories_impl(
     db: Session,
     skip: int = 0,
     limit: int = -1,
-) -> List[InventoryData]:
+) -> List[InventoryResponse]:
     """Read all inventory records"""
     q = db.query(Inventory)
     
@@ -150,54 +154,58 @@ def read_inventories_impl(
         q = q.limit(limit)
     
     inventories = q.all()
-    return [data_from_inventory(i) for i in inventories]
+    return [_inventory_to_response(i) for i in inventories]
 
 
 def read_inventories_by_residence_impl(
     db: Session,
     residence_id: int,
-) -> List[InventoryData]:
+) -> List[InventoryResponse]:
     """Read all inventory records for a residence"""
     inventories = db.query(Inventory).filter(
         Inventory.residence_id == residence_id
     ).all()
-    return [data_from_inventory(i) for i in inventories]
+    return [_inventory_to_response(i) for i in inventories]
 
 
 def read_inventories_by_item_impl(
     db: Session,
     item_id: int,
-) -> List[InventoryData]:
+) -> List[InventoryResponse]:
     """Read all inventory records for an item (locations)"""
     inventories = db.query(Inventory).filter(
         Inventory.item_id == item_id
     ).all()
-    return [data_from_inventory(i) for i in inventories]
+    return [_inventory_to_response(i) for i in inventories]
 
 
 def update_inventory_impl(
     db: Session,
     inventory_id: int,
-    data: InventoryData,
-) -> Optional[InventoryData]:
+    data: InventoryUpdateRequest,
+) -> Optional[InventoryResponse]:
     """Update an inventory record"""
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         return None
     
-    inventory.item_id = data.item_id
-    inventory.residence_id = data.residence_id
-    inventory.container_id = data.container_id
-    inventory.quantity = _str_to_decimal(data.quantity)
-    inventory.unit = data.unit
-    inventory.min_quantity = _str_to_decimal(data.min_quantity)
-    inventory.max_quantity = _str_to_decimal(data.max_quantity)
-    inventory.notes = data.notes
+    if data.container_id is not None:
+        inventory.container_id = data.container_id
+    if data.quantity is not None:
+        inventory.quantity = data.quantity
+    if data.unit is not None:
+        inventory.unit = data.unit
+    if data.min_quantity is not None:
+        inventory.min_quantity = data.min_quantity
+    if data.max_quantity is not None:
+        inventory.max_quantity = data.max_quantity
+    if data.notes is not None:
+        inventory.notes = data.notes
     inventory.mtime = datetime.now()
     
     db.commit()
     db.refresh(inventory)
-    return data_from_inventory(inventory)
+    return _inventory_to_response(inventory)
 
 
 def delete_inventory_impl(db: Session, inventory_id: int) -> Optional[dict]:
@@ -214,68 +222,63 @@ def delete_inventory_impl(db: Session, inventory_id: int) -> Optional[dict]:
 def record_consumption_impl(
     db: Session,
     inventory_id: int,
-    quantity: str,
-    reason: str = "",
-) -> InventoryData:
+    data: ConsumptionCreateRequest,
+) -> InventoryResponse:
     """Record consumption and update inventory"""
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         raise ValueError(f"Inventory {inventory_id} not found")
     
-    consume_qty = _str_to_decimal(quantity)
-    
     # Create consumption record
     consumption = Consumption(
         inventory_id=inventory_id,
-        quantity=consume_qty,
-        reason=reason,
-        htime=datetime.now(),
+        quantity=data.quantity,
+        reason=data.reason,
+        htime=data.htime or datetime.now(),
     )
     db.add(consumption)
     
     # Update inventory quantity
-    inventory.quantity = inventory.quantity - consume_qty
+    inventory.quantity = (inventory.quantity or Decimal("0")) - data.quantity
     inventory.mtime = datetime.now()
     
     db.commit()
     db.refresh(inventory)
     
-    return data_from_inventory(inventory)
+    return _inventory_to_response(inventory)
 
 
 def record_replenishment_impl(
     db: Session,
     inventory_id: int,
-    data: ReplenishmentData,
-) -> InventoryData:
+    data: ReplenishmentCreateRequest,
+) -> InventoryResponse:
     """Record replenishment and update inventory"""
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         raise ValueError(f"Inventory {inventory_id} not found")
     
-    replenish_qty = _str_to_decimal(data.quantity)
-    
     # Create replenishment record
     replenishment = Replenishment(
         inventory_id=inventory_id,
-        quantity=replenish_qty,
+        quantity=data.quantity,
         source=data.source,
         source_residence_id=data.source_residence_id,
         cost=data.cost,
         transaction_id=data.transaction_id,
         notes=data.notes,
-        htime=datetime.now(),
+        htime=data.htime or datetime.now(),
     )
     db.add(replenishment)
     
     # Update inventory quantity
-    inventory.quantity = inventory.quantity + replenish_qty
+    inventory.quantity = (inventory.quantity or Decimal("0")) + data.quantity
     inventory.mtime = datetime.now()
     
     db.commit()
     db.refresh(inventory)
     
-    return data_from_inventory(inventory)
+    return _inventory_to_response(inventory)
 
 
 def transfer_inventory_impl(
@@ -283,13 +286,11 @@ def transfer_inventory_impl(
     item_id: int,
     from_residence_id: int,
     to_residence_id: int,
-    quantity: str,
+    quantity: Decimal,
     from_container_id: Optional[int] = None,
     to_container_id: Optional[int] = None,
 ) -> dict:
     """Transfer inventory from one residence to another"""
-    transfer_qty = _str_to_decimal(quantity)
-    
     # Find source inventory
     source_filter = and_(
         Inventory.item_id == item_id,
@@ -302,11 +303,11 @@ def transfer_inventory_impl(
     if source_inv is None:
         raise ValueError("Source inventory not found")
     
-    if source_inv.quantity < transfer_qty:
+    if source_inv.quantity < quantity:
         raise ValueError("Insufficient quantity in source inventory")
     
     # Decrease source inventory
-    source_inv.quantity = source_inv.quantity - transfer_qty
+    source_inv.quantity = source_inv.quantity - quantity
     source_inv.mtime = datetime.now()
     
     # Find or create destination inventory
@@ -322,14 +323,14 @@ def transfer_inventory_impl(
     dest_inv = db.query(Inventory).filter(dest_filter).first()
     
     if dest_inv:
-        dest_inv.quantity = dest_inv.quantity + transfer_qty
+        dest_inv.quantity = dest_inv.quantity + quantity
         dest_inv.mtime = datetime.now()
     else:
         dest_inv = Inventory(
             item_id=item_id,
             residence_id=to_residence_id,
             container_id=to_container_id,
-            quantity=transfer_qty,
+            quantity=quantity,
             unit=source_inv.unit,
         )
         db.add(dest_inv)
@@ -337,16 +338,16 @@ def transfer_inventory_impl(
     db.commit()
     
     return {
-        "source": data_from_inventory(source_inv),
-        "destination": data_from_inventory(dest_inv),
-        "transferred_quantity": quantity,
+        "source": _inventory_to_response(source_inv),
+        "destination": _inventory_to_response(dest_inv),
+        "transferred_quantity": str(quantity),
     }
 
 
 def get_low_stock_impl(
     db: Session,
     residence_id: Optional[int] = None,
-) -> List[InventoryData]:
+) -> List[InventoryResponse]:
     """Get inventory records where quantity is below min_quantity"""
     q = db.query(Inventory).filter(
         Inventory.quantity <= Inventory.min_quantity,
@@ -357,7 +358,7 @@ def get_low_stock_impl(
         q = q.filter(Inventory.residence_id == residence_id)
     
     inventories = q.all()
-    return [data_from_inventory(i) for i in inventories]
+    return [_inventory_to_response(i) for i in inventories]
 
 
 def get_inventory_stats_impl(
