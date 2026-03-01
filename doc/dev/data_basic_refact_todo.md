@@ -289,87 +289,58 @@ from sail_server.data.analysis import CharacterData
 - 在 Phase 4/5 中，controller 将逐步迁移到使用 Pydantic DTOs
 - Pydantic DTOs 提供更好的 API 文档生成和请求验证
 
-### Phase 2: ORM 模型拆分 (v0.2.6)
-
-**目标**: 将 ORM 模型从 `data/analysis.py` 拆分出来
-
-- [ ] **Task 2.1**: 创建新的 ORM 目录结构
-  - 创建 `sail_server/infrastructure/orm/` 目录
-  - 创建子目录 `analysis/`
-  - **文件**: 新建目录
-
-- [ ] **Task 2.2**: 迁移 `analysis.py` 中的 ORM 类
-  - 创建 `infrastructure/orm/analysis/outline.py` - 迁移 `Outline`, `OutlineNode`, `OutlineEvent`
-  - 创建 `infrastructure/orm/analysis/character.py` - 迁移 `Character`, `CharacterAlias`, `CharacterAttribute`, `CharacterArc`, `CharacterRelation`
-  - 创建 `infrastructure/orm/analysis/setting.py` - 迁移 `Setting`, `SettingAttribute`, `SettingRelation`, `CharacterSettingLink`
-  - 创建 `infrastructure/orm/analysis/evidence.py` - 迁移 `TextEvidence`
-  - 创建 `infrastructure/orm/analysis/task.py` - 迁移 `AnalysisTask`, `AnalysisResult`
-  - **文件**: 新建 5 个文件
-
-- [ ] **Task 2.3**: 更新导入语句
-  - 更新所有引用 `analysis.py` 中 ORM 类的文件
-  - 使用新的导入路径
-  - **文件**: `sail_server/model/analysis/*.py`, `sail_server/controller/*.py`
-
-- [ ] **Task 2.4**: 验证数据库迁移
-  - 确保表结构不变
-  - 运行测试验证
-
-### Phase 3: DTO Pydantic 化 (v0.2.7)
-
-**目标**: 将 dataclass DTOs 迁移到 Pydantic
-
-- [ ] **Task 3.1**: 创建 Pydantic DTO 目录
-  - 创建 `sail_server/application/dto/` 目录
-  - **文件**: 新建目录
-
-- [ ] **Task 3.2**: 迁移 `finance` 模块（试点）
-  - 创建 `application/dto/finance.py`
-  - 定义 `AccountCreateRequest`, `AccountResponse` 等
-  - 更新 `finance.py` controller 使用新的 DTOs
-  - 验证 Litestar 兼容性
-  - **文件**: 新建 + 修改
-
-- [ ] **Task 3.3**: 迁移 `health` 模块
-  - 类似 Task 3.2
-  - **文件**: 新建 + 修改
-
-- [ ] **Task 3.4**: 迁移 `text` 模块
-  - 类似 Task 3.2
-  - **文件**: 新建 + 修改
-
-- [ ] **Task 3.5**: 迁移 `analysis` 模块（最复杂）
-  - 按子模块拆分 DTOs
-  - 创建 `application/dto/analysis/outline.py`
-  - 创建 `application/dto/analysis/character.py`
-  - 创建 `application/dto/analysis/setting.py`
-  - 创建 `application/dto/analysis/evidence.py`
-  - **文件**: 新建 + 修改
-
-### Phase 4: DAO 层提取 (v0.2.8)
+### Phase 4: DAO 层提取 (v0.2.8) ✅ 已完成
 
 **目标**: 将数据访问逻辑从 Model 层提取到 DAO 层
 
-- [ ] **Task 4.1**: 创建 DAO 基类
-  - 创建 `sail_server/data/dao/base.py`
-  - 实现 `BaseDAO` 类，包含 CRUD 基础方法
-  - **文件**: 新建
+**完成日期**: 2026-03-01
 
-- [ ] **Task 4.2**: 实现 `finance` DAO
-  - 创建 `data/dao/finance.py`
-  - 实现 `AccountDAO`, `TransactionDAO`
-  - 从 `model/finance/` 提取数据访问逻辑
-  - **文件**: 新建 + 修改
+**修改摘要**:
+- 创建了 DAO 基类 `BaseDAO`，提供通用 CRUD 操作
+- 实现了 finance 模块 DAO（AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO）
+- 实现了 analysis 模块 DAO（CharacterDAO, OutlineDAO, SettingDAO, TextEvidenceDAO 等）
+- 所有测试通过
 
-- [ ] **Task 4.3**: 实现 `analysis` DAO
-  - 创建 `data/dao/analysis/`
-  - 实现各子模块的 DAO
-  - **文件**: 新建 + 修改
+**新建文件**:
+- `sail_server/data/dao/__init__.py`
+- `sail_server/data/dao/base.py` - DAO 基类
+- `sail_server/data/dao/finance.py` - 财务 DAO
+- `sail_server/data/dao/analysis.py` - 分析 DAO
 
-- [ ] **Task 4.4**: 更新 Model 层
-  - Model 层改为调用 DAO 层
-  - 专注业务逻辑
-  - **文件**: `sail_server/model/**/*.py`
+**DAO 基类功能**:
+- `get_by_id()` - 通过 ID 获取
+- `get_all()` - 分页获取所有
+- `create()` / `create_many()` - 创建单条/批量
+- `update()` - 更新
+- `delete()` / `delete_many()` - 删除单条/批量
+- `count()` - 统计
+- `exists()` - 检查存在
+- `filter_by()` - 条件查询
+
+**具体 DAO 功能**:
+- `CharacterDAO`: `get_by_edition()`, `get_with_relations()`, `search_by_name()`
+- `OutlineDAO`: `get_by_edition()`, `get_with_nodes()`
+- `TextEvidenceDAO`: `get_by_edition()`, `get_by_node()`, `get_by_target()`, `count_by_target_type()`
+
+**使用示例**:
+```python
+from sail_server.data.dao import CharacterDAO, TextEvidenceDAO
+
+def get_character_with_evidence(db: Session, character_id: int):
+    # 使用 DAO 获取数据
+    char_dao = CharacterDAO(db)
+    evidence_dao = TextEvidenceDAO(db)
+    
+    character = char_dao.get_by_id(character_id)
+    evidences = evidence_dao.get_by_target("character", character_id)
+    
+    return character, evidences
+```
+
+**注意事项**:
+- DAO 返回 ORM 对象，业务逻辑层负责转换为 DTO
+- Model 层的 `*_impl` 函数可以逐步迁移到使用 DAO
+- DAO 支持依赖注入，便于测试
 
 ### Phase 5: 清理和优化 (v0.3.0)
 
