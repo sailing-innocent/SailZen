@@ -199,7 +199,6 @@ class EvidenceController(Controller):
     """证据控制器"""
     path = "/evidence"
     
-    # 内存存储（临时实现，后续应使用数据库）
     _evidence_store: Dict[str, TextEvidence] = {}
     
     @post("/")
@@ -282,6 +281,7 @@ class EvidenceController(Controller):
     ) -> EvidenceResponse:
         """获取单个证据"""
         evidence = self._evidence_store.get(evidence_id)
+        
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
         

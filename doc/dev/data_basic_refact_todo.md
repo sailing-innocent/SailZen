@@ -1,0 +1,424 @@
+# SailZen 数据层系统性重构方案
+
+> **文档状态**: 草案  
+> **创建日期**: 2026-03-01  
+> **目标版本**: 0.3.0  
+> **关联文档**: [AGENTS.md](../../AGENTS.md), [PRD](../../PRD.md)
+
+---
+
+## 1. 现状分析
+
+### 1.1 当前架构概览
+
+```
+sail_server/data/           # 数据层（当前：DTO + ORM 混合）
+├── analysis.py             # 60 dataclasses + 13 ORM 类（问题最严重）
+├── finance.py              # 4 dataclasses + 4 ORM 类
+├── health.py               # 8 dataclasses + 4 ORM 类
+├── necessity.py            # 9 dataclasses + 9 ORM 类
+├── project.py              # 2 dataclasses + 2 ORM 类
+├── text.py                 # 8 dataclasses + 4 ORM 类
+├── history.py              # 1 dataclass + 1 ORM 类
+├── life.py                 # 1 dataclass + 1 ORM 类
+├── unified_agent.py        # 5 dataclasses + 3 ORM 类
+├── types.py                # 数据库类型定义
+└── orm.py                  # ORMBase 定义
+```
+
+### 1.2 核心问题
+
+| 问题类别 | 描述 | 影响文件 | 严重程度 |
+|---------|------|---------|---------|
+| **命名冲突** | `TextEvidence` 同时作为 dataclass 和 ORM 类 | `analysis.py` | 🔴 高 |
+| **重复定义** | 同一 dataclass 在文件中定义两次 | `analysis.py` (6个类) | 🔴 高 |
+| **文件过大** | `analysis.py` 1557+ 行，职责过多 | `analysis.py` | 🟡 中 |
+| **类型混淆** | Pylance 无法区分 DTO 和 ORM | 多个文件 | 🟡 中 |
+| **混合模式** | 部分模块清晰，部分混乱 | 不一致 | 🟡 中 |
+
+### 1.3 重复定义详情（analysis.py）
+
+以下 dataclass 在 `analysis.py` 中定义了两次：
+
+| 类名 | 第一处位置 | 第二处位置 | 用途差异 |
+|-----|-----------|-----------|---------|
+| `AnalysisTaskData` | 第255行 | 第696行 | 兼容旧格式 / 新格式 |
+| `AnalysisResultData` | 第289行 | 第741行 | 兼容旧格式 / 新格式 |
+| `CharacterData` | 第372行 | 第781行 | 兼容旧格式 / 新格式 |
+| `CharacterAliasData` | 第409行 | 第834行 | 兼容旧格式 / 新格式 |
+| `CharacterAttributeData` | 第429行 | 第860行 | 兼容旧格式 / 新格式 |
+| `CharacterRelationData` | 第481行 | 第892行 | 兼容旧格式 / 新格式 |
+
+### 1.4 当前数据流
+
+```
+Router → Controller → Model/DAO → Data Layer
+              ↓
+         DataclassDTO (Litestar)
+              ↓
+    请求/响应序列化 (dataclass)
+```
+
+**优点**:
+- Litestar 原生支持 dataclass
+- DTOConfig 灵活控制字段
+- 类型安全
+
+**缺点**:
+- dataclass 和 ORM 类同文件，职责不清
+- 命名冲突导致类型检查错误
+- 大型文件难以维护
+
+---
+
+## 2. 目标架构
+
+### 2.1 分层架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  API Layer (Router/Controller)                              │
+│  - Pydantic DTOs (请求/响应验证)                             │
+│  - Litestar DTO 配置                                         │
+├─────────────────────────────────────────────────────────────┤
+│  Service Layer (可选)                                        │
+│  - 复杂业务逻辑编排                                          │
+│  - 事务管理                                                  │
+├─────────────────────────────────────────────────────────────┤
+│  Model/DAO Layer                                            │
+│  - 数据访问对象 (DAO)                                        │
+│  - ORM 操作封装                                              │
+│  - DTO ↔ ORM 转换                                           │
+├─────────────────────────────────────────────────────────────┤
+│  Data Access Layer (Repository)                             │
+│  - SQLAlchemy ORM 模型 (仅数据库操作)                         │
+│  - 数据库迁移 (Alembic)                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 目录结构重构
+
+```
+sail_server/
+├── domain/                      # 领域层 (可选，复杂业务)
+│   ├── __init__.py
+│   └── analysis/               # 分析领域逻辑
+│
+├── application/                 # 应用层 (可选)
+│   ├── __init__.py
+│   └── dto/                    # Pydantic DTOs
+│       ├── __init__.py
+│       ├── analysis.py         # 分析模块 DTOs
+│       ├── finance.py
+│       └── ...
+│
+├── infrastructure/              # 基础设施层
+│   ├── __init__.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── connection.py       # 数据库连接管理
+│   │   └── migrations/         # Alembic 迁移文件
+│   └── orm/                    # ORM 模型 (原 data/)
+│       ├── __init__.py
+│       ├── base.py             # ORMBase
+│       ├── analysis/           # 按模块拆分
+│       │   ├── __init__.py
+│       │   ├── outline.py      # Outline, OutlineNode...
+│       │   ├── character.py    # Character, CharacterAlias...
+│       │   ├── setting.py      # Setting, SettingAttribute...
+│       │   ├── evidence.py     # TextEvidence
+│       │   └── task.py         # AnalysisTask, AnalysisResult
+│       ├── finance.py
+│       ├── health.py
+│       ├── necessity.py
+│       ├── project.py
+│       ├── text.py
+│       ├── history.py
+│       └── unified_agent.py
+│
+├── data/                        # 数据访问层 (DAO)
+│   ├── __init__.py
+│   ├── dao/                    # DAO 实现
+│   │   ├── __init__.py
+│   │   ├── base.py             # BaseDAO
+│   │   ├── analysis.py         # AnalysisDAO
+│   │   ├── finance.py
+│   │   └── ...
+│   └── dto/                    # 内部数据传输对象
+│       ├── __init__.py
+│       └── ...
+│
+└── model/                       # 业务逻辑层 (保留)
+    └── ...
+```
+
+### 2.3 命名规范
+
+| 层级 | 命名模式 | 示例 |
+|-----|---------|------|
+| ORM 模型 | 名词（单数） | `Character`, `Outline`, `TextEvidence` |
+| Pydantic DTO (Request) | `*Request` | `CharacterCreateRequest`, `OutlineUpdateRequest` |
+| Pydantic DTO (Response) | `*Response` | `CharacterResponse`, `OutlineListResponse` |
+| DAO 类 | `*DAO` | `CharacterDAO`, `OutlineDAO` |
+| Service 类 | `*Service` | `AnalysisService`, `CharacterService` |
+| 内部 DTO | `*DTO` 或 `*Data` | `CharacterDTO` (内部使用) |
+
+---
+
+## 3. 重构任务清单
+
+### Phase 1: 紧急修复 (v0.2.5)
+
+**目标**: 解决命名冲突和重复定义，消除 Pylance 错误
+
+- [ ] **Task 1.1**: 修复 `TextEvidence` 命名冲突
+  - 将 dataclass `TextEvidence` 重命名为 `TextEvidenceDTO`
+  - 保留 `TextEvidence = TextEvidenceDTO` 别名（向后兼容）
+  - 更新所有引用文件
+  - **文件**: `sail_server/data/analysis.py`
+  - **影响**: `sail_server/model/analysis/evidence.py`
+
+- [ ] **Task 1.2**: 合并 `analysis.py` 中的重复 dataclass
+  - 分析 `AnalysisTaskData` 两个版本的差异
+  - 合并为一个类，保留所有必要字段
+  - 对 `AnalysisResultData`, `CharacterData` 等重复类同样处理
+  - **文件**: `sail_server/data/analysis.py`
+
+- [ ] **Task 1.3**: 添加类型别名导出
+  - 在 `analysis.py` 底部添加清晰的导出列表
+  - 标记已弃用的别名
+  - **文件**: `sail_server/data/analysis.py`
+
+### Phase 2: ORM 模型拆分 (v0.2.6)
+
+**目标**: 将 ORM 模型从 `data/analysis.py` 拆分出来
+
+- [ ] **Task 2.1**: 创建新的 ORM 目录结构
+  - 创建 `sail_server/infrastructure/orm/` 目录
+  - 创建子目录 `analysis/`
+  - **文件**: 新建目录
+
+- [ ] **Task 2.2**: 迁移 `analysis.py` 中的 ORM 类
+  - 创建 `infrastructure/orm/analysis/outline.py` - 迁移 `Outline`, `OutlineNode`, `OutlineEvent`
+  - 创建 `infrastructure/orm/analysis/character.py` - 迁移 `Character`, `CharacterAlias`, `CharacterAttribute`, `CharacterArc`, `CharacterRelation`
+  - 创建 `infrastructure/orm/analysis/setting.py` - 迁移 `Setting`, `SettingAttribute`, `SettingRelation`, `CharacterSettingLink`
+  - 创建 `infrastructure/orm/analysis/evidence.py` - 迁移 `TextEvidence`
+  - 创建 `infrastructure/orm/analysis/task.py` - 迁移 `AnalysisTask`, `AnalysisResult`
+  - **文件**: 新建 5 个文件
+
+- [ ] **Task 2.3**: 更新导入语句
+  - 更新所有引用 `analysis.py` 中 ORM 类的文件
+  - 使用新的导入路径
+  - **文件**: `sail_server/model/analysis/*.py`, `sail_server/controller/*.py`
+
+- [ ] **Task 2.4**: 验证数据库迁移
+  - 确保表结构不变
+  - 运行测试验证
+
+### Phase 3: DTO Pydantic 化 (v0.2.7)
+
+**目标**: 将 dataclass DTOs 迁移到 Pydantic
+
+- [ ] **Task 3.1**: 创建 Pydantic DTO 目录
+  - 创建 `sail_server/application/dto/` 目录
+  - **文件**: 新建目录
+
+- [ ] **Task 3.2**: 迁移 `finance` 模块（试点）
+  - 创建 `application/dto/finance.py`
+  - 定义 `AccountCreateRequest`, `AccountResponse` 等
+  - 更新 `finance.py` controller 使用新的 DTOs
+  - 验证 Litestar 兼容性
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.3**: 迁移 `health` 模块
+  - 类似 Task 3.2
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.4**: 迁移 `text` 模块
+  - 类似 Task 3.2
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.5**: 迁移 `analysis` 模块（最复杂）
+  - 按子模块拆分 DTOs
+  - 创建 `application/dto/analysis/outline.py`
+  - 创建 `application/dto/analysis/character.py`
+  - 创建 `application/dto/analysis/setting.py`
+  - 创建 `application/dto/analysis/evidence.py`
+  - **文件**: 新建 + 修改
+
+### Phase 4: DAO 层提取 (v0.2.8)
+
+**目标**: 将数据访问逻辑从 Model 层提取到 DAO 层
+
+- [ ] **Task 4.1**: 创建 DAO 基类
+  - 创建 `sail_server/data/dao/base.py`
+  - 实现 `BaseDAO` 类，包含 CRUD 基础方法
+  - **文件**: 新建
+
+- [ ] **Task 4.2**: 实现 `finance` DAO
+  - 创建 `data/dao/finance.py`
+  - 实现 `AccountDAO`, `TransactionDAO`
+  - 从 `model/finance/` 提取数据访问逻辑
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 4.3**: 实现 `analysis` DAO
+  - 创建 `data/dao/analysis/`
+  - 实现各子模块的 DAO
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 4.4**: 更新 Model 层
+  - Model 层改为调用 DAO 层
+  - 专注业务逻辑
+  - **文件**: `sail_server/model/**/*.py`
+
+### Phase 5: 清理和优化 (v0.3.0)
+
+**目标**: 清理旧代码，完善文档
+
+- [ ] **Task 5.1**: 删除旧的 `data/analysis.py`
+  - 确保所有导入已迁移
+  - 删除文件
+  - **文件**: 删除
+
+- [ ] **Task 5.2**: 统一导入路径
+  - 创建清晰的公共 API
+  - 更新 `__init__.py` 文件
+  - **文件**: 多个
+
+- [ ] **Task 5.3**: 更新文档
+  - 更新 AGENTS.md 中的架构说明
+  - 更新开发文档
+  - **文件**: `AGENTS.md`, 其他文档
+
+- [ ] **Task 5.4**: 性能优化
+  - 评估 Pydantic vs dataclass 性能差异
+  - 优化数据库查询
+  - 添加缓存（如需要）
+
+---
+
+## 4. 技术选型决策
+
+### 4.1 DTO 技术选型
+
+| 方案 | 优点 | 缺点 | 决策 |
+|-----|------|------|------|
+| **保持 dataclass** | 改动小，Litestar 原生支持 | 验证能力弱，无自动生成 OpenAPI | ❌ 不采用 |
+| **Pydantic v2** | 验证强，Litestar 支持，OpenAPI | 需要迁移工作 | ✅ **采用** |
+| **msgspec** | 性能最好 | 生态小，Litestar 支持有限 | ❌ 不采用 |
+
+### 4.2 ORM 技术选型
+
+| 方案 | 优点 | 缺点 | 决策 |
+|-----|------|------|------|
+| **保持 SQLAlchemy 2.0** | 成熟，团队熟悉 | 需要手动维护 DTO | ✅ **采用** |
+| **SQLModel** | Pydantic + SQLAlchemy 结合 | 较新，需要大面积重构 | ❌ 不采用 |
+| **Pydantic + async ORM** | 现代化 | 学习成本，迁移工作大 | ❌ 不采用 |
+
+### 4.3 目录结构决策
+
+采用 **渐进式重构**，不一次性改变太多：
+
+```
+# 当前结构（保持）
+sail_server/
+├── data/              # 逐步迁移后删除
+├── model/             # 保留，专注业务逻辑
+├── controller/        # 保留
+└── router/            # 保留
+
+# 新增结构
+sail_server/
+├── application/       # 新增：Pydantic DTOs
+├── infrastructure/    # 新增：ORM 模型
+└── domain/            # 可选：复杂领域逻辑
+```
+
+---
+
+## 5. 风险与缓解
+
+| 风险 | 影响 | 可能性 | 缓解措施 |
+|-----|------|--------|---------|
+| 重构引入 Bug | 高 | 中 | 1. 每个 Phase 后全面测试<br>2. 保持向后兼容<br>3. 小步提交 |
+| 性能下降 | 中 | 低 | 1. Pydantic v2 性能已优化<br>2. 基准测试对比<br>3. 必要时优化 |
+| 开发进度延迟 | 中 | 中 | 1. 分 Phase 实施<br>2. 优先修复紧急问题<br>3. 可跳过非关键任务 |
+| 团队适应成本 | 低 | 低 | 1. 完善文档<br>2. Code Review 指导<br>3. 保持命名一致 |
+
+---
+
+## 6. 测试策略
+
+### 6.1 每个 Phase 的测试要求
+
+- **单元测试**: 所有 DTO/DAO/Model 类
+- **集成测试**: API 端到端测试
+- **数据库测试**: 迁移脚本测试
+- **性能测试**: 关键 API 响应时间对比
+
+### 6.2 测试文件位置
+
+```
+tests/
+├── unit/
+│   ├── infrastructure/     # ORM 模型测试
+│   ├── application/        # DTO 测试
+│   └── data/               # DAO 测试
+├── integration/
+│   └── api/                # API 集成测试
+└── migration/              # 数据库迁移测试
+```
+
+---
+
+## 7. 实施时间线
+
+```
+Week 1-2:  Phase 1 (紧急修复)
+Week 3-4:  Phase 2 (ORM 拆分)
+Week 5-6:  Phase 3 (DTO Pydantic 化)
+Week 7-8:  Phase 4 (DAO 层提取)
+Week 9-10: Phase 5 (清理优化)
+```
+
+---
+
+## 8. 参考资源
+
+- [Pydantic v2 文档](https://docs.pydantic.dev/)
+- [SQLAlchemy 2.0 文档](https://docs.sqlalchemy.org/)
+- [Litestar DTO 文档](https://docs.litestar.dev/2/usage/dto.html)
+- [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+- [DDD 分层架构](https://ddd-practitioners.com/layered-architecture)
+
+---
+
+## 9. 附录
+
+### 9.1 当前命名冲突完整列表
+
+```python
+# sail_server/data/analysis.py
+
+# 冲突 1: TextEvidence
+@dataclass
+class TextEvidence: ...       # 第186行 (DTO)
+
+class TextEvidence(ORMBase): ...  # 第1503行 (ORM)
+
+# 冲突 2-7: 重复定义的 dataclass
+# AnalysisTaskData, AnalysisResultData, CharacterData,
+# CharacterAliasData, CharacterAttributeData, CharacterRelationData
+```
+
+### 9.2 建议的导入路径映射
+
+| 当前导入 | 新导入 (Phase 2 后) | 新导入 (Phase 3 后) |
+|---------|-------------------|-------------------|
+| `from sail_server.data.analysis import TextEvidence` | `from sail_server.infrastructure.orm.analysis.evidence import TextEvidence` | `from sail_server.application.dto.analysis.evidence import TextEvidenceResponse` |
+| `from sail_server.data.finance import Account` | `from sail_server.infrastructure.orm.finance import Account` | (不变) |
+| `from sail_server.data.finance import AccountData` | `from sail_server.data.finance import AccountData` | `from sail_server.application.dto.finance import AccountResponse` |
+
+---
+
+**文档维护**: 此文档应在每个 Phase 完成后更新，记录实际进展和遇到的问题。
