@@ -1,6 +1,6 @@
 # SailZen 数据层系统性重构方案
 
-> **文档状态**: 草案  
+> **文档状态**: Phase 1 完成，Phase 2 进行中  
 > **创建日期**: 2026-03-01  
 > **目标版本**: 0.3.0  
 > **关联文档**: [AGENTS.md](../../AGENTS.md), [PRD](../../PRD.md)
@@ -167,27 +167,114 @@ sail_server/
 
 ## 3. 重构任务清单
 
-### Phase 1: 紧急修复 (v0.2.5)
+### Phase 1: 紧急修复 (v0.2.5) ✅ 已完成
 
 **目标**: 解决命名冲突和重复定义，消除 Pylance 错误
 
-- [ ] **Task 1.1**: 修复 `TextEvidence` 命名冲突
-  - 将 dataclass `TextEvidence` 重命名为 `TextEvidenceDTO`
-  - 保留 `TextEvidence = TextEvidenceDTO` 别名（向后兼容）
-  - 更新所有引用文件
-  - **文件**: `sail_server/data/analysis.py`
-  - **影响**: `sail_server/model/analysis/evidence.py`
+**完成日期**: 2026-03-01
 
-- [ ] **Task 1.2**: 合并 `analysis.py` 中的重复 dataclass
-  - 分析 `AnalysisTaskData` 两个版本的差异
-  - 合并为一个类，保留所有必要字段
-  - 对 `AnalysisResultData`, `CharacterData` 等重复类同样处理
-  - **文件**: `sail_server/data/analysis.py`
+**修改摘要**:
+- 修复了 `TextEvidence` 命名冲突（DTO 重命名为 `TextEvidenceDTO`，ORM 保留为 `TextEvidenceORM`）
+- 合并了重复的 dataclass（`AnalysisTaskData`, `AnalysisResultData`, `CharacterData` 等）
+- 添加了向后兼容的别名导出
+- 所有 34 个 server 测试通过
 
-- [ ] **Task 1.3**: 添加类型别名导出
-  - 在 `analysis.py` 底部添加清晰的导出列表
-  - 标记已弃用的别名
-  - **文件**: `sail_server/data/analysis.py`
+**修改文件**:
+- `sail_server/data/analysis.py` - 主要修改
+- `sail_server/model/analysis/evidence.py` - 更新导入
+- `sail_server/controller/analysis.py` - 更新导入
+- `sail_server/router/analysis_compat.py` - 更新导入
+- `tests/server/test_evidence_api.py` - 更新导入
+
+**新的导入方式**:
+```python
+# 推荐：明确使用 DTO
+from sail_server.data.analysis import TextEvidenceDTO
+
+# 向后兼容：TextEvidence 现在是 DTO 的别名
+from sail_server.data.analysis import TextEvidence  # 等同于 TextEvidenceDTO
+
+# ORM 类
+from sail_server.data.analysis import TextEvidenceORM
+```
+
+---
+
+### Phase 2: ORM 模型拆分 (v0.2.6) ✅ 已完成
+
+**目标**: 将 ORM 模型从 `data/analysis.py` 拆分出来
+
+**完成日期**: 2026-03-01
+
+**修改摘要**:
+- 创建了新的 ORM 目录结构 `sail_server/infrastructure/orm/`
+- 创建了 `analysis` 子模块，包含 5 个 ORM 文件
+- 所有 ORM 类已迁移到新位置
+- 保持 `analysis.py` 中的 ORM 类定义（向后兼容）
+- 所有测试通过
+
+**新建文件**:
+- `sail_server/infrastructure/__init__.py`
+- `sail_server/infrastructure/orm/__init__.py`
+- `sail_server/infrastructure/orm/analysis/__init__.py`
+- `sail_server/infrastructure/orm/analysis/outline.py` - Outline, OutlineNode, OutlineEvent
+- `sail_server/infrastructure/orm/analysis/character.py` - Character, CharacterAlias, CharacterAttribute, CharacterArc, CharacterRelation
+- `sail_server/infrastructure/orm/analysis/setting.py` - Setting, SettingAttribute, SettingRelation, CharacterSettingLink
+- `sail_server/infrastructure/orm/analysis/evidence.py` - TextEvidence
+- `sail_server/infrastructure/orm/analysis/task.py` - AnalysisTask, AnalysisResult (占位符)
+
+**新的导入方式**:
+```python
+# 推荐：从新位置导入 ORM 模型
+from sail_server.infrastructure.orm.analysis import (
+    Outline, OutlineNode, OutlineEvent,
+    Character, CharacterAlias, CharacterAttribute,
+    Setting, SettingAttribute, TextEvidence,
+)
+
+# 向后兼容：仍然可以从原位置导入
+from sail_server.data.analysis import Outline, Character, Setting, TextEvidence
+```
+
+**注意事项**:
+- `analysis.py` 中的 ORM 类定义暂时保留，确保向后兼容
+- 新的代码建议从 `infrastructure.orm.analysis` 导入
+- 在 Phase 3 完成后，将移除 `analysis.py` 中的 ORM 类定义
+
+---
+
+### Phase 3: DTO Pydantic 化 (v0.2.7) 🚧 待开始
+
+**目标**: 将 dataclass DTOs 迁移到 Pydantic
+
+**计划开始**: 待 Phase 2 稳定后
+
+- [ ] **Task 3.1**: 创建 Pydantic DTO 目录
+  - 创建 `sail_server/application/dto/` 目录
+  - **文件**: 新建目录
+
+- [ ] **Task 3.2**: 迁移 `finance` 模块（试点）
+  - 创建 `application/dto/finance.py`
+  - 定义 `AccountCreateRequest`, `AccountResponse` 等
+  - 更新 `finance.py` controller 使用新的 DTOs
+  - 验证 Litestar 兼容性
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.3**: 迁移 `health` 模块
+  - 类似 Task 3.2
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.4**: 迁移 `text` 模块
+  - 类似 Task 3.2
+  - **文件**: 新建 + 修改
+
+- [ ] **Task 3.5**: 迁移 `analysis` 模块（最复杂）
+  - 按子模块拆分 DTOs
+  - 创建 `application/dto/analysis/outline.py`
+  - 创建 `application/dto/analysis/character.py`
+  - 创建 `application/dto/analysis/setting.py`
+  - 创建 `application/dto/analysis/evidence.py`
+  - **文件**: 新建 + 修改
 
 ### Phase 2: ORM 模型拆分 (v0.2.6)
 
@@ -289,11 +376,6 @@ sail_server/
   - 更新 AGENTS.md 中的架构说明
   - 更新开发文档
   - **文件**: `AGENTS.md`, 其他文档
-
-- [ ] **Task 5.4**: 性能优化
-  - 评估 Pydantic vs dataclass 性能差异
-  - 优化数据库查询
-  - 添加缓存（如需要）
 
 ---
 
