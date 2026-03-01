@@ -237,7 +237,7 @@ const Sidebar: React.FC<{
   const pendingCount = React.useMemo(() => tasks.filter((t) => t.status === 'pending').length, [tasks])
   const runningCount = React.useMemo(() => tasks.filter((t) => t.status === 'running').length, [tasks])
   const totalCount = tasks.length
-  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + (t.actualCost || 0), 0), [tasks])
+  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + (Number(t.actualCost) || 0), 0), [tasks])
   const activeTaskCount = pendingCount + runningCount
 
   const menuItems = React.useMemo(() => [
@@ -735,7 +735,7 @@ const TaskMonitorPanel: React.FC = () => {
                         <Progress value={task.progress} className="h-1.5" />
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>{task.progress}%</span>
-                          <span>${task.actualCost.toFixed(4)}</span>
+                          <span>${Number(task.actualCost || 0).toFixed(4)}</span>
                         </div>
                       </div>
 
@@ -800,7 +800,7 @@ const TaskMonitorPanel: React.FC = () => {
                     </div>
                     <div className="p-3 rounded-lg bg-muted">
                       <p className="text-xs text-muted-foreground">成本</p>
-                      <p className="text-lg font-medium">${currentTask.actualCost.toFixed(4)}</p>
+                      <p className="text-lg font-medium">${Number(currentTask.actualCost || 0).toFixed(4)}</p>
                     </div>
                   </div>
 
@@ -902,7 +902,7 @@ const CostDisplayPanel: React.FC = () => {
   }, [loadSchedulerStatus])
 
   // Calculate stats directly
-  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualCost, 0), [tasks])
+  const totalCost = React.useMemo(() => tasks.reduce((sum, t) => sum + (Number(t.actualCost) || 0), 0), [tasks])
   const totalTokens = React.useMemo(() => tasks.reduce((sum, t) => sum + t.actualTokens, 0), [tasks])
 
   const budgetLimit = 10.0 // 示例预算限制
@@ -1027,7 +1027,7 @@ const CostDisplayPanel: React.FC = () => {
               <div className="flex items-center justify-between text-sm mt-1">
                 <span className="text-muted-foreground">总成本</span>
                 <span className="font-medium">
-                  ${(schedulerStatus.stats.totalCost || 0).toFixed(3)}
+                  ${Number(schedulerStatus.stats.totalCost || 0).toFixed(3)}
                 </span>
               </div>
             </div>

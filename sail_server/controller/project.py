@@ -8,6 +8,7 @@
 from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request, Response
 from litestar.exceptions import NotFoundException
+import logging
 
 from sail_server.application.dto.project import (
     ProjectCreateRequest,
@@ -40,6 +41,8 @@ from sail_server.model.project import (
 from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
 
+logger = logging.getLogger(__name__)
+
 
 class ProjectController(Controller):
     path = "/project"
@@ -54,7 +57,7 @@ class ProjectController(Controller):
     ) -> List[ProjectResponse]:
         db = next(router_dependency)
         projects = get_projects_impl(db, skip, limit)
-        request.logger.info(f"Get projects: {len(projects)}")
+        logger.info(f"Get projects: {len(projects)}")
         return projects
 
     @get("/{project_id:int}")
@@ -69,7 +72,7 @@ class ProjectController(Controller):
         """
         db = next(router_dependency)
         project = get_project_impl(db, project_id)
-        request.logger.info(f"Get project {project_id}: {project}")
+        logger.info(f"Get project {project_id}: {project}")
         if not project:
             raise NotFoundException(detail=f"Project with ID {project_id} not found")
         return project
@@ -86,7 +89,7 @@ class ProjectController(Controller):
         """
         db = next(router_dependency)
         project = create_project_impl(db, data)
-        request.logger.info(f"Created project: {project.name}")
+        logger.info(f"Created project: {project.name}")
         return project
 
     @put("/{project_id:int}")
@@ -102,7 +105,7 @@ class ProjectController(Controller):
         """
         db = next(router_dependency)
         project = update_project_impl(db, project_id, data)
-        request.logger.info(f"Updated project {project_id}: {project}")
+        logger.info(f"Updated project {project_id}: {project}")
         if not project:
             raise NotFoundException(detail=f"Project with ID {project_id} not found")
         return project
@@ -119,7 +122,7 @@ class ProjectController(Controller):
         """
         db = next(router_dependency)
         project = delete_project_impl(db, project_id)
-        request.logger.info(f"Deleted project {project_id}")
+        logger.info(f"Deleted project {project_id}")
         if not project:
             raise NotFoundException(detail=f"Project with ID {project_id} not found")
         return project
@@ -143,7 +146,7 @@ class MissionController(Controller):
         """
         db = next(router_dependency)
         missions = get_missions_impl(db, skip, limit, parent_id, project_id)
-        request.logger.info(f"Get missions: {len(missions)}")
+        logger.info(f"Get missions: {len(missions)}")
         return missions
 
     @get("/{mission_id:int}")
@@ -158,7 +161,7 @@ class MissionController(Controller):
         """
         db = next(router_dependency)
         mission = get_mission_impl(db, mission_id)
-        request.logger.info(f"Get mission {mission_id}: {mission}")
+        logger.info(f"Get mission {mission_id}: {mission}")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -175,7 +178,7 @@ class MissionController(Controller):
         """
         db = next(router_dependency)
         mission = create_mission_impl(db, data)
-        request.logger.info(f"Created mission: {mission.name}")
+        logger.info(f"Created mission: {mission.name}")
         return mission
 
     @put("/{mission_id:int}")
@@ -191,7 +194,7 @@ class MissionController(Controller):
         """
         db = next(router_dependency)
         mission = update_mission_impl(db, mission_id, data)
-        request.logger.info(f"Updated mission {mission_id}: {mission}")
+        logger.info(f"Updated mission {mission_id}: {mission}")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -208,7 +211,7 @@ class MissionController(Controller):
         """
         db = next(router_dependency)
         mission = delete_mission_impl(db, mission_id)
-        request.logger.info(f"Deleted mission {mission_id}")
+        logger.info(f"Deleted mission {mission_id}")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -226,7 +229,7 @@ class MissionController(Controller):
         """Set mission state to PENDING."""
         db = next(router_dependency)
         mission = pending_mission_impl(db, mission_id)
-        request.logger.info(f"Mission {mission_id} set to PENDING")
+        logger.info(f"Mission {mission_id} set to PENDING")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -241,7 +244,7 @@ class MissionController(Controller):
         """Set mission state to READY."""
         db = next(router_dependency)
         mission = ready_mission_impl(db, mission_id)
-        request.logger.info(f"Mission {mission_id} set to READY")
+        logger.info(f"Mission {mission_id} set to READY")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -256,7 +259,7 @@ class MissionController(Controller):
         """Set mission state to DOING (start working)."""
         db = next(router_dependency)
         mission = doing_mission_impl(db, mission_id)
-        request.logger.info(f"Mission {mission_id} set to DOING")
+        logger.info(f"Mission {mission_id} set to DOING")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -271,7 +274,7 @@ class MissionController(Controller):
         """Set mission state to DONE (complete mission)."""
         db = next(router_dependency)
         mission = done_mission_impl(db, mission_id)
-        request.logger.info(f"Mission {mission_id} set to DONE")
+        logger.info(f"Mission {mission_id} set to DONE")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -286,7 +289,7 @@ class MissionController(Controller):
         """Set mission state to CANCELED."""
         db = next(router_dependency)
         mission = cancel_mission_impl(db, mission_id)
-        request.logger.info(f"Mission {mission_id} set to CANCELED")
+        logger.info(f"Mission {mission_id} set to CANCELED")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -302,7 +305,7 @@ class MissionController(Controller):
         """Postpone mission deadline by specified days."""
         db = next(router_dependency)
         mission = postpone_mission_impl(db, mission_id, days)
-        request.logger.info(f"Mission {mission_id} postponed by {days} days")
+        logger.info(f"Mission {mission_id} postponed by {days} days")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
         return mission
@@ -320,7 +323,7 @@ class MissionController(Controller):
         """Get missions with deadlines within specified hours."""
         db = next(router_dependency)
         missions = get_upcoming_missions_impl(db, hours)
-        request.logger.info(f"Found {len(missions)} upcoming missions within {hours}h")
+        logger.info(f"Found {len(missions)} upcoming missions within {hours}h")
         return missions
 
     @get("/overdue")
@@ -332,5 +335,5 @@ class MissionController(Controller):
         """Get all overdue missions (past deadline, not done/canceled)."""
         db = next(router_dependency)
         missions = get_overdue_missions_impl(db)
-        request.logger.info(f"Found {len(missions)} overdue missions")
+        logger.info(f"Found {len(missions)} overdue missions")
         return missions

@@ -204,13 +204,27 @@ export function OutlineReviewPanel({
     const isSelected = selectedNodeIds.includes(node.id)
     const isExpanded = expandedNodes.has(node.id)
     const hasChildren = node.children && node.children.length > 0
+    const reviewStatus = node.review_status || 'pending'
+
+    // 根据审核状态设置样式
+    const getReviewStatusStyle = () => {
+      switch (reviewStatus) {
+        case 'approved':
+          return 'bg-green-50 border-green-200'
+        case 'rejected':
+          return 'bg-red-50 border-red-200 opacity-50'
+        default:
+          return ''
+      }
+    }
 
     return (
       <div key={node.id} className="border-l-2 border-muted ml-3">
         <div
           className={`
-            flex items-start gap-2 py-2 px-3 rounded-md
+            flex items-start gap-2 py-2 px-3 rounded-md border
             ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'}
+            ${getReviewStatusStyle()}
           `}
           style={{ marginLeft: `${level * 16}px` }}
         >
@@ -258,6 +272,16 @@ export function OutlineReviewPanel({
               >
                 {SIGNIFICANCE_LABELS[node.significance]}
               </Badge>
+
+              {/* 审核状态徽章 */}
+              {reviewStatus !== 'pending' && (
+                <Badge
+                  variant={reviewStatus === 'approved' ? 'default' : 'destructive'}
+                  className="text-xs"
+                >
+                  {reviewStatus === 'approved' ? '已批准' : '已拒绝'}
+                </Badge>
+              )}
             </div>
 
             {/* 摘要 */}

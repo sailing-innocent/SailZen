@@ -581,10 +581,37 @@ export class UnifiedAgentAPI {
   }
 
   private _transformAgentEvent(data: Record<string, unknown>): AgentEvent {
+    // 支持后端两种可能的格式：snake_case 和 camelCase
+    const eventType = (data.event_type || data.eventType) as AgentEventType
+    const taskId = (data.task_id || data.taskId) as number
+    const timestamp = (data.timestamp || data.timestamp) as string
+    
+    // 后端使用 'type' 字段表示事件类型，需要映射到 eventType
+    const backendType = data.type as string
+    if (backendType && !eventType) {
+      // 将后端的 type 映射到前端的 eventType
+      const typeMapping: Record<string, AgentEventType> = {
+        'task_created': 'task_created',
+        'task_started': 'task_started',
+        'progress': 'task_progress',
+        'step': 'task_step',
+        'task_completed': 'task_completed',
+        'task_failed': 'task_failed',
+        'task_cancelled': 'task_cancelled',
+        'cost_update': 'cost_update',
+      }
+      return {
+        eventType: typeMapping[backendType] || backendType as AgentEventType,
+        taskId: (data.task_id || data.taskId) as number,
+        timestamp: (data.timestamp || new Date().toISOString()) as string,
+        data: (data.data as Record<string, unknown>) ?? {},
+      }
+    }
+    
     return {
-      eventType: data.event_type as AgentEventType,
-      taskId: data.task_id as number,
-      timestamp: data.timestamp as string,
+      eventType: eventType,
+      taskId: taskId,
+      timestamp: timestamp || new Date().toISOString(),
       data: (data.data as Record<string, unknown>) ?? {},
     }
   }

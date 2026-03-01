@@ -7,6 +7,9 @@
 # ---------------------------------
 from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.health import (
     WeightCreateRequest,
@@ -62,11 +65,11 @@ class WeightController(Controller):
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
         except ValueError:
-            request.logger.error(f"Invalid date format: {date}")
+            logger.error(f"Invalid date format: {date}")
             return None
 
         weight = target_weight_impl(db, target_date)
-        request.logger.info(f"Get target weight for {date}: {weight}")
+        logger.info(f"Get target weight for {date}: {weight}")
         if weight is None:
             return None
 
@@ -84,7 +87,7 @@ class WeightController(Controller):
         """
         db = next(router_dependency)
         weight = read_weight_impl(db, weight_id)
-        request.logger.info(f"Get weight: {weight}")
+        logger.info(f"Get weight: {weight}")
         if weight is None:
             return None
 
@@ -135,7 +138,7 @@ class WeightController(Controller):
         """
         db = next(router_dependency)
         weight = create_weight_impl(db, data)
-        request.logger.info(f"Create weight: {weight}")
+        logger.info(f"Create weight: {weight}")
         if weight is None:
             return None
 
@@ -156,7 +159,7 @@ class WeightController(Controller):
         """
         db = next(router_dependency)
         result = analyze_weight_trend_impl(db, start, end, model_type)
-        request.logger.info(f"Weight analysis: slope={result['slope']}, trend={result['current_trend']}")
+        logger.info(f"Weight analysis: slope={result['slope']}, trend={result['current_trend']}")
         return result
 
     # GET /weight/prediction?target_time=&model_type=&start=&end=
@@ -175,7 +178,7 @@ class WeightController(Controller):
         """
         db = next(router_dependency)
         predicted = predict_weight_impl(db, target_time, model_type, start, end)
-        request.logger.info(f"Weight prediction for {target_time}: {predicted}")
+        logger.info(f"Weight prediction for {target_time}: {predicted}")
         return {"predicted_weight": predicted, "target_time": target_time}
 
 
@@ -197,7 +200,7 @@ class WeightPlanController(Controller):
         """
         db = next(router_dependency)
         plan = get_active_weight_plan_impl(db)
-        request.logger.info(f"Get weight plan: {plan}")
+        logger.info(f"Get weight plan: {plan}")
         if plan is None:
             return None
         return plan
@@ -214,7 +217,7 @@ class WeightPlanController(Controller):
         """
         db = next(router_dependency)
         plan = create_weight_plan_impl(db, data)
-        request.logger.info(f"Create weight plan: {plan}")
+        logger.info(f"Create weight plan: {plan}")
         return plan
 
     @get("/progress")
@@ -230,7 +233,7 @@ class WeightPlanController(Controller):
         """
         db = next(router_dependency)
         progress = get_weight_plan_progress_impl(db, plan_id)
-        request.logger.info(f"Weight plan progress: control_rate={progress['control_rate'] if progress else None}")
+        logger.info(f"Weight plan progress: control_rate={progress['control_rate'] if progress else None}")
         if progress is None:
             return None
         return progress
@@ -254,7 +257,7 @@ class WeightPlanController(Controller):
         """
         db = next(router_dependency)
         result = get_weights_with_plan_status_impl(db, start, end, plan_id)
-        request.logger.info(f"Get {len(result)} weights with status")
+        logger.info(f"Get {len(result)} weights with status")
         return result
 
 
@@ -277,7 +280,7 @@ class ExerciseController(Controller):
         """
         db = next(router_dependency)
         exercise = read_exercise_impl(db, exercise_id)
-        request.logger.info(f"Get exercise: {exercise}")
+        logger.info(f"Get exercise: {exercise}")
         if exercise is None:
             return None
         return exercise
@@ -310,7 +313,7 @@ class ExerciseController(Controller):
         """
         db = next(router_dependency)
         exercise = create_exercise_impl(db, data)
-        request.logger.info(f"Create exercise: {exercise}")
+        logger.info(f"Create exercise: {exercise}")
         if exercise is None:
             return None
         return exercise
@@ -328,7 +331,7 @@ class ExerciseController(Controller):
         """
         db = next(router_dependency)
         exercise = update_exercise_impl(db, exercise_id, data)
-        request.logger.info(f"Update exercise: {exercise}")
+        logger.info(f"Update exercise: {exercise}")
         if exercise is None:
             return None
         return exercise
@@ -345,4 +348,4 @@ class ExerciseController(Controller):
         """
         db = next(router_dependency)
         delete_exercise_impl(db, exercise_id)
-        request.logger.info(f"Delete exercise: {exercise_id}")
+        logger.info(f"Delete exercise: {exercise_id}")

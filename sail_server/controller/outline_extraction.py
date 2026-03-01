@@ -725,6 +725,9 @@ class OutlineExtractionController(Controller):
         if task["status"] != "completed":
             raise ClientException(detail="Task is not completed yet")
         
+        if not task.get("result"):
+            raise ClientException(detail="Task result is not available")
+        
         db = next(router_dependency)
         
         try:

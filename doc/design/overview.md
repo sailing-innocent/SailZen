@@ -68,3 +68,5 @@ PostgreSQL
 - [健康管理](./manager/health.md)
 - [物资管理](./manager/necessity.md)
 - [文本管理](./manager/text.md)
+- [大纲提取 V2 (Checkpoint-Resume)](./outline-extraction-v2.md) - 新版任务状态持久化
+- [大纲提取 V1](./outline-extraction.md) - 原版文档

@@ -9,6 +9,9 @@
 from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import NotFoundException
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.text import (
     WorkCreateRequest,
@@ -103,7 +106,7 @@ class WorkController(Controller):
         """获取作品列表"""
         db = next(router_dependency)
         works = get_works_impl(db, skip, limit)
-        request.logger.info(f"Get works: {len(works)}")
+        logger.info(f"Get works: {len(works)}")
         return works
     
     @get("/search")
@@ -118,7 +121,7 @@ class WorkController(Controller):
         """搜索作品"""
         db = next(router_dependency)
         works = search_works_impl(db, keyword, skip, limit)
-        request.logger.info(f"Search works with keyword '{keyword}': {len(works)}")
+        logger.info(f"Search works with keyword '{keyword}': {len(works)}")
         return works
     
     @get("/{work_id:int}")
@@ -133,7 +136,7 @@ class WorkController(Controller):
         work = get_work_impl(db, work_id)
         if not work:
             raise NotFoundException(detail=f"Work with ID {work_id} not found")
-        request.logger.info(f"Get work {work_id}: {work.title}")
+        logger.info(f"Get work {work_id}: {work.title}")
         return work
     
     @post("/")
@@ -146,7 +149,7 @@ class WorkController(Controller):
         """创建作品"""
         db = next(router_dependency)
         work = create_work_impl(db, data)
-        request.logger.info(f"Created work: {work.title}")
+        logger.info(f"Created work: {work.title}")
         return work
     
     @put("/{work_id:int}")
@@ -162,7 +165,7 @@ class WorkController(Controller):
         work = update_work_impl(db, work_id, data)
         if not work:
             raise NotFoundException(detail=f"Work with ID {work_id} not found")
-        request.logger.info(f"Updated work {work_id}: {work.title}")
+        logger.info(f"Updated work {work_id}: {work.title}")
         return work
     
     @delete("/{work_id:int}", status_code=200)
@@ -177,7 +180,7 @@ class WorkController(Controller):
         work = delete_work_impl(db, work_id)
         if not work:
             raise NotFoundException(detail=f"Work with ID {work_id} not found")
-        request.logger.info(f"Deleted work {work_id}")
+        logger.info(f"Deleted work {work_id}")
         return work
 
 
@@ -201,7 +204,7 @@ class EditionController(Controller):
         edition = get_edition_impl(db, edition_id)
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        request.logger.info(f"Get edition {edition_id}")
+        logger.info(f"Get edition {edition_id}")
         return edition
     
     @get("/work/{work_id:int}")
@@ -214,7 +217,7 @@ class EditionController(Controller):
         """获取作品的所有版本"""
         db = next(router_dependency)
         editions = get_editions_by_work_impl(db, work_id)
-        request.logger.info(f"Get editions for work {work_id}: {len(editions)}")
+        logger.info(f"Get editions for work {work_id}: {len(editions)}")
         return editions
     
     @post("/")
@@ -227,7 +230,7 @@ class EditionController(Controller):
         """创建版本"""
         db = next(router_dependency)
         edition = create_edition_impl(db, data)
-        request.logger.info(f"Created edition: {edition.edition_name}")
+        logger.info(f"Created edition: {edition.edition_name}")
         return edition
     
     @put("/{edition_id:int}")
@@ -243,7 +246,7 @@ class EditionController(Controller):
         edition = update_edition_impl(db, edition_id, data)
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        request.logger.info(f"Updated edition {edition_id}")
+        logger.info(f"Updated edition {edition_id}")
         return edition
     
     @delete("/{edition_id:int}", status_code=200)
@@ -258,7 +261,7 @@ class EditionController(Controller):
         edition = delete_edition_impl(db, edition_id)
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        request.logger.info(f"Deleted edition {edition_id}")
+        logger.info(f"Deleted edition {edition_id}")
         return edition
     
     @get("/{edition_id:int}/chapters")
@@ -271,7 +274,7 @@ class EditionController(Controller):
         """获取版本的章节列表（目录）"""
         db = next(router_dependency)
         chapters = get_chapter_list_impl(db, edition_id)
-        request.logger.info(f"Get chapter list for edition {edition_id}: {len(chapters)} chapters")
+        logger.info(f"Get chapter list for edition {edition_id}: {len(chapters)} chapters")
         return chapters
     
     @get("/{edition_id:int}/chapter/{chapter_index:int}")
@@ -287,7 +290,7 @@ class EditionController(Controller):
         chapter = get_chapter_content_impl(db, edition_id, chapter_index)
         if not chapter:
             raise NotFoundException(detail=f"Chapter {chapter_index} in edition {edition_id} not found")
-        request.logger.info(f"Get chapter {chapter_index} for edition {edition_id}")
+        logger.info(f"Get chapter {chapter_index} for edition {edition_id}")
         return chapter
     
     @get("/{edition_id:int}/search")
@@ -303,7 +306,7 @@ class EditionController(Controller):
         """搜索版本中的内容"""
         db = next(router_dependency)
         results = search_content_impl(db, edition_id, keyword, skip, limit)
-        request.logger.info(f"Search content in edition {edition_id} with keyword '{keyword}': {len(results)} results")
+        logger.info(f"Search content in edition {edition_id} with keyword '{keyword}': {len(results)} results")
         return results
     
     @post("/{edition_id:int}/chapter/insert")
@@ -326,7 +329,7 @@ class EditionController(Controller):
         )
         if not chapter:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        request.logger.info(f"Inserted chapter at position {data.sort_index} in edition {edition_id}")
+        logger.info(f"Inserted chapter at position {data.sort_index} in edition {edition_id}")
         return ChapterInsertResponse(
             chapter=chapter,
             message=f"成功插入章节到位置 {data.sort_index}"
@@ -354,7 +357,7 @@ class DocumentNodeController(Controller):
         node = get_document_node_impl(db, node_id, include_content)
         if not node:
             raise NotFoundException(detail=f"Node with ID {node_id} not found")
-        request.logger.info(f"Get node {node_id}")
+        logger.info(f"Get node {node_id}")
         return node
 
     @put("/{node_id:int}")
@@ -370,7 +373,7 @@ class DocumentNodeController(Controller):
         node = update_document_node_impl(db, node_id, data)
         if not node:
             raise NotFoundException(detail=f"Node with ID {node_id} not found")
-        request.logger.info(f"Updated node {node_id}")
+        logger.info(f"Updated node {node_id}")
         return node
 
 
@@ -396,7 +399,7 @@ class ImportController(Controller):
         """
         db = next(router_dependency)
         work, edition, chapter_count = import_text_impl(db, data)
-        request.logger.info(f"Imported text: {work.title}, {chapter_count} chapters")
+        logger.info(f"Imported text: {work.title}, {chapter_count} chapters")
         return ImportResponse(
             work=work,
             edition=edition,
@@ -420,7 +423,7 @@ class ImportController(Controller):
         new_count = append_chapters_impl(db, edition_id, content, chapter_pattern)
         if new_count == 0:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found or no chapters parsed")
-        request.logger.info(f"Appended {new_count} chapters to edition {edition_id}")
+        logger.info(f"Appended {new_count} chapters to edition {edition_id}")
         return AppendResponse(
             edition_id=edition_id,
             new_chapter_count=new_count,

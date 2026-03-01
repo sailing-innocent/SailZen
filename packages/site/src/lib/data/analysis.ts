@@ -164,6 +164,7 @@ export interface ExtractedOutlineNode {
     start_offset: number
     end_offset: number
   }
+  review_status?: 'pending' | 'approved' | 'rejected'
 }
 
 export interface OutlineExtractionResult {

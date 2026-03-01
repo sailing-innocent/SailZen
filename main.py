@@ -9,16 +9,16 @@
 import os
 import sys
 import argparse
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def run_task_mode(args):
     """运行任务调度模式"""
     from sail_server.utils.env import read_env
+    from sail_server.utils.logging_config import setup_logging, get_logger
 
     read_env("prod")
+    setup_logging()
+    logger = get_logger("main")
 
     from sail_server.db import g_db_func
     from task.db._dispatcher import DBTaskDispatcher
@@ -35,7 +35,7 @@ def run_task_mode(args):
         result = dispatcher.dispatch(task_name, task_args)
         logger.info(f"Task {task_name} result: {result}")
     except Exception as e:
-        logger.info(f"Error: {e}")
+        logger.error(f"Error: {e}")
 
 
 def run_import_text_mode():
@@ -91,8 +91,13 @@ def main():
     )
     args = parser.parse_args()
     from sail_server.utils.env import read_env
+    from sail_server.utils.logging_config import setup_logging, get_logger
 
-    read_env("prod" if args.prod else "dev")
+    mode = "prod" if args.prod else "dev"
+    read_env(mode)
+    setup_logging()
+    logger = get_logger("main")
+    
     if args.task:
         run_task_mode(args)
 

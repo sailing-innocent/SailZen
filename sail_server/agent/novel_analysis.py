@@ -41,6 +41,11 @@ from sail_server.model.unified_agent import (
 )
 from sail_server.infrastructure.orm.text import DocumentNode, Edition, Work
 from sail_server.utils.llm.gateway import LLMExecutionConfig, TokenBudget
+from sail_server.utils.llm.available_providers import (
+    DEFAULT_LLM_PROVIDER,
+    DEFAULT_LLM_MODEL,
+)
+from sail_server.application.dto.analysis import RangeSelectionMode
 
 logger = logging.getLogger(__name__)
 
@@ -319,18 +324,80 @@ class NovelAnalysisAgent(BaseAgent):
         """准备章节分块"""
         db = context.db_session
         
+        # 从 config 中获取 range_selection
+        config = task.config or {}
+        range_selection = config.get("range_selection", {})
+        range_mode = range_selection.get("mode", "full_edition")
+        
+        logger.info(f"[_prepare_chunks] Task {task.id}: range_mode={range_mode}, edition_id={task.edition_id}")
+        
         # 获取目标章节
-        if task.target_node_ids:
-            nodes = db.query(DocumentNode).filter(
-                DocumentNode.id.in_(task.target_node_ids)
-            ).order_by(DocumentNode.sort_index).all()
-        elif task.edition_id:
-            nodes = db.query(DocumentNode).filter(
-                DocumentNode.edition_id == task.edition_id,
-                DocumentNode.node_type == 'chapter'
-            ).order_by(DocumentNode.sort_index).all()
-        else:
+        nodes = []
+        
+        if task.edition_id:
+            # 根据 range_selection 模式获取章节
+            if range_mode == RangeSelectionMode.SINGLE_CHAPTER.value:
+                chapter_index = range_selection.get("chapter_index")
+                logger.info(f"[_prepare_chunks] Single chapter mode: chapter_index={chapter_index}")
+                if chapter_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index == chapter_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CHAPTER_RANGE.value:
+                start_index = range_selection.get("start_index")
+                end_index = range_selection.get("end_index")
+                logger.info(f"[_prepare_chunks] Chapter range mode: start={start_index}, end={end_index}")
+                if start_index is not None and end_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index >= start_index,
+                        DocumentNode.sort_index <= end_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.MULTI_CHAPTER.value:
+                chapter_indices = range_selection.get("chapter_indices", [])
+                logger.info(f"[_prepare_chunks] Multi chapter mode: indices={chapter_indices}")
+                if chapter_indices:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index.in_(chapter_indices)
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CURRENT_TO_END.value:
+                start_index = range_selection.get("start_index")
+                logger.info(f"[_prepare_chunks] Current to end mode: start={start_index}")
+                if start_index is not None:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.edition_id == task.edition_id,
+                        DocumentNode.node_type == 'chapter',
+                        DocumentNode.sort_index >= start_index
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            elif range_mode == RangeSelectionMode.CUSTOM_RANGE.value:
+                node_ids = range_selection.get("node_ids", [])
+                logger.info(f"[_prepare_chunks] Custom range mode: node_ids={node_ids}")
+                if node_ids:
+                    nodes = db.query(DocumentNode).filter(
+                        DocumentNode.id.in_(node_ids)
+                    ).order_by(DocumentNode.sort_index).all()
+            
+            else:  # FULL_EDITION or unknown
+                logger.info(f"[_prepare_chunks] Full edition mode: getting all chapters")
+                nodes = db.query(DocumentNode).filter(
+                    DocumentNode.edition_id == task.edition_id,
+                    DocumentNode.node_type == 'chapter'
+                ).order_by(DocumentNode.sort_index).all()
+        
+        if not nodes:
+            logger.warning(f"[_prepare_chunks] No nodes found for task {task.id}")
             return []
+        
+        logger.info(f"[_prepare_chunks] Found {len(nodes)} nodes for processing")
         
         if not nodes:
             return []
@@ -465,21 +532,31 @@ class NovelAnalysisAgent(BaseAgent):
             )]
         
         # 调用 LLM
+        # 使用默认值确保 provider 和 model 不为空
+        provider = task.llm_provider or config.get("llm_provider") or DEFAULT_LLM_PROVIDER
+        model = task.llm_model or config.get("llm_model") or DEFAULT_LLM_MODEL
+        # 对于 Moonshot，temperature 必须为 1.0
+        temperature = config.get("temperature", DEFAULT_TEMPERATURE)
+        if provider.lower() == "moonshot":
+            temperature = 1.0
+            logger.info(f"[NovelAnalysis] Forced temperature to 1.0 for moonshot provider")
+        
         llm_config = LLMExecutionConfig(
-            provider=task.llm_provider or config.get("llm_provider", "openai"),
-            model=task.llm_model or config.get("llm_model", "gpt-4o-mini"),
-            temperature=config.get("temperature", DEFAULT_TEMPERATURE),
+            provider=provider,
+            model=model,
+            temperature=temperature,
             max_tokens=config.get("max_tokens", 4000),
             system_prompt=rendered.system_prompt,
         )
+        logger.info(f"[NovelAnalysis] LLM config: provider={provider}, model={model}, temperature={temperature}")
         
         try:
             response = await context.llm_gateway.execute(
                 rendered.user_prompt,
                 llm_config,
                 budget=TokenBudget(
-                    max_tokens=config.get("max_tokens_per_chunk", 10000),
-                    max_cost=config.get("max_cost_per_chunk", 0.5),
+                    max_tokens=config.get("max_tokens_per_chunk", 100000),
+                    max_cost=config.get("max_cost_per_chunk", 1.0),
                 )
             )
             
@@ -694,7 +771,8 @@ class NovelAnalysisAgent(BaseAgent):
                 "node_ids": result.node_ids,
             })
         
-        return {
+        # 构建标准结果格式
+        compiled = {
             "sub_type": sub_type,
             "total_results": len(results),
             "results_by_type": by_type,
@@ -707,6 +785,60 @@ class NovelAnalysisAgent(BaseAgent):
                 }
                 for r in results
             ],
+        }
+        
+        # 为 outline_extraction 子类型生成 extraction_result 格式
+        if sub_type == TaskSubType.OUTLINE_EXTRACTION:
+            extraction_result = self._compile_outline_results(results)
+            compiled["extraction_result"] = extraction_result
+        
+        return compiled
+    
+    def _compile_outline_results(
+        self,
+        results: List[AnalysisResult]
+    ) -> Dict[str, Any]:
+        """编译大纲提取结果为前端期望的格式"""
+        nodes = []
+        turning_points = []
+        
+        # 从 outline_node 类型的结果中提取节点
+        outline_results = [r for r in results if r.result_type == "outline_node"]
+        for i, result in enumerate(outline_results):
+            data = result.data
+            node = {
+                "id": f"extracted_{i}",
+                "node_type": data.get("node_type", "scene"),
+                "title": data.get("title", ""),
+                "summary": data.get("summary", ""),
+                "significance": data.get("significance", "normal"),
+                "sort_index": i,
+                "characters": data.get("characters", []),
+                "evidence_list": [],
+                "review_status": "pending",
+            }
+            # 添加证据
+            if data.get("evidence"):
+                node["evidence_list"].append({
+                    "text": data["evidence"],
+                    "chapter_title": "",
+                    "start_fragment": "",
+                    "end_fragment": "",
+                })
+            nodes.append(node)
+        
+        # 从 chunk_summary 类型的结果中提取总结
+        summaries = [r.data.get("summary", "") for r in results if r.result_type == "chunk_summary"]
+        
+        return {
+            "nodes": nodes,
+            "turning_points": turning_points,
+            "metadata": {
+                "total_nodes": len(nodes),
+                "total_turning_points": len(turning_points),
+                "chunk_summaries": summaries,
+                "compiled_at": datetime.utcnow().isoformat(),
+            }
         }
     
     async def _create_step(

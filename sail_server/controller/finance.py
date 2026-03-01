@@ -10,6 +10,9 @@ from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request
 from litestar.exceptions import HTTPException
 from sail_server.utils.money import Money
+import logging
+
+logger = logging.getLogger(__name__)
 
 from sail_server.application.dto.finance import (
     AccountResponse,
@@ -89,9 +92,9 @@ class AccountController(Controller):
         try:
             db = next(router_dependency)
             account = read_account_impl(db, account_id)
-            request.logger.info(f"Get account: {account}")
+            logger.info(f"Get account: {account}")
         except Exception as e:
-            request.logger.error(f"Error getting account: {e}")
+            logger.error(f"Error getting account: {e}")
             return None
         if account is None:
             return None
@@ -124,14 +127,14 @@ class AccountController(Controller):
         db = next(router_dependency)
         name = data.name.strip()  # only name is required
         if not name:
-            request.logger.error("Account name cannot be empty.")
+            logger.error("Account name cannot be empty.")
             raise HTTPException(status_code=400, detail="Account name cannot be empty.")
         if len(name) > 100:
-            request.logger.error("Account name is too long.")
+            logger.error("Account name is too long.")
             raise HTTPException(status_code=400, detail="Account name is too long.")
         else:
             account = create_account_impl(db, name)
-        request.logger.info(f"Create account: {account}")
+        logger.info(f"Create account: {account}")
         if account is None:
             return None
 
@@ -149,7 +152,7 @@ class AccountController(Controller):
         """
         db = next(router_dependency)
         account = update_account_balance_impl(db, account_id)
-        request.logger.info(f"Update account balance: {account}")
+        logger.info(f"Update account balance: {account}")
         if account is None:
             return None
 
@@ -167,7 +170,7 @@ class AccountController(Controller):
         """
         db = next(router_dependency)
         account = recalc_account_balance_impl(db, account_id)
-        request.logger.info(f"Recalculate account balance: {account}")
+        logger.info(f"Recalculate account balance: {account}")
         if account is None:
             return None
 
@@ -185,7 +188,7 @@ class AccountController(Controller):
         """
         db = next(router_dependency)
         account = fix_account_balance_impl(db, data)
-        request.logger.info(f"Fix account balance: {account}")
+        logger.info(f"Fix account balance: {account}")
         if account is None:
             return None
 
@@ -204,10 +207,10 @@ class AccountController(Controller):
         db = next(router_dependency)
         account = delete_account_impl(db, account_id)
         if account is None:
-            request.logger.error(f"Account {account_id} not found")
+            logger.error(f"Account {account_id} not found")
             raise HTTPException(status_code=404, detail="Account not found")
 
-        request.logger.info(f"Delete account: {account}")
+        logger.info(f"Delete account: {account}")
         return {
             "id": account_id,
             "status": "success",
@@ -236,9 +239,9 @@ class TransactionController(Controller):
         try:
             db = next(router_dependency)
             transaction = read_transaction_impl(db, transaction_id)
-            request.logger.info(f"Get transaction: {transaction}")
+            logger.info(f"Get transaction: {transaction}")
         except Exception as e:
-            request.logger.error(f"Error getting transaction: {e}")
+            logger.error(f"Error getting transaction: {e}")
             return None
         if transaction is None:
             return None
@@ -336,11 +339,11 @@ class TransactionController(Controller):
             if "data" in result:
                 result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
             
-            request.logger.info(f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}")
+            logger.info(f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}")
             return result
             
         except Exception as e:
-            request.logger.error(f"Error getting paginated transactions: {e}")
+            logger.error(f"Error getting paginated transactions: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting paginated transactions: {str(e)}")
 
     @post()
@@ -355,7 +358,7 @@ class TransactionController(Controller):
         """
         db = next(router_dependency)
         transaction = create_transaction_impl(db, data)
-        request.logger.info(f"Create transaction: {transaction}")
+        logger.info(f"Create transaction: {transaction}")
         if transaction is None:
             return None
 
@@ -374,7 +377,7 @@ class TransactionController(Controller):
         """
         db = next(router_dependency)
         transaction = update_transaction_impl(db, transaction_id, data)
-        request.logger.info(f"Update transaction: {transaction}")
+        logger.info(f"Update transaction: {transaction}")
         if transaction is None:
             return None
 
@@ -393,10 +396,10 @@ class TransactionController(Controller):
         db = next(router_dependency)
         transaction = delete_transaction_impl(db, transaction_id)
         if transaction is None:
-            request.logger.error(f"Transaction {transaction_id} not found")
+            logger.error(f"Transaction {transaction_id} not found")
             raise HTTPException(status_code=404, detail="Transaction not found")
 
-        request.logger.info(f"Delete transaction: {transaction}")
+        logger.info(f"Delete transaction: {transaction}")
         return {
             "id": transaction_id,
             "status": "success",
@@ -458,14 +461,14 @@ class TransactionController(Controller):
                     )
                     results.append({"id": query_id, "stats": stats})
                 except Exception as e:
-                    request.logger.error(f"Error getting stats for query {query_id}: {e}")
+                    logger.error(f"Error getting stats for query {query_id}: {e}")
                     results.append({"id": query_id, "stats": None, "error": str(e)})
             
-            request.logger.info(f"Batch stats: processed {len(results)} queries")
+            logger.info(f"Batch stats: processed {len(results)} queries")
             return results
             
         except Exception as e:
-            request.logger.error(f"Error in batch stats: {e}")
+            logger.error(f"Error in batch stats: {e}")
             raise HTTPException(status_code=500, detail=f"Error in batch stats: {str(e)}")
 
     @get("/stats/")
@@ -538,11 +541,11 @@ class TransactionController(Controller):
                 result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
             
             data_count = len(result.get("data", [])) if return_list else 0
-            request.logger.info(f"Get transaction stats: total={result['total_count']}, income={result['income_count']}, expense={result['expense_count']}, data_items={data_count}")
+            logger.info(f"Get transaction stats: total={result['total_count']}, income={result['income_count']}, expense={result['expense_count']}, data_items={data_count}")
             return result
             
         except Exception as e:
-            request.logger.error(f"Error getting transaction stats: {e}")
+            logger.error(f"Error getting transaction stats: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting transaction stats: {str(e)}")
 
 
@@ -567,9 +570,9 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             budget = read_budget_impl(db, budget_id)
-            request.logger.info(f"Get budget: {budget}")
+            logger.info(f"Get budget: {budget}")
         except Exception as e:
-            request.logger.error(f"Error getting budget: {e}")
+            logger.error(f"Error getting budget: {e}")
             raise HTTPException(status_code=404, detail=f"Budget not found: {str(e)}")
         if budget is None:
             raise HTTPException(status_code=404, detail="Budget not found")
@@ -632,14 +635,14 @@ class BudgetController(Controller):
         db = next(router_dependency)
         name = data.name.strip() if data.name else ""
         if not name:
-            request.logger.error("Budget name cannot be empty.")
+            logger.error("Budget name cannot be empty.")
             raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
         if len(name) > 100:
-            request.logger.error("Budget name is too long.")
+            logger.error("Budget name is too long.")
             raise HTTPException(status_code=400, detail="Budget name is too long.")
         
         budget = create_budget_impl(db, data)
-        request.logger.info(f"Create budget: {budget}")
+        logger.info(f"Create budget: {budget}")
         if budget is None:
             raise HTTPException(status_code=500, detail="Failed to create budget")
         return BudgetResponse.model_validate(budget)
@@ -659,11 +662,11 @@ class BudgetController(Controller):
         db = next(router_dependency)
         name = data.name.strip() if data.name else ""
         if not name:
-            request.logger.error("Budget name cannot be empty.")
+            logger.error("Budget name cannot be empty.")
             raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
         
         budget = update_budget_impl(db, budget_id, data)
-        request.logger.info(f"Update budget: {budget}")
+        logger.info(f"Update budget: {budget}")
         if budget is None:
             raise HTTPException(status_code=404, detail="Budget not found")
         return BudgetResponse.model_validate(budget)
@@ -681,9 +684,9 @@ class BudgetController(Controller):
         db = next(router_dependency)
         result = delete_budget_impl(db, budget_id)
         if result is None:
-            request.logger.error(f"Budget {budget_id} not found")
+            logger.error(f"Budget {budget_id} not found")
             raise HTTPException(status_code=404, detail="Budget not found")
-        request.logger.info(f"Delete budget: {result}")
+        logger.info(f"Delete budget: {result}")
         return result
 
     @get("/stats/")
@@ -717,11 +720,11 @@ class BudgetController(Controller):
                 return_list=return_list,
             )
             
-            request.logger.info(f"Get budget stats: total_count={result['total_budget_count']}, total_amount={result['total_budget_amount']}")
+            logger.info(f"Get budget stats: total_count={result['total_budget_count']}, total_amount={result['total_budget_amount']}")
             return result
             
         except Exception as e:
-            request.logger.error(f"Error getting budget stats: {e}")
+            logger.error(f"Error getting budget stats: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting budget stats: {str(e)}")
 
     @get("/{budget_id:int}/analysis")
@@ -739,12 +742,12 @@ class BudgetController(Controller):
             result = get_budget_analysis_impl(db, budget_id)
             if result is None:
                 raise HTTPException(status_code=404, detail="Budget not found")
-            request.logger.info(f"Get budget analysis: budget_id={budget_id}")
+            logger.info(f"Get budget analysis: budget_id={budget_id}")
             return result
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error getting budget analysis: {e}")
+            logger.error(f"Error getting budget analysis: {e}")
             raise HTTPException(status_code=500, detail=f"Error getting budget analysis: {str(e)}")
 
     @post("/{budget_id:int}/consume")
@@ -766,13 +769,13 @@ class BudgetController(Controller):
                 raise HTTPException(status_code=400, detail="Transaction value must be positive")
             
             transaction = consume_budget_impl(db, budget_id, data)
-            request.logger.info(f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}")
+            logger.info(f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}")
             return TransactionResponse.model_validate(transaction)
         except ValueError as e:
-            request.logger.error(f"Error consuming budget: {e}")
+            logger.error(f"Error consuming budget: {e}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error consuming budget: {e}")
+            logger.error(f"Error consuming budget: {e}")
             raise HTTPException(status_code=500, detail=f"Error consuming budget: {str(e)}")
 
     @post("/{budget_id:int}/link/{transaction_id:int}")
@@ -789,15 +792,15 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             transaction = link_transaction_impl(db, budget_id, transaction_id)
-            request.logger.info(
+            logger.info(
                 f"Link transaction: budget_id={budget_id}, transaction_id={transaction_id}"
             )
             return TransactionResponse.model_validate(transaction)
         except ValueError as e:
-            request.logger.error(f"Error linking transaction: {e}")
+            logger.error(f"Error linking transaction: {e}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error linking transaction: {e}")
+            logger.error(f"Error linking transaction: {e}")
             raise HTTPException(status_code=500, detail=f"Error linking transaction: {str(e)}")
 
     @post("/{budget_id:int}/link-batch")
@@ -844,7 +847,7 @@ class BudgetController(Controller):
                 except Exception as e:
                     failed.append({"id": transaction_id, "error": f"Unexpected error: {str(e)}"})
             
-            request.logger.info(
+            logger.info(
                 f"Batch link transactions: budget_id={budget_id}, "
                 f"total={len(transaction_ids)}, success={len(success)}, failed={len(failed)}"
             )
@@ -860,7 +863,7 @@ class BudgetController(Controller):
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error in batch link transactions: {e}")
+            logger.error(f"Error in batch link transactions: {e}")
             raise HTTPException(status_code=500, detail=f"Error in batch link transactions: {str(e)}")
 
     @delete("/unlink/{transaction_id:int}", status_code=200)
@@ -876,13 +879,13 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             transaction = unlink_transaction_impl(db, transaction_id)
-            request.logger.info(f"Unlink transaction: transaction_id={transaction_id}")
+            logger.info(f"Unlink transaction: transaction_id={transaction_id}")
             return TransactionResponse.model_validate(transaction)
         except ValueError as e:
-            request.logger.error(f"Error unlinking transaction: {e}")
+            logger.error(f"Error unlinking transaction: {e}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error unlinking transaction: {e}")
+            logger.error(f"Error unlinking transaction: {e}")
             raise HTTPException(status_code=500, detail=f"Error unlinking transaction: {str(e)}")
 
     # ============ Budget Items ============
@@ -900,7 +903,7 @@ class BudgetController(Controller):
             items = read_items_impl(db, budget_id)
             return [BudgetItemResponse.model_validate(item).model_dump() for item in items]
         except Exception as e:
-            request.logger.error(f"Error getting budget items: {e}")
+            logger.error(f"Error getting budget items: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @post("/{budget_id:int}/items")
@@ -917,12 +920,12 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             item = create_item_impl(db, budget_id, data)
-            request.logger.info(f"Created budget item: {item.name}")
+            logger.info(f"Created budget item: {item.name}")
             return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error creating budget item: {e}")
+            logger.error(f"Error creating budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @put("/items/{item_id:int}")
@@ -943,7 +946,7 @@ class BudgetController(Controller):
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error updating budget item: {e}")
+            logger.error(f"Error updating budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @delete("/items/{item_id:int}", status_code=200)
@@ -963,7 +966,7 @@ class BudgetController(Controller):
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error deleting budget item: {e}")
+            logger.error(f"Error deleting budget item: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @post("/items/{item_id:int}/refund")
@@ -979,12 +982,12 @@ class BudgetController(Controller):
             db = next(router_dependency)
             refund_amount = data.get("refund_amount", "0.0")
             item = record_refund_impl(db, item_id, refund_amount)
-            request.logger.info(f"Recorded refund for item {item_id}: {refund_amount}")
+            logger.info(f"Recorded refund for item {item_id}: {refund_amount}")
             return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error recording refund: {e}")
+            logger.error(f"Error recording refund: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @post("/items/{item_id:int}/advance")
@@ -998,12 +1001,12 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             item = advance_period_impl(db, item_id)
-            request.logger.info(f"Advanced item {item_id} to period {item.current_period}")
+            logger.info(f"Advanced item {item_id} to period {item.current_period}")
             return BudgetItemResponse.model_validate(item).model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            request.logger.error(f"Error advancing period: {e}")
+            logger.error(f"Error advancing period: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @get("/{budget_id:int}/detail")
@@ -1026,5 +1029,5 @@ class BudgetController(Controller):
         except HTTPException:
             raise
         except Exception as e:
-            request.logger.error(f"Error getting budget detail: {e}")
+            logger.error(f"Error getting budget detail: {e}")
             raise HTTPException(status_code=500, detail=str(e))

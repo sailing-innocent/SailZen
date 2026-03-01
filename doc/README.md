@@ -32,6 +32,18 @@
 | [design/outline-extraction.md](./design/outline-extraction.md) | 大纲提取功能设计 |
 | [design/agent-system.md](./design/agent-system.md) | Agent系统设计 |
 
+### API 文档
+
+| 模块 | 文档 | 说明 |
+|------|------|------|
+| API 概览 | [api/README.md](./api/README.md) | API 文档入口与通用规范 |
+| 财务管理 | [api/finance.md](./api/finance.md) | 账户、交易、预算 API |
+| 健康管理 | [api/health.md](./api/health.md) | 体重、运动、计划 API |
+| 文本管理 | [api/text.md](./api/text.md) | 作品、版本、章节 API |
+| AI 分析 | [api/analysis.md](./api/analysis.md) | 大纲、人物、设定 API |
+| 项目管理 | [api/project.md](./api/project.md) | 项目、任务 API |
+| 物资管理 | [api/necessity.md](./api/necessity.md) | 库存、住所、行程 API |
+
 ### 业务模块设计
 
 | 模块 | 文档 | 状态 |
@@ -61,6 +73,15 @@ doc/
 ├── KNOWN_ISSUES.md                    # 已知问题追踪
 ├── refact_todo.md                     # 代码重构计划
 ├── environment_variables.md           # 环境变量配置
+│
+├── api/                               # API 接口文档
+│   ├── README.md                      # API 文档入口
+│   ├── finance.md                     # 财务管理 API
+│   ├── health.md                      # 健康管理 API
+│   ├── text.md                        # 文本管理 API
+│   ├── analysis.md                    # AI 分析 API
+│   ├── project.md                     # 项目管理 API
+│   └── necessity.md                   # 物资管理 API
 │
 ├── design/                            # 架构设计文档
 │   ├── overview.md                    # 系统架构总览
@@ -98,13 +119,16 @@ doc/
 ### 如果你是后端开发者
 1. 阅读 [dev/README.md](./dev/README.md) 搭建开发环境
 2. 查看 [design/overview.md](./design/overview.md) 了解后端架构
-3. 参考 [refact_todo.md](./refact_todo.md) 了解重构计划
+3. 参考各模块 [API 文档](./api/) 了解接口规范
 4. 查看 [TESTING.md](./TESTING.md) 了解测试规范
+5. 参考 [refact_todo.md](./refact_todo.md) 了解重构计划
 
 ### 如果你是前端开发者
 1. 阅读 [dev/README.md](./dev/README.md) 搭建开发环境
 2. 查看 [PRD.md](./PRD.md) 了解功能需求
-3. 参考各模块设计文档了解UI设计
+3. 参考各模块 [API 文档](./api/) 了解接口调用
+4. 查看前端 API 客户端代码 `packages/site/src/lib/api/`
+5. 参考各模块设计文档了解UI设计
 
 ### 如果你是测试工程师
 1. 阅读 [TESTING.md](./TESTING.md) 了解测试框架

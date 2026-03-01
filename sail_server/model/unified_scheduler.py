@@ -445,13 +445,14 @@ class UnifiedAgentScheduler:
             UnifiedAgentTaskResponse: 创建的任务响应
         """
         logger.info(f"Scheduling task: type={task_data.task_type}, priority={task_data.priority}")
+        logger.info(f"[Scheduler] Task data llm_provider={task_data.llm_provider}, llm_model={task_data.llm_model}")
         
         with self.db_factory() as db:
             dao = UnifiedTaskDAO(db)
             
             # 创建任务记录
             orm = dao.create(task_data)
-            logger.info(f"Task record created: id={orm.id}, status={orm.status}")
+            logger.info(f"Task record created: id={orm.id}, status={orm.status}, llm_provider={orm.llm_provider}, llm_model={orm.llm_model}")
             
             # 创建队列项
             item = TaskQueueItem(
