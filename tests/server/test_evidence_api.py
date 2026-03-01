@@ -9,7 +9,7 @@
 import pytest
 from datetime import datetime
 from sail_server.data.analysis import (
-    TextEvidence,
+    TextEvidenceDTO,
     EvidenceCreateRequest,
     EvidenceUpdateRequest,
 )
@@ -73,7 +73,7 @@ class TestEvidenceController:
 
     def test_evidence_dataclass(self):
         """测试证据数据类"""
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="test-001",
             edition_id=1,
             node_id=100,
@@ -157,7 +157,7 @@ class TestEvidenceController:
     def test_evidence_store_operations(self, evidence_controller):
         """测试证据存储操作"""
         # 创建证据并存储
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="store-test-001",
             edition_id=1,
             node_id=100,
@@ -186,7 +186,7 @@ class TestEvidenceController:
         """测试按节点过滤证据"""
         # 创建多个证据
         evidences = [
-            TextEvidence(
+            TextEvidenceDTO(
                 id=f"filter-test-{i}",
                 edition_id=1,
                 node_id=100 if i < 3 else 200,  # 3个属于节点100，2个属于节点200
@@ -227,7 +227,7 @@ class TestEvidenceController:
         # 创建不同类型的证据
         types = ["character", "character", "setting", "outline", "relation"]
         evidences = [
-            TextEvidence(
+            TextEvidenceDTO(
                 id=f"type-test-{i}",
                 edition_id=1,
                 node_id=100,
@@ -262,7 +262,7 @@ class TestEvidenceController:
         """测试按目标过滤证据"""
         # 创建关联到不同目标的证据
         evidences = [
-            TextEvidence(
+            TextEvidenceDTO(
                 id=f"target-test-{i}",
                 edition_id=1,
                 node_id=100,
@@ -306,7 +306,7 @@ class TestEvidenceEdgeCases:
 
     def test_empty_selected_text(self):
         """测试空选中文本"""
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="empty-test",
             edition_id=1,
             node_id=100,
@@ -324,7 +324,7 @@ class TestEvidenceEdgeCases:
 
     def test_large_offset_values(self):
         """测试大偏移量值"""
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="large-offset-test",
             edition_id=1,
             node_id=100,
@@ -341,7 +341,7 @@ class TestEvidenceEdgeCases:
 
     def test_unicode_content(self):
         """测试Unicode内容"""
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="unicode-test",
             edition_id=1,
             node_id=100,
@@ -362,7 +362,7 @@ class TestEvidenceEdgeCases:
     def test_special_characters_in_content(self):
         """测试内容中的特殊字符"""
         special_content = '<script>alert("xss")</script> & \n\t \\ "quoted"'
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id="special-chars-test",
             edition_id=1,
             node_id=100,

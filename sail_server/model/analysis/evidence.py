@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from sail_server.data.analysis import (
-    TextEvidence, AnalysisTask, AnalysisResult,
     TextEvidenceData, AnalysisTaskData, AnalysisResultData,
 )
+from sail_server.data.analysis import TextEvidence as TextEvidenceORM
 from sail_server.data.text import DocumentNode
 
 
@@ -36,7 +36,7 @@ def add_text_evidence_impl(
     source: str = "manual"
 ) -> TextEvidenceData:
     """添加文本证据"""
-    evidence = TextEvidence(
+    evidence = TextEvidenceORM(
         edition_id=edition_id,
         node_id=node_id,
         target_type=target_type,
@@ -63,26 +63,26 @@ def get_evidence_for_target_impl(
     target_id: int
 ) -> List[TextEvidenceData]:
     """获取目标的所有证据"""
-    evidences = db.query(TextEvidence).filter(
-        TextEvidence.target_type == target_type,
-        TextEvidence.target_id == target_id
-    ).order_by(TextEvidence.node_id, TextEvidence.start_char).all()
+    evidences = db.query(TextEvidenceORM).filter(
+        TextEvidenceORM.target_type == target_type,
+        TextEvidenceORM.target_id == target_id
+    ).order_by(TextEvidenceORM.node_id, TextEvidenceORM.start_char).all()
     
     return [TextEvidenceData.read_from_orm(e) for e in evidences]
 
 
 def get_evidence_for_node_impl(db: Session, node_id: int) -> List[TextEvidenceData]:
     """获取章节的所有证据"""
-    evidences = db.query(TextEvidence).filter(
-        TextEvidence.node_id == node_id
-    ).order_by(TextEvidence.start_char).all()
+    evidences = db.query(TextEvidenceORM).filter(
+        TextEvidenceORM.node_id == node_id
+    ).order_by(TextEvidenceORM.start_char).all()
     
     return [TextEvidenceData.read_from_orm(e) for e in evidences]
 
 
 def delete_text_evidence_impl(db: Session, evidence_id: int) -> bool:
     """删除文本证据"""
-    evidence = db.query(TextEvidence).filter(TextEvidence.id == evidence_id).first()
+    evidence = db.query(TextEvidenceORM).filter(TextEvidenceORM.id == evidence_id).first()
     if not evidence:
         return False
     
@@ -93,9 +93,9 @@ def delete_text_evidence_impl(db: Session, evidence_id: int) -> bool:
 
 def get_chapter_annotations_impl(db: Session, node_id: int) -> Dict[str, List[Dict[str, Any]]]:
     """获取章节的所有标注（按类型分组）"""
-    evidences = db.query(TextEvidence).filter(
-        TextEvidence.node_id == node_id
-    ).order_by(TextEvidence.start_char).all()
+    evidences = db.query(TextEvidenceORM).filter(
+        TextEvidenceORM.node_id == node_id
+    ).order_by(TextEvidenceORM.start_char).all()
     
     result: Dict[str, List[Dict[str, Any]]] = {}
     
@@ -397,11 +397,11 @@ def get_analysis_stats_impl(db: Session, edition_id: int) -> Dict[str, Any]:
     
     # 证据统计
     evidence_stats = db.query(
-        TextEvidence.target_type,
-        func.count(TextEvidence.id)
+        TextEvidenceORM.target_type,
+        func.count(TextEvidenceORM.id)
     ).filter(
-        TextEvidence.edition_id == edition_id
-    ).group_by(TextEvidence.target_type).all()
+        TextEvidenceORM.edition_id == edition_id
+    ).group_by(TextEvidenceORM.target_type).all()
     
     return {
         "tasks": {s[0]: s[1] for s in task_stats},

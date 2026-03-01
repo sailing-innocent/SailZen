@@ -20,7 +20,7 @@ from sail_server.data.analysis import (
     EvidenceCreateRequest,
     EvidenceUpdateRequest,
     EvidenceListResponse,
-    TextEvidence,
+    TextEvidenceDTO,
 )
 from sail_server.service.range_selector import TextRangeParser, create_range_selection
 
@@ -199,7 +199,7 @@ class EvidenceController(Controller):
     """证据控制器"""
     path = "/evidence"
     
-    _evidence_store: Dict[str, TextEvidence] = {}
+    _evidence_store: Dict[str, TextEvidenceDTO] = {}
     
     @post("/")
     async def create_evidence(
@@ -234,7 +234,7 @@ class EvidenceController(Controller):
         # 创建证据
         evidence_id = str(uuid.uuid4())
         now = datetime.now()
-        evidence = TextEvidence(
+        evidence = TextEvidenceDTO(
             id=evidence_id,
             edition_id=data.edition_id,
             node_id=data.node_id,

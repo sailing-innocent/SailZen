@@ -20,10 +20,8 @@ from litestar.exceptions import NotFoundException, ValidationException
 
 from sail_server.db import get_db_dependency
 from sail_server.data.analysis import (
-    AnalysisTask,
-    AnalysisTaskData,
-    AnalysisResult,
-    AnalysisResultData,
+    AnalysisTaskDataCompat as AnalysisTaskData,
+    AnalysisResultDataCompat as AnalysisResultData,
 )
 from sail_server.data.unified_agent import (
     UnifiedAgentTask,

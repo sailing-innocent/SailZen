@@ -183,8 +183,14 @@ class AnalysisTask:
 # ============================================================================
 
 @dataclass
-class TextEvidence:
-    """文本证据"""
+class TextEvidenceDTO:
+    """文本证据 DTO (数据传输对象)
+    
+    注意: 此类用于 API 请求/响应的数据传输。
+    数据库 ORM 模型请使用同模块中的 TextEvidence (SQLAlchemy 模型)。
+    
+    TODO: 后续将迁移到 Pydantic BaseModel (Phase 3)
+    """
     id: str
     edition_id: int
     
@@ -209,6 +215,9 @@ class TextEvidence:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: Optional[datetime] = None
     meta_data: Dict[str, Any] = field(default_factory=dict)
+
+
+
 
 
 @dataclass
@@ -241,7 +250,7 @@ class EvidenceUpdateRequest:
 @dataclass
 class EvidenceListResponse:
     """证据列表响应"""
-    evidences: List[TextEvidence]
+    evidences: List['TextEvidenceDTO']  # 使用字符串前向引用
     total: int
     node_id: Optional[int] = None
     target_type: Optional[str] = None
@@ -253,8 +262,12 @@ class EvidenceListResponse:
 # ============================================================================
 
 @dataclass
-class AnalysisTaskData:
-    """分析任务数据（兼容旧格式）"""
+class AnalysisTaskDataCompat:
+    """分析任务数据（兼容旧格式）
+    
+    注意: 此类用于 analysis_compat.py 的兼容层，新代码请使用 AnalysisTaskData
+    TODO: 将在统一任务系统完全迁移后移除
+    """
     id: str
     edition_id: int
     task_type: AnalysisTaskType
@@ -273,8 +286,12 @@ class AnalysisTaskData:
 
 
 @dataclass
-class AnalysisResult:
-    """分析结果（兼容旧格式）"""
+class AnalysisResultCompat:
+    """分析结果（兼容旧格式）
+    
+    注意: 此类用于 analysis_compat.py 的兼容层
+    TODO: 将在统一任务系统完全迁移后移除
+    """
     id: int
     task_id: str
     result_type: str
@@ -287,8 +304,12 @@ class AnalysisResult:
 
 
 @dataclass
-class AnalysisResultData:
-    """分析结果数据（兼容旧格式）"""
+class AnalysisResultDataCompat:
+    """分析结果数据（兼容旧格式）
+    
+    注意: 此类用于 analysis_compat.py 的兼容层，新代码请使用 AnalysisResultData
+    TODO: 将在统一任务系统完全迁移后移除
+    """
     result_type: str
     content: Dict[str, Any]
     confidence: Optional[float] = None
@@ -368,150 +389,10 @@ class OutlineExtractionResponse:
 # ============================================================================
 # Character Types (DTOs for model/analysis/character.py)
 # ============================================================================
-
-@dataclass
-class CharacterData:
-    """人物数据 DTO"""
-    id: Optional[int] = None
-    edition_id: int = 0
-    canonical_name: str = ""
-    role_type: str = "supporting"  # protagonist, antagonist, deuteragonist, supporting, minor, mentioned
-    description: Optional[str] = None
-    first_appearance_node_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    def create_orm(self):
-        """创建 ORM 对象（简化实现）"""
-        pass
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj, alias_count: int = 0, attribute_count: int = 0, relation_count: int = 0) -> 'CharacterData':
-        """从 ORM 对象读取"""
-        return cls(
-            id=orm_obj.id,
-            edition_id=orm_obj.edition_id,
-            canonical_name=orm_obj.canonical_name,
-            role_type=orm_obj.role_type,
-            description=orm_obj.description,
-            first_appearance_node_id=orm_obj.first_appearance_node_id,
-            created_at=orm_obj.created_at,
-            updated_at=orm_obj.updated_at,
-        )
-    
-    def update_orm(self, orm_obj):
-        """更新 ORM 对象"""
-        orm_obj.canonical_name = self.canonical_name
-        orm_obj.role_type = self.role_type
-        orm_obj.description = self.description
-
-
-@dataclass
-class CharacterAliasData:
-    """人物别名数据 DTO"""
-    id: Optional[int] = None
-    character_id: int = 0
-    alias: str = ""
-    alias_type: str = "other"  # nickname, title, courtesy_name, other
-    created_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'CharacterAliasData':
-        return cls(
-            id=orm_obj.id,
-            character_id=orm_obj.character_id,
-            alias=orm_obj.alias,
-            alias_type=orm_obj.alias_type,
-            created_at=orm_obj.created_at,
-        )
-
-
-@dataclass
-class CharacterAttributeData:
-    """人物属性数据 DTO"""
-    id: Optional[int] = None
-    character_id: int = 0
-    category: str = "other"  # appearance, personality, ability, background, relationship, other
-    key: str = ""
-    value: str = ""
-    confidence: Optional[float] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'CharacterAttributeData':
-        return cls(
-            id=orm_obj.id,
-            character_id=orm_obj.character_id,
-            category=orm_obj.category,
-            key=orm_obj.key,
-            value=orm_obj.value,
-            confidence=orm_obj.confidence,
-            created_at=orm_obj.created_at,
-            updated_at=orm_obj.updated_at,
-        )
-
-
-@dataclass
-class CharacterArcData:
-    """人物弧光数据 DTO"""
-    id: Optional[int] = None
-    character_id: int = 0
-    arc_name: str = ""
-    arc_type: str = "growth"  # growth, fall, redemption, tragedy, other
-    description: Optional[str] = None
-    start_chapter_id: Optional[int] = None
-    end_chapter_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'CharacterArcData':
-        return cls(
-            id=orm_obj.id,
-            character_id=orm_obj.character_id,
-            arc_name=orm_obj.arc_name,
-            arc_type=orm_obj.arc_type,
-            description=orm_obj.description,
-            start_chapter_id=orm_obj.start_chapter_id,
-            end_chapter_id=orm_obj.end_chapter_id,
-            created_at=orm_obj.created_at,
-        )
-
-
-@dataclass
-class CharacterRelationData:
-    """人物关系数据 DTO"""
-    id: Optional[int] = None
-    source_character_id: int = 0
-    target_character_id: int = 0
-    relation_type: str = ""
-    description: Optional[str] = None
-    strength: Optional[float] = None
-    is_mutual: bool = False
-    created_at: Optional[datetime] = None
-    
-    @classmethod
-    def read_from_orm(cls, orm_obj) -> 'CharacterRelationData':
-        return cls(
-            id=orm_obj.id,
-            source_character_id=orm_obj.source_character_id,
-            target_character_id=orm_obj.target_character_id,
-            relation_type=orm_obj.relation_type,
-            description=orm_obj.description,
-            strength=orm_obj.strength,
-            is_mutual=orm_obj.is_mutual,
-            created_at=orm_obj.created_at,
-        )
-
-
-@dataclass
-class CharacterProfile:
-    """人物档案"""
-    character: CharacterData
-    aliases: List[CharacterAliasData]
-    attributes: List[CharacterAttributeData]
-    arcs: List[CharacterArcData]
-    relations: List[CharacterRelationData]
+# 注意: CharacterData, CharacterAliasData, CharacterAttributeData, 
+#       CharacterArcData, CharacterRelationData, CharacterProfile
+#       已在文件底部定义（第750行起），此处不再重复定义
+# TODO: 后续重构时将统一移至独立模块
 
 
 @dataclass
@@ -1519,9 +1400,13 @@ class TextEvidence(ORMBase):
     source = Column(String, nullable=True, default="manual")
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
+
 @dataclass
-class AnalysisTask:
-    """分析任务 ORM 占位符"""
+class AnalysisTaskPlaceholder:
+    """分析任务 ORM 占位符
+    
+    注意: 此类将在 Phase 2 重构后移除，请使用 AnalysisTaskData
+    """
     id: Optional[int] = None
     edition_id: int = 0
     task_type: str = ""
@@ -1539,9 +1424,13 @@ class AnalysisTask:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
+
 @dataclass
-class AnalysisResult:
-    """分析结果 ORM 占位符"""
+class AnalysisResultPlaceholder:
+    """分析结果 ORM 占位符
+    
+    注意: 此类将在 Phase 2 重构后移除，请使用 AnalysisResultData
+    """
     id: Optional[int] = None
     task_id: int = 0
     result_type: str = ""
@@ -1555,3 +1444,19 @@ class AnalysisResult:
     applied_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# ============================================================================
+# Backward Compatibility Aliases
+# ============================================================================
+# 以下别名用于保持向后兼容，将在 Phase 3 完成后移除
+
+# 保留 ORM 类的引用（在别名覆盖之前）
+TextEvidenceORM = TextEvidence  # 保存 ORM 类引用
+
+# TextEvidence DTO 别名（推荐在新代码中使用 TextEvidenceDTO）
+TextEvidence = TextEvidenceDTO
+
+# AnalysisTask / AnalysisResult 占位符别名
+AnalysisTask = AnalysisTaskPlaceholder
+AnalysisResult = AnalysisResultPlaceholder
