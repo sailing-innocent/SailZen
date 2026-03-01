@@ -48,6 +48,7 @@ import CharacterPanel from '@components/analysis/character_panel'
 import SettingPanel from '@components/analysis/setting_panel'
 import OutlinePanel from '@components/analysis/outline_panel'
 import TaskPanel from '@components/analysis/task_panel'
+import OutlineExtractionPanel from '@components/analysis/outline_extraction_panel'
 
 export default function AnalysisPage() {
   // Local state

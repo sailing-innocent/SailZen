@@ -46,26 +46,15 @@ import {
   api_add_outline_node,
   api_delete_outline_node,
   api_add_outline_event,
-  api_get_llm_providers,
 } from '@lib/api/analysis'
-import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType, LLMProvider } from '@lib/data/analysis'
+import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType } from '@lib/data/analysis'
 
-// Outline Extraction imports
-import { OutlineExtractionConfigPanel } from '@components/outline_extraction_config'
-import { OutlineReviewPanel } from '@components/outline_review_panel'
-import {
-  api_create_outline_extraction_task,
-  api_get_outline_extraction_progress,
-  api_get_outline_extraction_result,
-  api_save_outline_extraction_result,
-  api_get_edition_outline_tasks,
-  api_recover_outline_task,
-  api_dismiss_outline_task,
-} from '@lib/api/analysis'
-import type { OutlineExtractionConfig, OutlineExtractionResult, OutlineExtractionProgress, OutlineExtractionTaskSummary } from '@lib/data/analysis'
+// Outline Extraction imports - Unified Agent Version
+import OutlineExtractionPanel from './outline_extraction_panel'
 
 interface OutlinePanelProps {
   editionId: number
+  workTitle?: string
 }
 
 const OUTLINE_TYPE_LABELS: Record<OutlineType, string> = {
@@ -97,7 +86,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   climax: '高潮',
 }
 
-export default function OutlinePanel({ editionId }: OutlinePanelProps) {
+export default function OutlinePanel({ editionId, workTitle }: OutlinePanelProps) {
   const [outlines, setOutlines] = useState<Outline[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -112,26 +101,8 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     description: '',
   })
 
-  // Extraction state
+  // Extraction state - Unified Agent Integration
   const [showExtraction, setShowExtraction] = useState(false)
-  const [extractionConfig, setExtractionConfig] = useState<OutlineExtractionConfig>({
-    granularity: 'scene',
-    outline_type: 'main',
-    extract_turning_points: true,
-    extract_characters: true,
-    max_nodes: 50,
-    temperature: 0.3,
-    prompt_template_id: 'outline_extraction_v2',
-  })
-  const [providers, setProviders] = useState<LLMProvider[]>([])
-  const [defaultProvider, setDefaultProvider] = useState<string>('')
-  const [extractionTaskId, setExtractionTaskId] = useState<string | null>(null)
-  const [extractionProgress, setExtractionProgress] = useState<OutlineExtractionProgress | null>(null)
-  const [extractionResult, setExtractionResult] = useState<OutlineExtractionResult | null>(null)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [selectedResultNodes, setSelectedResultNodes] = useState<string[]>([])
-  const [activeTasks, setActiveTasks] = useState<OutlineExtractionTaskSummary[]>([])
-  const [showTaskRecovery, setShowTaskRecovery] = useState(false)
 
   const fetchOutlines = async () => {
     setLoading(true)
@@ -146,140 +117,9 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     }
   }
 
-  // 加载 LLM Provider 列表
-  const loadProviders = async () => {
-    try {
-      const data = await api_get_llm_providers()
-      if (data.success) {
-        setProviders(data.providers)
-        if (data.default_provider) {
-          setDefaultProvider(data.default_provider)
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load providers:', err)
-    }
-  }
-
   useEffect(() => {
     fetchOutlines()
-    loadProviders()
-    checkActiveExtractionTasks() // 检查活跃任务
   }, [editionId])
-
-  // localStorage 持久化：保存正在进行的任务ID
-  useEffect(() => {
-    if (extractionTaskId && isExtracting) {
-      localStorage.setItem(`outline_extraction_task_${editionId}`, extractionTaskId)
-    }
-  }, [extractionTaskId, isExtracting, editionId])
-
-  // 检查活跃任务（用于页面刷新后恢复）
-  const checkActiveExtractionTasks = async () => {
-    try {
-      // 1. 优先从 localStorage 恢复
-      const savedTaskId = localStorage.getItem(`outline_extraction_task_${editionId}`)
-      
-      if (savedTaskId) {
-        // 验证任务状态
-        const progress = await api_get_outline_extraction_progress(savedTaskId)
-        
-        if (progress.progress_percent < 100 && progress.progress_percent > 0) {
-          // 任务还在进行中，自动恢复
-          setExtractionTaskId(savedTaskId)
-          setIsExtracting(true)
-          setShowExtraction(true)
-          pollExtractionProgress(savedTaskId)
-          return
-        } else if (progress.progress_percent >= 100) {
-          // 任务已完成，尝试恢复结果
-          const result = await api_recover_outline_task(savedTaskId)
-          if (result.success && result.result) {
-            setExtractionTaskId(savedTaskId)
-            setExtractionResult(result.result)
-            setShowExtraction(true)
-            setSelectedResultNodes(result.result.nodes.map((n) => n.id))
-            // 清除 localStorage，因为已经恢复成功
-            localStorage.removeItem(`outline_extraction_task_${editionId}`)
-            return
-          }
-        }
-        // 任务无效，清除 localStorage
-        localStorage.removeItem(`outline_extraction_task_${editionId}`)
-      }
-
-      // 2. 从服务器查询该版本的活跃任务
-      const tasks = await api_get_edition_outline_tasks(editionId)
-      setActiveTasks(tasks)
-      
-      // 找出正在运行或最近完成的任务
-      const runningTask = tasks.find(t => t.status === 'running' || t.status === 'pending')
-      const completedTask = tasks.find(t => t.status === 'completed' && t.total_nodes && t.total_nodes > 0)
-      
-      if (runningTask) {
-        // 有正在运行的任务，询问是否恢复
-        setShowTaskRecovery(true)
-      } else if (completedTask) {
-        // 有已完成但未查看的任务，询问是否查看
-        setShowTaskRecovery(true)
-      }
-    } catch (err) {
-      console.error('Failed to check active tasks:', err)
-    }
-  }
-
-  // 恢复任务查看
-  const handleRecoverTask = async (taskId: string) => {
-    try {
-      setShowTaskRecovery(false)
-      setShowExtraction(true)
-      
-      // 先尝试获取当前进度
-      const progress = await api_get_outline_extraction_progress(taskId)
-      setExtractionProgress(progress)
-      
-      if (progress.progress_percent >= 100) {
-        // 任务已完成，获取结果
-        const result = await api_recover_outline_task(taskId)
-        if (result.success && result.result) {
-          setExtractionTaskId(taskId)
-          setExtractionResult(result.result)
-          setIsExtracting(false)
-          setSelectedResultNodes(result.result.nodes.map((n) => n.id))
-        }
-      } else {
-        // 任务还在进行中
-        setExtractionTaskId(taskId)
-        setIsExtracting(true)
-        pollExtractionProgress(taskId)
-      }
-    } catch (err) {
-      console.error('Failed to recover task:', err)
-      setError('恢复任务失败')
-    }
-  }
-
-  // 关闭任务并清理
-  const handleDismissTask = async (taskId: string) => {
-    try {
-      await api_dismiss_outline_task(taskId)
-      setActiveTasks(prev => prev.filter(t => t.task_id !== taskId))
-      
-      // 如果当前正在查看这个任务，重置状态
-      if (extractionTaskId === taskId) {
-        setExtractionTaskId(null)
-        setExtractionResult(null)
-        setExtractionProgress(null)
-        setIsExtracting(false)
-        setShowExtraction(false)
-      }
-      
-      // 清除 localStorage
-      localStorage.removeItem(`outline_extraction_task_${editionId}`)
-    } catch (err) {
-      console.error('Failed to dismiss task:', err)
-    }
-  }
 
   const handleSelectOutline = async (outline: Outline) => {
     setSelectedOutline(outline)
@@ -324,79 +164,14 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     }
   }
 
-  // Extraction handlers
-  const handleStartExtraction = async () => {
-    setIsExtracting(true)
-    setExtractionResult(null)
-    setError(null)
-
-    try {
-      const task = await api_create_outline_extraction_task({
-        edition_id: editionId,
-        range_selection: {
-          edition_id: editionId,
-          mode: 'full_edition',
-        },
-        config: extractionConfig,
-      })
-      setExtractionTaskId(task.task_id)
-
-      // Start polling for progress
-      pollExtractionProgress(task.task_id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '创建提取任务失败')
-      setIsExtracting(false)
-    }
-  }
-
-  const pollExtractionProgress = async (taskId: string) => {
-    const poll = async () => {
-      try {
-        const progress = await api_get_outline_extraction_progress(taskId)
-        setExtractionProgress(progress)
-
-        if (progress.progress_percent >= 100) {
-          // Get result
-          const result = await api_get_outline_extraction_result(taskId)
-          if (result.success && result.result) {
-            setExtractionResult(result.result)
-            setSelectedResultNodes(result.result.nodes.map((n) => n.id))
-          }
-          setIsExtracting(false)
-          // 任务完成，清除 localStorage
-          localStorage.removeItem(`outline_extraction_task_${editionId}`)
-        } else {
-          // Continue polling
-          setTimeout(() => poll(), 2000)
-        }
-      } catch (err) {
-        console.error('Failed to get progress:', err)
-        setIsExtracting(false)
-      }
-    }
-    poll()
-  }
-
   // Access global store for refreshing stats
   const { loadStats } = useAnalysisStore()
 
-  const handleSaveExtractionResult = async () => {
-    if (!extractionTaskId) return
-    try {
-      const result = await api_save_outline_extraction_result(extractionTaskId)
-      if (result.success) {
-        alert(`保存成功！\n大纲 ID: ${result.outline_id}\n节点数: ${result.nodes_created}`)
-        // Refresh outlines and stats
-        fetchOutlines()
-        loadStats(editionId)
-        setShowExtraction(false)
-        setExtractionResult(null)
-        // 清理已保存的任务
-        await handleDismissTask(extractionTaskId)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败')
-    }
+  // Handle extraction complete
+  const handleExtractionComplete = () => {
+    fetchOutlines()
+    loadStats(editionId)
+    setShowExtraction(false)
   }
 
   if (loading) {
@@ -426,147 +201,20 @@ export default function OutlinePanel({ editionId }: OutlinePanelProps) {
     )
   }
 
-  // Show extraction interface
+  // Show extraction interface - Unified Agent Version
   if (showExtraction) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">AI 大纲提取</h3>
-          <div className="flex gap-2">
-            {extractionTaskId && !isExtracting && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="text-red-500 hover:text-red-700"
-                onClick={() => {
-                  if (confirm('确定要关闭此任务吗？未保存的结果将被丢弃。')) {
-                    handleDismissTask(extractionTaskId)
-                  }
-                }}
-              >
-                关闭任务
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setShowExtraction(false)}>
-              返回列表
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <OutlineExtractionConfigPanel
-            config={extractionConfig}
-            onConfigChange={setExtractionConfig}
-            onStart={handleStartExtraction}
-            isProcessing={isExtracting}
-            providers={providers}
-            defaultProvider={defaultProvider}
-          />
-          <OutlineReviewPanel
-            result={extractionResult}
-            progress={extractionProgress}
-            isProcessing={isExtracting}
-            selectedNodeIds={selectedResultNodes}
-            onSelectionChange={setSelectedResultNodes}
-            onSave={handleSaveExtractionResult}
-            onRetry={() => {
-              setExtractionResult(null)
-              setExtractionProgress(null)
-            }}
-          />
-        </div>
-      </div>
+      <OutlineExtractionPanel
+        editionId={editionId}
+        workTitle={workTitle}
+      />
     )
   }
 
-  // 渲染任务恢复对话框
-  const renderTaskRecoveryDialog = () => {
-    if (!showTaskRecovery || activeTasks.length === 0) return null
-    
-    const runningTask = activeTasks.find(t => t.status === 'running' || t.status === 'pending')
-    const completedTask = activeTasks.find(t => t.status === 'completed')
-    const failedTask = activeTasks.find(t => t.status === 'failed')
-    
-    return (
-      <Dialog open={showTaskRecovery} onOpenChange={setShowTaskRecovery}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>发现历史任务</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-muted-foreground">
-              检测到该版本有以下历史提取任务：
-            </p>
-            
-            {runningTask && (
-              <div className="border rounded-lg p-4 bg-blue-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Badge className="mb-2" variant="outline">进行中</Badge>
-                    <p className="text-sm font-medium">任务 {runningTask.task_id.slice(0, 8)}...</p>
-                    <p className="text-xs text-muted-foreground">
-                      进度: {runningTask.progress}% | 
-                      {runningTask.checkpoint_progress !== undefined && ` 检查点: ${runningTask.checkpoint_progress}% |`}
-                      {runningTask.completed_batches !== undefined && ` 批次: ${runningTask.completed_batches}/${runningTask.total_batches}`}
-                    </p>
-                  </div>
-                  <Button size="sm" onClick={() => handleRecoverTask(runningTask.task_id)}>
-                    恢复查看
-                  </Button>
-                </div>
-              </div>
-            )}
-            
-            {completedTask && (
-              <div className="border rounded-lg p-4 bg-green-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Badge className="mb-2" variant="default">已完成</Badge>
-                    <p className="text-sm font-medium">任务 {completedTask.task_id.slice(0, 8)}...</p>
-                    <p className="text-xs text-muted-foreground">
-                      共提取 {completedTask.total_nodes || 0} 个节点
-                      {completedTask.total_turning_points ? `, ${completedTask.total_turning_points} 个转折点` : ''}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => handleRecoverTask(completedTask.task_id)}>
-                    查看结果
-                  </Button>
-                </div>
-              </div>
-            )}
-            
-            {failedTask && (
-              <div className="border rounded-lg p-4 bg-red-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Badge className="mb-2" variant="destructive">失败</Badge>
-                    <p className="text-sm font-medium">任务 {failedTask.task_id.slice(0, 8)}...</p>
-                    <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                      {failedTask.error || '未知错误'}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="ghost" onClick={() => handleDismissTask(failedTask.task_id)}>
-                    清除
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTaskRecovery(false)}>
-              忽略，开始新任务
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )
-  }
+
 
   return (
     <div className="space-y-4">
-      {/* Task Recovery Dialog */}
-      {renderTaskRecoveryDialog()}
-      
       {/* Toolbar */}
       <div className="flex justify-between">
         <h3 className="text-lg font-semibold">大纲列表</h3>

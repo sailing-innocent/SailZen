@@ -630,6 +630,22 @@ class SettingRelationData(BaseModel):
     created_at: Optional[datetime] = Field(default=None, description="创建时间")
 
 
+class OutlineData(BaseModel):
+    """大纲数据 DTO (向后兼容)"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Optional[int] = Field(default=None, description="大纲ID")
+    edition_id: int = Field(default=0, description="版本ID")
+    title: str = Field(default="", description="大纲标题")
+    outline_type: str = Field(default="main", description="大纲类型")
+    description: Optional[str] = Field(default=None, description="大纲描述")
+    status: str = Field(default="draft", description="状态")
+    source: str = Field(default="manual", description="来源")
+    node_count: int = Field(default=0, description="节点数")
+    created_at: Optional[datetime] = Field(default=None, description="创建时间")
+    updated_at: Optional[datetime] = Field(default=None, description="更新时间")
+
+
 # ============================================================================
 # Legacy Data DTOs (with read_from_orm method for backward compatibility)
 # ============================================================================
