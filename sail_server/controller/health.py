@@ -11,6 +11,7 @@ from litestar.dto.config import DTOConfig
 from litestar import Controller, delete, get, post, put, Request
 
 from sail_server.data.health import WeightData, ExerciseData, WeightPlanData, WeightAnalysisResult, WeightPlanProgress, WeightRecordWithStatus
+
 from sail_server.model.health import (
     read_weight_impl,
     read_weights_impl,

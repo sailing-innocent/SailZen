@@ -115,6 +115,7 @@ agentAPI.connectEventStream()       // WS   /api/v1/agent/ws/events
 ```
 
 #### 使用 Store
+
 - `useUnifiedAgentStore` → `packages/site/src/lib/store/unifiedAgentStore.ts`
 
 #### 核心 API

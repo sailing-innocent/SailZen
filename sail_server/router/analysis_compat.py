@@ -61,6 +61,7 @@ STATUS_MAPPING = {
     "completed": TaskStatus.COMPLETED,
     "failed": TaskStatus.FAILED,
     "cancelled": TaskStatus.CANCELLED,
+    
     # 新 -> 旧（反向映射）
     TaskStatus.PENDING: "pending",
     TaskStatus.SCHEDULED: "pending",

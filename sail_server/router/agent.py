@@ -27,7 +27,7 @@ from sail_server.data.agent import (
     AgentTaskDetailResponse,
 )
 from sail_server.db import get_db_dependency
-from sail_server.model.agent import get_agent_scheduler
+from sail_server.agent import get_agent_scheduler
 
 
 # ============================================================================

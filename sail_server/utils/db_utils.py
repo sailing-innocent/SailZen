@@ -12,8 +12,17 @@
 import logging
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects import postgresql
 
 logger = logging.getLogger(__name__)
+
+
+
+def show_sql(query):
+    """
+    Show the SQL query string.
+    """
+    print(query.statement.compile(compile_kwargs={"literal_binds": True},dialect=postgresql.dialect(paramstyle="named")))
 
 
 def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
@@ -52,7 +61,7 @@ def fix_sequence(db: Session, table_name: str, id_column: str = "id") -> bool:
                 text(f"SELECT last_value FROM {sequence_name}")
             ).scalar()
             
-            if curr_val <= max_id:
+            if curr_val and curr_val <= max_id:
                 # 修复序列
                 new_val = max_id + 1
                 db.execute(
