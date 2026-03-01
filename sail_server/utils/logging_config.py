@@ -407,5 +407,7 @@ def log_api_response(path: str, status: int, duration: float, body: Any = None, 
 # 全局初始化
 # ============================================================================
 
-# 默认初始化
-setup_logging()
+# 注意：不要在模块导入时自动初始化日志
+# 应该在应用启动时显式调用 setup_logging()
+# 这样可以确保环境变量已经加载
+# setup_logging()  # 由应用启动时调用

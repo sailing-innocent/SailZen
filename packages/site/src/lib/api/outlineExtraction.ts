@@ -88,10 +88,18 @@ export async function api_create_unified_outline_task(
   workTitle?: string,
   knownCharacters?: string[]
 ): Promise<UnifiedOutlineExtractionTask> {
+  // 确保使用 moonshot 作为默认 provider
+  const llmProvider = config.llm_provider || 'moonshot'
+  const llmModel = config.llm_model || 'kimi-k2.5'
+  
+  console.log(`[OutlineExtraction] Creating task with provider: ${llmProvider}, model: ${llmModel}`)
+  
   const request: CreateTaskRequest = {
     taskType: 'novel_analysis',
     subType: 'outline_extraction',
     editionId,
+    llmProvider,
+    llmModel,
     config: {
       extraction_config: config,
       range_selection: rangeSelection,

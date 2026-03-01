@@ -207,6 +207,10 @@ class OutlineExtractor:
         logger.info(f"[Extractor] Starting extraction for edition {edition_id}, work_title='{work_title}'")
         logger.info(f"[Extractor] Config: granularity={config.granularity}, outline_type={config.outline_type}, "
                    f"extract_turning_points={config.extract_turning_points}, extract_characters={config.extract_characters}")
+        logger.info(f"[Extractor] Range selection: mode={range_selection.mode}, edition_id={range_selection.edition_id}, "
+                   f"chapter_index={range_selection.chapter_index}, start_index={range_selection.start_index}, "
+                   f"end_index={range_selection.end_index}, chapter_indices={range_selection.chapter_indices}, "
+                   f"node_ids={range_selection.node_ids}")
         
         # 1. 获取文本内容
         logger.info(f"[Extractor] Parsing text range selection: mode={range_selection.mode}")
@@ -301,6 +305,7 @@ class OutlineExtractor:
         progress_callback: Optional[callable] = None,
     ) -> ServiceExtractionResult:
         """单块文本提取（带重试）"""
+        logger.info(f"[_extract_single_with_retry] Called with config.llm_provider={config.llm_provider}, config.llm_model={config.llm_model}")
         
         async def operation():
             return await self._extract_single(
@@ -400,6 +405,7 @@ class OutlineExtractor:
     ) -> ServiceExtractionResult:
         """单块文本提取"""
         logger.info(f"[_extract_single] Starting single-pass extraction for edition {edition_id}")
+        logger.info(f"[_extract_single] Config details: llm_provider={config.llm_provider}, llm_model={config.llm_model}, granularity={config.granularity}, outline_type={config.outline_type}")
         
         # 1. 加载并渲染提示词模板
         chapter_range = self._format_chapter_range(chapters)
@@ -432,15 +438,24 @@ class OutlineExtractor:
         # 如果需要特定的 provider/model，创建新的 client
         if config.llm_provider or config.llm_model:
             provider = config.llm_provider or DEFAULT_LLM_PROVIDER
-            # 使用 from_env 从环境变量读取 API key 和 provider 特定配置
-            llm_config = LLMConfig.from_env(LLMProvider(provider))
+            # 检查 provider 是否可用，如果不可用则回退到默认
+            try:
+                llm_config = LLMConfig.from_env(LLMProvider(provider))
+            except ValueError as e:
+                logger.warning(f"[_extract_single] Provider {provider} not available: {e}, falling back to {DEFAULT_LLM_PROVIDER}")
+                provider = DEFAULT_LLM_PROVIDER
+                llm_config = LLMConfig.from_env(LLMProvider(provider))
             # 覆盖模型（如果指定）
             if config.llm_model:
                 llm_config.model = config.llm_model
-            # 注意：对于 Moonshot/Kimi K2.5，保持 from_env 设置的 temperature=1.0
-            # 不要覆盖 temperature，因为 Kimi K2.5 要求必须为 1
-            if provider.lower() != "moonshot" and config.temperature is not None:
+            # 注意：对于 Moonshot/Kimi K2.5，temperature 必须为 1
+            # 强制设置 temperature，确保不会因为任何原因被覆盖
+            if provider.lower() == "moonshot":
+                llm_config.temperature = 1.0
+                logger.info(f"[_extract_single] Forced temperature to 1.0 for moonshot provider")
+            elif config.temperature is not None:
                 llm_config.temperature = config.temperature
+                logger.info(f"[_extract_single] Set temperature to {config.temperature} for {provider}")
             client = LLMClient(llm_config)
             logger.info(f"[_extract_single] Using custom LLM config: provider={provider}, model={llm_config.model}, temp={llm_config.temperature}")
         else:

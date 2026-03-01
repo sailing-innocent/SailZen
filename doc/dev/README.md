@@ -78,3 +78,18 @@ uv run pytest
 - 使用 `;` 而不是 `&&` 连接命令
 - 设置环境变量: `$env:VAR="value"`
 - 修复编码: `chcp 65001`
+
+## 新功能快速参考
+
+### 大纲提取 V2 (Checkpoint-Resume)
+
+- [快速参考](./outline-extraction-v2-quickstart.md)
+- [完整设计文档](../design/outline-extraction-v2.md)
+- [数据库迁移指南](../../sail_server/migration/README_outline_checkpoint.md)
+
+**一键升级**:
+```bash
+psql -U postgres -d sailzen -f sail_server/migration/add_outline_extraction_checkpoints.sql
+uv run server.py
+pnpm run build-site
+```

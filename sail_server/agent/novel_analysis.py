@@ -41,6 +41,10 @@ from sail_server.model.unified_agent import (
 )
 from sail_server.infrastructure.orm.text import DocumentNode, Edition, Work
 from sail_server.utils.llm.gateway import LLMExecutionConfig, TokenBudget
+from sail_server.utils.llm.available_providers import (
+    DEFAULT_LLM_PROVIDER,
+    DEFAULT_LLM_MODEL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -465,21 +469,31 @@ class NovelAnalysisAgent(BaseAgent):
             )]
         
         # 调用 LLM
+        # 使用默认值确保 provider 和 model 不为空
+        provider = task.llm_provider or config.get("llm_provider") or DEFAULT_LLM_PROVIDER
+        model = task.llm_model or config.get("llm_model") or DEFAULT_LLM_MODEL
+        # 对于 Moonshot，temperature 必须为 1.0
+        temperature = config.get("temperature", DEFAULT_TEMPERATURE)
+        if provider.lower() == "moonshot":
+            temperature = 1.0
+            logger.info(f"[NovelAnalysis] Forced temperature to 1.0 for moonshot provider")
+        
         llm_config = LLMExecutionConfig(
-            provider=task.llm_provider or config.get("llm_provider", "openai"),
-            model=task.llm_model or config.get("llm_model", "gpt-4o-mini"),
-            temperature=config.get("temperature", DEFAULT_TEMPERATURE),
+            provider=provider,
+            model=model,
+            temperature=temperature,
             max_tokens=config.get("max_tokens", 4000),
             system_prompt=rendered.system_prompt,
         )
+        logger.info(f"[NovelAnalysis] LLM config: provider={provider}, model={model}, temperature={temperature}")
         
         try:
             response = await context.llm_gateway.execute(
                 rendered.user_prompt,
                 llm_config,
                 budget=TokenBudget(
-                    max_tokens=config.get("max_tokens_per_chunk", 10000),
-                    max_cost=config.get("max_cost_per_chunk", 0.5),
+                    max_tokens=config.get("max_tokens_per_chunk", 50000),
+                    max_cost=config.get("max_cost_per_chunk", 1.0),
                 )
             )
             

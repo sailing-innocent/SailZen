@@ -128,6 +128,18 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
     loadProviders()
   }, [])
   
+  // Ensure default provider is set to moonshot if available
+  useEffect(() => {
+    if (providers.length > 0 && !config.llm_provider) {
+      // Prefer moonshot as default
+      const moonshotProvider = providers.find(p => p.id === 'moonshot')
+      const defaultProv = moonshotProvider || providers[0]
+      if (defaultProv) {
+        setConfig(prev => ({ ...prev, llm_provider: defaultProv.id }))
+      }
+    }
+  }, [providers])
+  
   // Check for recoverable tasks when opening
   useEffect(() => {
     if (isOpen) {
@@ -368,8 +380,25 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
   const handleSaveResult = async () => {
     if (!result || !taskId) return
     
-    // Result is already saved in the backend
-    // Just refresh the stats and close
+    // 过滤出已批准的节点
+    const approvedNodes = result.nodes.filter(n => n.review_status === 'approved')
+    const rejectedCount = result.nodes.filter(n => n.review_status === 'rejected').length
+    
+    if (approvedNodes.length === 0) {
+      alert('没有已批准的节点可保存。请先批准至少一个节点。')
+      return
+    }
+    
+    // 确认保存
+    if (rejectedCount > 0) {
+      const confirmed = confirm(`您拒绝了 ${rejectedCount} 个节点，批准了 ${approvedNodes.length} 个节点。确定只保存批准的节点吗？`)
+      if (!confirmed) return
+    }
+    
+    // 保存到后端（这里应该调用 API 保存批准的节点）
+    // TODO: 调用 api_save_outline_result(taskId, approvedNodes)
+    
+    // 刷新统计
     loadStats(editionId)
     
     // Clear storage
@@ -382,6 +411,40 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
     setCheckpoint(null)
     setResult(null)
     setIsOpen(false)
+  }
+
+  // 批准选中的节点
+  const handleApproveNodes = (nodeIds: string[]) => {
+    if (!result) return
+    
+    // 更新节点的批准状态
+    const updatedNodes = result.nodes.map(node => 
+      nodeIds.includes(node.id) 
+        ? { ...node, review_status: 'approved' as const }
+        : node
+    )
+    
+    setResult({
+      ...result,
+      nodes: updatedNodes
+    })
+  }
+
+  // 拒绝选中的节点
+  const handleRejectNodes = (nodeIds: string[]) => {
+    if (!result) return
+    
+    // 更新节点的拒绝状态
+    const updatedNodes = result.nodes.map(node => 
+      nodeIds.includes(node.id) 
+        ? { ...node, review_status: 'rejected' as const }
+        : node
+    )
+    
+    setResult({
+      ...result,
+      nodes: updatedNodes
+    })
   }
 
   // ==========================================================================
@@ -399,6 +462,10 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
     }
     
     const config = statusConfig[status || 'pending']
+    
+    if (!config) {
+      return <Badge variant="outline">{status || 'unknown'}</Badge>
+    }
     
     return (
       <Badge variant={config.variant} className="flex items-center gap-1">
@@ -558,8 +625,10 @@ export default function OutlineExtractionPanel({ editionId, workTitle }: Outline
           result={result}
           progress={progress}
           isProcessing={isProcessing}
-          selectedNodeIds={result.nodes.map(n => n.id)}
+          selectedNodeIds={result.nodes.filter(n => n.review_status !== 'rejected').map(n => n.id)}
           onSelectionChange={() => {}}
+          onApprove={handleApproveNodes}
+          onReject={handleRejectNodes}
           onSave={handleSaveResult}
           onRetry={() => {
             setResult(null)

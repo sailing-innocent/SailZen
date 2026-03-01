@@ -181,6 +181,9 @@ class UnifiedTaskController(Controller):
         """创建新任务"""
         db = next(router_dependency)
         
+        logger.info(f"[UnifiedTaskController] Creating task: type={data.task_type}, sub_type={data.sub_type}, edition_id={data.edition_id}")
+        logger.info(f"[UnifiedTaskController] LLM config from request: llm_provider={data.llm_provider}, llm_model={data.llm_model}")
+        
         # 验证任务类型
         registry = get_agent_registry()
         agent = registry.get_agent_for_task(data.task_type)
@@ -200,6 +203,7 @@ class UnifiedTaskController(Controller):
             priority=data.priority,
             config=data.config,
         )
+        logger.info(f"[UnifiedTaskController] UnifiedTaskData created: llm_provider={task_data.llm_provider}, llm_model={task_data.llm_model}")
         
         # 调度任务（内部会创建任务记录并加入队列）
         scheduler = self._get_scheduler()

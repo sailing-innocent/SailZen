@@ -476,7 +476,7 @@ class WebSocketManager:
             if message.type == "ping":
                 await self.send_to_client(client_id, WSMessage(type="pong"))
             
-            elif message.type == "subscribe":
+            elif message.type in ("subscribe", "subscribe_task"):
                 task_id = message.task_id
                 if task_id:
                     await self.subscribe_task(client_id, task_id)
@@ -484,7 +484,7 @@ class WebSocketManager:
                     # 没有指定 task_id，订阅所有事件
                     await self.subscribe_all(client_id)
             
-            elif message.type == "unsubscribe":
+            elif message.type in ("unsubscribe", "unsubscribe_task"):
                 task_id = message.task_id
                 if task_id:
                     await self.unsubscribe_task(client_id, task_id)

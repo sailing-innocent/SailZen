@@ -104,6 +104,7 @@ class SailServer:
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
         from sail_server.router.unified_agent import unified_agent_router
+        from sail_server.controller.outline_extraction_unified import OutlineExtractionUnifiedController
 
         # 自动注册 Agent
         from sail_server.agent import auto_register_agents
@@ -134,6 +135,7 @@ class SailServer:
                 necessity_router,
                 analysis_router,
                 unified_agent_router,
+                OutlineExtractionUnifiedController,
             ],
         )
 
@@ -202,6 +204,18 @@ class SailServer:
 
     async def on_startup(self):
         logger.info("Server starting up...")
+        
+        # 执行大纲提取任务恢复
+        try:
+            from sail_server.service.startup_recovery import perform_startup_recovery
+            result = perform_startup_recovery()
+            if result["recovered_count"] > 0:
+                logger.info(
+                    f"[Startup] Recovered {result['recovered_count']} outline extraction tasks "
+                    f"to paused state"
+                )
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to recover outline extraction tasks: {e}")
 
     async def on_shutdown(self):
         logger.info("Server shutting down...")
