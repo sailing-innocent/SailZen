@@ -15,7 +15,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Callable, Any, Set
+from typing import Dict, List, Optional, Callable, Any, Set, Union
 from dataclasses import dataclass, field
 from enum import Enum
 from sqlalchemy.orm import Session
@@ -52,7 +52,7 @@ class SchedulerConfig:
     max_concurrent_tasks: int = 5           # 最大并发任务数
     max_tasks_per_user: int = 3             # 每用户最大任务数
     poll_interval_seconds: float = 2.0      # 轮询间隔
-    task_timeout_seconds: int = 21600       # 任务超时时间 (6小时)
+    task_timeout_seconds: Optional[int] = None  # 任务超时时间 (None表示无限制)
     enable_priority_preemption: bool = True  # 启用优先级抢占
     token_rate_limit_per_minute: int = 100000  # Token 速率限制
     default_task_priority: int = 5          # 默认任务优先级
@@ -349,16 +349,17 @@ class UnifiedAgentScheduler:
             try:
                 await asyncio.sleep(60)  # 每分钟检查一次
                 
-                # 检查超时任务
-                async with self._lock:
-                    current_time = datetime.utcnow()
-                    for task_id, info in list(self._running_task_info.items()):
-                        start_time = info.get("started_at")
-                        if start_time:
-                            elapsed = (current_time - start_time).total_seconds()
-                            if elapsed > self.config.task_timeout_seconds:
-                                logger.warning(f"Task {task_id} timed out, cancelling...")
-                                await self.cancel_task(task_id, reason="timeout")
+                # 检查超时任务 (仅当设置了超时时间时才检查)
+                if self.config.task_timeout_seconds is not None:
+                    async with self._lock:
+                        current_time = datetime.utcnow()
+                        for task_id, info in list(self._running_task_info.items()):
+                            start_time = info.get("started_at")
+                            if start_time:
+                                elapsed = (current_time - start_time).total_seconds()
+                                if elapsed > self.config.task_timeout_seconds:
+                                    logger.warning(f"Task {task_id} timed out, cancelling...")
+                                    await self.cancel_task(task_id, reason="timeout")
                 
                 # 重置速率限制计数器
                 self._resource_usage.tokens_used_last_minute = 0
