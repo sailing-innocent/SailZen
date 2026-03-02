@@ -13,10 +13,10 @@ export interface ProjectData extends ProjectCreateProps {
 
 export interface MissionCreateProps {
     name: string,
-    description: string,
-    parent_id: number,
-    project_id: number,
-    ddl: number
+    description?: string,
+    parent_id?: number,
+    project_id?: number,
+    ddl?: number
 }
 
 export interface MissionData extends Omit<MissionCreateProps, 'ddl'> {
