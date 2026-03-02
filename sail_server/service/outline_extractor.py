@@ -897,12 +897,43 @@ class OutlineExtractor:
         from sail_server.model.analysis.outline import create_outline_impl
         from sail_server.application.dto.analysis import OutlineData
         
-        # 1. 创建大纲
+        # 1. 创建大纲（添加时间戳和更多信息以便区分不同版本）
+        from datetime import datetime
+        now = datetime.now()
+        timestamp = now.strftime("%Y-%m-%d %H:%M")
+        
+        # 构建更具描述性的标题
+        type_labels = {
+            "main": "主线",
+            "subplot": "支线",
+            "character_arc": "人物弧线",
+            "theme": "主题",
+        }
+        type_label = type_labels.get(config.outline_type, config.outline_type)
+        
+        granularity_labels = {
+            "act": "幕级",
+            "arc": "弧级",
+            "scene": "场景级",
+            "beat": "节拍级",
+        }
+        granularity_label = granularity_labels.get(config.granularity, config.granularity)
+        
+        title = f"AI提取-{type_label}-{granularity_label} ({timestamp})"
+        
+        # 构建详细的描述信息
+        description_parts = [
+            f"通过 LLM 自动提取的{type_label}大纲",
+            f"分析粒度：{granularity_label}",
+            f"提取时间：{now.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"共 {len(result.nodes)} 个节点",
+        ]
+        
         outline_data = OutlineData(
             edition_id=edition_id,
-            title=f"自动提取 - {config.outline_type}",
+            title=title,
             outline_type=config.outline_type,
-            description=f"通过 LLM 自动提取的大纲，粒度：{config.granularity}",
+            description=" | ".join(description_parts),
         )
         outline = create_outline_impl(self.db, outline_data)
         
