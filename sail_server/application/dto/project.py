@@ -189,6 +189,14 @@ class MissionCreateRequest(BaseModel):
     project_id: Optional[int] = Field(default=None, description="所属项目ID")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
     
+    @field_validator('parent_id', 'project_id', mode='before')
+    @classmethod
+    def convert_zero_to_none(cls, v):
+        """Convert 0 to None to avoid foreign key constraint violations"""
+        if v == 0 or v == "0":
+            return None
+        return v
+    
     @field_validator('ddl', mode='before')
     @classmethod
     def convert_timestamp_to_datetime(cls, v):
