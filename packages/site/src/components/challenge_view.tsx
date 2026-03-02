@@ -73,20 +73,40 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
 
     try {
       const detail = await api_get_challenge_detail(challengeId)
-      if (detail) {
-        const stats = calculateChallengeStats(
-          detail.checkIns,
-          detail.challenge.startDate,
-          detail.challenge.days
-        )
+      // 检查是否已经被删除（如果 detail 为 null，可能是 challenge 已被删除）
+      if (!detail) {
+        // Challenge 可能已被删除，从 map 中移除
         setChallengeStatsMap(prev => {
           const newMap = new Map(prev)
-          newMap.set(challengeId, stats)
+          newMap.delete(challengeId)
           return newMap
         })
+        return
       }
+      
+      const stats = calculateChallengeStats(
+        detail.checkIns,
+        detail.challenge.startDate,
+        detail.challenge.days
+      )
+      setChallengeStatsMap(prev => {
+        const newMap = new Map(prev)
+        newMap.set(challengeId, stats)
+        return newMap
+      })
     } catch (err) {
-      console.error(`Failed to load stats for challenge ${challengeId}:`, err)
+      // 如果是 "not found" 错误，静默处理（challenge 可能已被删除）
+      const errorStr = String(err)
+      if (errorStr.toLowerCase().includes('not found') || errorStr.includes('404')) {
+        // 从 map 中移除已不存在的 challenge
+        setChallengeStatsMap(prev => {
+          const newMap = new Map(prev)
+          newMap.delete(challengeId)
+          return newMap
+        })
+      } else {
+        console.error(`Failed to load stats for challenge ${challengeId}:`, err)
+      }
     } finally {
       loadingChallengeIds.current.delete(challengeId)
     }
@@ -189,9 +209,26 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
   // 处理删除挑战
   const handleDeleteChallenge = async (challengeId: number) => {
     if (confirm('确定要删除这个挑战吗？所有打卡记录也将被删除。')) {
-      await deleteChallenge(challengeId)
+      // 1. 先从本地状态中移除该挑战的 stats，防止异步加载完成时触发错误
+      setChallengeStatsMap(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(challengeId)
+        return newMap
+      })
+      // 2. 从 loading 集合中移除，防止还在加载的请求回来后又重新加载
+      loadingChallengeIds.current.delete(challengeId)
+      
+      // 3. 如果当前选中的是这个挑战，先清空选中
       if (selectedChallengeId === challengeId) {
         setSelectedChallengeId(null)
+      }
+      
+      // 4. 调用 API 删除
+      const success = await deleteChallenge(challengeId)
+      
+      // 5. 如果删除失败，恢复状态（可选）
+      if (!success) {
+        console.error('删除挑战失败')
       }
     }
   }
