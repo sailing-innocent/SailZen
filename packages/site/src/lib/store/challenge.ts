@@ -138,11 +138,27 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
           isLoading: false,
         })
       } else {
-        set({ error: 'Challenge not found', isLoading: false })
+        // Challenge 不存在（可能已被删除），静默清理状态
+        set({ 
+          currentChallenge: null,
+          currentCheckIns: [],
+          currentStats: null,
+          isLoading: false 
+        })
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch challenge detail'
-      set({ error: errorMsg, isLoading: false })
+      // 如果是 "not found" 错误，静默处理不显示错误
+      if (errorMsg.toLowerCase().includes('not found')) {
+        set({ 
+          currentChallenge: null,
+          currentCheckIns: [],
+          currentStats: null,
+          isLoading: false 
+        })
+      } else {
+        set({ error: errorMsg, isLoading: false })
+      }
     }
   },
 
