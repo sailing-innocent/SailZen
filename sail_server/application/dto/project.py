@@ -13,9 +13,9 @@
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 # ============================================================================
@@ -188,6 +188,16 @@ class MissionCreateRequest(BaseModel):
     parent_id: Optional[int] = Field(default=None, description="父任务ID")
     project_id: Optional[int] = Field(default=None, description="所属项目ID")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
+    
+    @field_validator('ddl', mode='before')
+    @classmethod
+    def convert_timestamp_to_datetime(cls, v):
+        """Convert Unix timestamp (int/float) to datetime"""
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return datetime.fromtimestamp(v)
+        return v
 
 
 class MissionUpdateRequest(BaseModel):
@@ -198,6 +208,16 @@ class MissionUpdateRequest(BaseModel):
     description: Optional[str] = Field(default=None, description="任务描述")
     state: Optional[int] = Field(default=None, description="任务状态")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
+    
+    @field_validator('ddl', mode='before')
+    @classmethod
+    def convert_timestamp_to_datetime(cls, v):
+        """Convert Unix timestamp (int/float) to datetime"""
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return datetime.fromtimestamp(v)
+        return v
 
 
 class MissionResponse(MissionBase):
