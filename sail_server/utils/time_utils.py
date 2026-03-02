@@ -90,28 +90,34 @@ class QuarterBiWeekTime:
 
     @classmethod
     def from_datetime(cls, t: datetime):
-        cls.year = t.year
-        cls.quater = getQuarterFromMonth(t.month)
-        for biweek in listFullBiweeksInQuarter(cls.year, cls.quarter):
-            if isWithIn(t, biweek.first_w.start, biweek.next_w.end):
-                cls.biweek = biweek.index
-        return cls
+        year = t.year
+        quarter = getQuarterFromMonth(t.month)
+        biweek = 1  # default value
+        for bw in listFullBiweeksInQuarter(year, quarter):
+            if isWithIn(t, bw.first_w.start, bw.next_w.end):
+                biweek = bw.index
+                break
+        return cls(year, quarter, biweek)
 
     @classmethod
     def from_timestamp(cls, timestamp: int):
         t = datetime.fromtimestamp(timestamp)
         return cls.from_datetime(t)
 
+    @classmethod
+    def now(cls):
+        """Create a QuarterBiWeekTime instance from the current datetime."""
+        return cls.from_datetime(datetime.now())
+
     def to_db_int(self):
         return self.year * 10000 + self.quarter * 100 + self.biweek
 
     @classmethod
     def from_db_int(cls, value: int):
-        cls.year = value // 10000
-        cls.quarter = (value % 10000) // 100
-        cls.biweek = value % 100
-        cls.start_date, cls.end_date = getQuarterStartEnd(cls.year, cls.quarter)
-        return cls
+        year = value // 10000
+        quarter = (value % 10000) // 100
+        biweek = value % 100
+        return cls(year, quarter, biweek)
 
     def __repr__(self):
         # serialize to "YYYY-[1-3]-[1-6]"

@@ -116,7 +116,7 @@ class ProjectController(Controller):
         project_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> ProjectResponse:
+    ) -> dict:
         """
         Delete a project by its ID.
         """
@@ -125,7 +125,7 @@ class ProjectController(Controller):
         logger.info(f"Deleted project {project_id}")
         if not project:
             raise NotFoundException(detail=f"Project with ID {project_id} not found")
-        return project
+        return {"id": project_id, "status": "success", "message": "Project deleted successfully"}
 
 
 class MissionController(Controller):
@@ -205,7 +205,7 @@ class MissionController(Controller):
         mission_id: int,
         router_dependency: Generator[Session, None, None],
         request: Request,
-    ) -> MissionResponse:
+    ) -> dict:
         """
         Delete a mission by its ID.
         """
@@ -214,7 +214,7 @@ class MissionController(Controller):
         logger.info(f"Deleted mission {mission_id}")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
-        return mission
+        return {"id": mission_id, "status": "success", "message": "Mission deleted successfully"}
 
     # ------------------------------------------------
     # Mission State Transition APIs
