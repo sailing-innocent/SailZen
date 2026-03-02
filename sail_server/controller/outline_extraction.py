@@ -39,6 +39,23 @@ from sail_server.service.extraction_cache import (
 from sqlalchemy.orm import Session
 from sail_server.db import get_db_session
 
+# ============================================================================
+# V2 Support - 配置开关
+# ============================================================================
+
+# 设置为 True 启用 V2，False 使用 V1
+USE_V2_EXTRACTOR = True
+
+if USE_V2_EXTRACTOR:
+    try:
+        from sail_server.service.outline_extractor_v2 import OutlineExtractorV2
+        from sail_server.model.analysis.outline_v2 import OutlineBatchSaver
+        from sail_server.service.outline_extraction_v2 import MergedOutlineResult
+        logger.info("[OutlineExtraction] V2 extractor loaded successfully")
+    except ImportError as e:
+        logger.warning(f"[OutlineExtraction] Failed to load V2 extractor: {e}, falling back to V1")
+        USE_V2_EXTRACTOR = False
+
 
 # ============================================================================
 # Local Pydantic Models for API
@@ -397,6 +414,19 @@ def _fail_task(task_id: str, error: str, error_info: Optional[Dict] = None):
         _save_task_state(task_id, task)
 
 
+def _complete_task_v2(task_id: str, result):
+    """完成 V2 任务"""
+    if task_id in _outline_extraction_tasks:
+        task = _outline_extraction_tasks[task_id]
+        task["status"] = "completed"
+        task["phase"] = ExtractionPhase.COMPLETED.value
+        task["progress"] = 100
+        task["result"] = result
+        task["completed_at"] = datetime.now()
+        task["is_v2"] = True  # 标记为 V2 结果
+        _save_task_state(task_id, task)
+
+
 # 初始化时加载所有持久化的任务状态
 _outline_extraction_tasks = _load_all_task_states()
 
@@ -470,7 +500,7 @@ class OutlineExtractionController(Controller):
         work_title: str,
         known_characters: Optional[List[str]],
     ):
-        """运行提取任务（后台）"""
+        """运行提取任务（后台）- 支持 V1/V2 切换"""
         logger.info(f"[Task {task_id}] Starting extraction task for edition {edition_id}")
         
         # 更新任务状态为运行中
@@ -502,26 +532,44 @@ class OutlineExtractionController(Controller):
         
         with get_db_session() as db:
             try:
-                # 创建提取器
-                logger.info(f"[Task {task_id}] Creating OutlineExtractor")
-                extractor = OutlineExtractor(db)
+                if USE_V2_EXTRACTOR:
+                    # ===== V2 提取流程 =====
+                    logger.info(f"[Task {task_id}] Using V2 extractor")
+                    extractor = OutlineExtractorV2(db)
+                    
+                    result = await extractor.extract(
+                        edition_id=edition_id,
+                        range_selection=range_selection,
+                        config=config,
+                        work_title=work_title,
+                        known_characters=known_characters,
+                        progress_callback=progress_callback,
+                    )
+                    
+                    # 完成任务（V2 结果）
+                    logger.info(f"[Task {task_id}] V2 extraction completed, nodes: {len(result.nodes)}, turning_points: {len(result.turning_points)}")
+                    _complete_task_v2(task_id, result)
+                    
+                else:
+                    # ===== V1 提取流程 =====
+                    logger.info(f"[Task {task_id}] Using V1 extractor")
+                    extractor = OutlineExtractor(db)
+                    
+                    result = await extractor.extract(
+                        edition_id=edition_id,
+                        range_selection=range_selection,
+                        config=config,
+                        work_title=work_title,
+                        known_characters=known_characters,
+                        progress_callback=progress_callback,
+                        task_id=task_id,
+                        resume_from_checkpoint=True,
+                    )
+                    
+                    # 完成任务（V1 结果）
+                    logger.info(f"[Task {task_id}] V1 extraction completed, nodes: {len(result.nodes)}, turning_points: {len(result.turning_points)}")
+                    _complete_task(task_id, result)
                 
-                # 执行提取（带进度回调和任务ID）
-                logger.info(f"[Task {task_id}] Starting extraction with config: granularity={config.granularity}, outline_type={config.outline_type}")
-                result = await extractor.extract(
-                    edition_id=edition_id,
-                    range_selection=range_selection,
-                    config=config,
-                    work_title=work_title,
-                    known_characters=known_characters,
-                    progress_callback=progress_callback,
-                    task_id=task_id,
-                    resume_from_checkpoint=True,
-                )
-                
-                # 完成任务
-                logger.info(f"[Task {task_id}] Extraction completed successfully, nodes: {len(result.nodes)}, turning_points: {len(result.turning_points)}")
-                _complete_task(task_id, result)
                 logger.info(f"[Task {task_id}] Task marked as completed")
                 
             except ClientException as e:
@@ -716,7 +764,7 @@ class OutlineExtractionController(Controller):
         task_id: str,
         router_dependency: Generator[Session, None, None] = None,
     ) -> Dict[str, Any]:
-        """将提取结果保存到数据库"""
+        """将提取结果保存到数据库 - 支持 V1/V2 切换"""
         if task_id not in _outline_extraction_tasks:
             raise NotFoundException(detail=f"Task {task_id} not found")
         
@@ -731,23 +779,66 @@ class OutlineExtractionController(Controller):
         db = next(router_dependency)
         
         try:
-            # 创建提取器并保存
-            extractor = OutlineExtractor(db)
-            save_result = extractor.save_to_database(
-                edition_id=task["edition_id"],
-                result=task["result"],
-                config=task["config"],
+            # 检查是否是 V2 结果
+            is_v2_result = task.get("is_v2", False) or (
+                USE_V2_EXTRACTOR and hasattr(task["result"], 'nodes') and 
+                len(task["result"].nodes) > 0 and 
+                hasattr(task["result"].nodes[0], 'position_anchor')
             )
             
-            return {
-                "success": True,
-                "message": "大纲已保存到数据库",
-                "outline_id": save_result["outline_id"],
-                "nodes_created": save_result["nodes_created"],
-                "events_created": save_result["events_created"],
-            }
+            if is_v2_result and USE_V2_EXTRACTOR:
+                # ===== V2 保存流程 =====
+                logger.info(f"[Task {task_id}] Saving using V2 batch saver")
+                saver = OutlineBatchSaver(db)
+                
+                # 获取配置
+                config = task.get("config", {})
+                outline_type = config.get("outline_type", "main") if isinstance(config, dict) else config.outline_type
+                granularity = config.get("granularity", "scene") if isinstance(config, dict) else config.granularity
+                
+                save_result = saver.save(
+                    edition_id=task["edition_id"],
+                    result=task["result"],
+                    outline_type=outline_type,
+                    granularity=granularity,
+                )
+                
+                return {
+                    "success": True,
+                    "message": "大纲已保存到数据库 (V2)",
+                    "outline_id": save_result["outline_id"],
+                    "nodes_created": save_result["nodes_created"],
+                    "events_created": save_result.get("events_created", 0),
+                    "version": "v2",
+                }
+            else:
+                # ===== V1 保存流程 =====
+                logger.info(f"[Task {task_id}] Saving using V1 extractor")
+                extractor = OutlineExtractor(db)
+                
+                # 确保 config 是对象而非字典
+                config = task["config"]
+                if isinstance(config, dict):
+                    from sail_server.application.dto.analysis import OutlineExtractionConfig
+                    config = OutlineExtractionConfig(**config)
+                
+                save_result = extractor.save_to_database(
+                    edition_id=task["edition_id"],
+                    result=task["result"],
+                    config=config,
+                )
+                
+                return {
+                    "success": True,
+                    "message": "大纲已保存到数据库",
+                    "outline_id": save_result["outline_id"],
+                    "nodes_created": save_result["nodes_created"],
+                    "events_created": save_result["events_created"],
+                    "version": "v1",
+                }
             
         except Exception as e:
+            logger.error(f"[Task {task_id}] Failed to save: {e}", exc_info=True)
             raise ClientException(detail=f"Failed to save: {str(e)}")
     
     @post("/task/{task_id:str}/resume")

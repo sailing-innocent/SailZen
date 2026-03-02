@@ -235,12 +235,16 @@ function ChapterTree({
             <Label className="text-xs whitespace-nowrap">从</Label>
             <select
               className="h-8 px-2 text-sm border rounded bg-background"
-              value={startIndex ?? ''}
-              onChange={(e) => handleRangeStartChange(e.target.value ? parseInt(e.target.value) : undefined)}
+              value={startIndex !== undefined ? chapters.find(ch => ch.sort_index === startIndex)?.id ?? '' : ''}
+              onChange={(e) => {
+                const selectedId = e.target.value ? parseInt(e.target.value) : undefined
+                const selectedChapter = selectedId !== undefined ? chapters.find(ch => ch.id === selectedId) : undefined
+                handleRangeStartChange(selectedChapter?.sort_index)
+              }}
             >
               <option value="">选择章节</option>
               {chapters.map((ch) => (
-                <option key={`start-${ch.id}`} value={ch.sort_index}>
+                <option key={`start-${ch.id}`} value={ch.id}>
                   {ch.label} {ch.title}
                 </option>
               ))}
@@ -250,12 +254,16 @@ function ChapterTree({
           <div className="flex items-center gap-2">
             <select
               className="h-8 px-2 text-sm border rounded bg-background"
-              value={endIndex ?? ''}
-              onChange={(e) => handleRangeEndChange(e.target.value ? parseInt(e.target.value) : undefined)}
+              value={endIndex !== undefined ? chapters.find(ch => ch.sort_index === endIndex)?.id ?? '' : ''}
+              onChange={(e) => {
+                const selectedId = e.target.value ? parseInt(e.target.value) : undefined
+                const selectedChapter = selectedId !== undefined ? chapters.find(ch => ch.id === selectedId) : undefined
+                handleRangeEndChange(selectedChapter?.sort_index)
+              }}
             >
               <option value="">选择章节</option>
               {chapters.map((ch) => (
-                <option key={`end-${ch.id}`} value={ch.sort_index}>
+                <option key={`end-${ch.id}`} value={ch.id}>
                   {ch.label} {ch.title}
                 </option>
               ))}
@@ -270,12 +278,16 @@ function ChapterTree({
           <Label className="text-xs whitespace-nowrap">从章节</Label>
           <select
             className="h-8 px-2 text-sm border rounded bg-background flex-1"
-            value={startIndex ?? ''}
-            onChange={(e) => onStartIndexChange(e.target.value ? parseInt(e.target.value) : undefined)}
+            value={startIndex !== undefined ? chapters.find(ch => ch.sort_index === startIndex)?.id ?? '' : ''}
+            onChange={(e) => {
+              const selectedId = e.target.value ? parseInt(e.target.value) : undefined
+              const selectedChapter = selectedId !== undefined ? chapters.find(ch => ch.id === selectedId) : undefined
+              onStartIndexChange(selectedChapter?.sort_index)
+            }}
           >
             <option value="">选择起始章节</option>
             {chapters.map((ch) => (
-              <option key={`current-${ch.id}`} value={ch.sort_index}>
+              <option key={`current-${ch.id}`} value={ch.id}>
                 {ch.label} {ch.title}
               </option>
             ))}

@@ -71,11 +71,14 @@ import type {
   OutlineExtractionResult,
   OutlineExtractionProgress,
   LLMProvider,
+  TextRangeSelection,
 } from '@lib/data/analysis'
+import type { ChapterListItem } from '@lib/data/text'
 
 interface OutlineExtractionPanelProps {
   editionId: number
   workTitle?: string
+  chapters?: ChapterListItem[]
   onComplete?: (result: OutlineExtractionResult) => void
   onSave?: () => void
   onClose?: () => void
@@ -85,7 +88,7 @@ interface OutlineExtractionPanelProps {
 // Main Component
 // ============================================================================
 
-export default function OutlineExtractionPanel({ editionId, workTitle, onComplete, onSave, onClose }: OutlineExtractionPanelProps) {
+export default function OutlineExtractionPanel({ editionId, workTitle, chapters = [], onComplete, onSave, onClose }: OutlineExtractionPanelProps) {
   // ==========================================================================
   // State
   // ==========================================================================
@@ -503,7 +506,63 @@ export default function OutlineExtractionPanel({ editionId, workTitle, onComplet
   // ==========================================================================
   // Render Helpers
   // ==========================================================================
-  
+
+  /**
+   * 根据 rangeSelection 和 chapters 计算范围显示文本
+   * 直接使用本地 chapters 数据，不依赖后端返回的 selected_chapters
+   */
+  const getRangeDisplayText = (selection: TextRangeSelection | null): string => {
+    if (!selection) return ''
+
+    const getChapterDisplay = (chapter: ChapterListItem | undefined): string => {
+      if (!chapter) return ''
+      const parts: string[] = []
+      if (chapter.label) parts.push(chapter.label)
+      if (chapter.title) parts.push(chapter.title)
+      return parts.join(' ') || `第 ${chapter.sort_index + 1} 章`
+    }
+
+    switch (selection.mode) {
+      case 'full_edition':
+        return '整部作品'
+
+      case 'single_chapter': {
+        if (selection.chapter_index === undefined) return '单章选择'
+        const chapter = chapters.find(ch => ch.sort_index === selection.chapter_index)
+        return getChapterDisplay(chapter) || `第 ${selection.chapter_index + 1} 章`
+      }
+
+      case 'chapter_range': {
+        if (selection.start_index === undefined || selection.end_index === undefined) {
+          return '章节范围选择'
+        }
+        const startChapter = chapters.find(ch => ch.sort_index === selection.start_index)
+        const endChapter = chapters.find(ch => ch.sort_index === selection.end_index)
+        const startText = getChapterDisplay(startChapter) || `第 ${selection.start_index + 1} 章`
+        const endText = getChapterDisplay(endChapter) || `第 ${selection.end_index + 1} 章`
+        return `${startText} 到 ${endText}`
+      }
+
+      case 'multi_chapter': {
+        const count = selection.chapter_indices?.length || 0
+        return `${count} 个章节`
+      }
+
+      case 'current_to_end': {
+        if (selection.start_index === undefined) return '从当前到结尾'
+        const startChapter = chapters.find(ch => ch.sort_index === selection.start_index)
+        const startText = getChapterDisplay(startChapter) || `第 ${selection.start_index + 1} 章`
+        return `从 ${startText} 到结尾`
+      }
+
+      case 'custom_range':
+        return '自定义范围'
+
+      default:
+        return ''
+    }
+  }
+
   const getStatusBadge = (status?: string) => {
     const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
       pending: { label: '等待中', variant: 'secondary', icon: <Clock className="w-3 h-3" /> },
@@ -574,14 +633,7 @@ export default function OutlineExtractionPanel({ editionId, workTitle, onComplet
         <AlertDescription>
           {rangeSelection ? (
             <span>
-              当前选择: <strong>
-                {rangeSelection.mode === 'full_edition' && '整部作品'}
-                {rangeSelection.mode === 'single_chapter' && `第 ${(rangeSelection.chapter_index || 0) + 1} 章`}
-                {rangeSelection.mode === 'chapter_range' && `第 ${(rangeSelection.start_index || 0) + 1} 章 到 第 ${(rangeSelection.end_index || 0) + 1} 章`}
-                {rangeSelection.mode === 'multi_chapter' && `${rangeSelection.chapter_indices?.length || 0} 个章节`}
-                {rangeSelection.mode === 'current_to_end' && `从第 ${(rangeSelection.start_index || 0) + 1} 章到结尾`}
-                {rangeSelection.mode === 'custom_range' && '自定义范围'}
-              </strong>
+              当前选择: <strong>{getRangeDisplayText(rangeSelection)}</strong>
               {' '}(请在左侧"任务"标签页中更改范围选择)
             </span>
           ) : (

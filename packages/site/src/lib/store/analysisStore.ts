@@ -200,6 +200,8 @@ export const useAnalysisStore = create<AnalysisState>()(
           set({ isPreviewLoading: true, error: null })
           try {
             const preview = await api_preview_range(selection)
+            console.log('[Debug Store] previewRange result:', preview)
+            console.log('[Debug Store] selected_chapters:', preview.selected_chapters)
             set({
               rangePreview: {
                 chapterCount: preview.chapter_count,
@@ -212,6 +214,7 @@ export const useAnalysisStore = create<AnalysisState>()(
               isPreviewLoading: false,
             })
           } catch (error) {
+            console.error('[Debug Store] previewRange error:', error)
             set({
               error: error instanceof Error ? error.message : 'Failed to preview range',
               isPreviewLoading: false,

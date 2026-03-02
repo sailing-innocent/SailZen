@@ -37,12 +37,16 @@ import {
   api_get_character_profile,
   api_get_relation_graph,
 } from '@lib/api/analysis'
-import type { Character, CharacterProfile, CharacterRoleType, RelationGraphData } from '@lib/data/analysis'
+import type { Character, CharacterProfile, CharacterRoleType, RelationGraphData, TextRangeSelection } from '@lib/data/analysis'
+import type { ChapterListItem } from '@lib/data/text'
 import CharacterProfileCard from './character_profile_card'
 import RelationGraph from './relation_graph'
 
 interface CharacterPanelProps {
   editionId: number
+  workTitle?: string
+  rangeSelection?: TextRangeSelection
+  chapters?: ChapterListItem[]
 }
 
 const ROLE_TYPE_LABELS: Record<CharacterRoleType, string> = {
@@ -54,7 +58,7 @@ const ROLE_TYPE_LABELS: Record<CharacterRoleType, string> = {
   mentioned: '提及',
 }
 
-export default function CharacterPanel({ editionId }: CharacterPanelProps) {
+export default function CharacterPanel({ editionId, workTitle, rangeSelection, chapters = [] }: CharacterPanelProps) {
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

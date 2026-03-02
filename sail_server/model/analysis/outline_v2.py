@@ -132,6 +132,92 @@ def add_outline_node_impl_v2(
     return _outline_node_to_response(node)
 
 
+def add_outline_node_bulk(
+    db: Session,
+    outline_id: int,
+    node_type: str,
+    title: str,
+    sort_index: int,
+    parent_id: Optional[int] = None,
+    summary: Optional[str] = None,
+    significance: str = "normal",
+    chapter_start_id: Optional[int] = None,
+    chapter_end_id: Optional[int] = None,
+    meta_data: Optional[Dict[str, Any]] = None,
+    position_anchor: Optional[Dict[str, Any]] = None,
+) -> Optional[OutlineNode]:
+    """
+    批量添加大纲节点（不进行索引调整，直接按指定索引插入）
+    
+    用于批量保存场景，调用者需要确保索引不冲突。
+    
+    Args:
+        db: 数据库会话
+        outline_id: 大纲ID
+        node_type: 节点类型
+        title: 标题
+        sort_index: 指定的排序索引（必须唯一）
+        parent_id: 父节点ID
+        summary: 摘要
+        significance: 重要性
+        chapter_start_id: 起始章节ID
+        chapter_end_id: 结束章节ID
+        meta_data: 元数据
+        position_anchor: 位置锚点信息
+    
+    Returns:
+        创建的节点 ORM 对象，失败返回 None
+    """
+    outline = db.query(Outline).filter(Outline.id == outline_id).first()
+    if not outline:
+        logger.error(f"Outline {outline_id} not found")
+        return None
+    
+    # 计算 depth
+    if parent_id:
+        parent = db.query(OutlineNode).filter(OutlineNode.id == parent_id).first()
+        if not parent:
+            logger.error(f"Parent node {parent_id} not found")
+            return None
+        depth = parent.depth + 1
+        parent_path = parent.path
+    else:
+        depth = 0
+        parent_path = ""
+    
+    # 生成 path
+    if parent_path:
+        path = f"{parent_path}.{sort_index:04d}"
+    else:
+        path = f"{sort_index:04d}"
+    
+    # 合并元数据，包含位置锚点
+    final_meta = dict(meta_data) if meta_data else {}
+    if position_anchor:
+        final_meta["position_anchor"] = position_anchor
+        final_meta["extracted_with_v2"] = True
+    
+    node = OutlineNode(
+        outline_id=outline_id,
+        parent_id=parent_id,
+        node_type=node_type,
+        sort_index=sort_index,
+        depth=depth,
+        title=title,
+        summary=summary,
+        significance=significance,
+        chapter_start_id=chapter_start_id,
+        chapter_end_id=chapter_end_id,
+        path=path,
+        meta_data=final_meta,
+    )
+    db.add(node)
+    # 注意：不在此 commit，由调用者统一提交
+    
+    logger.debug(f"Prepared node '{title}' with sort_index {sort_index}")
+    return node
+
+
 def _shift_sibling_sort_indices(
     db: Session,
     outline_id: int,
@@ -170,6 +256,11 @@ def _shift_sibling_sort_indices(
             sibling.path = f"{sibling.sort_index:04d}"
         
         logger.debug(f"Shifted node {sibling.id} sort_index from {old_index} to {sibling.sort_index}")
+    
+    # 提交修改
+    if siblings:
+        db.commit()
+        logger.debug(f"Committed {len(siblings)} sibling shifts")
 
 
 def _calculate_next_sort_index(
@@ -366,26 +457,29 @@ class OutlineBatchSaver:
         logger.info(f"Created outline {outline.id} for edition {edition_id}")
         
         # 2. 第一阶段：创建所有节点（不指定 parent_id）
+        # 使用批量插入，不进行索引调整
         node_id_map: Dict[str, int] = {}  # temp_id -> orm_id
+        created_nodes: List[OutlineNode] = []
         
         for i, node in enumerate(result.nodes):
             # 使用位置排序后的索引作为 sort_index
-            specified_sort_index = i
+            sort_index = i
             
             # 提取位置锚点
             position_anchor = None
             if node.position_anchor:
                 position_anchor = node.position_anchor.model_dump()
             
-            node_data = add_outline_node_impl_v2(
+            # 使用批量插入函数（不立即提交）
+            node_orm = add_outline_node_bulk(
                 db=self.db,
                 outline_id=outline.id,
                 node_type=node.node_type,
                 title=node.title,
+                sort_index=sort_index,
                 parent_id=None,  # 第一阶段不设置父节点
                 summary=node.summary,
                 significance=node.significance,
-                specified_sort_index=specified_sort_index,
                 position_anchor=position_anchor,
                 meta_data={
                     "extracted": True,
@@ -395,11 +489,22 @@ class OutlineBatchSaver:
                 },
             )
             
-            if node_data:
-                node_id_map[node.id] = node_data.id
-                logger.debug(f"Created node {node_data.id} from temp id {node.id}")
+            if node_orm:
+                created_nodes.append(node_orm)
+                # 暂时保存映射，等 commit 后再获取 id
+                logger.debug(f"Prepared node '{node.title}' with sort_index {sort_index}")
         
-        logger.info(f"Phase 1 complete: Created {len(node_id_map)} nodes")
+        # 统一提交所有节点
+        if created_nodes:
+            self.db.commit()
+            
+            # 刷新所有节点以获取 id
+            for i, node_orm in enumerate(created_nodes):
+                self.db.refresh(node_orm)
+                temp_id = result.nodes[i].id
+                node_id_map[temp_id] = node_orm.id
+            
+            logger.info(f"Phase 1 complete: Created {len(created_nodes)} nodes")
         
         # 3. 第二阶段：更新 parent_id
         parent_update_count = 0

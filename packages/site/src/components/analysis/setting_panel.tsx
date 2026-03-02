@@ -39,10 +39,13 @@ import {
   api_add_setting_attribute,
   api_delete_setting_attribute,
 } from '@lib/api/analysis'
-import type { Setting, SettingDetail, SettingType } from '@lib/data/analysis'
+import type { Setting, SettingDetail, SettingType, TextRangeSelection } from '@lib/data/analysis'
+import type { ChapterListItem } from '@lib/data/text'
 
 interface SettingPanelProps {
   editionId: number
+  rangeSelection?: TextRangeSelection
+  chapters?: ChapterListItem[]
 }
 
 const SETTING_TYPE_LABELS: Record<SettingType, string> = {
@@ -62,7 +65,7 @@ const IMPORTANCE_LABELS: Record<string, string> = {
   minor: '次要',
 }
 
-export default function SettingPanel({ editionId }: SettingPanelProps) {
+export default function SettingPanel({ editionId, rangeSelection, chapters = [] }: SettingPanelProps) {
   const [settings, setSettings] = useState<Setting[]>([])
   const [typeStats, setTypeStats] = useState<{ type: string; count: number }[]>([])
   const [loading, setLoading] = useState(true)

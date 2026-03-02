@@ -47,7 +47,8 @@ import {
   api_delete_outline_node,
   api_add_outline_event,
 } from '@lib/api/analysis'
-import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType } from '@lib/data/analysis'
+import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType, TextRangeSelection } from '@lib/data/analysis'
+import type { ChapterListItem } from '@lib/data/text'
 
 // Outline Extraction imports - Unified Agent Version
 import OutlineExtractionPanel from './outline_extraction_panel'
@@ -55,6 +56,8 @@ import OutlineExtractionPanel from './outline_extraction_panel'
 interface OutlinePanelProps {
   editionId: number
   workTitle?: string
+  chapters?: ChapterListItem[]
+  rangeSelection?: TextRangeSelection
 }
 
 const OUTLINE_TYPE_LABELS: Record<OutlineType, string> = {
@@ -86,7 +89,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   climax: '高潮',
 }
 
-export default function OutlinePanel({ editionId, workTitle }: OutlinePanelProps) {
+export default function OutlinePanel({ editionId, workTitle, chapters = [], rangeSelection }: OutlinePanelProps) {
   const [outlines, setOutlines] = useState<Outline[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -207,6 +210,7 @@ export default function OutlinePanel({ editionId, workTitle }: OutlinePanelProps
       <OutlineExtractionPanel
         editionId={editionId}
         workTitle={workTitle}
+        chapters={chapters}
         onSave={handleExtractionComplete}
         onClose={() => setShowExtraction(false)}
       />
