@@ -52,7 +52,7 @@ class SchedulerConfig:
     max_concurrent_tasks: int = 5           # 最大并发任务数
     max_tasks_per_user: int = 3             # 每用户最大任务数
     poll_interval_seconds: float = 2.0      # 轮询间隔
-    task_timeout_seconds: int = 3600        # 任务超时时间
+    task_timeout_seconds: int = 21600       # 任务超时时间 (6小时)
     enable_priority_preemption: bool = True  # 启用优先级抢占
     token_rate_limit_per_minute: int = 100000  # Token 速率限制
     default_task_priority: int = 5          # 默认任务优先级
