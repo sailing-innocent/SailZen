@@ -63,9 +63,9 @@ export interface ChallengeActions {
   abortChallenge: (challengeId: number) => Promise<boolean>
   
   // 打卡操作
-  checkInSuccess: (missionId: number, challengeId: number) => Promise<void>
-  checkInFailed: (missionId: number, challengeId: number) => Promise<void>
-  resetCheckIn: (missionId: number, challengeId: number) => Promise<void>
+  checkInSuccess: (missionId: number, challengeId: number) => Promise<number | null>
+  checkInFailed: (missionId: number, challengeId: number) => Promise<number | null>
+  resetCheckIn: (missionId: number, challengeId: number) => Promise<number | null>
   
   // 快捷操作
   getTodayMissionId: () => number | null
@@ -244,7 +244,7 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
   // 打卡操作
   // ==========================================
 
-  checkInSuccess: async (missionId: number, challengeId: number): Promise<void> => {
+  checkInSuccess: async (missionId: number, challengeId: number): Promise<number | null> => {
     set({ isCheckingIn: true, error: null })
     try {
       await api_check_in_success(missionId)
@@ -252,13 +252,15 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
+      return challengeId
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to check in'
       set({ error: errorMsg, isCheckingIn: false })
+      return null
     }
   },
 
-  checkInFailed: async (missionId: number, challengeId: number): Promise<void> => {
+  checkInFailed: async (missionId: number, challengeId: number): Promise<number | null> => {
     set({ isCheckingIn: true, error: null })
     try {
       await api_check_in_failed(missionId)
@@ -266,13 +268,15 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
+      return challengeId
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to check in'
       set({ error: errorMsg, isCheckingIn: false })
+      return null
     }
   },
 
-  resetCheckIn: async (missionId: number, challengeId: number): Promise<void> => {
+  resetCheckIn: async (missionId: number, challengeId: number): Promise<number | null> => {
     set({ isCheckingIn: true, error: null })
     try {
       await api_reset_check_in(missionId)
@@ -280,9 +284,11 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
       set({ isCheckingIn: false })
+      return challengeId
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to reset check-in'
       set({ error: errorMsg, isCheckingIn: false })
+      return null
     }
   },
 
