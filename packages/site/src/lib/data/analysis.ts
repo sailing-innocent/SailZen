@@ -547,6 +547,75 @@ export interface OutlineEvent {
 }
 
 // ============================================================================
+// Paginated Outline Types (Performance Optimization)
+// ============================================================================
+
+export interface OutlineNodeListItem {
+  id: string
+  outline_id: string
+  parent_id?: string
+  node_type: OutlineNodeType
+  title: string
+  summary?: string
+  significance?: string
+  sort_index: number
+  depth: number
+  path?: string
+  chapter_start_id?: string
+  chapter_end_id?: string
+  has_children: boolean
+  evidence_preview?: string
+  evidence_full_available: boolean
+  events_count: number
+}
+
+export interface PaginatedOutlineNodesResponse {
+  nodes: OutlineNodeListItem[]
+  next_cursor?: string
+  has_more: boolean
+  total_count?: number
+}
+
+export interface NodeEvidence {
+  text: string
+  chapter_title?: string
+  start_fragment?: string
+  end_fragment?: string
+}
+
+export interface NodeEvidenceResponse {
+  node_id: string
+  evidence_list: NodeEvidence[]
+  total_count: number
+}
+
+export interface NodeEvent {
+  id: string
+  event_type: string
+  title?: string
+  description?: string
+  importance?: string
+}
+
+export interface NodeDetailResponse {
+  id: string
+  outline_id: string
+  parent_id?: string
+  node_type: string
+  title: string
+  summary?: string
+  significance?: string
+  sort_index: number
+  depth: number
+  path?: string
+  chapter_start_id?: string
+  chapter_end_id?: string
+  meta_data: Record<string, unknown>
+  events: NodeEvent[]
+  child_count: number
+}
+
+// ============================================================================
 // Task Types (for task_panel.tsx)
 // ============================================================================
 

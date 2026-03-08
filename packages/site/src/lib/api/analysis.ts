@@ -662,6 +662,96 @@ export async function api_add_outline_event(
 }
 
 // ============================================================================
+// Outline Pagination API (Performance Optimization)
+// ============================================================================
+
+import type {
+  PaginatedOutlineNodesResponse,
+  NodeEvidenceResponse,
+  NodeDetailResponse,
+} from '@lib/data/outline'
+
+/**
+ * 获取分页大纲节点列表
+ * @param outlineId 大纲ID
+ * @param limit 每页数量 (默认50)
+ * @param cursor 分页游标
+ * @param parentId 父节点ID过滤
+ * @returns 分页节点列表
+ */
+export async function api_get_outline_nodes_paginated(
+  outlineId: string,
+  limit: number = 50,
+  cursor?: string,
+  parentId?: string
+): Promise<PaginatedOutlineNodesResponse> {
+  const params = new URLSearchParams()
+  params.append('limit', limit.toString())
+  if (cursor) params.append('cursor', cursor)
+  if (parentId) params.append('parent_id', parentId)
+
+  const response = await fetch(
+    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/${outlineId}/nodes?${params.toString()}`
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to get paginated outline nodes: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 获取节点完整证据
+ * @param nodeId 节点ID
+ * @returns 节点证据列表
+ */
+export async function api_get_node_evidence(nodeId: string): Promise<NodeEvidenceResponse> {
+  const response = await fetch(
+    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/node/${nodeId}/evidence`
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to get node evidence: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 获取节点详情
+ * @param nodeId 节点ID
+ * @returns 节点详情
+ */
+export async function api_get_node_detail(nodeId: string): Promise<NodeDetailResponse> {
+  const response = await fetch(
+    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/node/${nodeId}/detail`
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to get node detail: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+/**
+ * 批量获取节点详情
+ * @param nodeIds 节点ID列表 (最多50个)
+ * @returns 节点详情列表
+ */
+export async function api_get_nodes_details_batch(
+  nodeIds: string[]
+): Promise<NodeDetailResponse[]> {
+  const response = await fetch(
+    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/nodes/batch-details`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nodeIds),
+    }
+  )
+  if (!response.ok) {
+    throw new Error(`Failed to get batch node details: ${response.statusText}`)
+  }
+  return response.json()
+}
+
+// ============================================================================
 // Task API (for task_panel.tsx)
 // ============================================================================
 

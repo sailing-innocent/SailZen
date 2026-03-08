@@ -18,6 +18,12 @@ from sail_server.infrastructure.orm.analysis import (
     OutlineNode,
     OutlineEvent,
 )
+from sail_server.utils.pagination import (
+    PaginationCursor,
+    PaginatedResponse,
+    create_paginated_response,
+    parse_pagination_params,
+)
 
 
 # ============================================================================
@@ -85,6 +91,68 @@ class CreateOutlineEventRequest:
     event_type: str
     description: str
     significance: Optional[str] = None
+
+
+# ============================================================================
+# Paginated Response Models (Performance Optimization)
+# ============================================================================
+
+@dataclass
+class OutlineNodeListItem:
+    """大纲节点列表项（精简版，用于分页）"""
+    id: str
+    outline_id: str
+    parent_id: Optional[str]
+    node_type: str
+    title: str
+    summary: Optional[str]
+    significance: Optional[str]
+    sort_index: int
+    depth: int
+    path: Optional[str]
+    chapter_start_id: Optional[str] = None
+    chapter_end_id: Optional[str] = None
+    has_children: bool = False
+    evidence_preview: Optional[str] = None
+    evidence_full_available: bool = False
+    events_count: int = 0
+
+
+@dataclass
+class PaginatedOutlineNodesResponse:
+    """分页大纲节点响应"""
+    nodes: List[OutlineNodeListItem]
+    next_cursor: Optional[str]
+    has_more: bool
+    total_count: Optional[int] = None
+
+
+@dataclass
+class NodeEvidenceResponse:
+    """节点证据响应"""
+    node_id: str
+    evidence_list: List[Dict[str, Any]]
+    total_count: int
+
+
+@dataclass
+class NodeDetailResponse:
+    """节点详情响应"""
+    id: str
+    outline_id: str
+    parent_id: Optional[str]
+    node_type: str
+    title: str
+    summary: Optional[str]
+    significance: Optional[str]
+    sort_index: int
+    depth: int
+    path: Optional[str]
+    chapter_start_id: Optional[str] = None
+    chapter_end_id: Optional[str] = None
+    meta_data: Dict[str, Any] = field(default_factory=dict)
+    events: List[Dict[str, Any]] = field(default_factory=list)
+    child_count: int = 0
 
 
 # ============================================================================
@@ -198,7 +266,16 @@ class OutlineController(Controller):
         outline_id: str,
         router_dependency: Generator[Session, None, None] = None,
     ) -> OutlineTreeResponse:
-        """获取大纲树结构"""
+        """获取大纲树结构
+        
+        ⚠️ DEPRECATED: This endpoint loads the entire tree including all evidence text,
+        which can cause performance issues with large outlines. 
+        
+        Please use the paginated `/nodes` endpoint instead for better performance.
+        See: /doc/api/outline-paginated-api.md for migration guide.
+        
+        This endpoint will be removed in a future version.
+        """
         db = next(router_dependency)
         
         outline = db.query(Outline).filter(Outline.id == int(outline_id)).first()
@@ -356,6 +433,303 @@ class OutlineController(Controller):
         except Exception as e:
             db.rollback()
             raise ClientException(detail=f"Failed to create event: {str(e)}")
+
+    # ========================================================================
+    # Paginated Endpoints (Performance Optimization)
+    # ========================================================================
+
+    @get("/{outline_id:str}/nodes")
+    async def get_outline_nodes_paginated(
+        self,
+        outline_id: str,
+        limit: int = 50,
+        cursor: Optional[str] = None,
+        parent_id: Optional[str] = None,
+        router_dependency: Generator[Session, None, None] = None,
+    ) -> PaginatedOutlineNodesResponse:
+        """获取分页大纲节点列表
+        
+        Args:
+            outline_id: 大纲ID
+            limit: 每页数量 (1-100, 默认50)
+            cursor: 分页游标
+            parent_id: 父节点ID过滤 (可选)
+        """
+        db = next(router_dependency)
+        
+        # 解析分页参数
+        try:
+            pagination_cursor, validated_limit = parse_pagination_params(
+                cursor_str=cursor,
+                limit=limit,
+                max_limit=100
+            )
+        except ValueError as e:
+            raise ClientException(detail=f"Invalid pagination parameters: {str(e)}")
+        
+        # 验证大纲存在
+        outline = db.query(Outline).filter(Outline.id == int(outline_id)).first()
+        if not outline:
+            raise NotFoundException(detail=f"Outline {outline_id} not found")
+        
+        # 构建基础查询
+        query = db.query(OutlineNode).filter(
+            OutlineNode.outline_id == int(outline_id)
+        )
+        
+        # 应用父节点过滤
+        if parent_id:
+            query = query.filter(OutlineNode.parent_id == int(parent_id))
+        else:
+            query = query.filter(OutlineNode.parent_id.is_(None))
+        
+        # 应用游标过滤
+        if pagination_cursor:
+            from sqlalchemy import or_, and_
+            query = query.filter(
+                or_(
+                    OutlineNode.sort_index > pagination_cursor.sort_index,
+                    and_(
+                        OutlineNode.sort_index == pagination_cursor.sort_index,
+                        OutlineNode.id > pagination_cursor.node_id
+                    )
+                )
+            )
+        
+        # 获取总数 (仅在第一页)
+        total_count = None
+        if not cursor:
+            total_count = query.count()
+        
+        # 查询节点 (limit+1 用于判断是否有更多)
+        nodes = query.order_by(
+            OutlineNode.sort_index.asc(),
+            OutlineNode.id.asc()
+        ).limit(validated_limit + 1).all()
+        
+        # 检查子节点存在性
+        node_ids = [n.id for n in nodes[:validated_limit]]
+        children_counts = {}
+        if node_ids:
+            from sqlalchemy import func as sql_func
+            child_counts = db.query(
+                OutlineNode.parent_id,
+                sql_func.count(OutlineNode.id).label('count')
+            ).filter(
+                OutlineNode.parent_id.in_(node_ids)
+            ).group_by(OutlineNode.parent_id).all()
+            children_counts = {parent_id: count for parent_id, count in child_counts}
+        
+        # 构建响应
+        def truncate_evidence(text: Optional[str], max_len: int = 200) -> Optional[str]:
+            if not text:
+                return None
+            return text[:max_len] + ('...' if len(text) > max_len else '')
+        
+        node_items = []
+        for node in nodes[:validated_limit]:
+            # 从meta_data中获取证据预览
+            meta = node.meta_data or {}
+            evidence_data = meta.get('evidence', [])
+            evidence_preview = None
+            evidence_full_available = False
+            
+            if evidence_data and len(evidence_data) > 0:
+                first_evidence = evidence_data[0]
+                if isinstance(first_evidence, dict):
+                    evidence_text = first_evidence.get('text', '')
+                    evidence_preview = truncate_evidence(evidence_text)
+                    evidence_full_available = len(evidence_text) > 200 if evidence_text else False
+            
+            node_items.append(OutlineNodeListItem(
+                id=str(node.id),
+                outline_id=str(node.outline_id),
+                parent_id=str(node.parent_id) if node.parent_id else None,
+                node_type=node.node_type,
+                title=node.title,
+                summary=node.summary,
+                significance=node.significance,
+                sort_index=node.sort_index,
+                depth=node.depth,
+                path=node.path,
+                chapter_start_id=str(node.chapter_start_id) if node.chapter_start_id else None,
+                chapter_end_id=str(node.chapter_end_id) if node.chapter_end_id else None,
+                has_children=children_counts.get(node.id, 0) > 0,
+                evidence_preview=evidence_preview,
+                evidence_full_available=evidence_full_available,
+                events_count=len(node.events) if hasattr(node, 'events') else 0,
+            ))
+        
+        # 创建下一页游标
+        next_cursor = None
+        has_more = len(nodes) > validated_limit
+        
+        if has_more and node_items:
+            last_node = nodes[validated_limit - 1]
+            cursor_obj = PaginationCursor(
+                sort_index=last_node.sort_index,
+                node_id=last_node.id
+            )
+            next_cursor = cursor_obj.encode()
+        
+        return PaginatedOutlineNodesResponse(
+            nodes=node_items,
+            next_cursor=next_cursor,
+            has_more=has_more,
+            total_count=total_count,
+        )
+
+    @get("/node/{node_id:str}/evidence")
+    async def get_node_evidence(
+        self,
+        node_id: str,
+        router_dependency: Generator[Session, None, None] = None,
+    ) -> NodeEvidenceResponse:
+        """获取节点完整证据列表"""
+        db = next(router_dependency)
+        
+        node = db.query(OutlineNode).filter(OutlineNode.id == int(node_id)).first()
+        
+        if not node:
+            raise NotFoundException(detail=f"Node {node_id} not found")
+        
+        # 从meta_data获取证据
+        meta = node.meta_data or {}
+        evidence_list = meta.get('evidence', [])
+        
+        # 格式化证据
+        formatted_evidence = []
+        for evidence in evidence_list:
+            if isinstance(evidence, dict):
+                formatted_evidence.append({
+                    'text': evidence.get('text', ''),
+                    'chapter_title': evidence.get('chapter_title'),
+                    'start_fragment': evidence.get('start_fragment'),
+                    'end_fragment': evidence.get('end_fragment'),
+                })
+        
+        return NodeEvidenceResponse(
+            node_id=str(node.id),
+            evidence_list=formatted_evidence,
+            total_count=len(formatted_evidence),
+        )
+
+    @get("/node/{node_id:str}/detail")
+    async def get_node_detail(
+        self,
+        node_id: str,
+        router_dependency: Generator[Session, None, None] = None,
+    ) -> NodeDetailResponse:
+        """获取节点完整详情"""
+        db = next(router_dependency)
+        
+        node = db.query(OutlineNode).filter(OutlineNode.id == int(node_id)).first()
+        
+        if not node:
+            raise NotFoundException(detail=f"Node {node_id} not found")
+        
+        # 获取子节点数量
+        from sqlalchemy import func as sql_func
+        child_count = db.query(sql_func.count(OutlineNode.id)).filter(
+            OutlineNode.parent_id == node.id
+        ).scalar() or 0
+        
+        # 获取事件
+        events = []
+        for event in node.events:
+            events.append({
+                'id': str(event.id),
+                'event_type': event.event_type,
+                'title': event.title,
+                'description': event.description,
+                'importance': event.importance,
+            })
+        
+        return NodeDetailResponse(
+            id=str(node.id),
+            outline_id=str(node.outline_id),
+            parent_id=str(node.parent_id) if node.parent_id else None,
+            node_type=node.node_type,
+            title=node.title,
+            summary=node.summary,
+            significance=node.significance,
+            sort_index=node.sort_index,
+            depth=node.depth,
+            path=node.path,
+            chapter_start_id=str(node.chapter_start_id) if node.chapter_start_id else None,
+            chapter_end_id=str(node.chapter_end_id) if node.chapter_end_id else None,
+            meta_data=node.meta_data or {},
+            events=events,
+            child_count=child_count,
+        )
+
+    @post("/nodes/batch-details")
+    async def get_nodes_batch_details(
+        self,
+        data: List[str],
+        router_dependency: Generator[Session, None, None] = None,
+    ) -> List[NodeDetailResponse]:
+        """批量获取节点详情
+        
+        Args:
+            data: 节点ID列表 (最多50个)
+        """
+        db = next(router_dependency)
+        
+        if len(data) > 50:
+            raise ClientException(detail="Maximum 50 nodes allowed per batch request")
+        
+        node_ids = [int(nid) for nid in data]
+        
+        from sqlalchemy import func as sql_func
+        
+        # 批量查询节点
+        nodes = db.query(OutlineNode).filter(
+            OutlineNode.id.in_(node_ids)
+        ).all()
+        
+        # 批量查询子节点数量
+        child_counts = db.query(
+            OutlineNode.parent_id,
+            sql_func.count(OutlineNode.id).label('count')
+        ).filter(
+            OutlineNode.parent_id.in_(node_ids)
+        ).group_by(OutlineNode.parent_id).all()
+        child_count_map = {parent_id: count for parent_id, count in child_counts}
+        
+        # 构建响应
+        results = []
+        for node in nodes:
+            events = [
+                {
+                    'id': str(event.id),
+                    'event_type': event.event_type,
+                    'title': event.title,
+                    'description': event.description,
+                    'importance': event.importance,
+                }
+                for event in node.events
+            ]
+            
+            results.append(NodeDetailResponse(
+                id=str(node.id),
+                outline_id=str(node.outline_id),
+                parent_id=str(node.parent_id) if node.parent_id else None,
+                node_type=node.node_type,
+                title=node.title,
+                summary=node.summary,
+                significance=node.significance,
+                sort_index=node.sort_index,
+                depth=node.depth,
+                path=node.path,
+                chapter_start_id=str(node.chapter_start_id) if node.chapter_start_id else None,
+                chapter_end_id=str(node.chapter_end_id) if node.chapter_end_id else None,
+                meta_data=node.meta_data or {},
+                events=events,
+                child_count=child_count_map.get(node.id, 0),
+            ))
+        
+        return results
 
 
 # ============================================================================
