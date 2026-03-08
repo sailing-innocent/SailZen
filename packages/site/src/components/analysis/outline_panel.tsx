@@ -5,9 +5,9 @@
  * @date 2025-02-01
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAnalysisStore } from '@lib/store/analysisStore'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, ChevronRight, ChevronDown, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,12 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -46,9 +40,12 @@ import {
   api_add_outline_node,
   api_delete_outline_node,
   api_add_outline_event,
+  api_get_outline_nodes_paginated,
+  api_get_node_evidence,
 } from '@lib/api/analysis'
-import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType, TextRangeSelection } from '@lib/data/analysis'
+import type { Outline, OutlineTree, OutlineTreeNode, OutlineType, OutlineNodeType, TextRangeSelection, OutlineNodeListItem, NodeEvidence } from '@lib/data/analysis'
 import type { ChapterListItem } from '@lib/data/text'
+import { VirtualizedOutlineTree } from './virtualized'
 
 // Outline Extraction imports - Unified Agent Version
 import OutlineExtractionPanel from './outline_extraction_panel'
@@ -94,7 +91,6 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedOutline, setSelectedOutline] = useState<Outline | null>(null)
-  const [outlineTree, setOutlineTree] = useState<OutlineTree | null>(null)
 
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -126,12 +122,10 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
 
   const handleSelectOutline = async (outline: Outline) => {
     setSelectedOutline(outline)
-    try {
-      const tree = await api_get_outline_tree(outline.id)
-      setOutlineTree(tree)
-    } catch (err) {
-      console.error('Failed to load tree:', err)
-    }
+  }
+
+  const handleRefreshOutline = () => {
+    fetchOutlines()
   }
 
   const handleCreateOutline = async () => {
@@ -190,16 +184,15 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
     )
   }
 
-  // Show outline tree editor
-  if (selectedOutline && outlineTree) {
+  // Show outline tree editor with virtualization
+  if (selectedOutline) {
     return (
       <OutlineTreeEditor
-        tree={outlineTree}
+        outline={selectedOutline}
         onBack={() => {
           setSelectedOutline(null)
-          setOutlineTree(null)
         }}
-        onUpdate={() => handleSelectOutline(selectedOutline)}
+        onUpdate={handleRefreshOutline}
       />
     )
   }
@@ -336,27 +329,98 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
   )
 }
 
-// Outline Tree Editor Component
+// Outline Tree Editor Component with Virtualization
 interface OutlineTreeEditorProps {
-  tree: OutlineTree
+  outline: Outline
   onBack: () => void
   onUpdate: () => void
 }
 
-function OutlineTreeEditor({ tree, onBack, onUpdate }: OutlineTreeEditorProps) {
+function OutlineTreeEditor({ outline, onBack, onUpdate }: OutlineTreeEditorProps) {
   const [addNodeOpen, setAddNodeOpen] = useState(false)
-  const [parentNodeId, setParentNodeId] = useState<number | null>(null)
+  const [parentNodeId, setParentNodeId] = useState<string | null>(null)
   const [newNode, setNewNode] = useState({
     node_type: 'act' as OutlineNodeType,
     title: '',
     summary: '',
     significance: 'normal',
   })
+  
+  // Pagination state
+  const [nodes, setNodes] = useState<OutlineNodeListItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined)
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
+  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined)
+  const [totalCount, setTotalCount] = useState<number | undefined>(undefined)
+
+  // Load initial nodes
+  useEffect(() => {
+    loadNodes()
+  }, [outline.id])
+
+  const loadNodes = async (cursor?: string) => {
+    const isInitial = !cursor
+    if (isInitial) {
+      setIsLoading(true)
+    } else {
+      setIsLoadingMore(true)
+    }
+
+    try {
+      const response = await api_get_outline_nodes_paginated(
+        outline.id,
+        50,
+        cursor,
+        undefined // parent_id - load root level
+      )
+
+      if (isInitial) {
+        setNodes(response.nodes)
+      } else {
+        setNodes(prev => [...prev, ...response.nodes])
+      }
+
+      setHasMore(response.has_more)
+      setNextCursor(response.next_cursor)
+      setTotalCount(response.total_count)
+    } catch (err) {
+      console.error('Failed to load nodes:', err)
+    } finally {
+      setIsLoading(false)
+      setIsLoadingMore(false)
+    }
+  }
+
+  const handleLoadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore && nextCursor) {
+      loadNodes(nextCursor)
+    }
+  }, [isLoadingMore, hasMore, nextCursor])
+
+  const handleNodeExpand = useCallback((nodeId: string) => {
+    setExpandedNodes(prev => new Set(prev).add(nodeId))
+  }, [])
+
+  const handleNodeCollapse = useCallback((nodeId: string) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev)
+      next.delete(nodeId)
+      return next
+    })
+  }, [])
+
+  const handleLoadEvidence = useCallback(async (nodeId: string): Promise<NodeEvidence[]> => {
+    const response = await api_get_node_evidence(nodeId)
+    return response.evidence_list
+  }, [])
 
   const handleAddNode = async () => {
     if (!newNode.title.trim()) return
     try {
-      await api_add_outline_node(tree.outline.id, {
+      await api_add_outline_node(outline.id, {
         node_type: newNode.node_type,
         title: newNode.title,
         parent_id: parentNodeId || undefined,
@@ -366,91 +430,33 @@ function OutlineTreeEditor({ tree, onBack, onUpdate }: OutlineTreeEditorProps) {
       setAddNodeOpen(false)
       setNewNode({ node_type: 'act', title: '', summary: '', significance: 'normal' })
       setParentNodeId(null)
+      // Refresh nodes
+      setNodes([])
+      setNextCursor(undefined)
+      loadNodes()
       onUpdate()
     } catch (err) {
       console.error('Failed to add node:', err)
     }
   }
 
-  const handleDeleteNode = async (nodeId: number) => {
+  const handleDeleteNode = async (nodeId: string) => {
     if (!confirm('确定要删除这个节点及其子节点吗？')) return
     try {
       await api_delete_outline_node(nodeId)
+      // Refresh nodes
+      setNodes([])
+      setNextCursor(undefined)
+      loadNodes()
       onUpdate()
     } catch (err) {
       console.error('Failed to delete node:', err)
     }
   }
 
-  const openAddNodeDialog = (parentId: number | null = null) => {
+  const openAddNodeDialog = (parentId: string | null = null) => {
     setParentNodeId(parentId)
     setAddNodeOpen(true)
-  }
-
-  // Recursive node renderer
-  const renderNode = (node: OutlineTreeNode, level: number = 0) => {
-    const indent = level * 16
-
-    return (
-      <div key={node.id} style={{ marginLeft: indent }}>
-        <div className="flex items-center justify-between py-2 px-3 rounded hover:bg-muted/50 group">
-          <div className="flex items-center gap-2 flex-1">
-            <Badge variant="outline" className="text-xs">
-              {NODE_TYPE_LABELS[node.node_type as OutlineNodeType] || node.node_type}
-            </Badge>
-            <span className="font-medium">{node.title}</span>
-            <Badge variant="secondary" className="text-xs">
-              {SIGNIFICANCE_LABELS[node.significance] || node.significance}
-            </Badge>
-          </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2"
-              onClick={() => openAddNodeDialog(node.id)}
-            >
-              + 子节点
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-red-500 hover:text-red-700"
-              onClick={() => handleDeleteNode(node.id)}
-            >
-              删除
-            </Button>
-          </div>
-        </div>
-
-        {node.summary && (
-          <p className="text-sm text-muted-foreground ml-3 mb-1" style={{ marginLeft: indent + 12 }}>
-            {node.summary}
-          </p>
-        )}
-
-        {/* Events */}
-        {node.events.length > 0 && (
-          <div className="ml-6 mb-2" style={{ marginLeft: indent + 24 }}>
-            {node.events.map((event) => (
-              <div key={event.id} className="flex items-center gap-2 text-sm py-1">
-                <Badge variant="secondary" className="text-xs">
-                  {EVENT_TYPE_LABELS[event.event_type] || event.event_type}
-                </Badge>
-                <span>{event.title}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Children */}
-        {node.children.length > 0 && (
-          <div className="border-l ml-4">
-            {node.children.map((child) => renderNode(child, level + 1))}
-          </div>
-        )}
-      </div>
-    )
   }
 
   return (
@@ -459,38 +465,47 @@ function OutlineTreeEditor({ tree, onBack, onUpdate }: OutlineTreeEditorProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={onBack}>← 返回</Button>
-          <h2 className="text-xl font-bold">{tree.outline.title}</h2>
-          <Badge variant="outline">{OUTLINE_TYPE_LABELS[tree.outline.outline_type]}</Badge>
+          <h2 className="text-xl font-bold">{outline.title}</h2>
+          <Badge variant="outline">{OUTLINE_TYPE_LABELS[outline.outline_type]}</Badge>
         </div>
-        <Button onClick={() => openAddNodeDialog(null)}>添加根节点</Button>
+        <div className="flex items-center gap-2">
+          {totalCount !== undefined && (
+            <span className="text-sm text-muted-foreground">
+              {nodes.length} / {totalCount} 节点
+            </span>
+          )}
+          <Button onClick={() => openAddNodeDialog(null)}>添加根节点</Button>
+        </div>
       </div>
 
       {/* Description */}
-      {tree.outline.description && (
+      {outline.description && (
         <Card>
           <CardContent className="pt-4">
-            <p className="text-muted-foreground">{tree.outline.description}</p>
+            <p className="text-muted-foreground">{outline.description}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Tree View */}
-      <Card>
-        <CardHeader className="pb-2">
+      {/* Tree View with Virtualization */}
+      <Card className="h-[600px] flex flex-col">
+        <CardHeader className="pb-2 shrink-0">
           <CardTitle className="text-base">大纲结构</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-[500px]">
-            {tree.nodes.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                暂无节点，点击「添加根节点」开始构建大纲
-              </p>
-            ) : (
-              <div className="space-y-1">
-                {tree.nodes.map((node) => renderNode(node))}
-              </div>
-            )}
-          </ScrollArea>
+        <CardContent className="flex-1 min-h-0 p-0">
+          <VirtualizedOutlineTree
+            nodes={nodes}
+            isLoading={isLoading}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+            onNodeExpand={handleNodeExpand}
+            onNodeCollapse={handleNodeCollapse}
+            expandedNodes={expandedNodes}
+            selectedNodeId={selectedNodeId}
+            onNodeSelect={setSelectedNodeId}
+            loadEvidence={handleLoadEvidence}
+          />
         </CardContent>
       </Card>
 
