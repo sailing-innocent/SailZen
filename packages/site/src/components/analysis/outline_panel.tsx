@@ -306,7 +306,6 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
                   </p>
                 )}
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{outline.node_count} 节点</span>
                   <Button
                     variant="ghost"
                     size="sm"
