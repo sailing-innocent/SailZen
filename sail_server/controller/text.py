@@ -32,7 +32,8 @@ from sail_server.model.text import (
 )
 
 from sqlalchemy.orm import Session
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Dict, Any
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -72,6 +73,54 @@ class ImportResponse(BaseModel):
     edition: EditionResponse
     chapter_count: int
     message: str = "导入成功"
+
+
+class AsyncImportRequest(BaseModel):
+    """异步导入请求"""
+    file_id: str = Field(description="上传文件ID")
+    work_title: str = Field(description="作品标题")
+    work_author: Optional[str] = Field(default=None, description="作者")
+    edition_name: Optional[str] = Field(default="原始导入", description="版本名称")
+    enable_ai_parsing: bool = Field(default=True, description="启用AI解析")
+    priority: int = Field(default=5, description="任务优先级(1-10)")
+
+
+class AsyncImportResponse(BaseModel):
+    """异步导入响应"""
+    task_id: int
+    status: str
+    message: str = "导入任务已创建"
+
+
+class FileUploadResponse(BaseModel):
+    """文件上传响应"""
+    file_id: str
+    file_name: str
+    file_size: int
+    encoding: Optional[str] = None
+    message: str = "文件上传成功"
+
+
+class ImportTaskResponse(BaseModel):
+    """导入任务详情响应"""
+    id: int
+    task_type: str
+    status: str
+    work_title: str
+    work_author: Optional[str] = None
+    progress: int
+    current_phase: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+
+
+class ImportTaskListResponse(BaseModel):
+    """导入任务列表响应"""
+    tasks: List[ImportTaskResponse]
+    total: int
 
 
 class AppendResponse(BaseModel):
@@ -429,3 +478,255 @@ class ImportController(Controller):
             new_chapter_count=new_count,
             message=f"成功追加 {new_count} 章"
         )
+
+
+# ============================================================================
+# Async Import Controller
+# ============================================================================
+
+class AsyncImportController(Controller):
+    """异步导入控制器"""
+    path = "/import-async"
+    
+    @post("/upload")
+    async def upload_file(
+        self,
+        data: bytes,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        filename: str = "upload.txt",
+        encoding: Optional[str] = None,
+    ) -> FileUploadResponse:
+        """
+        上传文件
+        
+        接收文件数据并保存到临时目录，返回 file_id 用于后续导入
+        """
+        from sail_server.utils.text_import import get_temp_file_manager
+        
+        temp_manager = get_temp_file_manager()
+        
+        # 验证文件
+        is_valid, error = temp_manager.validate_file(filename, len(data))
+        if not is_valid:
+            raise NotFoundException(detail=error)
+        
+        # 保存文件
+        info = temp_manager.save_upload(data, filename, encoding)
+        
+        logger.info(f"File uploaded: {filename} -> {info.file_id}")
+        
+        return FileUploadResponse(
+            file_id=info.file_id,
+            file_name=filename,
+            file_size=info.file_size,
+            encoding=info.encoding,
+        )
+    
+    @post("/")
+    async def create_import_task(
+        self,
+        data: AsyncImportRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> AsyncImportResponse:
+        """
+        创建异步导入任务
+        
+        创建后台任务处理文本导入，支持大文件和AI解析
+        """
+        db = next(router_dependency)
+        
+        # 验证文件存在
+        from sail_server.utils.text_import import get_temp_file_manager
+        temp_manager = get_temp_file_manager()
+        file_info = temp_manager.get_file(data.file_id)
+        
+        if not file_info:
+            raise NotFoundException(detail=f"File not found: {data.file_id}")
+        
+        # 创建统一任务
+        from sail_server.application.dto.unified_agent import UnifiedAgentTaskCreateRequest
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        
+        task_data = UnifiedAgentTaskCreateRequest(
+            task_type="text_import",
+            priority=data.priority,
+            payload={
+                "file_id": data.file_id,
+                "work_title": data.work_title,
+                "work_author": data.work_author,
+                "edition_name": data.edition_name,
+                "enable_ai_parsing": data.enable_ai_parsing,
+            }
+        )
+        
+        task_dao = UnifiedTaskDAO(db)
+        task = task_dao.create(task_data)
+        
+        logger.info(f"Async import task created: {task.id} for {data.work_title}")
+        
+        return AsyncImportResponse(
+            task_id=task.id,
+            status=task.status,
+            message="导入任务已创建，正在排队处理"
+        )
+    
+    @get("/tasks")
+    async def list_import_tasks(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+    ) -> ImportTaskListResponse:
+        """
+        获取导入任务列表
+        
+        支持按状态筛选和分页
+        """
+        db = next(router_dependency)
+        
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        
+        task_dao = UnifiedTaskDAO(db)
+        
+        # 获取任务列表（只获取 text_import 类型的任务）
+        tasks = task_dao.get_by_type("text_import", status, skip, limit)
+        total = task_dao.count_by_type("text_import", status)
+        
+        task_responses = []
+        for task in tasks:
+            # 从 payload 中提取作品信息
+            payload = task.payload or {}
+            work_title = payload.get("work_title", "Unknown")
+            work_author = payload.get("work_author")
+            
+            task_responses.append(ImportTaskResponse(
+                id=task.id,
+                task_type=task.task_type,
+                status=task.status,
+                work_title=work_title,
+                work_author=work_author,
+                progress=task.progress,
+                current_phase=task.current_phase,
+                created_at=task.created_at,
+                started_at=task.started_at,
+                completed_at=task.completed_at,
+                result=task.result,
+                error_message=task.error_message,
+            ))
+        
+        return ImportTaskListResponse(
+            tasks=task_responses,
+            total=total
+        )
+    
+    @get("/tasks/{task_id:int}")
+    async def get_import_task(
+        self,
+        task_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> ImportTaskResponse:
+        """
+        获取导入任务详情
+        """
+        db = next(router_dependency)
+        
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        
+        task_dao = UnifiedTaskDAO(db)
+        task = task_dao.get_by_id(task_id)
+        
+        if not task or task.task_type != "text_import":
+            raise NotFoundException(detail=f"Import task with ID {task_id} not found")
+        
+        # 从 payload 中提取作品信息
+        payload = task.payload or {}
+        work_title = payload.get("work_title", "Unknown")
+        work_author = payload.get("work_author")
+        
+        return ImportTaskResponse(
+            id=task.id,
+            task_type=task.task_type,
+            status=task.status,
+            work_title=work_title,
+            work_author=work_author,
+            progress=task.progress,
+            current_phase=task.current_phase,
+            created_at=task.created_at,
+            started_at=task.started_at,
+            completed_at=task.completed_at,
+            result=task.result,
+            error_message=task.error_message,
+        )
+    
+    @post("/tasks/{task_id:int}/cancel")
+    async def cancel_import_task(
+        self,
+        task_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> Dict[str, str]:
+        """
+        取消导入任务
+        """
+        db = next(router_dependency)
+        
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        from sail_server.application.dto.unified_agent import TaskStatus
+        
+        task_dao = UnifiedTaskDAO(db)
+        task = task_dao.get_by_id(task_id)
+        
+        if not task or task.task_type != "text_import":
+            raise NotFoundException(detail=f"Import task with ID {task_id} not found")
+        
+        if task.status not in [TaskStatus.PENDING, TaskStatus.SCHEDULED, TaskStatus.RUNNING]:
+            return {"message": f"Task cannot be cancelled (status: {task.status})"}
+        
+        # 标记为取消
+        task_dao.mark_as_cancelled(task_id)
+        
+        logger.info(f"Import task {task_id} cancelled")
+        
+        return {"message": "任务已取消"}
+    
+    @delete("/tasks/{task_id:int}")
+    async def delete_import_task(
+        self,
+        task_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> Dict[str, str]:
+        """
+        删除导入任务记录
+        
+        只删除任务记录，不删除已导入的作品数据
+        """
+        db = next(router_dependency)
+        
+        from sail_server.model.unified_agent import UnifiedTaskDAO
+        
+        task_dao = UnifiedTaskDAO(db)
+        task = task_dao.get_by_id(task_id)
+        
+        if not task or task.task_type != "text_import":
+            raise NotFoundException(detail=f"Import task with ID {task_id} not found")
+        
+        # 删除任务
+        task_dao.delete(task_id)
+        
+        # 清理临时文件
+        payload = task.payload or {}
+        file_id = payload.get("file_id")
+        if file_id:
+            from sail_server.utils.text_import import get_temp_file_manager
+            temp_manager = get_temp_file_manager()
+            temp_manager.delete_file(file_id)
+        
+        logger.info(f"Import task {task_id} deleted")
+        
+        return {"message": "任务已删除"}

@@ -13,6 +13,7 @@ from sail_server.controller.text import (
     EditionController,
     DocumentNodeController,
     ImportController,
+    AsyncImportController,
 )
 from sail_server.db import get_db_dependency
 
@@ -25,5 +26,6 @@ router = Router(
         EditionController,
         DocumentNodeController,
         ImportController,
+        AsyncImportController,
     ],
 )
