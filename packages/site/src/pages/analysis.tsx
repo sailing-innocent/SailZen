@@ -8,7 +8,6 @@
  * - 顶部: 标题栏 + 作品/版本选择器 + 紧凑统计概览
  * - 范围选择区: 共享的章节范围选择器 (所有tab可见)
  * - 主体区域: 标签页内容区
- *   - 任务管理: 任务创建/监控
  *   - 人物管理: 人物列表和分析
  *   - 设定管理: 设定列表和分析
  *   - 大纲分析: 大纲列表、AI提取、树形编辑器
@@ -23,17 +22,15 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { 
-  FileText, 
-  Users, 
-  Settings, 
+import {
+  FileText,
+  Users,
+  Settings,
   BookOpen,
   Layers,
   Target,
   Sparkles,
   Activity,
-  AlertCircle,
 } from 'lucide-react'
 
 import { api_get_works } from '@lib/api/text'
@@ -51,7 +48,6 @@ import TextRangeSelector from '@components/text_range_selector'
 import CharacterPanel from '@components/analysis/character_panel'
 import SettingPanel from '@components/analysis/setting_panel'
 import OutlinePanel from '@components/analysis/outline_panel'
-import TaskPanel from '@components/analysis/task_panel'
 
 // ============================================================================
 // Helper Functions
@@ -168,7 +164,7 @@ export default function AnalysisPage() {
   const [editions, setEditions] = useState<Edition[]>([])
   const [chapters, setChapters] = useState<ChapterListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('tasks')
+  const [activeTab, setActiveTab] = useState('outline')
   const [showRangeSelector, setShowRangeSelector] = useState(false)
 
   // Global store state
@@ -261,9 +257,9 @@ export default function AnalysisPage() {
   // Get selected chapters info for TextRangeSelector
   const selectedChaptersInfo = useMemo(() => {
     if (!rangeSelection) return []
-    
+
     let selectedChapters: ChapterListItem[] = []
-    
+
     switch (rangeSelection.mode) {
       case 'full_edition':
         selectedChapters = chapters
@@ -291,7 +287,7 @@ export default function AnalysisPage() {
         }
         break
     }
-    
+
     return selectedChapters.map(ch => ({
       id: ch.id,
       sort_index: ch.sort_index,
@@ -337,7 +333,7 @@ export default function AnalysisPage() {
               <Target className="w-6 h-6" />
               <h1 className="text-xl md:text-2xl font-bold">作品分析工作台</h1>
             </div>
-            
+
             {/* Work and Edition Selector */}
             <div className="flex flex-wrap gap-2">
               <Select
@@ -356,7 +352,7 @@ export default function AnalysisPage() {
                   ))}
                 </SelectContent>
               </Select>
-              
+
               {editions.length > 0 && (
                 <Select
                   value={selectedEditionId?.toString()}
@@ -425,8 +421,8 @@ export default function AnalysisPage() {
                       )}
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => setShowRangeSelector(!showRangeSelector)}
                   >
@@ -502,11 +498,11 @@ export default function AnalysisPage() {
 
             {/* Tabs */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="tasks" className="flex items-center gap-1">
-                  <Target className="w-4 h-4" />
-                  <span className="hidden sm:inline">分析任务</span>
-                  <span className="sm:hidden">任务</span>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="outline" className="flex items-center gap-1">
+                  <Sparkles className="w-4 h-4" />
+                  <span className="hidden sm:inline">大纲分析</span>
+                  <span className="sm:hidden">大纲</span>
                 </TabsTrigger>
                 <TabsTrigger value="characters" className="flex items-center gap-1">
                   <Users className="w-4 h-4" />
@@ -518,41 +514,31 @@ export default function AnalysisPage() {
                   <span className="hidden sm:inline">设定管理</span>
                   <span className="sm:hidden">设定</span>
                 </TabsTrigger>
-                <TabsTrigger value="outline" className="flex items-center gap-1">
-                  <Sparkles className="w-4 h-4" />
-                  <span className="hidden sm:inline">大纲分析</span>
-                  <span className="sm:hidden">大纲</span>
-                </TabsTrigger>
+
               </TabsList>
-              
-              {/* Tasks Tab */}
-              <TabsContent value="tasks" className="mt-4">
-                <TaskPanel editionId={selectedEdition.id} />
-              </TabsContent>
-              
               {/* Characters Tab */}
               <TabsContent value="characters" className="mt-4">
-                <CharacterPanel 
-                  editionId={selectedEdition.id} 
+                <CharacterPanel
+                  editionId={selectedEdition.id}
                   workTitle={selectedWork?.title || ''}
                   rangeSelection={rangeSelection || undefined}
                   chapters={chapters}
                 />
               </TabsContent>
-              
+
               {/* Settings Tab */}
               <TabsContent value="settings" className="mt-4">
-                <SettingPanel 
+                <SettingPanel
                   editionId={selectedEdition.id}
                   rangeSelection={rangeSelection || undefined}
                   chapters={chapters}
                 />
               </TabsContent>
-              
+
               {/* Outline Tab */}
               <TabsContent value="outline" className="mt-4">
-                <OutlinePanel 
-                  editionId={selectedEdition.id} 
+                <OutlinePanel
+                  editionId={selectedEdition.id}
                   chapters={chapters}
                   rangeSelection={rangeSelection || undefined}
                 />

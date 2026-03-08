@@ -13,8 +13,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -132,8 +130,7 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
     if (!newOutline.title.trim()) return
 
     try {
-      const created = await api_create_outline({
-        edition_id: editionId,
+      const created = await api_create_outline(editionId, {
         title: newOutline.title,
         outline_type: newOutline.outline_type,
         description: newOutline.description || undefined,
@@ -154,7 +151,7 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
       setOutlines(outlines.filter(o => o.id !== outline.id))
       if (selectedOutline?.id === outline.id) {
         setSelectedOutline(null)
-        setOutlineTree(null)
+        // setOutlineTree(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败')
@@ -228,52 +225,54 @@ export default function OutlinePanel({ editionId, workTitle, chapters = [], rang
             <DialogTrigger asChild>
               <Button>新建大纲</Button>
             </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>新建大纲</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>大纲标题</Label>
-                <Input
-                  value={newOutline.title}
-                  onChange={(e) => setNewOutline({ ...newOutline, title: e.target.value })}
-                  placeholder="输入大纲标题"
-                />
+
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>新建大纲</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>大纲标题</Label>
+                  <Input
+                    value={newOutline.title}
+                    onChange={(e) => setNewOutline({ ...newOutline, title: e.target.value })}
+                    placeholder="输入大纲标题"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>大纲类型</Label>
+                  <Select
+                    value={newOutline.outline_type}
+                    onValueChange={(v) => setNewOutline({ ...newOutline, outline_type: v as OutlineType })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(OUTLINE_TYPE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>描述</Label>
+                  <Textarea
+                    value={newOutline.description}
+                    onChange={(e) => setNewOutline({ ...newOutline, description: e.target.value })}
+                    placeholder="大纲描述（可选）"
+                    rows={3}
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>大纲类型</Label>
-                <Select
-                  value={newOutline.outline_type}
-                  onValueChange={(v) => setNewOutline({ ...newOutline, outline_type: v as OutlineType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(OUTLINE_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>描述</Label>
-                <Textarea
-                  value={newOutline.description}
-                  onChange={(e) => setNewOutline({ ...newOutline, description: e.target.value })}
-                  placeholder="大纲描述（可选）"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>取消</Button>
-              <Button onClick={handleCreateOutline}>创建</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>取消</Button>
+                <Button onClick={handleCreateOutline}>创建</Button>
+              </DialogFooter>
+            </DialogContent>
+
+          </Dialog>
+        </div>
       </div>
 
       {/* Error message */}
@@ -345,7 +344,7 @@ function OutlineTreeEditor({ outline, onBack, onUpdate }: OutlineTreeEditorProps
     summary: '',
     significance: 'normal',
   })
-  
+
   // Pagination state
   const [nodes, setNodes] = useState<OutlineNodeListItem[]>([])
   const [isLoading, setIsLoading] = useState(true)

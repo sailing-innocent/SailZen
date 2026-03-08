@@ -18,6 +18,7 @@ import type {
   PaginatedOutlineNodesResponse,
   NodeEvidenceResponse,
   NodeDetailResponse,
+  OutlineCreateData,
 } from '@lib/data/analysis'
 import { SERVER_URL, API_BASE } from './config'
 
@@ -110,24 +111,24 @@ async function fetchWithInterceptors<T>(
   isPaginated: boolean = false
 ): Promise<T> {
   const startTime = performance.now()
-  
+
   // Apply request interceptors
   let requestConfig = { url, options }
   for (const interceptor of requestInterceptors) {
     const result = interceptor(requestConfig.url, requestConfig.options)
     requestConfig = result instanceof Promise ? await result : result
   }
-  
+
   try {
     const response = await fetch(requestConfig.url, requestConfig.options)
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
-    
+
     const data = await response.json()
     const responseTime = performance.now() - startTime
-    
+
     // Update metrics for paginated requests
     if (isPaginated) {
       paginationMetrics.totalRequests++
@@ -138,26 +139,26 @@ async function fetchWithInterceptors<T>(
       // Update running average
       const currentAvg = paginationMetrics.averageResponseTime
       const count = paginationMetrics.totalRequests
-      paginationMetrics.averageResponseTime = 
+      paginationMetrics.averageResponseTime =
         (currentAvg * (count - 1) + responseTime) / count
     }
-    
+
     // Apply response interceptors
     let processedData = data
     for (const interceptor of responseInterceptors) {
       const result = interceptor(processedData, requestConfig.url)
       processedData = result instanceof Promise ? await result : result
     }
-    
+
     return processedData
   } catch (error) {
     paginationMetrics.errors++
-    
+
     // Apply error interceptors
     for (const interceptor of errorInterceptors) {
       await interceptor(error instanceof Error ? error : new Error(String(error)), requestConfig.url)
     }
-    
+
     throw error
   }
 }
@@ -588,7 +589,7 @@ export async function api_create_setting(
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/setting/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
+    body: JSON.stringify({
       edition_id: editionId,
       canonical_name: data.name,
       setting_type: data.setting_type,
@@ -709,24 +710,20 @@ export async function api_get_outlines_by_edition(
  * 创建大纲
  * @param editionId 版本ID
  * @param data 大纲数据
- * @returns 创建的大�?
+ * @returns 创建的大纲
  */
 export async function api_create_outline(
   editionId: number,
-  data: {
-    name: string
-    outline_type: OutlineType
-    description?: string
-  }
+  data: OutlineCreateData,
 ): Promise<Outline> {
   const response = await fetch(`${SERVER_URL}/${ANALYSIS_API_BASE}/outline/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      title: data.name,
+    body: JSON.stringify({
+      title: data.title,
       outline_type: data.outline_type,
       description: data.description,
-      edition_id: editionId 
+      edition_id: editionId
     }),
   })
   if (!response.ok) {
@@ -841,12 +838,6 @@ export async function api_add_outline_event(
 // ============================================================================
 // Outline Pagination API (Performance Optimization)
 // ============================================================================
-
-import type {
-  PaginatedOutlineNodesResponse,
-  NodeEvidenceResponse,
-  NodeDetailResponse,
-} from '@lib/data/outline'
 
 /**
  * 获取分页大纲节点列表

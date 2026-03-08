@@ -187,14 +187,14 @@ export function getExtractedNodeEvidencePreview(
     if (text.length <= maxLength) return text
     return text.substring(0, maxLength) + '...'
   }
-  
+
   // Fall back to legacy evidence field
   if (node.evidence?.text) {
     const text = node.evidence.text
     if (text.length <= maxLength) return text
     return text.substring(0, maxLength) + '...'
   }
-  
+
   return undefined
 }
 
@@ -208,12 +208,12 @@ export function hasExtractedNodeFullEvidence(node: ExtractedOutlineNode): boolea
   if (node.evidence_list && node.evidence_list.length > 0) {
     return node.evidence_list.some(e => e.text && e.text.length > 200)
   }
-  
+
   // Fall back to legacy evidence field
   if (node.evidence?.text) {
     return node.evidence.text.length > 200
   }
-  
+
   return false
 }
 
@@ -556,12 +556,15 @@ export interface SettingDetail {
 export type OutlineType = 'main' | 'subplot' | 'character_arc'
 export type OutlineNodeType = 'act' | 'chapter' | 'scene' | 'event' | 'beat'
 
-export interface Outline {
-  id: string
-  edition_id: number
+export interface OutlineCreateData {
   title: string
   outline_type: OutlineType
   description?: string
+}
+
+export interface Outline extends OutlineCreateData {
+  id: string
+  edition_id: number
   root_node_id?: string
   created_at: string
   updated_at?: string
