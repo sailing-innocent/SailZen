@@ -7,11 +7,13 @@
 # ---------------------------------
 
 from __future__ import annotations
-from litestar import Controller, get, post, delete
+from litestar import Controller, get, post, delete, Response
 from litestar.exceptions import NotFoundException, ClientException
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Generator
 from dataclasses import dataclass, field
+import hashlib
+import json
 
 from sail_server.infrastructure.orm.analysis import (
     Outline,
@@ -584,8 +586,11 @@ class OutlineController(Controller):
         self,
         node_id: str,
         router_dependency: Generator[Session, None, None] = None,
-    ) -> NodeEvidenceResponse:
-        """获取节点完整证据列表"""
+    ) -> Response[NodeEvidenceResponse]:
+        """获取节点完整证据列表
+        
+        Supports HTTP caching with ETag headers for efficient client-side caching.
+        """
         db = next(router_dependency)
         
         node = db.query(OutlineNode).filter(OutlineNode.id == int(node_id)).first()
@@ -608,10 +613,27 @@ class OutlineController(Controller):
                     'end_fragment': evidence.get('end_fragment'),
                 })
         
-        return NodeEvidenceResponse(
+        # 生成ETag (基于节点ID、证据内容和更新时间)
+        etag_content = {
+            'node_id': node_id,
+            'evidence': formatted_evidence,
+            'updated_at': node.updated_at.isoformat() if node.updated_at else '',
+        }
+        etag = hashlib.md5(json.dumps(etag_content, sort_keys=True).encode()).hexdigest()
+        etag_header = f'"{etag}"'
+        
+        response_data = NodeEvidenceResponse(
             node_id=str(node.id),
             evidence_list=formatted_evidence,
             total_count=len(formatted_evidence),
+        )
+        
+        return Response(
+            content=response_data,
+            headers={
+                'ETag': etag_header,
+                'Cache-Control': 'private, max-age=300',  # 5 minutes client-side caching
+            }
         )
 
     @get("/node/{node_id:str}/detail")

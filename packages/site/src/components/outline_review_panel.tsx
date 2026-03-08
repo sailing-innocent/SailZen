@@ -34,6 +34,7 @@ import {
   Clock,
 } from 'lucide-react'
 import type { ExtractedOutlineNode, OutlineExtractionResult, OutlineExtractionProgress } from '@lib/data/analysis'
+import { getExtractedNodeEvidencePreview, hasExtractedNodeFullEvidence } from '@lib/data/analysis'
 
 export interface OutlineReviewPanelProps {
   /** 提取结果 */
@@ -289,12 +290,19 @@ export function OutlineReviewPanel({
               {node.summary}
             </p>
 
-            {/* 证据预览 */}
-            {node.evidence && (
+            {/* 证据预览 (支持新数据流) */}
+            {(node.evidence || node.evidence_preview || node.evidence_list) && (
               <div className="mt-2 text-xs bg-muted p-2 rounded border-l-2 border-primary">
                 <span className="font-medium">证据：</span>
-                {node.evidence.text.slice(0, 100)}
-                {node.evidence.text.length > 100 ? '...' : ''}
+                {node.evidence_preview || getExtractedNodeEvidencePreview(node, 100) || '...'}
+                {hasExtractedNodeFullEvidence(node) && !node.evidence_preview?.endsWith('...') && '...'}
+                
+                {/* 完整证据提示 */}
+                {(node.evidence_full_available || hasExtractedNodeFullEvidence(node)) && (
+                  <span className="text-primary ml-1 cursor-pointer hover:underline">
+                    (查看更多)
+                  </span>
+                )}
               </div>
             )}
 

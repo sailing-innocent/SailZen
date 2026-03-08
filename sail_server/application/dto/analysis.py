@@ -342,6 +342,8 @@ class ExtractedOutlineNode(BaseModel):
     """提取的大纲节点
     
     用于AI大纲提取结果的中间表示，最终被转换为 OutlineNode ORM 模型
+    
+    Supports evidence truncation for list views to optimize payload size.
     """
     model_config = ConfigDict(from_attributes=True)
     
@@ -354,6 +356,80 @@ class ExtractedOutlineNode(BaseModel):
     parent_id: Optional[str] = Field(default=None, description="父节点ID")
     characters: List[str] = Field(default_factory=list, description="涉及人物列表")
     evidence_list: List[OutlineEvidence] = Field(default_factory=list, description="文本证据列表")
+    
+    def get_evidence_preview(self, max_length: int = 200) -> Optional[str]:
+        """Get truncated evidence preview for list views.
+        
+        Args:
+            max_length: Maximum length of the preview text (default: 200)
+            
+        Returns:
+            Truncated evidence text or None if no evidence
+        """
+        if not self.evidence_list:
+            return None
+        
+        # Get first evidence text
+        first_evidence = self.evidence_list[0]
+        text = first_evidence.text
+        
+        if not text:
+            return None
+        
+        if len(text) <= max_length:
+            return text
+        
+        return text[:max_length] + "..."
+    
+    def has_full_evidence(self) -> bool:
+        """Check if full evidence text is available (exceeds preview length).
+        
+        Returns:
+            True if any evidence text exceeds 200 characters
+        """
+        if not self.evidence_list:
+            return False
+        
+        return any(
+            len(evidence.text) > 200 
+            for evidence in self.evidence_list 
+            if evidence.text
+        )
+    
+    def get_truncated_evidence_list(self, max_length: int = 200) -> List[OutlineEvidence]:
+        """Get evidence list with all texts truncated for list views.
+        
+        Args:
+            max_length: Maximum length for each evidence text (default: 200)
+            
+        Returns:
+            List of OutlineEvidence with truncated text
+        """
+        truncated = []
+        for evidence in self.evidence_list:
+            text = evidence.text
+            if text and len(text) > max_length:
+                text = text[:max_length] + "..."
+            
+            truncated.append(OutlineEvidence(
+                text=text or "",
+                chapter_title=evidence.chapter_title,
+                start_fragment=evidence.start_fragment,
+                end_fragment=evidence.end_fragment,
+            ))
+        return truncated
+    
+    def calculate_evidence_payload_size(self) -> int:
+        """Calculate total evidence payload size in bytes.
+        
+        Returns:
+            Total size of all evidence texts in bytes
+        """
+        total = 0
+        for evidence in self.evidence_list:
+            if evidence.text:
+                total += len(evidence.text.encode('utf-8'))
+        return total
 
 
 class OutlineExtractionConfig(BaseModel):

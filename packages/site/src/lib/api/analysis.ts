@@ -15,10 +15,187 @@ import type {
   TextEvidence,
   AnalysisStats,
   LLMProvidersResponse,
+  PaginatedOutlineNodesResponse,
+  NodeEvidenceResponse,
+  NodeDetailResponse,
 } from '@lib/data/analysis'
 import { SERVER_URL, API_BASE } from './config'
 
 const ANALYSIS_API_BASE = `${API_BASE}/analysis`
+
+// ============================================================================
+// Pagination Interceptors
+// ============================================================================
+
+export type RequestInterceptor = (url: string, options: RequestInit) => Promise<{ url: string; options: RequestInit }> | { url: string; options: RequestInit }
+export type ResponseInterceptor = <T>(response: T, url: string) => Promise<T> | T
+export type ErrorInterceptor = (error: Error, url: string) => Promise<void> | void
+
+interface PaginationMetrics {
+  totalRequests: number
+  totalPages: number
+  totalNodes: number
+  averageResponseTime: number
+  errors: number
+}
+
+const requestInterceptors: RequestInterceptor[] = []
+const responseInterceptors: ResponseInterceptor[] = []
+const errorInterceptors: ErrorInterceptor[] = []
+const paginationMetrics: PaginationMetrics = {
+  totalRequests: 0,
+  totalPages: 0,
+  totalNodes: 0,
+  averageResponseTime: 0,
+  errors: 0,
+}
+
+/**
+ * Add request interceptor
+ */
+export function addRequestInterceptor(interceptor: RequestInterceptor): () => void {
+  requestInterceptors.push(interceptor)
+  return () => {
+    const index = requestInterceptors.indexOf(interceptor)
+    if (index > -1) requestInterceptors.splice(index, 1)
+  }
+}
+
+/**
+ * Add response interceptor
+ */
+export function addResponseInterceptor(interceptor: ResponseInterceptor): () => void {
+  responseInterceptors.push(interceptor)
+  return () => {
+    const index = responseInterceptors.indexOf(interceptor)
+    if (index > -1) responseInterceptors.splice(index, 1)
+  }
+}
+
+/**
+ * Add error interceptor
+ */
+export function addErrorInterceptor(interceptor: ErrorInterceptor): () => void {
+  errorInterceptors.push(interceptor)
+  return () => {
+    const index = errorInterceptors.indexOf(interceptor)
+    if (index > -1) errorInterceptors.splice(index, 1)
+  }
+}
+
+/**
+ * Get pagination metrics
+ */
+export function getPaginationMetrics(): PaginationMetrics {
+  return { ...paginationMetrics }
+}
+
+/**
+ * Reset pagination metrics
+ */
+export function resetPaginationMetrics(): void {
+  paginationMetrics.totalRequests = 0
+  paginationMetrics.totalPages = 0
+  paginationMetrics.totalNodes = 0
+  paginationMetrics.averageResponseTime = 0
+  paginationMetrics.errors = 0
+}
+
+/**
+ * Execute fetch with interceptors
+ */
+async function fetchWithInterceptors<T>(
+  url: string,
+  options: RequestInit = {},
+  isPaginated: boolean = false
+): Promise<T> {
+  const startTime = performance.now()
+  
+  // Apply request interceptors
+  let requestConfig = { url, options }
+  for (const interceptor of requestInterceptors) {
+    const result = interceptor(requestConfig.url, requestConfig.options)
+    requestConfig = result instanceof Promise ? await result : result
+  }
+  
+  try {
+    const response = await fetch(requestConfig.url, requestConfig.options)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    const data = await response.json()
+    const responseTime = performance.now() - startTime
+    
+    // Update metrics for paginated requests
+    if (isPaginated) {
+      paginationMetrics.totalRequests++
+      paginationMetrics.totalPages++
+      if (data.nodes) {
+        paginationMetrics.totalNodes += data.nodes.length
+      }
+      // Update running average
+      const currentAvg = paginationMetrics.averageResponseTime
+      const count = paginationMetrics.totalRequests
+      paginationMetrics.averageResponseTime = 
+        (currentAvg * (count - 1) + responseTime) / count
+    }
+    
+    // Apply response interceptors
+    let processedData = data
+    for (const interceptor of responseInterceptors) {
+      const result = interceptor(processedData, requestConfig.url)
+      processedData = result instanceof Promise ? await result : result
+    }
+    
+    return processedData
+  } catch (error) {
+    paginationMetrics.errors++
+    
+    // Apply error interceptors
+    for (const interceptor of errorInterceptors) {
+      await interceptor(error instanceof Error ? error : new Error(String(error)), requestConfig.url)
+    }
+    
+    throw error
+  }
+}
+
+// Default interceptors for pagination
+
+// Request interceptor: Add pagination headers
+addRequestInterceptor((url, options) => {
+  // Add cache control for paginated requests
+  if (url.includes('/nodes?')) {
+    options.headers = {
+      ...options.headers,
+      'X-Client-Pagination': 'true',
+    }
+  }
+  return { url, options }
+})
+
+// Response interceptor: Transform paginated responses
+addResponseInterceptor((response: any, url) => {
+  // Add pagination metadata if missing
+  if (url.includes('/nodes') && response.nodes && !response.pagination_metadata) {
+    response.pagination_metadata = {
+      has_more: response.has_more ?? false,
+      next_cursor: response.next_cursor,
+      total_count: response.total_count,
+      timestamp: new Date().toISOString(),
+    }
+  }
+  return response
+})
+
+// Error interceptor: Log pagination errors
+addErrorInterceptor((error, url) => {
+  if (url.includes('/nodes')) {
+    console.warn(`[Pagination] Request failed: ${url}`, error.message)
+  }
+})
 
 // ============================================================================
 // Text Range API
@@ -690,13 +867,11 @@ export async function api_get_outline_nodes_paginated(
   if (cursor) params.append('cursor', cursor)
   if (parentId) params.append('parent_id', parentId)
 
-  const response = await fetch(
-    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/${outlineId}/nodes?${params.toString()}`
+  return fetchWithInterceptors<PaginatedOutlineNodesResponse>(
+    `${SERVER_URL}/${ANALYSIS_API_BASE}/outline/${outlineId}/nodes?${params.toString()}`,
+    {},
+    true // Mark as paginated request
   )
-  if (!response.ok) {
-    throw new Error(`Failed to get paginated outline nodes: ${response.statusText}`)
-  }
-  return response.json()
 }
 
 /**

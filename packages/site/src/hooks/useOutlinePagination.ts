@@ -137,6 +137,7 @@ interface EvidenceCache {
 interface UseNodeEvidenceOptions {
   nodeId: string
   preload?: boolean
+  preloadSiblings?: string[]
 }
 
 interface UseNodeEvidenceReturn {
@@ -144,17 +145,63 @@ interface UseNodeEvidenceReturn {
   isLoading: boolean
   error: Error | null
   loadEvidence: () => Promise<void>
+  preloadEvidence: (nodeIds: string[]) => Promise<void>
 }
 
 const evidenceCache: EvidenceCache = {}
+let preloadQueue: string[] = []
+let isPreloading = false
 
 /**
- * Hook for lazy loading node evidence with caching
+ * Preload evidence for multiple nodes in the background
+ */
+async function processPreloadQueue() {
+  if (isPreloading || preloadQueue.length === 0) return
+  
+  isPreloading = true
+  const batch = preloadQueue.splice(0, 5) // Process 5 at a time
+  
+  try {
+    // Filter out already cached nodes
+    const nodesToLoad = batch.filter(id => !evidenceCache[id])
+    
+    if (nodesToLoad.length > 0) {
+      const responses = await api_get_nodes_details_batch(nodesToLoad)
+      responses.forEach(detail => {
+        if (detail.meta_data?.evidence) {
+          evidenceCache[detail.id] = detail.meta_data.evidence
+        }
+      })
+    }
+  } catch (err) {
+    console.warn('Failed to preload evidence:', err)
+  } finally {
+    isPreloading = false
+    // Continue processing if there are more items
+    if (preloadQueue.length > 0) {
+      processPreloadQueue()
+    }
+  }
+}
+
+/**
+ * Queue nodes for preloading
+ */
+function queueEvidencePreload(nodeIds: string[]) {
+  const uncachedIds = nodeIds.filter(id => !evidenceCache[id] && !preloadQueue.includes(id))
+  if (uncachedIds.length > 0) {
+    preloadQueue.push(...uncachedIds)
+    processPreloadQueue()
+  }
+}
+
+/**
+ * Hook for lazy loading node evidence with caching and preloading
  */
 export function useNodeEvidence(
   options: UseNodeEvidenceOptions
 ): UseNodeEvidenceReturn {
-  const { nodeId, preload = false } = options
+  const { nodeId, preload = false, preloadSiblings } = options
 
   const [evidence, setEvidence] = useState<NodeEvidence[]>(() => {
     return evidenceCache[nodeId] || []
@@ -165,6 +212,10 @@ export function useNodeEvidence(
   const loadEvidence = useCallback(async () => {
     if (evidenceCache[nodeId]) {
       setEvidence(evidenceCache[nodeId])
+      // Preload siblings after loading current
+      if (preloadSiblings) {
+        queueEvidencePreload(preloadSiblings.filter(id => id !== nodeId))
+      }
       return
     }
 
@@ -175,12 +226,21 @@ export function useNodeEvidence(
       const response = await api_get_node_evidence(nodeId)
       evidenceCache[nodeId] = response.evidence_list
       setEvidence(response.evidence_list)
+      
+      // Preload siblings after loading current
+      if (preloadSiblings) {
+        queueEvidencePreload(preloadSiblings.filter(id => id !== nodeId))
+      }
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
       setIsLoading(false)
     }
-  }, [nodeId])
+  }, [nodeId, preloadSiblings])
+  
+  const preloadEvidence = useCallback(async (nodeIds: string[]) => {
+    queueEvidencePreload(nodeIds)
+  }, [])
 
   useEffect(() => {
     if (preload) {
@@ -193,6 +253,7 @@ export function useNodeEvidence(
     isLoading,
     error,
     loadEvidence,
+    preloadEvidence,
   }
 }
 

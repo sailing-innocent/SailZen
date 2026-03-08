@@ -164,7 +164,57 @@ export interface ExtractedOutlineNode {
     start_offset: number
     end_offset: number
   }
+  evidence_list?: NodeEvidence[]  // New: Multiple evidence support for pagination
+  evidence_preview?: string  // New: Truncated preview for list views
+  evidence_full_available?: boolean  // New: Flag indicating full evidence available
   review_status?: 'pending' | 'approved' | 'rejected'
+}
+
+/**
+ * Helper to get evidence preview for ExtractedOutlineNode
+ * @param node - The extracted outline node
+ * @param maxLength - Maximum length of preview (default: 200)
+ * @returns Truncated evidence preview or undefined
+ */
+export function getExtractedNodeEvidencePreview(
+  node: ExtractedOutlineNode,
+  maxLength: number = 200
+): string | undefined {
+  // Try evidence_list first
+  if (node.evidence_list && node.evidence_list.length > 0) {
+    const text = node.evidence_list[0].text
+    if (!text) return undefined
+    if (text.length <= maxLength) return text
+    return text.substring(0, maxLength) + '...'
+  }
+  
+  // Fall back to legacy evidence field
+  if (node.evidence?.text) {
+    const text = node.evidence.text
+    if (text.length <= maxLength) return text
+    return text.substring(0, maxLength) + '...'
+  }
+  
+  return undefined
+}
+
+/**
+ * Helper to check if full evidence is available for ExtractedOutlineNode
+ * @param node - The extracted outline node
+ * @returns true if full evidence is available
+ */
+export function hasExtractedNodeFullEvidence(node: ExtractedOutlineNode): boolean {
+  // Check evidence_list
+  if (node.evidence_list && node.evidence_list.length > 0) {
+    return node.evidence_list.some(e => e.text && e.text.length > 200)
+  }
+  
+  // Fall back to legacy evidence field
+  if (node.evidence?.text) {
+    return node.evidence.text.length > 200
+  }
+  
+  return false
 }
 
 export interface OutlineExtractionResult {
