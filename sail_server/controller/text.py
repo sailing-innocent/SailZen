@@ -694,7 +694,7 @@ class AsyncImportController(Controller):
         
         return {"message": "任务已取消"}
     
-    @delete("/tasks/{task_id:int}")
+    @delete("/tasks/{task_id:int}", status_code=200)
     async def delete_import_task(
         self,
         task_id: int,

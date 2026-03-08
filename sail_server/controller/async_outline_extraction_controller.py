@@ -221,7 +221,7 @@ class AsyncOutlineExtractionController(Controller):
             performance_metrics=progress.performance_metrics,
         )
 
-    @delete("/{task_id:str}")
+    @delete("/{task_id:str}", status_code=200)
     async def cancel_extraction(
         self,
         task_id: str,
