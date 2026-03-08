@@ -9,6 +9,7 @@ dependencies = [
     "aiohttp>=3.13.3",
     "dotenv>=0.9.9",
     "google-genai>=1.0.0",
+    "httpx>=0.28.0",
     "litestar>=2.15.2",
     "matplotlib>=3.10.3",
     "msgspec>=0.20.0",
