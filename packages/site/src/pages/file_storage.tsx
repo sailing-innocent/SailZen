@@ -35,7 +35,7 @@ import {
   api_get_file_content,
 } from '@lib/api/file_storage'
 
-const MAX_FILE_SIZE = 1024 // 1KB
+const MAX_FILE_SIZE = 1048576 // 1MB
 
 export default function FileStoragePage() {
   const [files, setFiles] = useState<FileInfo[]>([])
@@ -89,8 +89,8 @@ export default function FileStoragePage() {
   }
 
   // 处理文件删除
-  const handleDelete = async (filename: string) => {
-    if (!confirm(`确定要删除文件 "${filename}" 吗？`)) {
+  const handleDelete = async (filename: string, originalName: string) => {
+    if (!confirm(`确定要删除文件 "${originalName}" 吗？`)) {
       return
     }
 
@@ -175,7 +175,7 @@ export default function FileStoragePage() {
         {/* 说明 */}
         <Alert>
           <AlertDescription>
-            支持上传文本文件（.txt），单个文件大小限制为 {MAX_FILE_SIZE} 字节（1KB）。上传后可以在此页面预览、下载或删除文件。
+            支持上传文本文件（.txt），单个文件大小限制为 {MAX_FILE_SIZE} 字节（1MB）。上传后可以在此页面预览、下载或删除文件。
           </AlertDescription>
         </Alert>
 
@@ -210,8 +210,9 @@ export default function FileStoragePage() {
                 <TableBody>
                   {files.map((file) => (
                     <TableRow key={file.filename}>
-                      <TableCell className="font-mono text-sm">
-                        {file.filename}
+                      <TableCell>
+                        <div className="font-medium">{file.original_name}</div>
+                        <div className="text-xs text-gray-500 font-mono">{file.filename}</div>
                       </TableCell>
                       <TableCell>{formatSize(file.size)}</TableCell>
                       <TableCell>{formatDate(file.created_at)}</TableCell>
@@ -235,7 +236,7 @@ export default function FileStoragePage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(file.filename)}
+                            onClick={() => handleDelete(file.filename, file.original_name)}
                             disabled={loading}
                             className="text-red-600 hover:text-red-700"
                           >
@@ -257,8 +258,11 @@ export default function FileStoragePage() {
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>
-              文件预览: {selectedFile?.filename}
+              文件预览: {selectedFile?.original_name}
             </DialogTitle>
+            <div className="text-xs text-gray-500 font-mono">
+              {selectedFile?.filename}
+            </div>
           </DialogHeader>
           <div className="mt-4">
             <div className="bg-gray-50 p-4 rounded-md overflow-auto max-h-[60vh]">

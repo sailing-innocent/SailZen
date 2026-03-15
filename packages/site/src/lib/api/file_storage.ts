@@ -17,7 +17,7 @@ const FILE_STORAGE_API_BASE = `${API_BASE}/file-storage`
 
 /**
  * 上传文件
- * @param file 要上传的文件（限制1KB）
+ * @param file 要上传的文件（限制1MB）
  * @returns 上传结果
  */
 export async function api_upload_file(file: File): Promise<FileUploadResponse> {

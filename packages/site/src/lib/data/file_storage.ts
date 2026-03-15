@@ -14,6 +14,7 @@ export interface FileUploadResponse {
 
 export interface FileInfo {
   filename: string
+  original_name: string
   size: number
   created_at: string
   updated_at: string
@@ -31,6 +32,7 @@ export interface FileDeleteResponse {
 
 export interface FileContentResponse {
   filename: string
+  original_name: string
   content: string
   size: number
 }
