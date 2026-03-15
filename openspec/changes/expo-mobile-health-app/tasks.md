@@ -8,6 +8,8 @@
 - [ ] 1.6 Add necessary dependencies (Zustand, Axios, expo-sqlite, drizzle-orm)
 - [ ] 1.7 Configure Drizzle ORM with SQLite for local storage
 - [ ] 1.8 Create TypeScript type definitions for all data models
+- [ ] 1.9 Create environment configuration files (.env.development, .env.production) with API base URL
+- [ ] 1.10 Configure notification permissions in app.json
 
 ## 2. Database Layer
 
@@ -84,31 +86,51 @@
 - [ ] 8.9 Create sync error handling and retry logic
 - [ ] 8.10 Add last sync time display and stale data warning
 
-## 9. UI/UX Polish
+## 9. Push Notifications
 
-- [ ] 9.1 Implement consistent color scheme with theme provider
-- [ ] 9.2 Add loading states and skeleton screens
-- [ ] 9.3 Implement empty states for lists
-- [ ] 9.4 Add pull-to-refresh functionality
-- [ ] 9.5 Create error boundary for crash handling
-- [ ] 9.6 Implement offline mode indicator
-- [ ] 9.7 Add haptic feedback for actions
-- [ ] 9.8 Optimize list performance with FlatList
+- [ ] 9.1 Configure expo-notifications and request permissions
+- [ ] 9.2 Create notification service with scheduling API
+- [ ] 9.3 Implement daily weight reminder notification (configurable time)
+- [ ] 9.4 Implement weekly exercise progress notification
+- [ ] 9.5 Create weight goal milestone celebration notification
+- [ ] 9.6 Add offline data sync reminder notification
+- [ ] 9.7 Create notification settings screen
+- [ ] 9.8 Implement notification permission handling and guidance
+- [ ] 9.9 Test notification delivery in background and foreground
+- [ ] 9.10 Add notification analytics (optional)
 
-## 10. Testing & Build
+## 10. UI/UX Polish
 
-- [ ] 10.1 Configure EAS Build for Android
-- [ ] 10.2 Create development build for testing
-- [ ] 10.3 Test weight tracking flow end-to-end
-- [ ] 10.4 Test exercise tracking flow end-to-end
-- [ ] 10.5 Test weight planning flow end-to-end
-- [ ] 10.6 Test offline sync scenarios
-- [ ] 10.7 Perform UI testing on different screen sizes
-- [ ] 10.8 Build production APK/AAB
-- [ ] 10.9 Write basic documentation (README.md for mobile/)
-- [ ] 10.10 Create CHANGELOG.md for mobile releases
+- [ ] 10.1 Implement consistent color scheme with theme provider
+- [ ] 10.2 Add loading states and skeleton screens
+- [ ] 10.3 Implement empty states for lists
+- [ ] 10.4 Add pull-to-refresh functionality
+- [ ] 10.5 Create error boundary for crash handling
+- [ ] 10.6 Implement offline mode indicator
+- [ ] 10.7 Add haptic feedback for actions
+- [ ] 10.8 Optimize list performance with FlatList
 
-## 11. Verification with Web Team
+## 11. Testing & Build
+
+- [ ] 11.1 Configure EAS Build for Android
+- [ ] 11.2 Create development build for testing
+- [ ] 11.3 Test weight tracking flow end-to-end
+- [ ] 11.4 Test exercise tracking flow end-to-end
+- [ ] 11.5 Test weight planning flow end-to-end
+- [ ] 11.6 Test offline sync scenarios
+- [ ] 11.7 Test push notification delivery
+- [ ] 11.8 Perform UI testing on different screen sizes
+- [ ] 11.9 Build production APK/AAB
+- [ ] 11.10 Write basic documentation (README.md for mobile/)
+- [ ] 11.11 Create CHANGELOG.md for mobile releases
+
+## 12. Verification with Web Team
+
+- [ ] 12.1 Document API usage and any inconsistencies found
+- [ ] 12.2 Share mobile UX patterns with Web team
+- [ ] 12.3 Verify data compatibility between mobile and web
+- [ ] 12.4 Test parallel development workflow
+- [ ] 12.5 Document lessons learned for future mobile features
 
 - [ ] 11.1 Document API usage and any inconsistencies found
 - [ ] 11.2 Share mobile UX patterns with Web team
