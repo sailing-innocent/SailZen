@@ -7,6 +7,7 @@
 # ---------------------------------
 
 from .analysis import analysis_router
+from .file_storage import router as file_storage_router
 from .finance import router as finance_router
 from .health import router as health_router
 from .history import router as history_router
@@ -17,6 +18,7 @@ from .unified_agent import unified_agent_router
 
 __all__ = [
     "analysis_router",
+    "file_storage_router",
     "finance_router",
     "health_router",
     "history_router",

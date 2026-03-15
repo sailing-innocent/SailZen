@@ -43,6 +43,7 @@ class SailServer:
             "/text",
             "/analysis",
             "/necessity",
+            "/file-storage",
         ]
         self.api_router = None
         self.debug = True
@@ -51,8 +52,9 @@ class SailServer:
     def init(self):
         # 日志已在 main() 中初始化，直接获取 logger
         from sail_server.utils.logging_config import get_logger
+
         logger = get_logger("sail_server")
-        
+
         @get("/health")
         async def health_check(request: Request) -> dict[str, str]:
             return {"status": "ok"}
@@ -101,16 +103,21 @@ class SailServer:
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
         from sail_server.router.unified_agent import unified_agent_router
-        from sail_server.controller.outline_extraction_unified import OutlineExtractionUnifiedController
+        from sail_server.router.file_storage import router as file_storage_router
+        from sail_server.controller.outline_extraction_unified import (
+            OutlineExtractionUnifiedController,
+        )
 
         # 自动注册 Agent
         from sail_server.agent import auto_register_agents
+
         auto_register_agents()
-        
+
         # 修复数据库序列
         try:
             from sail_server.db import get_db_session
             from sail_server.utils.db_utils import fix_all_sequences
+
             with get_db_session() as db:
                 fix_results = fix_all_sequences(db)
                 for table, success in fix_results.items():
@@ -131,6 +138,7 @@ class SailServer:
                 necessity_router,
                 analysis_router,
                 unified_agent_router,
+                file_storage_router,
                 OutlineExtractionUnifiedController,
             ],
         )
@@ -152,8 +160,9 @@ class SailServer:
         # 配置全局中间件
         from litestar.middleware.base import DefineMiddleware
         from sail_server.middleware.logging_middleware import logging_middleware_factory
+
         middleware = [DefineMiddleware(logging_middleware_factory)]
-        
+
         try:
             self.app = Litestar(
                 route_handlers=[self.base_router, self.api_router],
@@ -173,12 +182,14 @@ class SailServer:
 
     async def on_startup(self):
         from sail_server.utils.logging_config import get_logger
+
         logger = get_logger("sail_server")
         logger.info("Server starting up...")
-        
+
         # 执行大纲提取任务恢复
         try:
             from sail_server.service.startup_recovery import perform_startup_recovery
+
             result = perform_startup_recovery()
             if result["recovered_count"] > 0:
                 logger.info(
@@ -190,11 +201,13 @@ class SailServer:
 
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger
+
         logger = get_logger("sail_server")
         logger.info("Server shutting down...")
 
     def run(self):
         from sail_server.utils.logging_config import get_logger
+
         logger = get_logger("sail_server")
         logger.info(f"Server running on {self.host}:{self.port}")
         if not self.app:
@@ -215,6 +228,7 @@ class SailServer:
 def main():
     # 先初始化日志配置，再获取 logger
     from sail_server.utils.logging_config import setup_logging, get_logger
+
     setup_logging()
     logger = get_logger("sail_server")
 
@@ -239,7 +253,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     from sail_server.utils.env import read_env
-    
+
     if args.dev:
         read_env("dev")
     elif args.debug:
