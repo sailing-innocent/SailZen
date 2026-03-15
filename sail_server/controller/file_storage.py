@@ -173,7 +173,7 @@ class FileStorageController(Controller):
         except UnicodeDecodeError:
             raise HTTPException(status_code=400, detail="文件不是有效的UTF-8文本")
 
-    @delete(path="/delete/{filename:str}")
+    @delete(path="/delete/{filename:str}", status_code=200)
     async def delete_file(self, filename: str) -> FileDeleteResponse:
         """删除文件"""
         file_path = STORAGE_DIR / filename
