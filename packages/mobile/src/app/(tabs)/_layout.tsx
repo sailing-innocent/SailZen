@@ -40,6 +40,13 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Hide the _layout route from tabs */}
+      <Tabs.Screen
+        name="_layout"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

@@ -35,11 +35,6 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "sailzen",
-    "extra": {
-      "router": {
-        "origin": false
-      }
-    }
+    "scheme": "sailzen"
   }
 }
