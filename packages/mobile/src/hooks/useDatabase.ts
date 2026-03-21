@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../db';
 import * as schema from '../db/schema';
+import { initializeTables, isDatabaseInitialized } from '../db/migrations';
 
 interface MigrationStatus {
   isReady: boolean;
@@ -23,13 +24,18 @@ export function useMigrations(): MigrationStatus {
       try {
         setStatus((prev) => ({ ...prev, isMigrating: true, error: null }));
 
-        // Create tables if they don't exist
-        // Note: Drizzle ORM with expo-sqlite handles table creation automatically
-        // when we insert data, but we can also use drizzle-kit for migrations
+        // Always try to create tables - IF NOT EXISTS handles the case where they already exist
+        console.log('[DB] Initializing tables...');
+        await initializeTables();
         
-        // For now, we'll verify database connection by querying
-        await db.select().from(schema.syncMetadata).limit(1);
+        // Verify tables were created
+        const initialized = await isDatabaseInitialized();
+        if (!initialized) {
+          console.warn('[DB] Tables may not be fully initialized, retrying...');
+          await initializeTables();
+        }
 
+        console.log('[DB] Database ready');
         setStatus({
           isReady: true,
           isMigrating: false,

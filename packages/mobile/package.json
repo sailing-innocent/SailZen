@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
+    "prestart": "powershell -ExecutionPolicy Bypass -File ./scripts/update-ip.ps1",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -14,6 +15,9 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "6.1.2",
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/datetimepicker": "^8.4.4",
     "@react-native-community/netinfo": "11.4.1",
     "@react-navigation/bottom-tabs": "^7.3.0",
     "@react-navigation/native": "^7.1.0",

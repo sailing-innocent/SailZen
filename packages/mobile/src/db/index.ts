@@ -7,3 +7,4 @@ const expoDb = openDatabaseSync('sailzen.db');
 export const db = drizzle(expoDb, { schema });
 
 export * from './schema';
+export { initializeTables, isDatabaseInitialized } from './migrations';
