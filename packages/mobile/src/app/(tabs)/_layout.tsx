@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from 'react-native-paper';
+import { SyncButton } from '../../components/SyncButton';
 
 export default function TabLayout() {
   const theme = useTheme();
@@ -11,6 +12,7 @@ export default function TabLayout() {
         headerShown: true,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceDisabled,
+        headerRight: () => <SyncButton variant="icon" />,
       }}
     >
       <Tabs.Screen

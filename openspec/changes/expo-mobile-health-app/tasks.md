@@ -56,9 +56,9 @@
 - [x] 2.2 Create Drizzle schema for exercise records table
 - [x] 2.3 Create Drizzle schema for weight plans table
 - [x] 2.4 Create Drizzle schema for sync metadata table
-- [ ] 2.5 Implement database initialization on app launch
-- [ ] 2.6 Create database utility hooks (useDatabase, useMigrations)
-- [ ] 2.7 Add database debugging tools for development
+- [x] 2.5 Implement database initialization on app launch
+- [x] 2.6 Create database utility hooks (useDatabase, useMigrations)
+- [x] 2.7 Add database debugging tools for development
 
 ## 3. API Client
 
@@ -77,53 +77,53 @@
 - [x] 4.3 Create Zustand store for weight plans
 - [x] 4.4 Create Zustand store for sync status
 - [x] 4.5 Implement persistence middleware for stores
-- [ ] 4.6 Create custom hooks for data operations (useWeights, useExercises, useWeightPlan)
+- [x] 4.6 Create custom hooks for data operations (useWeights, useExercises, useWeightPlan)
 
 ## 5. Weight Tracking Feature
 
-- [ ] 5.1 Create weight input form component
-- [ ] 5.2 Implement quick weight recording on home screen
-- [ ] 5.3 Create weight history list with pagination
-- [ ] 5.4 Implement weight statistics display (avg, min, max)
-- [ ] 5.5 Integrate react-native-gifted-charts for weight trend chart
-- [ ] 5.6 Implement time range selector (7d, 30d, 90d, all)
-- [ ] 5.7 Add edit and delete functionality for weight records
-- [ ] 5.8 Create weight detail view screen
+- [x] 5.1 Create weight input form component
+- [x] 5.2 Implement quick weight recording on home screen
+- [x] 5.3 Create weight history list with pagination
+- [x] 5.4 Implement weight statistics display (avg, min, max)
+- [x] 5.5 Integrate react-native-gifted-charts for weight trend chart
+- [x] 5.6 Implement time range selector (7d, 30d, 90d, all)
+- [x] 5.7 Add edit and delete functionality for weight records
+- [x] 5.8 Create weight detail view screen
 
 ## 6. Exercise Tracking Feature
 
-- [ ] 6.1 Create exercise type selector component
-- [ ] 6.2 Implement duration input with quick-select options
-- [ ] 6.3 Add calorie calculation based on MET values
-- [ ] 6.4 Create exercise history list with date grouping
-- [ ] 6.5 Implement exercise statistics cards
-- [ ] 6.6 Create exercise record form with validation
-- [ ] 6.7 Implement edit and delete for exercise records
-- [ ] 6.8 Add exercise detail view screen
+- [x] 6.1 Create exercise type selector component
+- [x] 6.2 Implement duration input with quick-select options
+- [x] 6.3 Add calorie calculation based on MET values
+- [x] 6.4 Create exercise history list with date grouping
+- [x] 6.5 Implement exercise statistics cards
+- [x] 6.6 Create exercise record form with validation
+- [x] 6.7 Implement edit and delete for exercise records
+- [x] 6.8 Add exercise detail view screen
 
 ## 7. Weight Planning Feature
 
-- [ ] 7.1 Create weight goal creation form
-- [ ] 7.2 Implement form validation for goal inputs
-- [ ] 7.3 Create current goal display with progress bar
-- [ ] 7.4 Calculate and display progress percentage
-- [ ] 7.5 Implement goal status indicators (正常, 落后, 超前)
-- [ ] 7.6 Create goal progress chart with expected vs actual
-- [ ] 7.7 Add goal history list view
-- [ ] 7.8 Implement goal editing and deletion
+- [x] 7.1 Create weight goal creation form
+- [x] 7.2 Implement form validation for goal inputs
+- [x] 7.3 Create current goal display with progress bar
+- [x] 7.4 Calculate and display progress percentage
+- [x] 7.5 Implement goal status indicators (正常, 落后, 超前)
+- [x] 7.6 Create goal progress chart with expected vs actual
+- [x] 7.7 Add goal history list view
+- [x] 7.8 Implement goal editing and deletion
 
 ## 8. Offline Sync Feature
 
-- [ ] 8.1 Implement network status detection hook
+- [x] 8.1 Implement network status detection hook
 - [x] 8.2 Create sync service for batch operations
 - [x] 8.3 Implement pending changes tracking
-- [ ] 8.4 Create sync button with pending count badge
+- [x] 8.4 Create sync button with pending count badge
 - [x] 8.5 Implement upload of pending records to server
-- [ ] 8.6 Implement download of server records
-- [ ] 8.7 Add conflict resolution (last-write-wins)
+- [x] 8.6 Implement download of server records
+- [x] 8.7 Add conflict resolution (last-write-wins)
 - [ ] 8.8 Implement auto-sync on connection restore
-- [ ] 8.9 Create sync error handling and retry logic
-- [ ] 8.10 Add last sync time display and stale data warning
+- [x] 8.9 Create sync error handling and retry logic
+- [x] 8.10 Add last sync time display and stale data warning
 
 ## 9. Push Notifications
 
