@@ -1,0 +1,71 @@
+# Feishu Agent Configuration
+# Save as: ~/.config/feishu-agent/config.yaml
+#
+# This is the ONLY configuration file needed.
+# All settings are loaded from here - no environment variables required.
+
+# =============================================================================
+# REQUIRED: Feishu App Credentials
+# =============================================================================
+# Get these from: https://open.feishu.cn/app
+# 
+# Steps:
+# 1. Create a self-built enterprise application
+# 2. Enable "Bot" capability
+# 3. Add permissions: im:message.group_at_msg:readonly, im:message.p2p_msg:readonly, im:message:send
+# 4. Enable event subscription with "long connection" mode
+# 5. Add event: im.message.receive_v1
+# 6. Publish the app
+
+app_id: ""
+app_secret: ""
+
+# =============================================================================
+# OPTIONAL: Session Settings
+# =============================================================================
+
+# Starting port for OpenCode sessions (default: 4096)
+# Each session will use a different port: 4096, 4097, 4098, ...
+base_port: 4096
+
+# Maximum number of concurrent OpenCode sessions (default: 10)
+max_sessions: 10
+
+# Session callback timeout in seconds (default: 300)
+callback_timeout: 300
+
+# Auto-restart crashed sessions (default: false)
+auto_restart: false
+
+# =============================================================================
+# Configuration Example
+# =============================================================================
+# 
+# app_id: "cli_xxxxxxxxxxxxxxxx"
+# app_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# base_port: 4096
+# max_sessions: 10
+# callback_timeout: 300
+# auto_restart: false
+#
+# =============================================================================
+# Quick Start
+# =============================================================================
+#
+# 1. Fill in app_id and app_secret above
+# 2. Save this file
+# 3. Run: python scripts/feishu_agent.py
+#
+# That's it! No environment variables needed.
+#
+# =============================================================================
+# Usage Examples
+# =============================================================================
+#
+# In Feishu chat:
+#   @机器人 /start ~/projects/myapp
+#   @机器人 /code ~/projects/myapp implement login
+#   @机器人 /git ~/projects/myapp status
+#   @机器人 /status
+#
+# =============================================================================

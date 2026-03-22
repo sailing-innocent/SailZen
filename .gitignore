@@ -35,6 +35,7 @@ _tmp*
 .env.prod 
 .env.development
 .env.production
+*.bot.yaml
 .venv
 __pycache__
 /data
