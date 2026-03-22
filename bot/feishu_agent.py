@@ -471,7 +471,12 @@ class FeishuBotAgent:
             traceback.print_exc()
 
     def _parse_command(self, text: str, chat_id: str) -> Optional[str]:
-        """Parse command from message."""
+        """Parse command from message.
+
+        IMPORTANT: This agent uses mobile-first design. Slash commands (e.g., /start)
+        are NOT supported because typing '/' requires switching to symbol keyboard on
+        mobile devices, creating poor UX. Use natural language instead.
+        """
         import re
 
         text = re.sub(r"@_user_\d+", "", text).strip()
@@ -479,35 +484,25 @@ class FeishuBotAgent:
         if not text:
             return None
 
+        # Reject slash commands with helpful message
         if text.startswith("/"):
-            parts = text.split(maxsplit=2)
-            cmd = parts[0].lower()
-            arg1 = parts[1] if len(parts) > 1 else ""
-            arg2 = parts[2] if len(parts) > 2 else ""
-
-            handlers = {
-                "/session": self._cmd_session,
-                "/start": self._cmd_start,
-                "/stop": self._cmd_stop,
-                "/status": self._cmd_status,
-                "/list": self._cmd_list,
-                "/code": self._cmd_code,
-                "/git": self._cmd_git,
-                "/help": self._cmd_help,
-            }
-
-            handler = handlers.get(cmd)
-            if handler:
-                return handler(arg1, arg2, chat_id)
-            else:
-                return f"❓ Unknown: {cmd}\nTry /help"
+            return (
+                "❌ 不支持 / 开头的命令\n\n"
+                "在手机上输入 / 需要切换键盘，体验不佳。\n"
+                "请直接输入自然语言，例如：\n"
+                '• "启动 ~/projects/myapp"\n'
+                '• "查看状态"\n'
+                '• "停止会话"\n'
+                '• "帮我写代码 ~/projects/myapp 实现登录功能"\n\n'
+                '发送 "帮助" 查看更多信息 👇'
+            )
 
         return self._handle_natural_language(text, chat_id)
 
     def _cmd_session(self, path: str, args: str, chat_id: str) -> str:
         """Create or get a session for a path."""
         if not path:
-            return "Usage: /session <path>\nExample: /session ~/projects/myapp"
+            return "Usage: 创建会话 <path>\nExample: 创建会话 ~/projects/myapp"
 
         session = self.session_mgr.create_session(path, chat_id)
         return (
@@ -516,17 +511,15 @@ class FeishuBotAgent:
             f"ID: {session.session_id}\n"
             f"Path: {session.path}\n"
             f"Port: {session.port}\n\n"
-            f"To start: /start {session.session_id}\n"
-            f"Or: /start {path}"
+            f"To start: 启动 {session.session_id}\n"
+            f"Or: 启动 {path}"
         )
 
     def _cmd_start(self, identifier: str, args: str, chat_id: str) -> str:
         """Start OpenCode for a session."""
         if not identifier:
             # Show usage
-            return (
-                "Usage: /start <path_or_session_id>\nExample: /start ~/projects/myapp"
-            )
+            return "Usage: 启动 <path_or_session_id>\nExample: 启动 ~/projects/myapp"
 
         # Try to find session
         session = self.session_mgr.find_by_path(identifier)
@@ -603,7 +596,7 @@ class FeishuBotAgent:
     def _cmd_code(self, identifier: str, task: str, chat_id: str) -> str:
         """Request code generation."""
         if not identifier:
-            return "Usage: /code <path> <task>\nExample: /code ~/projects/myapp implement login"
+            return "Usage: 帮我写代码 <path> <task>\nExample: 帮我写代码 ~/projects/myapp 实现登录功能"
 
         # Get or create session
         session = self.session_mgr.find_by_path(identifier)
@@ -634,7 +627,7 @@ class FeishuBotAgent:
     def _cmd_git(self, args: str, extra: str, chat_id: str) -> str:
         """Execute git command."""
         if not args:
-            return "Usage: /git <path> <command>\nCommands: status, pull, commit, push\nExample: /git ~/projects/myapp status"
+            return "Usage: git<command> <path>\nCommands: git状态, git提交, git推送\nExample: git状态 ~/projects/myapp"
 
         parts = args.split(maxsplit=1)
         path = parts[0]
@@ -705,27 +698,28 @@ class FeishuBotAgent:
     def _cmd_help(self, args: str, extra: str, chat_id: str) -> str:
         """Show help."""
         return (
-            "🤖 Feishu OpenCode Agent\n"
+            "🤖 Feishu OpenCode Agent (Mobile-First Design)\n"
             "━━━━━━━━━━━━━━\n"
-            "Session Management:\n"
-            "  /session <path> - Create/get session for path\n"
-            "  /start <path> - Start OpenCode at path\n"
-            "  /stop [path] - Stop OpenCode\n"
-            "  /status [path] - Show status\n"
-            "  /list - List all sessions\n"
+            "✨ Natural Language Commands:\n"
+            "  启动 ~/projects/myapp - Start OpenCode at path\n"
+            "  停止会话 - Stop sessions\n"
+            "  查看状态 - Show status\n"
+            "  列出工作区 - List all sessions\n"
+            "  帮助 - Show this help\n"
             "\n"
-            "Code Generation:\n"
-            "  /code <path> <task> - Start and request code\n"
+            "📝 Code Generation:\n"
+            "  帮我写代码 ~/projects/myapp 实现登录功能\n"
+            "  code ~/projects/myapp implement login\n"
             "\n"
-            "Git Operations:\n"
-            "  /git <path> status - Git status\n"
-            "  /git <path> pull - Git pull\n"
-            "  /git <path> commit [msg] - Git commit\n"
-            "  /git <path> push - Git push\n"
+            "🔀 Git Operations:\n"
+            "  git状态 ~/projects/myapp - Git status\n"
+            '  git提交 ~/projects/myapp "commit message"\n'
+            "  git推送 ~/projects/myapp - Git push\n"
             "\n"
-            "Natural Language:\n"
-            "  'start ~/projects/myapp'\n"
-            "  'status' | 'list'"
+            "❌ Important:\n"
+            "  Slash commands (/start, /status) are NOT supported\n"
+            "  because they require symbol keyboard switching on mobile.\n"
+            "  Use natural language or tap card buttons instead!"
         )
 
     def _handle_natural_language(self, text: str, chat_id: str) -> str:
@@ -754,12 +748,14 @@ class FeishuBotAgent:
 
         else:
             return (
-                f"🤖 Received: {text[:50]}...\n\n"
-                f"Try:\n"
-                f"• /start ~/projects/myapp\n"
-                f"• /code ~/projects/myapp implement login\n"
-                f"• /status\n"
-                f"• /help"
+                f"🤖 收到消息: {text[:50]}...\n\n"
+                f"您可以尝试:\n"
+                f'• "启动 ~/projects/myapp"\n'
+                f'• "帮我写代码 ~/projects/myapp 实现登录功能"\n'
+                f'• "查看状态"\n'
+                f'• "帮助"\n\n'
+                f"❌ 注意: 不支持 /start, /status 等 slash 命令\n"
+                f"   在手机上输入 / 需要切换键盘，体验不佳"
             )
 
     def run(self) -> None:

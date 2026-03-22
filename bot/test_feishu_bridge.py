@@ -29,7 +29,7 @@ def test_webhook():
                 "message_id": "om_test_msg",
                 "chat_type": "p2p",
                 "message_type": "text",
-                "content": json.dumps({"text": "/status"}),
+                "content": json.dumps({"text": "查看状态"}),
             },
         },
     }
@@ -138,7 +138,8 @@ def main():
     print("1. Start server: uv run server.py --dev")
     print("2. Start agent: python bot/opencode_agent.py")
     print("3. Configure Feishu webhook to point to your server")
-    print("4. Test in Feishu: @机器人 /status")
+    print("4. Test in Feishu: @机器人 查看状态")
+    print("\nNote: Use natural language (e.g., '查看状态') instead of /status")
 
 
 if __name__ == "__main__":

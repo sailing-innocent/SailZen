@@ -278,12 +278,12 @@ class IntentRouter:
         """Try to route using deterministic patterns.
 
         Handles common commands without LLM overhead.
+
+        NOTE: Slash commands (e.g., /start) are intentionally NOT supported
+        as they require switching to symbol keyboard on mobile, creating poor UX.
+        Use natural language or card buttons instead.
         """
         text_lower = text.lower().strip()
-
-        # Slash commands
-        if text_lower.startswith("/"):
-            return self._parse_slash_command(text_lower)
 
         # Simple keyword matching for common intents
         patterns = [
@@ -345,40 +345,6 @@ class IntentRouter:
             )
 
         return None
-
-    def _parse_slash_command(self, text: str) -> IntentPlan:
-        """Parse a slash command."""
-        parts = text.split(maxsplit=1)
-        command = parts[0]
-        args = parts[1] if len(parts) > 1 else ""
-
-        command_map = {
-            "/status": ("monitoring", "status"),
-            "/start": ("session_control", "start_session"),
-            "/stop": ("session_control", "stop_session"),
-            "/restart": ("session_control", "restart_session"),
-            "/code": ("code_request", "code_request"),
-            "/git-status": ("git_operation", "git_status"),
-            "/git-pull": ("git_operation", "git_pull"),
-            "/git-commit": ("git_operation", "git_commit"),
-            "/git-push": ("git_operation", "git_push"),
-            "/help": ("navigation", "help"),
-            "/list": ("navigation", "list_workspaces"),
-        }
-
-        intent_type, action = command_map.get(command, ("unknown", "unknown"))
-
-        return IntentPlan(
-            intent_type=intent_type,
-            target_workspace=None,
-            target_session=None,
-            requested_action=action,
-            parameters={"args": args},
-            confidence=1.0,  # Slash commands have high confidence
-            risk_level=self.ACTION_RISKS.get(action, RiskLevel.SAFE),
-            requires_confirmation=action in self.CONFIRMATION_REQUIRED,
-            raw_input=text,
-        )
 
     async def _route_with_llm(
         self, text: str, sender_id: str, context: Dict[str, Any]

@@ -320,7 +320,7 @@ curl -X POST http://localhost:1974/api/v1/feishu/webhook \
         "message_id": "om_test",
         "chat_type": "p2p",
         "message_type": "text",
-        "content": "{\"text\": \"/status\"}"
+        "content": "{\"text\": \"查看状态\"}"
       }
     }
   }'
@@ -328,10 +328,12 @@ curl -X POST http://localhost:1974/api/v1/feishu/webhook \
 
 #### 7.2 在飞书中测试
 1. 打开飞书，找到配置了机器人的群组
-2. @机器人并发送指令：
+2. @机器人并发送指令（使用自然语言）：
    ```
-   @机器人 /status
+   @机器人 查看状态
    ```
+   
+   **注意**：新版系统不支持 `/status` 等 slash 命令，因为手机上输入 `/` 需要切换键盘，体验不佳。请使用自然语言如 "查看状态"、"启动工作区" 等。
 3. 查看服务器日志确认收到消息
 
 ### 8. 故障排查

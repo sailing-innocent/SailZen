@@ -108,10 +108,17 @@ projects:
 # Usage Examples
 # =============================================================================
 #
-# In Feishu chat:
-#   @机器人 /start ~/projects/myapp
-#   @机器人 /code ~/projects/myapp implement login
-#   @机器人 /git ~/projects/myapp status
-#   @机器人 /status
+# IMPORTANT: This system uses mobile-first design with natural language.
+# Slash commands (e.g., /start, /status) are NOT supported because typing '/'
+# requires switching to symbol keyboard on mobile, creating poor UX.
+#
+# In Feishu chat, use natural language or card buttons:
+#   @机器人 启动 ~/projects/myapp      (Start project)
+#   @机器人 帮我写代码 ~/projects/myapp 实现登录功能
+#   @机器人 git状态 ~/projects/myapp
+#   @机器人 查看状态
+#   @机器人 停止会话
+#
+# Or simply tap buttons on the interactive cards!
 #
 # =============================================================================

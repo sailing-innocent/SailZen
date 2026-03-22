@@ -71,10 +71,10 @@
 
 ## 10. Compatibility and rollout controls
 
-- [x] 10.1 Keep existing slash-command flows as home-host compatibility fallbacks behind a feature flag during migration
+- [x] 10.1 ~~Keep existing slash-command flows as home-host compatibility fallbacks~~ (REMOVED: slash commands intentionally not supported due to poor mobile UX - requires switching to symbol keyboard)
 - [x] 10.2 Add a shadow-mode path where the edge runtime forwards events to the server without executing remote lifecycle actions
 - [x] 10.3 Add staged rollout flags for card rendering, intent routing, desktop reconciliation, and confirmation gating
-- [x] 10.4 Define rollback behavior that returns the edge runtime to deterministic MVP command handling when server-routed orchestration is disabled
+- [x] 10.4 Define rollback behavior that returns the edge runtime to deterministic text-based natural language handling when server-routed orchestration is disabled
 
 ## 11. Validation and execution readiness
 

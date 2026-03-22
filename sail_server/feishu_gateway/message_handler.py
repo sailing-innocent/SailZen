@@ -95,45 +95,32 @@ class MessageHandler:
 
         return {"type": "text", "content": f"未识别的操作: {intent or 'unknown'}"}
 
-    # Legacy interface for backward compatibility
     async def handle_command(
         self, text: str, sender_id: str, chat_type: str
     ) -> Dict[str, Any]:
-        """Parse and execute command from message text (legacy interface)."""
+        """Parse and execute command from message text.
+
+        Note: Slash commands (e.g., /status) are NOT supported as they
+        require symbol keyboard switching on mobile, creating poor UX.
+        Use natural language (e.g., "查看状态") or card buttons instead.
+        """
         # Remove @mentions
         text = re.sub(r"@_user_\d+", "", text).strip()
 
-        # Parse command
+        # Reject slash commands with helpful message
         if text.startswith("/"):
-            return await self._handle_structured_command(text, sender_id)
-        else:
-            return await self._handle_natural_language(text, sender_id)
+            return {
+                "type": "text",
+                "content": "❌ 不支持 / 开头的命令\n\n"
+                "在手机上输入 / 需要切换键盘，体验不佳。\n"
+                "请直接输入自然语言，例如：\n"
+                '• "查看状态"\n'
+                '• "启动工作区"\n'
+                '• "停止会话"\n\n'
+                "或使用下方的快捷按钮 👇",
+            }
 
-    async def _handle_structured_command(
-        self, text: str, sender_id: str
-    ) -> Dict[str, Any]:
-        """Handle structured /commands."""
-        parts = text.split(maxsplit=1)
-        command = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ""
-
-        handlers = {
-            "/start-opencode": self._cmd_start_opencode,
-            "/stop-opencode": self._cmd_stop_opencode,
-            "/restart-opencode": self._cmd_restart_opencode,
-            "/status": self._cmd_status,
-            "/code": self._cmd_code,
-            "/git-pull": self._cmd_git_pull,
-            "/git-commit": self._cmd_git_commit,
-            "/git-push": self._cmd_git_push,
-            "/git-status": self._cmd_git_status,
-        }
-
-        handler = handlers.get(command)
-        if handler:
-            return await handler(args, sender_id)
-        else:
-            return {"type": "text", "content": f"Unknown command: {command}"}
+        return await self._handle_natural_language(text, sender_id)
 
     async def _handle_natural_language(
         self, text: str, sender_id: str
@@ -151,7 +138,12 @@ class MessageHandler:
         else:
             return {
                 "type": "text",
-                "content": "收到消息，但我暂时只能理解特定的指令。\n可用指令：/start-opencode, /status, /git-commit",
+                "content": "收到消息！您可以尝试说：\n"
+                '• "查看状态" - 查看系统状态\n'
+                '• "启动工作区" - 启动OpenCode\n'
+                '• "停止会话" - 停止当前会话\n'
+                '• "提交代码" - 提交git更改\n\n'
+                "或使用下方的快捷按钮 👇",
             }
 
     async def _cmd_start_opencode(self, args: str, sender_id: str) -> Dict[str, Any]:
@@ -206,7 +198,7 @@ class MessageHandler:
         if not args:
             return {
                 "type": "text",
-                "content": "用法: /code <描述>\n示例: /code 实现一个登录页面",
+                "content": '请描述您需要的代码功能，例如：\n"帮我实现一个用户登录页面"',
             }
 
         return {

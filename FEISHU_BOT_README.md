@@ -4,6 +4,7 @@ Universal OpenCode controller via Feishu Bot. Works with **any directory** on yo
 
 ## Features
 
+- ✅ **Mobile-first design** - Natural language and card buttons, no slash commands
 - ✅ **No project binding** - Works with any path
 - ✅ **Dynamic sessions** - Start OpenCode at any location
 - ✅ **Configuration-based** - All settings in config file
@@ -84,40 +85,71 @@ uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 
 ## Usage
 
+**Important**: This system uses a **mobile-first design** that intentionally does NOT support slash commands (e.g., `/start`, `/status`). 
+
+**Why no slash commands?** On mobile, typing `/` requires switching to the symbol keyboard, which is slow and creates poor user experience. Instead, we use:
+- **Natural language** - Just type what you want
+- **Card buttons** - Tap interactive buttons in Feishu cards
+- **Voice input** - Use your phone's voice-to-text feature
+
 ### Start OpenCode at Any Path
+
+Simply send a natural language message:
 ```
-@机器人 /start ~/projects/myapp
-@机器人 /start D:\work\project
-@机器人 /start ./relative/path
+@机器人 启动 ~/projects/myapp
+@机器人 start D:\work\project
+@机器人 打开项目 ./relative/path
 ```
+
+Or use the **Workspace Home** card buttons:
+1. Send any message to the bot to get the home card
+2. Tap "🚀 启动会话" button
+3. Select the workspace from the list
 
 ### Code Generation
 ```
-@机器人 /code ~/projects/myapp implement login page
+@机器人 帮我写代码 ~/projects/myapp implement login page
+@机器人 code request ~/projects/myapp 实现用户认证
 ```
 
 ### Git Operations
 ```
-@机器人 /git ~/projects/myapp status
-@机器人 /git ~/projects/myapp commit "Add feature"
-@机器人 /git ~/projects/myapp push
+@机器人 git状态 ~/projects/myapp
+@机器人 git提交 ~/projects/myapp "Add feature"
+@机器人 git推送 ~/projects/myapp
 ```
 
 ### Session Management
 ```
-@机器人 /status              # Show all sessions
-@机器人 /status ~/projects/myapp  # Show specific session
-@机器人 /stop               # Stop all sessions
-@机器人 /stop ~/projects/myapp    # Stop specific session
-@机器人 /list              # List all sessions
+@机器人 查看状态              # Show all sessions
+@机器人 status ~/projects/myapp  # Show specific session
+@机器人 停止会话               # Stop all sessions
+@机器人 stop ~/projects/myapp    # Stop specific session
+@机器人 列出工作区              # List all workspaces
 ```
 
-### Natural Language Commands
+### Natural Language Examples
 ```
-@机器人 start ~/projects/myapp
-@机器人 status
-@机器人 stop
-@机器人 help
+@机器人 查看状态
+@机器人 启动 ~/projects/myapp
+@机器人 停止
+@机器人 帮助
+@机器人 列出所有项目
+```
+
+## What Happens If I Type Slash Commands?
+
+If you accidentally type a slash command like `/status`, the bot will reply:
+```
+❌ 不支持 / 开头的命令
+
+在手机上输入 / 需要切换键盘，体验不佳。
+请直接输入自然语言，例如：
+• "查看状态"
+• "启动工作区"
+• "停止会话"
+
+或使用下方的快捷按钮 👇
 ```
 
 ## Configuration
@@ -182,18 +214,40 @@ uv run bot/feishu_agent.py --config bot/myconfig.bot.yaml
 python bot/feishu_agent.py -c bot/myconfig.bot.yaml
 ```
 
-## Commands
+## Interaction Patterns
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `/session <path>` | Create/get session for path | `/session ~/projects/myapp` |
-| `/start <path>` | Start OpenCode at path | `/start ~/projects/myapp` |
-| `/stop [path]` | Stop session(s) | `/stop` or `/stop ~/projects/myapp` |
-| `/status [path]` | Show status | `/status` or `/status ~/projects/myapp` |
-| `/list` | List all sessions | `/list` |
-| `/code <path> <task>` | Start and request code | `/code ~/projects/myapp implement login` |
-| `/git <path> <cmd>` | Git operations | `/git ~/projects/myapp status` |
-| `/help` | Show help | `/help` |
+### Mobile-First Design Principles
+
+1. **Natural Language First**: Just type what you want in Chinese or English
+   - ✅ "启动工作区"
+   - ✅ "查看状态"
+   - ✅ "停止会话"
+   - ❌ `/start` (not supported)
+
+2. **Card-Based Actions**: Use buttons in Feishu cards for quick actions
+   - Tap buttons instead of typing commands
+   - Visual feedback with rich cards
+
+3. **Voice Input Friendly**: Use your phone's voice-to-text
+   - Speak naturally: "启动我的前端项目"
+   - The system handles messy transcription with normalization
+
+4. **No Symbol Switching**: All interactions use regular characters
+   - No need to switch to symbol keyboard for `/`
+   - Faster input on mobile devices
+
+## Available Actions
+
+| Action | Natural Language Examples | Card Button |
+|--------|---------------------------|-------------|
+| Start Session | "启动 ~/projects/myapp", "start myapp" | 🚀 启动会话 |
+| Stop Session | "停止", "stop session" | ⏹️ 停止 |
+| View Status | "查看状态", "status" | 📊 查看状态 |
+| List Workspaces | "列出工作区", "list workspaces" | 📁 工作区列表 |
+| Code Request | "帮我写代码", "code request" | 📝 代码请求 |
+| Git Status | "git状态", "git status" | Git 状态 |
+| Git Commit | "git提交", "git commit" | Git 提交 |
+| Git Push | "git推送", "git push" | Git 推送 |
 
 ## Files
 
@@ -218,13 +272,13 @@ Includes:
 
 ### Example 1: Quick Code Generation
 ```
-@机器人 /code ~/projects/myapp implement user authentication with JWT
+@机器人 帮我写代码 ~/projects/myapp 实现用户认证
 
 📝 Code Generation
 ━━━━━━━━━━━━━━
 Path: /home/user/projects/myapp
 Port: 4096
-Task: implement user authentication with JWT
+Task: 实现用户认证
 
 OpenCode running at http://localhost:4096
 Open this URL and input your task.
@@ -232,16 +286,16 @@ Open this URL and input your task.
 
 ### Example 2: Git Workflow
 ```
-@机器人 /git ~/projects/myapp status
-@机器人 /git ~/projects/myapp commit "Add auth feature"  
-@机器人 /git ~/projects/myapp push
+@机器人 git状态 ~/projects/myapp
+@机器人 git提交 ~/projects/myapp "Add auth feature"  
+@机器人 git推送 ~/projects/myapp
 ```
 
 ### Example 3: Multi-Project
 ```
-@机器人 /start ~/projects/frontend
-@机器人 /start ~/projects/backend
-@机器人 /status
+@机器人 启动 ~/projects/frontend
+@机器人 启动 ~/projects/backend
+@机器人 查看状态
 ```
 
 ### Example 4: Server Control Plane Integration
@@ -294,6 +348,8 @@ uv run bot/test_feishu_bridge.py
 
 For detailed design decisions and architecture:
 - [openspec/changes/redesign-feishu-opencode-bridge-workflow/design.md](openspec/changes/redesign-feishu-opencode-bridge-workflow/design.md)
+
+**Important Design Decision**: This system intentionally does NOT support slash commands (e.g., `/start`, `/status`) because they require symbol keyboard switching on mobile devices, creating poor user experience. We use natural language and card buttons instead.
 
 ## License
 

@@ -234,7 +234,7 @@ Alternatives considered:
 
 - Stand up the isolated server-side datastore, migrations, and service boundaries for remote-control state.
 - Introduce the home-host edge runtime in shadow mode, using the local long-connection Feishu bot pattern to publish heartbeats, inbound Feishu events, and observed state without taking control.
-- Move `MessageHandler` behind a new edge-to-server interaction facade while keeping existing slash commands as compatibility fallbacks.
+- Move `MessageHandler` behind a new edge-to-server interaction facade. Note: Slash commands (e.g., /start) are intentionally NOT supported as they require symbol keyboard switching on mobile, creating poor UX. Use natural language or card buttons instead.
 - Enable the server-side LLM intent router first for draft normalization and recommendations/logging, then for guarded dispatch once validation quality is acceptable.
 - Roll out card-based responses for status and session cockpit views before converting destructive workflows to confirmation cards.
 - Cut over OpenCode lifecycle management from placeholder/manual guidance to desired-state reconciliation with the desktop agent.

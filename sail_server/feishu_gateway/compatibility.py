@@ -33,9 +33,9 @@ class FeatureFlag(Enum):
 class RollbackMode(Enum):
     """Rollback modes."""
 
-    FULL = "full"  # Full new system
-    HYBRID = "hybrid"  # New system with fallbacks
-    LEGACY_ONLY = "legacy_only"  # Legacy command handling only
+    FULL = "full"  # Full new system with cards and natural language
+    HYBRID = "hybrid"  # New system with simplified text fallback
+    DEGRADED = "degraded"  # Minimal functionality mode (emergency only)
 
 
 @dataclass
@@ -144,8 +144,8 @@ class CompatibilityLayer:
         """
         self._rollback_mode = mode
 
-        if mode == RollbackMode.LEGACY_ONLY:
-            # Disable all new features
+        if mode == RollbackMode.DEGRADED:
+            # Disable all new features in degraded mode
             for flag in FeatureFlag:
                 self._features[flag].enabled = False
 
@@ -153,9 +153,9 @@ class CompatibilityLayer:
         """Get current rollback mode."""
         return self._rollback_mode
 
-    def should_use_legacy_handler(self) -> bool:
-        """Check if we should use legacy command handler."""
-        return self._rollback_mode in [RollbackMode.LEGACY_ONLY, RollbackMode.HYBRID]
+    def should_use_text_fallback(self) -> bool:
+        """Check if we should use simplified text fallback."""
+        return self._rollback_mode in [RollbackMode.DEGRADED, RollbackMode.HYBRID]
 
     def register_legacy_handler(self, handler: Callable) -> None:
         """Register the legacy command handler for fallback."""

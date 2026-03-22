@@ -166,7 +166,7 @@ curl -X POST https://your-domain.com/api/v1/feishu/webhook \
         "message_id": "om_test",
         "chat_type": "p2p",
         "message_type": "text",
-        "content": "{\"text\": \"/status\"}"
+        "content": "{\"text\": \"查看状态\"}"
       }
     }
   }'
@@ -183,7 +183,11 @@ curl -X POST https://your-domain.com/api/v1/feishu/webhook \
 ### 测试3: 飞书Bot消息测试
 在飞书中:
 1. [ ] 将Bot添加到测试群组
-2. [ ] @Bot 发送: `/status`
+2. [ ] @Bot 发送自然语言指令: `查看状态`
+   
+   **注意**：新版系统不支持 `/status` 等 slash 命令（手机上输入 `/` 需切换键盘，体验差）。请使用：
+   - "查看状态"、"启动工作区"、"停止会话" 等自然语言
+   - 或点击卡片上的快捷按钮
 3. [ ] 查看服务器日志是否有请求记录
 
 检查日志:

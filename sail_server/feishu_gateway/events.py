@@ -104,6 +104,12 @@ class TextEvent(NormalizedEvent):
 
     @property
     def is_slash_command(self) -> bool:
+        """Check if text starts with slash (NOT recommended for mobile UX).
+
+        Note: Slash commands are intentionally NOT supported as they require
+        switching to symbol keyboard on mobile, creating poor UX. This property
+        is kept only to detect and reject slash commands with a helpful message.
+        """
         return self.text_normalized.strip().startswith("/")
 
 
