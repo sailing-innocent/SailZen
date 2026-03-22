@@ -5,17 +5,28 @@
 # @date 2026-03-21
 # @version 1.0
 # ---------------------------------
-"""Parse and handle user commands from Feishu messages."""
+"""Parse and handle user commands from Feishu messages.
+
+This module provides both legacy text-based command handling and
+new event-based handlers for the normalized event pipeline.
+"""
 
 import re
 import os
 import subprocess
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from .events import TextEvent, CardActionEvent
 
 
 class MessageHandler:
-    """Parse and execute user commands."""
+    """Parse and execute user commands from normalized Feishu events.
+
+    Supports both legacy text-based commands and new event-driven
+    interactions including card actions and voice-derived text.
+    """
 
     def __init__(self):
         # TODO: Load from config/Redis
@@ -23,10 +34,72 @@ class MessageHandler:
             "default": os.environ.get("OPENCODE_DEFAULT_PROJECT", "D:/ws/repos/SailZen")
         }
 
+    async def handle_text_event(self, event: "TextEvent") -> Optional[Dict[str, Any]]:
+        """Handle normalized text message events.
+
+        This is the primary entry point for text-based interactions,
+        including both direct text and voice-derived text (flagged via
+        event.is_voice_input for special normalization).
+
+        Args:
+            event: Normalized text event with cleaned text and metadata
+
+        Returns:
+            Response dict to send back to Feishu, or None if no response
+        """
+        text = event.text_normalized
+        sender_id = event.sender.open_id
+
+        # For MVP-2: Keep legacy command handling as fallback
+        # In the future, this will route through the LLM intent router
+        return await self.handle_command(
+            text=text, sender_id=sender_id, chat_type=event.chat_type
+        )
+
+    async def handle_card_action_event(
+        self, event: "CardActionEvent"
+    ) -> Optional[Dict[str, Any]]:
+        """Handle card action callback events.
+
+        Card actions represent structured user interactions like
+        button clicks, quick actions, and form submissions.
+
+        Args:
+            event: Normalized card action event with structured intent
+
+        Returns:
+            Response dict to send back to Feishu, or None if no response
+        """
+        intent = event.intent_type
+        workspace = event.target_workspace
+        session = event.target_session
+        params = event.action_parameters
+
+        # Map card actions to commands
+        action_map = {
+            "start_session": self._cmd_start_opencode,
+            "stop_session": self._cmd_stop_opencode,
+            "restart_session": self._cmd_restart_opencode,
+            "get_status": self._cmd_status,
+            "git_pull": self._cmd_git_pull,
+            "git_commit": self._cmd_git_commit,
+            "git_push": self._cmd_git_push,
+            "git_status": self._cmd_git_status,
+            "code_request": self._cmd_code,
+        }
+
+        if intent and (handler := action_map.get(intent)):
+            # Convert params to args string for legacy compatibility
+            args = params.get("args") or ""
+            return await handler(args, event.sender.open_id)
+
+        return {"type": "text", "content": f"未识别的操作: {intent or 'unknown'}"}
+
+    # Legacy interface for backward compatibility
     async def handle_command(
         self, text: str, sender_id: str, chat_type: str
     ) -> Dict[str, Any]:
-        """Parse and execute command from message text."""
+        """Parse and execute command from message text (legacy interface)."""
         # Remove @mentions
         text = re.sub(r"@_user_\d+", "", text).strip()
 
