@@ -1,4 +1,37 @@
-# Deployment Guide - SailZen with Feishu Bot
+# Deployment Guide - SailZen with Feishu Bot (Edge Runtime)
+
+> **架构说明**: 当前版本使用 **Edge Runtime 架构**，飞书 Bot 作为本地代理运行，通过长连接接收消息，无需服务器端 Webhook 配置。
+
+## 架构概览
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SERVER CONTROL PLANE                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │   Session    │  │    LLM       │  │   Event      │          │
+│  │   Registry   │  │   Router     │  │   Store      │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│                                                                 │
+│  • Durable state and orchestration                             │
+│  • Policy enforcement and audit                                │
+│  • Intent routing and action planning                          │
+│  • Event streaming and alerting                                │
+└──────────────────────────┬──────────────────────────────────────┘
+                           │ HTTPS/WebSocket (可选)
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   HOME-HOST EDGE PLANE                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │ Feishu Bot   │  │   Desktop    │  │  OpenCode    │          │
+│  │   (Lark WS)  │  │    Agent     │  │  Sessions    │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│                                                                 │
+│  • 本地飞书事件接收（长连接）                                  │
+│  • OpenCode 进程生命周期管理                                   │
+│  • 心跳和状态同步                                              │
+│  • 命令执行                                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## 快速部署（已配置环境）
 
@@ -48,37 +81,15 @@ cp .env.template .env.prod
 nano .env.prod
 ```
 
-#### 2.2 添加Feishu Bot配置（在.env.prod末尾追加）
+#### 2.2 配置数据库和其他服务
 ```bash
-cat >> .env.prod << 'EOF'
-
-# =============================================================================
-# Feishu Bot 配置 (MVP版本)
-# =============================================================================
-
-# 飞书应用凭证（从飞书开放平台获取）
-FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
-FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-FEISHU_VERIFICATION_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-FEISHU_ENCRYPT_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# OpenCode默认项目路径（用于MVP版本）
-OPENCODE_DEFAULT_PROJECT=D:/ws/repos/SailZen
-OPENCODE_PORT=4096
-
-# Feishu功能开关
-ENABLE_FEISHU_BOT=true
-EOF
+# 编辑 .env.prod，配置以下关键项：
+# - POSTGRE_URI: PostgreSQL 连接字符串
+# - LOG_MODE: 日志模式 (prod/dev/debug)
+# - 其他服务配置...
 ```
 
-#### 2.3 关键配置说明
-
-| 变量 | 获取位置 | 说明 |
-|------|---------|------|
-| `FEISHU_APP_ID` | 飞书开放平台 > 应用详情 | 应用唯一标识 |
-| `FEISHU_APP_SECRET` | 飞书开放平台 > 应用详情 > 凭证 | 应用密钥 |
-| `FEISHU_VERIFICATION_TOKEN` | 飞书开放平台 > 事件订阅 | 验证Token |
-| `FEISHU_ENCRYPT_KEY` | 飞书开放平台 > 事件订阅 > 加密策略 | 消息加密密钥 |
+**注意**: Feishu Bot 配置已移至本地配置文件，不再需要服务器端环境变量。
 
 ### 3. 飞书开放平台配置
 
@@ -100,17 +111,13 @@ EOF
    - `im:message.p2p_msg:readonly` - 接收私聊消息
    - `im:message:send` - 发送消息
 
-#### 3.4 配置事件订阅
+#### 3.4 配置事件订阅（长连接模式）
 1. 左侧菜单 > **事件与回调** > **事件订阅**
 2. 开启 **启用事件订阅**
-3. 配置 **请求地址**：
-   ```
-   https://your-domain.com/api/v1/feishu/webhook
-   ```
-   ⚠️ **重要**: 必须是HTTPS，且域名需备案
+3. 选择 **长连接** 模式（不需要配置请求地址）
+   - ⚠️ **重要**: 新版架构使用长连接模式，不需要 HTTPS 域名
 4. 添加订阅事件：
    - `im.message.receive_v1` - 接收消息
-5. 记录 **Verification Token** 和 **Encrypt Key**
 
 #### 3.5 发布应用
 1. 左侧菜单 > **版本管理与发布**
@@ -137,9 +144,6 @@ sudo ufw allow 443/tcp
 
 # 开放SailServer端口（根据你的配置）
 sudo ufw allow 1974/tcp
-
-# 如需WebSocket（后续版本）
-sudo ufw allow 8080/tcp
 ```
 
 #### 4.2 Nginx反向代理配置（HTTPS）
@@ -185,7 +189,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
         
-        # 增加超时时间（飞书Webhook可能需要）
+        # 增加超时时间
         proxy_connect_timeout 30s;
         proxy_send_timeout 30s;
         proxy_read_timeout 30s;
@@ -270,32 +274,62 @@ sudo journalctl -u sailzen.service -f
 tail -f ~/logs/sailzen.log
 ```
 
-### 6. 本地Agent配置（开发机）
+### 6. 本地 Feishu Agent 配置（开发机）
 
-#### 6.1 在本地开发机配置
+#### 6.1 复制配置文件模板
 ```bash
-# 在本地开发机（Windows/Mac）上
-# 创建配置文件
-mkdir -p ~/.config/opencode-agent
-cat > ~/.config/opencode-agent/config.yaml << 'EOF'
-cloud_url: wss://your-domain.com/ws
-pin: "123456"  # 与服务端配置的PIN一致
-project_path: "D:/ws/repos/SailZen"  # Windows路径示例
-opencode_port: 4096
-heartbeat_interval: 5
-EOF
+cd ~/repos/SailZen
+cp bot/opencode.bot.yaml bot/myconfig.bot.yaml
 ```
 
-#### 6.2 启动本地Agent
+#### 6.2 编辑配置文件
 ```bash
-# Windows
-python D:/ws/repos/SailZen/scripts/opencode_agent.py
-
-# 或Mac/Linux
-python3 ~/repos/SailZen/scripts/opencode_agent.py
+nano bot/myconfig.bot.yaml
 ```
 
-⚠️ **注意**: MVP版本需要手动启动Agent，后续版本将实现自动启动
+填写以下配置：
+```yaml
+# REQUIRED: Feishu App Credentials
+app_id: "cli_xxxxxxxxxxxxxxxx"
+app_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# OPTIONAL: Control Plane Settings (如需服务器集成)
+# control_plane_url: "https://your-server.com/api/v1/remote-dev/control-plane"
+# edge_node_key: "home-macbook-pro"
+# heartbeat_interval_seconds: 15
+
+# OPTIONAL: Session Settings
+base_port: 4096
+max_sessions: 10
+callback_timeout: 300
+auto_restart: false
+
+# OPTIONAL: Project Inventory
+projects:
+  - slug: "sailzen"
+    path: "/home/ubuntu/repos/SailZen"  # Linux/Mac 路径
+    label: "SailZen"
+  # - slug: "myproject"
+  #   path: "D:/projects/myproject"     # Windows 路径示例
+  #   label: "My Project"
+```
+
+#### 6.3 启动本地 Agent
+```bash
+# 使用 uv 运行（推荐）
+uv run bot/feishu_agent.py -c bot/myconfig.bot.yaml
+
+# 或使用 Python 直接运行
+python bot/feishu_agent.py -c bot/myconfig.bot.yaml
+```
+
+#### 6.4 后台运行（Linux/Mac）
+```bash
+# 使用 nohup
+nohup uv run bot/feishu_agent.py -c bot/myconfig.bot.yaml > logs/feishu_agent.log 2>&1 &
+
+# 或使用 systemd（推荐用于长期运行）
+```
 
 ### 7. 测试验证
 
@@ -303,46 +337,27 @@ python3 ~/repos/SailZen/scripts/opencode_agent.py
 ```bash
 # 测试健康检查
 curl https://your-domain.com/api/v1/health
-
-# 测试Feishu Webhook（本地测试）
-curl -X POST http://localhost:1974/api/v1/feishu/webhook \
-  -H "Content-Type: application/json" \
-  -d '{
-    "schema": "2.0",
-    "header": {
-      "event_id": "test-001",
-      "event_type": "im.message.receive_v1",
-      "app_id": "cli_test"
-    },
-    "event": {
-      "sender": {"sender_id": {"open_id": "ou_test"}, "sender_type": "user"},
-      "message": {
-        "message_id": "om_test",
-        "chat_type": "p2p",
-        "message_type": "text",
-        "content": "{\"text\": \"查看状态\"}"
-      }
-    }
-  }'
 ```
 
 #### 7.2 在飞书中测试
 1. 打开飞书，找到配置了机器人的群组
-2. @机器人并发送指令（使用自然语言）：
+2. @机器人并发送自然语言指令：
    ```
    @机器人 查看状态
+   @机器人 启动 ~/projects/myapp
+   @机器人 帮我写代码 ~/projects/myapp 实现用户登录
    ```
    
-   **注意**：新版系统不支持 `/status` 等 slash 命令，因为手机上输入 `/` 需要切换键盘，体验不佳。请使用自然语言如 "查看状态"、"启动工作区" 等。
-3. 查看服务器日志确认收到消息
+   **注意**：系统使用 **自然语言** 而非 slash 命令（如 `/status`），因为手机上输入 `/` 需要切换键盘，体验不佳。
+3. 查看本地 Agent 日志确认收到消息
 
 ### 8. 故障排查
 
-#### 8.1 Webhook接收不到
-- 检查Nginx日志: `sudo tail -f /var/log/nginx/error.log`
-- 检查服务日志: `sudo journalctl -u sailzen -f`
-- 确认URL可公网访问: `curl -I https://your-domain.com/api/v1/feishu/webhook`
-- 检查飞书开放平台的事件订阅配置
+#### 8.1 Agent 无法连接飞书
+- 检查 `app_id` 和 `app_secret` 是否正确
+- 确认应用已发布并通过审批
+- 检查网络连接：`curl https://open.feishu.cn`
+- 查看 Agent 日志：`tail -f logs/feishu_agent.log`
 
 #### 8.2 服务启动失败
 - 检查环境变量: `cat /home/ubuntu/repos/SailZen/.env.prod`
@@ -353,6 +368,26 @@ curl -X POST http://localhost:1974/api/v1/feishu/webhook \
 - 检查应用是否已发布并审批通过
 - 检查机器人是否已添加到群组
 - 检查权限配置是否完整
+- 确认事件订阅模式为 **长连接** 而非 **请求地址模式**
+
+#### 8.4 FeishuWebhookHandler 启动错误
+**错误信息**: `TypeError: FeishuWebhookHandler.__init__() got an unexpected keyword argument 'owner'`
+
+**原因**: Litestar 框架在注册 Controller 时会自动传递 `owner` 参数，但自定义的 `__init__` 方法未正确处理。
+
+**解决方案**: 确保 `FeishuWebhookHandler.__init__()` 方法接受 `owner` 参数并调用父类的 `__init__`：
+
+```python
+def __init__(self, owner: Router | None = None) -> None:
+    super().__init__(owner=owner)
+    # 你的初始化代码...
+```
+
+**注意**: 从 2026-03-22 版本开始，此问题已修复。如果遇到此问题，请更新代码：
+```bash
+cd ~/repos/SailZen && git pull
+sudo systemctl restart sailzen.service
+```
 
 ---
 
@@ -379,6 +414,20 @@ sudo journalctl -u sailzen.service -f -n 100
 
 ## 相关文档
 
-- [Feishu Bot配置详细指南](../changes/feishu-opencode-bridge/FEISHU_SETUP.md)
-- [MVP版本使用说明](../changes/feishu-opencode-bridge/MVP_README.md)
+- [Feishu Bot 详细使用指南](../../FEISHU_BOT_README.md)
 - [飞书开放平台文档](https://open.feishu.cn/document/)
+
+---
+
+## 版本历史
+
+### 2026-03-22 - Edge Runtime 架构
+- 迁移到 Edge Runtime 架构
+- 飞书 Bot 改为本地长连接模式
+- 移除服务器端 Webhook 依赖
+- 新增 Control Plane 集成（可选）
+
+### 2026-03-21 - MVP 版本
+- 初始版本
+- 服务器端 Webhook 接收飞书消息
+- 需要 HTTPS 域名和备案

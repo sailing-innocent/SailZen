@@ -16,7 +16,7 @@ import base64
 import hmac
 from typing import Dict, Any, Optional
 from datetime import datetime
-from litestar import Controller, post
+from litestar import Controller, Router, post
 from litestar.response import Response
 
 from .events import (
@@ -37,7 +37,8 @@ class FeishuWebhookHandler(Controller):
 
     path = "/feishu"
 
-    def __init__(self) -> None:
+    def __init__(self, owner: Router | None = None) -> None:
+        super().__init__(owner=owner)
         self.message_handler = MessageHandler()
         # TODO: Load from environment variable
         self.encrypt_key = ""
