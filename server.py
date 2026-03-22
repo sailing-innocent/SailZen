@@ -105,6 +105,7 @@ class SailServer:
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.feishu import create_feishu_router
+        from sail_server.router.control_plane import router as control_plane_router
         from sail_server.controller.outline_extraction_unified import (
             OutlineExtractionUnifiedController,
         )
@@ -113,6 +114,13 @@ class SailServer:
         from sail_server.agent import auto_register_agents
 
         auto_register_agents()
+
+        try:
+            from sail_server.control_plane.db import ControlPlaneDatabase
+
+            ControlPlaneDatabase.get_instance().create_all()
+        except Exception as e:
+            logger.warning(f"Failed to initialize control plane database: {e}")
 
         # 修复数据库序列
         try:
@@ -141,6 +149,7 @@ class SailServer:
                 unified_agent_router,
                 file_storage_router,
                 create_feishu_router(),
+                control_plane_router,
                 OutlineExtractionUnifiedController,
             ],
         )

@@ -346,6 +346,15 @@ class FeishuBotAgent:
         self.config = config
         self.session_mgr = OpenCodeSessionManager(config.base_port)
         self.client: Optional[lark.ws.Client] = None
+        self.edge_runtime = None
+
+        try:
+            from sail_server.edge_runtime import EdgeRuntime, load_edge_runtime_config
+
+            runtime_config = load_edge_runtime_config(config.config_path)
+            self.edge_runtime = EdgeRuntime(runtime_config)
+        except Exception as e:
+            print(f"⚠️ Edge runtime unavailable: {e}")
 
     def _send_message(self, chat_id: str, text: str) -> None:
         """Send text message to Feishu chat."""
@@ -421,6 +430,28 @@ class FeishuBotAgent:
                 return
 
             print(f"📩 Message from chat {chat_id[:20]}...: {text[:60]}...")
+
+            if self.edge_runtime:
+                try:
+                    sender_open_id = ""
+                    if data.event.sender and data.event.sender.sender_id:
+                        sender_open_id = data.event.sender.sender_id.open_id or ""
+                    envelope = self.edge_runtime.normalize_text_message(
+                        message_id=message.message_id
+                        or f"local-{int(datetime.now().timestamp())}",
+                        chat_id=chat_id,
+                        sender_open_id=sender_open_id,
+                        text=text,
+                        chat_type=message.chat_type or "unknown",
+                        mentions=[
+                            item.model_dump() if hasattr(item, "model_dump") else {}
+                            for item in (message.mentions or [])
+                        ],
+                    )
+                    sync_result = self.edge_runtime.forward_message(envelope)
+                    print(f"🔄 Edge sync result: {sync_result}")
+                except Exception as e:
+                    print(f"⚠️ Failed to sync inbound message to control plane: {e}")
 
             # 解析并执行命令
             response = self._parse_command(text, chat_id)
@@ -756,6 +787,9 @@ class FeishuBotAgent:
         print()
 
         try:
+            if self.edge_runtime:
+                self.edge_runtime.register_or_heartbeat()
+
             # Build event handler
             print("🔧 Building event handler...")
 
@@ -811,8 +845,12 @@ class FeishuBotAgent:
             ws_client.start()
 
         except KeyboardInterrupt:
+            if self.edge_runtime:
+                self.edge_runtime.close()
             print("\n👋 Stopped by user")
         except Exception as e:
+            if self.edge_runtime:
+                self.edge_runtime.close()
             print(f"\n❌ Fatal error: {e}")
             import traceback
 
@@ -864,6 +902,23 @@ def create_default_config(config_path: str) -> None:
 # Get from: https://open.feishu.cn/app
 app_id: ""
 app_secret: ""
+
+# Remote Control Plane
+control_plane_url: "http://127.0.0.1:8000/api/v1/remote-dev/control-plane"
+edge_node_key: "home-dev-host"
+edge_secret: ""
+host_name: ""
+runtime_version: "0.1.0"
+heartbeat_interval_seconds: 15
+request_timeout_seconds: 15
+offline_mode: false
+queue_path: "data/control_plane/edge_queue.json"
+
+# Optional project inventory
+projects:
+  - slug: "sailzen"
+    path: "D:/ws/repos/SailZen"
+    label: "SailZen"
 
 # Session Settings
 base_port: 4096        # Starting port for OpenCode sessions
