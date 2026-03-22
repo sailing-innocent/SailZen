@@ -77,7 +77,7 @@ def test_agent_standalone():
     # Start agent in background
     try:
         agent = subprocess.Popen(
-            [sys.executable, "scripts/opencode_agent.py", "--project", "."],
+            [sys.executable, "bot/opencode_agent.py", "--project", "."],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -136,7 +136,7 @@ def main():
 
     print("\nNext steps:")
     print("1. Start server: uv run server.py --dev")
-    print("2. Start agent: python scripts/opencode_agent.py")
+    print("2. Start agent: python bot/opencode_agent.py")
     print("3. Configure Feishu webhook to point to your server")
     print("4. Test in Feishu: @机器人 /status")
 

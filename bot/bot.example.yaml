@@ -1,5 +1,5 @@
-# Feishu Agent Configuration
-# Save as: ~/.config/feishu-agent/config.yaml
+# OpenCode Bot Configuration
+# Usage: uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 #
 # This is the ONLY configuration file needed.
 # All settings are loaded from here - no environment variables required.
@@ -21,6 +21,37 @@ app_id: ""
 app_secret: ""
 
 # =============================================================================
+# OPTIONAL: Control Plane Settings
+# =============================================================================
+
+# Server control plane URL (optional, for server integration)
+# control_plane_url: "http://127.0.0.1:8000/api/v1/remote-dev/control-plane"
+
+# Edge node identifier (optional)
+# edge_node_key: "home-dev-host"
+
+# Edge node secret for authentication (optional)
+# edge_secret: ""
+
+# Host name for this machine (optional, auto-detected if empty)
+# host_name: ""
+
+# Runtime version identifier (optional)
+# runtime_version: "0.1.0"
+
+# Heartbeat interval in seconds (default: 15)
+# heartbeat_interval_seconds: 15
+
+# Request timeout in seconds (default: 15)
+# request_timeout_seconds: 15
+
+# Offline mode - don't connect to control plane (default: false)
+# offline_mode: false
+
+# Queue file path for offline message buffering (optional)
+# queue_path: "data/control_plane/edge_queue.json"
+
+# =============================================================================
 # OPTIONAL: Session Settings
 # =============================================================================
 
@@ -36,6 +67,21 @@ callback_timeout: 300
 
 # Auto-restart crashed sessions (default: false)
 auto_restart: false
+
+# =============================================================================
+# OPTIONAL: Project Inventory
+# =============================================================================
+# Define your project shortcuts here for easier access
+
+projects:
+  # Example project - replace with your own
+  - slug: "sailzen"
+    path: "D:/ws/repos/SailZen"
+    label: "SailZen"
+  # Add more projects as needed:
+  # - slug: "myproject"
+  #   path: "/home/user/projects/myproject"
+  #   label: "My Project"
 
 # =============================================================================
 # Configuration Example
@@ -54,7 +100,7 @@ auto_restart: false
 #
 # 1. Fill in app_id and app_secret above
 # 2. Save this file
-# 3. Run: python scripts/feishu_agent.py
+# 3. Run: uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 #
 # That's it! No environment variables needed.
 #

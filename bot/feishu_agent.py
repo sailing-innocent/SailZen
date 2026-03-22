@@ -19,13 +19,16 @@ Features:
 - All configuration via config file (no env vars needed)
 
 Configuration:
-    ~/.config/feishu-agent/config.yaml
+    bot/opencode.bot.yaml
 
 Usage:
-    python scripts/feishu_agent.py
+    uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 
-    # Or specify custom config
-    python scripts/feishu_agent.py --config /path/to/config.yaml
+    # Or use default config location
+    uv run bot/feishu_agent.py
+
+    # Create default config
+    uv run bot/feishu_agent.py --init
 """
 
 import os
@@ -945,21 +948,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Configuration:
-  Config file: ~/.config/feishu-agent/config.yaml
+  Config file: bot/opencode.bot.yaml
   
   Required fields:
     app_id: Your Feishu App ID
     app_secret: Your Feishu App Secret
 
 Examples:
-  # Start with default config
-  python scripts/feishu_agent.py
+  # Start with explicit config (recommended)
+  uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
   
-  # Use custom config
-  python scripts/feishu_agent.py --config /path/to/config.yaml
+  # Start with default config location
+  uv run bot/feishu_agent.py
   
   # Create default config
-  python scripts/feishu_agent.py --init
+  uv run bot/feishu_agent.py --init
         """,
     )
 

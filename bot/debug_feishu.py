@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Debug script for Feishu Bot Agent
-Run with: uv run python scripts/debug_feishu.py
+Run with: uv run python bot/debug_feishu.py
 """
 
 import os
@@ -33,7 +33,7 @@ def main():
 
     if not config_path.exists():
         print("   ❌ Config file NOT FOUND")
-        print(f"   Create it with: uv run python scripts/feishu_agent.py --init")
+        print(f"   Create it with: uv run python bot/feishu_agent.py --init")
         return
 
     try:
