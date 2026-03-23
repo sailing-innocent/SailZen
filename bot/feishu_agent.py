@@ -38,6 +38,33 @@ import yaml
 import time
 import socket
 import argparse
+from pathlib import Path
+
+
+def _load_dotenv():
+    """Load environment variables from .env files."""
+    env_files = [".env", ".env.local", ".env.dev", ".env.production"]
+    for filename in env_files:
+        env_path = Path(filename)
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        if "=" in line:
+                            key, value = line.split("=", 1)
+                            key = key.strip()
+                            value = value.strip().strip("'\"")
+                            # Only set if not already in environment
+                            if key not in os.environ:
+                                os.environ[key] = value
+            except Exception:
+                pass
+
+
+_load_dotenv()
 import subprocess
 import threading
 from pathlib import Path
@@ -157,9 +184,20 @@ class OpenCodeWebClient:
 
         This call blocks until the model finishes. For long tasks set a larger
         collect_timeout (default 300s).
+
+        Handles SSE stream edge cases: session.idle vs session.completed event names
+        may vary across opencode versions. Uses robust event-name matching and
+        timeout fallback.
         """
         url = f"{self._base_url}/session/{session_id}/message"
         body = {"parts": [{"type": "text", "text": text}]}
+
+        # Initialize variables that need to be accessible in exception handlers
+        import time
+
+        start_time = time.time()
+        collected_texts: List[str] = []
+        session_completed = False
 
         try:
             with httpx.Client(timeout=collect_timeout) as client:
@@ -167,18 +205,107 @@ class OpenCodeWebClient:
                 if resp.status_code not in (200, 201):
                     return f"OpenCode API error: HTTP {resp.status_code}: {resp.text[:300]}"
 
-                data = resp.json()
-                parts = data.get("parts", [])
-                text_parts = [
-                    p.get("text", "")
-                    for p in parts
-                    if isinstance(p, dict) and p.get("type") == "text" and p.get("text")
-                ]
-                reply = "".join(text_parts).strip()
-                return reply or "(OpenCode returned an empty response)"
+                # Check if response is SSE stream
+                content_type = resp.headers.get("content-type", "")
+                if (
+                    "text/event-stream" in content_type
+                    or resp.headers.get("transfer-encoding") == "chunked"
+                ):
+                    # Handle SSE stream
+                    for line in resp.iter_lines():
+                        if time.time() - start_time > collect_timeout:
+                            break
+
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        # Parse SSE event
+                        if line.startswith("data: "):
+                            data = line[6:]  # Remove "data: " prefix
+                            try:
+                                event_data = json.loads(data)
+                            except json.JSONDecodeError:
+                                continue
+
+                            # Handle different event types with robust matching
+                            event_type = event_data.get("type", "")
+
+                            # Collect text from content events (various formats)
+                            if event_type in ("content", "text", "chunk", "delta"):
+                                content = (
+                                    event_data.get("content", "")
+                                    or event_data.get("text", "")
+                                    or event_data.get("delta", "")
+                                )
+                                if content:
+                                    collected_texts.append(content)
+
+                            # Check for completion events (various names across versions)
+                            elif event_type in (
+                                "completed",
+                                "done",
+                                "finished",
+                                "end",
+                                "session.completed",
+                            ):
+                                session_completed = True
+                                break
+
+                            # Check for idle/stop events (alternative completion signals)
+                            elif event_type in (
+                                "idle",
+                                "stopped",
+                                "session.idle",
+                                "halt",
+                            ):
+                                session_completed = True
+                                break
+
+                            # Check for error events
+                            elif event_type in ("error", "failed"):
+                                error_msg = event_data.get(
+                                    "message", event_data.get("error", "Unknown error")
+                                )
+                                return f"OpenCode error: {error_msg}"
+
+                    # Fallback: if we collected text but didn't get completion event,
+                    # return what we have (with a note if incomplete)
+                    reply = "".join(collected_texts).strip()
+                    if reply and not session_completed:
+                        return (
+                            reply
+                            + "\n\n[Response may be incomplete - timeout or stream interruption]"
+                        )
+                    return reply or "(OpenCode returned an empty response)"
+                else:
+                    # Handle regular JSON response
+                    data = resp.json()
+                    parts = data.get("parts", [])
+                    text_parts = [
+                        p.get("text", "")
+                        for p in parts
+                        if isinstance(p, dict)
+                        and p.get("type") == "text"
+                        and p.get("text")
+                    ]
+                    reply = "".join(text_parts).strip()
+                    return reply or "(OpenCode returned an empty response)"
+
         except httpx.TimeoutException:
+            # Return collected text even on timeout
+            if collected_texts:
+                reply = "".join(collected_texts).strip()
+                return (
+                    reply
+                    + f"\n\n[Response truncated - timed out after {collect_timeout}s]"
+                )
             return f"OpenCode timed out after {collect_timeout}s. The task may still be running."
         except Exception as exc:
+            # Return collected text even on error
+            if collected_texts:
+                reply = "".join(collected_texts).strip()
+                return reply + f"\n\n[Response may be incomplete - error: {exc}]"
             return f"OpenCode communication error: {exc}"
 
 
@@ -214,6 +341,9 @@ class AgentConfig:
     config_path: Optional[str] = None
     # Named project shortcuts
     projects: List[Dict[str, str]] = field(default_factory=list)
+    # LLM settings for BotBrain (optional, fallback to env vars)
+    llm_provider: Optional[str] = None
+    llm_api_key: Optional[str] = None
 
 
 class OpenCodeSessionManager:
@@ -384,16 +514,27 @@ class OpenCodeSessionManager:
         kwargs: Dict[str, Any] = {}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+            kwargs["shell"] = True  # Windows: use shell to find PATH executables
 
         print(f"[OpenCode] Starting: {' '.join(cmd)}")
         print(f"[OpenCode] Working dir: {session.path}")
+
+        # Log file for opencode output
+        log_dir = Path.home() / ".config" / "feishu-agent" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        stdout_log = open(
+            log_dir / f"opencode_{session.port}.out.log", "w", encoding="utf-8"
+        )
+        stderr_log = open(
+            log_dir / f"opencode_{session.port}.err.log", "w", encoding="utf-8"
+        )
 
         try:
             process = subprocess.Popen(
                 cmd,
                 cwd=session.path,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=stdout_log,
+                stderr=stderr_log,
                 **kwargs,
             )
             session.pid = process.pid
@@ -614,6 +755,24 @@ class ConversationContext:
     def clear_pending(self) -> None:
         self.pending = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize context to dict for persistence (excludes history and pending)."""
+        return {
+            "chat_id": self.chat_id,
+            "mode": self.mode,
+            "active_workspace": self.active_workspace,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ConversationContext":
+        """Deserialize context from dict."""
+        ctx = cls(
+            chat_id=data.get("chat_id", ""),
+            mode=data.get("mode", "idle"),
+            active_workspace=data.get("active_workspace"),
+        )
+        return ctx
+
 
 # ---------------------------------------------------------------------------
 # LLM-driven brain
@@ -685,8 +844,15 @@ class ActionPlan:
     reply: str = ""
 
 
-def _make_gateway():
-    """Build a minimal LLMGateway from environment variables."""
+def _make_gateway(
+    config_provider: Optional[str] = None, config_api_key: Optional[str] = None
+):
+    """Build a minimal LLMGateway from environment variables or config.
+
+    Args:
+        config_provider: Optional provider name from config file (e.g., "moonshot")
+        config_api_key: Optional API key from config file
+    """
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -707,25 +873,44 @@ def _make_gateway():
             "anthropic": "ANTHROPIC_API_KEY",
         }
 
+        # Default models for each provider
+        default_models = {
+            "moonshot": DEFAULT_LLM_MODEL
+            if DEFAULT_LLM_PROVIDER == "moonshot"
+            else "kimi-k2.5",
+            "openai": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            "google": os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash"),
+            "deepseek": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+            "anthropic": os.environ.get("ANTHROPIC_MODEL", "claude-3-haiku-20240307"),
+        }
+
         gw = LLMGateway()
         registered = []
+
+        # First, check if config file has explicit provider + api_key
+        if config_provider and config_api_key:
+            provider = config_provider.lower()
+            if provider in provider_env_keys:
+                model = default_models.get(provider, "")
+                cfg = ProviderConfig(
+                    provider_name=provider,
+                    model=model,
+                    api_key=config_api_key,
+                    api_base=os.environ.get(f"{provider.upper()}_API_BASE"),
+                )
+                gw.register_provider(provider, cfg)
+                registered.append(provider)
+                print(f"[BotBrain] Registered provider from config: {provider}")
+
+        # Then check environment variables for other providers
         for pname, env_key in provider_env_keys.items():
+            if pname in registered:
+                continue  # Skip if already registered from config
             key = os.environ.get(env_key, "")
             if key:
-                model_map = {
-                    "moonshot": DEFAULT_LLM_MODEL
-                    if DEFAULT_LLM_PROVIDER == "moonshot"
-                    else "kimi-k2.5",
-                    "openai": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-                    "google": os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash"),
-                    "deepseek": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
-                    "anthropic": os.environ.get(
-                        "ANTHROPIC_MODEL", "claude-3-haiku-20240307"
-                    ),
-                }
                 cfg = ProviderConfig(
                     provider_name=pname,
-                    model=model_map[pname],
+                    model=default_models[pname],
                     api_key=key,
                     api_base=os.environ.get(f"{pname.upper()}_API_BASE"),
                 )
@@ -739,11 +924,7 @@ def _make_gateway():
             if DEFAULT_LLM_PROVIDER in registered
             else registered[0]
         )
-        model = (
-            DEFAULT_LLM_MODEL
-            if primary == DEFAULT_LLM_PROVIDER
-            else model_map.get(primary, "")
-        )
+        model = default_models.get(primary, "")
         temp = float(DEFAULT_LLM_CONFIG.get("temperature", 0.7))
         return gw, primary, (model, temp)
     except Exception as exc:
@@ -760,9 +941,16 @@ class BotBrain:
 
     _CONFIRM_TTL = timedelta(minutes=5)
 
-    def __init__(self, projects: List[Dict[str, str]]):
+    def __init__(
+        self,
+        projects: List[Dict[str, str]],
+        llm_provider: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+    ):
         self.projects = projects
-        self._gw, self._provider, self._model_cfg = _make_gateway()
+        self._gw, self._provider, self._model_cfg = _make_gateway(
+            llm_provider, llm_api_key
+        )
         if self._gw:
             m, _ = self._model_cfg
             print(f"[BotBrain] LLM ready: {self._provider}/{m}")
@@ -894,12 +1082,19 @@ class BotBrain:
 class FeishuBotAgent:
     """Feishu bot that bridges messages to OpenCode web sessions."""
 
+    CONTEXT_STATE_FILE = Path.home() / ".config" / "feishu-agent" / "contexts.json"
+
     def __init__(self, config: AgentConfig):
         self.config = config
         self.session_mgr = OpenCodeSessionManager(config.base_port)
         self.lark_client: Optional[lark.Client] = None
-        self.brain = BotBrain(config.projects)
+        self.brain = BotBrain(
+            config.projects,
+            llm_provider=config.llm_provider,
+            llm_api_key=config.llm_api_key,
+        )
         self._contexts: Dict[str, ConversationContext] = {}
+        self._load_contexts()
 
     # ------------------------------------------------------------------
     # Feishu messaging
@@ -1075,6 +1270,7 @@ class FeishuBotAgent:
             if ok:
                 ctx.mode = "coding"
                 ctx.active_workspace = session.path
+                self._save_contexts()
                 return (
                     f"OpenCode 已启动\n"
                     f"  工作区: {session.path}\n"
@@ -1094,6 +1290,7 @@ class FeishuBotAgent:
                 if ok:
                     ctx.mode = "idle"
                     ctx.active_workspace = None
+                    self._save_contexts()
                 return msg
             sessions = self.session_mgr.list_sessions()
             if not sessions:
@@ -1104,6 +1301,7 @@ class FeishuBotAgent:
                 results.append(f"{Path(s.path).name}: {msg}")
             ctx.mode = "idle"
             ctx.active_workspace = None
+            self._save_contexts()
             return "已停止：\n" + "\n".join(results)
 
         if action == "send_task":
@@ -1136,6 +1334,7 @@ class FeishuBotAgent:
 
             ctx.mode = "coding"
             ctx.active_workspace = session.path
+            self._save_contexts()
 
             if not task_text:
                 return "OpenCode 已就绪，请描述你的任务。"
@@ -1185,6 +1384,40 @@ class FeishuBotAgent:
             self._send_to_chat(chat_id, text)
         except Exception:
             pass
+
+    def _load_contexts(self) -> None:
+        """Load conversation contexts from disk."""
+        if not self.CONTEXT_STATE_FILE.exists():
+            return
+        try:
+            with open(self.CONTEXT_STATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data:
+                chat_id = item.get("chat_id", "")
+                if not chat_id:
+                    continue
+                ctx = ConversationContext.from_dict(item)
+                self._contexts[chat_id] = ctx
+            if self._contexts:
+                print(
+                    f"[Context] Loaded {len(self._contexts)} conversation(s) from disk"
+                )
+        except Exception as exc:
+            print(f"[Context] Failed to load contexts: {exc}")
+
+    def _save_contexts(self) -> None:
+        """Save conversation contexts to disk (mode + active_workspace only)."""
+        try:
+            self.CONTEXT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = []
+            for chat_id, ctx in self._contexts.items():
+                # Only save contexts with active workspace or non-idle mode
+                if ctx.active_workspace or ctx.mode != "idle":
+                    data.append(ctx.to_dict())
+            with open(self.CONTEXT_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as exc:
+            print(f"[Context] Failed to save contexts: {exc}")
 
     def run(self) -> None:
         """Start the bot."""
@@ -1274,6 +1507,9 @@ def load_config(config_path: str) -> AgentConfig:
             for p in raw_projects
             if p.get("path")
         ]
+        # LLM settings (optional, fallback to environment variables)
+        config.llm_provider = data.get("llm_provider") or None
+        config.llm_api_key = data.get("llm_api_key") or None
     except Exception as exc:
         print(f"Warning: Failed to load config: {exc}")
     return config
@@ -1303,6 +1539,12 @@ base_port: 4096     # Starting port for opencode web instances
 max_sessions: 10
 callback_timeout: 300
 auto_restart: false
+
+# Optional: LLM settings for intent understanding
+# If not set, falls back to environment variables (MOONSHOT_API_KEY, etc.)
+# Supported providers: moonshot, openai, google, deepseek, anthropic
+# llm_provider: "moonshot"
+# llm_api_key: "your-api-key-here"
 """
     with open(p, "w", encoding="utf-8") as f:
         f.write(content)
