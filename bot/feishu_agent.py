@@ -1,201 +1,394 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # @file feishu_agent.py
-# @brief Generic Feishu Bot Agent - Universal OpenCode Controller
+# @brief Feishu Bot Agent - Feishu <-> OpenCode Web Bridge
 # @author sailing-innocent
-# @date 2026-03-21
-# @version 4.0
+# @date 2026-03-23
+# @version 6.0
 # ---------------------------------
-"""Generic Feishu Bot Agent - Universal OpenCode Session Manager
+"""Feishu Bot Agent - OpenCode Web Bridge with LLM-driven intent understanding.
 
-This agent provides a universal interface to control OpenCode from Feishu.
-It can start OpenCode sessions at ANY location on your computer and monitor
-callback messages.
-
-Features:
-- No project binding - works with any directory
-- Dynamic session creation at any path
-- Session monitoring and management
-- All configuration via config file (no env vars needed)
+Architecture (v6):
+  Feishu Message
+      ↓ (lark long-connection SDK)
+  FeishuBotAgent._handle_message()
+      ↓
+  BotBrain.think(text, context)     ← LLM intent recognition + confirmation logic
+      ↓
+  ActionPlan (action, params, needs_confirm)
+      ↓ (if needs_confirm: return confirmation prompt, await next message)
+  Execute action → OpenCodeSessionManager / status / help
+      ↓
+  FeishuBotAgent._reply_to_message()   ← lark SDK REST reply
 
 Configuration:
     bot/opencode.bot.yaml
 
 Usage:
     uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
-
-    # Or use default config location
-    uv run bot/feishu_agent.py
-
-    # Create default config
     uv run bot/feishu_agent.py --init
 """
 
+import asyncio
 import os
 import sys
 import json
+import re
 import yaml
+import time
+import socket
 import argparse
 import subprocess
-import hashlib
+import threading
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
-from collections import defaultdict
+from typing import Optional, Dict, Any, List, Tuple
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from collections import deque
 
 # Feishu SDK
 try:
     import lark_oapi as lark
-    from lark_oapi.api.im.v1 import *
+    from lark_oapi.api.im.v1 import (
+        CreateMessageRequest,
+        CreateMessageRequestBody,
+        ReplyMessageRequest,
+        ReplyMessageRequestBody,
+    )
 
     HAS_LARK = True
 except ImportError:
     HAS_LARK = False
-    print("❌ Error: lark-oapi not installed")
-    print("   Install: pip install lark-oapi pyyaml")
+    print("Error: lark-oapi not installed")
+    print("   Install: pip install lark-oapi pyyaml httpx")
+    sys.exit(1)
+
+try:
+    import httpx
+except ImportError:
+    print("Error: httpx not installed")
+    print("   Install: pip install httpx")
     sys.exit(1)
 
 
-@dataclass
-class SessionInfo:
-    """Information about an OpenCode session."""
+# ---------------------------------------------------------------------------
+# OpenCode Web API Client
+# ---------------------------------------------------------------------------
 
-    session_id: str
-    path: str
-    port: int
-    pid: Optional[int] = None
-    started_at: Optional[datetime] = None
-    chat_id: Optional[str] = None
-    status: str = "stopped"  # stopped, starting, running, error
+
+class OpenCodeWebClient:
+    """HTTP client for the OpenCode web/serve API.
+
+    OpenCode exposes a local Hono-based server with these key endpoints:
+      GET  /global/health              - health check
+      POST /session                    - create new session
+      GET  /session/:id                - get session details
+      POST /session/:id/message        - send task (SSE stream response)
+
+    This client handles session lifecycle and message streaming.
+    """
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 4096, timeout: int = 120):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+        self._base_url = f"http://{host}:{port}"
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
+    def is_healthy(self) -> bool:
+        """Check if opencode server is up."""
+        try:
+            with httpx.Client(timeout=5) as client:
+                resp = client.get(f"{self._base_url}/global/health")
+                return resp.status_code == 200
+        except Exception:
+            return False
+
+    def create_session(self, title: Optional[str] = None) -> Optional[str]:
+        """Create a new OpenCode session and return its ID.
+
+        POST /session
+        Body: { "title": "..." }
+        Returns: Session object with "id" field
+        """
+        body: Dict[str, Any] = {}
+        if title:
+            body["title"] = title
+
+        try:
+            with httpx.Client(timeout=30) as client:
+                resp = client.post(f"{self._base_url}/session", json=body)
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    return data.get("id")
+                print(
+                    f"[OpenCode] create_session failed: {resp.status_code} {resp.text[:200]}"
+                )
+                return None
+        except Exception as exc:
+            print(f"[OpenCode] create_session error: {exc}")
+            return None
+
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        """List all sessions on this server."""
+        try:
+            with httpx.Client(timeout=10) as client:
+                resp = client.get(f"{self._base_url}/session")
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as exc:
+            print(f"[OpenCode] list_sessions error: {exc}")
+        return []
+
+    def send_message(
+        self,
+        session_id: str,
+        text: str,
+        collect_timeout: int = 300,
+    ) -> str:
+        """Send a task message to a session and return the assistant reply.
+
+        POST /session/:id/message
+        Body: { parts: [{ type: "text", text: "..." }] }
+        Response: { info: Message, parts: Part[] }
+
+        This call blocks until the model finishes. For long tasks set a larger
+        collect_timeout (default 300s).
+        """
+        url = f"{self._base_url}/session/{session_id}/message"
+        body = {"parts": [{"type": "text", "text": text}]}
+
+        try:
+            with httpx.Client(timeout=collect_timeout) as client:
+                resp = client.post(url, json=body)
+                if resp.status_code not in (200, 201):
+                    return f"OpenCode API error: HTTP {resp.status_code}: {resp.text[:300]}"
+
+                data = resp.json()
+                parts = data.get("parts", [])
+                text_parts = [
+                    p.get("text", "")
+                    for p in parts
+                    if isinstance(p, dict) and p.get("type") == "text" and p.get("text")
+                ]
+                reply = "".join(text_parts).strip()
+                return reply or "(OpenCode returned an empty response)"
+        except httpx.TimeoutException:
+            return f"OpenCode timed out after {collect_timeout}s. The task may still be running."
+        except Exception as exc:
+            return f"OpenCode communication error: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# Session Manager
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ManagedSession:
+    """Tracks a running opencode web process and its API session."""
+
+    path: str  # workspace directory
+    port: int  # opencode server port
+    pid: Optional[int] = None  # subprocess PID
+    process_status: str = "stopped"  # stopped | starting | running | error
+    opencode_session_id: Optional[str] = None  # OpenCode API session ID
+    started_at: Optional[str] = None
+    last_error: Optional[str] = None
+    chat_id: Optional[str] = None  # Feishu chat this session was created from
 
 
 @dataclass
 class AgentConfig:
-    """Agent configuration - all settings in one place."""
+    """All agent settings."""
 
-    # Feishu credentials
     app_id: str = ""
     app_secret: str = ""
-
-    # Session settings
     base_port: int = 4096
     max_sessions: int = 10
-
-    # Callback settings
-    callback_timeout: int = 300  # seconds
+    callback_timeout: int = 300
     auto_restart: bool = False
-
-    # Config file path (auto-populated)
     config_path: Optional[str] = None
+    # Named project shortcuts
+    projects: List[Dict[str, str]] = field(default_factory=list)
 
 
 class OpenCodeSessionManager:
-    """Manages OpenCode sessions at arbitrary locations."""
+    """Manages OpenCode web processes and their API sessions.
+
+    For each workspace path, we maintain:
+    - A running `opencode web --hostname 127.0.0.1 --port <N>` subprocess
+    - An OpenCode API session created via POST /session
+    - A client for communicating with that server
+
+    Sessions persist across Feishu messages within the same process lifetime.
+    State is saved to ~/.config/feishu-agent/sessions.json for restart recovery.
+    """
+
+    STATE_FILE = Path.home() / ".config" / "feishu-agent" / "sessions.json"
 
     def __init__(self, base_port: int = 4096):
         self.base_port = base_port
-        self.sessions: Dict[str, SessionInfo] = {}
-        self.port_map: Dict[int, str] = {}  # port -> session_id
-        self._load_sessions()
+        self._sessions: Dict[str, ManagedSession] = {}
+        self._load_state()
 
-    def _generate_session_id(self, path: str) -> str:
-        """Generate unique session ID from path."""
-        path_hash = hashlib.md5(path.encode()).hexdigest()[:8]
-        return f"session_{path_hash}"
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-    def _find_free_port(self) -> int:
-        """Find next available port."""
-        port = self.base_port
-        while port in self.port_map:
-            port += 1
-        return port
+    def ensure_running(
+        self, path: str, chat_id: Optional[str] = None
+    ) -> Tuple[bool, ManagedSession, str]:
+        """Ensure an opencode web process is running for `path`.
 
-    def create_session(self, path: str, chat_id: Optional[str] = None) -> SessionInfo:
-        """Create a new session for the given path."""
+        Returns (success, session, message).
+        If already running, returns immediately.
+        If not running, starts a new process and waits for it to become healthy.
+        """
         path = str(Path(path).expanduser().resolve())
 
-        # Check if session already exists
-        session_id = self._generate_session_id(path)
-        if session_id in self.sessions:
-            return self.sessions[session_id]
+        session = self._sessions.get(path)
+        if session and self._is_port_open(session.port):
+            session.process_status = "running"
+            return True, session, f"Already running on port {session.port}"
 
-        # Create new session
-        port = self._find_free_port()
-        session = SessionInfo(
-            session_id=session_id, path=path, port=port, chat_id=chat_id
-        )
+        # Need to start or restart
+        port = self._allocate_port()
+        if session is None:
+            session = ManagedSession(path=path, port=port, chat_id=chat_id)
+            self._sessions[path] = session
+        else:
+            session.port = port
+            session.opencode_session_id = None  # reset; old session is gone
 
-        self.sessions[session_id] = session
-        self.port_map[port] = session_id
+        return self._start_process(session)
 
-        return session
-
-    def get_session(self, session_id: str) -> Optional[SessionInfo]:
-        """Get session by ID."""
-        return self.sessions.get(session_id)
-
-    def find_by_path(self, path: str) -> Optional[SessionInfo]:
-        """Find session by path."""
+    def get_or_create_opencode_session(self, path: str) -> Optional[str]:
+        """Get the OpenCode API session ID for a workspace, creating one if needed."""
         path = str(Path(path).expanduser().resolve())
-        session_id = self._generate_session_id(path)
-        return self.sessions.get(session_id)
+        session = self._sessions.get(path)
+        if not session or session.process_status != "running":
+            return None
 
-    def is_port_available(self, port: int) -> bool:
-        """Check if a port is available."""
-        import socket
+        if session.opencode_session_id:
+            return session.opencode_session_id
 
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2)
-            result = sock.connect_ex(("127.0.0.1", port))
-            sock.close()
-            return result != 0
-        except:
-            return False
+        client = OpenCodeWebClient(port=session.port)
+        title = f"Feishu session - {Path(path).name}"
+        sess_id = client.create_session(title=title)
+        if sess_id:
+            session.opencode_session_id = sess_id
+            self._save_state()
+        return sess_id
 
-    def is_session_running(self, session_id: str) -> bool:
-        """Check if a session is running."""
-        session = self.sessions.get(session_id)
+    def send_task(self, path: str, task_text: str) -> str:
+        """Send a coding task to the opencode session for `path`.
+
+        Ensures process is running, creates API session if needed,
+        then streams the response and returns the final reply text.
+        """
+        path = str(Path(path).expanduser().resolve())
+        session = self._sessions.get(path)
+
+        if not session or session.process_status != "running":
+            return f"No running session for {path}. Use '启动 {path}' first."
+
+        sess_id = self.get_or_create_opencode_session(path)
+        if not sess_id:
+            return "Failed to create OpenCode session. The server may not be ready yet."
+
+        client = OpenCodeWebClient(port=session.port)
+        print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
+        return client.send_message(sess_id, task_text)
+
+    def stop_session(self, path: str) -> Tuple[bool, str]:
+        """Stop the opencode process for a workspace."""
+        path = str(Path(path).expanduser().resolve())
+        session = self._sessions.get(path)
         if not session:
-            return False
+            return False, f"No session for {path}"
 
-        return not self.is_port_available(session.port)
+        if session.pid:
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(session.pid), "/T", "/F"],
+                        check=False,
+                        capture_output=True,
+                    )
+                else:
+                    os.kill(session.pid, 15)
+                time.sleep(1)
+            except Exception as exc:
+                session.last_error = str(exc)
 
-    def start_session(self, session_id: str) -> tuple[bool, str]:
-        """Start OpenCode for a session."""
-        session = self.sessions.get(session_id)
-        if not session:
-            return False, "❌ Session not found"
+        session.pid = None
+        session.process_status = "stopped"
+        session.opencode_session_id = None
+        self._save_state()
+        return True, "Stopped"
 
-        # Check if already running
-        if self.is_session_running(session_id):
-            return True, f"✅ Session already running on port {session.port}"
+    def get_status(self, path: Optional[str] = None) -> str:
+        """Return a human-readable status summary."""
+        if path:
+            path = str(Path(path).expanduser().resolve())
+            session = self._sessions.get(path)
+            if not session:
+                return f"No session for {path}"
+            return self._format_session(session)
 
-        # Validate path
+        if not self._sessions:
+            return "No sessions. Use '启动 <path>' to start one."
+
+        lines = ["Session Status", "=" * 40]
+        for s in self._sessions.values():
+            lines.append(self._format_session(s))
+        return "\n".join(lines)
+
+    def list_sessions(self) -> List[ManagedSession]:
+        return list(self._sessions.values())
+
+    def find_by_slug(self, slug: str, projects: List[Dict[str, str]]) -> Optional[str]:
+        """Resolve a project slug to a path from the config projects list."""
+        for p in projects:
+            if p.get("slug") == slug or p.get("label", "").lower() == slug.lower():
+                return p.get("path", "")
+        return None
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _start_process(
+        self, session: ManagedSession
+    ) -> Tuple[bool, ManagedSession, str]:
+        """Start an opencode web process for the session."""
         path = Path(session.path)
         if not path.exists():
-            return False, f"❌ Path does not exist: {session.path}"
+            session.process_status = "error"
+            session.last_error = f"Path does not exist: {session.path}"
+            return False, session, session.last_error
+
+        cmd = [
+            "opencode",
+            "web",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+            str(session.port),
+        ]
+
+        kwargs: Dict[str, Any] = {}
+        if sys.platform == "win32":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+
+        print(f"[OpenCode] Starting: {' '.join(cmd)}")
+        print(f"[OpenCode] Working dir: {session.path}")
 
         try:
-            cmd = [
-                "opencode",
-                "web",
-                "--hostname",
-                "127.0.0.1",
-                "--port",
-                str(session.port),
-            ]
-
-            print(f"🚀 Starting OpenCode session...")
-            print(f"   Path: {session.path}")
-            print(f"   Port: {session.port}")
-
-            # Start process
-            kwargs = {}
-            if sys.platform == "win32":
-                kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-
             process = subprocess.Popen(
                 cmd,
                 cwd=session.path,
@@ -203,171 +396,522 @@ class OpenCodeSessionManager:
                 stderr=subprocess.DEVNULL,
                 **kwargs,
             )
-
             session.pid = process.pid
-            session.started_at = datetime.now()
-            session.status = "starting"
+            session.process_status = "starting"
+            session.started_at = datetime.now().isoformat()
+        except FileNotFoundError:
+            session.process_status = "error"
+            session.last_error = (
+                "opencode command not found. Is it installed and in PATH?"
+            )
+            return False, session, session.last_error
+        except Exception as exc:
+            session.process_status = "error"
+            session.last_error = str(exc)
+            return False, session, session.last_error
 
-            # Wait for startup
-            import time
+        # Wait for the server to become healthy (up to 15 seconds)
+        client = OpenCodeWebClient(port=session.port)
+        for attempt in range(15):
+            time.sleep(1)
+            if client.is_healthy():
+                session.process_status = "running"
+                self._save_state()
+                msg = f"Started on port {session.port} (PID {session.pid})"
+                print(f"[OpenCode] {msg}")
+                return True, session, msg
 
-            time.sleep(3)
+        session.process_status = "error"
+        session.last_error = (
+            f"Server did not become healthy on port {session.port} after 15s"
+        )
+        return False, session, session.last_error
 
-            if self.is_session_running(session_id):
-                session.status = "running"
-                self._save_sessions()
-                return (
-                    True,
-                    f"✅ OpenCode started (PID: {process.pid}, Port: {session.port})",
-                )
-            else:
-                session.status = "error"
-                return False, f"❌ OpenCode failed to start"
-
-        except Exception as e:
-            session.status = "error"
-            return False, f"❌ Error: {e}"
-
-    def stop_session(self, session_id: str) -> tuple[bool, str]:
-        """Stop OpenCode for a session."""
-        session = self.sessions.get(session_id)
-        if not session:
-            return False, "❌ Session not found"
-
-        if not self.is_session_running(session_id):
-            session.status = "stopped"
-            return True, "ℹ️ Session is not running"
-
+    def _is_port_open(self, port: int) -> bool:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1)
         try:
-            # Try to kill by PID if available
-            if session.pid:
-                import signal
+            return sock.connect_ex(("127.0.0.1", port)) == 0
+        finally:
+            sock.close()
 
-                try:
-                    os.kill(session.pid, signal.SIGTERM)
-                    # Wait a bit
-                    import time
+    def _allocate_port(self) -> int:
+        used = {s.port for s in self._sessions.values()}
+        port = self.base_port
+        while port in used or self._is_port_open(port):
+            port += 1
+        return port
 
-                    time.sleep(2)
-
-                    # Check if still running
-                    if self.is_session_running(session_id):
-                        os.kill(session.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-
-            session.pid = None
-            session.status = "stopped"
-            self._save_sessions()
-
-            return True, f"✅ Session stopped"
-        except Exception as e:
-            return False, f"❌ Error stopping: {e}"
-
-    def get_session_status(self, session_id: str) -> str:
-        """Get human-readable status of a session."""
-        session = self.sessions.get(session_id)
-        if not session:
-            return "❌ Session not found"
-
-        running = self.is_session_running(session_id)
-        status_icon = "🟢" if running else "⚪"
-        status_text = "Running" if running else "Stopped"
-
+    def _format_session(self, s: ManagedSession) -> str:
+        running = self._is_port_open(s.port)
+        icon = "running" if running else s.process_status
         lines = [
-            f"{status_icon} Session: {session.session_id}",
-            f"   Status: {status_text}",
-            f"   Path: {session.path}",
-            f"   Port: {session.port}",
+            f"[{icon}] {s.path}",
+            f"  Port: {s.port}  PID: {s.pid}",
         ]
-
-        if session.pid:
-            lines.append(f"   PID: {session.pid}")
-        if session.started_at and running:
-            duration = datetime.now() - session.started_at
-            lines.append(f"   Duration: {duration}")
-
+        if s.opencode_session_id:
+            lines.append(f"  OpenCode session: {s.opencode_session_id}")
+        if s.last_error:
+            lines.append(f"  Last error: {s.last_error}")
         return "\n".join(lines)
 
-    def list_sessions(self) -> List[SessionInfo]:
-        """List all sessions."""
-        return list(self.sessions.values())
-
-    def get_running_sessions(self) -> List[SessionInfo]:
-        """Get all running sessions."""
-        return [
-            s for s in self.sessions.values() if self.is_session_running(s.session_id)
-        ]
-
-    def _save_sessions(self) -> None:
-        """Save sessions to state file."""
+    def _save_state(self) -> None:
         try:
-            state_file = Path.home() / ".config" / "feishu-agent" / "sessions.json"
-            state_file.parent.mkdir(parents=True, exist_ok=True)
-
+            self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
             data = []
-            for session in self.sessions.values():
+            for s in self._sessions.values():
                 data.append(
                     {
-                        "session_id": session.session_id,
-                        "path": session.path,
-                        "port": session.port,
-                        "chat_id": session.chat_id,
+                        "path": s.path,
+                        "port": s.port,
+                        "opencode_session_id": s.opencode_session_id,
+                        "chat_id": s.chat_id,
                     }
                 )
+            with open(self.STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as exc:
+            print(f"[State] Failed to save: {exc}")
 
-            with open(state_file, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to save sessions: {e}")
-
-    def _load_sessions(self) -> None:
-        """Load sessions from state file."""
+    def _load_state(self) -> None:
+        if not self.STATE_FILE.exists():
+            return
         try:
-            state_file = Path.home() / ".config" / "feishu-agent" / "sessions.json"
-            if state_file.exists():
-                with open(state_file, "r") as f:
-                    data = json.load(f)
+            with open(self.STATE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data:
+                path = item.get("path", "")
+                if not path:
+                    continue
+                s = ManagedSession(
+                    path=path,
+                    port=item.get("port", self.base_port),
+                    opencode_session_id=item.get("opencode_session_id"),
+                    chat_id=item.get("chat_id"),
+                )
+                # Check if process still running
+                if self._is_port_open(s.port):
+                    s.process_status = "running"
+                self._sessions[path] = s
+            if self._sessions:
+                print(f"[State] Loaded {len(self._sessions)} session(s) from disk")
+        except Exception as exc:
+            print(f"[State] Failed to load: {exc}")
 
-                for item in data:
-                    session = SessionInfo(
-                        session_id=item["session_id"],
-                        path=item["path"],
-                        port=item["port"],
-                        chat_id=item.get("chat_id"),
-                    )
-                    self.sessions[session.session_id] = session
-                    self.port_map[session.port] = session.session_id
-        except Exception as e:
-            print(f"⚠️ Warning: Failed to load sessions: {e}")
+
+def _extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optional[str]:
+    patterns = [
+        r"([~/][^\s]+)",
+        r"([A-Z]:[/\\][^\s]+)",
+        r"(\.[/\\][^\s]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            candidate = match.group(1)
+            try:
+                return str(Path(candidate).expanduser().resolve())
+            except Exception:
+                continue
+
+    for p in projects:
+        slug = p.get("slug", "")
+        label = p.get("label", "")
+        if slug and slug in text:
+            return p.get("path", "")
+        if label and label.lower() in text.lower():
+            return p.get("path", "")
+
+    return None
+
+
+def _resolve_path(raw: str, projects: List[Dict[str, str]]) -> Optional[str]:
+    if not raw:
+        return None
+    for p in projects:
+        if p.get("slug") == raw or p.get("label", "").lower() == raw.lower():
+            return p.get("path", "")
+    try:
+        resolved = str(Path(raw).expanduser().resolve())
+        return resolved
+    except Exception:
+        return raw or None
+
+
+# ---------------------------------------------------------------------------
+# Conversation context
+# ---------------------------------------------------------------------------
+
+_CONFIRM_WORDS = frozenset(
+    [
+        "确认",
+        "确定",
+        "是",
+        "yes",
+        "ok",
+        "好",
+        "好的",
+        "执行",
+        "继续",
+        "confirm",
+        "y",
+    ]
+)
+_CANCEL_WORDS = frozenset(
+    [
+        "取消",
+        "算了",
+        "不",
+        "no",
+        "cancel",
+        "停",
+        "别",
+        "n",
+    ]
+)
+
+_HISTORY_WINDOW = 6
+
+
+@dataclass
+class TurnRecord:
+    role: str
+    text: str
+    ts: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class PendingConfirmation:
+    action: str
+    params: Dict[str, Any]
+    summary: str
+    expires_at: datetime
+
+
+@dataclass
+class ConversationContext:
+    """Per-chat conversation state."""
+
+    chat_id: str
+    history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY_WINDOW))
+    mode: str = "idle"
+    active_workspace: Optional[str] = None
+    pending: Optional[PendingConfirmation] = None
+
+    def push(self, role: str, text: str) -> None:
+        self.history.append(TurnRecord(role=role, text=text))
+
+    def history_text(self) -> str:
+        lines = []
+        for t in self.history:
+            prefix = "User" if t.role == "user" else "Bot"
+            lines.append(f"{prefix}: {t.text}")
+        return "\n".join(lines)
+
+    def is_pending_expired(self) -> bool:
+        return self.pending is not None and datetime.now() > self.pending.expires_at
+
+    def clear_pending(self) -> None:
+        self.pending = None
+
+
+# ---------------------------------------------------------------------------
+# LLM-driven brain
+# ---------------------------------------------------------------------------
+
+_BRAIN_SYSTEM = """\
+你是一个智能飞书机器人，负责帮用户通过飞书控制本地电脑上的 OpenCode 开发环境。
+你的职责是理解用户的自然语言（可能有错别字、语音输入的口语化表达、不完整的句子），
+判断用户想做什么，并返回一个结构化的 JSON 行动计划。
+
+当前上下文：
+- mode: {mode}（idle=空闲等待, coding=正在进行开发任务）
+- active_workspace: {active_workspace}（None=未选择工作区）
+- configured_projects: {projects}
+
+对话历史（最近几轮）：
+{history}
+
+---
+用户最新消息：{user_text}
+
+---
+请返回一个 JSON 对象，格式如下：
+{{
+  "action": "<动作>",
+  "params": {{...}},
+  "confirm_required": true/false,
+  "confirm_summary": "<如需确认，展示给用户看的操作摘要>",
+  "reply": "<如果不需要执行任何动作，直接回复用户的文字>",
+  "reasoning": "<简短说明判断依据，仅供调试>"
+}}
+
+合法的 action 值：
+- "start_workspace"：启动 OpenCode，params 需含 path（绝对路径或 slug）
+- "stop_workspace"：停止会话，params 可含 path（省略则停所有）
+- "send_task"：将用户的编码请求发给 OpenCode，params 需含 task（任务描述），可含 path
+- "show_status"：查看当前所有会话状态
+- "show_help"：展示帮助
+- "chat"：普通闲聊或无法识别为开发操作，直接 reply 回复
+- "clarify"：需要更多信息才能行动，直接 reply 提问
+
+confirm_required 规则：
+- start_workspace 且 active_workspace 已在运行：false（直接重用）
+- stop_workspace：true（停止是危险操作）
+- send_task 且消息长度 > 200 字或包含可能有歧义的破坏性操作（覆盖、删除、重置）：true
+- 其余情况：false
+
+重要注意事项：
+1. 用户可能打错字，例如"帮我吃"可能是"帮我写"，请合理推断
+2. 用户说"启动项目"、"开始工作"、"打开"等都可能是 start_workspace
+3. 如果 active_workspace 已知且用户直接描述任务（如"帮我加个登录"），推断为 send_task
+4. 只返回 JSON，不要有任何多余文字
+"""
+
+_BRAIN_FALLBACK_ACTIONS = {
+    "帮助": ("show_help", {}),
+    "help": ("show_help", {}),
+    "状态": ("show_status", {}),
+    "status": ("show_status", {}),
+}
+
+
+@dataclass
+class ActionPlan:
+    action: str
+    params: Dict[str, Any] = field(default_factory=dict)
+    confirm_required: bool = False
+    confirm_summary: str = ""
+    reply: str = ""
+
+
+def _make_gateway():
+    """Build a minimal LLMGateway from environment variables."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    try:
+        from sail_server.utils.llm.gateway import LLMGateway
+        from sail_server.utils.llm.providers import ProviderConfig
+        from sail_server.utils.llm.available_providers import (
+            DEFAULT_LLM_PROVIDER,
+            DEFAULT_LLM_MODEL,
+            DEFAULT_LLM_CONFIG,
+        )
+
+        provider_env_keys = {
+            "moonshot": "MOONSHOT_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "deepseek": "DEEPSEEK_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+        }
+
+        gw = LLMGateway()
+        registered = []
+        for pname, env_key in provider_env_keys.items():
+            key = os.environ.get(env_key, "")
+            if key:
+                model_map = {
+                    "moonshot": DEFAULT_LLM_MODEL
+                    if DEFAULT_LLM_PROVIDER == "moonshot"
+                    else "kimi-k2.5",
+                    "openai": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+                    "google": os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash"),
+                    "deepseek": os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
+                    "anthropic": os.environ.get(
+                        "ANTHROPIC_MODEL", "claude-3-haiku-20240307"
+                    ),
+                }
+                cfg = ProviderConfig(
+                    provider_name=pname,
+                    model=model_map[pname],
+                    api_key=key,
+                    api_base=os.environ.get(f"{pname.upper()}_API_BASE"),
+                )
+                gw.register_provider(pname, cfg)
+                registered.append(pname)
+
+        if not registered:
+            return None, None, None
+        primary = (
+            DEFAULT_LLM_PROVIDER
+            if DEFAULT_LLM_PROVIDER in registered
+            else registered[0]
+        )
+        model = (
+            DEFAULT_LLM_MODEL
+            if primary == DEFAULT_LLM_PROVIDER
+            else model_map.get(primary, "")
+        )
+        temp = float(DEFAULT_LLM_CONFIG.get("temperature", 0.7))
+        return gw, primary, (model, temp)
+    except Exception as exc:
+        print(f"[BotBrain] Gateway init failed: {exc}")
+        return None, None, None
+
+
+class BotBrain:
+    """LLM-driven intent recognizer for the Feishu bot.
+
+    Converts raw user text + conversation context into a structured ActionPlan.
+    Falls back to deterministic keyword matching when LLM is unavailable.
+    """
+
+    _CONFIRM_TTL = timedelta(minutes=5)
+
+    def __init__(self, projects: List[Dict[str, str]]):
+        self.projects = projects
+        self._gw, self._provider, self._model_cfg = _make_gateway()
+        if self._gw:
+            m, _ = self._model_cfg
+            print(f"[BotBrain] LLM ready: {self._provider}/{m}")
+        else:
+            print("[BotBrain] No LLM API key found — falling back to keyword dispatch")
+
+    def think(self, text: str, ctx: ConversationContext) -> ActionPlan:
+        """Main entry: text + context → ActionPlan."""
+        if self._gw:
+            try:
+                return asyncio.run(self._think_llm(text, ctx))
+            except Exception as exc:
+                print(f"[BotBrain] LLM call failed, using fallback: {exc}")
+        return self._think_deterministic(text, ctx)
+
+    def build_confirmation(
+        self,
+        action: str,
+        params: Dict[str, Any],
+        summary: str,
+        ctx: ConversationContext,
+    ) -> PendingConfirmation:
+        return PendingConfirmation(
+            action=action,
+            params=params,
+            summary=summary,
+            expires_at=datetime.now() + self._CONFIRM_TTL,
+        )
+
+    def check_confirmation_reply(self, text: str) -> Optional[bool]:
+        """Return True=confirmed, False=cancelled, None=unrelated."""
+        t = text.strip().lower()
+        if t in _CONFIRM_WORDS:
+            return True
+        if t in _CANCEL_WORDS:
+            return False
+        return None
+
+    async def _think_llm(self, text: str, ctx: ConversationContext) -> ActionPlan:
+        from sail_server.utils.llm.gateway import LLMExecutionConfig
+
+        slugs = [p.get("slug", p.get("label", "")) for p in self.projects]
+        prompt = _BRAIN_SYSTEM.format(
+            mode=ctx.mode,
+            active_workspace=ctx.active_workspace or "None",
+            projects=", ".join(slugs) if slugs else "None",
+            history=ctx.history_text() or "(无历史)",
+            user_text=text,
+        )
+        model, temp = self._model_cfg
+        config = LLMExecutionConfig(
+            provider=self._provider,
+            model=model,
+            temperature=temp,
+            max_tokens=512,
+            enable_caching=False,
+        )
+        result = await self._gw.execute(prompt, config)
+        raw = result.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        return ActionPlan(
+            action=data.get("action", "chat"),
+            params=data.get("params", {}),
+            confirm_required=bool(data.get("confirm_required", False)),
+            confirm_summary=data.get("confirm_summary", ""),
+            reply=data.get("reply", ""),
+        )
+
+    def _think_deterministic(self, text: str, ctx: ConversationContext) -> ActionPlan:
+        t = text.lower().strip()
+
+        for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
+            if kw in t:
+                return ActionPlan(action=action, params=params)
+
+        if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):
+            path = _extract_path_from_text(text, self.projects)
+            return ActionPlan(action="start_workspace", params={"path": path})
+
+        if any(k in t for k in ["stop", "停止", "关闭", "结束", "kill"]):
+            path = _extract_path_from_text(text, self.projects)
+            return ActionPlan(
+                action="stop_workspace",
+                params={"path": path},
+                confirm_required=True,
+                confirm_summary=f"停止 {'所有会话' if not path else path}",
+            )
+
+        if ctx.mode == "coding" and ctx.active_workspace:
+            return ActionPlan(
+                action="send_task", params={"task": text, "path": ctx.active_workspace}
+            )
+
+        if any(
+            k in t
+            for k in [
+                "code",
+                "写",
+                "实现",
+                "帮我",
+                "task",
+                "任务",
+                "帮",
+                "修",
+                "fix",
+                "add",
+                "implement",
+            ]
+        ):
+            path = _extract_path_from_text(text, self.projects)
+            return ActionPlan(action="send_task", params={"task": text, "path": path})
+
+        return ActionPlan(
+            action="chat",
+            reply=(
+                "我理解你说的可能是一个开发任务，但我需要知道目标工作区。\n"
+                "可以说：'启动 sailzen' 或 '启动 ~/projects/myapp'"
+            ),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Main Bot Agent
+# ---------------------------------------------------------------------------
 
 
 class FeishuBotAgent:
-    """Generic Feishu Bot Agent."""
+    """Feishu bot that bridges messages to OpenCode web sessions."""
 
     def __init__(self, config: AgentConfig):
         self.config = config
         self.session_mgr = OpenCodeSessionManager(config.base_port)
-        self.client: Optional[lark.ws.Client] = None
-        self.edge_runtime = None
+        self.lark_client: Optional[lark.Client] = None
+        self.brain = BotBrain(config.projects)
+        self._contexts: Dict[str, ConversationContext] = {}
 
+    # ------------------------------------------------------------------
+    # Feishu messaging
+    # ------------------------------------------------------------------
+
+    def _send_to_chat(self, chat_id: str, text: str) -> None:
+        """Send a text message to a Feishu chat."""
+        if not self.lark_client:
+            print(f"[Feishu] (no client) Would send to {chat_id}: {text[:80]}")
+            return
         try:
-            from sail_server.edge_runtime import EdgeRuntime, load_edge_runtime_config
-
-            runtime_config = load_edge_runtime_config(config.config_path)
-            self.edge_runtime = EdgeRuntime(runtime_config)
-        except Exception as e:
-            print(f"⚠️ Edge runtime unavailable: {e}")
-
-    def _send_message(self, chat_id: str, text: str) -> None:
-        """Send text message to Feishu chat."""
-        try:
-            if not self.client:
-                print("⚠️ Client not initialized")
-                return
-
             content = json.dumps({"text": text}, ensure_ascii=False)
-
             request = (
                 CreateMessageRequest.builder()
                 .receive_id_type("chat_id")
@@ -380,613 +924,420 @@ class FeishuBotAgent:
                 )
                 .build()
             )
+            resp = self.lark_client.im.v1.message.create(request)
+            if not resp.success():
+                print(f"[Feishu] Send failed: {resp.msg}")
+        except Exception as exc:
+            print(f"[Feishu] Send error: {exc}")
 
-            response: CreateMessageResponse = self.client.im.v1.message.create(request)
+    def _reply_to_message(self, message_id: str, text: str) -> None:
+        """Reply to a specific Feishu message (thread reply)."""
+        if not self.lark_client:
+            print(f"[Feishu] (no client) Would reply to {message_id}: {text[:80]}")
+            return
+        try:
+            content = json.dumps({"text": text}, ensure_ascii=False)
+            request = (
+                ReplyMessageRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    ReplyMessageRequestBody.builder()
+                    .content(content)
+                    .msg_type("text")
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.reply(request)
+            if not resp.success():
+                print(f"[Feishu] Reply failed: {resp.msg}")
+        except Exception as exc:
+            print(f"[Feishu] Reply error: {exc}")
 
-            if not response.success():
-                print(f"⚠️ Failed to send message: {response.msg}")
-            else:
-                print(f"✅ Message sent successfully")
-
-        except Exception as e:
-            print(f"⚠️ Error sending message: {e}")
-            import traceback
-
-            traceback.print_exc()
+    # ------------------------------------------------------------------
+    # Message handling
+    # ------------------------------------------------------------------
 
     def _handle_message(self, data: lark.im.v1.P2ImMessageReceiveV1) -> None:
-        """Handle incoming message from Feishu."""
+        """Handle incoming Feishu message."""
         try:
-            # 详细调试输出
-            print(f"\n📨 [{datetime.now().strftime('%H:%M:%S')}] Received event")
-
-            # 安全检查数据结构
-            if not data or not data.event:
-                print("⚠️ Invalid data: missing event")
-                return
-
-            if not data.event.message:
-                print("⚠️ Invalid data: missing message")
+            if not data or not data.event or not data.event.message:
                 return
 
             message = data.event.message
-
-            # 检查消息类型
             if message.message_type != "text":
-                print(f"ℹ️ Ignoring non-text message: {message.message_type}")
+                print(f"[Bot] Ignoring non-text message: {message.message_type}")
                 return
 
-            # 解析消息内容
             try:
-                content_str = message.content or "{}"
-                content = json.loads(content_str)
-            except json.JSONDecodeError as e:
-                print(f"⚠️ Failed to parse message content: {e}")
-                print(f"   Raw content: {message.content}")
+                content = json.loads(message.content or "{}")
+            except json.JSONDecodeError:
                 return
 
             text = content.get("text", "").strip()
             chat_id = message.chat_id
+            message_id = message.message_id
 
-            if not chat_id:
-                print("⚠️ Missing chat_id")
+            if not text or not chat_id:
                 return
 
-            print(f"📩 Message from chat {chat_id[:20]}...: {text[:60]}...")
+            print(f"\n[Bot] Message from {chat_id}: {text[:80]}")
 
-            if self.edge_runtime:
-                try:
-                    sender_open_id = ""
-                    if data.event.sender and data.event.sender.sender_id:
-                        sender_open_id = data.event.sender.sender_id.open_id or ""
-                    envelope = self.edge_runtime.normalize_text_message(
-                        message_id=message.message_id
-                        or f"local-{int(datetime.now().timestamp())}",
-                        chat_id=chat_id,
-                        sender_open_id=sender_open_id,
-                        text=text,
-                        chat_type=message.chat_type or "unknown",
-                        mentions=[
-                            item.model_dump() if hasattr(item, "model_dump") else {}
-                            for item in (message.mentions or [])
-                        ],
-                    )
-                    sync_result = self.edge_runtime.forward_message(envelope)
-                    print(f"🔄 Edge sync result: {sync_result}")
-                except Exception as e:
-                    print(f"⚠️ Failed to sync inbound message to control plane: {e}")
+            # Handle in a background thread to avoid blocking the SDK
+            threading.Thread(
+                target=self._process_message,
+                args=(text, chat_id, message_id),
+                daemon=True,
+            ).start()
 
-            # 解析并执行命令
-            response = self._parse_command(text, chat_id)
-            if response:
-                print(f"📤 Sending response: {response[:100]}...")
-                self._send_message(chat_id, response)
-            else:
-                print("ℹ️ No response generated")
-
-        except Exception as e:
-            print(f"❌ Error handling message: {e}")
+        except Exception as exc:
+            print(f"[Bot] handle_message error: {exc}")
             import traceback
 
             traceback.print_exc()
 
-    def _parse_command(self, text: str, chat_id: str) -> Optional[str]:
-        """Parse command from message.
+    def _get_context(self, chat_id: str) -> ConversationContext:
+        if chat_id not in self._contexts:
+            self._contexts[chat_id] = ConversationContext(chat_id=chat_id)
+        ctx = self._contexts[chat_id]
+        if ctx.is_pending_expired():
+            ctx.clear_pending()
+        return ctx
 
-        IMPORTANT: This agent uses mobile-first design. Slash commands (e.g., /start)
-        are NOT supported because typing '/' requires switching to symbol keyboard on
-        mobile devices, creating poor UX. Use natural language instead.
-        """
-        import re
-
-        text = re.sub(r"@_user_\d+", "", text).strip()
-
+    def _process_message(self, text: str, chat_id: str, message_id: str) -> None:
+        """Process a message (runs in background thread)."""
+        text = re.sub(r"@\S+", "", text).strip()
         if not text:
-            return None
-
-        # Reject slash commands with helpful message
-        if text.startswith("/"):
-            return (
-                "❌ 不支持 / 开头的命令\n\n"
-                "在手机上输入 / 需要切换键盘，体验不佳。\n"
-                "请直接输入自然语言，例如：\n"
-                '• "启动 ~/projects/myapp"\n'
-                '• "查看状态"\n'
-                '• "停止会话"\n'
-                '• "帮我写代码 ~/projects/myapp 实现登录功能"\n\n'
-                '发送 "帮助" 查看更多信息 👇'
-            )
-
-        return self._handle_natural_language(text, chat_id)
-
-    def _cmd_session(self, path: str, args: str, chat_id: str) -> str:
-        """Create or get a session for a path."""
-        if not path:
-            return "Usage: 创建会话 <path>\nExample: 创建会话 ~/projects/myapp"
-
-        session = self.session_mgr.create_session(path, chat_id)
-        return (
-            f"📁 Session created/retrieved\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"ID: {session.session_id}\n"
-            f"Path: {session.path}\n"
-            f"Port: {session.port}\n\n"
-            f"To start: 启动 {session.session_id}\n"
-            f"Or: 启动 {path}"
-        )
-
-    def _cmd_start(self, identifier: str, args: str, chat_id: str) -> str:
-        """Start OpenCode for a session."""
-        if not identifier:
-            # Show usage
-            return "Usage: 启动 <path_or_session_id>\nExample: 启动 ~/projects/myapp"
-
-        # Try to find session
-        session = self.session_mgr.find_by_path(identifier)
-        if not session:
-            session = self.session_mgr.get_session(identifier)
-
-        if not session:
-            # Create new session
-            session = self.session_mgr.create_session(identifier, chat_id)
-
-        success, msg = self.session_mgr.start_session(session.session_id)
-        return msg
-
-    def _cmd_stop(self, identifier: str, args: str, chat_id: str) -> str:
-        """Stop OpenCode."""
-        if not identifier:
-            # Stop all running
-            running = self.session_mgr.get_running_sessions()
-            if not running:
-                return "ℹ️ No sessions running"
-
-            results = []
-            for session in running:
-                success, msg = self.session_mgr.stop_session(session.session_id)
-                results.append(msg)
-            return "🛑 Stopped all:\n" + "\n".join(results)
-
-        session = self.session_mgr.find_by_path(identifier)
-        if not session:
-            session = self.session_mgr.get_session(identifier)
-
-        if not session:
-            return f"❌ Session not found: {identifier}"
-
-        success, msg = self.session_mgr.stop_session(session.session_id)
-        return msg
-
-    def _cmd_status(self, identifier: str, args: str, chat_id: str) -> str:
-        """Get status."""
-        if identifier:
-            session = self.session_mgr.find_by_path(identifier)
-            if not session:
-                session = self.session_mgr.get_session(identifier)
-
-            if not session:
-                return f"❌ Session not found: {identifier}"
-
-            return self.session_mgr.get_session_status(session.session_id)
-
-        # Show all
-        sessions = self.session_mgr.list_sessions()
-        if not sessions:
-            return "ℹ️ No sessions. Create one: /session ~/projects/myapp"
-
-        lines = ["📊 All Sessions", "━━━━━━━━━━━━━━"]
-        for session in sessions:
-            running = self.session_mgr.is_session_running(session.session_id)
-            icon = "🟢" if running else "⚪"
-            lines.append(
-                f"{icon} {session.session_id[:20]}... | {session.path[:40]}... | Port: {session.port}"
-            )
-
-        running_count = len(self.session_mgr.get_running_sessions())
-        lines.append(
-            f"━━━━━━━━━━━━━━\nTotal: {len(sessions)} | Running: {running_count}"
-        )
-
-        return "\n".join(lines)
-
-    def _cmd_list(self, args: str, extra: str, chat_id: str) -> str:
-        """List sessions."""
-        return self._cmd_status("", "", chat_id)
-
-    def _cmd_code(self, identifier: str, task: str, chat_id: str) -> str:
-        """Request code generation."""
-        if not identifier:
-            return "Usage: 帮我写代码 <path> <task>\nExample: 帮我写代码 ~/projects/myapp 实现登录功能"
-
-        # Get or create session
-        session = self.session_mgr.find_by_path(identifier)
-        if not session:
-            session = self.session_mgr.get_session(identifier)
-
-        if not session:
-            session = self.session_mgr.create_session(identifier, chat_id)
-
-        # Start if not running
-        if not self.session_mgr.is_session_running(session.session_id):
-            success, msg = self.session_mgr.start_session(session.session_id)
-            if not success:
-                return f"❌ Failed to start: {msg}"
-
-        task_desc = task if task else "(no specific task)"
-
-        return (
-            f"📝 Code Generation\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"Path: {session.path}\n"
-            f"Port: {session.port}\n"
-            f"Task: {task_desc}\n\n"
-            f"OpenCode running at http://localhost:{session.port}\n"
-            f"Open this URL and input your task."
-        )
-
-    def _cmd_git(self, args: str, extra: str, chat_id: str) -> str:
-        """Execute git command."""
-        if not args:
-            return "Usage: git<command> <path>\nCommands: git状态, git提交, git推送\nExample: git状态 ~/projects/myapp"
-
-        parts = args.split(maxsplit=1)
-        path = parts[0]
-        cmd = parts[1] if len(parts) > 1 else "status"
-        message = extra if extra else ""
-
-        # Resolve path
-        try:
-            full_path = Path(path).expanduser().resolve()
-        except:
-            return f"❌ Invalid path: {path}"
-
-        if not full_path.exists():
-            return f"❌ Path not found: {full_path}"
-
-        try:
-            if cmd == "status":
-                result = subprocess.run(
-                    ["git", "status"],
-                    cwd=full_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                return f"📊 Git status:\n```\n{result.stdout[:800]}\n```"
-
-            elif cmd == "pull":
-                result = subprocess.run(
-                    ["git", "pull"],
-                    cwd=full_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                status = "✅" if result.returncode == 0 else "❌"
-                return f"{status} Pull:\n```\n{result.stdout or result.stderr}\n```"
-
-            elif cmd == "commit":
-                msg = message or "Update from Feishu"
-                subprocess.run(["git", "add", "."], cwd=full_path, capture_output=True)
-                result = subprocess.run(
-                    ["git", "commit", "-m", msg],
-                    cwd=full_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                status = "✅" if result.returncode == 0 else "⚠️"
-                return f"{status} Commit:\n```\n{result.stdout or result.stderr}\n```"
-
-            elif cmd == "push":
-                result = subprocess.run(
-                    ["git", "push"],
-                    cwd=full_path,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-                status = "✅" if result.returncode == 0 else "❌"
-                return f"{status} Push:\n```\n{result.stdout or result.stderr}\n```"
-
-            else:
-                return f"❌ Unknown: {cmd}. Try: status, pull, commit, push"
-
-        except Exception as e:
-            return f"❌ Git error: {e}"
-
-    def _cmd_help(self, args: str, extra: str, chat_id: str) -> str:
-        """Show help."""
-        return (
-            "🤖 Feishu OpenCode Agent (Mobile-First Design)\n"
-            "━━━━━━━━━━━━━━\n"
-            "✨ Natural Language Commands:\n"
-            "  启动 ~/projects/myapp - Start OpenCode at path\n"
-            "  停止会话 - Stop sessions\n"
-            "  查看状态 - Show status\n"
-            "  列出工作区 - List all sessions\n"
-            "  帮助 - Show this help\n"
-            "\n"
-            "📝 Code Generation:\n"
-            "  帮我写代码 ~/projects/myapp 实现登录功能\n"
-            "  code ~/projects/myapp implement login\n"
-            "\n"
-            "🔀 Git Operations:\n"
-            "  git状态 ~/projects/myapp - Git status\n"
-            '  git提交 ~/projects/myapp "commit message"\n'
-            "  git推送 ~/projects/myapp - Git push\n"
-            "\n"
-            "❌ Important:\n"
-            "  Slash commands (/start, /status) are NOT supported\n"
-            "  because they require symbol keyboard switching on mobile.\n"
-            "  Use natural language or tap card buttons instead!"
-        )
-
-    def _handle_natural_language(self, text: str, chat_id: str) -> str:
-        """Handle natural language."""
-        text_lower = text.lower()
-
-        if any(kw in text_lower for kw in ["start", "启动", "开启"]):
-            # Try to extract path
-            words = text.split()
-            for word in words:
-                if word.startswith("/") or word.startswith("~") or word.startswith("."):
-                    return self._cmd_start(word, "", chat_id)
-            return "Please specify a path: start ~/projects/myapp"
-
-        elif any(kw in text_lower for kw in ["stop", "停止", "关闭"]):
-            return self._cmd_stop("", "", chat_id)
-
-        elif any(kw in text_lower for kw in ["status", "状态", "情况"]):
-            return self._cmd_status("", "", chat_id)
-
-        elif any(kw in text_lower for kw in ["list", "列表", "all"]):
-            return self._cmd_list("", "", chat_id)
-
-        elif any(kw in text_lower for kw in ["help", "帮助", "?"]):
-            return self._cmd_help("", "", chat_id)
-
-        else:
-            return (
-                f"🤖 收到消息: {text[:50]}...\n\n"
-                f"您可以尝试:\n"
-                f'• "启动 ~/projects/myapp"\n'
-                f'• "帮我写代码 ~/projects/myapp 实现登录功能"\n'
-                f'• "查看状态"\n'
-                f'• "帮助"\n\n'
-                f"❌ 注意: 不支持 /start, /status 等 slash 命令\n"
-                f"   在手机上输入 / 需要切换键盘，体验不佳"
-            )
-
-    def run(self) -> None:
-        """Start the agent."""
-        print("🚀 Feishu OpenCode Agent v4.0")
-        print(f"   Config: {self.config.config_path}")
-        print(f"   Sessions: {len(self.session_mgr.list_sessions())}")
-        print()
-
-        # Check credentials
-        if not self.config.app_id or not self.config.app_secret:
-            print("❌ Error: Feishu credentials not configured")
-            print(f"   Edit config: {self.config.config_path}")
-            print()
-            print("Required settings:")
-            print("  app_id: cli_xxxxxxxx")
-            print("  app_secret: xxxxxxxxxx")
             return
 
-        # Mask credentials for display
-        app_id_display = (
-            self.config.app_id[:10] + "..."
-            if len(self.config.app_id) > 10
-            else self.config.app_id
+        ctx = self._get_context(chat_id)
+        ctx.push("user", text)
+
+        response = self._handle_with_context(text, chat_id, ctx)
+        if response:
+            ctx.push("bot", response[:200])
+            self._reply_to_message(message_id, response)
+
+    def _handle_with_context(
+        self, text: str, chat_id: str, ctx: ConversationContext
+    ) -> Optional[str]:
+        if ctx.pending:
+            decision = self.brain.check_confirmation_reply(text)
+            if decision is True:
+                plan = ActionPlan(action=ctx.pending.action, params=ctx.pending.params)
+                ctx.clear_pending()
+                return self._execute_plan(plan, chat_id, ctx)
+            elif decision is False:
+                ctx.clear_pending()
+                return "已取消。"
+            else:
+                ctx.clear_pending()
+                return "确认已超时或取消。重新发起指令即可。"
+
+        plan = self.brain.think(text, ctx)
+
+        if plan.action == "chat" or plan.action == "clarify":
+            return plan.reply or "我不太确定你的意思，能再描述一下吗？"
+
+        if plan.confirm_required:
+            ctx.pending = self.brain.build_confirmation(
+                plan.action, plan.params, plan.confirm_summary, ctx
+            )
+            return (
+                f"请确认以下操作：\n{plan.confirm_summary}\n\n"
+                "回复「确认」执行，回复「取消」放弃。（5分钟内有效）"
+            )
+
+        return self._execute_plan(plan, chat_id, ctx)
+
+    def _execute_plan(
+        self, plan: ActionPlan, chat_id: str, ctx: ConversationContext
+    ) -> str:
+        action = plan.action
+        params = plan.params
+
+        if action == "show_help":
+            return self._help()
+
+        if action == "show_status":
+            return self.session_mgr.get_status()
+
+        if action == "start_workspace":
+            raw_path = params.get("path") or ""
+            path = _resolve_path(raw_path, self.config.projects)
+            if not path:
+                running = self.session_mgr.list_sessions()
+                if running:
+                    return self.session_mgr.get_status()
+                return "请告诉我要启动哪个工作区，例如：\n  启动 ~/projects/myapp\n  启动 sailzen"
+            self._send_to_chat(chat_id, f"正在启动 {path}...")
+            ok, session, msg = self.session_mgr.ensure_running(path, chat_id)
+            if ok:
+                ctx.mode = "coding"
+                ctx.active_workspace = session.path
+                return (
+                    f"OpenCode 已启动\n"
+                    f"  工作区: {session.path}\n"
+                    f"  端口: {session.port}\n"
+                    f"  Web UI: http://127.0.0.1:{session.port}\n\n"
+                    f"现在可以直接描述你的任务，例如：\n"
+                    f"  '实现用户登录功能'\n"
+                    f"  'fix the bug in auth.py'"
+                )
+            return f"启动失败: {msg}"
+
+        if action == "stop_workspace":
+            raw_path = params.get("path") or ""
+            path = _resolve_path(raw_path, self.config.projects) if raw_path else None
+            if path:
+                ok, msg = self.session_mgr.stop_session(path)
+                if ok:
+                    ctx.mode = "idle"
+                    ctx.active_workspace = None
+                return msg
+            sessions = self.session_mgr.list_sessions()
+            if not sessions:
+                return "没有正在运行的会话。"
+            results = []
+            for s in sessions:
+                ok, msg = self.session_mgr.stop_session(s.path)
+                results.append(f"{Path(s.path).name}: {msg}")
+            ctx.mode = "idle"
+            ctx.active_workspace = None
+            return "已停止：\n" + "\n".join(results)
+
+        if action == "send_task":
+            task_text = params.get("task", "")
+            raw_path = params.get("path") or ""
+            path = _resolve_path(raw_path, self.config.projects) if raw_path else None
+
+            if not path:
+                running = [
+                    s
+                    for s in self.session_mgr.list_sessions()
+                    if s.process_status == "running"
+                ]
+                if not running:
+                    return (
+                        "没有正在运行的 OpenCode 会话。\n"
+                        "请先启动一个，例如：启动 sailzen"
+                    )
+                if len(running) == 1:
+                    path = running[0].path
+                elif ctx.active_workspace:
+                    path = ctx.active_workspace
+                else:
+                    names = [Path(s.path).name for s in running]
+                    return f"有多个会话运行中：{', '.join(names)}\n请指定工作区，例如：在 sailzen 里{task_text[:30]}"
+
+            ok, session, start_msg = self.session_mgr.ensure_running(path, chat_id)
+            if not ok:
+                return f"无法启动 OpenCode: {start_msg}"
+
+            ctx.mode = "coding"
+            ctx.active_workspace = session.path
+
+            if not task_text:
+                return "OpenCode 已就绪，请描述你的任务。"
+
+            self._send_to_chat(chat_id, f"正在处理: {task_text[:80]}...")
+            reply = self.session_mgr.send_task(path, task_text)
+            if not reply:
+                return "OpenCode 完成了任务（无文字输出）。"
+            if len(reply) > 3800:
+                reply = reply[:3800] + "\n\n…（已截断，请在 OpenCode 查看完整输出）"
+            return reply
+
+        return f"未知动作: {action}"
+
+    # ------------------------------------------------------------------
+    # Command handlers
+    # ------------------------------------------------------------------
+
+    def _help(self) -> str:
+        slugs = [p.get("slug", "") for p in self.config.projects]
+        proj_line = f"  配置的项目: {', '.join(slugs)}\n" if slugs else ""
+        llm_status = "LLM 已启用" if self.brain._gw else "LLM 未配置（关键词兜底模式）"
+        sep = "=" * 32
+        return (
+            f"Feishu OpenCode Bridge v6\n{sep}\n"
+            "直接用自然语言告诉我你想做什么：\n\n"
+            "  启动工作区：\n"
+            "    '打开 sailzen'\n"
+            "    '启动 ~/projects/myapp'\n\n"
+            "  发送编码任务：\n"
+            "    '帮我实现用户登录'\n"
+            "    'fix the bug in auth.py'\n"
+            "    '在 sailzen 里加一个健康检查接口'\n\n"
+            "  管理会话：\n"
+            "    '查看状态'\n"
+            "    '停止所有会话'\n\n"
+            f"{proj_line}"
+            f"[{llm_status}]"
         )
-        print(f"🔑 App ID: {app_id_display}")
-        print(f"🔑 App Secret: {'*' * min(len(self.config.app_secret), 10)}...")
-        print()
+
+    # ------------------------------------------------------------------
+    # Utilities
+    # ------------------------------------------------------------------
+
+    def _send_interim(self, chat_id: str, text: str) -> None:
+        try:
+            self._send_to_chat(chat_id, text)
+        except Exception:
+            pass
+
+    def run(self) -> None:
+        """Start the bot."""
+        print("Feishu OpenCode Bridge v5.0")
+        print(f"  Config: {self.config.config_path}")
+
+        if not self.config.app_id or not self.config.app_secret:
+            print("Error: Feishu credentials not configured")
+            print(f"  Edit: {self.config.config_path}")
+            return
+
+        print(f"  App ID: {self.config.app_id[:10]}...")
+        if self.config.projects:
+            slugs = [p.get("slug", "") for p in self.config.projects]
+            print(f"  Projects: {', '.join(slugs)}")
+
+        # Create the lark REST client (for sending messages)
+        self.lark_client = (
+            lark.Client.builder()
+            .app_id(self.config.app_id)
+            .app_secret(self.config.app_secret)
+            .build()
+        )
+
+        # Build event handler
+        event_handler = (
+            lark.EventDispatcherHandler.builder("", "")
+            .register_p2_im_message_receive_v1(self._handle_message)
+            .build()
+        )
+
+        # WebSocket client (long connection, for receiving events)
+        ws_client = lark.ws.Client(
+            self.config.app_id,
+            self.config.app_secret,
+            event_handler=event_handler,
+            log_level=lark.LogLevel.INFO,
+        )
+
+        print("Connecting to Feishu (long connection)...")
+        print("Send '帮助' in Feishu to see available commands.")
+        print("(Ctrl+C to stop)\n")
 
         try:
-            if self.edge_runtime:
-                self.edge_runtime.register_or_heartbeat()
-
-            # Build event handler
-            print("🔧 Building event handler...")
-
-            # 添加一个通用的拦截器来捕获所有事件
-            def debug_interceptor(data):
-                print(f"\n🐛 [INTERCEPTOR] Raw event received!")
-                print(f"   Type: {type(data)}")
-                try:
-                    print(f"   Data: {str(data)[:200]}...")
-                except:
-                    print(f"   Data: <cannot stringify>")
-
-            event_handler = (
-                lark.EventDispatcherHandler.builder("", "")
-                .register_p2_im_message_receive_v1(self._handle_message)
-                .register_p1_customized_event(
-                    "im.message.receive_v1", debug_interceptor
-                )  # 也注册v1事件
-                .build()
-            )
-            print("✅ Event handler registered")
-
-            # Create client
-            print("🔧 Creating WebSocket client...")
-            self.client = (
-                lark.Client.builder()
-                .app_id(self.config.app_id)
-                .app_secret(self.config.app_secret)
-                .log_level(lark.LogLevel.DEBUG)
-                .build()
-            )
-
-            ws_client = lark.ws.Client(
-                self.config.app_id,
-                self.config.app_secret,
-                event_handler=event_handler,
-                log_level=lark.LogLevel.DEBUG,
-            )
-            print("✅ Client created")
-
-            print()
-            print(f"✅ Agent ready")
-            print(f"   Sessions: {len(self.session_mgr.list_sessions())}")
-            print("🔗 Connecting to Feishu...")
-            print("   Waiting for messages...")
-            print("   (Ctrl+C to stop)")
-            print()
-            print("💡 Tip: If you don't see messages after sending in Feishu,")
-            print("   check that 'im.message.receive_v1' event is subscribed")
-            print("   and the app is published with proper permissions.")
-            print()
-
             ws_client.start()
-
         except KeyboardInterrupt:
-            if self.edge_runtime:
-                self.edge_runtime.close()
-            print("\n👋 Stopped by user")
-        except Exception as e:
-            if self.edge_runtime:
-                self.edge_runtime.close()
-            print(f"\n❌ Fatal error: {e}")
+            print("\nStopped by user")
+        except Exception as exc:
+            print(f"\nFatal error: {exc}")
             import traceback
 
             traceback.print_exc()
+
+
+# ---------------------------------------------------------------------------
+# Config loading
+# ---------------------------------------------------------------------------
 
 
 def get_default_config_path() -> str:
-    """Get default config path."""
     if sys.platform == "win32":
         return str(Path.home() / "AppData" / "Roaming" / "feishu-agent" / "config.yaml")
-    else:
-        return str(Path.home() / ".config" / "feishu-agent" / "config.yaml")
+    return str(Path.home() / ".config" / "feishu-agent" / "config.yaml")
 
 
 def load_config(config_path: str) -> AgentConfig:
-    """Load configuration from file."""
     config = AgentConfig(config_path=config_path)
-
-    if not Path(config_path).exists():
+    p = Path(config_path)
+    if not p.exists():
         return config
-
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-
-        if data:
-            config.app_id = data.get("app_id", "")
-            config.app_secret = data.get("app_secret", "")
-            config.base_port = data.get("base_port", 4096)
-            config.max_sessions = data.get("max_sessions", 10)
-            config.callback_timeout = data.get("callback_timeout", 300)
-            config.auto_restart = data.get("auto_restart", False)
-
-    except Exception as e:
-        print(f"⚠️ Warning: Failed to load config: {e}")
-
+        with open(p, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+        config.app_id = data.get("app_id", "")
+        config.app_secret = data.get("app_secret", "")
+        config.base_port = data.get("base_port", 4096)
+        config.max_sessions = data.get("max_sessions", 10)
+        config.callback_timeout = data.get("callback_timeout", 300)
+        config.auto_restart = data.get("auto_restart", False)
+        raw_projects = data.get("projects", [])
+        config.projects = [
+            {
+                "slug": p.get("slug", ""),
+                "path": p.get("path", ""),
+                "label": p.get("label", ""),
+            }
+            for p in raw_projects
+            if p.get("path")
+        ]
+    except Exception as exc:
+        print(f"Warning: Failed to load config: {exc}")
     return config
 
 
 def create_default_config(config_path: str) -> None:
-    """Create default config file."""
-    config_dir = Path(config_path).parent
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    default_content = """# Feishu Agent Configuration
-# Save as: ~/.config/feishu-agent/config.yaml
+    p = Path(config_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    content = """\
+# Feishu OpenCode Bridge Configuration
+# Usage: uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 
 # Feishu App Credentials (Required)
 # Get from: https://open.feishu.cn/app
 app_id: ""
 app_secret: ""
 
-# Remote Control Plane
-control_plane_url: "http://127.0.0.1:8000/api/v1/remote-dev/control-plane"
-edge_node_key: "home-dev-host"
-edge_secret: ""
-host_name: ""
-runtime_version: "0.1.0"
-heartbeat_interval_seconds: 15
-request_timeout_seconds: 15
-offline_mode: false
-queue_path: "data/control_plane/edge_queue.json"
-
-# Optional project inventory
+# Optional: Named project shortcuts
+# Use slug in Feishu: '启动 sailzen'
 projects:
   - slug: "sailzen"
-    path: "D:/ws/repos/SailZen"
+    path: "~/repos/SailZen"
     label: "SailZen"
 
-# Session Settings
-base_port: 4096        # Starting port for OpenCode sessions
-max_sessions: 10       # Maximum concurrent sessions
-callback_timeout: 300  # Session callback timeout (seconds)
-auto_restart: false    # Auto-restart crashed sessions
-
-# Example configuration:
-# app_id: "cli_xxxxxxxx"
-# app_secret: "xxxxxxxxxxxxxxxx"
+# Session settings
+base_port: 4096     # Starting port for opencode web instances
+max_sessions: 10
+callback_timeout: 300
+auto_restart: false
 """
-
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write(default_content)
-
-    print(f"✅ Created default config: {config_path}")
-    print("   Please edit and add your Feishu credentials.")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"Created config: {config_path}")
+    print("Please edit and add your Feishu credentials.")
 
 
-def main():
-    """Main entry point."""
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Feishu OpenCode Agent - Universal Session Manager",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Configuration:
-  Config file: bot/opencode.bot.yaml
-  
-  Required fields:
-    app_id: Your Feishu App ID
-    app_secret: Your Feishu App Secret
-
-Examples:
-  # Start with explicit config (recommended)
-  uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
-  
-  # Start with default config location
-  uv run bot/feishu_agent.py
-  
-  # Create default config
-  uv run bot/feishu_agent.py --init
-        """,
+        description="Feishu OpenCode Bridge - Connect Feishu messages to OpenCode sessions"
     )
-
     parser.add_argument(
         "--config", "-c", default=get_default_config_path(), help="Config file path"
     )
     parser.add_argument(
-        "--init", action="store_true", help="Create default config file and exit"
+        "--init", action="store_true", help="Create default config and exit"
     )
-
     args = parser.parse_args()
 
-    # Init mode
     if args.init:
         create_default_config(args.config)
         return
 
-    # Load config
-    config = load_config(args.config)
-
-    # Check if config exists
     if not Path(args.config).exists():
-        print("❌ Config file not found")
+        print(f"Config not found: {args.config}")
         create_default_config(args.config)
         print(f"\nPlease edit: {args.config}")
         return
 
-    # Run agent
+    config = load_config(args.config)
     agent = FeishuBotAgent(config)
     agent.run()
 
