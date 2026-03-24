@@ -3,8 +3,8 @@
 # @file feishu_agent.py
 # @brief Feishu Bot Agent - Feishu <-> OpenCode Web Bridge
 # @author sailing-innocent
-# @date 2026-03-23
-# @version 6.0
+# @date 2026-03-24
+# @version 7.0
 # ---------------------------------
 """Feishu Bot Agent - OpenCode Web Bridge with LLM-driven intent understanding.
 
@@ -79,6 +79,8 @@ try:
     from lark_oapi.api.im.v1 import (
         CreateMessageRequest,
         CreateMessageRequestBody,
+        PatchMessageRequest,
+        PatchMessageRequestBody,
         ReplyMessageRequest,
         ReplyMessageRequestBody,
     )
@@ -96,6 +98,28 @@ except ImportError:
     print("Error: httpx not installed")
     print("   Install: pip install httpx")
     sys.exit(1)
+
+import sys as _sys
+
+_sys.path.insert(0, str(Path(__file__).parent))
+from card_renderer import (
+    CardColor,
+    CardMessageTracker,
+    CardRenderer,
+    card_to_feishu_content,
+    text_fallback,
+)
+from session_state import (
+    ActiveOperation,
+    ConfirmationManager,
+    OperationTracker,
+    PendingAction,
+    RiskLevel,
+    SessionHealthMonitor,
+    SessionState,
+    SessionStateStore,
+    classify_risk,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -360,9 +384,12 @@ class OpenCodeSessionManager:
 
     STATE_FILE = Path.home() / ".config" / "feishu-agent" / "sessions.json"
 
-    def __init__(self, base_port: int = 4096):
+    def __init__(
+        self, base_port: int = 4096, state_store: Optional["SessionStateStore"] = None
+    ):
         self.base_port = base_port
         self._sessions: Dict[str, ManagedSession] = {}
+        self._state_store = state_store
         self._load_state()
 
     # ------------------------------------------------------------------
@@ -383,6 +410,7 @@ class OpenCodeSessionManager:
         session = self._sessions.get(path)
         if session and self._is_port_open(session.port):
             session.process_status = "running"
+            self._sync_state(path, "running", port=session.port, pid=session.pid)
             return True, session, f"Already running on port {session.port}"
 
         # Need to start or restart
@@ -392,7 +420,11 @@ class OpenCodeSessionManager:
             self._sessions[path] = session
         else:
             session.port = port
-            session.opencode_session_id = None  # reset; old session is gone
+            session.opencode_session_id = None
+
+        if self._state_store:
+            entry = self._state_store.get_or_create(path, chat_id)
+            self._state_store.transition(path, SessionState.STARTING, port=port)
 
         return self._start_process(session)
 
@@ -441,6 +473,8 @@ class OpenCodeSessionManager:
         if not session:
             return False, f"No session for {path}"
 
+        self._sync_state(path, "stopping")
+
         if session.pid:
             try:
                 if sys.platform == "win32":
@@ -459,6 +493,7 @@ class OpenCodeSessionManager:
         session.process_status = "stopped"
         session.opencode_session_id = None
         self._save_state()
+        self._sync_state(path, "stopped")
         return True, "Stopped"
 
     def get_status(self, path: Optional[str] = None) -> str:
@@ -500,6 +535,7 @@ class OpenCodeSessionManager:
         if not path.exists():
             session.process_status = "error"
             session.last_error = f"Path does not exist: {session.path}"
+            self._sync_state(session.path, "error", last_error=session.last_error)
             return False, session, session.last_error
 
         cmd = [
@@ -514,12 +550,11 @@ class OpenCodeSessionManager:
         kwargs: Dict[str, Any] = {}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-            kwargs["shell"] = True  # Windows: use shell to find PATH executables
+            kwargs["shell"] = True
 
         print(f"[OpenCode] Starting: {' '.join(cmd)}")
         print(f"[OpenCode] Working dir: {session.path}")
 
-        # Log file for opencode output
         log_dir = Path.home() / ".config" / "feishu-agent" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         stdout_log = open(
@@ -545,19 +580,23 @@ class OpenCodeSessionManager:
             session.last_error = (
                 "opencode command not found. Is it installed and in PATH?"
             )
+            self._sync_state(session.path, "error", last_error=session.last_error)
             return False, session, session.last_error
         except Exception as exc:
             session.process_status = "error"
             session.last_error = str(exc)
+            self._sync_state(session.path, "error", last_error=session.last_error)
             return False, session, session.last_error
 
-        # Wait for the server to become healthy (up to 15 seconds)
         client = OpenCodeWebClient(port=session.port)
         for attempt in range(15):
             time.sleep(1)
             if client.is_healthy():
                 session.process_status = "running"
                 self._save_state()
+                self._sync_state(
+                    session.path, "running", port=session.port, pid=session.pid
+                )
                 msg = f"Started on port {session.port} (PID {session.pid})"
                 print(f"[OpenCode] {msg}")
                 return True, session, msg
@@ -566,7 +605,31 @@ class OpenCodeSessionManager:
         session.last_error = (
             f"Server did not become healthy on port {session.port} after 15s"
         )
+        self._sync_state(session.path, "error", last_error=session.last_error)
         return False, session, session.last_error
+
+    def _sync_state(self, path: str, status: str, **kwargs: Any) -> None:
+        if not self._state_store:
+            return
+        try:
+            state_map = {
+                "idle": SessionState.IDLE,
+                "starting": SessionState.STARTING,
+                "running": SessionState.RUNNING,
+                "stopping": SessionState.STOPPING,
+                "error": SessionState.ERROR,
+                "stopped": SessionState.IDLE,
+            }
+            target = state_map.get(status, SessionState.IDLE)
+            entry = self._state_store.get(path)
+            if entry is None:
+                return
+            if entry.state != target:
+                self._state_store.transition(path, target, **kwargs)
+            elif kwargs:
+                self._state_store.force_set(path, target, **kwargs)
+        except Exception as exc:
+            print(f"[SessionState] Sync error: {exc}")
 
     def _is_port_open(self, port: int) -> bool:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1086,7 +1149,14 @@ class FeishuBotAgent:
 
     def __init__(self, config: AgentConfig):
         self.config = config
-        self.session_mgr = OpenCodeSessionManager(config.base_port)
+        self.state_store = SessionStateStore()
+        self.state_store.load_from_disk()
+        self.session_mgr = OpenCodeSessionManager(
+            config.base_port, state_store=self.state_store
+        )
+        self.op_tracker = OperationTracker()
+        self.confirm_mgr = ConfirmationManager()
+        self.card_tracker = CardMessageTracker()
         self.lark_client: Optional[lark.Client] = None
         self.brain = BotBrain(
             config.projects,
@@ -1095,6 +1165,12 @@ class FeishuBotAgent:
         )
         self._contexts: Dict[str, ConversationContext] = {}
         self._load_contexts()
+        self._health_monitor = SessionHealthMonitor(
+            self.state_store,
+            health_check_fn=self._health_check_fn,
+            auto_restart=config.auto_restart,
+        )
+        self.state_store.register_hook(self._on_state_change)
 
     # ------------------------------------------------------------------
     # Feishu messaging
@@ -1148,6 +1224,144 @@ class FeishuBotAgent:
                 print(f"[Feishu] Reply failed: {resp.msg}")
         except Exception as exc:
             print(f"[Feishu] Reply error: {exc}")
+
+    def _send_card(
+        self,
+        chat_id: str,
+        card: dict,
+        card_type: str = "",
+        context: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Send an interactive card to a chat. Returns message_id on success."""
+        if not self.lark_client:
+            print(
+                f"[Feishu] (no client) Would send card to {chat_id}: {card.get('header', {}).get('title', {}).get('content', '')}"
+            )
+            return None
+        try:
+            content = card_to_feishu_content(card)
+            request = (
+                CreateMessageRequest.builder()
+                .receive_id_type("chat_id")
+                .request_body(
+                    CreateMessageRequestBody.builder()
+                    .receive_id(chat_id)
+                    .msg_type("interactive")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.create(request)
+            if resp.success() and resp.data and resp.data.message_id:
+                mid = resp.data.message_id
+                if card_type:
+                    self.card_tracker.register(mid, card_type, context or {})
+                return mid
+            else:
+                print(f"[Feishu] Card send failed: {resp.msg}")
+                self._send_to_chat(chat_id, text_fallback(card))
+                return None
+        except Exception as exc:
+            print(f"[Feishu] Card send error: {exc}")
+            try:
+                self._send_to_chat(chat_id, text_fallback(card))
+            except Exception:
+                pass
+            return None
+
+    def _reply_card(
+        self,
+        message_id: str,
+        card: dict,
+        card_type: str = "",
+        context: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Reply with an interactive card to a specific message. Returns message_id on success."""
+        if not self.lark_client:
+            print(f"[Feishu] (no client) Would reply card to {message_id}")
+            return None
+        try:
+            content = card_to_feishu_content(card)
+            request = (
+                ReplyMessageRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    ReplyMessageRequestBody.builder()
+                    .content(content)
+                    .msg_type("interactive")
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.reply(request)
+            if resp.success() and resp.data and resp.data.message_id:
+                mid = resp.data.message_id
+                if card_type:
+                    self.card_tracker.register(mid, card_type, context or {})
+                return mid
+            else:
+                print(f"[Feishu] Card reply failed: {resp.msg}")
+                self._reply_to_message(message_id, text_fallback(card))
+                return None
+        except Exception as exc:
+            print(f"[Feishu] Card reply error: {exc}")
+            try:
+                self._reply_to_message(message_id, text_fallback(card))
+            except Exception:
+                pass
+            return None
+
+    def _update_card(self, message_id: str, card: dict) -> bool:
+        """Update an existing card message in-place (1.2.1)."""
+        if not self.lark_client:
+            print(f"[Feishu] (no client) Would update card {message_id}")
+            return False
+        try:
+            content = card_to_feishu_content(card)
+            request = (
+                PatchMessageRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    PatchMessageRequestBody.builder().content(content).build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.patch(request)
+            if not resp.success():
+                print(f"[Feishu] Card update failed: {resp.msg}")
+                return False
+            return True
+        except Exception as exc:
+            print(f"[Feishu] Card update error: {exc}")
+            return False
+
+    def _health_check_fn(self, path: str, port: int) -> bool:
+        client = OpenCodeWebClient(port=port)
+        return client.is_healthy()
+
+    def _on_state_change(
+        self,
+        path: str,
+        prev: SessionState,
+        next_state: SessionState,
+        entry: Any,
+    ) -> None:
+        if next_state == SessionState.ERROR:
+            session = self.session_mgr._sessions.get(path)
+            chat_id = (session.chat_id if session else None) or getattr(
+                entry, "chat_id", None
+            )
+            if chat_id:
+                card = CardRenderer.session_status(
+                    path=path,
+                    state="error",
+                    last_error=getattr(entry, "last_error", None) or "会话异常终止",
+                    activities=entry.recent_activities()
+                    if hasattr(entry, "recent_activities")
+                    else [],
+                )
+                self._send_card(chat_id, card, "session_status", {"path": path})
 
     # ------------------------------------------------------------------
     # Message handling
@@ -1208,101 +1422,245 @@ class FeishuBotAgent:
         ctx = self._get_context(chat_id)
         ctx.push("user", text)
 
-        response = self._handle_with_context(text, chat_id, ctx)
-        if response:
-            ctx.push("bot", response[:200])
-            self._reply_to_message(message_id, response)
+        self._dispatch_message(text, chat_id, message_id, ctx)
 
-    def _handle_with_context(
-        self, text: str, chat_id: str, ctx: ConversationContext
-    ) -> Optional[str]:
+    def _dispatch_message(
+        self, text: str, chat_id: str, message_id: str, ctx: ConversationContext
+    ) -> None:
+        force_flag = "--force" in text or "强制" in text
+
         if ctx.pending:
             decision = self.brain.check_confirmation_reply(text)
             if decision is True:
                 plan = ActionPlan(action=ctx.pending.action, params=ctx.pending.params)
                 ctx.clear_pending()
-                return self._execute_plan(plan, chat_id, ctx)
+                self._execute_plan_with_card(plan, chat_id, message_id, ctx)
+                return
             elif decision is False:
                 ctx.clear_pending()
-                return "已取消。"
+                card = CardRenderer.result("已取消", "操作已取消。", success=False)
+                self._reply_card(message_id, card)
+                ctx.push("bot", "已取消")
+                return
             else:
                 ctx.clear_pending()
-                return "确认已超时或取消。重新发起指令即可。"
+                self._reply_to_message(message_id, "确认已超时，请重新发起指令。")
+                return
+
+        pending_id = self._find_pending_id_from_text(text)
+        if pending_id:
+            pending = self.confirm_mgr.consume(pending_id)
+            if pending:
+                plan = ActionPlan(action=pending.action, params=pending.params)
+                self._execute_plan_with_card(plan, chat_id, message_id, ctx)
+                return
 
         plan = self.brain.think(text, ctx)
 
-        if plan.action == "chat" or plan.action == "clarify":
-            return plan.reply or "我不太确定你的意思，能再描述一下吗？"
+        if plan.action in ("chat", "clarify"):
+            reply = plan.reply or "我不太确定你的意思，能再描述一下吗？"
+            ctx.push("bot", reply[:200])
+            self._reply_to_message(message_id, reply)
+            return
 
-        if plan.confirm_required:
-            ctx.pending = self.brain.build_confirmation(
-                plan.action, plan.params, plan.confirm_summary, ctx
+        task_text = plan.params.get("task", "")
+        has_running = any(
+            s.process_status == "running" for s in self.session_mgr.list_sessions()
+        )
+        risk = classify_risk(plan.action, task_text, has_running)
+
+        if (
+            risk == RiskLevel.CONFIRM_REQUIRED
+            and not force_flag
+            and not self.confirm_mgr.should_bypass(plan.action)
+        ):
+            pending = self.confirm_mgr.create(
+                action=plan.action,
+                params=plan.params,
+                summary=plan.confirm_summary or plan.action,
+                risk_level=risk,
+                can_undo=(plan.action == "stop_workspace"),
             )
-            return (
-                f"请确认以下操作：\n{plan.confirm_summary}\n\n"
-                "回复「确认」执行，回复「取消」放弃。（5分钟内有效）"
+            ctx.pending = PendingConfirmation(
+                action=plan.action,
+                params=plan.params,
+                summary=pending.summary,
+                expires_at=datetime.now() + self.brain._CONFIRM_TTL,
             )
+            card = CardRenderer.confirmation(
+                action_summary=pending.summary,
+                risk_level=risk.value,
+                can_undo=pending.can_undo,
+                pending_id=pending.pending_id,
+            )
+            self._reply_card(
+                message_id, card, "confirmation", {"pending_id": pending.pending_id}
+            )
+            ctx.push("bot", "需要确认: " + pending.summary)
+            return
 
-        return self._execute_plan(plan, chat_id, ctx)
+        if risk == RiskLevel.GUARDED and not force_flag:
+            running_count = sum(
+                1
+                for s in self.session_mgr.list_sessions()
+                if s.process_status == "running"
+            )
+            if running_count >= 3:
+                card = CardRenderer.result(
+                    "资源提示",
+                    "当前已有 "
+                    + str(running_count)
+                    + " 个会话运行中，继续启动可能影响性能。\n回复「确认」继续，或「取消」放弃。",
+                    success=False,
+                )
+                ctx.pending = PendingConfirmation(
+                    action=plan.action,
+                    params=plan.params,
+                    summary="在资源紧张时启动新会话",
+                    expires_at=datetime.now() + self.brain._CONFIRM_TTL,
+                )
+                self._reply_card(message_id, card)
+                return
 
-    def _execute_plan(
-        self, plan: ActionPlan, chat_id: str, ctx: ConversationContext
-    ) -> str:
+        self._execute_plan_with_card(plan, chat_id, message_id, ctx)
+
+    def _find_pending_id_from_text(self, text: str) -> Optional[str]:
+        import re as _re
+
+        m = _re.search(r"pending_id[=:]\s*([a-f0-9]{12})", text)
+        return m.group(1) if m else None
+
+    def _execute_plan_with_card(
+        self, plan: ActionPlan, chat_id: str, message_id: str, ctx: ConversationContext
+    ) -> None:
         action = plan.action
         params = plan.params
 
         if action == "show_help":
-            return self._help()
+            self._reply_to_message(message_id, self._help())
+            return
 
         if action == "show_status":
-            return self.session_mgr.get_status()
+            sessions = self.session_mgr.list_sessions()
+            session_dicts = [
+                {
+                    "path": s.path,
+                    "state": s.process_status,
+                    "port": s.port,
+                }
+                for s in sessions
+            ]
+            card = CardRenderer.all_sessions(session_dicts)
+            self._reply_card(message_id, card, "all_sessions")
+            ctx.push("bot", "状态已显示")
+            return
 
         if action == "start_workspace":
             raw_path = params.get("path") or ""
             path = _resolve_path(raw_path, self.config.projects)
             if not path:
-                running = self.session_mgr.list_sessions()
-                if running:
-                    return self.session_mgr.get_status()
-                return "请告诉我要启动哪个工作区，例如：\n  启动 ~/projects/myapp\n  启动 sailzen"
-            self._send_to_chat(chat_id, f"正在启动 {path}...")
-            ok, session, msg = self.session_mgr.ensure_running(path, chat_id)
-            if ok:
-                ctx.mode = "coding"
-                ctx.active_workspace = session.path
-                self._save_contexts()
-                return (
-                    f"OpenCode 已启动\n"
-                    f"  工作区: {session.path}\n"
-                    f"  端口: {session.port}\n"
-                    f"  Web UI: http://127.0.0.1:{session.port}\n\n"
-                    f"现在可以直接描述你的任务，例如：\n"
-                    f"  '实现用户登录功能'\n"
-                    f"  'fix the bug in auth.py'"
+                projects = self.config.projects
+                state_map: Dict[str, str] = {}
+                for s in self.session_mgr.list_sessions():
+                    state_map[s.path] = s.process_status
+                card = CardRenderer.workspace_selection(
+                    projects, session_states=state_map
                 )
-            return f"启动失败: {msg}"
+                self._reply_card(message_id, card, "workspace_selection")
+                return
+
+            self.state_store.get_or_create(path, chat_id)
+            op_id = self.op_tracker.start(path, "启动 " + Path(path).name, timeout=30.0)
+            progress_card = CardRenderer.progress(
+                "正在启动 " + Path(path).name, "初始化 OpenCode 服务..."
+            )
+            prog_mid = self._reply_card(
+                message_id, progress_card, "progress", {"op_id": op_id, "path": path}
+            )
+
+            def do_start() -> None:
+                ok, session, msg = self.session_mgr.ensure_running(path, chat_id)
+                self.op_tracker.finish(op_id)
+                if ok:
+                    ctx.mode = "coding"
+                    ctx.active_workspace = session.path
+                    self._save_contexts()
+                    entry = self.state_store.get(path)
+                    activities = entry.recent_activities() if entry else []
+                    result_card = CardRenderer.session_status(
+                        path=session.path,
+                        state="running",
+                        port=session.port,
+                        pid=session.pid,
+                        activities=activities,
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, result_card)
+                    else:
+                        self._send_card(
+                            chat_id, result_card, "session_status", {"path": path}
+                        )
+                    ctx.push("bot", "OpenCode 已启动: " + session.path)
+                else:
+                    err_card = CardRenderer.error(
+                        "启动失败",
+                        msg,
+                        context_path=path,
+                        retry_action={"action": "start_workspace", "path": raw_path},
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, err_card)
+                    else:
+                        self._send_card(chat_id, err_card)
+
+            threading.Thread(target=do_start, daemon=True).start()
+            return
 
         if action == "stop_workspace":
             raw_path = params.get("path") or ""
             path = _resolve_path(raw_path, self.config.projects) if raw_path else None
+
+            undo_deadline = time.time() + 30.0
+
             if path:
                 ok, msg = self.session_mgr.stop_session(path)
                 if ok:
                     ctx.mode = "idle"
                     ctx.active_workspace = None
                     self._save_contexts()
-                return msg
-            sessions = self.session_mgr.list_sessions()
-            if not sessions:
-                return "没有正在运行的会话。"
-            results = []
-            for s in sessions:
-                ok, msg = self.session_mgr.stop_session(s.path)
-                results.append(f"{Path(s.path).name}: {msg}")
-            ctx.mode = "idle"
-            ctx.active_workspace = None
-            self._save_contexts()
-            return "已停止：\n" + "\n".join(results)
+                result_card = CardRenderer.result(
+                    "已停止" if ok else "停止失败",
+                    Path(path).name + " 已停止。" if ok else msg,
+                    success=ok,
+                    can_undo=ok,
+                    undo_deadline=undo_deadline if ok else None,
+                    context_path=path,
+                )
+                self._reply_card(
+                    message_id,
+                    result_card,
+                    "stop_result",
+                    {"path": path, "undo_deadline": undo_deadline},
+                )
+                ctx.push("bot", "已停止: " + path)
+            else:
+                sessions = self.session_mgr.list_sessions()
+                if not sessions:
+                    self._reply_to_message(message_id, "没有正在运行的会话。")
+                    return
+                results = []
+                for s in sessions:
+                    ok, msg = self.session_mgr.stop_session(s.path)
+                    results.append(Path(s.path).name + ": " + ("已停止" if ok else msg))
+                ctx.mode = "idle"
+                ctx.active_workspace = None
+                self._save_contexts()
+                result_card = CardRenderer.result(
+                    "全部停止", "\n".join(results), success=True
+                )
+                self._reply_card(message_id, result_card)
+                ctx.push("bot", "全部停止")
+            return
 
         if action == "send_task":
             task_text = params.get("task", "")
@@ -1316,38 +1674,78 @@ class FeishuBotAgent:
                     if s.process_status == "running"
                 ]
                 if not running:
-                    return (
-                        "没有正在运行的 OpenCode 会话。\n"
-                        "请先启动一个，例如：启动 sailzen"
+                    card = CardRenderer.error(
+                        "未找到会话",
+                        "没有正在运行的 OpenCode 会话。\n请先启动一个，例如：启动 sailzen",
                     )
+                    self._reply_card(message_id, card)
+                    return
                 if len(running) == 1:
                     path = running[0].path
                 elif ctx.active_workspace:
                     path = ctx.active_workspace
                 else:
                     names = [Path(s.path).name for s in running]
-                    return f"有多个会话运行中：{', '.join(names)}\n请指定工作区，例如：在 sailzen 里{task_text[:30]}"
+                    self._reply_to_message(
+                        message_id,
+                        "有多个会话运行中：" + ", ".join(names) + "\n请指定工作区",
+                    )
+                    return
 
-            ok, session, start_msg = self.session_mgr.ensure_running(path, chat_id)
-            if not ok:
-                return f"无法启动 OpenCode: {start_msg}"
+            op_id = self.op_tracker.start(path, task_text[:60], timeout=300.0)
+            progress_card = CardRenderer.progress(
+                "处理中",
+                task_text[:100] + ("..." if len(task_text) > 100 else ""),
+            )
+            prog_mid = self._reply_card(
+                message_id, progress_card, "progress", {"op_id": op_id, "path": path}
+            )
 
-            ctx.mode = "coding"
-            ctx.active_workspace = session.path
-            self._save_contexts()
+            def do_task() -> None:
+                ok, session, start_msg = self.session_mgr.ensure_running(path, chat_id)
+                if not ok:
+                    self.op_tracker.finish(op_id)
+                    err_card = CardRenderer.error(
+                        "启动失败", start_msg, context_path=path
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, err_card)
+                    return
 
-            if not task_text:
-                return "OpenCode 已就绪，请描述你的任务。"
+                ctx.mode = "coding"
+                ctx.active_workspace = session.path
+                self._save_contexts()
 
-            self._send_to_chat(chat_id, f"正在处理: {task_text[:80]}...")
-            reply = self.session_mgr.send_task(path, task_text)
-            if not reply:
-                return "OpenCode 完成了任务（无文字输出）。"
-            if len(reply) > 3800:
-                reply = reply[:3800] + "\n\n…（已截断，请在 OpenCode 查看完整输出）"
-            return reply
+                if not task_text:
+                    self.op_tracker.finish(op_id)
+                    card = CardRenderer.result(
+                        "就绪",
+                        "OpenCode 已就绪，请描述你的任务。",
+                        success=True,
+                        context_path=path,
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, card)
+                    return
 
-        return f"未知动作: {action}"
+                reply = self.session_mgr.send_task(path, task_text)
+                self.op_tracker.finish(op_id)
+
+                if not reply:
+                    reply = "（任务已完成，无文字输出）"
+                result_card = CardRenderer.result(
+                    "任务完成", reply, success=True, context_path=path
+                )
+                if prog_mid:
+                    self._update_card(prog_mid, result_card)
+                else:
+                    self._send_card(chat_id, result_card)
+                ctx.push("bot", "任务完成")
+
+            threading.Thread(target=do_task, daemon=True).start()
+            return
+
+        self._reply_to_message(message_id, "未知动作: " + action)
 
     # ------------------------------------------------------------------
     # Command handlers
@@ -1419,9 +1817,36 @@ class FeishuBotAgent:
         except Exception as exc:
             print(f"[Context] Failed to save contexts: {exc}")
 
+    def on_bot_startup(self) -> None:
+        for entry in self.state_store.all_entries():
+            path = entry.path
+            if entry.state in (SessionState.RUNNING, SessionState.STARTING):
+                session = self.session_mgr._sessions.get(path)
+                port = entry.port or (session.port if session else None)
+                if port and self.session_mgr._is_port_open(port):
+                    print(f"[Startup] Reconnected to {path} on port {port}")
+                    if session:
+                        session.process_status = "running"
+                else:
+                    print(f"[Startup] Cannot recover {path}, marking error")
+                    self.state_store.force_set(
+                        path,
+                        SessionState.ERROR,
+                        last_error="Process not found on startup",
+                    )
+
+    def on_bot_shutdown(self) -> None:
+        self._health_monitor.stop()
+        sessions = self.session_mgr.list_sessions()
+        for s in sessions:
+            if s.process_status in ("running", "starting"):
+                print(f"[Shutdown] Stopping {s.path}")
+                self.session_mgr.stop_session(s.path)
+        self.state_store.save_to_disk()
+
     def run(self) -> None:
         """Start the bot."""
-        print("Feishu OpenCode Bridge v5.0")
+        print("Feishu OpenCode Bridge v7.0")
         print(f"  Config: {self.config.config_path}")
 
         if not self.config.app_id or not self.config.app_secret:
@@ -1434,7 +1859,8 @@ class FeishuBotAgent:
             slugs = [p.get("slug", "") for p in self.config.projects]
             print(f"  Projects: {', '.join(slugs)}")
 
-        # Create the lark REST client (for sending messages)
+        self.on_bot_startup()
+
         self.lark_client = (
             lark.Client.builder()
             .app_id(self.config.app_id)
@@ -1442,20 +1868,20 @@ class FeishuBotAgent:
             .build()
         )
 
-        # Build event handler
         event_handler = (
             lark.EventDispatcherHandler.builder("", "")
             .register_p2_im_message_receive_v1(self._handle_message)
             .build()
         )
 
-        # WebSocket client (long connection, for receiving events)
         ws_client = lark.ws.Client(
             self.config.app_id,
             self.config.app_secret,
             event_handler=event_handler,
             log_level=lark.LogLevel.INFO,
         )
+
+        self._health_monitor.start()
 
         print("Connecting to Feishu (long connection)...")
         print("Send '帮助' in Feishu to see available commands.")
@@ -1470,6 +1896,8 @@ class FeishuBotAgent:
             import traceback
 
             traceback.print_exc()
+        finally:
+            self.on_bot_shutdown()
 
 
 # ---------------------------------------------------------------------------
