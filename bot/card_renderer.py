@@ -72,12 +72,21 @@ def _note(content: str) -> Dict[str, Any]:
 def _button(
     label: str, action_type: str, value: Dict[str, Any], style: str = "default"
 ) -> Dict[str, Any]:
+    # Feishu button uses behaviors array for interactions
+    # action_type can be: open_url, callback, form_action
+    if action_type == "callback":
+        behaviors = [{"type": "callback", "value": value}]
+    elif action_type == "link":
+        behaviors = [{"type": "open_url", "default_url": value.get("url", "")}]
+    else:
+        # Default fallback
+        behaviors = [{"type": "callback", "value": value}]
+
     return {
         "tag": "button",
         "text": {"tag": "plain_text", "content": label},
         "type": style,
-        "value": value,
-        "action_type": action_type,
+        "behaviors": behaviors,
     }
 
 
@@ -113,7 +122,8 @@ class CardRenderer:
     ) -> Dict[str, Any]:
         session_states = session_states or {}
         elements: List[Dict[str, Any]] = [
-            _text("请选择要启动的工作区：", bold=True),
+            _text("📱 手机端快捷指令", bold=True),
+            _note("直接发送「启动 sailzen」即可快速启动，无需输入完整路径"),
             _divider(),
         ]
 
@@ -136,32 +146,27 @@ class CardRenderer:
                 _text(icon + " **" + label + "** (" + slug + ")  |  " + state_label)
             )
 
+            # 添加文字指令提示（本地运行不支持卡片按钮回调）
             if state in ("idle", "error"):
-                btn_label = "启动" if state == "idle" else "重新启动"
-                btn_style = "primary"
+                cmd_text = f"发送「启动 {slug}」启动此工作区"
             elif state == "running":
-                btn_label = "使用此工作区"
-                btn_style = "default"
+                cmd_text = f"发送「使用 {slug}」切换到该工作区"
             else:
-                btn_label = state_label
-                btn_style = "default"
+                cmd_text = f"当前状态: {state_label}"
 
-            elements.append(
-                _action_row(
-                    [
-                        _button(
-                            btn_label,
-                            "callback",
-                            {"action": "start_workspace", "path": slug or path},
-                            btn_style,
-                        )
-                    ]
-                )
-            )
+            elements.append(_note(cmd_text))
             elements.append(_divider())
 
         if not projects:
             elements.append(_text("暂无配置的工作区，请在配置文件中添加 projects。"))
+        else:
+            # 添加底部提示
+            elements.append(_text("💡 提示", bold=True))
+            elements.append(_note("点击上方按钮，或直接发送「启动 <名称>」"))
+            # 显示所有可用的快捷名称
+            slugs = [p.get("slug", "") for p in projects if p.get("slug")]
+            if slugs:
+                elements.append(_note(f"可用名称: {', '.join(slugs)}"))
 
         return {
             "config": {"wide_screen_mode": True},
@@ -212,55 +217,25 @@ class CardRenderer:
             for act in activities[-5:]:
                 elements.append(_note(act))
 
-        # Mobile: max 2 action buttons per row
+        # 添加快捷指令提示
+        if path:
+            elements.append(_divider())
+            # 获取slug用于快捷指令
+            slug_hint = Path(path).name
+            elements.append(
+                _note(f"快捷操作：发送「使用 {slug_hint}」可直接进入此工作区发送指令")
+            )
+
+        # 添加文字指令提示（本地运行不支持卡片按钮回调）
         if state == "running" and show_stop_button:
             elements.append(_divider())
-            elements.append(
-                _action_row(
-                    [
-                        _button(
-                            "停止",
-                            "callback",
-                            {"action": "stop_workspace", "path": path},
-                            "danger",
-                        ),
-                        _button(
-                            "查看状态",
-                            "callback",
-                            {"action": "show_status", "path": path},
-                            "default",
-                        ),
-                    ]
-                )
-            )
+            elements.append(_note("💡 发送「停止" + name + "」可停止此工作区"))
         elif state == "error":
             elements.append(_divider())
-            elements.append(
-                _action_row(
-                    [
-                        _button(
-                            "重新启动",
-                            "callback",
-                            {"action": "start_workspace", "path": path},
-                            "primary",
-                        ),
-                    ]
-                )
-            )
+            elements.append(_note("💡 发送「启动" + name + "」可重新启动"))
         elif state == "idle":
             elements.append(_divider())
-            elements.append(
-                _action_row(
-                    [
-                        _button(
-                            "启动",
-                            "callback",
-                            {"action": "start_workspace", "path": path},
-                            "primary",
-                        ),
-                    ]
-                )
-            )
+            elements.append(_note("💡 发送「启动" + name + "」可启动此工作区"))
 
         return {
             "config": {"wide_screen_mode": True},
@@ -339,25 +314,10 @@ class CardRenderer:
             elements.append(_note("此操作可在 30 秒内撤销"))
 
         elements.append(_divider())
-        # Mobile: confirm (danger) + cancel side-by-side for quick thumb reach
-        elements.append(
-            _action_row(
-                [
-                    _button(
-                        "确认执行",
-                        "callback",
-                        {"action": "confirm_action", "pending_id": pending_id},
-                        "danger",
-                    ),
-                    _button(
-                        "取消",
-                        "callback",
-                        {"action": "cancel_action", "pending_id": pending_id},
-                        "default",
-                    ),
-                ]
-            )
-        )
+        # 文字指令提示（本地运行不支持卡片按钮回调）
+        elements.append(_note("💡 请回复："))
+        elements.append(_note("   「确认」- 执行此操作"))
+        elements.append(_note("   「取消」- 放弃此操作"))
 
         return {
             "config": {"wide_screen_mode": True},
@@ -386,40 +346,21 @@ class CardRenderer:
                 display += "\n\n…（已截断，请在 OpenCode 查看完整输出）"
             elements.append(_text(display))
 
-        buttons: List[Dict[str, Any]] = []
+        # 文字指令提示（本地运行不支持卡片按钮回调）
+        notes: List[str] = []
         if can_retry and retry_action:
-            buttons.append(_button("重试", "callback", retry_action, "primary"))
+            notes.append("💡 发送「重试」重新执行")
         if can_undo and undo_deadline:
             remaining = undo_deadline - time.time()
             if remaining > 0:
-                buttons.append(
-                    _button(
-                        "撤销 (" + str(int(remaining)) + "s)",
-                        "callback",
-                        {
-                            "action": "undo_action",
-                            "path": context_path,
-                        },
-                        "default",
-                    )
-                )
+                notes.append(f"💡 发送「撤销」撤销此操作（{int(remaining)}秒内有效）")
         if context_path:
-            buttons.append(
-                _button(
-                    "查看状态",
-                    "callback",
-                    {
-                        "action": "show_status",
-                        "path": context_path,
-                    },
-                    "default",
-                )
-            )
+            notes.append(f"💡 发送「状态 {Path(context_path).name}」查看详情")
 
-        if buttons:
+        if notes:
             elements.append(_divider())
-            for i in range(0, len(buttons), 2):
-                elements.append(_action_row(buttons[i : i + 2]))
+            for note in notes:
+                elements.append(_note(note))
 
         return {
             "config": {"wide_screen_mode": True},
@@ -436,24 +377,18 @@ class CardRenderer:
         retry_action: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         elements: List[Dict[str, Any]] = [_text(error_message[:300])]
-        buttons: List[Dict[str, Any]] = []
+
+        # 文字指令提示（本地运行不支持卡片按钮回调）
+        notes: List[str] = []
         if can_retry and retry_action:
-            buttons.append(_button("重试", "callback", retry_action, "primary"))
+            notes.append("💡 发送「重试」重新执行")
         if context_path:
-            buttons.append(
-                _button(
-                    "查看状态",
-                    "callback",
-                    {
-                        "action": "show_status",
-                        "path": context_path,
-                    },
-                    "default",
-                )
-            )
-        if buttons:
+            notes.append(f"💡 发送「状态 {Path(context_path).name}」查看详情")
+
+        if notes:
             elements.append(_divider())
-            elements.append(_action_row(buttons[:2]))
+            for note in notes:
+                elements.append(_note(note))
 
         return {
             "config": {"wide_screen_mode": True},
@@ -472,14 +407,15 @@ class CardRenderer:
                 state = s.get("state", "idle")
                 port = s.get("port")
                 icon = _STATE_ICONS.get(state, "⬜")
-                name = Path(path).name if path else "?"
-                state_label = {
+                name = str(Path(path).name if path else "?")
+                state_label_map = {
                     "idle": "空闲",
                     "starting": "启动中",
                     "running": "运行中",
                     "stopping": "停止中",
                     "error": "出错",
-                }.get(state, state)
+                }
+                state_label = state_label_map.get(state, state or "未知")
                 port_info = ":" + str(port) if port else ""
                 elements.append(
                     _text(icon + " **" + name + "**" + port_info + "  " + state_label)

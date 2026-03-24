@@ -350,6 +350,9 @@ class ManagedSession:
     started_at: Optional[str] = None
     last_error: Optional[str] = None
     chat_id: Optional[str] = None  # Feishu chat this session was created from
+    _process: Optional[Any] = None  # subprocess.Popen object for proper cleanup
+    _stdout_log: Optional[Any] = None  # stdout file handle
+    _stderr_log: Optional[Any] = None  # stderr file handle
 
 
 @dataclass
@@ -405,7 +408,21 @@ class OpenCodeSessionManager:
         If already running, returns immediately.
         If not running, starts a new process and waits for it to become healthy.
         """
-        path = str(Path(path).expanduser().resolve())
+        # 验证路径有效性
+        try:
+            path_obj = Path(path).expanduser().resolve()
+            if not path_obj.exists():
+                # 创建错误状态的 session
+                error_session = ManagedSession(path=path, port=0, chat_id=chat_id)
+                error_session.process_status = "error"
+                error_session.last_error = f"路径不存在: {path}"
+                return False, error_session, f"路径不存在: {path}"
+            path = str(path_obj)
+        except Exception as e:
+            error_session = ManagedSession(path=path, port=0, chat_id=chat_id)
+            error_session.process_status = "error"
+            error_session.last_error = f"无效路径: {e}"
+            return False, error_session, f"无效路径 '{path}': {e}"
 
         session = self._sessions.get(path)
         if session and self._is_port_open(session.port):
@@ -475,6 +492,7 @@ class OpenCodeSessionManager:
 
         self._sync_state(path, "stopping")
 
+        # Kill the process
         if session.pid:
             try:
                 if sys.platform == "win32":
@@ -485,15 +503,46 @@ class OpenCodeSessionManager:
                     )
                 else:
                     os.kill(session.pid, 15)
+
+                # Wait for process to terminate
+                if session._process:
+                    try:
+                        session._process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        # Force kill if graceful termination failed
+                        try:
+                            session._process.kill()
+                            session._process.wait(timeout=2)
+                        except Exception:
+                            pass
+
                 time.sleep(1)
             except Exception as exc:
                 session.last_error = str(exc)
 
+        # Close file handles to prevent resource leaks
+        if session._stdout_log:
+            try:
+                session._stdout_log.close()
+            except Exception:
+                pass
+            session._stdout_log = None
+
+        if session._stderr_log:
+            try:
+                session._stderr_log.close()
+            except Exception:
+                pass
+            session._stderr_log = None
+
+        # Clean up process reference
+        session._process = None
         session.pid = None
         session.process_status = "stopped"
         session.opencode_session_id = None
         self._save_state()
         self._sync_state(path, "stopped")
+        print(f"[OpenCode] Stopped session for {path}")
         return True, "Stopped"
 
     def get_status(self, path: Optional[str] = None) -> str:
@@ -564,6 +613,7 @@ class OpenCodeSessionManager:
             log_dir / f"opencode_{session.port}.err.log", "w", encoding="utf-8"
         )
 
+        process = None
         try:
             process = subprocess.Popen(
                 cmd,
@@ -573,9 +623,15 @@ class OpenCodeSessionManager:
                 **kwargs,
             )
             session.pid = process.pid
+            session._process = process
+            session._stdout_log = stdout_log
+            session._stderr_log = stderr_log
             session.process_status = "starting"
             session.started_at = datetime.now().isoformat()
         except FileNotFoundError:
+            # Clean up file handles on error
+            stdout_log.close()
+            stderr_log.close()
             session.process_status = "error"
             session.last_error = (
                 "opencode command not found. Is it installed and in PATH?"
@@ -583,6 +639,9 @@ class OpenCodeSessionManager:
             self._sync_state(session.path, "error", last_error=session.last_error)
             return False, session, session.last_error
         except Exception as exc:
+            # Clean up file handles on error
+            stdout_log.close()
+            stderr_log.close()
             session.process_status = "error"
             session.last_error = str(exc)
             self._sync_state(session.path, "error", last_error=session.last_error)
@@ -600,6 +659,26 @@ class OpenCodeSessionManager:
                 msg = f"Started on port {session.port} (PID {session.pid})"
                 print(f"[OpenCode] {msg}")
                 return True, session, msg
+
+        # Health check failed - clean up the failed process
+        if process:
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                        check=False,
+                        capture_output=True,
+                    )
+                else:
+                    os.kill(process.pid, 9)
+            except Exception as exc:
+                print(f"[OpenCode] Warning: Failed to kill failed process: {exc}")
+
+        # Close file handles
+        stdout_log.close()
+        stderr_log.close()
+        session._stdout_log = None
+        session._stderr_log = None
 
         session.process_status = "error"
         session.last_error = (
@@ -841,54 +920,19 @@ class ConversationContext:
 # LLM-driven brain
 # ---------------------------------------------------------------------------
 
-_BRAIN_SYSTEM = """\
-你是一个智能飞书机器人，负责帮用户通过飞书控制本地电脑上的 OpenCode 开发环境。
-你的职责是理解用户的自然语言（可能有错别字、语音输入的口语化表达、不完整的句子），
-判断用户想做什么，并返回一个结构化的 JSON 行动计划。
+_BRAIN_SYSTEM = """你是飞书机器人，帮用户控制OpenCode开发环境。理解自然语言（可能有错别字），返回JSON行动计划。
 
-当前上下文：
-- mode: {mode}（idle=空闲等待, coding=正在进行开发任务）
-- active_workspace: {active_workspace}（None=未选择工作区）
-- configured_projects: {projects}
+上下文：mode={mode}, workspace={active_workspace}, projects={projects}
+历史：{history}
 
-对话历史（最近几轮）：
-{history}
+用户：{user_text}
 
----
-用户最新消息：{user_text}
+返回JSON：
+{{"action":"...","params":{{}},"confirm_required":false,"confirm_summary":"","reply":"","reasoning":""}}
 
----
-请返回一个 JSON 对象，格式如下：
-{{
-  "action": "<动作>",
-  "params": {{...}},
-  "confirm_required": true/false,
-  "confirm_summary": "<如需确认，展示给用户看的操作摘要>",
-  "reply": "<如果不需要执行任何动作，直接回复用户的文字>",
-  "reasoning": "<简短说明判断依据，仅供调试>"
-}}
-
-合法的 action 值：
-- "start_workspace"：启动 OpenCode，params 需含 path（绝对路径或 slug）
-- "stop_workspace"：停止会话，params 可含 path（省略则停所有）
-- "send_task"：将用户的编码请求发给 OpenCode，params 需含 task（任务描述），可含 path
-- "show_status"：查看当前所有会话状态
-- "show_help"：展示帮助
-- "chat"：普通闲聊或无法识别为开发操作，直接 reply 回复
-- "clarify"：需要更多信息才能行动，直接 reply 提问
-
-confirm_required 规则：
-- start_workspace 且 active_workspace 已在运行：false（直接重用）
-- stop_workspace：true（停止是危险操作）
-- send_task 且消息长度 > 200 字或包含可能有歧义的破坏性操作（覆盖、删除、重置）：true
-- 其余情况：false
-
-重要注意事项：
-1. 用户可能打错字，例如"帮我吃"可能是"帮我写"，请合理推断
-2. 用户说"启动项目"、"开始工作"、"打开"等都可能是 start_workspace
-3. 如果 active_workspace 已知且用户直接描述任务（如"帮我加个登录"），推断为 send_task
-4. 只返回 JSON，不要有任何多余文字
-"""
+actions: start_workspace|stop_workspace|send_task|show_status|show_help|chat|clarify
+规则：stop_workspace需确认；长消息或破坏性操作需确认
+注意：推断用户意图，只返回JSON"""
 
 _BRAIN_FALLBACK_ACTIONS = {
     "帮助": ("show_help", {}),
@@ -1052,9 +1096,17 @@ class BotBrain:
             return False
         return None
 
-    async def _think_llm(self, text: str, ctx: ConversationContext) -> ActionPlan:
+    async def _think_llm(
+        self,
+        text: str,
+        ctx: ConversationContext,
+        chat_id: Optional[str] = None,
+        max_retries: int = 2,
+    ) -> ActionPlan:
         from sail_server.utils.llm.gateway import LLMExecutionConfig
+        import time
 
+        start_time = time.time()
         slugs = [p.get("slug", p.get("label", "")) for p in self.projects]
         prompt = _BRAIN_SYSTEM.format(
             mode=ctx.mode,
@@ -1063,6 +1115,14 @@ class BotBrain:
             history=ctx.history_text() or "(无历史)",
             user_text=text,
         )
+
+        # Log the prompt for debugging
+        chat_prefix = f"[{chat_id}] " if chat_id else ""
+        print(f"\n{'=' * 60}")
+        print(f"{chat_prefix}[LLM] Prompt ({len(prompt)} chars):")
+        print(f"{prompt[:500]}{'...' if len(prompt) > 500 else ''}")
+        print(f"{'=' * 60}")
+
         model, temp = self._model_cfg
         config = LLMExecutionConfig(
             provider=self._provider,
@@ -1070,19 +1130,168 @@ class BotBrain:
             temperature=temp,
             max_tokens=512,
             enable_caching=False,
+            timeout=30,  # 设置30秒超时，避免长时间等待
         )
-        result = await self._gw.execute(prompt, config)
-        raw = result.content.strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-        data = json.loads(raw)
-        return ActionPlan(
-            action=data.get("action", "chat"),
-            params=data.get("params", {}),
-            confirm_required=bool(data.get("confirm_required", False)),
-            confirm_summary=data.get("confirm_summary", ""),
-            reply=data.get("reply", ""),
+
+        # 重试循环
+        for attempt in range(max_retries + 1):
+            try:
+                result = await self._gw.execute(prompt, config)
+                raw = result.content.strip()
+                elapsed = time.time() - start_time
+
+                # 检查空响应
+                if not raw:
+                    print(
+                        f"{chat_prefix}[LLM] WARNING: Empty response (attempt {attempt + 1}/{max_retries + 1})"
+                    )
+                    if attempt < max_retries:
+                        print(f"{chat_prefix}[LLM] Retrying in 1s...")
+                        await asyncio.sleep(1)
+                        continue
+                    else:
+                        raise Exception("LLM returned empty response after all retries")
+
+                # Log the raw response
+                print(
+                    f"{chat_prefix}[LLM] Response ({elapsed:.2f}s, {len(raw)} chars, attempt {attempt + 1}):"
+                )
+                print(f"{raw[:800]}{'...' if len(raw) > 800 else ''}")
+
+                # Clean up markdown code blocks
+                raw_cleaned = re.sub(r"^```(?:json)?\s*", "", raw)
+                raw_cleaned = re.sub(r"\s*```$", "", raw_cleaned)
+
+                data = self._parse_llm_json(raw_cleaned, chat_id=chat_id)
+
+                action = data.get("action", "chat")
+                print(f"{chat_prefix}[LLM] Parsed action: {action}")
+
+                return ActionPlan(
+                    action=action,
+                    params=data.get("params", {}),
+                    confirm_required=bool(data.get("confirm_required", False)),
+                    confirm_summary=data.get("confirm_summary", ""),
+                    reply=data.get("reply", ""),
+                )
+
+            except Exception as exc:
+                elapsed = time.time() - start_time
+                if attempt < max_retries:
+                    print(
+                        f"{chat_prefix}[LLM] Attempt {attempt + 1} failed after {elapsed:.2f}s: {exc}"
+                    )
+                    print(f"{chat_prefix}[LLM] Retrying...")
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    print(
+                        f"{chat_prefix}[LLM] ERROR after {elapsed:.2f}s (all {max_retries + 1} attempts failed): {type(exc).__name__}: {exc}"
+                    )
+                    import traceback
+
+                    traceback.print_exc()
+                    raise
+
+    async def think_with_feedback(
+        self,
+        text: str,
+        ctx: ConversationContext,
+        chat_id: str,
+        message_id: str,
+        agent: "FeishuBotAgent",
+    ) -> Tuple[ActionPlan, Optional[str]]:
+        """Think with UX feedback - returns (ActionPlan, thinking_card_message_id or None)."""
+        # Send a thinking progress card
+        thinking_card = CardRenderer.progress(
+            "正在理解你的意图", "AI正在分析中，请稍候..."
         )
+        thinking_mid = agent._reply_card(
+            message_id, thinking_card, "thinking", {"user_text": text[:50]}
+        )
+
+        try:
+            if self._gw:
+                plan = await self._think_llm(text, ctx, chat_id=chat_id)
+                return plan, thinking_mid
+            else:
+                # Fallback to deterministic without thinking card
+                return self._think_deterministic(text, ctx), None
+        except Exception as exc:
+            # Update thinking card to show error
+            if thinking_mid:
+                error_card = CardRenderer.error(
+                    "AI处理失败",
+                    f"理解你的指令时出错：{str(exc)[:100]}\n已切换到备用模式。",
+                    context_path=ctx.active_workspace or "unknown",
+                )
+                agent._update_card(thinking_mid, error_card)
+            raise
+
+    def _parse_llm_json(self, raw: str, chat_id: Optional[str] = None) -> dict:
+        """Parse JSON from LLM response with robust error handling.
+
+        LLMs often return malformed JSON with:
+        - Single quotes instead of double quotes
+        - Trailing commas
+        - Missing quotes around property names
+        - Python-style True/False/None instead of true/false/null
+        """
+        import ast
+
+        chat_prefix = f"[{chat_id}] " if chat_id else ""
+
+        # Try standard JSON parsing first
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"{chat_prefix}[LLM] JSON parse failed (attempt 1): {e}")
+
+        # Fix common LLM JSON issues
+        cleaned = raw
+
+        # Replace Python-style booleans and None with JSON equivalents
+        cleaned = re.sub(r"\bTrue\b", "true", cleaned)
+        cleaned = re.sub(r"\bFalse\b", "false", cleaned)
+        cleaned = re.sub(r"\bNone\b", "null", cleaned)
+
+        # Try JSON parsing again after boolean fixes
+        try:
+            result = json.loads(cleaned)
+            print(f"{chat_prefix}[LLM] JSON parsed after boolean fix")
+            return result
+        except json.JSONDecodeError as e:
+            print(
+                f"{chat_prefix}[LLM] JSON parse failed (attempt 2 after boolean fix): {e}"
+            )
+
+        # Try to use ast.literal_eval as a fallback for Python dict-like structures
+        try:
+            # This handles single quotes and other Python syntax
+            result = ast.literal_eval(cleaned)
+            if isinstance(result, dict):
+                print(f"{chat_prefix}[LLM] Parsed with ast.literal_eval")
+                return result
+        except (ValueError, SyntaxError) as e:
+            print(f"{chat_prefix}[LLM] ast.literal_eval failed: {e}")
+
+        # Last resort: try to extract JSON-like structure with regex
+        # Look for key-value pairs and reconstruct
+        try:
+            # Simple pattern to extract action and other fields
+            pattern = r'["\']?action["\']?\s*[:=]\s*["\']([^"\']+)["\']'
+            action_match = re.search(pattern, cleaned, re.IGNORECASE)
+            if action_match:
+                print(
+                    f"{chat_prefix}[LLM] Extracted action via regex: {action_match.group(1)}"
+                )
+                return {"action": action_match.group(1)}
+        except Exception as e:
+            print(f"{chat_prefix}[LLM] Regex extraction failed: {e}")
+
+        # If all parsing fails, return a default action
+        print(f"{chat_prefix}[LLM] All parsing attempts failed. Raw: {raw[:300]}")
+        return {"action": "chat", "reply": "抱歉，我处理请求时遇到了技术问题。"}
 
     def _think_deterministic(self, text: str, ctx: ConversationContext) -> ActionPlan:
         t = text.lower().strip()
@@ -1090,6 +1299,27 @@ class BotBrain:
         for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
             if kw in t:
                 return ActionPlan(action=action, params=params)
+
+        # 快速工作区切换指令（无需等待LLM）
+        switch_keywords = [
+            "使用",
+            "进入",
+            "切换到",
+            "切到",
+            "use",
+            "switch to",
+            "enter",
+        ]
+        if any(k in t for k in switch_keywords):
+            path = _extract_path_from_text(text, self.projects)
+            if path:
+                # 设置active_workspace
+                ctx.mode = "coding"
+                ctx.active_workspace = path
+                return ActionPlan(
+                    action="chat",
+                    reply=f"已切换到工作区：{Path(path).name}\n现在可以直接发送指令给这个工作区。",
+                )
 
         if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):
             path = _extract_path_from_text(text, self.projects)
@@ -1132,7 +1362,7 @@ class BotBrain:
             action="chat",
             reply=(
                 "我理解你说的可能是一个开发任务，但我需要知道目标工作区。\n"
-                "可以说：'启动 sailzen' 或 '启动 ~/projects/myapp'"
+                "可以说：'启动 sailzen' 或 '使用 sailzen' 或 '进入 ~/projects/myapp'"
             ),
         )
 
@@ -1367,6 +1597,73 @@ class FeishuBotAgent:
     # Message handling
     # ------------------------------------------------------------------
 
+    def _handle_card_action(self, data) -> Any:
+        """Handle card button click actions.
+
+        Returns P2CardActionTriggerResponse to acknowledge the action.
+        """
+        try:
+            if not data or not data.event or not data.event.action:
+                return None
+
+            action = data.event.action
+            value = action.value if hasattr(action, "value") else {}
+
+            # value could be a dict or string
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except json.JSONDecodeError:
+                    value = {}
+
+            action_type = value.get("action") if isinstance(value, dict) else None
+            path = value.get("path") if isinstance(value, dict) else None
+
+            # Get context info
+            context = data.event.context if hasattr(data.event, "context") else None
+            chat_id = context.open_chat_id if context else None
+            message_id = context.open_message_id if context else None
+
+            if not chat_id or not action_type:
+                print(f"[CardAction] Missing chat_id or action_type")
+                return None
+
+            print(f"[CardAction] {action_type} for {path} in {chat_id}")
+
+            # Execute the action in background thread
+            ctx = self._get_context(chat_id)
+            plan = ActionPlan(action=action_type, params={"path": path} if path else {})
+
+            threading.Thread(
+                target=self._execute_plan_with_card,
+                args=(plan, chat_id, message_id, ctx),
+                daemon=True,
+            ).start()
+
+            # Return success response to Feishu (required!)
+            from lark_oapi.event.callback.model.p2_card_action_trigger import (
+                P2CardActionTriggerResponse,
+            )
+
+            # 必须返回 P2CardActionTriggerResponse，传入 dict 结构
+            resp = P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "info",
+                        "content": "处理中...",
+                        "i18n": {"zh_cn": "处理中...", "en_us": "Processing..."},
+                    }
+                }
+            )
+            return resp
+
+        except Exception as exc:
+            print(f"[CardAction] Error: {exc}")
+            import traceback
+
+            traceback.print_exc()
+            return None
+
     def _handle_message(self, data: lark.im.v1.P2ImMessageReceiveV1) -> None:
         """Handle incoming Feishu message."""
         try:
@@ -1455,12 +1752,36 @@ class FeishuBotAgent:
                 self._execute_plan_with_card(plan, chat_id, message_id, ctx)
                 return
 
-        plan = self.brain.think(text, ctx)
+        # Use async think_with_feedback to show thinking indicator
+        thinking_mid = None
+        try:
+            import asyncio
+
+            plan, thinking_mid = asyncio.run(
+                self.brain.think_with_feedback(text, ctx, chat_id, message_id, self)
+            )
+        except Exception as exc:
+            # If think_with_feedback failed (including after error card update), fall back
+            print(f"[{chat_id}] think_with_feedback failed: {exc}")
+            plan = self.brain._think_deterministic(text, ctx)
+            # If there was a thinking card, update it to show fallback
+            if thinking_mid:
+                fallback_card = CardRenderer.result(
+                    "已切换到备用模式",
+                    "AI处理遇到问题，正在使用备用模式响应。",
+                    success=True,
+                )
+                self._update_card(thinking_mid, fallback_card)
 
         if plan.action in ("chat", "clarify"):
             reply = plan.reply or "我不太确定你的意思，能再描述一下吗？"
             ctx.push("bot", reply[:200])
-            self._reply_to_message(message_id, reply)
+            # Replace thinking card with reply, or send new message
+            if thinking_mid:
+                chat_card = CardRenderer.result("回复", reply, success=True)
+                self._update_card(thinking_mid, chat_card)
+            else:
+                self._reply_to_message(message_id, reply)
             return
 
         task_text = plan.params.get("task", "")
@@ -1493,9 +1814,16 @@ class FeishuBotAgent:
                 can_undo=pending.can_undo,
                 pending_id=pending.pending_id,
             )
-            self._reply_card(
-                message_id, card, "confirmation", {"pending_id": pending.pending_id}
-            )
+            # Replace thinking card with confirmation
+            if thinking_mid:
+                self._update_card(thinking_mid, card)
+                self.card_tracker.register(
+                    thinking_mid, "confirmation", {"pending_id": pending.pending_id}
+                )
+            else:
+                self._reply_card(
+                    message_id, card, "confirmation", {"pending_id": pending.pending_id}
+                )
             ctx.push("bot", "需要确认: " + pending.summary)
             return
 
@@ -1519,10 +1847,23 @@ class FeishuBotAgent:
                     summary="在资源紧张时启动新会话",
                     expires_at=datetime.now() + self.brain._CONFIRM_TTL,
                 )
-                self._reply_card(message_id, card)
+                if thinking_mid:
+                    self._update_card(thinking_mid, card)
+                else:
+                    self._reply_card(message_id, card)
                 return
 
-        self._execute_plan_with_card(plan, chat_id, message_id, ctx)
+        # Execute the plan - for non-confirmation actions, remove thinking card first
+        # or let _execute_plan_with_card handle the UI
+        if thinking_mid:
+            # Delete the thinking card by sending a result card in its place for simple actions
+            # For complex actions like start_workspace, the progress card will replace it
+            if plan.action in ("show_help", "show_status"):
+                # These don't need the thinking card anymore
+                pass
+            # Store thinking_mid so _execute_plan_with_card can use it if needed
+            # For now, we'll let the action handlers send their own cards
+        self._execute_plan_with_card(plan, chat_id, message_id, ctx, thinking_mid)
 
     def _find_pending_id_from_text(self, text: str) -> Optional[str]:
         import re as _re
@@ -1531,7 +1872,12 @@ class FeishuBotAgent:
         return m.group(1) if m else None
 
     def _execute_plan_with_card(
-        self, plan: ActionPlan, chat_id: str, message_id: str, ctx: ConversationContext
+        self,
+        plan: ActionPlan,
+        chat_id: str,
+        message_id: str,
+        ctx: ConversationContext,
+        thinking_mid: Optional[str] = None,
     ) -> None:
         action = plan.action
         params = plan.params
@@ -1817,9 +2163,208 @@ class FeishuBotAgent:
         except Exception as exc:
             print(f"[Context] Failed to save contexts: {exc}")
 
+    def _cleanup_previous_instances(self) -> None:
+        """启动前清理之前意外关闭时遗留的僵尸进程和文件句柄。"""
+        print("\n[Cleanup] 检查之前遗留的进程和文件句柄...")
+
+        import subprocess
+        import os
+        import signal
+
+        # 1. 查找并终止 opencode 进程
+        killed_count = 0
+        try:
+            if sys.platform == "win32":
+                # Windows: 使用 tasklist 和 taskkill
+                result = subprocess.run(
+                    ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV", "/V"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="ignore",
+                )
+
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split("\n")
+                    for line in lines[1:]:  # 跳过标题行
+                        if "feishu_agent" in line.lower() or "opencode" in line.lower():
+                            parts = line.strip('"').split('","')
+                            if len(parts) >= 2:
+                                pid = parts[1]
+                                print(f"[Cleanup] 发现遗留进程 PID {pid}，正在终止...")
+                                subprocess.run(
+                                    ["taskkill", "/PID", pid, "/T", "/F"],
+                                    check=False,
+                                    capture_output=True,
+                                )
+                                killed_count += 1
+            else:
+                # Linux/Mac: 使用 ps 和 kill
+                result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
+                for line in result.stdout.split("\n"):
+                    if "feishu_agent" in line.lower() or (
+                        "python" in line.lower() and "opencode" in line.lower()
+                    ):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            pid = parts[1]
+                            print(f"[Cleanup] 发现遗留进程 PID {pid}，正在终止...")
+                            try:
+                                os.kill(int(pid), signal.SIGTERM)
+                                killed_count += 1
+                            except Exception as e:
+                                print(f"[Cleanup] 终止失败: {e}")
+        except Exception as e:
+            print(f"[Cleanup] 进程检查失败: {e}")
+
+        # 2. 检查并关闭端口
+        port_cleared = 0
+        base_port = self.config.base_port
+        for port in range(base_port, base_port + 20):  # 检查基础端口及后续端口
+            if self.session_mgr._is_port_open(port):
+                print(f"[Cleanup] 端口 {port} 被占用，尝试释放...")
+                # 尝试找到并终止占用端口的进程
+                try:
+                    if sys.platform == "win32":
+                        result = subprocess.run(
+                            ["netstat", "-ano", "|", "findstr", f":{port}"],
+                            capture_output=True,
+                            text=True,
+                            shell=True,
+                        )
+                        if result.stdout:
+                            for line in result.stdout.split("\n"):
+                                parts = line.strip().split()
+                                if len(parts) >= 5:
+                                    pid = parts[-1]
+                                    print(
+                                        f"[Cleanup] 终止占用端口 {port} 的进程 PID {pid}"
+                                    )
+                                    subprocess.run(
+                                        ["taskkill", "/PID", pid, "/F"],
+                                        check=False,
+                                        capture_output=True,
+                                    )
+                                    port_cleared += 1
+                    else:
+                        result = subprocess.run(
+                            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+                        )
+                        if result.stdout:
+                            pid = result.stdout.strip()
+                            print(f"[Cleanup] 终止占用端口 {port} 的进程 PID {pid}")
+                            os.kill(int(pid), signal.SIGKILL)
+                            port_cleared += 1
+                except Exception as e:
+                    print(f"[Cleanup] 端口 {port} 释放失败: {e}")
+
+        # 3. 清理日志文件句柄（关闭可能遗留的日志文件）
+        log_dir = Path.home() / ".config" / "feishu-agent" / "logs"
+        files_closed = 0
+        if log_dir.exists():
+            for log_file in log_dir.glob("*.log"):
+                try:
+                    # 尝试打开并立即关闭，确保文件句柄被释放
+                    with open(log_file, "a"):
+                        pass
+                    files_closed += 1
+                except Exception:
+                    pass
+
+        # 4. 清理状态文件中的无效会话
+        invalid_sessions = 0
+        for entry in list(self.state_store.all_entries()):
+            if entry.state in (SessionState.RUNNING, SessionState.STARTING):
+                port = entry.port
+                if port and not self.session_mgr._is_port_open(port):
+                    print(f"[Cleanup] 清理无效会话状态: {entry.path}")
+                    self.state_store.force_set(
+                        entry.path,
+                        SessionState.ERROR,
+                        last_error="Process terminated during cleanup",
+                    )
+                    invalid_sessions += 1
+
+        # 5. 清理不在当前配置中的历史状态（防止污染新工作区）
+        config_paths = set()
+        for p in self.config.projects:
+            if p.get("path"):
+                try:
+                    resolved = str(Path(p["path"]).expanduser().resolve())
+                    config_paths.add(resolved)
+                except Exception:
+                    config_paths.add(p["path"])
+
+        orphaned_entries = 0
+        for entry in list(self.state_store.all_entries()):
+            # 如果路径不在配置中，且目录不存在，则清理
+            if entry.path not in config_paths:
+                path_exists = False
+                try:
+                    path_exists = Path(entry.path).exists()
+                except Exception:
+                    pass
+
+                if not path_exists:
+                    print(f"[Cleanup] 清理孤立状态记录（路径不存在）: {entry.path}")
+                    self.state_store.remove(entry.path)
+                    orphaned_entries += 1
+
+        # 报告清理结果
+        total_cleaned = (
+            killed_count + port_cleared + invalid_sessions + orphaned_entries
+        )
+        if total_cleaned > 0:
+            print(
+                f"[Cleanup] ✅ 清理完成: 终止了 {killed_count} 个进程, 释放了 {port_cleared} 个端口, "
+                f"清理了 {invalid_sessions} 个无效会话, 移除了 {orphaned_entries} 个孤立记录"
+            )
+        else:
+            print("[Cleanup] ✅ 未发现遗留的进程或资源")
+        print()
+
     def on_bot_startup(self) -> None:
+        """处理启动时的状态恢复，包含防御性检查。"""
+        print("[Startup] 恢复会话状态...")
+
+        # 验证配置中的项目路径是否有效
+        valid_projects = []
+        for p in self.config.projects:
+            path = p.get("path", "")
+            if not path:
+                continue
+            try:
+                resolved = Path(path).expanduser().resolve()
+                if resolved.exists():
+                    valid_projects.append(str(resolved))
+                else:
+                    print(f"[Startup] 警告: 配置项目路径不存在: {path}")
+            except Exception as e:
+                print(f"[Startup] 警告: 无法解析路径 {path}: {e}")
+
+        # 恢复会话状态
+        recovered_count = 0
+        error_count = 0
+
         for entry in self.state_store.all_entries():
             path = entry.path
+
+            # 检查路径是否在有效配置中
+            if path not in valid_projects:
+                # 路径不在配置中，标记为错误（除非它存在）
+                try:
+                    if not Path(path).exists():
+                        print(f"[Startup] 跳过不在配置中的路径: {path}")
+                        self.state_store.force_set(
+                            path,
+                            SessionState.ERROR,
+                            last_error="Path not in configuration",
+                        )
+                        error_count += 1
+                        continue
+                except Exception:
+                    pass
+
             if entry.state in (SessionState.RUNNING, SessionState.STARTING):
                 session = self.session_mgr._sessions.get(path)
                 port = entry.port or (session.port if session else None)
@@ -1827,6 +2372,7 @@ class FeishuBotAgent:
                     print(f"[Startup] Reconnected to {path} on port {port}")
                     if session:
                         session.process_status = "running"
+                    recovered_count += 1
                 else:
                     print(f"[Startup] Cannot recover {path}, marking error")
                     self.state_store.force_set(
@@ -1834,18 +2380,45 @@ class FeishuBotAgent:
                         SessionState.ERROR,
                         last_error="Process not found on startup",
                     )
+                    error_count += 1
+
+        if recovered_count > 0 or error_count > 0:
+            print(
+                f"[Startup] 状态恢复完成: {recovered_count} 个成功, {error_count} 个失败"
+            )
 
     def on_bot_shutdown(self) -> None:
+        print("\n[Shutdown] Cleaning up resources...")
         self._health_monitor.stop()
         sessions = self.session_mgr.list_sessions()
         for s in sessions:
             if s.process_status in ("running", "starting"):
                 print(f"[Shutdown] Stopping {s.path}")
                 self.session_mgr.stop_session(s.path)
+        # Also clean up any sessions in error state to release file handles
+        for s in sessions:
+            if s._stdout_log or s._stderr_log:
+                print(f"[Shutdown] Cleaning up file handles for {s.path}")
+                if s._stdout_log:
+                    try:
+                        s._stdout_log.close()
+                    except Exception:
+                        pass
+                    s._stdout_log = None
+                if s._stderr_log:
+                    try:
+                        s._stderr_log.close()
+                    except Exception:
+                        pass
+                    s._stderr_log = None
         self.state_store.save_to_disk()
+        print("[Shutdown] Cleanup complete")
 
     def run(self) -> None:
         """Start the bot."""
+        # 首先清理之前可能遗留的僵尸进程
+        self._cleanup_previous_instances()
+
         print("Feishu OpenCode Bridge v7.0")
         print(f"  Config: {self.config.config_path}")
 
@@ -1871,6 +2444,7 @@ class FeishuBotAgent:
         event_handler = (
             lark.EventDispatcherHandler.builder("", "")
             .register_p2_im_message_receive_v1(self._handle_message)
+            .register_p2_card_action_trigger(self._handle_card_action)
             .build()
         )
 

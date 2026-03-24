@@ -89,17 +89,14 @@ class TestCardRenderer:
         assert "60%" in elements_str
         assert "█" in elements_str
 
-    def test_confirmation_card_has_two_buttons(self):
+    def test_confirmation_card_has_instructions(self):
         card = CardRenderer.confirmation(
             "停止会话 myapp", risk_level="confirm_required", pending_id="abc123"
         )
-        action_rows = [el for el in card["elements"] if el.get("tag") == "action"]
-        assert len(action_rows) >= 1
-        confirm_row = action_rows[-1]
-        assert len(confirm_row["actions"]) == 2
-        labels = [a["text"]["content"] for a in confirm_row["actions"]]
-        assert "确认执行" in labels
-        assert "取消" in labels
+        # 卡片现在显示文字指令而不是按钮（本地运行不支持卡片按钮回调）
+        elements_str = str(card["elements"])
+        assert "确认" in elements_str
+        assert "取消" in elements_str
 
     def test_confirmation_undo_note_30s(self):
         card = CardRenderer.confirmation("停止", can_undo=True, pending_id="x")
