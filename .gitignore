@@ -41,3 +41,5 @@ __pycache__
 /data
 
 *.vsix
+*.patch
+packages/engine-server/src/drivers/generated-prisma-client/*

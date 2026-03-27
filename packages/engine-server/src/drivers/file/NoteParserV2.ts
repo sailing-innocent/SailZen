@@ -1,4 +1,3 @@
-/* eslint-disable no-await-in-loop */
 import {
   DendronError,
   DEngineClient,
@@ -24,7 +23,6 @@ import {
   string2Note,
   globMatch,
   DendronConfig,
-  asyncLoopOneAtATime,
   SchemaModuleDict,
 } from "@saili/common-all";
 import { DConfig, DLogger, vault2Path } from "@saili/common-server";
@@ -154,12 +152,10 @@ export class NoteParserV2 {
     unseenKeys.delete(rootNote.fname);
     this.logger.info({ ctx, msg: "post:parseRootNote" });
 
-    // Parse root hierarchies
-    await asyncLoopOneAtATime(
-      fileMetaDict[1]
-        // Don't count root node
-        .filter((n) => n.fpath !== "root.md"),
-      async (ent) => {
+    // Parse root hierarchies concurrently (addParent: false means no inter-note deps)
+    const domainFiles = fileMetaDict[1].filter((n) => n.fpath !== "root.md");
+    const domainResults = await Promise.all(
+      domainFiles.map(async (ent) => {
         try {
           const resp = await this.parseNoteProps({
             fpath: ent.fpath,
@@ -167,96 +163,109 @@ export class NoteParserV2 {
             vault,
             config,
           });
-          // Store each successfully parsed node in note dict and keep track of errors
-          if (resp.error) {
-            errors.push(resp.error);
-          }
-          if (resp.data && resp.data.length > 0) {
-            const parsedNote = resp.data[0].note;
-            unseenKeys.delete(parsedNote.fname);
-            DNodeUtils.addChild(rootNote, parsedNote);
-
-            // Check for duplicate IDs when adding notes to the map
-            if (notesById[parsedNote.id] !== undefined) {
-              const duplicate = notesById[parsedNote.id];
-              errors.push(
-                new DuplicateNoteError({
-                  noteA: duplicate,
-                  noteB: parsedNote,
-                })
-              );
-            }
-            // Update in-memory note dict
-            NoteDictsUtils.add(parsedNote, noteDicts);
-          }
+          return { ent, resp, error: null as any };
         } catch (err: any) {
-          const error = ErrorFactory.wrapIfNeeded(err);
-          // A fatal error would kill the initialization
-          error.severity = ERROR_SEVERITY.MINOR;
-          error.message =
-            `Failed to read ${ent.fpath} in ${vault.fsPath}: ` + error.message;
-          errors.push(error);
+          return { ent, resp: null, error: err };
         }
-      }
+      })
     );
+    // Commit domain results to noteDicts serially (safe dict mutation)
+    for (const { ent, resp, error: catchErr } of domainResults) {
+      if (catchErr) {
+        const error = ErrorFactory.wrapIfNeeded(catchErr);
+        error.severity = ERROR_SEVERITY.MINOR;
+        error.message =
+          `Failed to read ${ent.fpath} in ${vault.fsPath}: ` + error.message;
+        errors.push(error);
+        continue;
+      }
+      if (resp!.error) {
+        errors.push(resp!.error);
+      }
+      if (resp!.data && resp!.data.length > 0) {
+        const parsedNote = resp!.data[0].note;
+        unseenKeys.delete(parsedNote.fname);
+        DNodeUtils.addChild(rootNote, parsedNote);
+        if (notesById[parsedNote.id] !== undefined) {
+          const duplicate = notesById[parsedNote.id];
+          errors.push(
+            new DuplicateNoteError({ noteA: duplicate, noteB: parsedNote })
+          );
+        }
+        NoteDictsUtils.add(parsedNote, noteDicts);
+      }
+    }
 
     this.logger.info({ ctx, msg: "post:parseDomainNotes" });
 
-    // Parse level by level
+    // Parse level by level (levels must be sequential: child needs parent in noteDicts).
+    // Within each level:
+    //   Phase 1 (concurrent): read files from disk and parse note props (pure IO, no shared-state mutation)
+    //   Phase 2 (serial):     call addOrUpdateParents so parent/child links are built without races
     let lvl = 2;
     while (lvl <= maxLvl) {
-      await asyncLoopOneAtATime(
-        (fileMetaDict[lvl] || []).filter((ent) => {
-          return !globMatch(["root.*"], ent.fpath);
-        }),
-        async (ent) => {
+      const lvlFiles = (fileMetaDict[lvl] || []).filter(
+        (ent) => !globMatch(["root.*"], ent.fpath)
+      );
+
+      // Phase 1: concurrent file IO - parse each note WITHOUT touching noteDicts
+      const ioResults = await Promise.all(
+        lvlFiles.map(async (ent) => {
           try {
             const resp = await this.parseNoteProps({
               fpath: ent.fpath,
-              noteDicts: { notesById, notesByFname },
-              addParent: true,
+              addParent: false,
               vault,
               config,
             });
-
-            if (resp.error) {
-              errors.push(resp.error);
-            }
-
-            if (resp.data && resp.data.length > 0) {
-              const parsedNote = resp.data[0].note;
-              unseenKeys.delete(parsedNote.fname);
-
-              resp.data.forEach((ent) => {
-                const note = ent.note;
-                // Check for duplicate IDs when adding created notes to the map
-                if (
-                  ent.status === "create" &&
-                  notesById[note.id] !== undefined
-                ) {
-                  const duplicate = notesById[note.id];
-                  errors.push(
-                    new DuplicateNoteError({
-                      noteA: duplicate,
-                      noteB: note,
-                    })
-                  );
-                }
-
-                NoteDictsUtils.add(note, noteDicts);
-              });
-            }
+            return { ent, resp, error: null as any };
           } catch (err: any) {
-            const dendronError = ErrorFactory.wrapIfNeeded(err);
-            // A fatal error would kill the initialization
-            dendronError.severity = ERROR_SEVERITY.MINOR;
-            dendronError.message =
-              `Failed to read ${ent.fpath} in ${vault.fsPath}: ` +
-              dendronError.message;
-            errors.push(dendronError);
+            return { ent, resp: null, error: err };
           }
-        }
+        })
       );
+
+      // Phase 2: serial parent linking - addOrUpdateParents mutates noteDicts so must be sequential
+      for (const { ent, resp, error: catchErr } of ioResults) {
+        if (catchErr) {
+          const dendronError = ErrorFactory.wrapIfNeeded(catchErr);
+          dendronError.severity = ERROR_SEVERITY.MINOR;
+          dendronError.message =
+            `Failed to read ${ent.fpath} in ${vault.fsPath}: ` +
+            dendronError.message;
+          errors.push(dendronError);
+          continue;
+        }
+        if (resp!.error) {
+          errors.push(resp!.error);
+        }
+        if (resp!.data && resp!.data.length > 0) {
+          const parsedNote = resp!.data[0].note;
+          unseenKeys.delete(parsedNote.fname);
+          const changed = NoteUtils.addOrUpdateParents({
+            note: parsedNote,
+            noteDicts,
+            createStubs: true,
+          });
+          if (notesById[parsedNote.id] !== undefined) {
+            errors.push(
+              new DuplicateNoteError({
+                noteA: notesById[parsedNote.id],
+                noteB: parsedNote,
+              })
+            );
+          }
+          NoteDictsUtils.add(parsedNote, noteDicts);
+          // Must write back both "create" and "update" entries:
+          // addOrUpdateParents operates on cloneDeep copies from findByFname
+          changed.forEach((entry) => {
+            if (entry.note.id !== parsedNote.id) {
+              NoteDictsUtils.add(entry.note, noteDicts);
+            }
+          });
+        }
+      }
+
       lvl += 1;
     }
     this.logger.info({ ctx, msg: "post:parseAllNotes" });
@@ -392,6 +401,8 @@ export class NoteParserV2 {
           body,
           vault,
           contentHash: sig,
+          children: [],
+          parent: null,
         };
         return { data: note, error: null };
       } else {

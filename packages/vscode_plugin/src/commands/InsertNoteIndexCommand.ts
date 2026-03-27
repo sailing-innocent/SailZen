@@ -5,7 +5,7 @@ import { DendronClientUtilsV2 } from "../clientUtils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {
@@ -66,7 +66,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
       );
       return opts;
     }
-    const activeNote = await WSUtils.getNoteFromDocument(maybeEditor.document)!;
+    const activeNote = await WSUtilsV2.instance().getNoteFromDocument(maybeEditor.document)!;
     if (_.isUndefined(activeNote)) {
       window.showErrorMessage("Active file is not a Dendron note.");
       return opts;

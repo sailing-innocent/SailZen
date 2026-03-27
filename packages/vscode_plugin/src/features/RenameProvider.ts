@@ -23,7 +23,7 @@ import {
   getReferenceAtPositionResp,
 } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 
 export default class RenameProvider implements vscode.RenameProvider {
   private _targetNote: NoteProps | undefined;
@@ -44,7 +44,7 @@ export default class RenameProvider implements vscode.RenameProvider {
     const { label, vaultName, range, ref, refType, refText } = reference;
     const targetVault = vaultName
       ? VaultUtils.getVaultByName({ vaults, vname: vaultName })
-      : WSUtils.getVaultFromDocument(document);
+      : WSUtilsV2.instance().getVaultFromDocument(document);
     if (targetVault === undefined) {
       throw new DendronError({
         message: `Cannot rename note with specified vault (${vaultName}). Vault does not exist.`,
@@ -60,7 +60,7 @@ export default class RenameProvider implements vscode.RenameProvider {
         });
       }
       this._targetNote = targetNote;
-      const currentNote = await WSUtils.getNoteFromDocument(document);
+      const currentNote = await WSUtilsV2.instance().getNoteFromDocument(document);
       if (_.isEqual(currentNote, targetNote)) {
         throw new DendronError({
           message: `Cannot rename symbol that references current note.`,

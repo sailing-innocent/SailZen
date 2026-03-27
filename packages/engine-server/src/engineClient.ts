@@ -188,59 +188,41 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
    * See {@link DStore.getNote}
    */
   async getNote(id: string): Promise<GetNoteResp> {
-    if (this._config.dev?.enableEngineV3) {
-      return this.api.noteGet({ id, ws: this.ws });
-    } else {
-      const maybeNote = this.notes[id];
-
-      if (maybeNote) {
-        return { data: _.cloneDeep(maybeNote) };
-      } else {
-        return {
-          error: DendronError.createFromStatus({
-            status: ERROR_STATUS.CONTENT_NOT_FOUND,
-            message: `NoteProps not found for key ${id}.`,
-            severity: ERROR_SEVERITY.MINOR,
-          }),
-        };
-      }
-    }
+    return this.api.noteGet({ id, ws: this.ws });
   }
 
   async getNoteMeta(id: string): Promise<GetNoteMetaResp> {
-    if (this._config.dev?.enableEngineV3) {
-      return this.api.noteGetMeta({ id, ws: this.ws });
-    } else {
-      return this.getNote(id);
+    const maybeNote = this.notes[id];
+    if (maybeNote) {
+      const noteMeta: NotePropsMeta = _.omit(maybeNote, ["body"]);
+      return { data: _.cloneDeep(noteMeta) };
     }
+    return this.api.noteGetMeta({ id, ws: this.ws });
   }
 
-  /**
-   * See {@link DEngine.bulkGetNotes}
-   * TODO: remove this.notes
-   */
   async bulkGetNotes(ids: string[]): Promise<BulkGetNoteResp> {
-    if (this._config.dev?.enableEngineV3) {
-      return this.api.noteBulkGet({ ids, ws: this.ws });
-    } else {
-      return {
-        data: ids.map((id) => {
-          return _.cloneDeep(this.notes[id]);
-        }),
-      };
-    }
+    return this.api.noteBulkGet({ ids, ws: this.ws });
   }
 
-  /**
-   * See {@link DEngine.bulkGetNotesMeta}
-   * TODO: remove this.notes
-   */
   async bulkGetNotesMeta(ids: string[]): Promise<BulkGetNoteMetaResp> {
-    if (this._config.dev?.enableEngineV3) {
-      return this.api.noteBulkGetMeta({ ids, ws: this.ws });
-    } else {
-      return this.bulkGetNotes(ids);
+    const results: NotePropsMeta[] = [];
+    const missing: string[] = [];
+    for (const id of ids) {
+      const maybeNote = this.notes[id];
+      if (maybeNote) {
+        results.push(_.cloneDeep(_.omit(maybeNote, ["body"]) as NotePropsMeta));
+      } else {
+        missing.push(id);
+      }
     }
+    if (missing.length === 0) {
+      return { data: results };
+    }
+    const apiResp = await this.api.noteBulkGetMeta({ ids: missing, ws: this.ws });
+    return {
+      error: apiResp.error,
+      data: [...results, ...(apiResp.data ?? [])],
+    };
   }
 
   /**
@@ -255,6 +237,25 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
    * See {@link DStore.findNotesMeta}
    */
   async findNotesMeta(opts: FindNoteOpts): Promise<NotePropsMeta[]> {
+    const { fname, vault, excludeStub } = opts;
+    if (fname !== undefined && Object.keys(this.notes).length > 0) {
+      const cleanedFname = fname.toLowerCase();
+      const candidates = (this.noteFnames[cleanedFname] ?? [])
+        .map((id) => this.notes[id])
+        .filter(Boolean);
+      let results: NotePropsMeta[] = candidates.map(
+        (n) => _.cloneDeep(_.omit(n, ["body"]) as NotePropsMeta)
+      );
+      if (vault) {
+        results = results.filter((n) =>
+          VaultUtils.isEqual(vault, n.vault, this.wsRoot)
+        );
+      }
+      if (excludeStub) {
+        results = results.filter((n) => !n.stub);
+      }
+      return results;
+    }
     const resp = await this.api.noteFindMeta({ ...opts, ws: this.ws });
     return resp.data!;
   }

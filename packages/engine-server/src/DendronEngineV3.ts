@@ -242,7 +242,7 @@ export class DendronEngineV3 extends EngineV3Base implements DEngine {
         return { key: note.id, noteMeta };
       });
       this._noteStore.dispose();
-      this._noteStore.bulkWriteMetadata(bulkWriteOpts);
+      await this._noteStore.bulkWriteMetadata(bulkWriteOpts);
 
       const hookErrors: IDendronError[] = [];
       this.hooks.onCreate = this.hooks.onCreate.filter((hook) => {

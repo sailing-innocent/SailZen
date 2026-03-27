@@ -35,7 +35,7 @@ import { ExtensionUtils } from "../utils/ExtensionUtils";
 import { StartupUtils } from "../utils/StartupUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 import { DendronCodeWorkspace } from "./codeWorkspace";
 import { DendronNativeWorkspace } from "./nativeWorkspace";
 import { WorkspaceInitFactory } from "./WorkspaceInitFactory";
@@ -328,7 +328,7 @@ async function reloadWorkspace({
 }) {
   const ctx = "reloadWorkspace";
   const ws = ext.getDWorkspace();
-  const maybeEngine = await WSUtils.reloadWorkspace();
+  const maybeEngine = await WSUtilsV2.instance().reloadWorkspace();
   if (!maybeEngine) {
     return maybeEngine;
   }
@@ -568,7 +568,7 @@ export class WorkspaceActivator {
     context.subscriptions.push(TextDocumentServiceFactory.create(ext));
 
     // Reload
-    WSUtils.showActivateProgress();
+    WSUtilsV2.instance().showActivateProgress();
     const start = process.hrtime();
     const reloadSuccess = await reloadWorkspace({ ext, wsService });
     const durationReloadWorkspace = getDurationMilliseconds(start);

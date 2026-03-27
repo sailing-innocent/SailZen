@@ -20,7 +20,7 @@ import { LookupControllerV3CreateOpts } from "../components/lookup/LookupControl
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 import { BasicCommand } from "./base";
 import { RenameNoteOutputV2a, RenameNoteV2aCommand } from "./RenameNoteV2a";
 import {
@@ -149,7 +149,7 @@ export class RefactorHierarchyCommandV2 extends BasicCommand<
   async promptMatchText() {
     const editor = VSCodeUtils.getActiveTextEditor();
     const value = editor?.document
-      ? (await WSUtils.getNoteFromDocument(editor.document))?.fname
+      ? (await WSUtilsV2.instance().getNoteFromDocument(editor.document))?.fname
       : "";
     const match = await VSCodeUtils.showInputBox({
       title: "Enter match text",

@@ -19,6 +19,8 @@ import { ExtensionProvider } from "./ExtensionProvider";
 import { isInsidePath, vault2Path } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import { AnchorUtils } from "@saili/unified";
+import { HistoryEvent, HistoryService } from "@saili/engine-server";
+import { DENDRON_COMMANDS } from "./constants";
 
 let WS_UTILS: IWSUtilsV2 | undefined;
 
@@ -264,5 +266,64 @@ export class WSUtilsV2 implements IWSUtilsV2 {
     const { vault, fname } = schema;
     const fnameWithExtension = `${fname}.schema.yml`;
     return this.openFileInEditorUsingFullFname(vault, fnameWithExtension);
+  }
+
+  async openNoteByPath({ vault, fname }: { vault: DVault; fname: string }) {
+    const wsRoot = this.extension.getDWorkspace().wsRoot;
+    const vpath = vault2Path({ vault, wsRoot });
+    const notePath = path.join(vpath, `${fname}.md`);
+    const editor = await VSCodeUtils.openFileInEditor(
+      vscode.Uri.file(notePath)
+    );
+    return editor as vscode.TextEditor;
+  }
+
+  showActivateProgress() {
+    const ctx = "showActivateProgress";
+    vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "Starting Dendron...",
+        cancellable: true,
+      },
+      (_progress, _token) => {
+        _token.onCancellationRequested(() => {
+          console.log("Cancelled");
+        });
+        const p = new Promise((resolve) => {
+          HistoryService.instance().subscribe(
+            "extension",
+            async (_event: HistoryEvent) => {
+              if (_event.action === "initialized") {
+                resolve(undefined);
+              }
+            }
+          );
+          HistoryService.instance().subscribe(
+            "extension",
+            async (_event: HistoryEvent) => {
+              if (_event.action === "not_initialized") {
+                Logger.error({ ctx, msg: "issue initializing Dendron" });
+                resolve(undefined);
+              }
+            }
+          );
+        });
+        return p;
+      }
+    );
+  }
+
+  async reloadWorkspace(): Promise<unknown> {
+    try {
+      const out = await vscode.commands.executeCommand(
+        DENDRON_COMMANDS.RELOAD_INDEX.key,
+        true
+      );
+      return out;
+    } catch (err) {
+      Logger.error({ error: err as any });
+      return undefined;
+    }
   }
 }

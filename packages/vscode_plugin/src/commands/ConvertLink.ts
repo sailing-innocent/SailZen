@@ -23,7 +23,7 @@ import {
 } from "../utils/md";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 import { BasicCommand } from "./base";
 
 
@@ -354,7 +354,7 @@ export class ConvertLinkCommand extends BasicCommand<
     }
     const targetVault = vaultName
       ? VaultUtils.getVaultByName({ vaults, vname: vaultName })
-      : WSUtils.getVaultFromDocument(document);
+      : WSUtilsV2.instance().getVaultFromDocument(document);
 
     if (targetVault === undefined) {
       throw ConvertLinkCommand.noVaultError();

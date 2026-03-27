@@ -1,4 +1,4 @@
 ::-webkit-scrollbar{width:10px}
-::-webkit-scrollbar-track{background:#fff}
-::-webkit-scrollbar-thumb{background:#888}
-::-webkit-scrollbar-thumb:hover{background:#555}
+::-webkit-scrollbar-track{background:var(--vscode-editor-background,#f5f5f5)}
+::-webkit-scrollbar-thumb{background:var(--vscode-scrollbarSlider-background,#c1c1c1)}
+::-webkit-scrollbar-thumb:hover{background:var(--vscode-scrollbarSlider-hoverBackground,#a8a8a8)}

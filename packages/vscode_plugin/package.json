@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Dendron",
   "publisher": "SailingInnocent",
-  "version": "0.2.4",
+  "version": "0.3.6",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -1320,7 +1320,7 @@
   },
   "scripts": {
     "build": "pnpm run compile",
-    "precompile": "pnpm --filter=@saili/engine-server run buildCI",
+    "precompile": "pnpm --filter=@saili/engine-server run buildCI && pnpm --filter=@saili/dendron-plugin-views run build && pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
     "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --tsconfig=tsconfig.json && node scripts/fix-import-meta.js && node scripts/copy-prisma-assets.js",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --watch --tsconfig=tsconfig.json",
     "package": "vsce package --no-dependencies",

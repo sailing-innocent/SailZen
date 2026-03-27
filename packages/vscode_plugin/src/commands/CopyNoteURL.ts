@@ -8,7 +8,7 @@ import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {};
@@ -53,9 +53,9 @@ export class CopyNoteURLCommand extends BasicCommand<
       window.showErrorMessage("no active document found");
       return;
     }
-    const vault = WSUtils.getVaultFromDocument(maybeTextEditor.document);
+    const vault = WSUtilsV2.instance().getVaultFromDocument(maybeTextEditor.document);
 
-    const note = await WSUtils.getNoteFromDocument(maybeTextEditor.document);
+    const note = await WSUtilsV2.instance().getNoteFromDocument(maybeTextEditor.document);
     if (_.isUndefined(note)) {
       window.showErrorMessage("You need to be in a note to use this command");
       return;

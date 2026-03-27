@@ -47,7 +47,7 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
-import { WSUtils } from "../WSUtils";
+import { WSUtilsV2 } from "../WSUtilsV2";
 
 function padWithZero(n: number): string {
   if (n > 99) return String(n);
@@ -247,7 +247,7 @@ export const provideCompletionItems = async (
     const { wsRoot } = engine;
     let completionItems: CompletionItem[];
     const completionsIncomplete = true;
-    const currentVault = WSUtils.getVaultFromDocument(document);
+    const currentVault = WSUtilsV2.instance().getVaultFromDocument(document);
 
     if (found?.groups?.hashTag) {
       completionItems = await provideCompletionsForTag({
@@ -493,7 +493,7 @@ export async function provideBlockCompletionItems(
     otherFile = true;
   } else {
     // This anchor is to the same file, e.g. [[#
-    note = await WSUtils.getNoteFromDocument(document);
+    note = await WSUtilsV2.instance().getNoteFromDocument(document);
   }
 
   if (_.isUndefined(note) || token?.isCancellationRequested) return;

@@ -8,6 +8,7 @@ import {
   SchemaModuleProps,
 } from "@saili/common-all";
 
+
 export interface IWSUtilsV2 {
   getNoteFromDocument(
     document: vscode.TextDocument
@@ -42,6 +43,10 @@ export interface IWSUtilsV2 {
 
   openNote(note: NotePropsMeta): Promise<vscode.TextEditor>;
   openSchema(schema: SchemaModuleProps): Promise<vscode.TextEditor>;
+  openNoteByPath(opts: { vault: DVault; fname: string }): Promise<vscode.TextEditor>;
+
+  showActivateProgress(): void;
+  reloadWorkspace(): Promise<unknown>;
 
   /**
    * Given list of notes, prompt user to pick note by selecting corresponding vault name

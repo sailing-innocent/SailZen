@@ -72,7 +72,7 @@ import { showWelcome } from "./WelcomeUtils";
 import { DendronExtension, getDWorkspace, getExtension } from "./workspace";
 import { TutorialInitializer } from "./workspace/tutorialInitializer";
 import { WorkspaceActivator } from "./workspace/workspaceActivator";
-import { WSUtils } from "./WSUtils";
+import { WSUtilsV2 } from "./WSUtilsV2";
 
 const MARKDOWN_WORD_PATTERN = new RegExp("([\\w\\.]+)");
 // === Main
@@ -177,7 +177,7 @@ export async function _activate(
     // Setup the commands
     await _setupCommands({ ext: ws, context, requireActiveWorkspace: false });
     // Order matters. Need to register `Reload Index` command before activating workspace
-    // Workspace activation calls `RELOAD_INDEX` via {@link WSUtils.reloadWorkspace}
+    // Workspace activation calls `RELOAD_INDEX` via {@link WSUtilsV2.reloadWorkspace}
     if (!existingCommands.includes(DENDRON_COMMANDS.RELOAD_INDEX.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -377,7 +377,7 @@ export async function _activate(
         action: "activate",
       });
       // If automaticallyShowPreview = true, display preview panel on start up
-      const note = await WSUtils.getActiveNote();
+      const note = await WSUtilsV2.instance().getActiveNote();
       if (
         note &&
         ws.workspaceService?.config.preview?.automaticallyShowPreview

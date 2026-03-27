@@ -38,10 +38,6 @@ export const DEV: DendronConfigEntryCollection<DendronDevConfig> = {
     label: "Enable iframe note references.",
     desc: "Uses iframes for note references when publishing a vault using the nextjs export pod.",
   },
-  enableEngineV3: {
-    label: "Enable Engine V3",
-    desc: "Uses engine v3 as default backend",
-  },
   enableExperimentalInlineNoteRef: {
     label: "Enable inline note references.",
     desc: "Uses inline note references in Editor",

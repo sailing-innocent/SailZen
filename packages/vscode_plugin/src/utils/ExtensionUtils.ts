@@ -13,6 +13,7 @@ import {
   DConfig,
   getDurationMilliseconds,
 } from "@saili/common-server";
+import { StartupProfiler } from "../perf/StartupProfiler";
 import { MetadataService, WorkspaceService } from "@saili/engine-server";
 import { Subprocess as ExecaChildProcess } from "execa";
 import fs from "fs-extra";
@@ -473,6 +474,16 @@ export class ExtensionUtils {
       }
     }
 
+    StartupProfiler.write(wsRoot, {
+      timestamp: new Date().toISOString(),
+      version: VersionProvider.version(),
+      activationSucceeded: activatedSuccess,
+      noteCount: numNotes,
+      vaultCount: vaults.length,
+      durationMs: {
+        reloadWorkspace: durationReloadWorkspace,
+      },
+    });
   }
 
   /**
