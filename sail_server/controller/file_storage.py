@@ -24,7 +24,7 @@ from pathlib import Path
 # 文件存储目录 - 使用环境变量或默认路径
 STORAGE_DIR = Path(os.environ.get("FILE_STORAGE_PATH", "./data/file_storage"))
 METADATA_FILE = STORAGE_DIR / ".metadata.json"
-MAX_FILE_SIZE = 1048576  # 1MB
+MAX_FILE_SIZE = 10485760  # 10MB
 
 
 def ensure_storage_dir():
@@ -153,7 +153,7 @@ class FileStorageController(Controller):
     async def upload_file(
         self, data: UploadFile = Body(media_type="multipart/form-data")
     ) -> FileUploadResponse:
-        """上传文件 - 限制1MB以内的文本文件"""
+        """上传文件 - 限制10MB以内的文本文件"""
         ensure_storage_dir()
 
         # 检查文件大小

@@ -35,7 +35,7 @@ import {
   api_get_file_content,
 } from '@lib/api/file_storage'
 
-const MAX_FILE_SIZE = 1048576 // 1MB
+const MAX_FILE_SIZE = 10485760 // 10MB
 
 export default function FileStoragePage() {
   const [files, setFiles] = useState<FileInfo[]>([])
@@ -175,7 +175,7 @@ export default function FileStoragePage() {
         {/* 说明 */}
         <Alert>
           <AlertDescription>
-            支持上传文本文件（.txt），单个文件大小限制为 {MAX_FILE_SIZE} 字节（1MB）。上传后可以在此页面预览、下载或删除文件。
+            支持上传文本文件（.txt），单个文件大小限制为 {MAX_FILE_SIZE} 字节（10MB）。上传后可以在此页面预览、下载或删除文件。
           </AlertDescription>
         </Alert>
 
