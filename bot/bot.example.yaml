@@ -78,6 +78,10 @@ projects:
   - slug: "sailzen"
     path: "D:/ws/repos/SailZen"
     label: "SailZen"
+  # Books directory for novel text import via AI skill
+  - slug: "books"
+    path: "D:/ws/repos/SailZen/books"
+    label: "Books"
   # Add more projects as needed:
   # - slug: "myproject"
   #   path: "/home/user/projects/myproject"
