@@ -65,6 +65,7 @@ That means the first practical 3.0 milestone is:
 - monitor progress and state
 - suspend/resume safely
 - receive summaries and error feedback
+- the bot can update itself, disconnect from web, launch a new python session, backup and restore current bot session state, clean up and close gracefully
 
 Once that exists, the same infrastructure can expand from "development operations" into "life operations".
 
