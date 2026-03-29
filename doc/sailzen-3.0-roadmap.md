@@ -24,28 +24,6 @@ What changes in this roadmap is not the destination, but the implementation orde
 
 ---
 
-## Strategic Shift
-
-### Old Priority
-
-1. Foundation cleanup
-2. General Agent core
-3. Feishu / VSCode / Site interfaces
-4. Note-data bridge
-5. Proactive intelligence
-
-### New Priority
-
-1. **Feishu Dev Loop MVP**
-2. **Development Task Layer**
-3. **Unified Agent + Tooling for real work**
-4. **Note/Data Bridge**
-5. **Proactive Shadow**
-
-This order is better because it uses the strongest existing code path first, creates an immediate human-facing operating surface, and makes later AI-assisted development much faster.
-
----
-
 ## Current State Assessment
 
 ### What Already Exists
