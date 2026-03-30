@@ -28,7 +28,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from opencode_client import OpenCodeWebClient
+try:
+    from bot.opencode_client import OpenCodeWebClient
+    from bot.config import AgentConfig
+except ImportError:
+    from opencode_client import OpenCodeWebClient
+    from config import AgentConfig
 
 
 @dataclass
@@ -46,24 +51,6 @@ class ManagedSession:
     _process: Optional[Any] = None  # subprocess.Popen object for proper cleanup
     _stdout_log: Optional[Any] = None  # stdout file handle
     _stderr_log: Optional[Any] = None  # stderr file handle
-
-
-@dataclass
-class AgentConfig:
-    """All agent settings."""
-
-    app_id: str = ""
-    app_secret: str = ""
-    base_port: int = 4096
-    max_sessions: int = 10
-    callback_timeout: int = 300
-    auto_restart: bool = False
-    config_path: Optional[str] = None
-    # Named project shortcuts
-    projects: List[Dict[str, str]] = field(default_factory=list)
-    # LLM settings for BotBrain (optional, fallback to env vars)
-    llm_provider: Optional[str] = None
-    llm_api_key: Optional[str] = None
 
 
 class OpenCodeSessionManager:

@@ -121,6 +121,25 @@ from session_state import (
     classify_risk,
 )
 
+# Phase 0: Self-update support
+try:
+    sys.path.insert(0, str(Path(__file__).parent.parent / "sail_server"))
+    from sail_server.feishu_gateway.bot_state_manager import (
+        BotStateManager,
+        get_state_manager,
+    )
+    from sail_server.feishu_gateway.self_update_orchestrator import (
+        SelfUpdateOrchestrator,
+        UpdatePhase,
+        UpdateTriggerSource,
+        UpdateResult,
+    )
+
+    HAS_SELF_UPDATE = True
+except ImportError as e:
+    HAS_SELF_UPDATE = False
+    print(f"[Warning] Self-update module not available: {e}")
+
 
 # ---------------------------------------------------------------------------
 # OpenCode Web API Client
@@ -944,6 +963,23 @@ _BRAIN_FALLBACK_ACTIONS = {
     "导入文本": ("import_text", {}),
     "import text": ("import_text", {}),
     "import novel": ("import_text", {}),
+    # Phase 0: Self-update commands
+    "更新": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested update"},
+    ),
+    "update": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested update"},
+    ),
+    "升级": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested upgrade"},
+    ),
+    "restart": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested restart"},
+    ),
 }
 
 
@@ -1425,6 +1461,103 @@ class FeishuBotAgent:
         )
         self.state_store.register_hook(self._on_state_change)
 
+        # Phase 0: Self-update support
+        self._self_update_enabled = HAS_SELF_UPDATE
+        self._state_manager: Optional[Any] = None
+        self._update_orchestrator: Optional[Any] = None
+        self._init_self_update()
+
+    def _init_self_update(self) -> None:
+        """Initialize self-update functionality."""
+        if not self._self_update_enabled:
+            return
+
+        try:
+            self._state_manager = get_state_manager()
+            self._state_manager.initialize_session()
+
+            # Check for handover from previous instance
+            handover_data = SelfUpdateOrchestrator.check_for_handover()
+            if handover_data:
+                print(
+                    f"[SelfUpdate] Detected handover from PID {handover_data.get('old_pid')}"
+                )
+                # Restore state
+                self._state_manager.restore_from_backup(
+                    Path(handover_data.get("backup_path"))
+                    if handover_data.get("backup_path")
+                    else None
+                )
+
+            print(
+                f"[SelfUpdate] Initialized (session: {self._state_manager.get_current_state().session_id[:16]}...)"
+            )
+        except Exception as exc:
+            print(f"[SelfUpdate] Initialization failed: {exc}")
+            self._self_update_enabled = False
+
+    async def request_self_update(
+        self,
+        trigger_source: str = "manual",
+        reason: str = "User requested update",
+        initiated_by: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Request a self-update of the bot.
+
+        Args:
+            trigger_source: Source of update trigger (manual, opencode, scheduled)
+            reason: Human-readable reason for update
+            initiated_by: Who initiated the update
+
+        Returns:
+            Update result dictionary
+        """
+        if not self._self_update_enabled or not self._state_manager:
+            return {
+                "success": False,
+                "error": "Self-update not available",
+            }
+
+        try:
+            # Initialize update orchestrator if needed
+            if not self._update_orchestrator:
+                self._update_orchestrator = SelfUpdateOrchestrator(
+                    state_manager=self._state_manager,
+                    workspace_root=Path(__file__).parent.parent,
+                )
+
+            # Map trigger source
+            source_map = {
+                "manual": UpdateTriggerSource.MANUAL_COMMAND,
+                "opencode": UpdateTriggerSource.OPENCODE_SESSION,
+                "scheduled": UpdateTriggerSource.SCHEDULED,
+            }
+            source = source_map.get(trigger_source, UpdateTriggerSource.MANUAL_COMMAND)
+
+            # Initiate update
+            result = await self._update_orchestrator.initiate_self_update(
+                trigger_source=source,
+                reason=reason,
+                initiated_by=initiated_by,
+            )
+
+            return {
+                "success": result.success,
+                "phase": result.phase.name
+                if hasattr(result.phase, "name")
+                else str(result.phase),
+                "message": result.message,
+                "new_pid": result.new_pid,
+                "backup_path": str(result.backup_path) if result.backup_path else None,
+                "error": result.error,
+            }
+
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": f"Self-update failed: {exc}",
+            }
+
     # ------------------------------------------------------------------
     # Feishu messaging
     # ------------------------------------------------------------------
@@ -1662,6 +1795,68 @@ class FeishuBotAgent:
                 args=(plan, chat_id, message_id, ctx),
                 daemon=True,
             ).start()
+
+            # Handle self-update confirmation
+            if action_type == "confirm_self_update":
+                # Extract additional params from value
+                trigger_source = value.get("trigger_source", "manual")
+                reason = value.get("reason", "User confirmed update")
+
+                # Start self-update in background
+                def do_self_update():
+                    import asyncio
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        result = loop.run_until_complete(
+                            self.request_self_update(
+                                trigger_source=trigger_source,
+                                reason=reason,
+                                initiated_by=chat_id,
+                            )
+                        )
+
+                        if result.get("success"):
+                            # Send success message
+                            success_card = CardRenderer.result(
+                                "✅ 更新已启动",
+                                f"新进程 PID: {result.get('new_pid')}\n"
+                                f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
+                                "旧进程即将退出，新进程将接管。",
+                                success=True,
+                            )
+                            self._send_card(chat_id, success_card)
+                        else:
+                            # Send error message
+                            error_card = CardRenderer.error(
+                                "❌ 更新失败",
+                                result.get("error", "Unknown error"),
+                            )
+                            self._send_card(chat_id, error_card)
+                    finally:
+                        loop.close()
+
+                threading.Thread(target=do_self_update, daemon=True).start()
+
+                # Return immediate response
+                from lark_oapi.event.callback.model.p2_card_action_trigger import (
+                    P2CardActionTriggerResponse,
+                )
+
+                resp = P2CardActionTriggerResponse(
+                    {
+                        "toast": {
+                            "type": "info",
+                            "content": "正在启动更新...",
+                            "i18n": {
+                                "zh_cn": "正在启动更新...",
+                                "en_us": "Starting update...",
+                            },
+                        }
+                    }
+                )
+                return resp
 
             # Return success response to Feishu (required!)
             from lark_oapi.event.callback.model.p2_card_action_trigger import (
@@ -2249,6 +2444,57 @@ class FeishuBotAgent:
             threading.Thread(target=do_import, daemon=True).start()
             return
 
+        # Phase 0: Self-update support
+        if action == "self_update":
+            trigger_source = params.get("trigger_source", "manual")
+            reason = params.get("reason", "User requested update")
+
+            # Check if self-update is available
+            if not self._self_update_enabled:
+                self._reply_to_message(
+                    message_id,
+                    "❌ 自更新功能不可用。\n\n"
+                    "可能原因：\n"
+                    "- 缺少必要的依赖模块\n"
+                    "- 初始化失败\n\n"
+                    "请检查日志或联系管理员。",
+                )
+                return
+
+            # Send confirmation card
+            confirm_card = CardRenderer.confirmation(
+                action_summary="🔄 确认更新 Bot",
+                action_detail=f"**更新原因:** {reason}\n\n"
+                "更新流程：\n"
+                "1. 备份当前会话状态\n"
+                "2. 断开飞书连接\n"
+                "3. 启动新进程 (uv run)\n"
+                "4. 恢复会话状态\n"
+                "5. 优雅关闭旧进程\n\n"
+                "⚠️ 更新期间 Bot 会短暂离线 (约 5-10 秒)",
+                risk_level="confirm_required",
+                timeout_minutes=5,
+            )
+            # Store pending action in context
+            from session_state import PendingAction, RiskLevel
+
+            ctx.pending = PendingAction(
+                pending_id=f"self_update_{int(time.time())}",
+                action="confirm_self_update",
+                params={
+                    "trigger_source": trigger_source,
+                    "reason": reason,
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                },
+                summary="确认更新 Bot",
+                detail=f"更新原因: {reason}",
+                risk_level=RiskLevel.HIGH,
+            )
+            self._reply_card(message_id, confirm_card)
+            ctx.push("bot", "等待用户确认更新")
+            return
+
         self._reply_to_message(message_id, "未知动作: " + action)
 
     # ------------------------------------------------------------------
@@ -2266,6 +2512,11 @@ class FeishuBotAgent:
         proj_line = f"  配置的项目: {', '.join(slugs)}\n" if slugs else ""
         llm_status = "LLM 已启用" if self.brain._gw else "LLM 未配置（关键词兜底模式）"
         sep = "=" * 32
+        # Phase 0: Check self-update availability
+        update_line = ""
+        if self._self_update_enabled:
+            update_line = "\n  Bot 管理：\n    '更新' / 'update' - 触发 Bot 自更新\n\n"
+
         return (
             f"Feishu OpenCode Bridge v7.0\n{sep}\n"
             "直接用自然语言告诉我你想做什么：\n\n"
@@ -2281,7 +2532,8 @@ class FeishuBotAgent:
             "    '导入 xxx.txt'\n\n"
             "  管理会话：\n"
             "    '查看状态'\n"
-            "    '停止所有会话'\n\n"
+            "    '停止所有会话'\n"
+            f"{update_line}"
             f"{proj_line}"
             f"[{llm_status}]"
         )
