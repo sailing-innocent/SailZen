@@ -1,9 +1,60 @@
 # SailZen Project Guide for AI Agents
 
 > 📚 **重要文档**: 
+> - [SailZen 3.0 路线图](./doc/sailzen-3.0-roadmap.md) - **当前开发重点**
 > - [产品需求文档 (PRD)](./doc/PRD.md) - 完整的产品功能需求
 > - [文档中心](./doc/README.md) - 所有文档的导航入口
 > - [重构计划](./doc/refact_todo.md) - 代码架构重构计划
+
+## Current Development Focus: SailZen 3.0
+
+SailZen 3.0 是当前主要开发目标，核心愿景是：**"开发一个真正的影子助手，运行在服务器和开发机上，永不休眠。"**
+
+### 核心原则
+
+**Notes are notes. Databases are databases. The Agent is the bridge, not the replacement.**
+
+### 3.0 架构概览 (Phase 0-1)
+
+```
+Human
+  |
+Feishu Bot / Cards
+  |
+Feishu Gateway
+  |
+Control Plane <-> Unified Agent Tasks
+  |
+Edge Runtime / Local Execution Session
+  |
+Workspace / OpenCode / Repo Operations
+```
+
+### 开发路线图
+
+| 阶段 | 时间 | 目标 |
+|------|------|------|
+| **Phase 0** | Q2 2026 (4周) | Feishu Dev Loop MVP - 飞书开发控制台 |
+| **Phase 1** | Q2 2026 (4周) | Development Task Layer - 结构化开发任务 |
+| **Phase 2** | Q3 2026 (6周) | Unified Agent Tools - 统一工具层 |
+| **Phase 3** | Q3-Q4 2026 (6周) | Note/Data Bridge - 笔记与数据桥接 |
+| **Phase 4** | Q4 2026+ | Proactive Shadow - 主动式助手 |
+
+### Phase 0 当前优先级 (最高)
+
+1. **Consolidate Feishu path** - 统一飞书网关实现
+2. **Harden control plane** - 强化会话控制平面
+3. **Validate edge runtime** - 验证边缘运行时
+4. **Build Feishu cockpit cards** - 构建飞书控制卡片
+
+### 3.0 新增关键组件
+
+| 组件 | 路径 | 状态 | 说明 |
+|------|------|------|------|
+| Feishu Gateway | `sail_server/feishu_gateway/` | 🚧 Phase 0 | 飞书消息网关 |
+| Control Plane | `sail_server/control_plane/` | 🚧 Phase 0 | 工作区/会话控制 |
+| Edge Runtime | `sail_server/edge_runtime/` | 🚧 Phase 0 | 本地执行运行时 |
+| Unified Agent | `sail_server/router/unified_agent.py` | ✅ 基础可用 | 统一Agent路由 |
 
 ## Project Overview
 
@@ -70,7 +121,13 @@ SailZen/
 │   │   ├── history.py          # 历史路由
 │   │   ├── necessity.py        # 必需品路由
 │   │   ├── project.py          # 项目路由
-│   │   └── text.py             # 文本路由
+│   │   ├── text.py             # 文本路由
+│   │   ├── feishu.py           # 飞书路由 (Phase 0)
+│   │   └── unified_agent.py    # 统一Agent路由
+│   ├── feishu_gateway/         # 飞书消息网关 🚧 Phase 0
+│   ├── control_plane/          # 工作区/会话控制平面 🚧 Phase 0
+│   ├── edge_runtime/           # 边缘运行时/本地执行 🚧 Phase 0
+│   ├── agent/                  # Agent 相关基础设施
 │   ├── controller/             # 业务逻辑控制器
 │   ├── model/                  # SQLAlchemy 模型
 │   │   ├── analysis/           # 分析相关模型
@@ -86,7 +143,10 @@ SailZen/
 │   ├── build-with-deps.js      # 依赖拓扑排序构建脚本
 │   └── bump-version.js         # 版本号同步脚本
 ├── doc/                        # 文档
-└── .agents/skills/             # AI Agent 技能定义
+│   ├── sailzen-3.0-roadmap.md  # 3.0 开发路线图
+│   ├── design/agent-system/    # Agent系统设计文档
+│   └── ...
+└── .opencode/skills/           # AI Agent 技能定义
     ├── sailzen-dev-guide/      # 开发环境指南
     └── sailzen-ai-text-import/ # AI 文本导入工具
 ```
