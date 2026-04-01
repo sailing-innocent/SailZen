@@ -1,0 +1,396 @@
+[
+  {
+    "id": "cicd-basic",
+    "name": "Basic CI/CD Pipeline",
+    "description": "A standard CI/CD pipeline: checkout -> build -> test -> deploy",
+    "params": [
+      {"key": "branch", "label": "Git Branch", "type": "string", "default": "main"},
+      {"key": "env", "label": "Target Environment", "type": "select", "options": ["dev", "staging", "prod"], "default": "dev"},
+      {"key": "skip_test", "label": "Skip Tests", "type": "boolean", "default": false}
+    ],
+    "nodes": [
+      {
+        "id": "checkout",
+        "name": "Checkout Code",
+        "type": "git",
+        "description": "Clone repository and checkout branch",
+        "depends_on": [],
+        "mock_duration": 3,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["Initializing git...", "Fetching origin...", "Checked out branch: {branch}"]
+      },
+      {
+        "id": "install_deps",
+        "name": "Install Dependencies",
+        "type": "shell",
+        "description": "Run npm install / pip install",
+        "depends_on": ["checkout"],
+        "mock_duration": 5,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": ["Installing packages...", "Resolved 312 packages", "Done in 4.8s"]
+      },
+      {
+        "id": "lint",
+        "name": "Lint & Format Check",
+        "type": "shell",
+        "description": "Run ESLint and Prettier checks",
+        "depends_on": ["install_deps"],
+        "mock_duration": 4,
+        "mock_fail_rate": 0.15,
+        "dynamic_spawn": null,
+        "logs": ["Running ESLint...", "Checking Prettier format...", "No lint errors found"]
+      },
+      {
+        "id": "build",
+        "name": "Build",
+        "type": "build",
+        "description": "Compile and bundle the application",
+        "depends_on": ["lint"],
+        "mock_duration": 8,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": ["Starting webpack build...", "Compiling TypeScript...", "Build complete: 2.1MB"]
+      },
+      {
+        "id": "test_unit",
+        "name": "Unit Tests",
+        "type": "test",
+        "description": "Run Jest unit test suite",
+        "depends_on": ["build"],
+        "mock_duration": 6,
+        "mock_fail_rate": 0.2,
+        "dynamic_spawn": null,
+        "logs": ["Starting test runner...", "Running 145 tests...", "145 passed, 0 failed"]
+      },
+      {
+        "id": "test_integration",
+        "name": "Integration Tests",
+        "type": "test",
+        "description": "Run integration tests against mock API",
+        "depends_on": ["build"],
+        "mock_duration": 10,
+        "mock_fail_rate": 0.15,
+        "dynamic_spawn": null,
+        "logs": ["Starting integration tests...", "Spinning up test containers...", "All scenarios passed"]
+      },
+      {
+        "id": "docker_build",
+        "name": "Docker Build",
+        "type": "docker",
+        "description": "Build and tag Docker image",
+        "depends_on": ["test_unit", "test_integration"],
+        "mock_duration": 12,
+        "mock_fail_rate": 0.05,
+        "dynamic_spawn": {
+          "trigger_on": "success",
+          "description": "After Docker build, dynamically generate environment-specific deployment jobs",
+          "spawn_nodes": [
+            {
+              "id": "push_ecr",
+              "name": "Push to ECR",
+              "type": "docker",
+              "description": "Push image to Elastic Container Registry",
+              "depends_on": ["docker_build"],
+              "mock_duration": 7,
+              "mock_fail_rate": 0.05,
+              "dynamic_spawn": null,
+              "logs": ["Authenticating with ECR...", "Pushing layers...", "Image pushed: app:sha-abc123"]
+            },
+            {
+              "id": "security_scan",
+              "name": "Security Scan",
+              "type": "security",
+              "description": "Run Trivy vulnerability scan on image",
+              "depends_on": ["docker_build"],
+              "mock_duration": 8,
+              "mock_fail_rate": 0.1,
+              "dynamic_spawn": null,
+              "logs": ["Pulling Trivy DB...", "Scanning image layers...", "Found 0 CRITICAL, 2 MEDIUM vulnerabilities"]
+            }
+          ]
+        },
+        "logs": ["Building Dockerfile...", "Layer caching hit (3/5)...", "Tagged: app:latest, app:sha-abc123"]
+      },
+      {
+        "id": "deploy",
+        "name": "Deploy to {env}",
+        "type": "deploy",
+        "description": "Deploy application to target environment",
+        "depends_on": ["docker_build"],
+        "mock_duration": 15,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": [
+          "Connecting to Kubernetes cluster...",
+          "Applying deployment manifest...",
+          "Rolling update: 0/3 pods ready",
+          "Rolling update: 1/3 pods ready",
+          "Rolling update: 3/3 pods ready",
+          "Deployment successful to {env}"
+        ]
+      },
+      {
+        "id": "notify",
+        "name": "Notify",
+        "type": "notification",
+        "description": "Send Slack notification with pipeline result",
+        "depends_on": ["deploy"],
+        "mock_duration": 2,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["Sending Slack notification...", "Message sent to #deployments"]
+      }
+    ]
+  },
+  {
+    "id": "globalbatch-workflow",
+    "name": "GlobalBatch Workflow",
+    "description": "Multi-Agent workflow: Windows主Agent执行cherry-pick，然后Windows+Mac并行构建",
+    "params": [
+      {"key": "batch_name", "label": "Batch Name", "type": "string", "default": "globalbatch_0401"},
+      {"key": "base_branch", "label": "Base Branch", "type": "string", "default": "netease/main"},
+      {"key": "commits", "label": "Commit Count", "type": "string", "default": "50"}
+    ],
+    "nodes": [
+      {
+        "id": "init_workspace",
+        "name": "Initialize Workspace",
+        "type": "git",
+        "description": "准备工作空间和worktree",
+        "depends_on": [],
+        "mock_duration": 3,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["📂 Creating workspace...", "🌿 Setting up git worktree...", "✅ Workspace ready: {batch_name}"]
+      },
+      {
+        "id": "inject_skill",
+        "name": "Inject GlobalBatch Skill",
+        "type": "agent",
+        "description": "向OpenCode注入GlobalBatch技能",
+        "depends_on": ["init_workspace"],
+        "mock_duration": 2,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["🔧 Loading skill configuration...", "💉 Injecting skill to OpenCode session...", "✅ GlobalBatch skill ready"]
+      },
+      {
+        "id": "cherry_pick",
+        "name": "Cherry-Pick Commits",
+        "type": "agent",
+        "description": "执行cherry-pick操作（Windows Agent）",
+        "depends_on": ["inject_skill"],
+        "mock_duration": 15,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": [
+          "🍒 Starting cherry-pick from {base_branch}...",
+          "🍒 Processing commit 1/{commits}...",
+          "🍒 Processing commit 25/{commits}...",
+          "🍒 Processing commit 50/{commits}...",
+          "✅ All commits picked successfully"
+        ]
+      },
+      {
+        "id": "generate_summary",
+        "name": "Generate Summary",
+        "type": "llm",
+        "description": "使用LLM生成变更摘要",
+        "depends_on": ["cherry_pick"],
+        "mock_duration": 5,
+        "mock_fail_rate": 0.05,
+        "dynamic_spawn": null,
+        "logs": ["📝 Analyzing commit messages...", "🤖 Generating summary with LLM...", "✅ Summary generated"]
+      },
+      {
+        "id": "build_win",
+        "name": "Build Windows",
+        "type": "build",
+        "description": "Windows平台构建（Windows Agent）",
+        "depends_on": ["generate_summary"],
+        "mock_duration": 20,
+        "mock_fail_rate": 0.15,
+        "dynamic_spawn": null,
+        "logs": [
+          "🔨 Starting Windows build...",
+          "🔧 Running CMake configure...",
+          "⚙️ Compiling 2000+ source files...",
+          "🔗 Linking...",
+          "✅ Windows build complete"
+        ]
+      },
+      {
+        "id": "build_ios",
+        "name": "Build iOS",
+        "type": "build",
+        "description": "iOS平台构建（Mac Agent）",
+        "depends_on": ["generate_summary"],
+        "mock_duration": 25,
+        "mock_fail_rate": 0.15,
+        "dynamic_spawn": {
+          "trigger_on": "success",
+          "description": "构建成功后通知Mac Agent同步调试",
+          "spawn_nodes": [
+            {
+              "id": "mac_debug_sync",
+              "name": "Mac Debug Sync",
+              "type": "popo",
+              "description": "通过POPO通知Mac Agent启动调试",
+              "depends_on": ["build_ios"],
+              "mock_duration": 2,
+              "mock_fail_rate": 0.0,
+              "dynamic_spawn": null,
+              "logs": ["📤 Sending POPO notification to Mac Agent...", "✅ Mac Agent acknowledged"]
+            }
+          ]
+        },
+        "logs": [
+          "🍎 Starting iOS build...",
+          "📦 Installing CocoaPods...",
+          "⚙️ Xcode compiling...",
+          "🔐 Code signing...",
+          "✅ iOS build complete"
+        ]
+      },
+      {
+        "id": "code_review",
+        "name": "Automated Review",
+        "type": "agent",
+        "description": "自动代码审查",
+        "depends_on": ["build_win", "build_ios"],
+        "mock_duration": 8,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": ["🔍 Running static analysis...", "🧪 Checking test coverage...", "📊 Analyzing code quality...", "✅ Review passed"]
+      },
+      {
+        "id": "git_commit",
+        "name": "Git Commit & Push",
+        "type": "git",
+        "description": "提交并推送到远程",
+        "depends_on": ["code_review"],
+        "mock_duration": 5,
+        "mock_fail_rate": 0.05,
+        "dynamic_spawn": null,
+        "logs": ["📝 Creating commit...", "🚀 Pushing to origin...", "✅ Push complete: netease/globalbatch/{batch_name}"]
+      },
+      {
+        "id": "notify_team",
+        "name": "Notify Team via POPO",
+        "type": "popo",
+        "description": "通过POPO机器人通知团队",
+        "depends_on": ["git_commit"],
+        "mock_duration": 2,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["📨 Sending POPO notification...", "✅ Team notified: GlobalBatch {batch_name} complete"]
+      },
+      {
+        "id": "generate_report",
+        "name": "Generate Report",
+        "type": "report",
+        "description": "生成批次报告",
+        "depends_on": ["notify_team"],
+        "mock_duration": 3,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["📊 Generating batch report...", "📄 Report saved to: reports/{batch_name}.html", "✅ Report complete"]
+      }
+    ]
+  },
+  {
+    "id": "cicd-hotfix",
+    "name": "Hotfix Fast-Track Pipeline",
+    "description": "Accelerated pipeline for critical hotfixes: skip lint, fast tests, direct prod deploy",
+    "params": [
+      {"key": "branch", "label": "Hotfix Branch", "type": "string", "default": "hotfix/urgent"},
+      {"key": "ticket_id", "label": "Ticket ID", "type": "string", "default": "JIRA-001"}
+    ],
+    "nodes": [
+      {
+        "id": "checkout",
+        "name": "Checkout Hotfix",
+        "type": "git",
+        "description": "Checkout hotfix branch",
+        "depends_on": [],
+        "mock_duration": 2,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["Fast checkout: {branch}", "HEAD at: abc1234"]
+      },
+      {
+        "id": "build",
+        "name": "Quick Build",
+        "type": "build",
+        "description": "Build with cache enabled",
+        "depends_on": ["checkout"],
+        "mock_duration": 5,
+        "mock_fail_rate": 0.05,
+        "dynamic_spawn": null,
+        "logs": ["Using build cache...", "Incremental compile...", "Build done in 4.2s"]
+      },
+      {
+        "id": "smoke_test",
+        "name": "Smoke Tests",
+        "type": "test",
+        "description": "Run critical path tests only",
+        "depends_on": ["build"],
+        "mock_duration": 4,
+        "mock_fail_rate": 0.1,
+        "dynamic_spawn": null,
+        "logs": ["Running smoke suite (12 tests)...", "12/12 passed"]
+      },
+      {
+        "id": "deploy_prod",
+        "name": "Deploy PROD",
+        "type": "deploy",
+        "description": "Direct production deployment",
+        "depends_on": ["smoke_test"],
+        "mock_duration": 10,
+        "mock_fail_rate": 0.05,
+        "dynamic_spawn": {
+          "trigger_on": "success",
+          "description": "After prod deploy, spawn monitoring and rollback-ready jobs",
+          "spawn_nodes": [
+            {
+              "id": "health_check",
+              "name": "Health Check",
+              "type": "monitor",
+              "description": "Verify all endpoints are responding",
+              "depends_on": ["deploy_prod"],
+              "mock_duration": 5,
+              "mock_fail_rate": 0.05,
+              "dynamic_spawn": null,
+              "logs": ["Checking /health...", "Checking /api/status...", "All endpoints OK (200)"]
+            },
+            {
+              "id": "rollback_standby",
+              "name": "Rollback Standby",
+              "type": "monitor",
+              "description": "Prepare previous version as rollback target",
+              "depends_on": ["deploy_prod"],
+              "mock_duration": 3,
+              "mock_fail_rate": 0.0,
+              "dynamic_spawn": null,
+              "logs": ["Previous version: app:sha-prev123", "Rollback target registered"]
+            }
+          ]
+        },
+        "logs": ["Deploying to prod cluster...", "Zero-downtime rolling update...", "PROD deployment complete"]
+      },
+      {
+        "id": "notify",
+        "name": "Alert Team",
+        "type": "notification",
+        "description": "Notify team of hotfix deployment",
+        "depends_on": ["deploy_prod"],
+        "mock_duration": 1,
+        "mock_fail_rate": 0.0,
+        "dynamic_spawn": null,
+        "logs": ["Paging on-call engineer...", "Slack: Hotfix {ticket_id} deployed to PROD"]
+      }
+    ]
+  }
+]
