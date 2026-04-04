@@ -1,247 +1,304 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # @file opencode_client.py
-# @brief OpenCode Web API Client
+# @brief OpenCode Server API Client - Simplified reliable version
 # @author sailing-innocent
-# @date 2026-03-29
-# @version 1.2
+# @date 2026-04-04
+# @version 3.0
 # ---------------------------------
-"""HTTP client for the OpenCode web/serve API.
+"""OpenCode Server API Client - Reliable synchronous implementation.
 
-OpenCode exposes a local Hono-based server with these key endpoints:
-  GET  /global/health              - health check
-  POST /session                    - create new session
-  GET  /session/:id                - get session details
-  POST /session/:id/message        - send task (SSE stream response)
-
-This client handles session lifecycle and message streaming.
+This client provides simple, reliable access to the OpenCode server APIs.
 """
 
 import json
-import time
-from typing import Any, Dict, List, Optional
-
 import httpx
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+from pathlib import Path
+from enum import Enum
 
 
-class OpenCodeWebClient:
-    """HTTP client for the OpenCode web/serve API."""
+class MessagePartType(str, Enum):
+    """Types of message parts in OpenCode."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 4096, timeout: int = 120):
-        """Initialize client.
+    TEXT = "text"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    IMAGE = "image"
+    FILE = "file"
+    STEP_START = "step-start"
+    STEP_END = "step-end"
+    UNKNOWN = "unknown"
 
-        Args:
-            host: OpenCode server host
-            port: OpenCode server port
-            timeout: Default timeout for requests
-        """
-        self.host = host
-        self.port = port
-        self.timeout = timeout
-        self._base_url = f"http://{host}:{port}"
+
+@dataclass
+class MessagePart:
+    """A part of a message."""
+
+    type: MessagePartType
+    text: Optional[str] = None
+    tool_call: Optional[Dict[str, Any]] = None
+    tool_result: Optional[Dict[str, Any]] = None
+    raw_data: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MessagePart":
+        """Create MessagePart from API response dict."""
+        part_type = data.get("type", "text")
+
+        try:
+            msg_type = MessagePartType(part_type)
+        except ValueError:
+            return cls(type=MessagePartType.UNKNOWN, raw_data=data)
+
+        return cls(
+            type=msg_type,
+            text=data.get("text"),
+            tool_call=data.get("tool_call"),
+            tool_result=data.get("tool_result"),
+            raw_data=data if msg_type == MessagePartType.UNKNOWN else None,
+        )
+
+
+@dataclass
+class Message:
+    """An OpenCode message."""
+
+    id: str
+    role: str
+    parts: List[MessagePart] = field(default_factory=list)
+    created_at: Optional[str] = None
 
     @property
-    def base_url(self) -> str:
-        """Get base URL for OpenCode server."""
-        return self._base_url
+    def text_content(self) -> str:
+        """Extract all text content from message parts."""
+        texts = []
+        for part in self.parts:
+            if part.type == MessagePartType.TEXT and part.text:
+                texts.append(part.text)
+        return "".join(texts)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Message":
+        """Create Message from API response dict."""
+        info = data.get("info", {})
+        parts_data = data.get("parts", [])
+
+        return cls(
+            id=info.get("id", ""),
+            role=info.get("role", "assistant"),
+            parts=[MessagePart.from_dict(p) for p in parts_data],
+            created_at=info.get("createdAt"),
+        )
+
+
+@dataclass
+class Session:
+    """An OpenCode session."""
+
+    id: str
+    title: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    parent_id: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Session":
+        """Create Session from API response dict."""
+        return cls(
+            id=data.get("id", ""),
+            title=data.get("title"),
+            created_at=data.get("createdAt"),
+            updated_at=data.get("updatedAt"),
+            parent_id=data.get("parentID"),
+        )
+
+
+class OpenCodeSessionClient:
+    """Simple, reliable OpenCode Server API client.
+
+    Example:
+        client = OpenCodeSessionClient(port=4096)
+        session = client.create_session(title="My Session")
+        message = client.send_message(session.id, "Hello, write a function")
+        print(message.text_content)
+    """
+
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 4096,
+        timeout: float = 300.0,
+    ):
+        self.host = host
+        self.port = port
+        self._base_url = f"http://{host}:{port}"
+
+        # HTTP client with long timeout for AI responses
+        self._client = httpx.Client(
+            timeout=httpx.Timeout(timeout, read=timeout),
+        )
+
+    def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Make an HTTP request to the OpenCode server."""
+        url = f"{self._base_url}{path}"
+        return self._client.request(method, url, **kwargs)
+
+    def _json_request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+        """Make a JSON request and parse response."""
+        response = self._request(method, path, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
+    # -----------------------------------------------------------------------
+    # Health & Status
+    # -----------------------------------------------------------------------
+
+    def health_check(self) -> Dict[str, Any]:
+        """Check server health."""
+        return self._json_request("GET", "/global/health")
 
     def is_healthy(self) -> bool:
-        """Check if opencode server is up.
-
-        Returns:
-            True if server responds to health check
-        """
+        """Quick health check."""
         try:
-            with httpx.Client(timeout=5) as client:
-                resp = client.get(f"{self._base_url}/global/health")
-                return resp.status_code == 200
+            result = self.health_check()
+            return result.get("healthy", False)
         except Exception:
             return False
 
-    def create_session(self, title: Optional[str] = None) -> Optional[str]:
-        """Create a new OpenCode session and return its ID.
+    # -----------------------------------------------------------------------
+    # Session Management
+    # -----------------------------------------------------------------------
 
-        POST /session
-        Body: { "title": "..." }
-        Returns: Session object with "id" field
-
-        Args:
-            title: Optional session title
-
-        Returns:
-            Session ID or None on failure
-        """
-        body: Dict[str, Any] = {}
+    def create_session(self, title: Optional[str] = None) -> Session:
+        """Create a new session."""
+        body = {}
         if title:
             body["title"] = title
+        data = self._json_request("POST", "/session", json=body)
+        return Session.from_dict(data)
 
-        try:
-            with httpx.Client(timeout=30) as client:
-                resp = client.post(f"{self._base_url}/session", json=body)
-                if resp.status_code in (200, 201):
-                    data = resp.json()
-                    return data.get("id")
-                print(
-                    f"[OpenCode] create_session failed: {resp.status_code} {resp.text[:200]}"
-                )
-                return None
-        except Exception as exc:
-            print(f"[OpenCode] create_session error: {exc}")
-            return None
+    def get_session(self, session_id: str) -> Session:
+        """Get session details."""
+        data = self._json_request("GET", f"/session/{session_id}")
+        return Session.from_dict(data)
 
-    def list_sessions(self) -> List[Dict[str, Any]]:
-        """List all sessions on this server.
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session."""
+        response = self._request("DELETE", f"/session/{session_id}")
+        return response.status_code == 200
 
-        Returns:
-            List of session dictionaries
-        """
-        try:
-            with httpx.Client(timeout=10) as client:
-                resp = client.get(f"{self._base_url}/session")
-                if resp.status_code == 200:
-                    return resp.json()
-        except Exception as exc:
-            print(f"[OpenCode] list_sessions error: {exc}")
-        return []
+    def list_sessions(self) -> List[Session]:
+        """List all sessions."""
+        data = self._json_request("GET", "/session")
+        return [Session.from_dict(s) for s in data]
+
+    # -----------------------------------------------------------------------
+    # Messages - Reliable Synchronous
+    # -----------------------------------------------------------------------
 
     def send_message(
         self,
         session_id: str,
         text: str,
-        collect_timeout: int = 300,
-    ) -> str:
-        """Send a task message to a session and return the assistant reply.
+        timeout: Optional[float] = None,
+    ) -> Message:
+        """Send a message and wait for complete response.
 
-        POST /session/:id/message
-        Body: { parts: [{ type: "text", text: "..." }] }
-        Response: { info: Message, parts: Part[] }
-
-        This call blocks until the model finishes. For long tasks set a larger
-        collect_timeout (default 300s).
-
-        Handles SSE stream edge cases: session.idle vs session.completed event names
-        may vary across opencode versions. Uses robust event-name matching and
-        timeout fallback.
+        This uses the synchronous API which blocks until the AI finishes.
+        It's reliable for long responses (up to 5 minutes or more).
 
         Args:
-            session_id: OpenCode session ID
-            text: Message text to send
-            collect_timeout: Maximum time to wait for response
+            session_id: Session ID
+            text: Message text
+            timeout: Request timeout override (default: client timeout)
 
         Returns:
-            Assistant reply text
+            Complete response Message
         """
-        url = f"{self._base_url}/session/{session_id}/message"
-        body = {"parts": [{"type": "text", "text": text}]}
+        body = {
+            "parts": [{"type": "text", "text": text}],
+        }
 
-        start_time = time.time()
-        collected_texts: List[str] = []
-        session_completed = False
+        print(
+            f"[OpenCode] Sending message (timeout: {timeout or self._client.timeout.read}s)..."
+        )
 
-        try:
-            with httpx.Client(timeout=collect_timeout) as client:
-                resp = client.post(url, json=body)
-                if resp.status_code not in (200, 201):
-                    return f"OpenCode API error: HTTP {resp.status_code}: {resp.text[:300]}"
+        data = self._json_request(
+            "POST",
+            f"/session/{session_id}/message",
+            json=body,
+        )
 
-                # Check if response is SSE stream
-                content_type = resp.headers.get("content-type", "")
-                if (
-                    "text/event-stream" in content_type
-                    or resp.headers.get("transfer-encoding") == "chunked"
-                ):
-                    # Handle SSE stream
-                    for line in resp.iter_lines():
-                        if time.time() - start_time > collect_timeout:
-                            break
+        msg = Message.from_dict(data)
+        print(f"[OpenCode] Received response: {len(msg.text_content)} chars")
+        return msg
 
-                        line = line.strip()
-                        if not line:
-                            continue
+    def get_messages(self, session_id: str, limit: int = 50) -> List[Message]:
+        """Get messages in a session."""
+        params = {"limit": limit}
+        data = self._json_request(
+            "GET", f"/session/{session_id}/message", params=params
+        )
+        return [Message.from_dict(m) for m in data]
 
-                        # Parse SSE event
-                        if line.startswith("data: "):
-                            data = line[6:]  # Remove "data: " prefix
-                            try:
-                                event_data = json.loads(data)
-                            except json.JSONDecodeError:
-                                continue
+    # -----------------------------------------------------------------------
+    # Commands
+    # -----------------------------------------------------------------------
 
-                            # Handle different event types with robust matching
-                            event_type = event_data.get("type", "")
+    def execute_command(
+        self,
+        session_id: str,
+        command: str,
+        arguments: Optional[List[str]] = None,
+    ) -> Message:
+        """Execute a slash command."""
+        body = {
+            "command": command,
+            "arguments": arguments or [],
+        }
+        data = self._json_request(
+            "POST",
+            f"/session/{session_id}/command",
+            json=body,
+        )
+        return Message.from_dict(data)
 
-                            # Collect text from content events (various formats)
-                            if event_type in ("content", "text", "chunk", "delta"):
-                                content = (
-                                    event_data.get("content", "")
-                                    or event_data.get("text", "")
-                                    or event_data.get("delta", "")
-                                )
-                                if content:
-                                    collected_texts.append(content)
+    def list_commands(self) -> List[Dict[str, Any]]:
+        """List all available commands."""
+        return self._json_request("GET", "/command")
 
-                            # Check for completion events (various names across versions)
-                            elif event_type in (
-                                "completed",
-                                "done",
-                                "finished",
-                                "end",
-                                "session.completed",
-                            ):
-                                session_completed = True
-                                break
+    # -----------------------------------------------------------------------
+    # File Operations
+    # -----------------------------------------------------------------------
 
-                            # Check for idle/stop events (alternative completion signals)
-                            elif event_type in (
-                                "idle",
-                                "stopped",
-                                "session.idle",
-                                "halt",
-                            ):
-                                session_completed = True
-                                break
+    def read_file(self, path: str) -> Dict[str, Any]:
+        """Read file content."""
+        return self._json_request("GET", "/file/content", params={"path": path})
 
-                            # Check for error events
-                            elif event_type in ("error", "failed"):
-                                error_msg = event_data.get(
-                                    "message", event_data.get("error", "Unknown error")
-                                )
-                                return f"OpenCode error: {error_msg}"
+    def list_files(self, path: str = ".") -> List[Dict[str, Any]]:
+        """List files and directories."""
+        return self._json_request("GET", "/file", params={"path": path})
 
-                    # Fallback: if we collected text but didn't get completion event,
-                    # return what we have (with a note if incomplete)
-                    reply = "".join(collected_texts).strip()
-                    if reply and not session_completed:
-                        return (
-                            reply
-                            + "\n\n[Response may be incomplete - timeout or stream interruption]"
-                        )
-                    return reply or "(OpenCode returned an empty response)"
-                else:
-                    # Handle regular JSON response
-                    data = resp.json()
-                    parts = data.get("parts", [])
-                    text_parts = [
-                        p.get("text", "")
-                        for p in parts
-                        if isinstance(p, dict)
-                        and p.get("type") == "text"
-                        and p.get("text")
-                    ]
-                    reply = "".join(text_parts).strip()
-                    return reply or "(OpenCode returned an empty response)"
+    # -----------------------------------------------------------------------
+    # Context Management
+    # -----------------------------------------------------------------------
 
-        except httpx.TimeoutException:
-            # Return collected text even on timeout
-            if collected_texts:
-                reply = "".join(collected_texts).strip()
-                return (
-                    reply
-                    + f"\n\n[Response truncated - timed out after {collect_timeout}s]"
-                )
-            return f"OpenCode timed out after {collect_timeout}s. The task may still be running."
-        except Exception as exc:
-            # Return collected text even on error
-            if collected_texts:
-                reply = "".join(collected_texts).strip()
-                return reply + f"\n\n[Response may be incomplete - error: {exc}]"
-            return f"OpenCode communication error: {exc}"
+    def close(self) -> None:
+        """Close the HTTP client."""
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+
+# Legacy compatibility
+class OpenCodeWebClient(OpenCodeSessionClient):
+    """Legacy client name for backward compatibility."""
+
+    pass

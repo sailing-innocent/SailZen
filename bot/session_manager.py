@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
     from bot.opencode_client import OpenCodeWebClient
@@ -127,11 +127,68 @@ class OpenCodeSessionManager:
 
         client = OpenCodeWebClient(port=session.port)
         title = f"Feishu session - {Path(path).name}"
-        sess_id = client.create_session(title=title)
-        if sess_id:
-            session.opencode_session_id = sess_id
+        opencode_session = client.create_session(title=title)
+        if opencode_session:
+            session.opencode_session_id = opencode_session.id
             self._save_state()
-        return sess_id
+            return opencode_session.id
+        return None
+
+    def send_task_streaming(
+        self,
+        path: str,
+        task_text: str,
+        on_chunk=None,
+    ):
+        """Send a coding task and yield the complete response.
+
+        This is a simple synchronous wrapper that yields the full response
+        as a single chunk. OpenCode handles streaming internally.
+
+        Args:
+            path: Workspace path
+            task_text: Task description
+            on_chunk: Callback for progress (called once with full response)
+
+        Yields:
+            The complete response text
+        """
+        path = str(Path(path).expanduser().resolve())
+        session = self._sessions.get(path)
+
+        if not session or session.process_status != "running":
+            yield f"No running session for {path}. Use '启动 {path}' first."
+            return
+
+        sess_id = self.get_or_create_opencode_session(path)
+        if not sess_id:
+            yield "Failed to create OpenCode session. The server may not be ready yet."
+            return
+
+        client = OpenCodeWebClient(port=session.port)
+        print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
+        print(f"[OpenCode] Task: {task_text[:100]}...")
+
+        try:
+            # Use synchronous API - it's reliable and handles long responses
+            message = client.send_message(sess_id, task_text)
+
+            if message and message.text_content:
+                content = message.text_content
+                print(f"[OpenCode] Response received: {len(content)} chars")
+
+                # Call progress callback if provided
+                if on_chunk:
+                    on_chunk(content)
+
+                # Yield the complete content
+                yield content
+            else:
+                yield "(任务已完成，无文字输出)"
+
+        except Exception as exc:
+            print(f"[OpenCode] Error: {exc}")
+            yield f"\n[Error: {exc}]"
 
     def send_task(self, path: str, task_text: str) -> str:
         """Send a coding task to the opencode session for `path`."""
@@ -147,7 +204,8 @@ class OpenCodeSessionManager:
 
         client = OpenCodeWebClient(port=session.port)
         print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
-        return client.send_message(sess_id, task_text)
+        msg = client.send_message(sess_id, task_text)
+        return msg.text_content if msg else "(No response)"
 
     def stop_session(self, path: str) -> Tuple[bool, str]:
         """Stop the opencode process for a workspace."""

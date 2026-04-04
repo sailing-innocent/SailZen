@@ -430,6 +430,124 @@ class CardRenderer:
         }
 
     @staticmethod
+    def help(
+        projects: List[Dict[str, str]],
+        has_llm: bool = False,
+        has_self_update: bool = False,
+    ) -> Dict[str, Any]:
+        """Generate an interactive help card for Feishu."""
+        elements: List[Dict[str, Any]] = []
+
+        # Quick start section
+        elements.append(_text("🚀 **快速开始**", bold=True))
+        elements.append(_note("直接发送指令即可，支持自然语言"))
+
+        # Commands section
+        elements.append(_divider())
+        elements.append(_text("📋 **常用指令**", bold=True))
+
+        commands = [
+            ("打开 <项目>", "启动工作区", "例如：打开 sailzen"),
+            ("使用 <项目>", "切换工作区", "切换后可直接发送代码指令"),
+            ("停止 <项目>", "停止工作区", "破坏性操作需要确认"),
+            ("查看状态", "查看所有会话", "显示当前运行状态"),
+            ("帮我写代码...", "发送编码任务", "描述需求即可，支持中文"),
+        ]
+
+        for cmd, desc, example in commands:
+            elements.append(_text(f"• **{cmd}** - {desc}"))
+            elements.append(_note(f"  例：{example}"))
+
+        # Projects section
+        if projects:
+            elements.append(_divider())
+            elements.append(_text("📁 **配置的项目**", bold=True))
+            slugs = [p.get("slug", "") for p in projects if p.get("slug")]
+            if slugs:
+                elements.append(_text(f"可用名称：{', '.join(slugs)}"))
+            for proj in projects[:5]:  # Show up to 5 projects
+                slug = proj.get("slug", "")
+                label = proj.get("label", slug)
+                elements.append(_note(f"• {label} ({slug})"))
+            if len(projects) > 5:
+                elements.append(_note(f"... 还有 {len(projects) - 5} 个项目"))
+
+        # Advanced tips
+        elements.append(_divider())
+        elements.append(_text("💡 **高级技巧**", bold=True))
+        tips = [
+            "• 加「强制」或 --force 可跳过确认",
+            "• 可同时管理多个工作区",
+            "• 复杂任务直接描述，AI 会自动拆分",
+        ]
+        for tip in tips:
+            elements.append(_text(tip))
+
+        # Confirmation hints
+        elements.append(_divider())
+        elements.append(_text("✅ **确认操作**", bold=True))
+        elements.append(_note("确认/是/yes/ok | 取消/不/no/算了"))
+
+        # Status section
+        elements.append(_divider())
+        elements.append(_text("⚙️ **系统状态**", bold=True))
+        status_items = []
+        status_items.append(
+            ("智能识别", "✅ LLM 已启用" if has_llm else "⚪ 关键词模式")
+        )
+        if has_self_update:
+            status_items.append(("Bot 管理", "✅ 支持自更新"))
+        elements.append(_field_row(status_items))
+
+        # Footer
+        elements.append(_divider())
+        elements.append(_note("发送任意消息开始对话，我会尽力理解你的意图！"))
+
+        return {
+            "config": {"wide_screen_mode": True},
+            "header": _header("🤖 使用帮助", CardColor.BLUE),
+            "elements": elements,
+        }
+
+    @staticmethod
+    def current_workspace(path: str, mode: str = "coding") -> Dict[str, Any]:
+        """Display current active workspace status.
+
+        Args:
+            path: Current workspace path
+            mode: Current mode (coding/idle)
+        """
+        name = Path(path).name if path else "未知"
+
+        elements: List[Dict[str, Any]] = [
+            _text(f"🎯 **当前工作区：{name}**", bold=True),
+            _note("已切换到该工作区，可以直接发送指令"),
+        ]
+
+        elements.append(_divider())
+        elements.append(_text("💡 **你可以：**"))
+        elements.append(_note(f"• 直接发送任务指令（如：帮我优化代码）"))
+        elements.append(_note(f"• 发送「使用 <其他项目>」切换到其他工作区"))
+        elements.append(_note(f"• 发送「停止 {name}」停止当前工作区"))
+
+        return {
+            "config": {"wide_screen_mode": True},
+            "header": _header("🔄 工作区切换成功", CardColor.GREEN),
+            "elements": elements,
+        }
+
+    @staticmethod
+    def workspace_indicator(path: Optional[str] = None, mode: str = "idle") -> str:
+        """Generate a simple text indicator for the current workspace.
+
+        Returns a short string to append to messages indicating current workspace.
+        """
+        if mode == "coding" and path:
+            name = Path(path).name
+            return f"\n\n---\n💻 当前工作区：{name}"
+        return ""
+
+    @staticmethod
     def timeout_warning(
         operation: str,
         elapsed_seconds: float,

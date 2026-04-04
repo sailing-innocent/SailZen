@@ -120,6 +120,12 @@ from session_state import (
     SessionStateStore,
     classify_risk,
 )
+from session_manager import (
+    ManagedSession,
+    OpenCodeSessionManager,
+    extract_path_from_text,
+    resolve_path,
+)
 
 # Phase 0: Self-update support
 try:
@@ -353,25 +359,8 @@ class OpenCodeWebClient:
 
 
 # ---------------------------------------------------------------------------
-# Session Manager
+# Configuration
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class ManagedSession:
-    """Tracks a running opencode web process and its API session."""
-
-    path: str  # workspace directory
-    port: int  # opencode server port
-    pid: Optional[int] = None  # subprocess PID
-    process_status: str = "stopped"  # stopped | starting | running | error
-    opencode_session_id: Optional[str] = None  # OpenCode API session ID
-    started_at: Optional[str] = None
-    last_error: Optional[str] = None
-    chat_id: Optional[str] = None  # Feishu chat this session was created from
-    _process: Optional[Any] = None  # subprocess.Popen object for proper cleanup
-    _stdout_log: Optional[Any] = None  # stdout file handle
-    _stderr_log: Optional[Any] = None  # stderr file handle
 
 
 @dataclass
@@ -390,454 +379,6 @@ class AgentConfig:
     # LLM settings for BotBrain (optional, fallback to env vars)
     llm_provider: Optional[str] = None
     llm_api_key: Optional[str] = None
-
-
-class OpenCodeSessionManager:
-    """Manages OpenCode web processes and their API sessions.
-
-    For each workspace path, we maintain:
-    - A running `opencode web --hostname 127.0.0.1 --port <N>` subprocess
-    - An OpenCode API session created via POST /session
-    - A client for communicating with that server
-
-    Sessions persist across Feishu messages within the same process lifetime.
-    State is saved to ~/.config/feishu-agent/sessions.json for restart recovery.
-    """
-
-    STATE_FILE = Path.home() / ".config" / "feishu-agent" / "sessions.json"
-
-    def __init__(
-        self, base_port: int = 4096, state_store: Optional["SessionStateStore"] = None
-    ):
-        self.base_port = base_port
-        self._sessions: Dict[str, ManagedSession] = {}
-        self._state_store = state_store
-        self._load_state()
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def ensure_running(
-        self, path: str, chat_id: Optional[str] = None
-    ) -> Tuple[bool, ManagedSession, str]:
-        """Ensure an opencode web process is running for `path`.
-
-        Returns (success, session, message).
-        If already running, returns immediately.
-        If not running, starts a new process and waits for it to become healthy.
-        """
-        # 验证路径有效性
-        try:
-            path_obj = Path(path).expanduser().resolve()
-            if not path_obj.exists():
-                # 创建错误状态的 session
-                error_session = ManagedSession(path=path, port=0, chat_id=chat_id)
-                error_session.process_status = "error"
-                error_session.last_error = f"路径不存在: {path}"
-                return False, error_session, f"路径不存在: {path}"
-            path = str(path_obj)
-        except Exception as e:
-            error_session = ManagedSession(path=path, port=0, chat_id=chat_id)
-            error_session.process_status = "error"
-            error_session.last_error = f"无效路径: {e}"
-            return False, error_session, f"无效路径 '{path}': {e}"
-
-        session = self._sessions.get(path)
-        if session and self._is_port_open(session.port):
-            session.process_status = "running"
-            self._sync_state(path, "running", port=session.port, pid=session.pid)
-            return True, session, f"Already running on port {session.port}"
-
-        # Need to start or restart
-        port = self._allocate_port()
-        if session is None:
-            session = ManagedSession(path=path, port=port, chat_id=chat_id)
-            self._sessions[path] = session
-        else:
-            session.port = port
-            session.opencode_session_id = None
-
-        if self._state_store:
-            entry = self._state_store.get_or_create(path, chat_id)
-            self._state_store.transition(path, SessionState.STARTING, port=port)
-
-        return self._start_process(session)
-
-    def get_or_create_opencode_session(self, path: str) -> Optional[str]:
-        """Get the OpenCode API session ID for a workspace, creating one if needed."""
-        path = str(Path(path).expanduser().resolve())
-        session = self._sessions.get(path)
-        if not session or session.process_status != "running":
-            return None
-
-        if session.opencode_session_id:
-            return session.opencode_session_id
-
-        client = OpenCodeWebClient(port=session.port)
-        title = f"Feishu session - {Path(path).name}"
-        sess_id = client.create_session(title=title)
-        if sess_id:
-            session.opencode_session_id = sess_id
-            self._save_state()
-        return sess_id
-
-    def send_task(self, path: str, task_text: str) -> str:
-        """Send a coding task to the opencode session for `path`.
-
-        Ensures process is running, creates API session if needed,
-        then streams the response and returns the final reply text.
-        """
-        path = str(Path(path).expanduser().resolve())
-        session = self._sessions.get(path)
-
-        if not session or session.process_status != "running":
-            return f"No running session for {path}. Use '启动 {path}' first."
-
-        sess_id = self.get_or_create_opencode_session(path)
-        if not sess_id:
-            return "Failed to create OpenCode session. The server may not be ready yet."
-
-        client = OpenCodeWebClient(port=session.port)
-        print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
-        return client.send_message(sess_id, task_text)
-
-    def stop_session(self, path: str) -> Tuple[bool, str]:
-        """Stop the opencode process for a workspace."""
-        path = str(Path(path).expanduser().resolve())
-        session = self._sessions.get(path)
-        if not session:
-            return False, f"No session for {path}"
-
-        self._sync_state(path, "stopping")
-
-        # Kill the process
-        if session.pid:
-            try:
-                if sys.platform == "win32":
-                    subprocess.run(
-                        ["taskkill", "/PID", str(session.pid), "/T", "/F"],
-                        check=False,
-                        capture_output=True,
-                    )
-                else:
-                    os.kill(session.pid, 15)
-
-                # Wait for process to terminate
-                if session._process:
-                    try:
-                        session._process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        # Force kill if graceful termination failed
-                        try:
-                            session._process.kill()
-                            session._process.wait(timeout=2)
-                        except Exception:
-                            pass
-
-                time.sleep(1)
-            except Exception as exc:
-                session.last_error = str(exc)
-
-        # Close file handles to prevent resource leaks
-        if session._stdout_log:
-            try:
-                session._stdout_log.close()
-            except Exception:
-                pass
-            session._stdout_log = None
-
-        if session._stderr_log:
-            try:
-                session._stderr_log.close()
-            except Exception:
-                pass
-            session._stderr_log = None
-
-        # Clean up process reference
-        session._process = None
-        session.pid = None
-        session.process_status = "stopped"
-        session.opencode_session_id = None
-        self._save_state()
-        self._sync_state(path, "stopped")
-        print(f"[OpenCode] Stopped session for {path}")
-        return True, "Stopped"
-
-    def get_status(self, path: Optional[str] = None) -> str:
-        """Return a human-readable status summary."""
-        if path:
-            path = str(Path(path).expanduser().resolve())
-            session = self._sessions.get(path)
-            if not session:
-                return f"No session for {path}"
-            return self._format_session(session)
-
-        if not self._sessions:
-            return "No sessions. Use '启动 <path>' to start one."
-
-        lines = ["Session Status", "=" * 40]
-        for s in self._sessions.values():
-            lines.append(self._format_session(s))
-        return "\n".join(lines)
-
-    def list_sessions(self) -> List[ManagedSession]:
-        return list(self._sessions.values())
-
-    def find_by_slug(self, slug: str, projects: List[Dict[str, str]]) -> Optional[str]:
-        """Resolve a project slug to a path from the config projects list."""
-        for p in projects:
-            if p.get("slug") == slug or p.get("label", "").lower() == slug.lower():
-                return p.get("path", "")
-        return None
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _start_process(
-        self, session: ManagedSession
-    ) -> Tuple[bool, ManagedSession, str]:
-        """Start an opencode web process for the session."""
-        path = Path(session.path)
-        if not path.exists():
-            session.process_status = "error"
-            session.last_error = f"Path does not exist: {session.path}"
-            self._sync_state(session.path, "error", last_error=session.last_error)
-            return False, session, session.last_error
-
-        cmd = [
-            "opencode",
-            "web",
-            "--hostname",
-            "127.0.0.1",
-            "--port",
-            str(session.port),
-        ]
-
-        kwargs: Dict[str, Any] = {}
-        if sys.platform == "win32":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-            kwargs["shell"] = True
-
-        print(f"[OpenCode] Starting: {' '.join(cmd)}")
-        print(f"[OpenCode] Working dir: {session.path}")
-
-        log_dir = Path.home() / ".config" / "feishu-agent" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        stdout_log = open(
-            log_dir / f"opencode_{session.port}.out.log", "w", encoding="utf-8"
-        )
-        stderr_log = open(
-            log_dir / f"opencode_{session.port}.err.log", "w", encoding="utf-8"
-        )
-
-        process = None
-        try:
-            process = subprocess.Popen(
-                cmd,
-                cwd=session.path,
-                stdout=stdout_log,
-                stderr=stderr_log,
-                **kwargs,
-            )
-            session.pid = process.pid
-            session._process = process
-            session._stdout_log = stdout_log
-            session._stderr_log = stderr_log
-            session.process_status = "starting"
-            session.started_at = datetime.now().isoformat()
-        except FileNotFoundError:
-            # Clean up file handles on error
-            stdout_log.close()
-            stderr_log.close()
-            session.process_status = "error"
-            session.last_error = (
-                "opencode command not found. Is it installed and in PATH?"
-            )
-            self._sync_state(session.path, "error", last_error=session.last_error)
-            return False, session, session.last_error
-        except Exception as exc:
-            # Clean up file handles on error
-            stdout_log.close()
-            stderr_log.close()
-            session.process_status = "error"
-            session.last_error = str(exc)
-            self._sync_state(session.path, "error", last_error=session.last_error)
-            return False, session, session.last_error
-
-        client = OpenCodeWebClient(port=session.port)
-        for attempt in range(15):
-            time.sleep(1)
-            if client.is_healthy():
-                session.process_status = "running"
-                self._save_state()
-                self._sync_state(
-                    session.path, "running", port=session.port, pid=session.pid
-                )
-                msg = f"Started on port {session.port} (PID {session.pid})"
-                print(f"[OpenCode] {msg}")
-                return True, session, msg
-
-        # Health check failed - clean up the failed process
-        if process:
-            try:
-                if sys.platform == "win32":
-                    subprocess.run(
-                        ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                        check=False,
-                        capture_output=True,
-                    )
-                else:
-                    os.kill(process.pid, 9)
-            except Exception as exc:
-                print(f"[OpenCode] Warning: Failed to kill failed process: {exc}")
-
-        # Close file handles
-        stdout_log.close()
-        stderr_log.close()
-        session._stdout_log = None
-        session._stderr_log = None
-
-        session.process_status = "error"
-        session.last_error = (
-            f"Server did not become healthy on port {session.port} after 15s"
-        )
-        self._sync_state(session.path, "error", last_error=session.last_error)
-        return False, session, session.last_error
-
-    def _sync_state(self, path: str, status: str, **kwargs: Any) -> None:
-        if not self._state_store:
-            return
-        try:
-            state_map = {
-                "idle": SessionState.IDLE,
-                "starting": SessionState.STARTING,
-                "running": SessionState.RUNNING,
-                "stopping": SessionState.STOPPING,
-                "error": SessionState.ERROR,
-                "stopped": SessionState.IDLE,
-            }
-            target = state_map.get(status, SessionState.IDLE)
-            entry = self._state_store.get(path)
-            if entry is None:
-                return
-            if entry.state != target:
-                self._state_store.transition(path, target, **kwargs)
-            elif kwargs:
-                self._state_store.force_set(path, target, **kwargs)
-        except Exception as exc:
-            print(f"[SessionState] Sync error: {exc}")
-
-    def _is_port_open(self, port: int) -> bool:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        try:
-            return sock.connect_ex(("127.0.0.1", port)) == 0
-        finally:
-            sock.close()
-
-    def _allocate_port(self) -> int:
-        used = {s.port for s in self._sessions.values()}
-        port = self.base_port
-        while port in used or self._is_port_open(port):
-            port += 1
-        return port
-
-    def _format_session(self, s: ManagedSession) -> str:
-        running = self._is_port_open(s.port)
-        icon = "running" if running else s.process_status
-        lines = [
-            f"[{icon}] {s.path}",
-            f"  Port: {s.port}  PID: {s.pid}",
-        ]
-        if s.opencode_session_id:
-            lines.append(f"  OpenCode session: {s.opencode_session_id}")
-        if s.last_error:
-            lines.append(f"  Last error: {s.last_error}")
-        return "\n".join(lines)
-
-    def _save_state(self) -> None:
-        try:
-            self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            data = []
-            for s in self._sessions.values():
-                data.append(
-                    {
-                        "path": s.path,
-                        "port": s.port,
-                        "opencode_session_id": s.opencode_session_id,
-                        "chat_id": s.chat_id,
-                    }
-                )
-            with open(self.STATE_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception as exc:
-            print(f"[State] Failed to save: {exc}")
-
-    def _load_state(self) -> None:
-        if not self.STATE_FILE.exists():
-            return
-        try:
-            with open(self.STATE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for item in data:
-                path = item.get("path", "")
-                if not path:
-                    continue
-                s = ManagedSession(
-                    path=path,
-                    port=item.get("port", self.base_port),
-                    opencode_session_id=item.get("opencode_session_id"),
-                    chat_id=item.get("chat_id"),
-                )
-                # Check if process still running
-                if self._is_port_open(s.port):
-                    s.process_status = "running"
-                self._sessions[path] = s
-            if self._sessions:
-                print(f"[State] Loaded {len(self._sessions)} session(s) from disk")
-        except Exception as exc:
-            print(f"[State] Failed to load: {exc}")
-
-
-def _extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optional[str]:
-    patterns = [
-        r"([~/][^\s]+)",
-        r"([A-Z]:[/\\][^\s]+)",
-        r"(\.[/\\][^\s]+)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            candidate = match.group(1)
-            try:
-                return str(Path(candidate).expanduser().resolve())
-            except Exception:
-                continue
-
-    for p in projects:
-        slug = p.get("slug", "")
-        label = p.get("label", "")
-        if slug and slug in text:
-            return p.get("path", "")
-        if label and label.lower() in text.lower():
-            return p.get("path", "")
-
-    return None
-
-
-def _resolve_path(raw: str, projects: List[Dict[str, str]]) -> Optional[str]:
-    if not raw:
-        return None
-    for p in projects:
-        if p.get("slug") == raw or p.get("label", "").lower() == raw.lower():
-            return p.get("path", "")
-    try:
-        resolved = str(Path(raw).expanduser().resolve())
-        return resolved
-    except Exception:
-        return raw or None
 
 
 # ---------------------------------------------------------------------------
@@ -949,9 +490,8 @@ _BRAIN_SYSTEM = """你是飞书机器人，帮用户控制OpenCode开发环境�
 返回JSON：
 {{"action":"...","params":{{}},"confirm_required":false,"confirm_summary":"","reply":"","reasoning":""}}
 
-actions: start_workspace|stop_workspace|send_task|import_text|show_status|show_help|chat|clarify
-import_text: 用户想导入小说/文本到系统。params需要file_name(文件名)和可选的title(标题)、author(作者)。books目录下的txt文件可以导入。
-规则：stop_workspace需确认；长消息或破坏性操作需确认；import_text不需确认
+actions: start_workspace|stop_workspace|send_task|show_status|show_help|chat|clarify
+规则：stop_workspace需确认；长消息或破坏性操作需确认
 注意：推断用户意图，只返回JSON"""
 
 _BRAIN_FALLBACK_ACTIONS = {
@@ -959,10 +499,6 @@ _BRAIN_FALLBACK_ACTIONS = {
     "help": ("show_help", {}),
     "状态": ("show_status", {}),
     "status": ("show_status", {}),
-    "导入小说": ("import_text", {}),
-    "导入文本": ("import_text", {}),
-    "import text": ("import_text", {}),
-    "import novel": ("import_text", {}),
     # Phase 0: Self-update commands
     "更新": (
         "self_update",
@@ -1103,16 +639,58 @@ class BotBrain:
             m, _ = self._model_cfg
             print(f"[BotBrain] LLM ready: {self._provider}/{m}")
         else:
-            print("[BotBrain] No LLM API key found — falling back to keyword dispatch")
+            print("[BotBrain] No LLM API key found — keyword-only mode")
 
     def think(self, text: str, ctx: ConversationContext) -> ActionPlan:
-        """Main entry: text + context → ActionPlan."""
+        """Main entry: text + context → ActionPlan.
+
+        渐进式意图识别策略:
+        Level 1: 快速 regex/关键词匹配 (可靠、快速)
+        Level 2: LLM 语义理解 (复杂意图)
+        Level 3: 优雅降级到通用 chat
+        """
+        # Level 1: 先尝试确定性匹配
+        plan = self._think_deterministic(text, ctx)
+        if plan.action != "chat":
+            # 确定性匹配成功，直接返回
+            print(f"[BotBrain] Level 1 (regex) matched: {plan.action}")
+            return plan
+
+        # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
         if self._gw:
             try:
-                return asyncio.run(self._think_llm(text, ctx))
+                plan = asyncio.run(self._think_llm(text, ctx))
+                if plan.action != "chat":
+                    print(f"[BotBrain] Level 2 (LLM) matched: {plan.action}")
+                    return plan
+                # LLM 返回 chat，说明它也没理解，继续降级
             except Exception as exc:
-                print(f"[BotBrain] LLM call failed, using fallback: {exc}")
-        return self._think_deterministic(text, ctx)
+                print(f"[BotBrain] LLM failed: {exc}")
+
+        # Level 3: 优雅降级 - 返回通用 chat
+        print(f"[BotBrain] Level 3 (fallback to chat)")
+        return self._create_fallback_plan(text, ctx)
+
+    def _create_fallback_plan(self, text: str, ctx: ConversationContext) -> ActionPlan:
+        """创建优雅降级的 chat 响应。"""
+        # 根据当前状态提供更智能的提示
+        if ctx.mode == "coding" and ctx.active_workspace:
+            return ActionPlan(
+                action="send_task",
+                params={"task": text, "path": ctx.active_workspace},
+            )
+
+        return ActionPlan(
+            action="chat",
+            reply=(
+                "我可以帮你控制 OpenCode 开发环境。试试这些指令：\n"
+                "• 打开 sailzen\n"
+                "• 启动 ~/projects/myapp\n"
+                "• 查看状态\n"
+                "• 帮我写代码...\n\n"
+                "或者直接描述你需要做什么。"
+            ),
+        )
 
     def build_confirmation(
         self,
@@ -1174,6 +752,7 @@ class BotBrain:
             timeout=30,  # 设置30秒超时，避免长时间等待
         )
 
+        last_error = None
         # 重试循环
         for attempt in range(max_retries + 1):
             try:
@@ -1191,7 +770,8 @@ class BotBrain:
                         await asyncio.sleep(1)
                         continue
                     else:
-                        raise Exception("LLM returned empty response after all retries")
+                        # 所有重试后仍空，优雅降级
+                        return ActionPlan(action="chat")
 
                 # Log the raw response
                 print(
@@ -1218,6 +798,7 @@ class BotBrain:
 
             except Exception as exc:
                 elapsed = time.time() - start_time
+                last_error = exc
                 if attempt < max_retries:
                     print(
                         f"{chat_prefix}[LLM] Attempt {attempt + 1} failed after {elapsed:.2f}s: {exc}"
@@ -1227,12 +808,10 @@ class BotBrain:
                     continue
                 else:
                     print(
-                        f"{chat_prefix}[LLM] ERROR after {elapsed:.2f}s (all {max_retries + 1} attempts failed): {type(exc).__name__}: {exc}"
+                        f"{chat_prefix}[LLM] All {max_retries + 1} attempts failed after {elapsed:.2f}s"
                     )
-                    import traceback
-
-                    traceback.print_exc()
-                    raise
+                    # 不抛出异常，返回 chat action 让上层优雅降级
+                    return ActionPlan(action="chat")
 
     async def think_with_feedback(
         self,
@@ -1241,33 +820,58 @@ class BotBrain:
         chat_id: str,
         message_id: str,
         agent: "FeishuBotAgent",
+        use_thinking_card: bool = True,
     ) -> Tuple[ActionPlan, Optional[str]]:
-        """Think with UX feedback - returns (ActionPlan, thinking_card_message_id or None)."""
-        # Send a thinking progress card
-        thinking_card = CardRenderer.progress(
-            "正在理解你的意图", "AI正在分析中，请稍候..."
-        )
-        thinking_mid = agent._reply_card(
-            message_id, thinking_card, "thinking", {"user_text": text[:50]}
-        )
+        """Think with UX feedback - returns (ActionPlan, thinking_card_message_id or None).
+
+        渐进式识别流程:
+        1. 先尝试 regex 匹配 (不显示 thinking card)
+        2. regex 失败才显示 thinking card 并调用 LLM
+        3. LLM 失败优雅降级
+        """
+        # Level 1: 先尝试确定性匹配 (不显示 thinking card)
+        plan = self._think_deterministic(text, ctx)
+        if plan.action != "chat":
+            print(f"[BotBrain] Level 1 matched (no LLM needed): {plan.action}")
+            return plan, None
+
+        # Level 2: 需要 LLM，显示 thinking card
+        if use_thinking_card and self._gw:
+            thinking_card = CardRenderer.progress(
+                "正在理解你的意图", "AI正在分析中，请稍候..."
+            )
+            thinking_mid = agent._reply_card(
+                message_id, thinking_card, "thinking", {"user_text": text[:50]}
+            )
+        else:
+            thinking_mid = None
 
         try:
             if self._gw:
                 plan = await self._think_llm(text, ctx, chat_id=chat_id)
-                return plan, thinking_mid
-            else:
-                # Fallback to deterministic without thinking card
-                return self._think_deterministic(text, ctx), None
+                if plan.action != "chat":
+                    print(f"[BotBrain] Level 2 matched (LLM): {plan.action}")
+                    return plan, thinking_mid
+                # LLM 返回 chat，说明它也没理解
+                print(f"[BotBrain] Level 2 (LLM) returned chat, falling back")
+
+            # 没有 LLM 或 LLM 也没理解，优雅降级
+            plan = self._create_fallback_plan(text, ctx)
+            return plan, thinking_mid
+
         except Exception as exc:
-            # Update thinking card to show error
+            print(f"[{chat_id}] LLM failed: {exc}")
+            # 更新 thinking card 显示降级
             if thinking_mid:
-                error_card = CardRenderer.error(
-                    "AI处理失败",
-                    f"理解你的指令时出错：{str(exc)[:100]}\n已切换到备用模式。",
-                    context_path=ctx.active_workspace or "unknown",
+                fallback_card = CardRenderer.result(
+                    "已切换到备用模式",
+                    "AI理解遇到了问题，正在使用备用模式为你服务。",
+                    success=True,
                 )
-                agent._update_card(thinking_mid, error_card)
-            raise
+                agent._update_card(thinking_mid, fallback_card)
+            # 返回降级 plan
+            plan = self._create_fallback_plan(text, ctx)
+            return plan, thinking_mid
 
     def _parse_llm_json(self, raw: str, chat_id: Optional[str] = None) -> dict:
         """Parse JSON from LLM response with robust error handling.
@@ -1330,9 +934,9 @@ class BotBrain:
         except Exception as e:
             print(f"{chat_prefix}[LLM] Regex extraction failed: {e}")
 
-        # If all parsing fails, return a default action
+        # If all parsing fails, return a default action (graceful degradation)
         print(f"{chat_prefix}[LLM] All parsing attempts failed. Raw: {raw[:300]}")
-        return {"action": "chat", "reply": "抱歉，我处理请求时遇到了技术问题。"}
+        return {"action": "chat"}
 
     def _think_deterministic(self, text: str, ctx: ConversationContext) -> ActionPlan:
         t = text.lower().strip()
@@ -1352,28 +956,20 @@ class BotBrain:
             "enter",
         ]
         if any(k in t for k in switch_keywords):
-            path = _extract_path_from_text(text, self.projects)
+            path = extract_path_from_text(text, self.projects)
             if path:
-                # 设置active_workspace
-                ctx.mode = "coding"
-                ctx.active_workspace = path
+                # 返回 switch_workspace action，让上层处理 UI
                 return ActionPlan(
-                    action="chat",
-                    reply=f"已切换到工作区：{Path(path).name}\n现在可以直接发送指令给这个工作区。",
+                    action="switch_workspace",
+                    params={"path": path},
                 )
 
         if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):
-            path = _extract_path_from_text(text, self.projects)
+            path = extract_path_from_text(text, self.projects)
             return ActionPlan(action="start_workspace", params={"path": path})
 
-        if any(k in t for k in ["导入", "import"]) and any(
-            k in t for k in ["小说", "文本", "txt", "text", "novel", "书"]
-        ):
-            file_name = self._extract_file_name(text)
-            return ActionPlan(action="import_text", params={"file_name": file_name})
-
         if any(k in t for k in ["stop", "停止", "关闭", "结束", "kill"]):
-            path = _extract_path_from_text(text, self.projects)
+            path = extract_path_from_text(text, self.projects)
             return ActionPlan(
                 action="stop_workspace",
                 params={"path": path},
@@ -1402,28 +998,11 @@ class BotBrain:
                 "implement",
             ]
         ):
-            path = _extract_path_from_text(text, self.projects)
+            path = extract_path_from_text(text, self.projects)
             return ActionPlan(action="send_task", params={"task": text, "path": path})
 
-        return ActionPlan(
-            action="chat",
-            reply=(
-                "我理解你说的可能是一个开发任务，但我需要知道目标工作区。\n"
-                "可以说：'启动 sailzen' 或 '使用 sailzen' 或 '进入 ~/projects/myapp'"
-            ),
-        )
-
-    def _extract_file_name(self, text: str) -> Optional[str]:
-        """Extract a .txt file name from user text."""
-        match = re.search(r"[\w\u4e00-\u9fff\-\.]+\.txt", text)
-        if match:
-            return match.group()
-        for quote_char in ["《", "》", '"', '"', '"', "'"]:
-            text = text.replace(quote_char, '"')
-        match = re.search(r'"([^"]+)"', text)
-        if match:
-            return match.group(1)
-        return None
+        # 返回 chat action 表示需要 LLM 或无法识别
+        return ActionPlan(action="chat")
 
 
 # ---------------------------------------------------------------------------
@@ -2101,7 +1680,8 @@ class FeishuBotAgent:
         params = plan.params
 
         if action == "show_help":
-            self._reply_to_message(message_id, self._help())
+            self._send_help_card(chat_id, message_id)
+            ctx.push("bot", "显示帮助信息")
             return
 
         if action == "show_status":
@@ -2119,9 +1699,30 @@ class FeishuBotAgent:
             ctx.push("bot", "状态已显示")
             return
 
+        if action == "switch_workspace":
+            path = params.get("path")
+            if path:
+                # 更新上下文
+                ctx.mode = "coding"
+                ctx.active_workspace = path
+                self._save_contexts()
+                # 发送工作区切换卡片
+                card = CardRenderer.current_workspace(path, mode="coding")
+                self._reply_card(message_id, card, "workspace_switched", {"path": path})
+                ctx.push("bot", f"已切换到工作区: {Path(path).name}")
+            return
+
         if action == "start_workspace":
+            # 首先尝试从 project 参数解析，然后才是 path 参数
+            project_slug = params.get("project")
             raw_path = params.get("path") or ""
-            path = _resolve_path(raw_path, self.config.projects)
+
+            if project_slug:
+                # 如果提供了 project 名称，优先用它查找路径
+                path = resolve_path(project_slug, self.config.projects)
+            else:
+                path = resolve_path(raw_path, self.config.projects)
+
             if not path:
                 projects = self.config.projects
                 state_map: Dict[str, str] = {}
@@ -2164,6 +1765,15 @@ class FeishuBotAgent:
                         self._send_card(
                             chat_id, result_card, "session_status", {"path": path}
                         )
+
+                    # 发送当前工作区状态卡片
+                    workspace_card = CardRenderer.current_workspace(
+                        session.path, mode="coding"
+                    )
+                    self._send_card(
+                        chat_id, workspace_card, "current_workspace", {"path": path}
+                    )
+
                     ctx.push("bot", "OpenCode 已启动: " + session.path)
                 else:
                     err_card = CardRenderer.error(
@@ -2182,7 +1792,7 @@ class FeishuBotAgent:
 
         if action == "stop_workspace":
             raw_path = params.get("path") or ""
-            path = _resolve_path(raw_path, self.config.projects) if raw_path else None
+            path = resolve_path(raw_path, self.config.projects) if raw_path else None
 
             undo_deadline = time.time() + 30.0
 
@@ -2229,7 +1839,7 @@ class FeishuBotAgent:
         if action == "send_task":
             task_text = params.get("task", "")
             raw_path = params.get("path") or ""
-            path = _resolve_path(raw_path, self.config.projects) if raw_path else None
+            path = resolve_path(raw_path, self.config.projects) if raw_path else None
 
             if not path:
                 running = [
@@ -2292,156 +1902,88 @@ class FeishuBotAgent:
                         self._update_card(prog_mid, card)
                     return
 
-                reply = self.session_mgr.send_task(path, task_text)
-                self.op_tracker.finish(op_id)
+                # Stream the task with real-time updates
+                import time
 
-                if not reply:
-                    reply = "（任务已完成，无文字输出）"
-                result_card = CardRenderer.result(
-                    "任务完成", reply, success=True, context_path=path
-                )
-                if prog_mid:
-                    self._update_card(prog_mid, result_card)
-                else:
-                    self._send_card(chat_id, result_card)
-                ctx.push("bot", "任务完成")
+                start_time = time.time()
+                last_update = start_time
+                collected_chunks: list[str] = []
+                chunk_count = 0
 
-            threading.Thread(target=do_task, daemon=True).start()
-            return
+                try:
+                    for chunk in self.session_mgr.send_task_streaming(path, task_text):
+                        chunk_count += 1
+                        collected_chunks.append(chunk)
 
-        if action == "import_text":
-            file_name = params.get("file_name")
-            books_path = self._resolve_books_path()
+                        # Debug: print every 10th chunk
+                        if chunk_count % 10 == 0:
+                            print(
+                                f"[Stream Debug] Chunk #{chunk_count}: {chunk[:50]}..."
+                            )
 
-            if not books_path:
-                card = CardRenderer.error(
-                    "未配置 books 目录",
-                    "请在 bot 配置文件的 projects 中添加 slug 为 'books' 的项目。",
-                )
-                self._reply_card(message_id, card)
-                return
+                        # Update progress card every 3 seconds or every 50 chunks
+                        current_time = time.time()
+                        if current_time - last_update >= 3.0 or chunk_count % 50 == 0:
+                            elapsed = int(current_time - start_time)
+                            partial = "".join(collected_chunks)
+                            # Show last 400 chars of partial result
+                            preview = partial[-400:] if len(partial) > 400 else partial
 
-            books_dir = Path(books_path)
-            if not books_dir.exists():
-                card = CardRenderer.error(
-                    "目录不存在", f"books 目录不存在: {books_path}"
-                )
-                self._reply_card(message_id, card)
-                return
+                            print(
+                                f"[Stream Debug] Updating progress card, collected {len(partial)} chars"
+                            )
 
-            txt_files = sorted(books_dir.glob("*.txt"))
+                            progress_card = CardRenderer.progress(
+                                title=f"处理中 ({elapsed}s)",
+                                description=preview + "\n\n*(正在生成...)*",
+                            )
+                            if prog_mid:
+                                self._update_card(prog_mid, progress_card)
+                            last_update = current_time
 
-            if not file_name and not txt_files:
-                card = CardRenderer.result(
-                    "无可导入文件",
-                    f"books 目录下没有 .txt 文件: {books_path}",
-                    success=False,
-                )
-                self._reply_card(message_id, card)
-                return
-
-            if not file_name:
-                file_list = "\n".join(
-                    f"  {i + 1}. {f.name} ({f.stat().st_size / 1024:.0f} KB)"
-                    for i, f in enumerate(txt_files)
-                )
-                card = CardRenderer.result(
-                    "可导入的小说文件",
-                    f"books 目录下共 {len(txt_files)} 个 txt 文件：\n\n{file_list}"
-                    + "\n\n请回复「导入 <文件名>」来导入指定文件。",
-                    success=True,
-                    context_path=books_path,
-                )
-                self._reply_card(message_id, card)
-                ctx.push("bot", f"列出 {len(txt_files)} 个文件")
-                return
-
-            target_file = books_dir / file_name
-            if not target_file.exists():
-                candidates = [
-                    f for f in txt_files if file_name.lower() in f.name.lower()
-                ]
-                if len(candidates) == 1:
-                    target_file = candidates[0]
-                    file_name = target_file.name
-                elif candidates:
-                    names = "\n".join(f"  - {f.name}" for f in candidates)
-                    card = CardRenderer.result(
-                        "找到多个匹配文件",
-                        f"匹配「{file_name}」的文件：\n{names}\n\n请指定完整文件名。",
-                        success=False,
+                    print(
+                        f"[Stream Debug] Stream ended. Total chunks: {chunk_count}, Total chars: {len(''.join(collected_chunks))}"
                     )
-                    self._reply_card(message_id, card)
-                    return
-                else:
-                    card = CardRenderer.error(
-                        "文件未找到",
-                        f"在 books 目录下未找到「{file_name}」。",
-                    )
-                    self._reply_card(message_id, card)
-                    return
 
-            file_size_kb = target_file.stat().st_size / 1024
-            op_id = self.op_tracker.start(
-                books_path, f"导入 {file_name}", timeout=600.0
-            )
-            progress_card = CardRenderer.progress(
-                f"正在导入 {file_name}",
-                f"文件大小: {file_size_kb:.0f} KB\n正在启动 OpenCode 并加载文本导入 skill...",
-            )
-            prog_mid = self._reply_card(
-                message_id,
-                progress_card,
-                "progress",
-                {"op_id": op_id, "path": books_path},
-            )
-
-            def do_import() -> None:
-                ok, session, start_msg = self.session_mgr.ensure_running(
-                    books_path, chat_id
-                )
-                if not ok:
+                    # Final result
+                    final_reply = "".join(collected_chunks).strip()
                     self.op_tracker.finish(op_id)
+
+                    if not final_reply:
+                        final_reply = "（任务已完成，无文字输出）"
+
+                    result_card = CardRenderer.result(
+                        "✅ 任务完成",
+                        final_reply[:2000],  # Limit to 2000 chars
+                        success=True,
+                        context_path=path,
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, result_card)
+                    else:
+                        self._send_card(chat_id, result_card)
+                    ctx.push("bot", "任务完成")
+
+                except Exception as exc:
+                    self.op_tracker.finish(op_id)
+                    partial = "".join(collected_chunks).strip()
+                    error_msg = f"处理出错: {str(exc)}"
+
+                    if partial:
+                        # Show what we got + error
+                        display = partial[:500] + f"\n\n...\n\n❌ {error_msg}"
+                    else:
+                        display = error_msg
+
                     err_card = CardRenderer.error(
-                        "启动失败", start_msg, context_path=books_path
+                        "任务执行失败", display, context_path=path
                     )
                     if prog_mid:
                         self._update_card(prog_mid, err_card)
-                    return
+                    else:
+                        self._send_card(chat_id, err_card)
 
-                ctx.mode = "coding"
-                ctx.active_workspace = session.path
-                self._save_contexts()
-
-                import_task = (
-                    f"使用 /sailzen-ai-text-import skill 导入小说文件。\n"
-                    f"文件路径: {target_file}\n"
-                    f"请按照 skill 的完整工作流程执行：\n"
-                    f"1. 检测文件编码并读取\n"
-                    f"2. 采样分析章节模式\n"
-                    f"3. 生成临时导入脚本 _temp_import.py\n"
-                    f"4. 运行脚本分析章节\n"
-                    f"5. 展示分析报告等待我确认后上传到服务器"
-                )
-
-                reply = self.session_mgr.send_task(books_path, import_task)
-                self.op_tracker.finish(op_id)
-
-                if not reply:
-                    reply = "导入任务已提交，请等待分析结果。"
-                result_card = CardRenderer.result(
-                    f"导入分析: {file_name}",
-                    reply,
-                    success=True,
-                    context_path=books_path,
-                )
-                if prog_mid:
-                    self._update_card(prog_mid, result_card)
-                else:
-                    self._send_card(chat_id, result_card)
-                ctx.push("bot", f"导入分析完成: {file_name}")
-
-            threading.Thread(target=do_import, daemon=True).start()
+            threading.Thread(target=do_task, daemon=True).start()
             return
 
         # Phase 0: Self-update support
@@ -2501,42 +2043,33 @@ class FeishuBotAgent:
     # Command handlers
     # ------------------------------------------------------------------
 
-    def _resolve_books_path(self) -> Optional[str]:
-        for p in self.config.projects:
-            if p.get("slug") == "books":
-                return p.get("path", "")
-        return None
-
     def _help(self) -> str:
+        """Return help text fallback (for non-card contexts)."""
         slugs = [p.get("slug", "") for p in self.config.projects]
-        proj_line = f"  配置的项目: {', '.join(slugs)}\n" if slugs else ""
-        llm_status = "LLM 已启用" if self.brain._gw else "LLM 未配置（关键词兜底模式）"
-        sep = "=" * 32
-        # Phase 0: Check self-update availability
-        update_line = ""
-        if self._self_update_enabled:
-            update_line = "\n  Bot 管理：\n    '更新' / 'update' - 触发 Bot 自更新\n\n"
+        proj_line = f"配置的项目: {', '.join(slugs)}\n" if slugs else ""
+        llm_status = "LLM 已启用" if self.brain._gw else "LLM 未配置（关键词模式）"
 
         return (
-            f"Feishu OpenCode Bridge v7.0\n{sep}\n"
-            "直接用自然语言告诉我你想做什么：\n\n"
-            "  启动工作区：\n"
-            "    '打开 sailzen'\n"
-            "    '启动 ~/projects/myapp'\n\n"
-            "  发送编码任务：\n"
-            "    '帮我实现用户登录'\n"
-            "    'fix the bug in auth.py'\n"
-            "    '在 sailzen 里加一个健康检查接口'\n\n"
-            "  导入小说文本：\n"
-            "    '导入小说'\n"
-            "    '导入 xxx.txt'\n\n"
-            "  管理会话：\n"
-            "    '查看状态'\n"
-            "    '停止所有会话'\n"
-            f"{update_line}"
-            f"{proj_line}"
+            f"🤖 Feishu OpenCode Bridge\n"
+            f"{'=' * 40}\n\n"
+            "📋 常用指令:\n"
+            "  打开 <项目> - 启动工作区\n"
+            "  使用 <项目> - 切换工作区\n"
+            "  停止 <项目> - 停止工作区\n"
+            "  查看状态 - 查看所有会话\n"
+            "  帮我写代码... - 发送编码任务\n\n"
+            f"{proj_line}\n"
             f"[{llm_status}]"
         )
+
+    def _send_help_card(self, chat_id: str, message_id: str) -> None:
+        """Send interactive help card to Feishu."""
+        help_card = CardRenderer.help(
+            projects=self.config.projects,
+            has_llm=self.brain._gw is not None,
+            has_self_update=self._self_update_enabled,
+        )
+        self._reply_card(message_id, help_card, "help")
 
     # ------------------------------------------------------------------
     # Utilities
