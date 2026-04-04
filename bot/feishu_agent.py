@@ -379,6 +379,8 @@ class AgentConfig:
     # LLM settings for BotBrain (optional, fallback to env vars)
     llm_provider: Optional[str] = None
     llm_api_key: Optional[str] = None
+    # Admin notification settings
+    admin_chat_id: Optional[str] = None  # 管理员chat_id，用于接收启动/关闭通知
 
 
 # ---------------------------------------------------------------------------
@@ -939,35 +941,85 @@ class BotBrain:
         return {"action": "chat"}
 
     def _think_deterministic(self, text: str, ctx: ConversationContext) -> ActionPlan:
+        """确定性意图识别 - 基于当前状态进行不同的处理逻辑。
+
+        状态1 - 不在工作区（idle）:
+            正常执行三级意图匹配（关键词 → LLM → 降级）
+
+        状态2 - 在工作区（coding）:
+            绝大部分消息直接转发给OpenCode
+            只有以感叹号开头的消息才在Bot层执行控制指令
+        """
         t = text.lower().strip()
 
-        for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
-            if kw in t:
-                return ActionPlan(action=action, params=params)
+        # === 状态2：在工作区 ===
+        if ctx.mode == "coding" and ctx.active_workspace:
+            # 感叹号开头的消息 -> 在Bot层执行控制指令（去掉感叹号后的内容）
+            if t.startswith("!") or t.startswith("！"):
+                cmd_text = text.lstrip("!！").strip()
+                cmd_lower = cmd_text.lower()
 
-        # 快速工作区切换指令（无需等待LLM）
-        switch_keywords = [
-            "使用",
-            "进入",
-            "切换到",
-            "切到",
-            "use",
-            "switch to",
-            "enter",
-        ]
-        if any(k in t for k in switch_keywords):
-            path = extract_path_from_text(text, self.projects)
-            if path:
-                # 返回 switch_workspace action，让上层处理 UI
+                # 在感叹号模式下，解析控制指令
+                # 完全匹配精确指令
+                for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
+                    if cmd_lower == kw:
+                        return ActionPlan(action=action, params=params)
+
+                # 状态查询指令（!状态 或 !status）
+                if cmd_lower in ["状态", "status", "s"]:
+                    return ActionPlan(action="show_status", params={})
+
+                # 解析工作区控制指令（启动、停止、切换等）
+                if any(
+                    k in cmd_lower for k in ["启动", "打开", "开启", "start", "open"]
+                ):
+                    path = extract_path_from_text(cmd_text, self.projects)
+                    return ActionPlan(action="start_workspace", params={"path": path})
+
+                if any(
+                    k in cmd_lower for k in ["停止", "关闭", "结束", "stop", "kill"]
+                ):
+                    path = extract_path_from_text(cmd_text, self.projects)
+                    return ActionPlan(
+                        action="stop_workspace",
+                        params={"path": path},
+                        confirm_required=True,
+                        confirm_summary=f"停止 {'所有会话' if not path else path}",
+                    )
+
+                if any(
+                    k in cmd_lower for k in ["切换", "使用", "进入", "switch", "use"]
+                ):
+                    path = extract_path_from_text(cmd_text, self.projects)
+                    if path:
+                        return ActionPlan(
+                            action="switch_workspace", params={"path": path}
+                        )
+
+                # 感叹号开头但不认识的指令 -> 提示用户
                 return ActionPlan(
-                    action="switch_workspace",
-                    params={"path": path},
+                    action="chat",
+                    reply=f"未知的控制指令: {cmd_text}\n\n可用的控制指令:\n• !状态 / !status / !s - 查看当前状态\n• !启动 <项目> - 启动工作区\n• !停止 - 停止工作区\n• !切换 <项目> - 切换工作区\n• !帮助 / !help - 显示帮助",
                 )
 
+            # 非感叹号开头的消息 -> 直接转发给OpenCode
+            return ActionPlan(
+                action="send_task", params={"task": text, "path": ctx.active_workspace}
+            )
+
+        # === 状态1：不在工作区（idle）===
+        # Level 1: 精确匹配（完全匹配，无歧义）
+        for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
+            if t == kw:
+                return ActionPlan(action=action, params=params)
+
+        # 启动指令（进入coding模式）
         if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):
             path = extract_path_from_text(text, self.projects)
-            return ActionPlan(action="start_workspace", params={"path": path})
+            if path:
+                return ActionPlan(action="start_workspace", params={"path": path})
 
+        # 停止指令
         if any(k in t for k in ["stop", "停止", "关闭", "结束", "kill"]):
             path = extract_path_from_text(text, self.projects)
             return ActionPlan(
@@ -977,31 +1029,16 @@ class BotBrain:
                 confirm_summary=f"停止 {'所有会话' if not path else path}",
             )
 
-        if ctx.mode == "coding" and ctx.active_workspace:
-            return ActionPlan(
-                action="send_task", params={"task": text, "path": ctx.active_workspace}
-            )
-
+        # 切换工作区指令
         if any(
             k in t
-            for k in [
-                "code",
-                "写",
-                "实现",
-                "帮我",
-                "task",
-                "任务",
-                "帮",
-                "修",
-                "fix",
-                "add",
-                "implement",
-            ]
+            for k in ["使用", "进入", "切换到", "切到", "use", "switch to", "enter"]
         ):
             path = extract_path_from_text(text, self.projects)
-            return ActionPlan(action="send_task", params={"task": text, "path": path})
+            if path:
+                return ActionPlan(action="switch_workspace", params={"path": path})
 
-        # 返回 chat action 表示需要 LLM 或无法识别
+        # 返回 chat action 表示需要 LLM 处理（Level 2）
         return ActionPlan(action="chat")
 
 
@@ -1045,6 +1082,12 @@ class FeishuBotAgent:
         self._state_manager: Optional[Any] = None
         self._update_orchestrator: Optional[Any] = None
         self._init_self_update()
+
+        # 启动异步任务管理器
+        from async_task_manager import task_manager
+
+        task_manager.start()
+        print("[FeishuBotAgent] Async task manager started")
 
     def _init_self_update(self) -> None:
         """Initialize self-update functionality."""
@@ -1685,17 +1728,100 @@ class FeishuBotAgent:
             return
 
         if action == "show_status":
+            # 构建详细的状态报告
+            status_lines = []
+
+            # 1. 当前上下文状态
+            status_lines.append("📍 **当前状态**")
+            if ctx.active_workspace:
+                current_name = Path(ctx.active_workspace).name
+                status_lines.append(f"💻 当前工作区: **{current_name}**")
+                status_lines.append(f"   路径: `{ctx.active_workspace}`")
+            else:
+                status_lines.append("⚪ 当前工作区: 未选择")
+            status_lines.append(
+                f"📝 模式: {'coding' if ctx.mode == 'coding' else 'idle'}"
+            )
+            status_lines.append("")
+
+            # 2. 测试所有工作区的连接性
+            status_lines.append("🔍 **工作区连接状态**")
             sessions = self.session_mgr.list_sessions()
-            session_dicts = [
-                {
-                    "path": s.path,
-                    "state": s.process_status,
-                    "port": s.port,
-                }
-                for s in sessions
-            ]
-            card = CardRenderer.all_sessions(session_dicts)
-            self._reply_card(message_id, card, "all_sessions")
+
+            if not sessions:
+                status_lines.append("❌ 没有运行中的工作区")
+                status_lines.append(
+                    "💡 使用 `!启动 <项目名>` 或 `启动 <项目名>` 开启工作区"
+                )
+            else:
+                for session in sessions:
+                    name = Path(session.path).name
+                    port = session.port
+
+                    # 测试端口是否开放
+                    port_open = self.session_mgr._is_port_open(port)
+
+                    # 测试 API 是否健康
+                    api_healthy = False
+                    api_info = "unknown"
+                    if port_open:
+                        try:
+                            client = OpenCodeWebClient(port=port)
+                            api_healthy = client.is_healthy()
+                            api_info = "connected" if api_healthy else "unhealthy"
+                        except Exception as exc:
+                            api_healthy = False
+                            api_info = f"error: {str(exc)[:30]}"
+
+                    # 确定状态图标和描述
+                    if port_open and api_healthy:
+                        icon = "✅"
+                        status_desc = f"运行正常 ({api_info})"
+                    elif port_open and not api_healthy:
+                        icon = "⚠️"
+                        status_desc = f"端口开放但 API 异常 ({api_info})"
+                    else:
+                        icon = "❌"
+                        status_desc = "未运行"
+
+                    # 标记当前工作区
+                    is_current = ctx.active_workspace == session.path
+                    current_marker = " 👈 当前" if is_current else ""
+
+                    status_lines.append(f"{icon} **{name}**{current_marker}")
+                    status_lines.append(f"   路径: `{session.path}`")
+                    status_lines.append(f"   端口: {port}")
+                    status_lines.append(f"   状态: {status_desc}")
+                    status_lines.append("")
+
+            # 3. 配置的项目列表
+            if self.config.projects:
+                status_lines.append("📁 **配置的项目**")
+                for proj in self.config.projects:
+                    slug = proj.get("slug", "")
+                    path = proj.get("path", "")
+                    label = proj.get("label", slug)
+                    # 检查是否已在运行
+                    is_running = any(s.path == path for s in sessions)
+                    run_icon = "✅" if is_running else "⚪"
+                    status_lines.append(f"{run_icon} {label} (`{slug}`)")
+                status_lines.append("")
+
+            # 4. 快捷指令提示
+            status_lines.append("💡 **快捷指令**")
+            status_lines.append("• `!状态` - 刷新此状态")
+            status_lines.append("• `!启动 <项目>` - 启动工作区")
+            status_lines.append("• `!停止` - 停止当前工作区")
+            status_lines.append("• `!切换 <项目>` - 切换到其他工作区")
+
+            # 发送状态卡片
+            full_status = "\n".join(status_lines)
+            card = CardRenderer.result(
+                title="📊 系统状态",
+                content=full_status,
+                success=True,
+            )
+            self._reply_card(message_id, card, "status_report")
             ctx.push("bot", "状态已显示")
             return
 
@@ -1866,16 +1992,23 @@ class FeishuBotAgent:
                     )
                     return
 
-            op_id = self.op_tracker.start(path, task_text[:60], timeout=300.0)
+            op_id = self.op_tracker.start(path, task_text[:60], timeout=600.0)
+
+            # 创建进度卡片
             progress_card = CardRenderer.progress(
-                "处理中",
-                task_text[:100] + ("..." if len(task_text) > 100 else ""),
+                "🚀 任务已提交",
+                f"正在初始化...\n\n**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
             )
             prog_mid = self._reply_card(
                 message_id, progress_card, "progress", {"op_id": op_id, "path": path}
             )
 
-            def do_task() -> None:
+            def do_async_task() -> None:
+                """使用异步模式执行任务"""
+                import time
+                from async_task_manager import TaskStep, task_manager
+
+                # 确保工作区运行
                 ok, session, start_msg = self.session_mgr.ensure_running(path, chat_id)
                 if not ok:
                     self.op_tracker.finish(op_id)
@@ -1902,88 +2035,132 @@ class FeishuBotAgent:
                         self._update_card(prog_mid, card)
                     return
 
-                # Stream the task with real-time updates
-                import time
+                # 获取或创建 OpenCode session
+                sess_id = self.session_mgr.get_or_create_opencode_session(path)
+                if not sess_id:
+                    self.op_tracker.finish(op_id)
+                    err_card = CardRenderer.error(
+                        "会话创建失败",
+                        "无法创建 OpenCode 会话，请检查服务状态。",
+                        context_path=path,
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, err_card)
+                    return
 
                 start_time = time.time()
-                last_update = start_time
-                collected_chunks: list[str] = []
-                chunk_count = 0
+                last_card_update = start_time
+                all_steps: List[TaskStep] = []
 
-                try:
-                    for chunk in self.session_mgr.send_task_streaming(path, task_text):
-                        chunk_count += 1
-                        collected_chunks.append(chunk)
+                def on_step(step: TaskStep):
+                    """步骤更新回调"""
+                    nonlocal last_card_update
+                    all_steps.append(step)
 
-                        # Debug: print every 10th chunk
-                        if chunk_count % 10 == 0:
-                            print(
-                                f"[Stream Debug] Chunk #{chunk_count}: {chunk[:50]}..."
+                    # 每2秒更新一次卡片，避免过于频繁
+                    current_time = time.time()
+                    if current_time - last_card_update < 2.0:
+                        return
+
+                    last_card_update = current_time
+                    elapsed = int(current_time - start_time)
+
+                    # 构建进度描述
+                    recent_steps = all_steps[-5:]  # 最近5个步骤
+                    step_descriptions = []
+
+                    for s in recent_steps:
+                        if s.step_type == "tool_call":
+                            tool_name = s.metadata.get("tool", "unknown")
+                            step_descriptions.append(f"🔧 调用: {tool_name}")
+                        elif s.step_type == "tool_result":
+                            step_descriptions.append("✅ 工具完成")
+                        elif s.step_type == "thinking":
+                            text = (
+                                s.content[:80] + "..."
+                                if len(s.content) > 80
+                                else s.content
                             )
+                            step_descriptions.append(f"💭 {text}")
 
-                        # Update progress card every 3 seconds or every 50 chunks
-                        current_time = time.time()
-                        if current_time - last_update >= 3.0 or chunk_count % 50 == 0:
-                            elapsed = int(current_time - start_time)
-                            partial = "".join(collected_chunks)
-                            # Show last 400 chars of partial result
-                            preview = partial[-400:] if len(partial) > 400 else partial
-
-                            print(
-                                f"[Stream Debug] Updating progress card, collected {len(partial)} chars"
-                            )
-
-                            progress_card = CardRenderer.progress(
-                                title=f"处理中 ({elapsed}s)",
-                                description=preview + "\n\n*(正在生成...)*",
-                            )
-                            if prog_mid:
-                                self._update_card(prog_mid, progress_card)
-                            last_update = current_time
-
-                    print(
-                        f"[Stream Debug] Stream ended. Total chunks: {chunk_count}, Total chars: {len(''.join(collected_chunks))}"
+                    progress_text = (
+                        "\n".join(step_descriptions)
+                        if step_descriptions
+                        else "正在处理..."
                     )
 
-                    # Final result
-                    final_reply = "".join(collected_chunks).strip()
-                    self.op_tracker.finish(op_id)
+                    progress_card = CardRenderer.progress(
+                        title=f"⏳ 执行中 ({elapsed}s)",
+                        description=f"**任务:** {task_text[:60]}...\n\n**进度:**\n{progress_text}\n\n*正在等待OpenCode响应...*",
+                    )
+                    if prog_mid:
+                        self._update_card(prog_mid, progress_card)
 
-                    if not final_reply:
-                        final_reply = "（任务已完成，无文字输出）"
+                def on_complete(result: str):
+                    """完成回调"""
+                    self.op_tracker.finish(op_id)
+                    elapsed = int(time.time() - start_time)
+
+                    # 统计执行信息
+                    tool_calls = len(
+                        [s for s in all_steps if s.step_type == "tool_call"]
+                    )
 
                     result_card = CardRenderer.result(
-                        "✅ 任务完成",
-                        final_reply[:2000],  # Limit to 2000 chars
+                        title=f"✅ 任务完成 ({elapsed}s)",
+                        content=result[:2000]
+                        if len(result) <= 2000
+                        else result[:1997] + "...",
                         success=True,
                         context_path=path,
                     )
+
                     if prog_mid:
                         self._update_card(prog_mid, result_card)
                     else:
                         self._send_card(chat_id, result_card)
-                    ctx.push("bot", "任务完成")
 
-                except Exception as exc:
+                    ctx.push("bot", f"任务完成（{elapsed}s，{tool_calls}次工具调用）")
+
+                def on_error(error_msg: str):
+                    """错误回调"""
                     self.op_tracker.finish(op_id)
-                    partial = "".join(collected_chunks).strip()
-                    error_msg = f"处理出错: {str(exc)}"
 
-                    if partial:
-                        # Show what we got + error
-                        display = partial[:500] + f"\n\n...\n\n❌ {error_msg}"
-                    else:
-                        display = error_msg
+                    # 构建部分结果
+                    partial_steps = []
+                    for s in all_steps[-3:]:
+                        if s.step_type == "thinking":
+                            partial_steps.append(s.content[:100])
 
-                    err_card = CardRenderer.error(
-                        "任务执行失败", display, context_path=path
+                    partial_text = "\n".join(partial_steps) if partial_steps else ""
+
+                    error_card = CardRenderer.error(
+                        title="❌ 任务执行出错",
+                        error_message=f"{error_msg}\n\n**已执行步骤:**\n{partial_text[:300] if partial_text else '（无）'}",
+                        context_path=path,
                     )
-                    if prog_mid:
-                        self._update_card(prog_mid, err_card)
-                    else:
-                        self._send_card(chat_id, err_card)
 
-            threading.Thread(target=do_task, daemon=True).start()
+                    if prog_mid:
+                        self._update_card(prog_mid, error_card)
+                    else:
+                        self._send_card(chat_id, error_card)
+
+                    ctx.push("bot", f"任务出错: {error_msg[:50]}")
+
+                # 提交异步任务
+                print(f"[FeishuAgent] Submitting async task for session {sess_id}")
+                task = task_manager.submit_task(
+                    session_id=sess_id,
+                    port=session.port,
+                    text=task_text,
+                    on_step=on_step,
+                    on_complete=on_complete,
+                    on_error=on_error,
+                )
+
+                print(f"[FeishuAgent] Async task submitted: {task.task_id}")
+
+            threading.Thread(target=do_async_task, daemon=True).start()
             return
 
         # Phase 0: Self-update support
@@ -2114,6 +2291,87 @@ class FeishuBotAgent:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as exc:
             print(f"[Context] Failed to save contexts: {exc}")
+
+    def _notify_admin_startup(self) -> None:
+        """向管理员发送启动通知。"""
+        admin_chat_id = self.config.admin_chat_id
+        if not admin_chat_id:
+            return
+
+        if not self.lark_client:
+            print(f"[AdminNotify] 启动通知: lark_client 未初始化")
+            return
+
+        try:
+            from datetime import datetime
+            import platform
+
+            # 构建启动信息
+            hostname = platform.node() or "Unknown"
+            system = platform.system()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 获取运行信息
+            sessions = self.session_mgr.list_sessions()
+            running_count = sum(1 for s in sessions if s.process_status == "running")
+
+            # 构建通知内容
+            message = (
+                f"🤖 **Feishu Bot 已启动**\n"
+                f"\n"
+                f"📍 **主机**: {hostname}\n"
+                f"🖥️ **系统**: {system}\n"
+                f"🕐 **时间**: {now}\n"
+                f"\n"
+                f"📊 **状态**: 运行中\n"
+                f"💻 **会话数**: {running_count} 个运行中\n"
+                f"\n"
+                f"✅ 机器人已就绪，可以接收指令"
+            )
+
+            self._send_to_chat(admin_chat_id, message)
+            print(f"[AdminNotify] 启动通知已发送至 {admin_chat_id[:10]}...")
+        except Exception as exc:
+            print(f"[AdminNotify] 启动通知发送失败: {exc}")
+
+    def _notify_admin_shutdown(self) -> None:
+        """向管理员发送关闭通知。"""
+        admin_chat_id = self.config.admin_chat_id
+        if not admin_chat_id:
+            return
+
+        if not self.lark_client:
+            return
+
+        try:
+            from datetime import datetime
+            import platform
+
+            # 构建关闭信息
+            hostname = platform.node() or "Unknown"
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 获取运行信息
+            sessions = self.session_mgr.list_sessions()
+            running_count = sum(1 for s in sessions if s.process_status == "running")
+
+            # 构建通知内容
+            message = (
+                f"🛑 **Feishu Bot 已关闭**\n"
+                f"\n"
+                f"📍 **主机**: {hostname}\n"
+                f"🕐 **时间**: {now}\n"
+                f"\n"
+                f"📊 **关闭前状态**:\n"
+                f"💻 正在运行的会话: {running_count} 个\n"
+                f"\n"
+                f"⏹️ 机器人已停止，资源已清理"
+            )
+
+            self._send_to_chat(admin_chat_id, message)
+            print(f"[AdminNotify] 关闭通知已发送至 {admin_chat_id[:10]}...")
+        except Exception as exc:
+            print(f"[AdminNotify] 关闭通知发送失败: {exc}")
 
     def _cleanup_previous_instances(self) -> None:
         """启动前清理之前意外关闭时遗留的僵尸进程和文件句柄。"""
@@ -2341,7 +2599,18 @@ class FeishuBotAgent:
 
     def on_bot_shutdown(self) -> None:
         print("\n[Shutdown] Cleaning up resources...")
+
+        # 向管理员发送关闭通知
+        self._notify_admin_shutdown()
+
         self._health_monitor.stop()
+
+        # 停止异步任务管理器
+        from async_task_manager import task_manager
+
+        task_manager.stop()
+        print("[Shutdown] Async task manager stopped")
+
         sessions = self.session_mgr.list_sessions()
         for s in sessions:
             if s.process_status in ("running", "starting"):
@@ -2413,6 +2682,9 @@ class FeishuBotAgent:
         print("Send '帮助' in Feishu to see available commands.")
         print("(Ctrl+C to stop)\n")
 
+        # 向管理员发送启动通知
+        self._notify_admin_startup()
+
         try:
             ws_client.start()
         except KeyboardInterrupt:
@@ -2464,6 +2736,8 @@ def load_config(config_path: str) -> AgentConfig:
         # LLM settings (optional, fallback to environment variables)
         config.llm_provider = data.get("llm_provider") or None
         config.llm_api_key = data.get("llm_api_key") or None
+        # Admin notification settings
+        config.admin_chat_id = data.get("admin_chat_id") or None
     except Exception as exc:
         print(f"Warning: Failed to load config: {exc}")
     return config
@@ -2489,7 +2763,7 @@ projects:
     label: "SailZen"
 
 # Session settings
-base_port: 4096     # Starting port for opencode web instances
+base_port: 4096     # Starting port for opencode serve instances
 max_sessions: 10
 callback_timeout: 300
 auto_restart: false
@@ -2499,6 +2773,11 @@ auto_restart: false
 # Supported providers: moonshot, openai, google, deepseek, anthropic
 # llm_provider: "moonshot"
 # llm_api_key: "your-api-key-here"
+
+# Optional: Admin notification settings
+# admin_chat_id: "oc_xxxxxxxxxxxxxxxx"  # 管理员的chat_id，用于接收启动/关闭通知
+# 可以通过在飞书中 @机器人 并查看消息的 chat_id 获取
+# 或者先跟机器人单聊，然后查看收到的消息的 chat_id
 """
     with open(p, "w", encoding="utf-8") as f:
         f.write(content)

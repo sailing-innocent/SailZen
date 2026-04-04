@@ -5,10 +5,10 @@
 # @date 2026-03-25
 # @version 1.0
 # ---------------------------------
-"""Manages OpenCode web processes and their API sessions.
+"""Manages OpenCode serve processes and their API sessions.
 
-For each workspace path, we maintain:
-- A running `opencode web --hostname 127.0.0.1 --port <N>` subprocess
+Each workspace gets:
+- A running `opencode serve --hostname 127.0.0.1 --port <N>` subprocess
 - An OpenCode API session created via POST /session
 - A client for communicating with that server
 
@@ -313,7 +313,7 @@ class OpenCodeSessionManager:
 
         cmd = [
             "opencode",
-            "web",
+            "serve",
             "--hostname",
             "127.0.0.1",
             "--port",
@@ -481,29 +481,73 @@ class OpenCodeSessionManager:
             print(f"[State] Failed to save: {exc}")
 
     def _load_state(self) -> None:
+        """Load session state from disk with validation.
+
+        启动时清理无效状态，只保留健康的服务。
+        """
         if not self.STATE_FILE.exists():
             return
+
         try:
             with open(self.STATE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+
+            valid_sessions = []
+            invalid_count = 0
+
             for item in data:
                 path = item.get("path", "")
                 if not path:
                     continue
-                s = ManagedSession(
-                    path=path,
-                    port=item.get("port", self.base_port),
-                    opencode_session_id=item.get("opencode_session_id"),
-                    chat_id=item.get("chat_id"),
-                )
-                # Check if process still running
-                if self._is_port_open(s.port):
-                    s.process_status = "running"
-                self._sessions[path] = s
+
+                port = item.get("port", self.base_port)
+
+                # 验证端口是否开放且健康
+                if self._is_port_open(port):
+                    # 端口开放，进一步验证是否是 opencode 服务
+                    try:
+                        client = OpenCodeWebClient(port=port)
+                        if client.is_healthy():
+                            # 健康的服务，恢复状态
+                            s = ManagedSession(
+                                path=path,
+                                port=port,
+                                opencode_session_id=item.get("opencode_session_id"),
+                                chat_id=item.get("chat_id"),
+                            )
+                            s.process_status = "running"
+                            self._sessions[path] = s
+                            valid_sessions.append(s)
+                        else:
+                            # 端口被占用但不是 opencode
+                            invalid_count += 1
+                            print(
+                                f"[State] Port {port} is open but not healthy opencode, skipping: {path}"
+                            )
+                    except Exception as exc:
+                        invalid_count += 1
+                        print(
+                            f"[State] Failed to verify port {port}: {exc}, skipping: {path}"
+                        )
+                else:
+                    # 端口未开放，视为已停止
+                    invalid_count += 1
+                    print(f"[State] Port {port} is not open, skipping: {path}")
+
             if self._sessions:
-                print(f"[State] Loaded {len(self._sessions)} session(s) from disk")
+                print(
+                    f"[State] Loaded {len(self._sessions)} valid session(s) from disk"
+                )
+            if invalid_count > 0:
+                print(f"[State] Skipped {invalid_count} invalid/stopped session(s)")
+
+            # 保存清理后的状态
+            self._save_state()
+
         except Exception as exc:
             print(f"[State] Failed to load: {exc}")
+            # 出错时清空状态，重新开始
+            self._sessions.clear()
 
 
 # Path resolution utilities

@@ -341,9 +341,13 @@ class CardRenderer:
 
         elements: List[Dict[str, Any]] = []
         if content:
-            display = content[:500]
-            if len(content) > 500:
-                display += "\n\n…（已截断，请在 OpenCode 查看完整输出）"
+            # Use MAX_CARD_LENGTH from MessageFormatter to match Feishu limit
+            max_len = 3000  # MessageFormatter.MAX_CARD_LENGTH
+            display = content[:max_len]
+            if len(content) > max_len:
+                display += (
+                    f"\n\n[内容过长，共 {len(content)} 字符，已显示前 {max_len} 字符]"
+                )
             elements.append(_text(display))
 
         # 文字指令提示（本地运行不支持卡片按钮回调）
@@ -376,7 +380,9 @@ class CardRenderer:
         can_retry: bool = True,
         retry_action: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        elements: List[Dict[str, Any]] = [_text(error_message[:300])]
+        # Use MAX_CARD_LENGTH from MessageFormatter to match Feishu limit
+        max_len = 3000  # MessageFormatter.MAX_CARD_LENGTH
+        elements: List[Dict[str, Any]] = [_text(error_message[:max_len])]
 
         # 文字指令提示（本地运行不支持卡片按钮回调）
         notes: List[str] = []
