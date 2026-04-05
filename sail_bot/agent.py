@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
 import sys
 import threading
@@ -52,7 +52,8 @@ from .card_renderer import (
 from .task_logger import task_logger
 from .brain import BotBrain
 from .context import ConversationContext, ActionPlan, TurnRecord, PendingConfirmation
-from async_task_manager import task_manager
+from .async_task_manager import task_manager
+from .opencode_client import OpenCodeSessionClient
 
 # ---------------------------------------------------------------------------
 # Main Bot Agent
@@ -360,7 +361,7 @@ class FeishuBotAgent:
             return False
 
     def _health_check_fn(self, path: str, port: int) -> bool:
-        client = OpenCodeWebClient(port=port)
+        client = OpenCodeSessionClient(port=port)
         return client.is_healthy()
 
     def _on_state_change(
@@ -873,7 +874,7 @@ class FeishuBotAgent:
                     api_info = "unknown"
                     if port_open:
                         try:
-                            client = OpenCodeWebClient(port=port)
+                            client = OpenCodeSessionClient(port=port)
                             api_healthy = client.is_healthy()
                             api_info = "connected" if api_healthy else "unhealthy"
                         except Exception as exc:
@@ -1803,7 +1804,6 @@ class FeishuBotAgent:
         self._health_monitor.stop()
 
         # 停止异步任务管理器
-        from async_task_manager import task_manager
 
         task_manager.stop()
         print("[Shutdown] Async task manager stopped")

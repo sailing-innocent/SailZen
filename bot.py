@@ -30,56 +30,11 @@ Usage:
     uv run bot.py --init
 """
 
-import asyncio
-import os
-import sys
-import json
-import re
-import yaml
-import time
 import argparse
 from pathlib import Path
 from sail.utils import read_env
 
 read_env("prod")
-
-import threading
-from typing import Optional, Dict, Any, List, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from collections import deque
-
-
-import httpx
-
-from card_renderer import (
-    CardMessageTracker,
-    CardRenderer,
-    card_to_feishu_content,
-    text_fallback,
-)
-from session_state import (
-    ActiveOperation,
-    ConfirmationManager,
-    OperationTracker,
-    PendingAction,
-    RiskLevel,
-    SessionHealthMonitor,
-    SessionState,
-    SessionStateStore,
-    classify_risk,
-)
-from session_manager import (
-    ManagedSession,
-    OpenCodeSessionManager,
-    extract_path_from_text,
-    resolve_path,
-)
-
-# 导入任务历史记录器
-
-from task_logger import task_logger
-
 
 from sail_bot.config import create_default_config, load_config
 from sail_bot.agent import FeishuBotAgent

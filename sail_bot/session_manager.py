@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .opencode_client import OpenCodeWebClient
+from .opencode_client import OpenCodeSessionClient
 from .config import AgentConfig
 
 
@@ -121,7 +121,7 @@ class OpenCodeSessionManager:
         if session.opencode_session_id:
             return session.opencode_session_id
 
-        client = OpenCodeWebClient(port=session.port)
+        client = OpenCodeSessionClient(port=session.port)
         title = f"Feishu session - {Path(path).name}"
         opencode_session = client.create_session(title=title)
         if opencode_session:
@@ -161,7 +161,7 @@ class OpenCodeSessionManager:
             yield "Failed to create OpenCode session. The server may not be ready yet."
             return
 
-        client = OpenCodeWebClient(port=session.port)
+        client = OpenCodeSessionClient(port=session.port)
         print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
         print(f"[OpenCode] Task: {task_text[:100]}...")
 
@@ -198,7 +198,7 @@ class OpenCodeSessionManager:
         if not sess_id:
             return "Failed to create OpenCode session. The server may not be ready yet."
 
-        client = OpenCodeWebClient(port=session.port)
+        client = OpenCodeSessionClient(port=session.port)
         print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
         msg = client.send_message(sess_id, task_text)
         return msg.text_content if msg else "(No response)"
@@ -365,7 +365,7 @@ class OpenCodeSessionManager:
             self._sync_state(session.path, "error", last_error=session.last_error)
             return False, session, session.last_error
 
-        client = OpenCodeWebClient(port=session.port)
+        client = OpenCodeSessionClient(port=session.port)
         for attempt in range(15):
             time.sleep(1)
             if client.is_healthy():
@@ -502,7 +502,7 @@ class OpenCodeSessionManager:
                 if self._is_port_open(port):
                     # 端口开放，进一步验证是否是 opencode 服务
                     try:
-                        client = OpenCodeWebClient(port=port)
+                        client = OpenCodeSessionClient(port=port)
                         if client.is_healthy():
                             # 健康的服务，恢复状态
                             s = ManagedSession(

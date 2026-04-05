@@ -37,12 +37,6 @@ dependencies = [
 name = "tencent"
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
 
-[tool.uv.workspace]
-members = [
-    "sail",
-]
-
-
 [tool.pytest.ini_options]
 python_paths=[
     "."

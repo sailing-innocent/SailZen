@@ -1,10 +1,9 @@
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
-from .config import _HISTORY_WINDOW
 from datetime import datetime
 
-
+_HISTORY_WINDOW = 6
 # ---------------------------------------------------------------------------
 # Conversation context
 # ---------------------------------------------------------------------------
