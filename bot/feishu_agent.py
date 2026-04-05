@@ -2423,21 +2423,46 @@ class FeishuBotAgent:
             pass
 
     def _load_contexts(self) -> None:
-        """Load conversation contexts from disk."""
+        """Load conversation contexts from disk with validation."""
         if not self.CONTEXT_STATE_FILE.exists():
             return
         try:
             with open(self.CONTEXT_STATE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            reset_count = 0
             for item in data:
                 chat_id = item.get("chat_id", "")
                 if not chat_id:
                     continue
                 ctx = ConversationContext.from_dict(item)
+
+                # Validate active_workspace: check if OpenCode is actually connected
+                if ctx.active_workspace:
+                    session = self.session_mgr._sessions.get(ctx.active_workspace)
+                    port = session.port if session else None
+                    if not port:
+                        # Try to find port from state store
+                        entry = self.state_store.get(ctx.active_workspace)
+                        port = entry.port if entry else None
+
+                    if not port or not self.session_mgr._is_port_open(port):
+                        # No actual OpenCode connection, reset context
+                        print(
+                            f"[Context] Resetting context for {chat_id}: {ctx.active_workspace} not connected"
+                        )
+                        ctx.mode = "idle"
+                        ctx.active_workspace = None
+                        reset_count += 1
+
                 self._contexts[chat_id] = ctx
+
             if self._contexts:
                 print(
                     f"[Context] Loaded {len(self._contexts)} conversation(s) from disk"
+                )
+            if reset_count > 0:
+                print(
+                    f"[Context] Reset {reset_count} context(s) due to missing OpenCode connection"
                 )
         except Exception as exc:
             print(f"[Context] Failed to load contexts: {exc}")
