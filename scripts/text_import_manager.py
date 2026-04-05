@@ -38,7 +38,7 @@ from statistics import mean, stdev
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 
 
 # 延迟导入数据库相关模块

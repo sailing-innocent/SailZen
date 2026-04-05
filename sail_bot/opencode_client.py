@@ -295,10 +295,3 @@ class OpenCodeSessionClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
         return False
-
-
-# Legacy compatibility
-class OpenCodeWebClient(OpenCodeSessionClient):
-    """Legacy client name for backward compatibility."""
-
-    pass

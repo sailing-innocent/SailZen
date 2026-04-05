@@ -252,7 +252,7 @@ def fix_merged_chapters(
 
 def import_to_database(chapters: List[Chapter], title: str, author: str, env_mode: str):
     """导入到数据库"""
-    from sail_server.utils.env import read_env
+    from sail.utils import read_env
 
     print_header("开始导入到数据库")
 

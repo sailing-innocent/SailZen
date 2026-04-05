@@ -116,7 +116,7 @@ psql -U postgres -d main
 # 或使用 uv run python
 uv run python -c "
 from sail_server.db import Database
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')
 db = Database.get_instance().get_db_session()
 print('Connected')
@@ -128,7 +128,7 @@ print('Connected')
 uv run python -c "
 from sail_server.db import Database
 from sail_server.data.text import Work, Edition
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')
 
 db = Database.get_instance().get_db_session()
@@ -212,7 +212,7 @@ import sys
 sys.path.insert(0, '.')
 from sail_server.db import Database
 from sail_server.data.text import Work
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')
 db = Database.get_instance().get_db_session()
 work = db.query(Work).order_by(Work.id.desc()).first()

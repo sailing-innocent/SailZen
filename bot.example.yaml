@@ -8,7 +8,7 @@
 # REQUIRED: Feishu App Credentials
 # =============================================================================
 # Get these from: https://open.feishu.cn/app
-# 
+#
 # Steps:
 # 1. Create a self-built enterprise application
 # 2. Enable "Bot" capability
@@ -90,7 +90,7 @@ projects:
 # =============================================================================
 # Configuration Example
 # =============================================================================
-# 
+#
 # app_id: "cli_xxxxxxxxxxxxxxxx"
 # app_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 # base_port: 4096

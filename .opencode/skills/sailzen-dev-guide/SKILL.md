@@ -125,7 +125,7 @@ uv run python .agents/skills/sailzen-ai-text-import/scripts/import_with_ai.py `
 uv run python -c "
 import sys
 sys.path.insert(0, '.')
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')
 from sail_server.db import Database
 from sail_server.data.text import Work
@@ -176,7 +176,7 @@ pnpm test
 ```bash
 # 查询
 uv run python -c "
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')
 from sail_server.db import Database
 db = Database.get_instance().get_db_session()

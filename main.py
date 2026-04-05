@@ -13,7 +13,7 @@ import argparse
 
 def run_task_mode(args):
     """运行任务调度模式"""
-    from sail_server.utils.env import read_env
+    from sail.utils import read_env
     from sail_server.utils.logging_config import setup_logging, get_logger
 
     read_env("prod")
@@ -90,14 +90,13 @@ def main():
         "--prod", type=bool, help="use production mode", action="store_true"
     )
     args = parser.parse_args()
-    from sail_server.utils.env import read_env
+    from sail.utils import read_env
     from sail_server.utils.logging_config import setup_logging, get_logger
 
     mode = "prod" if args.prod else "dev"
     read_env(mode)
     setup_logging()
     logger = get_logger("main")
-    
     if args.task:
         run_task_mode(args)
 

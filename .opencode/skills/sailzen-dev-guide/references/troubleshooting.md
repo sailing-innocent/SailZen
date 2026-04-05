@@ -121,7 +121,7 @@ $env:POSTGRE_URI="postgresql://postgres:zzh666@localhost:5432/main"
 
 # 3. 使用 read_env 加载
 uv run python -c "
-from sail_server.utils.env import read_env
+from sail.utils import read_env
 read_env('dev')  # 或 'prod'
 from sail_server.db import Database
 db = Database.get_instance().get_db_session()
@@ -283,7 +283,8 @@ with open('file.txt', 'rb') as f:
 
 ## 快速修复检查清单
 
-- [ ] 在项目根目录 (`D:|wsepos|SailZen`) 运行命令
+- [ ] 在项目根目录 (`D:|ws
+epos|SailZen`) 运行命令
 - [ ] 使用 `uv run` 运行 Python 代码
 - [ ] 使用 `;` 而不是 `&&` 分隔 PowerShell 命令
 - [ ] 设置 `$env:POSTGRE_URI`

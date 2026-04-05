@@ -263,7 +263,7 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true", help="Run in debug mode")
     args = parser.parse_args()
 
-    from sail_server.utils.env import read_env
+    from sail.utils import read_env
 
     if args.dev:
         read_env("dev")

@@ -255,7 +255,7 @@ def export_to_database(
         print(f"Project root: {project_root}")
 
         # 读取环境变量
-        from sail_server.utils.env import read_env
+        from sail.utils import read_env
 
         read_env("dev")  # 使用开发环境
 

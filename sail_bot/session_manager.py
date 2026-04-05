@@ -28,12 +28,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-try:
-    from bot.opencode_client import OpenCodeWebClient
-    from bot.config import AgentConfig
-except ImportError:
-    from opencode_client import OpenCodeWebClient
-    from config import AgentConfig
+from .opencode_client import OpenCodeWebClient
+from .config import AgentConfig
 
 
 @dataclass
