@@ -20,6 +20,7 @@ import json
 import logging
 import threading
 import time
+import hashlib
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -102,9 +103,7 @@ class TaskHistoryTracker:
 
     def _get_log_file(self, workspace_path: str) -> Path:
         """获取工作区的日志文件路径"""
-        # 使用工作区路径的哈希作为文件名
-        import hashlib
-
+        # FIX: hashlib imported at top level
         path_hash = hashlib.md5(workspace_path.encode()).hexdigest()[:12]
         workspace_name = Path(workspace_path).name
         filename = f"{workspace_name}_{path_hash}.jsonl"

@@ -91,6 +91,48 @@ path = "D:/path/to/file.txt"
 path = "D:\\path\\to\\file.txt"
 ```
 
+## AI Agent 文件编辑教训
+
+### 问题：edit 工具路径格式错误
+
+**症状**：`File not found` 或 `oldString not found`
+
+**错误示例**（在编辑 session_manager.py 时犯的错误）：
+```python
+# ❌ 错误 1: 路径格式错误（带冒号但缺少盘符）
+":\\ws\\repos\\SailZen\\sail_bot\\session_manager.py"
+
+# ❌ 错误 2: 路径重复
+":\\ws\\repos\\SailZen\\:\\ws\\repos\\SailZen\\sail_bot\\session_manager.py"
+
+# ❌ 错误 3: 盘符后使用正斜杠
+"D:/ws/repos/SailZen/sail_bot/session_manager.py"
+
+# ❌ 错误 4: 单斜杠（JSON 需要转义）
+"D:\ws\repos\SailZen\sail_bot\session_manager.py"
+```
+
+**正确格式**：
+```python
+# ✅ Windows 绝对路径 - 双反斜杠
+"D:\\ws\\repos\\SailZen\\sail_bot\\session_manager.py"
+
+# ✅ 原始字符串（如果支持）
+r"D:\ws\repos\SailZen\sail_bot\session_manager.py"
+```
+
+**验证路径**：
+```powershell
+Test-Path "D:\ws\repos\SailZen\sail_bot\session_manager.py"
+```
+
+**关键要点**：
+1. Windows 路径必须使用双反斜杠 `\\`
+2. 盘符后直接跟双反斜杠，如 `D:\\`
+3. 不要使用 `:\\`（没有盘符）或混合斜杠
+4. 编辑前先用 `Read` 工具确认文件内容和路径
+5. 从 Read 工具的输出复制文件路径（已经包含正确的双反斜杠）
+
 ## Python/uv 问题
 
 ### 问题：`ModuleNotFoundError: No module named 'xxx'`

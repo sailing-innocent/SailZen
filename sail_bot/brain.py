@@ -1,9 +1,34 @@
+# -*- coding: utf-8 -*-
+# @file brain.py
+# @brief Bot brain with LLM intent recognition
+# @author sailing-innocent
+# @date 2026-04-06
+# @version 1.1
+# ---------------------------------
+"""Bot brain with LLM-driven intent recognition.
+
+This module provides the BotBrain class for converting user text
+into structured ActionPlan objects using LLM or deterministic matching.
+"""
+
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 import asyncio
 import re
 import json
 import os
+import time
+import ast
+
+# FIX: Move imports to top level
+from sail_server.utils.llm.gateway import LLMGateway, LLMExecutionConfig
+from sail_server.utils.llm.providers import ProviderConfig
+from sail_server.utils.llm.available_providers import (
+    DEFAULT_LLM_PROVIDER,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_LLM_CONFIG,
+)
+
 from .context import (
     ConversationContext,
     ActionPlan,
@@ -12,9 +37,7 @@ from .context import (
     _CANCEL_WORDS,
 )
 from .card_renderer import CardRenderer
-from .session_manager import (
-    extract_path_from_text,
-)
+from .session_manager import extract_path_from_text
 
 
 # 这是什么傻逼实现
@@ -28,14 +51,6 @@ def _make_gateway(
         config_api_key: Optional API key from config file
     """
     try:
-        from sail_server.utils.llm.gateway import LLMGateway
-        from sail_server.utils.llm.providers import ProviderConfig
-        from sail_server.utils.llm.available_providers import (
-            DEFAULT_LLM_PROVIDER,
-            DEFAULT_LLM_MODEL,
-            DEFAULT_LLM_CONFIG,
-        )
-
         provider_env_keys = {
             "moonshot": "MOONSHOT_API_KEY",
             "openai": "OPENAI_API_KEY",
@@ -253,9 +268,7 @@ class BotBrain:
         chat_id: Optional[str] = None,
         max_retries: int = 2,
     ) -> ActionPlan:
-        from sail_server.utils.llm.gateway import LLMExecutionConfig
-        import time
-
+        # FIX: Import moved to top level
         start_time = time.time()
         slugs = [p.get("slug", p.get("label", "")) for p in self.projects]
         prompt = _BRAIN_SYSTEM.format(
@@ -413,8 +426,7 @@ class BotBrain:
         - Missing quotes around property names
         - Python-style True/False/None instead of true/false/null
         """
-        import ast
-
+        # FIX: Import moved to top level
         chat_prefix = f"[{chat_id}] " if chat_id else ""
 
         # Try standard JSON parsing first

@@ -30,6 +30,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .opencode_client import OpenCodeSessionClient
 from .config import AgentConfig
+from .session_state import SessionState
 
 
 @dataclass
@@ -104,8 +105,6 @@ class OpenCodeSessionManager:
             session.opencode_session_id = None
 
         if self._state_store:
-            from session_state import SessionState
-
             self._state_store.get_or_create(path, chat_id)
             self._state_store.transition(path, SessionState.STARTING, port=port)
 
@@ -308,7 +307,7 @@ class OpenCodeSessionManager:
             return False, session, session.last_error
 
         cmd = [
-            "opencode",
+            "opencode-cli",
             "serve",
             "--hostname",
             "127.0.0.1",
@@ -409,8 +408,6 @@ class OpenCodeSessionManager:
         if not self._state_store:
             return
         try:
-            from session_state import SessionState
-
             state_map = {
                 "idle": SessionState.IDLE,
                 "starting": SessionState.STARTING,

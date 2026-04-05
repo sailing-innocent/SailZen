@@ -19,6 +19,7 @@ import json
 import logging
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -671,8 +672,7 @@ class AsyncTaskManager:
 
             except Exception as exc:
                 print(f"[AsyncTaskManager] Poll error for task {task.task_id}: {exc}")
-                import traceback
-
+                # FIX: traceback imported at top level
                 traceback.print_exc()
                 time.sleep(self.poll_interval)
 
