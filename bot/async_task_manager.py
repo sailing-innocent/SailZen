@@ -80,6 +80,9 @@ class AsyncTask:
     error_message: Optional[str] = None
     _last_warning_minute: int = field(default=0, repr=False)  # 上次警告时间（分钟）
 
+    # 工具调用记录
+    _tool_calls: List[Dict[str, Any]] = field(default_factory=list, repr=False)
+
     # 回调函数
     on_step: Optional[Callable[[TaskStep], None]] = None
     on_complete: Optional[Callable[[str], None]] = None
@@ -101,6 +104,35 @@ class AsyncTask:
                 self.on_step(step)
             except Exception as exc:
                 logger.error(f"[AsyncTask] on_step callback error: {exc}")
+
+    def add_tool_call(self, tool_name: str, status: str):
+        """记录工具调用历史"""
+        self._tool_calls.append(
+            {
+                "time": time.time(),
+                "tool": tool_name,
+                "status": status,
+            }
+        )
+        # 只保留最近20个
+        if len(self._tool_calls) > 20:
+            self._tool_calls = self._tool_calls[-20:]
+
+    def get_recent_tools(self, count: int = 5) -> str:
+        """获取最近的工具调用链描述"""
+        if not self._tool_calls:
+            return "无"
+        recent = self._tool_calls[-count:]
+        parts = []
+        for t in recent:
+            status_icon = {
+                "pending": "⏳",
+                "running": "⚙️",
+                "completed": "✅",
+                "error": "❌",
+            }.get(t["status"], "❓")
+            parts.append(f"{status_icon}{t['tool']}")
+        return " → ".join(parts)
 
 
 class AsyncTaskManager:
@@ -448,29 +480,13 @@ class AsyncTaskManager:
                     )
 
                     print(
-                        f"[AsyncTaskManager] ⏰ Task {task.task_id} running for {elapsed_minutes} minutes"
+                        f"[AsyncTaskManager] Task {task.task_id}: {elapsed_minutes}min | status={self._check_session_status(task)} | msgs={debug_stats['messages_received']} | tools={debug_stats['tool_calls_count']}"
                     )
                     print(
-                        f"[AsyncTaskManager]    - Time since last status change: {time_since_last_status_change:.1f}s"
+                        f"[AsyncTaskManager]   last status change: {time_since_last_status_change:.0f}s ago | last msg: {time_since_last_message:.0f}s ago"
                     )
                     print(
-                        f"[AsyncTaskManager]    - Time since last message: {time_since_last_message:.1f}s"
-                    )
-                    print(
-                        f"[AsyncTaskManager]    - Total messages: {debug_stats['messages_received']}"
-                    )
-                    print(
-                        f"[AsyncTaskManager]    - Tool calls: {debug_stats['tool_calls_count']}"
-                    )
-                    print(
-                        f"[AsyncTaskManager]    - Status checks: {debug_stats['status_check_count']}"
-                    )
-
-                    task.add_step(
-                        TaskStep(
-                            step_type="thinking",
-                            content=f"⏳ 任务已执行 {elapsed_minutes} 分钟，仍在处理中...\n(状态检查: {debug_stats['status_check_count']}次, 消息: {debug_stats['messages_received']}条)",
-                        )
+                        f"[AsyncTaskManager]   recent tools: {task.get_recent_tools(5)}"
                     )
 
             try:
@@ -503,15 +519,19 @@ class AsyncTaskManager:
                     time_since_status_change = (
                         current_time - debug_stats["last_status_change_time"]
                     )
+                    time_since_tool = current_time - debug_stats["last_tool_call_time"]
                     if (
                         time_since_status_change > 60
                         and debug_stats["status_check_count"] % 20 == 0
                     ):
                         print(
-                            f"[AsyncTaskManager] ⚠️ WARNING: Task {task.task_id} status '{session_status}' unchanged for {time_since_status_change:.1f}s"
+                            f"[AsyncTaskManager] Task {task.task_id}: status={session_status}, elapsed={elapsed:.0f}s"
                         )
                         print(
-                            f"[AsyncTaskManager]    This might indicate the task is stuck or waiting for external input"
+                            f"[AsyncTaskManager]   no status change for {time_since_status_change:.0f}s, last tool {time_since_tool:.0f}s ago"
+                        )
+                        print(
+                            f"[AsyncTaskManager]   recent: {task.get_recent_tools(5)}"
                         )
 
                     if session_status == "idle":
@@ -638,6 +658,8 @@ class AsyncTaskManager:
                                 tool_status = part.get("state", {}).get(
                                     "status", "unknown"
                                 )
+                                # 记录到任务
+                                task.add_tool_call(tool_name, tool_status)
                                 print(
                                     f"[AsyncTaskManager] Task {task.task_id} tool call: {tool_name} ({tool_status})"
                                 )
