@@ -27,11 +27,12 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
-# 配置结构化日志
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# 获取日志记录器（避免使用 basicConfig 覆盖全局配置）
 logger = logging.getLogger("async_task")
+
+# 确保 httpx 日志级别为 WARNING，避免过多 HTTP 请求日志
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # 导入任务历史记录器
 try:
