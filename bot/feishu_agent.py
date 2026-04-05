@@ -127,6 +127,12 @@ from session_manager import (
     resolve_path,
 )
 
+# 导入任务历史记录器
+try:
+    from task_logger import task_logger
+except ImportError:
+    task_logger = None
+
 # Phase 0: Self-update support
 try:
     sys.path.insert(0, str(Path(__file__).parent.parent / "sail_server"))
@@ -1408,6 +1414,62 @@ class FeishuBotAgent:
 
             print(f"[CardAction] {action_type} for {path} in {chat_id}")
 
+            # 处理取消任务
+            if action_type == "cancel_task":
+                task_id = value.get("task_id") if isinstance(value, dict) else None
+                if task_id:
+                    print(f"[CardAction] Cancelling task: {task_id}")
+                    from async_task_manager import task_manager
+
+                    success = task_manager.abort_task(task_id)
+
+                    # 返回响应
+                    from lark_oapi.event.callback.model.p2_card_action_trigger import (
+                        P2CardActionTriggerResponse,
+                    )
+
+                    if success:
+                        resp = P2CardActionTriggerResponse(
+                            {
+                                "toast": {
+                                    "type": "info",
+                                    "content": "正在取消任务...",
+                                    "i18n": {
+                                        "zh_cn": "正在取消任务...",
+                                        "en_us": "Cancelling task...",
+                                    },
+                                }
+                            }
+                        )
+                    else:
+                        resp = P2CardActionTriggerResponse(
+                            {
+                                "toast": {
+                                    "type": "error",
+                                    "content": "取消任务失败（任务可能已完成或不存在）",
+                                    "i18n": {
+                                        "zh_cn": "取消任务失败（任务可能已完成或不存在）",
+                                        "en_us": "Failed to cancel task (may already completed or not found)",
+                                    },
+                                }
+                            }
+                        )
+                    return resp
+                else:
+                    resp = P2CardActionTriggerResponse(
+                        {
+                            "toast": {
+                                "type": "error",
+                                "content": "取消任务失败（任务可能已完成或不存在）",
+                                "i18n": {
+                                    "zh_cn": "取消任务失败（任务可能已完成或不存在）",
+                                    "en_us": "Failed to cancel task (may already completed or not found)",
+                                },
+                            }
+                        }
+                    )
+                    return resp
+
             # Execute the action in background thread
             ctx = self._get_context(chat_id)
             plan = ActionPlan(action=action_type, params={"path": path} if path else {})
@@ -1737,6 +1799,42 @@ class FeishuBotAgent:
                 current_name = Path(ctx.active_workspace).name
                 status_lines.append(f"💻 当前工作区: **{current_name}**")
                 status_lines.append(f"   路径: `{ctx.active_workspace}`")
+
+                # 显示当前工作区的任务历史
+                if task_logger:
+                    try:
+                        history = task_logger.get_task_history(
+                            ctx.active_workspace, limit=5
+                        )
+                        if history:
+                            status_lines.append("\n   **📜 最近任务:**")
+                            for entry in history:
+                                status_icon = {
+                                    "completed": "✅",
+                                    "error": "❌",
+                                    "cancelled": "🚫",
+                                    "timeout": "⏱️",
+                                }.get(entry.status, "📝")
+                                task_summary = (
+                                    entry.task_text[:40] + "..."
+                                    if len(entry.task_text) > 40
+                                    else entry.task_text
+                                )
+                                duration = (
+                                    f"({entry.duration_seconds:.0f}s)"
+                                    if entry.duration_seconds > 0
+                                    else ""
+                                )
+                                tools = (
+                                    f"[{entry.tool_calls_count}tools]"
+                                    if entry.tool_calls_count > 0
+                                    else ""
+                                )
+                                status_lines.append(
+                                    f"   {status_icon} {task_summary} {duration} {tools}"
+                                )
+                    except Exception as exc:
+                        print(f"[ShowStatus] Failed to get task history: {exc}")
             else:
                 status_lines.append("⚪ 当前工作区: 未选择")
             status_lines.append(
@@ -1832,8 +1930,64 @@ class FeishuBotAgent:
                 ctx.mode = "coding"
                 ctx.active_workspace = path
                 self._save_contexts()
-                # 发送工作区切换卡片
-                card = CardRenderer.current_workspace(path, mode="coding")
+
+                # 获取工作区的任务历史
+                history_text = ""
+                if task_logger:
+                    try:
+                        history = task_logger.get_task_history(path, limit=3)
+                        if history:
+                            history_lines = []
+                            for entry in history:
+                                status_icon = {
+                                    "completed": "✅",
+                                    "error": "❌",
+                                    "cancelled": "🚫",
+                                    "timeout": "⏱️",
+                                }.get(entry.status, "📝")
+                                task_summary = (
+                                    entry.task_text[:50] + "..."
+                                    if len(entry.task_text) > 50
+                                    else entry.task_text
+                                )
+                                duration = (
+                                    f"({entry.duration_seconds:.0f}s)"
+                                    if entry.duration_seconds > 0
+                                    else ""
+                                )
+                                history_lines.append(
+                                    f"{status_icon} {task_summary} {duration}"
+                                )
+
+                            if history_lines:
+                                history_text = "\n\n**📜 最近任务:**\n" + "\n".join(
+                                    history_lines
+                                )
+                    except Exception as exc:
+                        print(f"[SwitchWorkspace] Failed to get task history: {exc}")
+
+                # 获取当前活跃任务
+                active_task_text = ""
+                if task_logger:
+                    try:
+                        active_task = task_logger.get_active_task_for_workspace(path)
+                        if active_task:
+                            active_task_text = (
+                                f"\n\n**⏳ 活跃任务:** {active_task.task_text[:60]}..."
+                            )
+                    except Exception as exc:
+                        print(f"[SwitchWorkspace] Failed to get active task: {exc}")
+
+                # 发送工作区切换卡片（包含历史任务信息）
+                workspace_name = Path(path).name
+                card_content = f"**工作区:** {workspace_name}\n**路径:** `{path}`{active_task_text}{history_text}"
+
+                card = CardRenderer.result(
+                    title=f"🔄 已切换到工作区",
+                    content=card_content,
+                    success=True,
+                    context_path=path,
+                )
                 self._reply_card(message_id, card, "workspace_switched", {"path": path})
                 ctx.push("bot", f"已切换到工作区: {Path(path).name}")
             return
@@ -1992,12 +2146,14 @@ class FeishuBotAgent:
                     )
                     return
 
-            op_id = self.op_tracker.start(path, task_text[:60], timeout=600.0)
+            op_id = self.op_tracker.start(path, task_text[:60], timeout=3600.0)
 
-            # 创建进度卡片
+            # 创建进度卡片（包含取消按钮）
             progress_card = CardRenderer.progress(
-                "🚀 任务已提交",
-                f"正在初始化...\n\n**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
+                title="🚀 任务已提交",
+                description=f"正在初始化...\n\n**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
+                show_cancel_button=True,
+                cancel_action_data={"action": "cancel_task", "op_id": op_id},
             )
             prog_mid = self._reply_card(
                 message_id, progress_card, "progress", {"op_id": op_id, "path": path}
@@ -2051,6 +2207,7 @@ class FeishuBotAgent:
                 start_time = time.time()
                 last_card_update = start_time
                 all_steps: List[TaskStep] = []
+                current_task = None  # 保存任务引用以便取消
 
                 def on_step(step: TaskStep):
                     """步骤更新回调"""
@@ -2092,6 +2249,12 @@ class FeishuBotAgent:
                     progress_card = CardRenderer.progress(
                         title=f"⏳ 执行中 ({elapsed}s)",
                         description=f"**任务:** {task_text[:60]}...\n\n**进度:**\n{progress_text}\n\n*正在等待OpenCode响应...*",
+                        show_cancel_button=True,
+                        cancel_action_data={
+                            "action": "cancel_task",
+                            "op_id": op_id,
+                            "task_id": current_task.task_id if current_task else "",
+                        },
                     )
                     if prog_mid:
                         self._update_card(prog_mid, progress_card)
@@ -2153,11 +2316,12 @@ class FeishuBotAgent:
                     session_id=sess_id,
                     port=session.port,
                     text=task_text,
+                    workspace_path=path,  # 添加工作区路径
                     on_step=on_step,
                     on_complete=on_complete,
                     on_error=on_error,
                 )
-
+                current_task = task  # 保存任务引用
                 print(f"[FeishuAgent] Async task submitted: {task.task_id}")
 
             threading.Thread(target=do_async_task, daemon=True).start()

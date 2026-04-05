@@ -250,6 +250,8 @@ class CardRenderer:
         progress_pct: Optional[int] = None,
         elapsed_seconds: Optional[float] = None,
         spinner_tick: int = 0,
+        show_cancel_button: bool = False,
+        cancel_action_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         spinner = spinner_chars[spinner_tick % len(spinner_chars)]
@@ -267,6 +269,25 @@ class CardRenderer:
 
         if elapsed_seconds is not None:
             elements.append(_note("已用时 " + str(int(elapsed_seconds)) + "s"))
+
+        # 添加取消按钮
+        if show_cancel_button:
+            elements.append(_divider())
+            if cancel_action_data:
+                elements.append(
+                    _action_row(
+                        [
+                            _button(
+                                "❌ 取消任务",
+                                "callback",
+                                cancel_action_data,
+                                "danger",
+                            )
+                        ]
+                    )
+                )
+            else:
+                elements.append(_note("💡 发送「取消」可中断当前任务"))
 
         return {
             "config": {"wide_screen_mode": True},
