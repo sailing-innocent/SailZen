@@ -1,0 +1,41 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  
+  "agent": {
+    "feishu-bridge": {
+      "mode": "primary",
+      "description": "Feishu Bot Bridge Agent - 自动化代码助手，无需确认直接执行",
+      "temperature": 0.2,
+      "prompt": "{file:./agents/feishu-bridge.md}",
+      "permission": {
+        "edit": "allow",
+        "bash": {
+          "*": "allow",
+          "git push*": "ask",
+          "sudo*": "deny",
+          "rm -rf /": "deny"
+        },
+        "webfetch": "deny",
+        "read": "allow",
+        "search": "allow",
+        "delete": "allow"
+      }
+    },
+    
+    "build": {
+      "mode": "primary",
+      "description": "Default build agent with interactive confirmation",
+      "temperature": 0.3,
+      "permission": {
+        "edit": "ask",
+        "bash": {
+          "*": "ask"
+        }
+      }
+    }
+  },
+  
+  "models": {
+    "default": "anthropic/claude-sonnet-4-20250514"
+  }
+}
