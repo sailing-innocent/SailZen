@@ -32,10 +32,10 @@ from lark_oapi.api.im.v1 import (
     ReplyMessageRequestBody,
 )
 
-from sail_server.feishu_gateway.bot_state_manager import (
+from sail_bot.bot_state_manager import (
     get_state_manager,
 )
-from sail_server.feishu_gateway.self_update_orchestrator import (
+from sail_bot.self_update_orchestrator import (
     SelfUpdateOrchestrator,
     UpdateTriggerSource,
 )
@@ -317,21 +317,23 @@ class FeishuBotAgent:
             traceback.print_exc()
             return None
 
-    def _handle_p2p_chat_entered(self, data: lark.im.v1.P2ImChatAccessEventBotP2pChatEnteredV1) -> None:
+    def _handle_p2p_chat_entered(
+        self, data: lark.im.v1.P2ImChatAccessEventBotP2pChatEnteredV1
+    ) -> None:
         """Handle P2P chat entered event (user starts chat with bot)."""
         try:
             if not data or not data.event:
                 return
-            
+
             chat_id = data.event.chat_id
             if not chat_id:
                 return
-            
+
             print(f"[FeishuBotAgent] User entered P2P chat: {chat_id}")
-            
+
             # Send welcome card
             self._welcome_handler.handle(chat_id)
-            
+
         except Exception as exc:
             print(f"[FeishuBotAgent] P2P chat entered handling error: {exc}")
             traceback.print_exc()
@@ -445,7 +447,9 @@ class FeishuBotAgent:
             lark.EventDispatcherHandler.builder("", "")
             .register_p2_im_message_receive_v1(self._handle_message)
             .register_p2_card_action_trigger(self._handle_card_action)
-            .register_p2_im_chat_access_event_bot_p2p_chat_entered_v1(self._handle_p2p_chat_entered)
+            .register_p2_im_chat_access_event_bot_p2p_chat_entered_v1(
+                self._handle_p2p_chat_entered
+            )
             .build()
         )
 
@@ -467,16 +471,19 @@ class FeishuBotAgent:
 
         exit_code = 0
         self._shutdown_event = threading.Event()
-        
+
         # Start ws_client in a separate thread since it's blocking
         ws_thread = threading.Thread(target=self._ws_client.start)
         ws_thread.daemon = True
         ws_thread.start()
-        
+
         try:
             # Wait for shutdown signal (from self-update or user interrupt)
             while not self._shutdown_event.is_set():
-                if self._update_orchestrator and self._update_orchestrator.should_exit():
+                if (
+                    self._update_orchestrator
+                    and self._update_orchestrator.should_exit()
+                ):
                     print("[FeishuBotAgent] Self-update requested, shutting down...")
                     break
                 # Check every 100ms
@@ -490,9 +497,9 @@ class FeishuBotAgent:
             exit_code = 1
         finally:
             # Signal ws_client to stop
-            if hasattr(self._ws_client, 'stop'):
+            if hasattr(self._ws_client, "stop"):
                 self._ws_client.stop()
-            
+
             self._lifecycle.on_shutdown()
 
             # Check if we should exit with special code for self-update
