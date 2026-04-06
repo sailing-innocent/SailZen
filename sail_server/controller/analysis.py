@@ -38,18 +38,22 @@ import uuid
 # DTOs
 # ============================================================================
 
+
 class TextRangeSelectionDTO(PydanticDTO[TextRangeSelection]):
     """文本范围选择 DTO"""
+
     pass
 
 
 class TextRangePreviewDTO(PydanticDTO[TextRangePreview]):
     """文本范围预览 DTO"""
+
     pass
 
 
 class TextRangeContentDTO(PydanticDTO[TextRangeContent]):
     """文本范围内容 DTO"""
+
     pass
 
 
@@ -57,9 +61,11 @@ class TextRangeContentDTO(PydanticDTO[TextRangeContent]):
 # Response Models
 # ============================================================================
 
+
 @dataclass
 class EvidenceResponse:
     """证据响应"""
+
     id: str
     edition_id: int
     node_id: int
@@ -79,6 +85,7 @@ class EvidenceResponse:
 @dataclass
 class AnalysisStatsResponse:
     """分析统计响应"""
+
     edition_id: int
     tasks: Dict[str, int]  # pending, running, completed, failed, cancelled
     evidence: Dict[str, int]  # character, setting, outline_node, relation
@@ -89,10 +96,12 @@ class AnalysisStatsResponse:
 # Range Controller
 # ============================================================================
 
+
 class TextRangeController(Controller):
     """文本范围控制器"""
+
     path = "/range"
-    
+
     @post("/preview", dto=TextRangeSelectionDTO, return_dto=TextRangePreviewDTO)
     async def preview_range(
         self,
@@ -101,9 +110,9 @@ class TextRangeController(Controller):
         request: Request,
     ) -> TextRangePreview:
         """预览文本范围
-        
+
         返回选定范围的统计信息，包括章节数、字数、预估 token 数等。
-        
+
         Request Body:
             - edition_id: 版本ID
             - mode: 选择模式 (single_chapter, chapter_range, multi_chapter, full_edition, current_to_end, custom_range)
@@ -115,14 +124,14 @@ class TextRangeController(Controller):
         """
         db = next(router_dependency)
         parser = TextRangeParser(db)
-        
+
         result = parser.preview(data)
         logger.info(
             f"Preview range for edition {data.edition_id}, mode {data.mode}, "
             f"chapters: {result.chapter_count}, tokens: {result.estimated_tokens}"
         )
         return result
-    
+
     @post("/content", dto=TextRangeSelectionDTO, return_dto=TextRangeContentDTO)
     async def get_range_content(
         self,
@@ -131,22 +140,22 @@ class TextRangeController(Controller):
         request: Request,
     ) -> TextRangeContent:
         """获取文本范围内容
-        
+
         返回选定范围的完整文本内容。
-        
+
         Request Body:
             同 preview_range
         """
         db = next(router_dependency)
         parser = TextRangeParser(db)
-        
+
         result = parser.get_content(data)
         logger.info(
             f"Get content for edition {data.edition_id}, mode {data.mode}, "
             f"chapters: {result.chapter_count}, chars: {result.total_chars}"
         )
         return result
-    
+
     @get("/modes")
     async def get_selection_modes(
         self,
@@ -198,12 +207,14 @@ class TextRangeController(Controller):
 # Evidence Controller
 # ============================================================================
 
+
 class EvidenceController(Controller):
     """证据控制器"""
+
     path = "/evidence"
-    
+
     _evidence_store: Dict[str, TextEvidenceResponse] = {}
-    
+
     @post("/")
     async def create_evidence(
         self,
@@ -212,7 +223,7 @@ class EvidenceController(Controller):
         request: Request,
     ) -> EvidenceResponse:
         """创建证据
-        
+
         Request Body:
             - edition_id: 版本ID
             - node_id: 节点ID
@@ -227,18 +238,19 @@ class EvidenceController(Controller):
             - meta_data: 元数据（可选）
         """
         db = next(router_dependency)
-        
+
         # 验证节点存在
         from sail_server.infrastructure.orm.text import DocumentNode
+
         node = db.query(DocumentNode).filter(DocumentNode.id == data.node_id).first()
         if not node:
             raise NotFoundException(detail=f"Node with ID {data.node_id} not found")
-        
+
         # 创建证据
         evidence_id = str(uuid.uuid4())
         now = datetime.now()
         from dataclasses import dataclass, field as dc_field
-        
+
         @dataclass
         class TempEvidence:
             id: str
@@ -255,7 +267,7 @@ class EvidenceController(Controller):
             created_at: any = None
             updated_at: any = None
             meta_data: dict = dc_field(default_factory=dict)
-        
+
         evidence = TempEvidence(
             id=evidence_id,
             edition_id=data.edition_id,
@@ -272,12 +284,12 @@ class EvidenceController(Controller):
             updated_at=None,
             meta_data={},
         )
-        
+
         # 存储证据
         self._evidence_store[evidence_id] = evidence
-        
+
         logger.info(f"Created evidence {evidence_id} for node {data.node_id}")
-        
+
         return EvidenceResponse(
             id=evidence_id,
             edition_id=evidence.edition_id,
@@ -292,9 +304,9 @@ class EvidenceController(Controller):
             context=evidence.context,
             created_at=evidence.created_at.isoformat(),
             updated_at=None,
-            message="证据创建成功"
+            message="证据创建成功",
         )
-    
+
     @get("/{evidence_id:str}")
     async def get_evidence(
         self,
@@ -303,10 +315,10 @@ class EvidenceController(Controller):
     ) -> EvidenceResponse:
         """获取单个证据"""
         evidence = self._evidence_store.get(evidence_id)
-        
+
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
-        
+
         return EvidenceResponse(
             id=evidence.id,
             edition_id=evidence.edition_id,
@@ -322,7 +334,7 @@ class EvidenceController(Controller):
             created_at=evidence.created_at.isoformat() if evidence.created_at else "",
             updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
         )
-    
+
     @post("/{evidence_id:str}")
     async def update_evidence(
         self,
@@ -331,7 +343,7 @@ class EvidenceController(Controller):
         request: Request,
     ) -> EvidenceResponse:
         """更新证据
-        
+
         Request Body:
             - content: 证据内容（可选）
             - evidence_type: 证据类型（可选）
@@ -343,7 +355,7 @@ class EvidenceController(Controller):
         evidence = self._evidence_store.get(evidence_id)
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
-        
+
         # 更新字段
         if data.content is not None:
             evidence.content = data.content
@@ -357,11 +369,11 @@ class EvidenceController(Controller):
             evidence.context = data.context
         if data.meta_data is not None:
             evidence.meta_data = data.meta_data
-        
+
         evidence.updated_at = datetime.now()
-        
+
         logger.info(f"Updated evidence {evidence_id}")
-        
+
         return EvidenceResponse(
             id=evidence.id,
             edition_id=evidence.edition_id,
@@ -376,9 +388,9 @@ class EvidenceController(Controller):
             context=evidence.context,
             created_at=evidence.created_at.isoformat() if evidence.created_at else "",
             updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
-            message="证据更新成功"
+            message="证据更新成功",
         )
-    
+
     @get("/chapter/{node_id:int}")
     async def get_chapter_evidence(
         self,
@@ -387,17 +399,18 @@ class EvidenceController(Controller):
         evidence_type: Optional[str] = None,
     ) -> List[EvidenceResponse]:
         """获取指定章节的所有证据
-        
+
         Args:
             node_id: 节点ID（章节ID）
             evidence_type: 证据类型过滤（可选）
         """
         evidences = [
-            ev for ev in self._evidence_store.values()
+            ev
+            for ev in self._evidence_store.values()
             if ev.node_id == node_id
             and (evidence_type is None or ev.evidence_type == evidence_type)
         ]
-        
+
         return [
             EvidenceResponse(
                 id=ev.id,
@@ -414,9 +427,11 @@ class EvidenceController(Controller):
                 created_at=ev.created_at.isoformat() if ev.created_at else "",
                 updated_at=ev.updated_at.isoformat() if ev.updated_at else None,
             )
-            for ev in sorted(evidences, key=lambda x: (x.start_offset, x.created_at or datetime.min))
+            for ev in sorted(
+                evidences, key=lambda x: (x.start_offset, x.created_at or datetime.min)
+            )
         ]
-    
+
     @get("/target/{target_type:str}/{target_id:str}")
     async def get_target_evidence(
         self,
@@ -425,16 +440,17 @@ class EvidenceController(Controller):
         request: Request,
     ) -> List[EvidenceResponse]:
         """获取指定目标的所有证据
-        
+
         Args:
             target_type: 目标类型 (character, setting, outline_node, etc.)
             target_id: 目标ID
         """
         evidences = [
-            ev for ev in self._evidence_store.values()
+            ev
+            for ev in self._evidence_store.values()
             if ev.target_type == target_type and ev.target_id == target_id
         ]
-        
+
         return [
             EvidenceResponse(
                 id=ev.id,
@@ -451,9 +467,11 @@ class EvidenceController(Controller):
                 created_at=ev.created_at.isoformat() if ev.created_at else "",
                 updated_at=ev.updated_at.isoformat() if ev.updated_at else None,
             )
-            for ev in sorted(evidences, key=lambda x: x.created_at or datetime.min, reverse=True)
+            for ev in sorted(
+                evidences, key=lambda x: x.created_at or datetime.min, reverse=True
+            )
         ]
-    
+
     @delete("/{evidence_id:str}", status_code=200)
     async def delete_evidence(
         self,
@@ -464,9 +482,9 @@ class EvidenceController(Controller):
         evidence = self._evidence_store.pop(evidence_id, None)
         if not evidence:
             raise NotFoundException(detail=f"Evidence with ID {evidence_id} not found")
-        
+
         logger.info(f"Deleted evidence {evidence_id}")
-        
+
         return EvidenceResponse(
             id=evidence.id,
             edition_id=evidence.edition_id,
@@ -481,7 +499,7 @@ class EvidenceController(Controller):
             context=evidence.context,
             created_at=evidence.created_at.isoformat() if evidence.created_at else "",
             updated_at=evidence.updated_at.isoformat() if evidence.updated_at else None,
-            message="证据删除成功"
+            message="证据删除成功",
         )
 
 
@@ -489,10 +507,12 @@ class EvidenceController(Controller):
 # Stats Controller
 # ============================================================================
 
+
 class AnalysisStatsController(Controller):
     """分析统计控制器"""
+
     path = "/stats"
-    
+
     @get("/{edition_id:int}")
     async def get_stats(
         self,
@@ -502,25 +522,34 @@ class AnalysisStatsController(Controller):
     ) -> AnalysisStatsResponse:
         """获取版本的统计分析数据"""
         db = next(router_dependency)
-        
+
         # 验证版本存在
         from sail_server.infrastructure.orm.text import Edition
+
         edition = db.query(Edition).filter(Edition.id == edition_id).first()
         if not edition:
             raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        
+
         # 从证据存储中统计（使用类变量直接访问）
         all_evidence = list(EvidenceController._evidence_store.values())
         edition_evidence = [ev for ev in all_evidence if ev.edition_id == edition_id]
-        
+
         # 统计证据类型
         evidence_stats = {
-            "character": len([ev for ev in edition_evidence if ev.evidence_type == "character"]),
-            "setting": len([ev for ev in edition_evidence if ev.evidence_type == "setting"]),
-            "outline_node": len([ev for ev in edition_evidence if ev.evidence_type == "outline"]),
-            "relation": len([ev for ev in edition_evidence if ev.evidence_type == "relation"]),
+            "character": len(
+                [ev for ev in edition_evidence if ev.evidence_type == "character"]
+            ),
+            "setting": len(
+                [ev for ev in edition_evidence if ev.evidence_type == "setting"]
+            ),
+            "outline_node": len(
+                [ev for ev in edition_evidence if ev.evidence_type == "outline"]
+            ),
+            "relation": len(
+                [ev for ev in edition_evidence if ev.evidence_type == "relation"]
+            ),
         }
-        
+
         # TODO: 从任务存储中统计（当任务系统实现后）
         task_stats = {
             "pending": 0,
@@ -529,7 +558,7 @@ class AnalysisStatsController(Controller):
             "failed": 0,
             "cancelled": 0,
         }
-        
+
         return AnalysisStatsResponse(
             edition_id=edition_id,
             tasks=task_stats,
@@ -542,14 +571,16 @@ class AnalysisStatsController(Controller):
 # Task Controller (Stub)
 # ============================================================================
 
+
 class TaskController(Controller):
     """任务控制器（桩实现）"""
+
     path = "/task"
-    
+
     # 内存存储（临时实现）
     _tasks: Dict[int, Dict] = {}
     _task_counter: int = 0
-    
+
     @post("/")
     async def create_task(
         self,
@@ -559,7 +590,7 @@ class TaskController(Controller):
         """创建分析任务"""
         TaskController._task_counter += 1
         task_id = TaskController._task_counter
-        
+
         task = {
             "id": task_id,
             "edition_id": data.get("edition_id"),
@@ -574,7 +605,7 @@ class TaskController(Controller):
         TaskController._tasks[task_id] = task
         logger.info(f"Created task {task_id}")
         return task
-    
+
     @get("/")
     async def list_tasks(
         self,
@@ -584,14 +615,14 @@ class TaskController(Controller):
     ) -> List[Dict[str, Any]]:
         """获取任务列表"""
         tasks = list(TaskController._tasks.values())
-        
+
         if edition_id:
             tasks = [t for t in tasks if t.get("edition_id") == edition_id]
         if status:
             tasks = [t for t in tasks if t.get("status") == status]
-        
+
         return tasks
-    
+
     @get("/{task_id:int}")
     async def get_task(
         self,
@@ -603,7 +634,7 @@ class TaskController(Controller):
         if not task:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
         return task
-    
+
     @post("/{task_id:int}/cancel")
     async def cancel_task(
         self,
@@ -614,10 +645,10 @@ class TaskController(Controller):
         task = TaskController._tasks.get(task_id)
         if not task:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
-        
+
         task["status"] = "cancelled"
         return {"success": True, "message": f"Task {task_id} cancelled"}
-    
+
     @delete("/{task_id:int}", status_code=200)
     async def delete_task(
         self,
@@ -627,10 +658,10 @@ class TaskController(Controller):
         """删除任务"""
         if task_id not in TaskController._tasks:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
-        
+
         del TaskController._tasks[task_id]
         return {"success": True, "message": f"Task {task_id} deleted"}
-    
+
     @post("/{task_id:int}/plan")
     async def create_task_plan(
         self,
@@ -642,7 +673,7 @@ class TaskController(Controller):
         task = TaskController._tasks.get(task_id)
         if not task:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
-        
+
         # 模拟执行计划
         plan = {
             "chunks": [
@@ -654,7 +685,7 @@ class TaskController(Controller):
             "prompt_template_id": "default_analysis",
         }
         return {"success": True, "plan": plan}
-    
+
     @post("/{task_id:int}/execute")
     async def execute_task(
         self,
@@ -666,10 +697,10 @@ class TaskController(Controller):
         task = TaskController._tasks.get(task_id)
         if not task:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
-        
+
         task["status"] = "running"
         return {"success": True}
-    
+
     @post("/{task_id:int}/apply")
     async def apply_results(
         self,
@@ -680,7 +711,7 @@ class TaskController(Controller):
         task = TaskController._tasks.get(task_id)
         if not task:
             raise NotFoundException(detail=f"Task with ID {task_id} not found")
-        
+
         return {"applied": 5, "failed": 0}
 
 
@@ -688,10 +719,12 @@ class TaskController(Controller):
 # Progress Controller
 # ============================================================================
 
+
 class ProgressController(Controller):
     """进度控制器"""
+
     path = "/progress"
-    
+
     @get("/{task_id:int}")
     async def get_progress(
         self,
@@ -702,19 +735,19 @@ class ProgressController(Controller):
         """获取任务进度"""
         from sail_server.model.unified_scheduler_ws import get_unified_scheduler_with_ws
         from sail_server.model.unified_agent import UnifiedTaskDAO
-        
+
         scheduler = get_unified_scheduler_with_ws()
         progress = scheduler.get_task_progress(task_id)
-        
+
         if not progress:
             # 从数据库获取任务状态
             db = next(router_dependency)
             dao = UnifiedTaskDAO(db)
             task = dao.get_by_id(task_id)
-            
+
             if not task:
                 raise NotFoundException(detail=f"Task with ID {task_id} not found")
-            
+
             # 转换状态
             status_map = {
                 "pending": "pending",
@@ -725,7 +758,7 @@ class ProgressController(Controller):
                 "failed": "failed",
                 "cancelled": "cancelled",
             }
-            
+
             return {
                 "success": True,
                 "progress": {
@@ -735,9 +768,9 @@ class ProgressController(Controller):
                     "total_chunks": 0,
                     "completed_chunks": 0,
                     "current_chunk_info": None,
-                }
+                },
             }
-        
+
         # 转换进度格式
         status_map = {
             "pending": "pending",
@@ -748,7 +781,7 @@ class ProgressController(Controller):
             "failed": "failed",
             "cancelled": "cancelled",
         }
-        
+
         return {
             "success": True,
             "progress": {
@@ -758,7 +791,7 @@ class ProgressController(Controller):
                 "total_chunks": progress.total_steps or 0,
                 "completed_chunks": progress.current_step or 0,
                 "current_chunk_info": None,
-            }
+            },
         }
 
 
@@ -766,10 +799,12 @@ class ProgressController(Controller):
 # Result Controller (Stub)
 # ============================================================================
 
+
 class ResultController(Controller):
     """结果控制器（桩实现）"""
+
     path = "/result"
-    
+
     @get("/{task_id:int}")
     async def get_results(
         self,
@@ -796,7 +831,7 @@ class ResultController(Controller):
                 "review_status": "approved",
             },
         ]
-    
+
     @post("/{result_id:int}/verify")
     async def verify_result(
         self,
@@ -806,27 +841,32 @@ class ResultController(Controller):
     ) -> Dict[str, Any]:
         """审核结果"""
         status = data.get("status", "pending")
-        return {"success": True, "message": f"Result {result_id} status updated to {status}"}
+        return {
+            "success": True,
+            "message": f"Result {result_id} status updated to {status}",
+        }
 
 
 # ============================================================================
 # LLM Provider Controller
 # ============================================================================
 
+
 class LLMProviderController(Controller):
     """LLM 提供商控制器 - 返回系统支持的 LLM Provider 列表"""
+
     path = "/llm-providers"
-    
+
     @get("/")
     async def get_providers(
         self,
         request: Request,
     ) -> Dict[str, Any]:
         """获取 LLM 提供商列表
-        
+
         返回系统中所有可用的 LLM Provider 及其配置信息，
         供前端选择使用。
-        
+
         Returns:
             {
                 "success": true,
@@ -847,30 +887,34 @@ class LLMProviderController(Controller):
                 "task_fallback_chains": {...}
             }
         """
-        from sail_server.utils.llm.available_providers import (
+        from sail.llm.available_providers import (
             AVAILABLE_PROVIDERS,
             DEFAULT_PROVIDER_PRIORITY,
             FALLBACK_PROVIDER_CHAIN,
             TASK_FALLBACK_CHAINS,
         )
-        
+
         # 构建 Provider 列表
         providers = []
         for name, info in AVAILABLE_PROVIDERS.items():
-            providers.append({
-                "id": name,
-                "name": info.display_name,
-                "display_name": info.display_name,
-                "description": info.description,
-                "models": info.available_models,
-                "default_model": info.default_model,
-                "requires_api_key": info.requires_api_key,
-            })
-        
+            providers.append(
+                {
+                    "id": name,
+                    "name": info.display_name,
+                    "display_name": info.display_name,
+                    "description": info.description,
+                    "models": info.available_models,
+                    "default_model": info.default_model,
+                    "requires_api_key": info.requires_api_key,
+                }
+            )
+
         return {
             "success": True,
             "providers": providers,
-            "default_provider": DEFAULT_PROVIDER_PRIORITY[0] if DEFAULT_PROVIDER_PRIORITY else None,
+            "default_provider": DEFAULT_PROVIDER_PRIORITY[0]
+            if DEFAULT_PROVIDER_PRIORITY
+            else None,
             "default_priority": DEFAULT_PROVIDER_PRIORITY,
             "fallback_chain": FALLBACK_PROVIDER_CHAIN,
             "task_fallback_chains": TASK_FALLBACK_CHAINS,

@@ -452,7 +452,7 @@ def test_with_cleanup(db):
 | `sail_server.infrastructure.orm` | 75% | 🟢 已实现 |
 | `sail_server.model.finance` | 70% | 🟡 进行中 |
 | `sail_server.data.dao` | 70% | 🔴 待添加 |
-| `sail_server.utils.llm` | 60% | 🟡 进行中 |
+| `sail.llm` | 60% | 🟡 进行中 |
 
 ## 更新记录
 

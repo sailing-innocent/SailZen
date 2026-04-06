@@ -260,7 +260,7 @@ $env:MOONSHOT_API_KEY
 
 # 2. 测试连接
 uv run python -c "
-from sail_server.utils.llm.client import LLMClient
+from sail.llm.client import LLMClient
 client = LLMClient()
 response = client.generate('Hello')
 print(response)

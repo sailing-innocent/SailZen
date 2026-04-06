@@ -574,7 +574,7 @@ DEFAULT_LLM_CONFIG = {
 
 ```python
 # ✅ 正确做法
-from sail_server.utils.llm.available_providers import (
+from sail.llm.available_providers import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,

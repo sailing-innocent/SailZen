@@ -33,7 +33,7 @@ from sail_server.service.async_outline_extraction import (
     ExtractionProgress,
 )
 from sail_server.service.async_outline_extraction.async_llm_client import AsyncLLMClient
-from sail_server.utils.llm.available_providers import DEFAULT_LLM_CONFIG
+from sail.llm.available_providers import DEFAULT_LLM_CONFIG
 import os
 
 

@@ -494,7 +494,7 @@ HTTP Response
 
 - **类型提示**：鼓励使用类型提示
 - **日志**：使用 `sail_server.utils.logging_config.get_logger`
-- **LLM**：使用 `sail_server.utils.llm.available_providers` 中的默认配置
+- **LLM**：使用 `sail.llm.available_providers` 中的默认配置
 
 ## 依赖关系
 

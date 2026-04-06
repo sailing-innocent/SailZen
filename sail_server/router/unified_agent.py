@@ -20,7 +20,14 @@ from litestar.exceptions import NotFoundException, ValidationException
 from litestar.response import Stream
 from litestar.handlers.websocket_handlers import WebsocketListener
 from litestar.connection import WebSocket
-from litestar.types import WebSocketScope, WebSocketReceiveMessage, WebSocketSendMessage, Scope, Receive, Send
+from litestar.types import (
+    WebSocketScope,
+    WebSocketReceiveMessage,
+    WebSocketSendMessage,
+    Scope,
+    Receive,
+    Send,
+)
 
 from sail_server.db import get_db_dependency, get_db_session
 from sail_server.infrastructure.orm.unified_agent import UnifiedAgentTask
@@ -60,9 +67,11 @@ logger = logging.getLogger(__name__)
 # Request/Response Models
 # ============================================================================
 
+
 @dataclass
 class CreateTaskRequest:
     """创建任务请求"""
+
     task_type: str
     sub_type: Optional[str] = None
     edition_id: Optional[int] = None
@@ -78,6 +87,7 @@ class CreateTaskRequest:
 @dataclass
 class TaskResponse:
     """任务响应"""
+
     id: int
     task_type: str
     sub_type: Optional[str]
@@ -94,7 +104,7 @@ class TaskResponse:
     completed_at: Optional[str]
     error_message: Optional[str] = None
     result_data: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def from_data(cls, data: UnifiedTaskData) -> "TaskResponse":
         """从数据对象创建响应"""
@@ -121,6 +131,7 @@ class TaskResponse:
 @dataclass
 class TaskProgressResponse:
     """任务进度响应"""
+
     task_id: int
     status: str
     progress: int
@@ -131,7 +142,7 @@ class TaskProgressResponse:
     error_message: Optional[str]
     actual_tokens: int
     actual_cost: float
-    
+
     @classmethod
     def from_progress(cls, progress: UnifiedTaskProgress) -> "TaskProgressResponse":
         """从进度对象创建响应"""
@@ -152,6 +163,7 @@ class TaskProgressResponse:
 @dataclass
 class TaskListFilter:
     """任务列表过滤条件"""
+
     status: Optional[str] = None
     task_type: Optional[str] = None
     sub_type: Optional[str] = None
@@ -164,14 +176,16 @@ class TaskListFilter:
 # Controllers
 # ============================================================================
 
+
 class UnifiedTaskController(Controller):
     """统一任务控制器"""
+
     path = "/tasks"
-    
+
     def _get_scheduler(self) -> UnifiedAgentScheduler:
         """获取调度器实例"""
         return get_unified_scheduler_with_ws()
-    
+
     @post("")
     async def create_task(
         self,
@@ -180,25 +194,33 @@ class UnifiedTaskController(Controller):
     ) -> TaskResponse:
         """创建新任务"""
         db = next(router_dependency)
-        
+
         # 详细记录接收到的所有数据
         logger.info("=" * 60)
-        logger.info(f"[UnifiedTaskController] Creating task: type={data.task_type}, sub_type={data.sub_type}, edition_id={data.edition_id}")
-        logger.info(f"[UnifiedTaskController] target_node_ids={data.target_node_ids}, target_scope={data.target_scope}")
-        logger.info(f"[UnifiedTaskController] LLM config from request: llm_provider={data.llm_provider}, llm_model={data.llm_model}")
-        
+        logger.info(
+            f"[UnifiedTaskController] Creating task: type={data.task_type}, sub_type={data.sub_type}, edition_id={data.edition_id}"
+        )
+        logger.info(
+            f"[UnifiedTaskController] target_node_ids={data.target_node_ids}, target_scope={data.target_scope}"
+        )
+        logger.info(
+            f"[UnifiedTaskController] LLM config from request: llm_provider={data.llm_provider}, llm_model={data.llm_model}"
+        )
+
         # 记录完整的 config 数据
         config_data = data.config or {}
         logger.info(f"[UnifiedTaskController] Full config data: {config_data}")
         range_selection = config_data.get("range_selection", {})
-        logger.info(f"[UnifiedTaskController] Range selection from request: {range_selection}")
-        
+        logger.info(
+            f"[UnifiedTaskController] Range selection from request: {range_selection}"
+        )
+
         # 验证任务类型
         registry = get_agent_registry()
         agent = registry.get_agent_for_task(data.task_type)
         if not agent:
             raise ValidationException(f"Unsupported task type: {data.task_type}")
-        
+
         # 创建任务数据
         task_data = UnifiedTaskData(
             task_type=data.task_type,
@@ -212,18 +234,20 @@ class UnifiedTaskController(Controller):
             priority=data.priority,
             config=data.config,
         )
-        logger.info(f"[UnifiedTaskController] UnifiedTaskData created: llm_provider={task_data.llm_provider}, llm_model={task_data.llm_model}")
-        
+        logger.info(
+            f"[UnifiedTaskController] UnifiedTaskData created: llm_provider={task_data.llm_provider}, llm_model={task_data.llm_model}"
+        )
+
         # 调度任务（内部会创建任务记录并加入队列）
         scheduler = self._get_scheduler()
-        
+
         # 启动调度器（如果未运行）
         if not scheduler.is_running():
             await scheduler.start()
-        
+
         # 调度任务
         result_data = await scheduler.schedule_task(task_data)
-        
+
         # 发送 task_created 事件通知客户端
         ws_manager = get_websocket_manager()
         await ws_manager.notify_task_created(
@@ -232,11 +256,11 @@ class UnifiedTaskController(Controller):
                 "task_type": result_data.task_type,
                 "status": result_data.status,
                 "priority": result_data.priority,
-            }
+            },
         )
-        
+
         return TaskResponse.from_data(result_data)
-    
+
     @get("")
     async def list_tasks(
         self,
@@ -251,7 +275,7 @@ class UnifiedTaskController(Controller):
         """获取任务列表"""
         db = next(router_dependency)
         dao = UnifiedTaskDAO(db)
-        
+
         tasks = dao.list_tasks(
             status=status,
             task_type=task_type,
@@ -260,16 +284,16 @@ class UnifiedTaskController(Controller):
             skip=skip,
             limit=limit,
         )
-        
+
         result = []
         for task in tasks:
             step_dao = UnifiedStepDAO(db)
             step_count = step_dao.get_next_step_number(task.id) - 1
             data = UnifiedTaskData.from_orm(task, step_count)
             result.append(TaskResponse.from_data(data))
-        
+
         return result
-    
+
     @get("/{task_id:int}")
     async def get_task(
         self,
@@ -279,15 +303,15 @@ class UnifiedTaskController(Controller):
         """获取任务详情"""
         db = next(router_dependency)
         dao = UnifiedTaskDAO(db)
-        
+
         result = dao.get_with_step_count(task_id)
         if not result:
             raise NotFoundException(f"Task {task_id} not found")
-        
+
         task, step_count = result
         data = UnifiedTaskData.from_orm(task, step_count)
         return TaskResponse.from_data(data)
-    
+
     @get("/{task_id:int}/progress")
     async def get_task_progress(
         self,
@@ -297,7 +321,7 @@ class UnifiedTaskController(Controller):
         """获取任务进度"""
         db = next(router_dependency)
         scheduler = self._get_scheduler()
-        
+
         progress = scheduler.get_task_progress(task_id)
         if not progress:
             # 从数据库获取基本信息
@@ -305,7 +329,7 @@ class UnifiedTaskController(Controller):
             task = dao.get_by_id(task_id)
             if not task:
                 raise NotFoundException(f"Task {task_id} not found")
-            
+
             progress = UnifiedTaskProgress(
                 task_id=task_id,
                 status=task.status,
@@ -314,9 +338,9 @@ class UnifiedTaskController(Controller):
                 actual_tokens=task.actual_tokens,
                 actual_cost=float(task.actual_cost),
             )
-        
+
         return TaskProgressResponse.from_progress(progress)
-    
+
     @post("/{task_id:int}/cancel")
     async def cancel_task(
         self,
@@ -325,13 +349,13 @@ class UnifiedTaskController(Controller):
     ) -> Dict[str, Any]:
         """取消任务"""
         scheduler = self._get_scheduler()
-        
+
         success = await scheduler.cancel_task(task_id)
         if not success:
             raise ValidationException(f"Failed to cancel task {task_id}")
-        
+
         return {"success": True, "message": f"Task {task_id} cancelled"}
-    
+
     @delete("/{task_id:int}", status_code=200)
     async def delete_task(
         self,
@@ -341,41 +365,42 @@ class UnifiedTaskController(Controller):
         """删除任务"""
         db = next(router_dependency)
         dao = UnifiedTaskDAO(db)
-        
+
         # 先尝试取消（如果正在运行）
         scheduler = self._get_scheduler()
         await scheduler.cancel_task(task_id)
-        
+
         # 删除任务
         success = dao.delete(task_id)
         if not success:
             raise NotFoundException(f"Task {task_id} not found")
-        
+
         return {"success": True, "message": f"Task {task_id} deleted"}
 
 
 class UnifiedAgentInfoController(Controller):
     """Agent 信息控制器"""
+
     path = "/agents"
-    
+
     @get("")
     async def list_agents(self) -> List[Dict[str, Any]]:
         """列出所有可用的 Agent"""
         registry = get_agent_registry()
         agents = registry.list_agents()
         return [agent.to_dict() for agent in agents]
-    
+
     @get("/{agent_type:str}")
     async def get_agent_info(self, agent_type: str) -> Dict[str, Any]:
         """获取 Agent 详细信息"""
         registry = get_agent_registry()
         agent = registry.get_agent(agent_type)
-        
+
         if not agent:
             raise NotFoundException(f"Agent {agent_type} not found")
-        
+
         return agent.agent_info.to_dict()
-    
+
     @post("/{agent_type:str}/estimate")
     async def estimate_task_cost(
         self,
@@ -386,10 +411,10 @@ class UnifiedAgentInfoController(Controller):
         """预估任务成本"""
         registry = get_agent_registry()
         agent = registry.get_agent(agent_type)
-        
+
         if not agent:
             raise NotFoundException(f"Agent {agent_type} not found")
-        
+
         # 创建临时任务对象用于预估
         task = UnifiedAgentTask(
             task_type=data.task_type,
@@ -400,54 +425,56 @@ class UnifiedAgentInfoController(Controller):
             llm_model=data.llm_model,
             config=data.config,
         )
-        
+
         estimate = agent.estimate_cost(task)
         return estimate.to_dict()
-    
+
     @get("/config/llm")
     async def get_llm_config(self) -> Dict[str, Any]:
         """获取 LLM 配置信息（供前端使用）"""
-        from sail_server.utils.llm.available_providers import to_frontend_config
+        from sail.llm.available_providers import to_frontend_config
+
         return to_frontend_config()
 
 
 class UnifiedSchedulerController(Controller):
     """调度器控制器"""
+
     path = "/scheduler"
-    
+
     def _get_scheduler(self) -> UnifiedAgentScheduler:
         """获取调度器实例"""
         return get_unified_scheduler_with_ws()
-    
+
     @get("/status")
     async def get_scheduler_status(self) -> Dict[str, Any]:
         """获取调度器状态"""
         scheduler = self._get_scheduler()
-        
+
         return {
             "is_running": scheduler.is_running(),
             "stats": scheduler.get_stats(),
         }
-    
+
     @post("/start")
     async def start_scheduler(self) -> Dict[str, Any]:
         """启动调度器"""
         scheduler = self._get_scheduler()
-        
+
         if scheduler.is_running():
             return {"success": True, "message": "Scheduler is already running"}
-        
+
         await scheduler.start()
         return {"success": True, "message": "Scheduler started"}
-    
+
     @post("/stop")
     async def stop_scheduler(self) -> Dict[str, Any]:
         """停止调度器"""
         scheduler = self._get_scheduler()
-        
+
         if not scheduler.is_running():
             return {"success": True, "message": "Scheduler is not running"}
-        
+
         await scheduler.stop()
         return {"success": True, "message": "Scheduler stopped"}
 
@@ -456,16 +483,18 @@ class UnifiedSchedulerController(Controller):
 # WebSocket Handler
 # ============================================================================
 
+
 class TaskProgressWebSocket(WebsocketListener):
     """任务进度 WebSocket"""
+
     path = "/ws/tasks"
-    
+
     async def on_accept(self, socket: WebSocket) -> None:
         """连接建立时"""
         self.socket = socket
         self.ws_manager = get_websocket_manager()
         self.client_id = f"ws_{id(socket)}"
-        
+
         async def _send_message(msg: str) -> None:
             """发送消息，捕获连接断开异常"""
             try:
@@ -473,19 +502,18 @@ class TaskProgressWebSocket(WebsocketListener):
             except Exception:
                 # 连接已断开，忽略发送错误
                 pass
-        
+
         await self.ws_manager.connect(
-            self.client_id,
-            lambda msg: asyncio.create_task(_send_message(msg))
+            self.client_id, lambda msg: asyncio.create_task(_send_message(msg))
         )
-        
+
         logger.info(f"WebSocket client {self.client_id} connected")
-    
+
     async def on_disconnect(self, socket: WebSocket) -> None:
         """连接断开时"""
         await self.ws_manager.disconnect(self.client_id)
         logger.info(f"WebSocket client {self.client_id} disconnected")
-    
+
     async def on_receive(self, data: str) -> None:
         """收到消息时"""
         await self.ws_manager.handle_message(self.client_id, data)

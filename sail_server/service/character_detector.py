@@ -14,15 +14,21 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from sail_server.utils.llm.client import LLMClient, LLMConfig, LLMProvider
-from sail_server.utils.llm.prompts import PromptTemplateManager
-from sail_server.utils.llm.retry_handler import (
-    LLMRetryHandler, RetryConfig, RetryStrategy, RetryResult
+from sail.llm.client import LLMClient, LLMConfig, LLMProvider
+from sail.llm.prompts import PromptTemplateManager
+from sail.llm.retry_handler import (
+    LLMRetryHandler,
+    RetryConfig,
+    RetryStrategy,
+    RetryResult,
 )
 from sail_server.service.extraction_cache import (
-    ExtractionCacheManager, ExtractionCheckpoint, ExtractionPhase, get_cache_manager
+    ExtractionCacheManager,
+    ExtractionCheckpoint,
+    ExtractionPhase,
+    get_cache_manager,
 )
-from sail_server.utils.llm.available_providers import (
+from sail.llm.available_providers import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,
@@ -42,12 +48,16 @@ logger = logging.getLogger(__name__)
 # Service-specific Data Classes
 # ============================================================================
 
+
 @dataclass
 class DetectedCharacter:
     """检测到的人物（服务内部使用）"""
+
     canonical_name: str
     aliases: List[Dict[str, str]] = field(default_factory=list)
-    role_type: str = "supporting"  # protagonist, deuteragonist, supporting, minor, mentioned
+    role_type: str = (
+        "supporting"  # protagonist, deuteragonist, supporting, minor, mentioned
+    )
     role_confidence: float = 0.5
     first_appearance: Optional[Dict[str, str]] = None
     description: str = ""
@@ -60,6 +70,7 @@ class DetectedCharacter:
 @dataclass
 class CharacterDetectionConfig:
     """人物检测配置"""
+
     detect_aliases: bool = True
     detect_attributes: bool = True
     detect_relations: bool = True
@@ -74,6 +85,7 @@ class CharacterDetectionConfig:
 @dataclass
 class DetectionProgress:
     """检测进度"""
+
     current_step: str
     progress_percent: int
     message: str
@@ -87,6 +99,7 @@ class DetectionProgress:
 @dataclass
 class DetectionErrorInfo:
     """检测错误信息"""
+
     error_type: str
     error_message: str
     is_retryable: bool = False
@@ -97,6 +110,7 @@ class DetectionErrorInfo:
 @dataclass
 class CharacterDetectionResult:
     """人物检测结果"""
+
     characters: List[DetectedCharacter]
     metadata: Dict[str, Any]
     raw_response: Optional[str] = None
@@ -108,9 +122,10 @@ class CharacterDetectionResult:
 # Character Detector Service
 # ============================================================================
 
+
 class CharacterDetector:
     """人物检测服务
-    
+
     负责从文本中检测人物并构建档案，支持：
     - 人物识别和别名合并
     - 角色分类（主角/配角/龙套等）
@@ -120,7 +135,7 @@ class CharacterDetector:
     - 结果合并和去重
     - 分阶段缓存和恢复
     """
-    
+
     def __init__(
         self,
         db: Session,
@@ -132,7 +147,9 @@ class CharacterDetector:
         self.db = db
         # 创建默认 LLM 配置
         if llm_client is None:
-            logger.info(f"[CharacterDetector] Using default LLM config: {DEFAULT_LLM_PROVIDER}/{DEFAULT_LLM_MODEL}")
+            logger.info(
+                f"[CharacterDetector] Using default LLM config: {DEFAULT_LLM_PROVIDER}/{DEFAULT_LLM_MODEL}"
+            )
             config = LLMConfig.from_env(LLMProvider(DEFAULT_LLM_PROVIDER))
             config.model = DEFAULT_LLM_MODEL
             config.max_tokens = DEFAULT_LLM_CONFIG["max_tokens"]
@@ -140,7 +157,7 @@ class CharacterDetector:
         else:
             self.llm_client = llm_client
         self.prompt_manager = prompt_manager or PromptTemplateManager()
-        
+
         # 初始化重试处理器
         self.retry_handler = retry_handler or LLMRetryHandler(
             RetryConfig(
@@ -154,14 +171,14 @@ class CharacterDetector:
                 retry_on_server_error=True,
             )
         )
-        
+
         # 初始化缓存管理器
         self.cache_manager = cache_manager or get_cache_manager()
-        
+
         # 任务状态
         self._current_task_id: Optional[str] = None
         self._is_cancelled: bool = False
-    
+
     async def detect(
         self,
         edition_id: int,
@@ -174,7 +191,7 @@ class CharacterDetector:
         resume_from_checkpoint: bool = True,
     ) -> CharacterDetectionResult:
         """执行人物检测
-        
+
         Args:
             edition_id: 版本ID
             range_selection: 文本范围选择
@@ -184,27 +201,36 @@ class CharacterDetector:
             progress_callback: 进度回调函数
             task_id: 任务ID（用于缓存和恢复）
             resume_from_checkpoint: 是否尝试从检查点恢复
-            
+
         Returns:
             检测结果
         """
         self._current_task_id = task_id
         self._is_cancelled = False
-        
-        logger.info(f"[Detector] Starting character detection for edition {edition_id}, work_title='{work_title}'")
-        
+
+        logger.info(
+            f"[Detector] Starting character detection for edition {edition_id}, work_title='{work_title}'"
+        )
+
         # 1. 获取文本内容
         from sail_server.service.range_selector import TextRangeParser
+
         parser = TextRangeParser(self.db)
         content_result = parser.get_content(range_selection)
-        logger.info(f"[Detector] Content parsed: {len(content_result.full_text)} chars, "
-                   f"{content_result.estimated_tokens} tokens, {len(content_result.chapters)} chapters")
-        
+        logger.info(
+            f"[Detector] Content parsed: {len(content_result.full_text)} chars, "
+            f"{content_result.estimated_tokens} tokens, {len(content_result.chapters)} chapters"
+        )
+
         # 2. 检查是否需要分块
-        needs_chunking = content_result.estimated_tokens > 8000 or len(content_result.chapters) > 20
-        
+        needs_chunking = (
+            content_result.estimated_tokens > 8000 or len(content_result.chapters) > 20
+        )
+
         if needs_chunking:
-            logger.info(f"[Detector] Using batch processing: {len(content_result.chapters)} chapters")
+            logger.info(
+                f"[Detector] Using batch processing: {len(content_result.chapters)} chapters"
+            )
             return await self._detect_with_chunking(
                 edition_id,
                 content_result,
@@ -215,16 +241,18 @@ class CharacterDetector:
                 task_id,
                 resume_from_checkpoint,
             )
-        
+
         # 3. 单块提取
         logger.info(f"[Detector] Using single-pass detection")
         if progress_callback:
-            await progress_callback({
-                "current_step": "detecting",
-                "progress_percent": 50,
-                "message": "正在分析人物...",
-            })
-        
+            await progress_callback(
+                {
+                    "current_step": "detecting",
+                    "progress_percent": 50,
+                    "message": "正在分析人物...",
+                }
+            )
+
         result = await self._detect_single_with_retry(
             edition_id,
             content_result.full_text,
@@ -234,16 +262,18 @@ class CharacterDetector:
             known_characters,
             progress_callback,
         )
-        
+
         if progress_callback:
-            await progress_callback({
-                "current_step": "completed",
-                "progress_percent": 100,
-                "message": "人物检测完成",
-            })
-        
+            await progress_callback(
+                {
+                    "current_step": "completed",
+                    "progress_percent": 100,
+                    "message": "人物检测完成",
+                }
+            )
+
         return result
-    
+
     async def _detect_single_with_retry(
         self,
         edition_id: int,
@@ -255,31 +285,37 @@ class CharacterDetector:
         progress_callback: Optional[callable] = None,
     ) -> CharacterDetectionResult:
         """单块文本检测（带重试）"""
-        
+
         async def operation():
             return await self._detect_single(
                 edition_id, text_content, config, work_title, chapters, known_characters
             )
-        
+
         async def on_retry(attempt: int, delay: float, rate_limit_info: Any):
-            message = f"LLM 调用失败，正在进行第 {attempt} 次重试，等待 {delay:.1f} 秒..."
+            message = (
+                f"LLM 调用失败，正在进行第 {attempt} 次重试，等待 {delay:.1f} 秒..."
+            )
             if rate_limit_info:
                 message = f"遇到速率限制，等待 {delay:.1f} 秒后重试..."
-            
+
             logger.warning(f"[Detector] {message}")
-            
+
             if progress_callback:
-                await progress_callback({
-                    "current_step": "retrying",
-                    "progress_percent": 40,
-                    "message": message,
-                    "is_retrying": True,
-                    "retry_attempt": attempt,
-                    "retry_delay": delay,
-                })
-        
-        retry_result: RetryResult = await self.retry_handler.execute(operation, on_retry)
-        
+                await progress_callback(
+                    {
+                        "current_step": "retrying",
+                        "progress_percent": 40,
+                        "message": message,
+                        "is_retrying": True,
+                        "retry_attempt": attempt,
+                        "retry_delay": delay,
+                    }
+                )
+
+        retry_result: RetryResult = await self.retry_handler.execute(
+            operation, on_retry
+        )
+
         if not retry_result.success:
             error_info = DetectionErrorInfo(
                 error_type=retry_result.last_error_type or "Unknown",
@@ -288,9 +324,11 @@ class CharacterDetector:
                 retry_count=retry_result.attempts,
                 suggestion=self._get_error_suggestion(retry_result),
             )
-            
-            logger.error(f"[Detector] Detection failed after {retry_result.attempts} attempts: {error_info}")
-            
+
+            logger.error(
+                f"[Detector] Detection failed after {retry_result.attempts} attempts: {error_info}"
+            )
+
             if self._current_task_id:
                 self.cache_manager.update_checkpoint(
                     self._current_task_id,
@@ -301,11 +339,11 @@ class CharacterDetector:
                     ),
                     auto_save=True,
                 )
-            
+
             raise Exception(f"人物检测失败: {error_info.error_message}")
-        
+
         return retry_result.data
-    
+
     def _get_error_suggestion(self, retry_result: RetryResult) -> str:
         """根据错误类型获取建议"""
         if retry_result.rate_limit_info:
@@ -319,12 +357,12 @@ class CharacterDetector:
                 return "请求频率过高，请稍后再试。"
             else:
                 return "遇到速率限制，请稍后再试。"
-        
+
         if retry_result.last_error_type in ["TimeoutError", "asyncio.TimeoutError"]:
             return "请求超时，可能是网络问题或服务器繁忙。请检查网络连接后重试。"
-        
+
         return "发生未知错误，请检查日志或联系管理员。"
-    
+
     async def _detect_single(
         self,
         edition_id: int,
@@ -335,18 +373,20 @@ class CharacterDetector:
         known_characters: Optional[List[str]] = None,
     ) -> CharacterDetectionResult:
         """单块文本检测"""
-        logger.info(f"[_detect_single] Starting single-pass detection for edition {edition_id}")
-        
+        logger.info(
+            f"[_detect_single] Starting single-pass detection for edition {edition_id}"
+        )
+
         # 1. 加载并渲染提示词模板
         chapter_range = self._format_chapter_range(chapters)
-        
+
         variables = {
             "work_title": work_title,
             "chapter_range": chapter_range,
             "known_characters": known_characters or [],
             "chapter_contents": text_content,
         }
-        
+
         # 2. 渲染提示词
         template_id = config.prompt_template_id or "character_detection_v2"
         logger.info(f"[_detect_single] Rendering prompt template: {template_id}")
@@ -354,9 +394,11 @@ class CharacterDetector:
             rendered = self.prompt_manager.render(template_id, variables)
             logger.info(f"[_detect_single] Prompt rendered successfully")
         except ValueError as e:
-            logger.warning(f"[_detect_single] Template {template_id} not found, falling back to v1: {e}")
+            logger.warning(
+                f"[_detect_single] Template {template_id} not found, falling back to v1: {e}"
+            )
             rendered = self.prompt_manager.render("character_detection_v1", variables)
-        
+
         # 3. 调用 LLM
         logger.info(f"[_detect_single] Calling LLM...")
         if config.llm_provider or config.llm_model:
@@ -371,19 +413,23 @@ class CharacterDetector:
         else:
             client = self.llm_client
             logger.info(f"[_detect_single] Using default LLM client")
-        
+
         response = await client.complete(
             prompt=rendered.user_prompt,
             system=rendered.system_prompt,
         )
-        logger.info(f"[_detect_single] LLM response received, content length: {len(response.content)}")
-        
+        logger.info(
+            f"[_detect_single] LLM response received, content length: {len(response.content)}"
+        )
+
         # 4. 解析结果
         logger.info(f"[_detect_single] Parsing detection result...")
         result = self._parse_detection_result(response.content)
-        logger.info(f"[_detect_single] Result parsed: {len(result.characters)} characters")
+        logger.info(
+            f"[_detect_single] Result parsed: {len(result.characters)} characters"
+        )
         return result
-    
+
     async def _detect_with_chunking(
         self,
         edition_id: int,
@@ -398,18 +444,22 @@ class CharacterDetector:
         """按章节批量检测长文本"""
         chapters = content_result.chapters
         total_chapters = len(chapters)
-        
+
         CHAPTERS_PER_BATCH = 20
         total_batches = (total_chapters + CHAPTERS_PER_BATCH - 1) // CHAPTERS_PER_BATCH
-        
-        logger.info(f"[_detect_with_chunking] Total chapters: {total_chapters}, batches: {total_batches}")
-        
+
+        logger.info(
+            f"[_detect_with_chunking] Total chapters: {total_chapters}, batches: {total_batches}"
+        )
+
         # 检查点恢复逻辑
         checkpoint: Optional[ExtractionCheckpoint] = None
         if task_id and resume_from_checkpoint:
             checkpoint = self.cache_manager.get_checkpoint(task_id)
             if checkpoint:
-                logger.info(f"[_detect_with_chunking] Found checkpoint for task {task_id}")
+                logger.info(
+                    f"[_detect_with_chunking] Found checkpoint for task {task_id}"
+                )
                 if checkpoint.phase == ExtractionPhase.COMPLETED.value:
                     return self._recover_from_checkpoint(checkpoint)
             else:
@@ -422,17 +472,19 @@ class CharacterDetector:
                         "detect_relations": config.detect_relations,
                     },
                     range_selection={
-                        "mode": content_result.mode if hasattr(content_result, 'mode') else "unknown",
+                        "mode": content_result.mode
+                        if hasattr(content_result, "mode")
+                        else "unknown",
                         "edition_id": edition_id,
                     },
                     work_title=work_title,
                     known_characters=known_characters,
                     total_batches=total_batches,
                 )
-        
+
         all_characters: List[DetectedCharacter] = []
         failed_batches = []
-        
+
         start_batch = 0
         if checkpoint:
             completed = checkpoint.completed_batches
@@ -444,38 +496,48 @@ class CharacterDetector:
                         for char_dict in batch_cp.characters:
                             char = self._dict_to_character(char_dict)
                             all_characters.append(char)
-                logger.info(f"[_detect_with_chunking] Recovered {len(all_characters)} characters from {len(completed)} batches")
-        
+                logger.info(
+                    f"[_detect_with_chunking] Recovered {len(all_characters)} characters from {len(completed)} batches"
+                )
+
         if checkpoint:
             checkpoint.set_phase(ExtractionPhase.BATCH_STARTED)
             self.cache_manager.save_checkpoint(checkpoint.task_id)
-        
+
         for batch_idx in range(start_batch, total_batches):
             if self._is_cancelled:
-                logger.info(f"[_detect_with_chunking] Task cancelled at batch {batch_idx}")
+                logger.info(
+                    f"[_detect_with_chunking] Task cancelled at batch {batch_idx}"
+                )
                 break
-            
+
             start_idx = batch_idx * CHAPTERS_PER_BATCH
             end_idx = min(start_idx + CHAPTERS_PER_BATCH, total_chapters)
-            
-            logger.info(f"[_detect_with_chunking] Processing batch {batch_idx + 1}/{total_batches}")
-            
+
+            logger.info(
+                f"[_detect_with_chunking] Processing batch {batch_idx + 1}/{total_batches}"
+            )
+
             if checkpoint and checkpoint.is_batch_completed(batch_idx):
-                logger.info(f"[_detect_with_chunking] Batch {batch_idx} already completed, skipping")
+                logger.info(
+                    f"[_detect_with_chunking] Batch {batch_idx} already completed, skipping"
+                )
                 continue
-            
+
             batch_chapters = chapters[start_idx:end_idx]
             batch_content = self._format_chapter_batch(batch_chapters, start_idx)
-            
+
             if progress_callback:
-                await progress_callback({
-                    "current_step": f"detecting_batch_{batch_idx + 1}",
-                    "progress_percent": int((batch_idx / total_batches) * 100),
-                    "message": f"正在分析第 {start_idx + 1}-{end_idx} 章的人物",
-                    "batch_index": batch_idx + 1,
-                    "total_batches": total_batches,
-                })
-            
+                await progress_callback(
+                    {
+                        "current_step": f"detecting_batch_{batch_idx + 1}",
+                        "progress_percent": int((batch_idx / total_batches) * 100),
+                        "message": f"正在分析第 {start_idx + 1}-{end_idx} 章的人物",
+                        "batch_index": batch_idx + 1,
+                        "total_batches": total_batches,
+                    }
+                )
+
             if checkpoint:
                 checkpoint.update_progress(
                     percent=int((batch_idx / total_batches) * 100),
@@ -483,7 +545,7 @@ class CharacterDetector:
                     message=f"Processing batch {batch_idx + 1}/{total_batches}",
                 )
                 self.cache_manager.save_checkpoint(checkpoint.task_id)
-            
+
             try:
                 result = await self._detect_single_with_retry(
                     edition_id,
@@ -494,10 +556,12 @@ class CharacterDetector:
                     known_characters,
                     progress_callback,
                 )
-                
+
                 all_characters.extend(result.characters)
-                logger.info(f"[_detect_with_chunking] Batch {batch_idx + 1} completed, characters: {len(result.characters)}")
-                
+                logger.info(
+                    f"[_detect_with_chunking] Batch {batch_idx + 1} completed, characters: {len(result.characters)}"
+                )
+
                 if checkpoint:
                     self.cache_manager.add_batch_result(
                         task_id=checkpoint.task_id,
@@ -506,59 +570,71 @@ class CharacterDetector:
                         start_chapter=start_idx + 1,
                         end_chapter=end_idx,
                     )
-                
+
             except Exception as e:
-                logger.error(f"[_detect_with_chunking] Batch {batch_idx + 1} failed: {e}")
+                logger.error(
+                    f"[_detect_with_chunking] Batch {batch_idx + 1} failed: {e}"
+                )
                 failed_batches.append(batch_idx)
-                
+
                 if checkpoint:
                     checkpoint.mark_batch_failed(batch_idx, str(e))
                     self.cache_manager.save_checkpoint(checkpoint.task_id)
-                
+
                 if progress_callback:
-                    await progress_callback({
-                        "current_step": f"batch_{batch_idx + 1}_failed",
-                        "progress_percent": int((batch_idx / total_batches) * 100),
-                        "message": f"第 {batch_idx + 1} 批处理失败，继续处理下一批...",
-                    })
-        
+                    await progress_callback(
+                        {
+                            "current_step": f"batch_{batch_idx + 1}_failed",
+                            "progress_percent": int((batch_idx / total_batches) * 100),
+                            "message": f"第 {batch_idx + 1} 批处理失败，继续处理下一批...",
+                        }
+                    )
+
         if progress_callback:
-            await progress_callback({
-                "current_step": "merging_results",
-                "progress_percent": 95,
-                "message": "正在合并人物检测结果...",
-            })
-        
+            await progress_callback(
+                {
+                    "current_step": "merging_results",
+                    "progress_percent": 95,
+                    "message": "正在合并人物检测结果...",
+                }
+            )
+
         if checkpoint:
             checkpoint.set_phase(ExtractionPhase.MERGING)
             self.cache_manager.save_checkpoint(checkpoint.task_id)
-        
+
         # 合并并去重
         merged_result = self._merge_character_results(all_characters)
-        
+
         if checkpoint:
             checkpoint.set_phase(ExtractionPhase.COMPLETED)
             checkpoint.update_progress(100, "completed", "人物检测完成")
             self.cache_manager.save_checkpoint(checkpoint.task_id)
-        
+
         if progress_callback:
-            await progress_callback({
-                "current_step": "completed",
-                "progress_percent": 100,
-                "message": "人物检测完成",
-            })
-        
+            await progress_callback(
+                {
+                    "current_step": "completed",
+                    "progress_percent": 100,
+                    "message": "人物检测完成",
+                }
+            )
+
         return merged_result
-    
-    def _recover_from_checkpoint(self, checkpoint: ExtractionCheckpoint) -> CharacterDetectionResult:
+
+    def _recover_from_checkpoint(
+        self, checkpoint: ExtractionCheckpoint
+    ) -> CharacterDetectionResult:
         """从检查点恢复结果"""
         characters = []
-        
+
         for char_dict in checkpoint.accumulated_data.get("characters", []):
             characters.append(self._dict_to_character(char_dict))
-        
-        logger.info(f"[_recover_from_checkpoint] Recovered {len(characters)} characters")
-        
+
+        logger.info(
+            f"[_recover_from_checkpoint] Recovered {len(characters)} characters"
+        )
+
         return CharacterDetectionResult(
             characters=characters,
             metadata={
@@ -569,7 +645,7 @@ class CharacterDetector:
             is_recovered=True,
             recovered_from_checkpoint=checkpoint.task_id,
         )
-    
+
     def _dict_to_character(self, char_dict: Dict[str, Any]) -> DetectedCharacter:
         """字典转换为人物对象"""
         return DetectedCharacter(
@@ -584,18 +660,22 @@ class CharacterDetector:
             key_actions=char_dict.get("key_actions", []),
             mention_count=char_dict.get("mention_count", 0),
         )
-    
-    def _parse_detection_result(self, response_content: str) -> CharacterDetectionResult:
+
+    def _parse_detection_result(
+        self, response_content: str
+    ) -> CharacterDetectionResult:
         """解析 LLM 输出结果"""
         logger.info(f"[_parse_detection_result] Starting to parse response")
         try:
             json_str = self._extract_json(response_content)
             data = json.loads(json_str)
-            
+
             characters = []
             characters_data = data.get("characters", [])
-            logger.info(f"[_parse_detection_result] Found {len(characters_data)} characters in response")
-            
+            logger.info(
+                f"[_parse_detection_result] Found {len(characters_data)} characters in response"
+            )
+
             for char_data in characters_data:
                 char = DetectedCharacter(
                     canonical_name=char_data.get("canonical_name", ""),
@@ -610,15 +690,15 @@ class CharacterDetector:
                     mention_count=char_data.get("mention_count", 0),
                 )
                 characters.append(char)
-            
+
             metadata = data.get("metadata", {})
-            
+
             return CharacterDetectionResult(
                 characters=characters,
                 metadata=metadata,
                 raw_response=response_content,
             )
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"[_parse_detection_result] Failed to parse result: {e}")
             return CharacterDetectionResult(
@@ -627,25 +707,27 @@ class CharacterDetector:
                 raw_response=response_content,
             )
         except Exception as e:
-            logger.error(f"[_parse_detection_result] Unexpected error: {str(e)}", exc_info=True)
+            logger.error(
+                f"[_parse_detection_result] Unexpected error: {str(e)}", exc_info=True
+            )
             raise
-    
+
     def _extract_json(self, content: str) -> str:
         """从响应中提取 JSON"""
         content = content.strip()
-        
+
         if "```json" in content:
             start = content.find("```json") + 7
             end = content.find("```", start)
             return content[start:end].strip()
-        
+
         if "```" in content:
             start = content.find("```") + 3
             end = content.find("```", start)
             return content[start:end].strip()
-        
+
         return content
-    
+
     def _merge_character_results(
         self,
         all_characters: List[DetectedCharacter],
@@ -653,14 +735,14 @@ class CharacterDetector:
         """合并多批次的人物检测结果，进行去重和属性合并"""
         # 按标准名称分组
         name_groups: Dict[str, List[DetectedCharacter]] = {}
-        
+
         for char in all_characters:
             # 使用标准名称作为键
             key = char.canonical_name
             if key not in name_groups:
                 name_groups[key] = []
             name_groups[key].append(char)
-        
+
         # 合并同一人物的不同检测结果
         merged_characters = []
         for name, group in name_groups.items():
@@ -669,7 +751,7 @@ class CharacterDetector:
             else:
                 merged_char = self._merge_character_group(group)
                 merged_characters.append(merged_char)
-        
+
         # 按角色重要性排序
         role_order = {
             "protagonist": 0,
@@ -679,28 +761,38 @@ class CharacterDetector:
             "mentioned": 4,
         }
         merged_characters.sort(key=lambda c: role_order.get(c.role_type, 5))
-        
+
         # 统计元数据
         metadata = {
             "total_characters": len(merged_characters),
-            "protagonist_count": sum(1 for c in merged_characters if c.role_type == "protagonist"),
-            "deuteragonist_count": sum(1 for c in merged_characters if c.role_type == "deuteragonist"),
-            "supporting_count": sum(1 for c in merged_characters if c.role_type == "supporting"),
+            "protagonist_count": sum(
+                1 for c in merged_characters if c.role_type == "protagonist"
+            ),
+            "deuteragonist_count": sum(
+                1 for c in merged_characters if c.role_type == "deuteragonist"
+            ),
+            "supporting_count": sum(
+                1 for c in merged_characters if c.role_type == "supporting"
+            ),
             "minor_count": sum(1 for c in merged_characters if c.role_type == "minor"),
-            "mentioned_count": sum(1 for c in merged_characters if c.role_type == "mentioned"),
+            "mentioned_count": sum(
+                1 for c in merged_characters if c.role_type == "mentioned"
+            ),
             "merged": True,
         }
-        
+
         return CharacterDetectionResult(
             characters=merged_characters,
             metadata=metadata,
         )
-    
-    def _merge_character_group(self, group: List[DetectedCharacter]) -> DetectedCharacter:
+
+    def _merge_character_group(
+        self, group: List[DetectedCharacter]
+    ) -> DetectedCharacter:
         """合并同一人物的多批次检测结果"""
         # 选择置信度最高的作为主要结果
         primary = max(group, key=lambda c: c.role_confidence)
-        
+
         # 合并别名（去重）
         all_aliases = []
         seen_aliases = set()
@@ -710,7 +802,7 @@ class CharacterDetector:
                 if alias_key and alias_key not in seen_aliases:
                     seen_aliases.add(alias_key)
                     all_aliases.append(alias)
-        
+
         # 合并属性（去重，保留置信度高的）
         all_attrs = []
         seen_attrs = set()
@@ -720,7 +812,7 @@ class CharacterDetector:
                 if attr_key not in seen_attrs:
                     seen_attrs.add(attr_key)
                     all_attrs.append(attr)
-        
+
         # 合并关系
         all_relations = []
         seen_relations = set()
@@ -730,7 +822,7 @@ class CharacterDetector:
                 if rel_key not in seen_relations:
                     seen_relations.add(rel_key)
                     all_relations.append(rel)
-        
+
         # 合并关键行为
         all_actions = []
         seen_actions = set()
@@ -739,10 +831,10 @@ class CharacterDetector:
                 if action not in seen_actions:
                     seen_actions.add(action)
                     all_actions.append(action)
-        
+
         # 累加提及次数
         total_mentions = sum(c.mention_count for c in group)
-        
+
         return DetectedCharacter(
             canonical_name=primary.canonical_name,
             aliases=all_aliases,
@@ -755,27 +847,31 @@ class CharacterDetector:
             key_actions=all_actions,
             mention_count=total_mentions,
         )
-    
-    def _format_chapter_batch(self, chapters: List[Dict[str, Any]], start_index: int) -> str:
+
+    def _format_chapter_batch(
+        self, chapters: List[Dict[str, Any]], start_index: int
+    ) -> str:
         """格式化章节批次内容"""
         parts = []
         for i, ch in enumerate(chapters):
             chapter_num = start_index + i + 1
-            parts.append(f"## 第{chapter_num}章 {ch.get('title', '')}\n\n{ch.get('content', '')}")
+            parts.append(
+                f"## 第{chapter_num}章 {ch.get('title', '')}\n\n{ch.get('content', '')}"
+            )
         return "\n\n".join(parts)
-    
+
     def _format_chapter_range(self, chapters: List[Dict[str, Any]]) -> str:
         """格式化章节范围显示"""
         if not chapters:
             return "未知范围"
-        
+
         if len(chapters) == 1:
             return chapters[0].get("label", "第1章")
-        
+
         first = chapters[0].get("label", "第1章")
         last = chapters[-1].get("label", f"第{len(chapters)}章")
         return f"{first} - {last}"
-    
+
     def cancel(self):
         """取消当前任务"""
         self._is_cancelled = True
@@ -785,6 +881,7 @@ class CharacterDetector:
 # ============================================================================
 # Convenience Functions
 # ============================================================================
+
 
 async def detect_characters(
     db: Session,
@@ -796,7 +893,7 @@ async def detect_characters(
     task_id: Optional[str] = None,
 ) -> CharacterDetectionResult:
     """便捷函数：检测人物
-    
+
     Args:
         db: 数据库会话
         edition_id: 版本ID
@@ -805,13 +902,13 @@ async def detect_characters(
         work_title: 作品标题
         known_characters: 已知人物列表
         task_id: 任务ID（用于缓存）
-        
+
     Returns:
         检测结果
     """
     if config is None:
         config = CharacterDetectionConfig()
-    
+
     detector = CharacterDetector(db)
     result = await detector.detect(
         edition_id=edition_id,

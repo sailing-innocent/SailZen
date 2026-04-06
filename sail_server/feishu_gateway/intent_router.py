@@ -19,8 +19,8 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from sail_server.utils.llm.gateway import LLMGateway, LLMExecutionConfig
-from sail_server.utils.llm.available_providers import (
+from sail.llm.gateway import LLMGateway, LLMExecutionConfig
+from sail.llm.available_providers import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,

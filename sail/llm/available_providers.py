@@ -15,13 +15,14 @@ from typing import Dict, List, Optional
 @dataclass
 class ProviderInfo:
     """Provider 信息"""
+
     name: str
     display_name: str
     default_model: str
     available_models: List[str]
     requires_api_key: bool = True
     description: str = ""
-    
+
 
 # ============================================================================
 # 默认 LLM 配置（项目全局默认）
@@ -170,15 +171,17 @@ def get_default_model(provider: str) -> str:
 
 def get_recommendation(task_type: str) -> Dict[str, str]:
     """获取任务类型的推荐配置"""
-    return TASK_TYPE_RECOMMENDATIONS.get(task_type, TASK_TYPE_RECOMMENDATIONS["general"])
+    return TASK_TYPE_RECOMMENDATIONS.get(
+        task_type, TASK_TYPE_RECOMMENDATIONS["general"]
+    )
 
 
 def get_fallback_chain(task_type: str = None) -> List[str]:
     """获取候补 Provider 序列
-    
+
     Args:
         task_type: 任务类型，如果提供则返回任务特定的候补序列
-        
+
     Returns:
         按优先级排序的 Provider 名称列表
     """
@@ -187,20 +190,22 @@ def get_fallback_chain(task_type: str = None) -> List[str]:
     return FALLBACK_PROVIDER_CHAIN
 
 
-def get_next_fallback_provider(current_provider: str, task_type: str = None, attempted: List[str] = None) -> Optional[str]:
+def get_next_fallback_provider(
+    current_provider: str, task_type: str = None, attempted: List[str] = None
+) -> Optional[str]:
     """获取下一个候补 Provider
-    
+
     Args:
         current_provider: 当前失败的 Provider
         task_type: 任务类型
         attempted: 已经尝试过的 Provider 列表
-        
+
     Returns:
         下一个应该尝试的 Provider 名称，如果没有可用的则返回 None
     """
     attempted = attempted or []
     chain = get_fallback_chain(task_type)
-    
+
     for provider in chain:
         if provider != current_provider and provider not in attempted:
             return provider

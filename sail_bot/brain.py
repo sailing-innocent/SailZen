@@ -21,9 +21,9 @@ import time
 import ast
 
 # FIX: Move imports to top level
-from sail_server.utils.llm.gateway import LLMGateway, LLMExecutionConfig
-from sail_server.utils.llm.providers import ProviderConfig
-from sail_server.utils.llm.available_providers import (
+from sail.llm.gateway import LLMGateway, LLMExecutionConfig
+from sail.llm.providers import ProviderConfig
+from sail.llm.available_providers import (
     DEFAULT_LLM_PROVIDER,
     DEFAULT_LLM_MODEL,
     DEFAULT_LLM_CONFIG,

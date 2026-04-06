@@ -30,7 +30,7 @@ from sail_server.model.analysis.task_scheduler import (
     AnalysisTaskRunner,
     import_external_result,
 )
-from sail_server.utils.llm import (
+from sail.llm import (
     LLMConfig,
     LLMProvider,
     PromptTemplateManager,
@@ -874,7 +874,7 @@ class LLMConfigController(Controller):
         self, provider: str, api_key: str, model: str = "gpt-4"
     ) -> Dict[str, Any]:
         """测试 LLM 连接"""
-        from sail_server.utils.llm import LLMClient, LLMConfig, LLMProvider
+        from sail.llm import LLMClient, LLMConfig, LLMProvider
 
         try:
             llm_provider = LLMProvider(provider)
