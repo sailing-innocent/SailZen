@@ -29,15 +29,15 @@ from sail_server.utils.llm.available_providers import (
     DEFAULT_LLM_CONFIG,
 )
 
-from .context import (
+from sail_bot.context import (
     ConversationContext,
     ActionPlan,
     PendingConfirmation,
     _CONFIRM_WORDS,
     _CANCEL_WORDS,
 )
-from .card_renderer import CardRenderer
-from .session_manager import extract_path_from_text
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.session_manager import extract_path_from_text
 
 
 # 这是什么傻逼实现
@@ -147,17 +147,49 @@ _BRAIN_FALLBACK_ACTIONS = {
         "self_update",
         {"trigger_source": "manual", "reason": "User requested update"},
     ),
+    "更新bot": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot update"},
+    ),
+    "更新 bots": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot update"},
+    ),
     "update": (
         "self_update",
         {"trigger_source": "manual", "reason": "User requested update"},
+    ),
+    "update bot": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot update"},
     ),
     "升级": (
         "self_update",
         {"trigger_source": "manual", "reason": "User requested upgrade"},
     ),
+    "升级bot": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot upgrade"},
+    ),
     "restart": (
         "self_update",
         {"trigger_source": "manual", "reason": "User requested restart"},
+    ),
+    "restart bot": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot restart"},
+    ),
+    "重启": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested restart"},
+    ),
+    "重启bot": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested bot restart"},
+    ),
+    "自更新": (
+        "self_update",
+        {"trigger_source": "manual", "reason": "User requested self-update"},
     ),
 }
 

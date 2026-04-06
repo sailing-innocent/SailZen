@@ -83,7 +83,7 @@ class ConversationContext:
         return "\n".join(lines)
 
     def is_pending_expired(self) -> bool:
-        return self.pending is not None and datetime.now() > self.pending.expires_at
+        return self.pending is not None and self.pending.is_expired()
 
     def clear_pending(self) -> None:
         self.pending = None

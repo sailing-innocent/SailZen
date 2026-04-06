@@ -24,10 +24,10 @@ from datetime import datetime
 
 import lark_oapi as lark
 
-from .base import BaseHandler, HandlerContext
-from ..context import ActionPlan, ConversationContext
-from ..card_renderer import CardRenderer
-from ..session_state import RiskLevel, classify_risk
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ActionPlan, ConversationContext
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.session_state import RiskLevel, classify_risk
 
 
 class MessageHandler(BaseHandler):
@@ -87,7 +87,14 @@ class MessageHandler(BaseHandler):
         ctx = self.ctx.get_or_create_context(chat_id)
         ctx.push("user", text)
 
-        self._dispatch_message(text, chat_id, message_id, ctx)
+        plan, thinking_mid = self._dispatch_message(text, chat_id, message_id, ctx)
+
+        # Execute the plan if it's an actionable plan
+        if plan.action not in ("noop", "chat", "clarify"):
+            from sail_bot.handlers.plan_executor import PlanExecutor
+
+            executor = PlanExecutor(self.ctx)
+            executor.execute(plan, chat_id, message_id, ctx, thinking_mid)
 
     def _dispatch_message(
         self, text: str, chat_id: str, message_id: str, ctx: ConversationContext
@@ -176,7 +183,7 @@ class MessageHandler(BaseHandler):
                 risk_level=risk,
                 can_undo=(plan.action == "stop_workspace"),
             )
-            from ..context import PendingConfirmation
+            from sail_bot.context import PendingConfirmation
 
             ctx.pending = PendingConfirmation(
                 action=plan.action,

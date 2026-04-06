@@ -23,10 +23,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..session_state import SessionState
+from sail_bot.session_state import SessionState
 
 if TYPE_CHECKING:
-    from ..agent import FeishuBotAgent
+    from sail_bot.agent import FeishuBotAgent
 
 
 class LifecycleManager:
@@ -111,7 +111,7 @@ class LifecycleManager:
         self.agent._health_monitor.stop()
 
         # Stop async task manager
-        from ..async_task_manager import task_manager
+        from sail_bot.async_task_manager import task_manager
 
         task_manager.stop()
         print("[Shutdown] Async task manager stopped")

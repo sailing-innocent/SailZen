@@ -28,9 +28,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .opencode_client import OpenCodeSessionClient
-from .config import AgentConfig
-from .session_state import SessionState
+from sail_bot.opencode_client import OpenCodeSessionClient
+from sail_bot.config import AgentConfig
+from sail_bot.session_state import SessionState
 
 
 @dataclass

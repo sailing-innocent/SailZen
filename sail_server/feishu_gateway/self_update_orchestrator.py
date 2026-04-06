@@ -2,33 +2,46 @@
 # @file self_update_orchestrator.py
 # @brief Self-update orchestration for Feishu Bot
 # @author sailing-innocent
-# @date 2026-03-29
-# @version 1.0
+# @date 2026-04-06
+# @version 2.0
 # ---------------------------------
 """Self-update orchestration for graceful bot updates.
 
-This module handles the complete self-update flow:
-1. Detect update trigger (from SailZen OpenCode session)
-2. Backup current state
-3. Disconnect from network (Feishu websocket)
-4. Launch new Python session with uv run
-5. Cleanup and close gracefully
+This module handles the self-update flow when running under bot_watcher:
+1. Receive update trigger from user command
+2. Create state backup
+3. Disconnect from Feishu websocket
+4. Perform git pull (optional, watcher will also do this)
+5. Signal exit code 42 for watcher to restart
+6. Watcher performs restart with updated code
+
+Usage:
+    Bot runs normally -> User requests update ->
+    Bot creates backup -> git pull -> Bot exits(42) ->
+    Watcher detects exit 42 -> performs git pull -> restarts bot ->
+    New bot restores state from backup
+
+Exit Code Convention:
+    0: Normal exit, don't restart
+    42: Self-update requested, restart with git pull
 """
 
 import asyncio
 import json
 import os
-import signal
 import subprocess
 import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 import threading
 import time
+
+
+EXIT_CODE_SELF_UPDATE = 42
 
 
 class UpdatePhase(Enum):
@@ -38,9 +51,8 @@ class UpdatePhase(Enum):
     DETECTED = auto()
     BACKING_UP = auto()
     DISCONNECTING = auto()
-    SPAWNING_NEW = auto()
-    HANDING_OVER = auto()
-    CLEANING_UP = auto()
+    GIT_PULL = auto()
+    READY_TO_RESTART = auto()
     COMPLETED = auto()
     FAILED = auto()
 
@@ -64,32 +76,36 @@ class UpdateContext:
     initiated_by: Optional[str] = None
     update_metadata: Dict[str, Any] = field(default_factory=dict)
     backup_path: Optional[Path] = None
-    new_process_pid: Optional[int] = None
+    git_pull_success: bool = False
+    git_pull_output: str = ""
     error_message: Optional[str] = None
 
 
 @dataclass
 class UpdateResult:
-    """Result of self-update operation."""
+    """Result of self-update preparation (not execution)."""
 
     success: bool
     phase: UpdatePhase
     message: str
-    new_pid: Optional[int] = None
+    should_exit: bool = False
+    exit_code: int = 0
     backup_path: Optional[Path] = None
+    git_pull_success: bool = False
     error: Optional[str] = None
 
 
 class SelfUpdateOrchestrator:
     """Orchestrates the bot self-update process.
 
-    This class manages the complete flow of self-updating:
-    - Receiving update trigger from SailZen OpenCode session
-    - Creating state backup
-    - Gracefully disconnecting from Feishu
-    - Spawning new process via uv run
-    - Handing over state
-    - Cleaning up old process
+    When running under bot_watcher, this orchestrator:
+    - Prepares the bot for restart (backup state, disconnect)
+    - Optionally performs git pull
+    - Signals completion so bot can exit with code 42
+    - Watcher then restarts the bot
+
+    When running standalone (no watcher), falls back to legacy mode
+    with process spawning.
     """
 
     def __init__(
@@ -109,7 +125,7 @@ class SelfUpdateOrchestrator:
         """
         self.state_manager = state_manager
         self.feishu_client = feishu_client
-        self.workspace_root = workspace_root or Path("D:/ws/repos/SailZen")
+        self.workspace_root = workspace_root or self._find_workspace_root()
         self.uv_executable = uv_executable
 
         self._phase = UpdatePhase.IDLE
@@ -117,11 +133,23 @@ class SelfUpdateOrchestrator:
         self._update_callbacks: List[Callable[[UpdatePhase, str], None]] = []
         self._current_context: Optional[UpdateContext] = None
 
-        # Graceful shutdown timeout
-        self._shutdown_timeout_seconds = 30
+        # Check if running under watcher
+        self._watcher_enabled = os.environ.get("BOT_WATCHER_ENABLED") == "1"
 
-        # Handover file for new process
-        self._handover_file: Optional[Path] = None
+    def _find_workspace_root(self) -> Path:
+        """Find workspace root from current file location."""
+        try:
+            # Try to find git repo root
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return Path(result.stdout.strip())
+        except Exception:
+            # Fallback to script directory
+            return Path(__file__).parent.parent.parent.parent
 
     @property
     def current_phase(self) -> UpdatePhase:
@@ -140,19 +168,25 @@ class SelfUpdateOrchestrator:
         reason: str,
         initiated_by: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        perform_git_pull: bool = True,
     ) -> UpdateResult:
         """Initiate the self-update process.
 
-        This is the main entry point for bot self-updates.
+        This prepares the bot for restart by:
+        1. Creating state backup
+        2. Disconnecting from Feishu
+        3. Optionally performing git pull
+        4. Returning result with exit code for watcher
 
         Args:
             trigger_source: What triggered the update
             reason: Human-readable reason for update
             initiated_by: Who/what initiated the update
             metadata: Additional metadata about the update
+            perform_git_pull: Whether to perform git pull (watcher will also do this)
 
         Returns:
-            UpdateResult with status and details
+            UpdateResult with status and exit code for watcher
         """
         # Check if already updating
         if self._phase != UpdatePhase.IDLE:
@@ -174,17 +208,31 @@ class SelfUpdateOrchestrator:
 
         try:
             # Execute update phases
-            await self._execute_update_phases()
+            await self._execute_update_phases(perform_git_pull)
 
-            return UpdateResult(
-                success=self._phase == UpdatePhase.COMPLETED,
-                phase=self._phase,
-                message="Self-update completed successfully"
-                if self._phase == UpdatePhase.COMPLETED
-                else "Self-update failed",
-                new_pid=self._current_context.new_process_pid,
-                backup_path=self._current_context.backup_path,
-            )
+            # Determine exit behavior
+            if self._watcher_enabled:
+                # Watcher mode: exit with code 42, watcher will restart
+                return UpdateResult(
+                    success=self._phase == UpdatePhase.READY_TO_RESTART,
+                    phase=self._phase,
+                    message="Self-update prepared - ready to restart via watcher",
+                    should_exit=True,
+                    exit_code=EXIT_CODE_SELF_UPDATE,
+                    backup_path=self._current_context.backup_path,
+                    git_pull_success=self._current_context.git_pull_success,
+                )
+            else:
+                # Standalone mode: spawn new process (legacy behavior)
+                await self._phase_spawn_new()
+                return UpdateResult(
+                    success=self._phase == UpdatePhase.COMPLETED,
+                    phase=self._phase,
+                    message="Self-update completed (standalone mode)",
+                    should_exit=False,
+                    exit_code=0,
+                    backup_path=self._current_context.backup_path,
+                )
 
         except Exception as e:
             self._set_phase(UpdatePhase.FAILED, str(e))
@@ -195,7 +243,7 @@ class SelfUpdateOrchestrator:
                 error=str(e),
             )
 
-    async def _execute_update_phases(self) -> None:
+    async def _execute_update_phases(self, perform_git_pull: bool = True) -> None:
         """Execute all update phases in sequence."""
         # Phase 1: Backup current state
         await self._phase_backup()
@@ -203,14 +251,14 @@ class SelfUpdateOrchestrator:
         # Phase 2: Disconnect from Feishu
         await self._phase_disconnect()
 
-        # Phase 3: Spawn new process
-        await self._phase_spawn_new()
-
-        # Phase 4: Hand over state
-        await self._phase_handover()
-
-        # Phase 5: Cleanup
-        await self._phase_cleanup()
+        if self._watcher_enabled:
+            # Watcher mode: optionally do git pull, then signal ready
+            if perform_git_pull:
+                await self._phase_git_pull()
+            self._set_phase(UpdatePhase.READY_TO_RESTART, "Ready for watcher restart")
+        else:
+            # Standalone mode: spawn new process
+            await self._phase_spawn_new()
 
     async def _phase_backup(self) -> None:
         """Phase 1: Backup current bot state."""
@@ -253,20 +301,51 @@ class SelfUpdateOrchestrator:
             # Log but continue - disconnection failures shouldn't stop update
             self._set_phase(UpdatePhase.DISCONNECTING, f"Disconnection warning: {e}")
 
-    async def _phase_spawn_new(self) -> None:
-        """Phase 3: Spawn new bot process via uv run."""
-        self._set_phase(UpdatePhase.SPAWNING_NEW, "Spawning new bot process...")
+    async def _phase_git_pull(self) -> None:
+        """Phase: Perform git pull to update code."""
+        self._set_phase(UpdatePhase.GIT_PULL, "Pulling latest code...")
 
         try:
-            # Create handover file with context
-            self._handover_file = self._create_handover_file()
+            # Run git pull
+            result = subprocess.run(
+                ["git", "pull"],
+                cwd=self.workspace_root,
+                capture_output=True,
+                text=True,
+            )
 
+            if self._current_context:
+                self._current_context.git_pull_success = result.returncode == 0
+                self._current_context.git_pull_output = result.stdout + result.stderr
+
+            if result.returncode == 0:
+                self._set_phase(UpdatePhase.GIT_PULL, "Git pull successful")
+            else:
+                # Git pull failed but we can still try to restart
+                self._set_phase(
+                    UpdatePhase.GIT_PULL, f"Git pull warning: {result.stderr}"
+                )
+
+        except Exception as e:
+            # Git pull error but don't fail the update
+            if self._current_context:
+                self._current_context.git_pull_success = False
+                self._current_context.git_pull_output = str(e)
+            self._set_phase(UpdatePhase.GIT_PULL, f"Git pull error: {e}")
+
+    async def _phase_spawn_new(self) -> None:
+        """Phase (legacy): Spawn new bot process via uv run.
+
+        This is only used when running without watcher (legacy mode).
+        """
+        self._set_phase(UpdatePhase.READY_TO_RESTART, "Spawning new bot process...")
+
+        try:
             # Build command to spawn new process
             cmd = self._build_spawn_command()
 
             # Spawn new process
             if sys.platform == "win32":
-                # Windows: use CREATE_NEW_PROCESS_GROUP and DETACHED_PROCESS
                 creationflags = (
                     subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
                 )
@@ -279,7 +358,6 @@ class SelfUpdateOrchestrator:
                     stdin=subprocess.DEVNULL,
                 )
             else:
-                # Unix: use nohup and disown pattern
                 process = subprocess.Popen(
                     cmd,
                     cwd=str(self.workspace_root),
@@ -289,17 +367,14 @@ class SelfUpdateOrchestrator:
                     start_new_session=True,
                 )
 
-            if self._current_context:
-                self._current_context.new_process_pid = process.pid
-
             # Wait a moment to verify process started
             await asyncio.sleep(2)
 
             # Check if process is still running
             try:
-                os.kill(process.pid, 0)  # Signal 0 checks if process exists
+                os.kill(process.pid, 0)
                 self._set_phase(
-                    UpdatePhase.SPAWNING_NEW,
+                    UpdatePhase.COMPLETED,
                     f"New process spawned (PID: {process.pid})",
                 )
             except ProcessLookupError:
@@ -308,141 +383,20 @@ class SelfUpdateOrchestrator:
         except Exception as e:
             raise RuntimeError(f"Failed to spawn new process: {e}")
 
-    async def _phase_handover(self) -> None:
-        """Phase 4: Hand over state to new process."""
-        self._set_phase(UpdatePhase.HANDING_OVER, "Handing over to new process...")
-
-        try:
-            # Write handover signal file
-            if self._handover_file:
-                handover_complete = self._handover_file.with_suffix(".complete")
-                handover_complete.write_text(
-                    json.dumps(
-                        {
-                            "old_pid": os.getpid(),
-                            "new_pid": self._current_context.new_process_pid
-                            if self._current_context
-                            else None,
-                            "handover_at": datetime.now().isoformat(),
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-
-            # Wait for new process to signal readiness
-            await self._wait_for_new_process_ready()
-
-            self._set_phase(UpdatePhase.HANDING_OVER, "Handover complete")
-
-        except Exception as e:
-            # Handover failure is serious but we should still try cleanup
-            self._set_phase(UpdatePhase.HANDING_OVER, f"Handover warning: {e}")
-
-    async def _phase_cleanup(self) -> None:
-        """Phase 5: Cleanup and graceful shutdown."""
-        self._set_phase(UpdatePhase.CLEANING_UP, "Cleaning up...")
-
-        try:
-            # Mark current state as handed over
-            if self._current_context and self._current_context.backup_path:
-                # Create a marker file indicating handover
-                marker = self._current_context.backup_path.with_suffix(".handed_over")
-                marker.write_text(
-                    json.dumps(
-                        {
-                            "old_pid": os.getpid(),
-                            "new_pid": self._current_context.new_process_pid,
-                            "handover_at": datetime.now().isoformat(),
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-
-            # Cleanup resources
-            self.state_manager.cleanup_current_session()
-
-            # Signal shutdown
-            self._shutdown_event.set()
-
-            self._set_phase(
-                UpdatePhase.COMPLETED, "Self-update completed - ready to exit"
-            )
-
-        except Exception as e:
-            self._set_phase(UpdatePhase.CLEANING_UP, f"Cleanup warning: {e}")
-
-    def _create_handover_file(self) -> Path:
-        """Create handover file for new process."""
-        handover_dir = Path(tempfile.gettempdir()) / "sailzen_bot_handover"
-        handover_dir.mkdir(parents=True, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        handover_file = handover_dir / f"handover_{timestamp}_{os.getpid()}.json"
-
-        handover_data = {
-            "old_pid": os.getpid(),
-            "workspace_root": str(self.workspace_root),
-            "backup_path": str(self._current_context.backup_path)
-            if self._current_context and self._current_context.backup_path
-            else None,
-            "trigger_source": self._current_context.trigger_source.value
-            if self._current_context
-            else None,
-            "trigger_reason": self._current_context.trigger_reason
-            if self._current_context
-            else None,
-            "initiated_at": self._current_context.initiated_at
-            if self._current_context
-            else None,
-            "handover_created_at": datetime.now().isoformat(),
-        }
-
-        handover_file.write_text(
-            json.dumps(handover_data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-
-        return handover_file
-
     def _build_spawn_command(self) -> List[str]:
-        """Build command to spawn new bot process."""
-        # Get current Python executable info
-        python_path = sys.executable
-
-        # Build uv run command
+        """Build command to spawn new bot process (legacy mode)."""
         cmd = [
             self.uv_executable,
             "run",
-            "--python",
-            python_path,
             "python",
             "-m",
-            "sail_server.feishu_gateway.bot_runtime",
+            "bot",
         ]
 
-        # Add handover file argument
-        if self._handover_file:
-            cmd.extend(["--handover-file", str(self._handover_file)])
-
-        # Add restore flag
+        # Add restore flag for state restoration
         cmd.append("--restore-state")
 
         return cmd
-
-    async def _wait_for_new_process_ready(self, timeout_seconds: int = 30) -> bool:
-        """Wait for new process to signal readiness."""
-        if not self._handover_file:
-            return False
-
-        ready_file = self._handover_file.with_suffix(".ready")
-
-        start_time = time.time()
-        while time.time() - start_time < timeout_seconds:
-            if ready_file.exists():
-                return True
-            await asyncio.sleep(0.5)
-
-        # Timeout - but don't fail, new process might still be starting
-        return False
 
     def _set_phase(self, phase: UpdatePhase, message: str) -> None:
         """Set current phase and notify callbacks."""
@@ -457,22 +411,22 @@ class SelfUpdateOrchestrator:
                 pass
 
     def should_exit(self) -> bool:
-        """Check if bot should exit after update."""
-        return self._phase == UpdatePhase.COMPLETED
+        """Check if bot should exit after update (watcher mode)."""
+        return self._phase == UpdatePhase.READY_TO_RESTART and self._watcher_enabled
 
     def get_exit_code(self) -> int:
-        """Get appropriate exit code."""
-        if self._phase == UpdatePhase.COMPLETED:
-            return 0  # Clean exit for handover
+        """Get appropriate exit code for watcher."""
+        if self._phase == UpdatePhase.READY_TO_RESTART and self._watcher_enabled:
+            return EXIT_CODE_SELF_UPDATE
         elif self._phase == UpdatePhase.FAILED:
-            return 1  # Error exit
+            return 1
         return 0
 
     @classmethod
     def check_for_handover(cls) -> Optional[Dict[str, Any]]:
-        """Check if this process was spawned as part of a handover.
+        """Check if this process should restore state from backup.
 
-        This should be called at startup to detect if we need to restore state.
+        Called at startup to detect if we need to restore state.
 
         Returns:
             Handover data if available, None otherwise
@@ -480,32 +434,18 @@ class SelfUpdateOrchestrator:
         import argparse
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("--handover-file", type=str)
         parser.add_argument("--restore-state", action="store_true")
 
         # Only parse known args to avoid conflicts
         args, _ = parser.parse_known_args()
 
-        if args.handover_file and Path(args.handover_file).exists():
-            try:
-                handover_data = json.loads(
-                    Path(args.handover_file).read_text(encoding="utf-8")
-                )
-
-                # Signal readiness
-                ready_file = Path(args.handover_file).with_suffix(".ready")
-                ready_file.write_text(
-                    json.dumps(
-                        {
-                            "pid": os.getpid(),
-                            "ready_at": datetime.now().isoformat(),
-                        }
-                    ),
-                    encoding="utf-8",
-                )
-
-                return handover_data
-            except Exception as e:
-                print(f"[SelfUpdate] Failed to read handover file: {e}")
+        if args.restore_state:
+            # Look for recent backup to restore
+            return {"restore_state": True}
 
         return None
+
+
+def get_exit_code_for_restart() -> int:
+    """Get the exit code that signals watcher to restart with update."""
+    return EXIT_CODE_SELF_UPDATE

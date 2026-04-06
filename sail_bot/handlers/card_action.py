@@ -11,6 +11,7 @@ This module extracts card action handling logic from FeishuBotAgent
 and provides a clean, testable interface for processing button clicks.
 """
 
+import asyncio
 import json
 import threading
 import traceback
@@ -21,11 +22,11 @@ from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTriggerResponse,
 )
 
-from .base import BaseHandler, HandlerContext
-from ..context import ActionPlan, PendingConfirmation
-from ..session_state import PendingAction, RiskLevel
-from ..card_renderer import CardRenderer
-from ..async_task_manager import task_manager
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ActionPlan, PendingConfirmation
+from sail_bot.session_state import PendingAction, RiskLevel
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.async_task_manager import task_manager
 
 
 class CardActionHandler(BaseHandler):
@@ -163,7 +164,7 @@ class CardActionHandler(BaseHandler):
                     # Send success message
                     success_card = CardRenderer.result(
                         "✅ 更新已启动",
-                        f"新进程 PID: {result.get('new_pid')}\n"
+                        f"阶段: {result.get('phase', 'unknown')}\n"
                         f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
                         "旧进程即将退出，新进程将接管。",
                         success=True,

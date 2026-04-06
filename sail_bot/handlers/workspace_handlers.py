@@ -18,11 +18,11 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from .base import BaseHandler, HandlerContext
-from ..context import ConversationContext
-from ..card_renderer import CardRenderer
-from ..session_state import SessionState
-from ..task_logger import task_logger
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ConversationContext
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.session_state import SessionState
+from sail_bot.task_logger import task_logger
 
 
 class StartWorkspaceHandler(BaseHandler):
@@ -45,7 +45,7 @@ class StartWorkspaceHandler(BaseHandler):
             path: Direct path to workspace
             project_slug: Project slug to look up path
         """
-        from ..session_manager import resolve_path
+        from sail_bot.session_manager import resolve_path
 
         # Resolve path from project or direct path
         if project_slug:
@@ -55,7 +55,7 @@ class StartWorkspaceHandler(BaseHandler):
 
         if not path:
             # Show workspace selection
-            from ..session_manager import resolve_path
+            from sail_bot.session_manager import resolve_path
 
             projects = self.ctx.config.projects
             state_map = {}
@@ -136,7 +136,7 @@ class StopWorkspaceHandler(BaseHandler):
         path: Optional[str] = None,
     ) -> None:
         """Stop a workspace."""
-        from ..session_manager import resolve_path
+        from sail_bot.session_manager import resolve_path
 
         if path:
             path = resolve_path(path, self.ctx.config.projects)

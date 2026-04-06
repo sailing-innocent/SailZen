@@ -15,11 +15,11 @@ This module handles commands like:
 from pathlib import Path
 from typing import Optional
 
-from .base import BaseHandler, HandlerContext
-from ..context import ConversationContext
-from ..card_renderer import CardRenderer
-from ..task_logger import task_logger
-from ..opencode_client import OpenCodeSessionClient
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ConversationContext
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.task_logger import task_logger
+from sail_bot.opencode_client import OpenCodeSessionClient
 
 
 class HelpHandler(BaseHandler):

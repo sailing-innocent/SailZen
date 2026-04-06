@@ -39,21 +39,21 @@ from sail_server.feishu_gateway.self_update_orchestrator import (
     UpdateTriggerSource,
 )
 
-from .config import AgentConfig
-from .session_state import (
+from sail_bot.config import AgentConfig
+from sail_bot.session_state import (
     ConfirmationManager,
     OperationTracker,
     SessionHealthMonitor,
     SessionState,
     SessionStateStore,
 )
-from .session_manager import OpenCodeSessionManager
-from .brain import BotBrain
-from .context import ConversationContext
-from .async_task_manager import task_manager
+from sail_bot.session_manager import OpenCodeSessionManager
+from sail_bot.brain import BotBrain
+from sail_bot.context import ConversationContext
+from sail_bot.async_task_manager import task_manager
 
-from .messaging import FeishuMessagingClient
-from .handlers import (
+from sail_bot.messaging import FeishuMessagingClient
+from sail_bot.handlers import (
     HandlerContext,
     MessageHandler,
     CardActionHandler,
@@ -196,7 +196,6 @@ class FeishuBotAgent:
                 if hasattr(result.phase, "name")
                 else str(result.phase),
                 "message": result.message,
-                "new_pid": result.new_pid,
                 "backup_path": str(result.backup_path) if result.backup_path else None,
                 "error": result.error,
             }
@@ -295,7 +294,7 @@ class FeishuBotAgent:
                 return
 
             # Delegate to message handler
-            from ..handlers.message_handler import MessageHandler
+            from sail_bot.handlers.message_handler import MessageHandler
 
             handler = MessageHandler(self._handler_ctx)
             handler.handle(data)
@@ -315,7 +314,7 @@ class FeishuBotAgent:
 
     def _health_check_fn(self, path: str, port: int) -> bool:
         """Health check function for sessions."""
-        from .opencode_client import OpenCodeSessionClient
+        from sail_bot.opencode_client import OpenCodeSessionClient
 
         client = OpenCodeSessionClient(port=port)
         return client.is_healthy()
@@ -330,7 +329,7 @@ class FeishuBotAgent:
                 entry, "chat_id", None
             )
             if chat_id:
-                from .card_renderer import CardRenderer
+                from sail_bot.card_renderer import CardRenderer
 
                 card = CardRenderer.session_status(
                     path=path,
@@ -384,8 +383,12 @@ class FeishuBotAgent:
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def run(self) -> None:
-        """Start the bot."""
+    def run(self) -> int:
+        """Start the bot and return exit code.
+
+        Returns:
+            Exit code: 0 for normal exit, 42 for self-update restart
+        """
         # Cleanup previous instances
         self._lifecycle.cleanup_previous_instances()
 
@@ -394,7 +397,7 @@ class FeishuBotAgent:
 
         if not self.config.app_id or not self.config.app_secret:
             print("Error: Feishu credentials not configured")
-            return
+            return 1
 
         print(f"  App ID: {self.config.app_id[:10]}...")
         if self.config.projects:
@@ -437,12 +440,22 @@ class FeishuBotAgent:
         # Send startup notification
         self._lifecycle._notify_startup()
 
+        exit_code = 0
         try:
             ws_client.start()
         except KeyboardInterrupt:
             print("\nStopped by user")
+            exit_code = 0
         except Exception as exc:
             print(f"\nFatal error: {exc}")
             traceback.print_exc()
+            exit_code = 1
         finally:
             self._lifecycle.on_shutdown()
+
+            # Check if we should exit with special code for self-update
+            if self._update_orchestrator and self._update_orchestrator.should_exit():
+                exit_code = self._update_orchestrator.get_exit_code()
+                print(f"[FeishuBotAgent] Exiting with code {exit_code} for self-update")
+
+        return exit_code

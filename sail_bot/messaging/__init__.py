@@ -10,6 +10,6 @@
 This package encapsulates all Feishu messaging operations.
 """
 
-from .client import FeishuMessagingClient
+from sail_bot.messaging.client import FeishuMessagingClient
 
 __all__ = ["FeishuMessagingClient"]

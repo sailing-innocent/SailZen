@@ -13,9 +13,9 @@ This module handles the self-update confirmation and execution flow.
 import time
 from typing import Optional
 
-from .base import BaseHandler, HandlerContext
-from ..context import ConversationContext
-from ..card_renderer import CardRenderer
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ConversationContext
+from sail_bot.card_renderer import CardRenderer
 
 
 class SelfUpdateHandler(BaseHandler):
@@ -66,7 +66,7 @@ class SelfUpdateHandler(BaseHandler):
         )
 
         # Store pending action in context
-        from ..session_state import PendingAction, RiskLevel
+        from sail_bot.session_state import PendingAction, RiskLevel
 
         ctx.pending = PendingAction(
             pending_id=f"self_update_{int(time.time())}",
@@ -79,7 +79,7 @@ class SelfUpdateHandler(BaseHandler):
             },
             summary="确认更新 Bot",
             detail=f"更新原因: {reason}",
-            risk_level=RiskLevel.HIGH,
+            risk_level=RiskLevel.CONFIRM_REQUIRED,
         )
 
         self.ctx.messaging.reply_card(message_id, confirm_card)

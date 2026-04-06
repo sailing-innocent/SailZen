@@ -18,19 +18,19 @@ This package contains handlers for different types of bot interactions:
 - LifecycleManager: Handles startup/shutdown/cleanup
 """
 
-from .base import HandlerContext, BaseHandler
-from .message_handler import MessageHandler
-from .card_action import CardActionHandler
-from .plan_executor import PlanExecutor
-from .command_handlers import HelpHandler, StatusHandler
-from .workspace_handlers import (
+from sail_bot.handlers.base import HandlerContext, BaseHandler
+from sail_bot.handlers.message_handler import MessageHandler
+from sail_bot.handlers.card_action import CardActionHandler
+from sail_bot.handlers.plan_executor import PlanExecutor
+from sail_bot.handlers.command_handlers import HelpHandler, StatusHandler
+from sail_bot.handlers.workspace_handlers import (
     StartWorkspaceHandler,
     StopWorkspaceHandler,
     SwitchWorkspaceHandler,
 )
-from .task_handler import TaskHandler
-from .self_update_handler import SelfUpdateHandler
-from .lifecycle_manager import LifecycleManager
+from sail_bot.handlers.task_handler import TaskHandler
+from sail_bot.handlers.self_update_handler import SelfUpdateHandler
+from sail_bot.handlers.lifecycle_manager import LifecycleManager
 
 __all__ = [
     "HandlerContext",

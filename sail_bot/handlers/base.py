@@ -18,12 +18,12 @@ import threading
 
 # Import types only for type checking to avoid circular imports
 if TYPE_CHECKING:
-    from ..messaging.client import FeishuMessagingClient
-    from ..session_manager import OpenCodeSessionManager
-    from ..config import AgentConfig
-    from ..brain import BotBrain
-    from ..context import ConversationContext
-    from ..session_state import SessionStateStore, OperationTracker, ConfirmationManager
+    from sail_bot.messaging.client import FeishuMessagingClient
+    from sail_bot.session_manager import OpenCodeSessionManager
+    from sail_bot.config import AgentConfig
+    from sail_bot.brain import BotBrain
+    from sail_bot.context import ConversationContext
+    from sail_bot.session_state import SessionStateStore, OperationTracker, ConfirmationManager
 
 
 @dataclass

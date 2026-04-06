@@ -11,10 +11,13 @@ This module coordinates the execution of ActionPlans by delegating
 to specific handlers based on the action type.
 """
 
-from typing import Optional
+import threading
+import asyncio
+from typing import Optional, Any, Dict
 
-from .base import BaseHandler, HandlerContext
-from ..context import ActionPlan, ConversationContext
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ActionPlan, ConversationContext
+from sail_bot.card_renderer import CardRenderer
 
 
 class PlanExecutor(BaseHandler):
@@ -33,14 +36,14 @@ class PlanExecutor(BaseHandler):
     def __init__(self, ctx: HandlerContext):
         super().__init__(ctx)
         # Initialize sub-handlers
-        from .command_handlers import HelpHandler, StatusHandler
-        from .workspace_handlers import (
+        from sail_bot.handlers.command_handlers import HelpHandler, StatusHandler
+        from sail_bot.handlers.workspace_handlers import (
             StartWorkspaceHandler,
             StopWorkspaceHandler,
             SwitchWorkspaceHandler,
         )
-        from .task_handler import TaskHandler
-        from .self_update_handler import SelfUpdateHandler
+        from sail_bot.handlers.task_handler import TaskHandler
+        from sail_bot.handlers.self_update_handler import SelfUpdateHandler
 
         self._help_handler = HelpHandler(ctx)
         self._status_handler = StatusHandler(ctx)
@@ -118,5 +121,64 @@ class PlanExecutor(BaseHandler):
             )
             return
 
+        if action == "confirm_self_update":
+            # User confirmed self-update, execute it directly
+            trigger_source = params.get("trigger_source", "manual")
+            reason = params.get("reason", "User confirmed update")
+            self._handle_confirmed_self_update(chat_id, message_id, trigger_source, reason)
+            ctx.push("bot", "正在执行自更新...")
+            return
+
         # Unknown action
         self.ctx.messaging.reply_text(message_id, f"未知动作: {action}")
+
+    def _handle_confirmed_self_update(
+        self,
+        chat_id: str,
+        message_id: str,
+        trigger_source: str,
+        reason: str,
+    ) -> None:
+        """Handle confirmed self-update request.
+
+        This runs the self-update in a background thread to avoid blocking.
+        """
+
+        def do_self_update():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = self.ctx.request_self_update(
+                    trigger_source=trigger_source,
+                    reason=reason,
+                    initiated_by=chat_id,
+                )
+
+                if result.get("success"):
+                    # Send success message
+                    success_card = CardRenderer.result(
+                        "✅ 更新已启动",
+                        f"阶段: {result.get('phase', 'unknown')}\n"
+                        f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
+                        "旧进程即将退出，新进程将接管。",
+                        success=True,
+                    )
+                    self.ctx.messaging.send_card(chat_id, success_card)
+                else:
+                    # Send error message
+                    error_card = CardRenderer.result(
+                        "❌ 更新失败",
+                        result.get("error", "Unknown error"),
+                        success=False,
+                    )
+                    self.ctx.messaging.send_card(chat_id, error_card)
+            finally:
+                loop.close()
+
+        # Start self-update in background thread
+        threading.Thread(target=do_self_update, daemon=True).start()
+
+        # Send immediate acknowledgment
+        self.ctx.messaging.reply_text(
+            message_id, "🔄 正在启动更新，请稍候..."
+        )

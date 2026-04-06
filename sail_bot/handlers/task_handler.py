@@ -19,11 +19,11 @@ import threading
 from pathlib import Path
 from typing import List, Optional
 
-from .base import BaseHandler, HandlerContext
-from ..context import ConversationContext
-from ..card_renderer import CardRenderer
-from ..async_task_manager import task_manager
-from ..task_logger import task_logger
+from sail_bot.handlers.base import BaseHandler, HandlerContext
+from sail_bot.context import ConversationContext
+from sail_bot.card_renderer import CardRenderer
+from sail_bot.async_task_manager import task_manager
+from sail_bot.task_logger import task_logger
 
 
 class TaskHandler(BaseHandler):
@@ -46,7 +46,7 @@ class TaskHandler(BaseHandler):
             task_text: The task description
             path: Workspace path (optional, will auto-detect if not provided)
         """
-        from ..session_manager import resolve_path
+        from sail_bot.session_manager import resolve_path
 
         # Resolve workspace path
         if not path:
@@ -91,7 +91,7 @@ class TaskHandler(BaseHandler):
 
         def do_async_task() -> None:
             """Execute task asynchronously."""
-            from ..async_task_manager import TaskStep
+            from sail_bot.async_task_manager import TaskStep
 
             # Ensure workspace is running
             ok, session, start_msg = self.ctx.session_mgr.ensure_running(path, chat_id)
