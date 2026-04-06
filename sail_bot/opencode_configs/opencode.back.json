@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  
+  "default_agent": "feishu-bridge",
   "agent": {
     "feishu-bridge": {
       "mode": "primary",
@@ -11,31 +11,26 @@
         "edit": "allow",
         "bash": {
           "*": "allow",
-          "git push*": "ask",
+          "git push*": "deny",
           "sudo*": "deny",
           "rm -rf /": "deny"
         },
-        "webfetch": "deny",
+        "webfetch": "allow",
         "read": "allow",
         "search": "allow",
         "delete": "allow"
       }
     },
-    
     "build": {
       "mode": "primary",
       "description": "Default build agent with interactive confirmation",
       "temperature": 0.3,
       "permission": {
-        "edit": "ask",
+        "edit": "allow",
         "bash": {
-          "*": "ask"
+          "*": "allow"
         }
       }
     }
   },
-  
-  "models": {
-    "default": "anthropic/claude-sonnet-4-20250514"
-  }
 }

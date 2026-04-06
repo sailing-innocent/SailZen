@@ -109,6 +109,10 @@ class CardActionHandler(BaseHandler):
 
         Returns:
             P2CardActionTriggerResponse to acknowledge the action
+
+        Note:
+            Must return response within 3 seconds to avoid "invalid confirmation" error.
+            All card updates and action execution are done in background threads.
         """
         pending_id = value.get("pending_id") if isinstance(value, dict) else None
         decision = value.get("decision") if isinstance(value, dict) else None
@@ -131,13 +135,17 @@ class CardActionHandler(BaseHandler):
         pending = self.ctx.confirm_mgr.consume(pending_id)
 
         if not pending:
-            # Pending action not found or expired
-            error_card = CardRenderer.result(
-                "操作已过期",
-                "该确认请求已过期或已被处理，请重新发起操作。",
-                success=False,
-            )
-            self.ctx.messaging.update_card(message_id, error_card)
+            # Pending action not found or expired - update card in background
+            def show_expired():
+                error_card = CardRenderer.result(
+                    "操作已过期",
+                    "该确认请求已过期或已被处理，请重新发起操作。",
+                    success=False,
+                )
+                self.ctx.messaging.update_card(message_id, error_card)
+
+            threading.Thread(target=show_expired, daemon=True).start()
+
             return P2CardActionTriggerResponse(
                 {
                     "toast": {
@@ -152,19 +160,22 @@ class CardActionHandler(BaseHandler):
             )
 
         if decision == "cancel":
-            # User cancelled the action
-            cancel_card = CardRenderer.result(
-                "已取消",
-                f"操作「{pending.summary}」已取消。",
-                success=True,
-            )
-            self.ctx.messaging.update_card(message_id, cancel_card)
+            # User cancelled the action - update card and clear context in background
+            def do_cancel():
+                cancel_card = CardRenderer.result(
+                    "已取消",
+                    f"操作「{pending.summary}」已取消。",
+                    success=True,
+                )
+                self.ctx.messaging.update_card(message_id, cancel_card)
 
-            # Clear pending from conversation context
-            ctx = self.ctx.get_or_create_context(chat_id)
-            if ctx.pending and ctx.pending.summary == pending.summary:
-                ctx.clear_pending()
-                self.ctx.save_contexts()
+                # Clear pending from conversation context
+                ctx = self.ctx.get_or_create_context(chat_id)
+                if ctx.pending and ctx.pending.summary == pending.summary:
+                    ctx.clear_pending()
+                    self.ctx.save_contexts()
+
+            threading.Thread(target=do_cancel, daemon=True).start()
 
             return P2CardActionTriggerResponse(
                 {
@@ -180,16 +191,16 @@ class CardActionHandler(BaseHandler):
             )
 
         # decision == "confirm" or default - execute the action
-        # Update card to show processing state
-        processing_card = CardRenderer.progress(
-            title="正在执行",
-            description=f"正在执行「{pending.summary}」...",
-        )
-        self.ctx.messaging.update_card(message_id, processing_card)
-
-        # Execute the action in background
+        # IMPORTANT: Update card and execute action in background to meet 3s response time
         def execute_confirmed_action():
             try:
+                # Update card to show processing state
+                processing_card = CardRenderer.progress(
+                    title="正在执行",
+                    description=f"正在执行「{pending.summary}」...",
+                )
+                self.ctx.messaging.update_card(message_id, processing_card)
+
                 from sail_bot.handlers.message_handler import MessageHandler
 
                 # Create a plan from the pending action

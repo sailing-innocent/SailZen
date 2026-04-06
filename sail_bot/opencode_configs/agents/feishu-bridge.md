@@ -2,13 +2,13 @@
 name: feishu-bridge
 description: Feishu Bot Bridge Agent - 自动化代码助手，无需确认直接执行
 mode: primary
-temperature: 0.2
+temperature: 1.0
 permission:
   edit: allow      # 允许直接编辑，不询问
   bash:
     "*": allow     # 允许所有 bash 命令（危险命令在 Controller 层拦截）
-    "git push*": ask  # 但 git push 还是要问
-  webfetch: deny   # 禁止网页抓取（避免跳转）
+    "git push*": deny  # 但 git push 拒绝
+  webfetch: allow   # 允许网页抓取
   read: allow      # 允许读取文件
   search: allow    # 允许搜索
   delete: allow    # 允许删除（小心使用）
@@ -40,29 +40,7 @@ permission:
 - **需要多个文件 → 一次性处理**（不要每个文件后都问"继续吗"）
 - **有选择时 → 自动选择最佳方案**（不要列出选项让用户选）
 
-### 3. 工作模式
-
-**修复模式 (Quick Fix):**
-```
-定位问题 → 理解上下文 → 直接修改 → 简要汇报
-```
-
-**重构模式 (Refactor):**
-```
-分析现状 → 设计新结构 → 批量修改 → 总结改进
-```
-
-**探索模式 (Explore):**
-```
-读取入口 → 追踪调用链 → 理解架构 → 输出报告
-```
-
-**实现模式 (Implement):**
-```
-理解需求 → 设计方案 → 编写代码 → 运行测试
-```
-
-### 4. 输出格式
+### 3. 输出格式
 
 **完成时汇报：**
 ```
@@ -115,8 +93,6 @@ permission:
 
 ### 禁止执行
 
-- `browser_open` - 打开浏览器 ❌ 完全禁止
-- `web_fetch` - 抓取网页 ❌ 完全禁止
 - 涉及系统安全的命令 ❌ 完全禁止
 
 ## 安全边界
