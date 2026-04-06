@@ -16,6 +16,7 @@ This package contains handlers for different types of bot interactions:
 - TaskHandler: Handles task execution
 - SelfUpdateHandler: Handles bot self-update
 - LifecycleManager: Handles startup/shutdown/cleanup
+- WelcomeHandler: Handles welcome messages for new P2P chats
 """
 
 from sail_bot.handlers.base import HandlerContext, BaseHandler
@@ -31,6 +32,7 @@ from sail_bot.handlers.workspace_handlers import (
 from sail_bot.handlers.task_handler import TaskHandler
 from sail_bot.handlers.self_update_handler import SelfUpdateHandler
 from sail_bot.handlers.lifecycle_manager import LifecycleManager
+from sail_bot.handlers.welcome_handler import WelcomeHandler
 
 __all__ = [
     "HandlerContext",
@@ -46,4 +48,5 @@ __all__ = [
     "TaskHandler",
     "SelfUpdateHandler",
     "LifecycleManager",
+    "WelcomeHandler",
 ]

@@ -565,6 +565,95 @@ class CardRenderer:
         }
 
     @staticmethod
+    def welcome(
+        projects: List[Dict[str, str]],
+        session_states: Optional[Dict[str, str]] = None,
+        has_llm: bool = False,
+        has_self_update: bool = False,
+    ) -> Dict[str, Any]:
+        """Generate a welcome card for new users entering P2P chat.
+
+        Args:
+            projects: List of configured projects
+            session_states: Optional dict mapping project paths to their states
+            has_llm: Whether LLM is available
+            has_self_update: Whether self-update is enabled
+        """
+        session_states = session_states or {}
+        elements: List[Dict[str, Any]] = []
+
+        # Welcome message
+        elements.append(_text("👋 欢迎使用 SailZen Bot！", bold=True))
+        elements.append(
+            _note("我是你的 OpenCode 开发助手，可以帮你管理工作区和执行开发任务。")
+        )
+
+        # System status
+        elements.append(_divider())
+        elements.append(_text("⚙️ 系统状态", bold=True))
+        status_items = []
+        status_items.append(
+            ("智能识别", "✅ LLM 已启用" if has_llm else "⚪ 关键词模式")
+        )
+        if has_self_update:
+            status_items.append(("Bot 管理", "✅ 支持自更新"))
+        elements.append(_field_row(status_items))
+
+        # Quick start commands
+        elements.append(_divider())
+        elements.append(_text("🚀 快速开始", bold=True))
+        elements.append(_note("发送以下指令即可开始："))
+
+        quick_commands = [
+            "• **帮助** - 查看完整使用说明",
+            "• **状态** - 查看所有会话状态",
+        ]
+        for cmd in quick_commands:
+            elements.append(_text(cmd))
+
+        # Projects status
+        if projects:
+            elements.append(_divider())
+            elements.append(_text("📁 配置的项目", bold=True))
+
+            for proj in projects[:5]:  # Show up to 5 projects
+                slug = proj.get("slug", "")
+                label = proj.get("label", slug)
+                path = proj.get("path", "")
+                state = session_states.get(path, "idle")
+                icon = _STATE_ICONS.get(state, "⬜")
+                state_label = {
+                    "idle": "未启动",
+                    "starting": "启动中...",
+                    "running": "运行中",
+                    "stopping": "停止中...",
+                    "error": "出错",
+                }.get(state, state)
+                elements.append(_text(f"{icon} **{label}** ({slug}) - {state_label}"))
+
+            if len(projects) > 5:
+                elements.append(_note(f"... 还有 {len(projects) - 5} 个项目"))
+
+            elements.append(_divider())
+            elements.append(_note("💡 发送「启动 <项目名>」即可启动工作区"))
+        else:
+            elements.append(_divider())
+            elements.append(_text("📁 配置的项目", bold=True))
+            elements.append(_note("暂无配置的项目，请联系管理员添加。"))
+
+        # Footer
+        elements.append(_divider())
+        elements.append(
+            _note("发送任意消息开始对话，我会尽力理解你的意图！")
+        )
+
+        return {
+            "config": {"wide_screen_mode": True},
+            "header": _header("🎉 欢迎使用 SailZen Bot", CardColor.GREEN),
+            "elements": elements,
+        }
+
+    @staticmethod
     def current_workspace(path: str, mode: str = "coding") -> Dict[str, Any]:
         """Display current active workspace status.
 

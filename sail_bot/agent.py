@@ -60,6 +60,7 @@ from sail_bot.handlers import (
     CardActionHandler,
     PlanExecutor,
     LifecycleManager,
+    WelcomeHandler,
 )
 
 
@@ -129,6 +130,7 @@ class FeishuBotAgent:
         self._card_action_handler = CardActionHandler(self._handler_ctx)
         self._plan_executor = PlanExecutor(self._handler_ctx)
         self._lifecycle = LifecycleManager(self)
+        self._welcome_handler = WelcomeHandler(self._handler_ctx)
 
         # Start async task manager
         task_manager.start()
@@ -315,6 +317,25 @@ class FeishuBotAgent:
             traceback.print_exc()
             return None
 
+    def _handle_p2p_chat_entered(self, data: lark.im.v1.P2ImChatAccessEventBotP2pChatEnteredV1) -> None:
+        """Handle P2P chat entered event (user starts chat with bot)."""
+        try:
+            if not data or not data.event:
+                return
+            
+            chat_id = data.event.chat_id
+            if not chat_id:
+                return
+            
+            print(f"[FeishuBotAgent] User entered P2P chat: {chat_id}")
+            
+            # Send welcome card
+            self._welcome_handler.handle(chat_id)
+            
+        except Exception as exc:
+            print(f"[FeishuBotAgent] P2P chat entered handling error: {exc}")
+            traceback.print_exc()
+
     def _health_check_fn(self, path: str, port: int) -> bool:
         """Health check function for sessions."""
         from sail_bot.opencode_client import OpenCodeSessionClient
@@ -424,6 +445,7 @@ class FeishuBotAgent:
             lark.EventDispatcherHandler.builder("", "")
             .register_p2_im_message_receive_v1(self._handle_message)
             .register_p2_card_action_trigger(self._handle_card_action)
+            .register_p2_im_chat_access_event_bot_p2p_chat_entered_v1(self._handle_p2p_chat_entered)
             .build()
         )
 
