@@ -1,7 +1,7 @@
 ---
 name: git-push
 description: |
-  由于开发环境限制，当前环境不能直接执行git push到origin，
+  由于开发环境限制，除非环境变量 $ALLOW_PUSH=1，否则不能直接执行git push到origin，
   所有新commit需要通过git format-patch生成patch后在其他环境提交。
   本技能确保AI操作前进行双重检查，防止错误提交。
 ---
@@ -10,7 +10,7 @@ description: |
 
 ## 重要约束
 
-**⚠️ CRITICAL: 当前开发环境禁止直接执行 `git push origin`**
+**⚠️ CRITICAL: 当前开发环境禁止直接执行 `git push origin`**，除非环境变量 $ALLOW_PUSH=1，如果需要push的时候，需要首先检查整个环境变量
 
 由于开发环境限制：
 - ❌ **禁止**: `git push origin <branch>`
@@ -32,6 +32,8 @@ git format-patch origin/<branch>
 
 # 4. 在其他环境应用patch并规范提交
 git am < changes.patch
+# 或者使用git apply
+git apply changes.patch
 ```
 
 ## AI操作检查清单

@@ -61,6 +61,10 @@ class PendingConfirmation:
     summary: str
     expires_at: datetime
 
+    def is_expired(self) -> bool:
+        """Check if the pending confirmation has expired."""
+        return datetime.now() > self.expires_at
+
 
 @dataclass
 class ConversationContext:

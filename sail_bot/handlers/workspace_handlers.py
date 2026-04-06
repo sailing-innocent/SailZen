@@ -82,6 +82,7 @@ class StartWorkspaceHandler(BaseHandler):
             if ok:
                 ctx.mode = "coding"
                 ctx.active_workspace = session.path
+                ctx.clear_pending()  # Clear any pending confirmation
                 self.ctx.save_contexts()
 
                 entry = self.ctx.state_store.get(path)
@@ -148,6 +149,7 @@ class StopWorkspaceHandler(BaseHandler):
             if ok:
                 ctx.mode = "idle"
                 ctx.active_workspace = None
+                ctx.clear_pending()  # Clear any pending confirmation
                 self.ctx.save_contexts()
 
             result_card = CardRenderer.result(
@@ -179,6 +181,7 @@ class StopWorkspaceHandler(BaseHandler):
 
             ctx.mode = "idle"
             ctx.active_workspace = None
+            ctx.clear_pending()  # Clear any pending confirmation
             self.ctx.save_contexts()
 
             result_card = CardRenderer.result(
@@ -202,6 +205,7 @@ class SwitchWorkspaceHandler(BaseHandler):
         # Update context
         ctx.mode = "coding"
         ctx.active_workspace = path
+        ctx.clear_pending()  # Clear any pending confirmation from previous operations
         self.ctx.save_contexts()
 
         # Get task history

@@ -60,7 +60,8 @@ class FeishuMessagingClient:
             True if successful, False otherwise
         """
         if not self.lark_client:
-            print(f"[FeishuMessaging] (no client) Would send to {chat_id}: {text[:80]}")
+            print(f"[FeishuMessaging] (no client) Would send to {chat_id}:")
+            print(f"{'='*40}\n{text}\n{'='*40}")
             return False
 
         try:

@@ -599,9 +599,32 @@ class CardRenderer:
             status_items.append(("Bot 管理", "✅ 支持自更新"))
         elements.append(_field_row(status_items))
 
-        # Quick start commands
+        # Current workspace status
         elements.append(_divider())
-        elements.append(_text("🚀 快速开始", bold=True))
+        elements.append(_text("💻 当前工作区", bold=True))
+
+        # Find active workspace
+        active_workspace = None
+        for proj in projects:
+            path = proj.get("path", "")
+            state = session_states.get(path, "idle")
+            if state == "running":
+                active_workspace = proj
+                break
+
+        if active_workspace:
+            slug = active_workspace.get("slug", "")
+            label = active_workspace.get("label", slug)
+            elements.append(_text(f"🟢 **{label}** ({slug})"))
+            elements.append(_note("当前已在此工作区，可直接发送指令"))
+        else:
+            elements.append(_note("⚪ 当前不在任何工作区内"))
+            if projects:
+                elements.append(_note("发送「使用 <项目名>」进入工作区"))
+
+        # Quick commands
+        elements.append(_divider())
+        elements.append(_text("💡 快捷指令", bold=True))
         elements.append(_note("发送以下指令即可开始："))
 
         quick_commands = [
@@ -643,9 +666,7 @@ class CardRenderer:
 
         # Footer
         elements.append(_divider())
-        elements.append(
-            _note("发送任意消息开始对话，我会尽力理解你的意图！")
-        )
+        elements.append(_note("发送任意消息开始对话，我会尽力理解你的意图！"))
 
         return {
             "config": {"wide_screen_mode": True},

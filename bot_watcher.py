@@ -15,10 +15,10 @@ This module provides a watcher process that:
 
 Usage:
     # Start with watcher
-    uv run bot_watcher.py -c bot/opencode.bot.yaml
+    uv run bot_watcher.py -c code.bot.yaml
 
     # Or directly (no self-update support)
-    uv run bot.py -c bot/opencode.bot.yaml
+    uv run bot.py -c code.bot.yaml
 
 Exit Codes:
     0: Normal exit, don't restart
@@ -68,7 +68,7 @@ class BotWatcher:
 
     def __init__(
         self,
-        config_path: str = "bot/opencode.bot.yaml",
+        config_path: str = "code.bot.yaml",
         state_file: Optional[Path] = None,
         max_restarts: int = MAX_RESTART_ATTEMPTS,
     ):
@@ -273,7 +273,7 @@ def main() -> None:
         description="Bot Watcher - Process supervisor for Feishu Bot"
     )
     parser.add_argument(
-        "--config", "-c", default="bot/opencode.bot.yaml", help="Config file path"
+        "--config", "-c", default="code.bot.yaml", help="Config file path"
     )
     parser.add_argument(
         "--max-restarts",

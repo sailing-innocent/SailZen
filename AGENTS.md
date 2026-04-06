@@ -614,11 +614,9 @@ DEFAULT_LLM_MODEL = "gpt-4o"     # 改为其他模型
 
 ## Notes for AI Agents
 
-- 这是一个个人项目，注释中英文混杂
+- 这是个人项目，注释中英文混杂
 - 许多注释和 docstrings 是中文
-- 项目从 Dendron 演化而来 - 部分代码保留 "dendron" 命名
-- Python 后端使用自定义任务调度器模式处理后台任务
-- LLM 集成支持多个提供商并带有降级机制
+- vscode-plugin 项目从 Dendron 演化而来 - 部分代码保留 "dendron" 命名
 - 数据库迁移手动处理 (检查 `sail_server/migration/`)
 - **Windows 开发注意**：
   - 使用 `uv run` 运行所有 Python 代码

@@ -104,6 +104,7 @@ class TaskHandler(BaseHandler):
 
             ctx.mode = "coding"
             ctx.active_workspace = session.path
+            ctx.clear_pending()  # Clear any pending confirmation
             self.ctx.save_contexts()
 
             if not task_text:
@@ -230,7 +231,8 @@ class TaskHandler(BaseHandler):
                 ctx.push("bot", f"任务出错: {error_msg[:50]}")
 
             # Submit async task
-            print(f"[TaskHandler] Submitting async task for session {sess_id}")
+            from sail_bot.log_formatter import task, task_progress
+            task(f"Submitting for session {sess_id[:16]}...")
             task = task_manager.submit_task(
                 session_id=sess_id,
                 port=session.port,
@@ -241,11 +243,13 @@ class TaskHandler(BaseHandler):
                 on_error=on_error,
             )
             current_task = task
-            print(f"[TaskHandler] Async task submitted: {task.task_id}")
+            task_progress(task.task_id, "started", f"session={sess_id[:16]}...")
 
             # Update card with correct task_id for cancellation
             # This ensures the cancel button works with the real task ID
-            task_desc = f"**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}"
+            task_desc = (
+                f"**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}"
+            )
             initial_card = CardRenderer.progress(
                 title="🚀 任务已开始",
                 description=f"正在执行...\n\n{task_desc}",

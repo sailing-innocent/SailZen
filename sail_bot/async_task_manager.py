@@ -41,6 +41,31 @@ try:
 except ImportError:
     task_logger = None
 
+# 导入 OpenCode 消息日志记录器
+try:
+    from sail_bot.opencode_message_logger import OpenCodeMessageLogger
+except ImportError:
+    OpenCodeMessageLogger = None
+
+# 导入统一日志格式化器
+try:
+    from sail_bot.log_formatter import async_mgr, task_progress, task_status, log, error, warn
+except ImportError:
+    # 回退到简单实现
+    def async_mgr(msg, task_id="", level="INFO"):
+        tid = f"{task_id[:16]}... " if task_id else ""
+        print(f"[Async] {tid}{msg}")
+    def task_progress(tid, action, detail=""):
+        print(f"[Async] {action} {tid[:16]}... {detail}")
+    def task_status(tid, status, elapsed, last_activity="", extra=""):
+        print(f"[Async] {tid[:16]}... status={status} elapsed={elapsed}s")
+    def log(level, comp, msg):
+        print(f"[{comp}] {msg}")
+    def error(comp, msg):
+        print(f"[ERROR][{comp}] {msg}")
+    def warn(comp, msg):
+        print(f"[WARN][{comp}] {msg}")
+
 
 class TaskStatus(str, Enum):
     """任务状态"""
@@ -83,6 +108,14 @@ class AsyncTask:
 
     # 工具调用记录
     _tool_calls: List[Dict[str, Any]] = field(default_factory=list, repr=False)
+    
+    # ⭐ 消息缓存 - 存储所有收到的消息用于调试和恢复
+    _message_cache: List[Dict[str, Any]] = field(default_factory=list, repr=False)
+    _last_message_id: str = field(default="", repr=False)
+    
+    # ⭐ 任务隔离 - 记录任务启动时的消息位置，只处理之后的消息
+    _start_message_id: str = field(default="", repr=False)
+    _user_message_id: str = field(default="", repr=False)  # 用户发送的当前任务指令的消息ID
 
     # 回调函数
     on_step: Optional[Callable[[TaskStep], None]] = None
@@ -160,14 +193,25 @@ class AsyncTaskManager:
         self._running = True
         self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         self._monitor_thread.start()
-        print("[AsyncTaskManager] Started")
+        log("INFO", "Async", "Started")
+
+    def _get_running_tasks_for_session(self, session_id: str, exclude_task_id: Optional[str] = None) -> List[AsyncTask]:
+        """获取指定 session 中正在运行的任务列表。"""
+        running = []
+        with self._lock:
+            for task_id, task in self._tasks.items():
+                if exclude_task_id and task_id == exclude_task_id:
+                    continue
+                if task.session_id == session_id and task.status == TaskStatus.RUNNING:
+                    running.append(task)
+        return running
 
     def stop(self):
         """停止任务管理器"""
         self._running = False
         if self._monitor_thread:
             self._monitor_thread.join(timeout=5.0)
-        print("[AsyncTaskManager] Stopped")
+        log("INFO", "Async", "Stopped")
 
     def submit_task(
         self,
@@ -196,6 +240,12 @@ class AsyncTaskManager:
         with self._lock:
             self._tasks[task_id] = task
 
+        # ⭐ 检查同一 session 是否已有运行中的任务
+        existing_tasks = self._get_running_tasks_for_session(session_id, exclude_task_id=task_id)
+        if existing_tasks:
+            existing_ids = [t.task_id for t in existing_tasks]
+            warn("Async", f"Task {task_id[:8]}... started while session has running: {existing_ids}")
+
         # 记录到任务历史日志
         if task_logger and workspace_path:
             task_logger.start_task(
@@ -209,7 +259,7 @@ class AsyncTaskManager:
         # 启动异步执行
         threading.Thread(target=self._execute_task, args=(task,), daemon=True).start()
 
-        logger.info(f"[AsyncTaskManager] Submitted task {task_id}: {text[:80]}...")
+        logger.info(f"[AsyncTaskManager] Submitted task {task_id}: {text}")
         return task
 
     def get_task(self, task_id: str) -> Optional[AsyncTask]:
@@ -315,7 +365,7 @@ class AsyncTaskManager:
             with self._lock:
                 if task_id in self._tasks:
                     del self._tasks[task_id]
-            print(f"[AsyncTaskManager] Cleaned up expired task {task_id}")
+            log("INFO", "Async", f"Cleaned up expired task {task_id[:16]}...")
 
     def _execute_task(self, task: AsyncTask):
         """执行异步任务"""
@@ -366,6 +416,22 @@ class AsyncTaskManager:
         """发送异步prompt请求"""
         try:
             base_url = f"http://127.0.0.1:{task.port}"
+            
+            # ⭐ 在发送prompt前，获取当前最后一条消息的ID作为起始点
+            try:
+                response = httpx.get(
+                    f"{base_url}/session/{task.session_id}/message",
+                    params={"limit": 1},
+                    timeout=5.0,
+                )
+                if response.status_code == 200:
+                    messages = response.json()
+                    if messages:
+                        last_msg = messages[-1]
+                        task._start_message_id = last_msg.get("info", {}).get("id", "")
+                        async_mgr(f"Start boundary: {task._start_message_id[:16]}...", task.task_id)
+            except Exception as e:
+                warn("Async", f"Could not get start message id: {e}")
 
             body = {
                 "parts": [{"type": "text", "text": task.original_text}],
@@ -378,16 +444,36 @@ class AsyncTaskManager:
             )
 
             if response.status_code == 204:
-                print(f"[AsyncTaskManager] Async prompt sent for task {task.task_id}")
+                task_progress(task.task_id, "started", f"session={task.session_id[:16]}...")
+                
+                # ⭐ 发送后获取最新消息列表，找到我们刚发送的用户消息
+                try:
+                    time.sleep(0.1)  # 稍微等待消息写入
+                    msg_response = httpx.get(
+                        f"{base_url}/session/{task.session_id}/message",
+                        params={"limit": 10},
+                        timeout=5.0,
+                    )
+                    if msg_response.status_code == 200:
+                        messages = msg_response.json()
+                        # 找到最后一条用户消息（我们刚发送的）
+                        for msg in reversed(messages):
+                            if msg.get("info", {}).get("role") == "user":
+                                user_msg_id = msg.get("info", {}).get("id", "")
+                                if user_msg_id != task._start_message_id:
+                                    task._user_message_id = user_msg_id
+                                    async_mgr(f"User message: {user_msg_id[:16]}...", task.task_id)
+                                    break
+                except Exception as e:
+                    warn("Async", f"Could not find user message id: {e}")
+                
                 return True
             else:
-                print(
-                    f"[AsyncTaskManager] Failed to send async prompt: {response.status_code}"
-                )
+                error("Async", f"Failed to send async prompt: {response.status_code}")
                 return False
 
         except Exception as exc:
-            print(f"[AsyncTaskManager] Send async prompt error: {exc}")
+            error("Async", f"Send async prompt error: {exc}")
             return False
 
     def _check_session_status(self, task: AsyncTask) -> Optional[str]:
@@ -418,7 +504,7 @@ class AsyncTaskManager:
 
             return None
         except Exception as exc:
-            print(f"[AsyncTaskManager] Failed to check session status: {exc}")
+            error("Async", f"Failed to check session status: {exc}")
             return None
 
     def _poll_for_result(self, task: AsyncTask):
@@ -441,8 +527,7 @@ class AsyncTaskManager:
             "status_check_count": 0,
         }
 
-        print(f"[AsyncTaskManager] Starting poll for task {task.task_id}")
-        print(f"[AsyncTaskManager] Session: {task.session_id}, Port: {task.port}")
+        async_mgr(f"Starting poll | session={task.session_id[:16]}... port={task.port}", task.task_id)
 
         while task.status == TaskStatus.RUNNING:
             elapsed = time.time() - start_time
@@ -480,15 +565,21 @@ class AsyncTaskManager:
                         time.time() - debug_stats["last_message_change_time"]
                     )
 
-                    print(
-                        f"[AsyncTaskManager] Task {task.task_id}: {elapsed_minutes}min | status={self._check_session_status(task)} | msgs={debug_stats['messages_received']} | tools={debug_stats['tool_calls_count']}"
+                    recent = task.get_recent_tools(5)
+                    task_status(
+                        task.task_id,
+                        self._check_session_status(task) or "unknown",
+                        int(elapsed),
+                        f"status_change={time_since_last_status_change:.0f}s msg={time_since_last_message:.0f}s",
+                        f"tools={debug_stats['tool_calls_count']} recent={recent}"
                     )
-                    print(
-                        f"[AsyncTaskManager]   last status change: {time_since_last_status_change:.0f}s ago | last msg: {time_since_last_message:.0f}s ago"
-                    )
-                    print(
-                        f"[AsyncTaskManager]   recent tools: {task.get_recent_tools(5)}"
-                    )
+                    
+                    # ⭐ 检测是否可能因为切换工作区而卡住
+                    if time_since_last_message > 60 and debug_stats["messages_received"] <= 2:
+                        warn("Async", f"Task {task.task_id[:16]}... appears stuck after workspace switch!")
+                        async_mgr(f"Trying to wake up (only {debug_stats['messages_received']} msgs)", task.task_id)
+                        # 尝试发送一个唤醒消息
+                        self._try_wake_session(task)
 
             try:
                 # ⭐ 定期检查会话状态 (每3秒)
@@ -512,9 +603,7 @@ class AsyncTaskManager:
                             }
                         )
                         debug_stats["last_status_change_time"] = current_time
-                        print(
-                            f"[AsyncTaskManager] Task {task.task_id} status changed to: {session_status} (elapsed: {elapsed:.1f}s)"
-                        )
+                        async_mgr(f"Status changed to: {session_status} (elapsed: {elapsed:.1f}s)", task.task_id)
 
                     # ⭐ 如果状态长时间未变，发出警告
                     time_since_status_change = (
@@ -525,14 +614,12 @@ class AsyncTaskManager:
                         time_since_status_change > 60
                         and debug_stats["status_check_count"] % 20 == 0
                     ):
-                        print(
-                            f"[AsyncTaskManager] Task {task.task_id}: status={session_status}, elapsed={elapsed:.0f}s"
-                        )
-                        print(
-                            f"[AsyncTaskManager]   no status change for {time_since_status_change:.0f}s, last tool {time_since_tool:.0f}s ago"
-                        )
-                        print(
-                            f"[AsyncTaskManager]   recent: {task.get_recent_tools(5)}"
+                        task_status(
+                            task.task_id,
+                            session_status or "unknown",
+                            int(elapsed),
+                            f"no_change={time_since_status_change:.0f}s tool={time_since_tool:.0f}s",
+                            task.get_recent_tools(5)
                         )
 
                     if session_status == "idle":
@@ -611,43 +698,60 @@ class AsyncTaskManager:
                             return
                     elif session_status == "busy":
                         if consecutive_idle_count > 0:
-                            print(
-                                f"[AsyncTaskManager] Task {task.task_id} back to busy (was idle {consecutive_idle_count} times)"
-                            )
+                            async_mgr(f"Back to busy (was idle {consecutive_idle_count} times)", task.task_id)
                         consecutive_idle_count = 0  # 重置计数
                     elif session_status is None:
                         # 检查失败，继续轮询
-                        print(
-                            f"[AsyncTaskManager] Task {task.task_id} status check failed (returned None)"
-                        )
+                        warn("Async", f"Task {task.task_id[:16]}... status check failed")
 
                 # 获取消息列表（用于显示进度）
-                response = httpx.get(
-                    f"{base_url}/session/{task.session_id}/message",
-                    params={"limit": 50},
-                    timeout=5.0,
-                )
+                try:
+                    response = httpx.get(
+                        f"{base_url}/session/{task.session_id}/message",
+                        params={"limit": 50},
+                        timeout=5.0,
+                    )
+                except Exception as exc:
+                    error("Async", f"Task {task.task_id[:16]}... message fetch error: {exc}")
+                    time.sleep(self.poll_interval)
+                    continue
 
                 if response.status_code == 200:
                     messages = response.json()
 
-                    # 检查是否有新消息
-                    current_message_count = len(messages)
-                    if current_message_count != last_message_count:
-                        new_count = current_message_count - last_message_count
-                        last_message_count = current_message_count
-                        debug_stats["messages_received"] += new_count
-                        debug_stats["last_message_change_time"] = time.time()
-                        print(
-                            f"[AsyncTaskManager] Task {task.task_id}: {current_message_count} messages (+{new_count} new)"
-                        )
+                    # ⭐ 任务隔离：找到起始消息位置
+                    boundary_id = task._user_message_id or task._start_message_id
+                    start_idx = 0
+                    if boundary_id:
+                        for i, m in enumerate(messages):
+                            if m.get("info", {}).get("id") == boundary_id:
+                                start_idx = i + 1
+                                break
+                    
+                    # 缓存消息
+                    task._message_cache = messages
 
-                    # 处理新消息（用于显示进度）
-                    for msg in messages:
+                    # 检查是否有新消息（只在边界后）
+                    current_message_count = len(messages)
+                    boundary_msgs = messages[start_idx:]
+                    new_boundary_count = len([m for m in boundary_msgs if m.get("info", {}).get("id", "") not in seen_message_ids])
+                    
+                    if new_boundary_count > 0:
+                        async_mgr(f"{new_boundary_count} new messages (total: {current_message_count})", task.task_id)
+                        debug_stats["messages_received"] += new_boundary_count
+                        debug_stats["last_message_change_time"] = time.time()
+
+                    # 处理新消息
+                    for msg in messages[start_idx:]:
                         msg_id = msg.get("info", {}).get("id", "")
                         if not msg_id or msg_id in seen_message_ids:
                             continue
+                        
                         seen_message_ids.add(msg_id)
+                        task._last_message_id = msg_id
+                        
+                        # ⭐ 打印新消息的详细内容
+                        self._log_message_details(task.task_id, msg)
 
                         # ⭐ 统计工具调用
                         parts = msg.get("parts", [])
@@ -661,17 +765,19 @@ class AsyncTaskManager:
                                 )
                                 # 记录到任务
                                 task.add_tool_call(tool_name, tool_status)
-                                print(
-                                    f"[AsyncTaskManager] Task {task.task_id} tool call: {tool_name} ({tool_status})"
-                                )
+                                task_progress(task.task_id, "tool", f"{tool_name} ({tool_status})")
 
                         self._process_message(task, msg)
+                        
+                        # ⭐ 检测任务是否完成（通过 step-finish part）
+                        if self._check_message_completion(task, msg, debug_stats):
+                            return  # 任务已完成，退出轮询
 
                 # 等待下次轮询
                 time.sleep(self.poll_interval)
 
             except Exception as exc:
-                print(f"[AsyncTaskManager] Poll error for task {task.task_id}: {exc}")
+                error("Async", f"Task {task.task_id[:16]}... poll error: {exc}")
                 # FIX: traceback imported at top level
                 traceback.print_exc()
                 time.sleep(self.poll_interval)
@@ -702,6 +808,11 @@ class AsyncTaskManager:
                 call_id = part.get("callID", "")
                 state = part.get("state", {})
                 status = state.get("status", "unknown")
+                
+                # ⭐ 自动处理反问工具 (question/permission)
+                if tool_name in ("question", "permission", "ask") and status in ("pending", "running"):
+                    async_mgr(f"Auto-answering {tool_name} tool", task.task_id)
+                    self._auto_answer_question(task, tool_name, state)
 
                 if status == "pending":
                     task.add_step(
@@ -795,6 +906,224 @@ class AsyncTaskManager:
                         metadata={"cost": cost, "tokens": tokens},
                     )
                 )
+
+    def _check_message_completion(
+        self, task: AsyncTask, msg: Dict[str, Any], debug_stats: Dict[str, Any]
+    ) -> bool:
+        """检查消息是否表示任务已完成。
+        
+        通过检测 step-finish part 的 reason 字段来判断：
+        - reason="stop": 任务正常完成
+        - reason="tool-calls": 工具调用链结束（可能还有更多步骤）
+        
+        Returns:
+            True if task is completed, False otherwise
+        """
+        info = msg.get("info", {})
+        role = info.get("role", "")
+        parts = msg.get("parts", [])
+        
+        # 只检查助手消息
+        if role != "assistant":
+            return False
+        
+        for part in parts:
+            if part.get("type") == "step-finish":
+                reason = part.get("reason", "")
+                
+                if reason == "stop":
+                    task_progress(task.task_id, "completed", "reason=stop")
+                    
+                    # 提取最终结果
+                    content = self._extract_text_content(parts)
+                    if content.strip():
+                        task.final_result = content
+                    else:
+                        task.final_result = "（任务已完成）"
+                    
+                    task.status = TaskStatus.COMPLETED
+                    
+                    # 添加完成步骤
+                    task.add_step(
+                        TaskStep(
+                            step_type="response",
+                            content=task.final_result[:200] + "..."
+                            if len(task.final_result) > 200
+                            else task.final_result,
+                        )
+                    )
+                    
+                    async_mgr(f"Completed via step-finish | tools={debug_stats['tool_calls_count']} msgs={debug_stats['messages_received']}", task.task_id)
+                    
+                    # 记录到任务历史日志
+                    if task_logger and task.workspace_path:
+                        task_logger.complete_task(
+                            task.task_id, final_result=task.final_result
+                        )
+                    
+                    # 打印会话摘要
+                    if OpenCodeMessageLogger:
+                        OpenCodeMessageLogger.log_session_summary(task.task_id)
+                    
+                    # 触发完成回调
+                    if task.on_complete:
+                        task.on_complete(task.final_result)
+                    
+                    return True
+                    
+                elif reason == "tool-calls":
+                    # 工具调用链结束，但可能还有更多步骤
+                    async_mgr(f"Step finished (reason=tool-calls), may continue", task.task_id)
+        
+        return False
+
+    def _try_wake_session(self, task: AsyncTask) -> bool:
+        """尝试唤醒可能卡住的 session。
+        
+        当检测到任务可能因为切换工作区而卡住时，
+        发送一个轻量级请求来检查 session 是否还活着。
+        
+        Returns:
+            True if wake attempt was made, False otherwise
+        """
+        try:
+            base_url = f"http://127.0.0.1:{task.port}"
+            
+            # 首先检查 session 是否还存在
+            response = httpx.get(
+                f"{base_url}/session/{task.session_id}",
+                timeout=5.0,
+            )
+            
+            if response.status_code == 404:
+                warn("Async", f"Session {task.session_id[:16]}... not found (may have been closed)")
+                # Session 已关闭，任务应该标记为失败
+                task.status = TaskStatus.ERROR
+                task.error_message = "Session was closed (possibly due to workspace switch)"
+                if task.on_error:
+                    task.on_error(task.error_message)
+                return True
+            
+            if response.status_code == 200:
+                session_data = response.json()
+                async_mgr(f"Session exists: {session_data.get('title', 'N/A')}", task.task_id)
+                
+                # Session 存在，尝试获取最新消息来唤醒连接
+                msg_response = httpx.get(
+                    f"{base_url}/session/{task.session_id}/message",
+                    params={"limit": 100},  # 获取更多消息
+                    timeout=5.0,
+                )
+                
+                if msg_response.status_code == 200:
+                    messages = msg_response.json()
+                    async_mgr(f"Refreshed messages: {len(messages)} total", task.task_id)
+                    
+                    # 检查是否有我们之前没看到的消息
+                    new_msgs = [m for m in messages if m.get("info", {}).get("id", "") not in 
+                               [mm.get("info", {}).get("id", "") for mm in task._message_cache]]
+                    if new_msgs:
+                        async_mgr(f"Found {len(new_msgs)} new messages after refresh!", task.task_id)
+                        # 更新缓存，让主循环处理这些新消息
+                        task._message_cache = messages
+                    
+                    return True
+            
+            return False
+            
+        except Exception as exc:
+            error("Async", f"Error waking session: {exc}")
+            return False
+
+    def _log_message_details(self, task_id: str, msg: Dict[str, Any]):
+        """打印消息的详细内容，使用专门的 OpenCode 消息日志记录器。"""
+        try:
+            if OpenCodeMessageLogger:
+                OpenCodeMessageLogger.log_message(task_id, msg)
+            else:
+                # Fallback: 简单的 JSON 输出
+                print(f"\n[MSG] Task {task_id}:")
+                print(json.dumps(msg, ensure_ascii=False, indent=2)[:2000])
+        except Exception as exc:
+            print(f"[AsyncTaskManager] Error logging message details: {exc}")
+
+    def _auto_answer_question(self, task: AsyncTask, tool_name: str, state: Dict[str, Any]):
+        """自动回答反问工具，让任务继续执行。
+        
+        OpenCode 的 question/permission 工具会等待用户回复。
+        这里我们发送一个默认的确认回复来继续任务。
+        """
+        try:
+            base_url = f"http://127.0.0.1:{task.port}"
+            
+            # ⭐ 打印完整的问题内容（不截断）
+            print(f"=" * 60)
+            print(f"[AUTO-ANSWER] Tool: {tool_name}")
+            print(f"  Status: {state.get('status', 'unknown')}")
+            print(f"  Title: {state.get('title', 'N/A')}")
+            
+            input_data = state.get("input", {})
+            if input_data:
+                print(f"  Input (full):")
+                print(json.dumps(input_data, ensure_ascii=False, indent=2))
+            
+            # 构造自动回复内容
+            if tool_name == "question":
+                questions = input_data.get("questions", [])
+                if questions:
+                    print(f"  Questions from tool:")
+                    for i, q in enumerate(questions):
+                        q_text = q.get("question", "") if isinstance(q, dict) else str(q)
+                        print(f"    [{i+1}] {q_text}")
+                    # 构造完整回复
+                    if len(questions) == 1:
+                        answer_text = questions[0].get("question", "") if isinstance(questions[0], dict) else str(questions[0])
+                        answer_text = f"{answer_text}\n\n继续执行当前任务。"
+                    else:
+                        answer_text = "\n".join([
+                            f"{i+1}. {q.get('question', '') if isinstance(q, dict) else str(q)}"
+                            for i, q in enumerate(questions)
+                        ])
+                        answer_text = f"问题已收到，回复如下：\n{answer_text}\n\n继续执行。"
+                else:
+                    answer_text = "收到，继续执行。"
+            elif tool_name == "permission":
+                patterns = input_data.get("patterns", [])
+                if patterns:
+                    print(f"  Permission patterns: {patterns}")
+                answer_text = "确认授权，继续执行当前操作。"
+            else:
+                answer_text = "确认，继续执行。"
+            
+            print(f"-" * 60)
+            print(f"[AUTO-ANSWER] Replying with:")
+            print(answer_text)
+            print(f"=" * 60)
+            
+            # 发送用户消息作为回复
+            body = {
+                "parts": [{"type": "text", "text": answer_text}],
+            }
+            
+            response = httpx.post(
+                f"{base_url}/session/{task.session_id}/message",
+                json=body,
+                timeout=10.0,
+            )
+            
+            if response.status_code == 200:
+                print(f"[AsyncTaskManager] [AUTO-ANSWER] Success: answered {tool_name}")
+                task.add_step(
+                    TaskStep(
+                        step_type="thinking",
+                        content=f"🤖 自动回复{tool_name}: {answer_text[:50]}",
+                    )
+                )
+            else:
+                print(f"[AsyncTaskManager] [AUTO-ANSWER] Failed: {response.status_code}")
+                
+        except Exception as exc:
+            print(f"[AsyncTaskManager] [AUTO-ANSWER] Error: {exc}")
 
     def _extract_text_content(self, parts: List[Dict[str, Any]]) -> str:
         """提取所有 text parts 的文本内容

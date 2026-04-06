@@ -162,7 +162,7 @@ class OpenCodeSessionManager:
 
         client = OpenCodeSessionClient(port=session.port)
         print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
-        print(f"[OpenCode] Task: {task_text[:100]}...")
+        print(f"[OpenCode] Task:\n{'='*60}\n{task_text}\n{'='*60}")
 
         try:
             # Use synchronous API - it's reliable and handles long responses

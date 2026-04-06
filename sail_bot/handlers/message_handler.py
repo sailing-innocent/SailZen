@@ -65,7 +65,8 @@ class MessageHandler(BaseHandler):
             if not text or not chat_id:
                 return
 
-            print(f"\n[MessageHandler] Message from {chat_id}: {text[:80]}")
+            from sail_bot.log_formatter import user_message
+            user_message(text, chat_id)
 
             # Handle in a background thread to avoid blocking the SDK
             threading.Thread(

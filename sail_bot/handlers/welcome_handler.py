@@ -11,6 +11,7 @@ This module handles the welcome flow when a user enters a P2P chat with the bot.
 """
 
 from typing import Any, Dict
+from pathlib import Path
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.card_renderer import CardRenderer
@@ -33,12 +34,18 @@ class WelcomeHandler(BaseHandler):
             for proj in self.ctx.config.projects:
                 path = proj.get("path", "")
                 if path:
+                    # Resolve the path to match session_manager's key format
+                    try:
+                        resolved_path = str(Path(path).expanduser().resolve())
+                    except Exception:
+                        resolved_path = path
+                    
                     # Get state from session manager or state store
-                    session = self.ctx.session_mgr._sessions.get(path)
+                    session = self.ctx.session_mgr._sessions.get(resolved_path)
                     if session and hasattr(session, "process_status"):
                         session_states[path] = session.process_status
                     else:
-                        entry = self.ctx.state_store.get(path)
+                        entry = self.ctx.state_store.get(resolved_path)
                         session_states[path] = (
                             entry.state.value if entry and hasattr(entry, "state") else "idle"
                         )
@@ -58,5 +65,4 @@ class WelcomeHandler(BaseHandler):
         except Exception as exc:
             print(f"[WelcomeHandler] Error sending welcome card: {exc}")
             import traceback
-
             traceback.print_exc()

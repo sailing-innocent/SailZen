@@ -231,7 +231,8 @@ class BotBrain:
         plan = self._think_deterministic(text, ctx)
         if plan.action != "chat":
             # 确定性匹配成功，直接返回
-            print(f"[BotBrain] Level 1 (regex) matched: {plan.action}")
+            from sail_bot.log_formatter import brain
+            brain(f"Level 1 matched: {plan.action}")
             return plan
 
         # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
@@ -239,14 +240,15 @@ class BotBrain:
             try:
                 plan = asyncio.run(self._think_llm(text, ctx))
                 if plan.action != "chat":
-                    print(f"[BotBrain] Level 2 (LLM) matched: {plan.action}")
+                    brain(f"Level 2 matched: {plan.action}")
                     return plan
                 # LLM 返回 chat，说明它也没理解，继续降级
             except Exception as exc:
-                print(f"[BotBrain] LLM failed: {exc}")
+                from sail_bot.log_formatter import error
+                error("Brain", f"LLM failed: {exc}")
 
         # Level 3: 优雅降级 - 返回通用 chat
-        print(f"[BotBrain] Level 3 (fallback to chat)")
+        brain("Level 3 fallback to chat")
         return self._create_fallback_plan(text, ctx)
 
     def _create_fallback_plan(self, text: str, ctx: ConversationContext) -> ActionPlan:
