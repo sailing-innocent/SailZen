@@ -83,7 +83,7 @@ class TaskHandler(BaseHandler):
             title="🚀 任务已提交",
             description=f"正在初始化...\n\n**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
             show_cancel_button=True,
-            cancel_action_data={"action": "cancel_task", "op_id": op_id},
+            cancel_action_data={"action": "cancel_task", "task_id": op_id},
         )
         prog_mid = self.ctx.messaging.reply_card(
             message_id, progress_card, "progress", {"op_id": op_id, "path": path}
@@ -175,8 +175,7 @@ class TaskHandler(BaseHandler):
                     show_cancel_button=True,
                     cancel_action_data={
                         "action": "cancel_task",
-                        "op_id": op_id,
-                        "task_id": current_task.task_id if current_task else "",
+                        "task_id": current_task.task_id if current_task else op_id,
                     },
                 )
                 if prog_mid:
@@ -243,5 +242,18 @@ class TaskHandler(BaseHandler):
             )
             current_task = task
             print(f"[TaskHandler] Async task submitted: {task.task_id}")
+
+            # Update card with correct task_id for cancellation
+            # This ensures the cancel button works with the real task ID
+            initial_card = CardRenderer.progress(
+                title="🚀 任务已开始",
+                description=f"正在执行...
+
+**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
+                show_cancel_button=True,
+                cancel_action_data={"action": "cancel_task", "task_id": task.task_id},
+            )
+            if prog_mid:
+                self.ctx.messaging.update_card(prog_mid, initial_card)
 
         threading.Thread(target=do_async_task, daemon=True).start()

@@ -248,7 +248,8 @@ class CardActionHandler(BaseHandler):
 
     def _handle_cancel_task(self, value: dict, chat_id: str) -> Any:
         """Handle task cancellation request."""
-        task_id = value.get("task_id") if isinstance(value, dict) else None
+        # Support both "task_id" and "op_id" for compatibility
+        task_id = value.get("task_id") or value.get("op_id") if isinstance(value, dict) else None
 
         if task_id:
             print(f"[CardActionHandler] Cancelling task: {task_id}")
