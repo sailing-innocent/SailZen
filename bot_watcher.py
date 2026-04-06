@@ -153,8 +153,7 @@ class BotWatcher:
         """Start the bot process and return its exit code."""
         cmd = [
             sys.executable,
-            "-m",
-            "bot",
+            "bot.py",
             "-c",
             self.config_path,
         ]
