@@ -201,19 +201,20 @@ class CardActionHandler(BaseHandler):
                 )
                 self.ctx.messaging.update_card(message_id, processing_card)
 
-                from sail_bot.handlers.message_handler import MessageHandler
-
                 # Create a plan from the pending action
                 plan = ActionPlan(
                     action=pending.action,
                     params=pending.params,
                 )
 
+                # Get or create conversation context
+                conv_ctx = self.ctx.get_or_create_context(chat_id)
+
                 # Execute the plan using PlanExecutor
                 from sail_bot.handlers.plan_executor import PlanExecutor
 
                 executor = PlanExecutor(self.ctx)
-                result = executor.execute(plan, chat_id, message_id)
+                executor.execute(plan, chat_id, message_id, conv_ctx)
 
                 # Update card with result (executor will handle this)
                 print(
