@@ -17,7 +17,6 @@
 import os
 import re
 import sys
-import hashlib
 import argparse
 from typing import List, Tuple, Optional
 from pathlib import Path

@@ -245,11 +245,10 @@ class TaskHandler(BaseHandler):
 
             # Update card with correct task_id for cancellation
             # This ensures the cancel button works with the real task ID
+            task_desc = f"**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}"
             initial_card = CardRenderer.progress(
                 title="🚀 任务已开始",
-                description=f"正在执行...
-
-**任务:** {task_text[:100]}{'...' if len(task_text) > 100 else ''}",
+                description=f"正在执行...\n\n{task_desc}",
                 show_cancel_button=True,
                 cancel_action_data={"action": "cancel_task", "task_id": task.task_id},
             )
