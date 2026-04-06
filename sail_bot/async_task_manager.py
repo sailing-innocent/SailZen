@@ -550,31 +550,26 @@ class AsyncTaskManager:
                     task.on_error(task.error_message)
                 return
 
-            # ⭐ 长时间任务提示（每10分钟）
+            # ⭐ 定期进度报告（每5分钟）
             elapsed_minutes = int(elapsed / 60)
-            if elapsed_minutes > 0 and elapsed_minutes % 10 == 0:
-                last_warning = getattr(task, "_last_warning_minute", 0)
-                if elapsed_minutes != last_warning:
-                    task._last_warning_minute = elapsed_minutes
-
-                    # ⭐ 计算停滞时间
-                    time_since_last_status_change = (
-                        time.time() - debug_stats["last_status_change_time"]
-                    )
-                    time_since_last_message = (
-                        time.time() - debug_stats["last_message_change_time"]
-                    )
-
-                    recent = task.get_recent_tools(5)
-                    task_status(
-                        task.task_id,
-                        self._check_session_status(task) or "unknown",
-                        int(elapsed),
-                        f"status_change={time_since_last_status_change:.0f}s msg={time_since_last_message:.0f}s",
-                        f"tools={debug_stats['tool_calls_count']} recent={recent}"
-                    )
+            if elapsed_minutes > 0 and elapsed_minutes % 5 == 0:
+                last_report = getattr(task, "_last_progress_minute", 0)
+                if elapsed_minutes != last_report:
+                    task._last_progress_minute = elapsed_minutes
+                    
+                    # 使用精简进度日志
+                    if OpenCodeMessageLogger:
+                        time_since_msg = time.time() - debug_stats["last_message_change_time"]
+                        OpenCodeMessageLogger.log_progress(
+                            task.task_id,
+                            int(elapsed),
+                            self._check_session_status(task) or "unknown",
+                            debug_stats["tool_calls_count"],
+                            f"last_msg={time_since_msg:.0f}s"
+                        )
                     
                     # ⭐ 检测是否可能因为切换工作区而卡住
+                    time_since_last_message = time.time() - debug_stats["last_message_change_time"]
                     if time_since_last_message > 60 and debug_stats["messages_received"] <= 2:
                         warn("Async", f"Task {task.task_id[:16]}... appears stuck after workspace switch!")
                         async_mgr(f"Trying to wake up (only {debug_stats['messages_received']} msgs)", task.task_id)
@@ -731,18 +726,16 @@ class AsyncTaskManager:
                     # 缓存消息
                     task._message_cache = messages
 
-                    # 检查是否有新消息（只在边界后）
-                    current_message_count = len(messages)
+                    # 处理新消息（只在边界后）
                     boundary_msgs = messages[start_idx:]
-                    new_boundary_count = len([m for m in boundary_msgs if m.get("info", {}).get("id", "") not in seen_message_ids])
+                    new_msgs = [m for m in boundary_msgs if m.get("info", {}).get("id", "") not in seen_message_ids]
                     
-                    if new_boundary_count > 0:
-                        async_mgr(f"{new_boundary_count} new messages (total: {current_message_count})", task.task_id)
-                        debug_stats["messages_received"] += new_boundary_count
+                    if new_msgs:
+                        debug_stats["messages_received"] += len(new_msgs)
                         debug_stats["last_message_change_time"] = time.time()
 
-                    # 处理新消息
-                    for msg in messages[start_idx:]:
+                    # 处理每条新消息
+                    for msg in new_msgs:
                         msg_id = msg.get("info", {}).get("id", "")
                         if not msg_id or msg_id in seen_message_ids:
                             continue
@@ -961,9 +954,9 @@ class AsyncTaskManager:
                             task.task_id, final_result=task.final_result
                         )
                     
-                    # 打印会话摘要
+                    # 打印任务完成摘要
                     if OpenCodeMessageLogger:
-                        OpenCodeMessageLogger.log_session_summary(task.task_id)
+                        OpenCodeMessageLogger.log_task_complete(task.task_id, task.final_result)
                     
                     # 触发完成回调
                     if task.on_complete:
@@ -1035,17 +1028,18 @@ class AsyncTaskManager:
             error("Async", f"Error waking session: {exc}")
             return False
 
-    def _log_message_details(self, task_id: str, msg: Dict[str, Any]):
+    def _log_message_details(self, task_id: str, msg: Dict[str, Any], elapsed: int = 0):
         """打印消息的详细内容，使用专门的 OpenCode 消息日志记录器。"""
         try:
             if OpenCodeMessageLogger:
-                OpenCodeMessageLogger.log_message(task_id, msg)
-            else:
-                # Fallback: 简单的 JSON 输出
-                print(f"\n[MSG] Task {task_id}:")
-                print(json.dumps(msg, ensure_ascii=False, indent=2)[:2000])
+                # 使用新的精简版日志，只显示有意义的内容
+                was_logged = OpenCodeMessageLogger.log_message(task_id, msg, elapsed)
+                # 如果消息被显示（有内容），不输出任何额外信息
+                # 如果消息被过滤（空消息），静默处理
+            # else: 静默处理，避免噪音
         except Exception as exc:
-            print(f"[AsyncTaskManager] Error logging message details: {exc}")
+            # 只在真正出错时输出
+            error("Async", f"Error logging message: {exc}")
 
     def _auto_answer_question(self, task: AsyncTask, tool_name: str, state: Dict[str, Any]):
         """自动回答反问工具，让任务继续执行。
