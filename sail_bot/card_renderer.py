@@ -335,10 +335,38 @@ class CardRenderer:
             elements.append(_note("此操作可在 30 秒内撤销"))
 
         elements.append(_divider())
-        # 文字指令提示（本地运行不支持卡片按钮回调）
-        elements.append(_note("💡 请回复："))
-        elements.append(_note("   「确认」- 执行此操作"))
-        elements.append(_note("   「取消」- 放弃此操作"))
+
+        # 添加确认和取消按钮
+        button_style = "danger" if risk_level == "confirm_required" else "primary"
+        elements.append(
+            _action_row(
+                [
+                    _button(
+                        "✅ 确认执行",
+                        "callback",
+                        {
+                            "action": "confirm_action",
+                            "pending_id": pending_id,
+                            "decision": "confirm",
+                        },
+                        button_style,
+                    ),
+                    _button(
+                        "❌ 取消",
+                        "callback",
+                        {
+                            "action": "confirm_action",
+                            "pending_id": pending_id,
+                            "decision": "cancel",
+                        },
+                        "default",
+                    ),
+                ]
+            )
+        )
+
+        # 保留文字指令提示作为备用
+        elements.append(_note("💡 或回复文字：确认 / 取消"))
 
         return {
             "config": {"wide_screen_mode": True},

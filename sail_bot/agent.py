@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import json
 import sys
+import threading
 import traceback
 from datetime import datetime
 
@@ -107,6 +108,7 @@ class FeishuBotAgent:
         self._self_update_enabled = True
         self._state_manager: Optional[Any] = None
         self._update_orchestrator: Optional[Any] = None
+        self._ws_client: Optional[Any] = None
         self._init_self_update()
 
         # Create handler context
@@ -174,6 +176,7 @@ class FeishuBotAgent:
             if not self._update_orchestrator:
                 self._update_orchestrator = SelfUpdateOrchestrator(
                     state_manager=self._state_manager,
+                    feishu_client=self._ws_client,
                     workspace_root=Path(__file__).parent.parent,
                 )
 
@@ -424,7 +427,7 @@ class FeishuBotAgent:
             .build()
         )
 
-        ws_client = lark.ws.Client(
+        self._ws_client = lark.ws.Client(
             self.config.app_id,
             self.config.app_secret,
             event_handler=event_handler,
@@ -441,8 +444,21 @@ class FeishuBotAgent:
         self._lifecycle._notify_startup()
 
         exit_code = 0
+        self._shutdown_event = threading.Event()
+        
+        # Start ws_client in a separate thread since it's blocking
+        ws_thread = threading.Thread(target=self._ws_client.start)
+        ws_thread.daemon = True
+        ws_thread.start()
+        
         try:
-            ws_client.start()
+            # Wait for shutdown signal (from self-update or user interrupt)
+            while not self._shutdown_event.is_set():
+                if self._update_orchestrator and self._update_orchestrator.should_exit():
+                    print("[FeishuBotAgent] Self-update requested, shutting down...")
+                    break
+                # Check every 100ms
+                self._shutdown_event.wait(0.1)
         except KeyboardInterrupt:
             print("\nStopped by user")
             exit_code = 0
@@ -451,6 +467,10 @@ class FeishuBotAgent:
             traceback.print_exc()
             exit_code = 1
         finally:
+            # Signal ws_client to stop
+            if hasattr(self._ws_client, 'stop'):
+                self._ws_client.stop()
+            
             self._lifecycle.on_shutdown()
 
             # Check if we should exit with special code for self-update

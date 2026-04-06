@@ -78,6 +78,10 @@ class CardActionHandler(BaseHandler):
 
             print(f"[CardActionHandler] {action_type} for {path} in {chat_id}")
 
+            # Handle confirm_action (confirmation button clicks)
+            if action_type == "confirm_action":
+                return self._handle_confirm_action(value, chat_id, message_id)
+
             # Handle cancel_task action
             if action_type == "cancel_task":
                 return self._handle_cancel_task(value, chat_id)
@@ -94,6 +98,141 @@ class CardActionHandler(BaseHandler):
             # FIX: traceback imported at top level
             traceback.print_exc()
             return None
+
+    def _handle_confirm_action(self, value: dict, chat_id: str, message_id: str) -> Any:
+        """Handle confirmation button clicks (confirm or cancel).
+
+        Args:
+            value: The action value dict containing pending_id and decision
+            chat_id: The chat ID
+            message_id: The message ID for updating the card
+
+        Returns:
+            P2CardActionTriggerResponse to acknowledge the action
+        """
+        pending_id = value.get("pending_id") if isinstance(value, dict) else None
+        decision = value.get("decision") if isinstance(value, dict) else None
+
+        if not pending_id:
+            return P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "error",
+                        "content": "无效的操作确认",
+                        "i18n": {
+                            "zh_cn": "无效的操作确认",
+                            "en_us": "Invalid confirmation",
+                        },
+                    }
+                }
+            )
+
+        # Get the pending action from ConfirmationManager
+        pending = self.ctx.confirm_mgr.consume(pending_id)
+
+        if not pending:
+            # Pending action not found or expired
+            error_card = CardRenderer.result(
+                "操作已过期",
+                "该确认请求已过期或已被处理，请重新发起操作。",
+                success=False,
+            )
+            self.ctx.messaging.update_card(message_id, error_card)
+            return P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "error",
+                        "content": "确认已过期，请重新发起",
+                        "i18n": {
+                            "zh_cn": "确认已过期，请重新发起",
+                            "en_us": "Confirmation expired, please retry",
+                        },
+                    }
+                }
+            )
+
+        if decision == "cancel":
+            # User cancelled the action
+            cancel_card = CardRenderer.result(
+                "已取消",
+                f"操作「{pending.summary}」已取消。",
+                success=True,
+            )
+            self.ctx.messaging.update_card(message_id, cancel_card)
+
+            # Clear pending from conversation context
+            ctx = self.ctx.get_or_create_context(chat_id)
+            if ctx.pending and ctx.pending.summary == pending.summary:
+                ctx.clear_pending()
+                self.ctx.save_contexts()
+
+            return P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "info",
+                        "content": "操作已取消",
+                        "i18n": {
+                            "zh_cn": "操作已取消",
+                            "en_us": "Operation cancelled",
+                        },
+                    }
+                }
+            )
+
+        # decision == "confirm" or default - execute the action
+        # Update card to show processing state
+        processing_card = CardRenderer.progress(
+            title="正在执行",
+            description=f"正在执行「{pending.summary}」...",
+        )
+        self.ctx.messaging.update_card(message_id, processing_card)
+
+        # Execute the action in background
+        def execute_confirmed_action():
+            try:
+                from sail_bot.handlers.message_handler import MessageHandler
+
+                # Create a plan from the pending action
+                plan = ActionPlan(
+                    action=pending.action,
+                    params=pending.params,
+                )
+
+                # Execute the plan using PlanExecutor
+                from sail_bot.handlers.plan_executor import PlanExecutor
+
+                executor = PlanExecutor(self.ctx)
+                result = executor.execute(plan, chat_id, message_id)
+
+                # Update card with result (executor will handle this)
+                print(
+                    f"[CardActionHandler] Confirmed action completed: {pending.action}"
+                )
+
+            except Exception as exc:
+                print(f"[CardActionHandler] Error executing confirmed action: {exc}")
+                traceback.print_exc()
+                error_card = CardRenderer.result(
+                    "执行失败",
+                    f"执行「{pending.summary}」时出错：{str(exc)}",
+                    success=False,
+                )
+                self.ctx.messaging.update_card(message_id, error_card)
+
+        threading.Thread(target=execute_confirmed_action, daemon=True).start()
+
+        return P2CardActionTriggerResponse(
+            {
+                "toast": {
+                    "type": "info",
+                    "content": "正在执行操作...",
+                    "i18n": {
+                        "zh_cn": "正在执行操作...",
+                        "en_us": "Executing operation...",
+                    },
+                }
+            }
+        )
 
     def _handle_cancel_task(self, value: dict, chat_id: str) -> Any:
         """Handle task cancellation request."""
