@@ -59,6 +59,7 @@ LOG_DIR: Path = DATA_DIR / "logs"
 TASK_LOG_DIR: Path = DATA_DIR / "task_logs"
 BACKUP_DIR: Path = DATA_DIR / "backups"
 OPENCODE_LOG_DIR: Path = DATA_DIR / "opencode_logs"
+OUTPUT_DIR: Path = DATA_DIR / "outputs"  # For long text output files
 
 # State files
 SESSIONS_FILE: Path = STATE_DIR / "sessions.json"
@@ -71,7 +72,7 @@ CONTEXTS_FILE: Path = STATE_DIR / "contexts.json"
 
 def ensure_dirs() -> None:
     """Create all data directories if they don't exist."""
-    for d in (STATE_DIR, LOG_DIR, TASK_LOG_DIR, BACKUP_DIR, OPENCODE_LOG_DIR):
+    for d in (STATE_DIR, LOG_DIR, TASK_LOG_DIR, BACKUP_DIR, OPENCODE_LOG_DIR, OUTPUT_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 

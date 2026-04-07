@@ -429,16 +429,19 @@ class OpenCodeAsyncClient:
     ) -> AsyncIterator[SSEEvent]:
         """Stream Server-Sent Events from an OpenCode session.
 
-        This connects to ``GET /session/:id/events`` and yields parsed
-        SSE events in real-time.  The connection stays open until:
+        This connects to ``GET /event`` (global event stream) and yields parsed
+        SSE events in real-time. The connection stays open until:
         - The server closes it (task finished)
         - The timeout is reached
         - The caller breaks out of the loop
 
+        Note: OpenCode uses a global event stream at /event, not per-session.
+        Events are filtered by sessionID in the event data.
+
         Yields:
             SSEEvent objects with .event (type) and .data (payload)
         """
-        url = f"{self._base_url}/session/{session_id}/events"
+        url = f"{self._base_url}/event"
         # Use a dedicated client with streaming timeout
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(timeout, connect=10.0, read=timeout)
@@ -458,9 +461,13 @@ class OpenCodeAsyncClient:
     ) -> AsyncIterator[SSEEvent]:
         """SSE stream with automatic reconnection on transient errors.
 
-        Same as stream_events() but retries on connection errors.  Yields
+        Same as stream_events() but retries on connection errors. Yields
         a synthetic ``SSEEvent(event="__reconnected__")`` after each
         successful reconnection so callers can react.
+
+        Note: The session_id parameter is used for event filtering in the
+        consumer, not for the HTTP endpoint. OpenCode uses a global /event
+        stream that includes events for all sessions.
         """
         reconnects = 0
         while reconnects <= max_reconnects:

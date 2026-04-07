@@ -4,15 +4,15 @@
 # @brief 异步任务管理器 - 基于SSE事件流的OpenCode任务执行
 # @author sailing-innocent
 # @date 2026-04-07
-# @version 2.0
+# @version 3.0
 # ---------------------------------
 """异步任务管理器 - 基于SSE事件流实时追踪OpenCode任务。
 
-v2.0 核心改进:
-1. 使用 SSE (GET /session/:id/events) 替代轮询，延迟从秒级降到毫秒级
-2. 统一到 asyncio 事件循环，消除线程泛滥
-3. 自动重连机制处理网络抖动
-4. 保留同步回调接口兼容上层 handler
+v3.0 核心改进:
+1. 正确处理 message.part.updated/delta 事件来累积流式文本
+2. 使用 session.idle 事件判断任务完成（最可靠）
+3. 关联 user message 和 assistant message，避免消息错乱
+4. 保留 step-finish 作为备用完成检测机制
 """
 
 import asyncio
@@ -114,10 +114,27 @@ class AsyncTask:
     # Tool call history (for display)
     _tool_calls: List[Dict[str, Any]] = field(default_factory=list, repr=False)
 
+    # Track the user message we sent (to identify our assistant response)
+    _user_message_id: Optional[str] = field(default=None, repr=False)
+    _user_message_sent: bool = field(default=False, repr=False)
+
+    # Track assistant message associated with this task
+    _assistant_msg_id: Optional[str] = field(default=None, repr=False)
+    _assistant_msg_time: Optional[str] = field(default=None, repr=False)
+
+    # Accumulated text content from streaming parts
+    _accumulated_text: str = field(default="", repr=False)
+    _text_part_id: Optional[str] = field(default=None, repr=False)
+    _last_logged_text_len: int = field(default=0, repr=False)  # For throttling logs
+    _last_log_time: float = field(default=0.0, repr=False)
+
+    # Session state tracking
+    _session_was_busy: bool = field(default=False, repr=False)
+
     # Callbacks (called from the event loop thread)
-    on_step: Optional[Callable[[TaskStep], None]] = None
-    on_complete: Optional[Callable[[str], None]] = None
-    on_error: Optional[Callable[[str], None]] = None
+    on_step: Optional[Callable[[TaskStep], None]] = field(default=None, repr=False)
+    on_complete: Optional[Callable[[str], None]] = field(default=None, repr=False)
+    on_error: Optional[Callable[[str], None]] = field(default=None, repr=False)
 
     # Internal: asyncio task handle for cancellation
     _asyncio_task: Optional[Any] = field(default=None, repr=False)
@@ -159,22 +176,50 @@ class AsyncTask:
             f"{icons.get(t['status'], '❓')}{t['tool']}" for t in recent
         )
 
+    def append_text_delta(self, delta: str, part_id: Optional[str] = None, start_time: float = 0) -> None:
+        """追加文本增量（来自 message.part.updated/delta）"""
+        if not delta:
+            return
+            
+        self._accumulated_text += delta
+        if part_id:
+            self._text_part_id = part_id
+        
+        # Throttled logging: log every 5 seconds or every 1000 chars
+        current_time = time.time()
+        current_len = len(self._accumulated_text)
+        time_since_last_log = current_time - self._last_log_time
+        chars_since_last_log = current_len - self._last_logged_text_len
+        
+        if time_since_last_log >= 5.0 or chars_since_last_log >= 1000:
+            elapsed = int(current_time - start_time) if start_time else 0
+            async_mgr(f"Streaming: {current_len} chars (+{chars_since_last_log}), {elapsed}s", self.task_id)
+            self._last_logged_text_len = current_len
+            self._last_log_time = current_time
+
     def _fire_complete(self, result: str) -> None:
-        self.final_result = result
+        """触发完成回调（线程安全）"""
+        # Use accumulated text if available and result is empty/generic
+        final_result = result
+        if self._accumulated_text.strip() and (not result or result == "（任务已完成）"):
+            final_result = self._accumulated_text.strip()
+
+        self.final_result = final_result
         self.status = TaskStatus.COMPLETED
         self.updated_at = datetime.now()
         if task_logger and self.workspace_path:
             try:
-                task_logger.complete_task(self.task_id, final_result=result)
+                task_logger.complete_task(self.task_id, final_result=final_result)
             except Exception:
                 pass
         if self.on_complete:
             try:
-                self.on_complete(result)
+                self.on_complete(final_result)
             except Exception as exc:
                 logger.error("[AsyncTask] on_complete callback error: %s", exc)
 
     def _fire_error(self, msg: str) -> None:
+        """触发错误回调（线程安全）"""
         self.error_message = msg
         if self.status not in (TaskStatus.CANCELLED,):
             self.status = TaskStatus.ERROR
@@ -371,7 +416,7 @@ class AsyncTaskManager:
             error("Async", f"Abort task {task_id[:16]}... error: {exc}")
             return False
 
-    # -- Internal helpers (thread-safe) ----------------------------------------
+    # -- Internal helpers (thread-safe) ---------------------------------------
 
     def _get_running_tasks_for_session(
         self, session_id: str, exclude: Optional[str] = None
@@ -401,6 +446,7 @@ class AsyncTaskManager:
                     task._fire_error("Failed to send prompt (server rejected)")
                     return
 
+                task._user_message_sent = True
                 task.add_step(TaskStep(
                     step_type="thinking",
                     content="任务已提交，开始执行...",
@@ -426,7 +472,6 @@ class AsyncTaskManager:
     ) -> None:
         """Stream SSE events from OpenCode and process them."""
         start_time = time.time()
-        tool_call_count = 0
         sse_connected = False
 
         try:
@@ -464,8 +509,12 @@ class AsyncTaskManager:
                     ))
                     continue
 
+                # Filter events by session ID (global event stream includes all sessions)
+                if not self._event_matches_session(event, task.session_id):
+                    continue
+
                 # Process the SSE event
-                completed = self._process_sse_event(task, event)
+                completed = self._process_sse_event(task, event, start_time)
                 if completed:
                     return
 
@@ -483,125 +532,237 @@ class AsyncTaskManager:
                 warn("Async", "Falling back to status polling")
                 await self._fallback_poll(client, task, start_time)
 
-    def _process_sse_event(self, task: AsyncTask, event: SSEEvent) -> bool:
+    def _event_matches_session(self, event: SSEEvent, session_id: str) -> bool:
+        """Check if an event belongs to the specified session.
+
+        OpenCode's global /event stream includes events for all sessions.
+        Events are wrapped in {type, properties: {...}} structure.
+        """
+        data = event.json()
+        if data is None:
+            return True  # Process events without data (like server.connected)
+
+        # OpenCode puts event type in data.type
+        event_type = data.get("type", "")
+        
+        # Always process these global events
+        if event_type in ("server.connected", "server.heartbeat"):
+            return False  # Silently skip
+        
+        # OpenCode wraps event data in properties
+        props = data.get("properties", {})
+        
+        # Check various locations where sessionID might be
+        event_session_id = props.get("sessionID") or props.get("session_id")
+        
+        # Fallback to root level (for backwards compatibility)
+        if not event_session_id:
+            event_session_id = data.get("sessionID") or data.get("session_id")
+        
+        # Check in nested info (message events)
+        if not event_session_id:
+            info = props.get("info", {}) if props else data.get("info", {})
+            event_session_id = info.get("sessionID") or info.get("session_id")
+
+        # If no session ID in event, it's a global event - process it
+        if not event_session_id:
+            return True
+
+        return event_session_id == session_id
+
+    def _process_sse_event(self, task: AsyncTask, event: SSEEvent, start_time: float) -> bool:
         """Process a single SSE event. Returns True if task is completed."""
         data = event.json()
         if data is None:
             return False
 
-        event_type = event.event
+        # OpenCode puts event type in data.type, not in SSE event field
+        event_type = data.get("type", event.event)
 
-        # OpenCode SSE event types (based on API docs):
-        # - message.created: new message (user or assistant)
-        # - message.updated: message content updated (parts changed)
-        # - session.updated: session metadata changed
-        # etc.
+        # OpenCode SSE event types:
+        # - message.part.updated: message part created/updated (includes delta for text parts)
+        # - message.part.delta: incremental text update (newer versions)
+        # - message.updated: message metadata updated
+        # - session.idle: session became idle (task complete)
+        # - session.status: session status changed
 
-        # For message events, data contains the full message object
-        if event_type in ("message.created", "message.updated"):
-            return self._handle_message_event(task, data)
+        if event_type == "message.part.updated":
+            return self._handle_part_updated(task, data, start_time)
 
-        # For session status events
-        if event_type == "session.updated":
-            # Could track session-level status here
-            return False
+        if event_type == "message.part.delta":
+            return self._handle_part_delta(task, data, start_time)
 
-        # Log unrecognized events for debugging
-        if event_type:
-            async_mgr(f"SSE event: {event_type}", task.task_id)
+        if event_type == "message.updated":
+            return self._handle_message_updated(task, data)
+
+        if event_type == "session.idle":
+            async_mgr(f"Event: session.idle", task.task_id)
+            return self._handle_session_idle(task, data)
+
+        if event_type == "session.status":
+            return self._handle_session_status(task, data)
+
+        # Silently ignore other events (server.connected, server.heartbeat, etc.)
 
         return False
 
-    def _handle_message_event(self, task: AsyncTask, msg_data: Dict[str, Any]) -> bool:
-        """Handle a message event from SSE. Returns True if task completed."""
-        info = msg_data.get("info", {})
-        role = info.get("role", "")
-        parts = msg_data.get("parts", [])
+    def _handle_part_updated(self, task: AsyncTask, data: Dict[str, Any], start_time: float) -> bool:
+        """Handle message.part.updated event.
 
-        # Only process assistant messages
-        if role != "assistant":
-            return False
+        This event is fired when:
+        - A new part is created
+        - A part is updated (e.g., text content changes)
 
-        for part in parts:
-            part_type = part.get("type", "")
+        Data format: {"properties": {"part": Part, "delta": string?}}
+        """
+        # OpenCode wraps event data in properties
+        props = data.get("properties", {})
+        part = props.get("part", {}) if props else data.get("part", {})
+        delta = props.get("delta", "") if props else data.get("delta", "")
 
-            if part_type == "tool":
-                tool_name = part.get("tool", "unknown")
-                state = part.get("state", {})
-                status = state.get("status", "unknown")
-                title = state.get("title", tool_name)
+        part_type = part.get("type", "")
+        part_id = part.get("id", "")
 
-                task.add_tool_call(tool_name, status)
+        # Track text parts for accumulation
+        if part_type == "text":
+            if delta:
+                task.append_text_delta(delta, part_id, start_time)
+            # Also capture full text if available
+            text = part.get("text", "")
+            if text and not task._accumulated_text:
+                task._accumulated_text = text
 
-                if status == "pending":
-                    task.add_step(TaskStep(
-                        step_type="tool_call",
-                        content=f"🔧 准备调用: {tool_name}",
-                        metadata={"tool": tool_name, "status": status},
-                    ))
-                elif status == "running":
-                    task.add_step(TaskStep(
-                        step_type="tool_call",
-                        content=f"⏳ 执行中: {title}",
-                        metadata={"tool": tool_name, "status": status},
-                    ))
-                elif status == "completed":
-                    task.add_step(TaskStep(
-                        step_type="tool_result",
-                        content=f"✅ {title}",
-                        metadata={"tool": tool_name, "status": status},
-                    ))
-                    task_progress(task.task_id, "tool", f"{tool_name} (completed)")
-                elif status == "error":
-                    err = state.get("error", "Unknown error")
-                    task.add_step(TaskStep(
-                        step_type="tool_result",
-                        content=f"❌ {tool_name} 失败: {err[:100]}",
-                        metadata={"tool": tool_name, "status": status, "error": err},
-                    ))
-
-                # Auto-answer question/permission tools
-                if tool_name in ("question", "permission", "ask") and status in ("pending", "running"):
-                    asyncio.ensure_future(
-                        self._auto_answer_tool(task, tool_name, state)
-                    )
-
-            elif part_type == "reasoning":
-                text = part.get("text", "").strip()
-                if text:
-                    task.add_step(TaskStep(
-                        step_type="thinking",
-                        content=f"💭 {text[:150]}{'...' if len(text) > 150 else ''}",
-                    ))
-
-            elif part_type == "step-start":
+        elif part_type == "reasoning":
+            # Reasoning/thinking content
+            text = part.get("text", "").strip()
+            if text:
                 task.add_step(TaskStep(
                     step_type="thinking",
-                    content="🚀 开始新步骤...",
+                    content=f"💭 {text[:150]}{'...' if len(text) > 150 else ''}",
                 ))
 
-            elif part_type == "step-finish":
-                reason = part.get("reason", "")
-                cost = part.get("cost", 0)
+        elif part_type == "tool":
+            # Tool call state change
+            tool_name = part.get("tool", "unknown")
+            state = part.get("state", {})
+            status = state.get("status", "unknown")
+            title = state.get("title", tool_name)
 
-                if reason == "stop":
-                    # ✅ Task completed!
-                    text_content = self._extract_text_from_parts(parts)
-                    result = text_content if text_content.strip() else "（任务已完成）"
-                    task_progress(task.task_id, "completed", f"reason=stop")
-                    task._fire_complete(result)
-                    return True
+            task.add_tool_call(tool_name, status)
 
-                elif reason == "tool-calls":
-                    task.add_step(TaskStep(
-                        step_type="thinking",
-                        content="✅ 步骤完成（工具调用链结束，可能还有后续步骤）",
-                        metadata={"cost": cost},
-                    ))
+            if status == "pending":
+                task.add_step(TaskStep(
+                    step_type="tool_call",
+                    content=f"🔧 准备调用: {tool_name}",
+                    metadata={"tool": tool_name, "status": status},
+                ))
+            elif status == "running":
+                task.add_step(TaskStep(
+                    step_type="tool_call",
+                    content=f"⏳ 执行中: {title}",
+                    metadata={"tool": tool_name, "status": status},
+                ))
+            elif status == "completed":
+                task.add_step(TaskStep(
+                    step_type="tool_result",
+                    content=f"✅ {title}",
+                    metadata={"tool": tool_name, "status": status},
+                ))
+                task_progress(task.task_id, "tool", f"{tool_name} (completed)")
+            elif status == "error":
+                err = state.get("error", "Unknown error")
+                task.add_step(TaskStep(
+                    step_type="tool_result",
+                    content=f"❌ {tool_name} 失败: {err[:100]}",
+                    metadata={"tool": tool_name, "status": status, "error": err},
+                ))
 
-            elif part_type == "text":
-                # Text parts are accumulated; we only extract at completion
-                pass
+            # Auto-answer question/permission tools
+            if tool_name in ("question", "permission", "ask") and status in ("pending", "running"):
+                asyncio.ensure_future(
+                    self._auto_answer_tool(task, tool_name, state)
+                )
+
+        return False
+
+    def _handle_part_delta(self, task: AsyncTask, data: Dict[str, Any], start_time: float) -> bool:
+        """Handle message.part.delta event (newer OpenCode versions).
+
+        This event provides true incremental streaming.
+        Data format: {"properties": {"partID": string, "delta": string, "field": string}}
+        """
+        # OpenCode wraps event data in properties
+        props = data.get("properties", {})
+        delta = props.get("delta", "") if props else data.get("delta", "")
+        field = props.get("field", "") if props else data.get("field", "")
+        part_id = props.get("partID", "") if props else data.get("partID", "")
+
+        if delta and field in ("text", "reasoning"):
+            task.append_text_delta(delta, part_id, start_time)
+
+        return False
+
+    def _handle_message_updated(self, task: AsyncTask, data: Dict[str, Any]) -> bool:
+        """Handle message.updated event.
+
+        This event contains full message info when a message is created or modified.
+        We use it to track the assistant message associated with this task.
+        """
+        # OpenCode sends message info in data.properties.info or data.info
+        props = data.get("properties", {})
+        info = props.get("info", {}) if props else data.get("info", {})
+        
+        role = info.get("role", "")
+        msg_id = info.get("id", "")
+        created_at = info.get("createdAt", "")
+
+        if role == "assistant" and msg_id:
+            # Check if this is a new assistant message after our user message
+            if task._user_message_sent:
+                # Track this as our response candidate
+                if not task._assistant_msg_id or (created_at and created_at > (task._assistant_msg_time or "")):
+                    task._assistant_msg_id = msg_id
+                    task._assistant_msg_time = created_at
+
+        return False
+
+    def _handle_session_idle(self, task: AsyncTask, data: Dict[str, Any]) -> bool:
+        """Handle session.idle event - most reliable signal that task is complete."""
+        # OpenCode sends session info in data.properties.sessionID or data.sessionID
+        props = data.get("properties", {})
+        session_id = props.get("sessionID", "") if props else data.get("sessionID", "")
+        
+        if session_id == task.session_id:
+            async_mgr(f"Complete via session.idle: {len(task._accumulated_text)} chars", task.task_id)
+            result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
+            task._fire_complete(result)
+            return True
+        else:
+            async_mgr(f"session.idle wrong session: got={session_id[:16]}..., want={task.session_id[:16]}...", task.task_id)
+        return False
+
+    def _handle_session_status(self, task: AsyncTask, data: Dict[str, Any]) -> bool:
+        """Handle session.status event.
+
+        Track session busy/idle state to detect completion.
+        """
+        # OpenCode sends session info in data.properties.sessionID or data.sessionID
+        props = data.get("properties", {})
+        session_id = props.get("sessionID", "") if props else data.get("sessionID", "")
+        status_type = props.get("type", "") if props else data.get("type", "")
+        
+        if session_id != task.session_id:
+            return False
+
+        if status_type == "busy":
+            task._session_was_busy = True
+        elif status_type == "idle":
+            if task._session_was_busy:
+                # Transition from busy to idle = task complete
+                async_mgr(f"Complete via session.status: {len(task._accumulated_text)} chars", task.task_id)
+                result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
+                task._fire_complete(result)
+                return True
 
         return False
 
@@ -628,12 +789,32 @@ class AsyncTaskManager:
     async def _fetch_final_result(
         self, client: OpenCodeAsyncClient, task: AsyncTask
     ) -> None:
-        """Fetch the final result from the last assistant message."""
+        """Fetch the final result from the assistant message associated with this task.
+
+        Uses _assistant_msg_id to find the specific message for this task.
+        """
         if task.status != TaskStatus.RUNNING:
             return
 
         try:
-            messages = await client.get_messages(task.session_id, limit=5)
+            # If we have accumulated text from streaming, use it
+            if task._accumulated_text.strip():
+                task._fire_complete(task._accumulated_text.strip())
+                return
+
+            # Fetch messages to find our specific response
+            messages = await client.get_messages(task.session_id, limit=20)
+
+            # If we tracked a specific assistant message ID, find it
+            if task._assistant_msg_id:
+                for msg in messages:
+                    if msg.id == task._assistant_msg_id:
+                        if msg.text_content.strip():
+                            task._fire_complete(msg.text_content)
+                            return
+                        break
+
+            # Fallback: find the most recent assistant message
             for msg in reversed(messages):
                 if msg.role == "assistant" and msg.text_content.strip():
                     task._fire_complete(msg.text_content)
@@ -652,7 +833,7 @@ class AsyncTaskManager:
         start_time: float,
     ) -> None:
         """Fallback: poll session status when SSE is unavailable."""
-        async_mgr("Using fallback polling", task.task_id)
+        async_mgr("Fallback to polling", task.task_id)
         consecutive_idle = 0
 
         while task.status == TaskStatus.RUNNING:
@@ -699,6 +880,7 @@ class AsyncTaskManager:
                 client.close()
                 return
 
+            task._user_message_sent = True
             task.add_step(TaskStep(
                 step_type="thinking",
                 content="任务已提交（降级模式），等待完成...",
@@ -722,12 +904,29 @@ class AsyncTaskManager:
                         consecutive_idle = 0
 
                     if consecutive_idle >= 2:
-                        msgs = client.get_messages(task.session_id, limit=5)
+                        # Use accumulated text if available
+                        if task._accumulated_text.strip():
+                            task._fire_complete(task._accumulated_text.strip())
+                            client.close()
+                            return
+
+                        msgs = client.get_messages(task.session_id, limit=20)
+
+                        # Try to find the specific message tracked for this task
+                        if task._assistant_msg_id:
+                            for m in msgs:
+                                if m.id == task._assistant_msg_id and m.text_content.strip():
+                                    task._fire_complete(m.text_content)
+                                    client.close()
+                                    return
+
+                        # Fallback: most recent assistant message
                         for m in reversed(msgs):
                             if m.role == "assistant" and m.text_content.strip():
                                 task._fire_complete(m.text_content)
                                 client.close()
                                 return
+
                         task._fire_complete("（任务完成）")
                         client.close()
                         return
@@ -773,19 +972,6 @@ class AsyncTaskManager:
         if to_remove:
             log("INFO", "Async",
                 f"Cleaned up {len(to_remove)} expired task(s)")
-
-    # -- Utility ---------------------------------------------------------------
-
-    @staticmethod
-    def _extract_text_from_parts(parts: List[Dict[str, Any]]) -> str:
-        """Extract all text content from message parts."""
-        texts = []
-        for part in parts:
-            if part.get("type") == "text":
-                text = part.get("text", "")
-                if text:
-                    texts.append(text)
-        return "".join(texts)
 
 
 # ---------------------------------------------------------------------------

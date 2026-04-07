@@ -69,6 +69,26 @@ def _note(content: str) -> Dict[str, Any]:
     }
 
 
+def _section(title: str, content: str) -> Dict[str, Any]:
+    """Create a section with title and content."""
+    return {
+        "tag": "div",
+        "elements": [
+            {
+                "tag": "plain_text",
+                "content": f"**{title}**",
+            },
+            {
+                "tag": "div",
+                "text": {
+                    "tag": "lark_md",
+                    "content": content,
+                },
+            }
+        ],
+    }
+
+
 def _button(
     label: str, action_type: str, value: Dict[str, Any], style: str = "default"
 ) -> Dict[str, Any]:
@@ -391,7 +411,7 @@ class CardRenderer:
         elements: List[Dict[str, Any]] = []
         if content:
             # Use MAX_CARD_LENGTH from MessageFormatter to match Feishu limit
-            max_len = 3000  # MessageFormatter.MAX_CARD_LENGTH
+            max_len = 8000  # MessageFormatter.MAX_CARD_LENGTH (increased from 3000)
             display = content[:max_len]
             if len(content) > max_len:
                 display += (
@@ -430,7 +450,7 @@ class CardRenderer:
         retry_action: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         # Use MAX_CARD_LENGTH from MessageFormatter to match Feishu limit
-        max_len = 3000  # MessageFormatter.MAX_CARD_LENGTH
+        max_len = 8000  # MessageFormatter.MAX_CARD_LENGTH (increased from 3000)
         elements: List[Dict[str, Any]] = [_text(error_message[:max_len])]
 
         # 文字指令提示（本地运行不支持卡片按钮回调）
@@ -448,6 +468,47 @@ class CardRenderer:
         return {
             "config": {"wide_screen_mode": True},
             "header": _header("❌ " + title, CardColor.RED),
+            "elements": elements,
+        }
+
+    @staticmethod
+    def result_paginated(
+        title: str,
+        content: str,
+        page: int = 1,
+        total_pages: int = 1,
+        success: bool = True,
+    ) -> Dict[str, Any]:
+        """Create a paginated result card for very long content.
+        
+        Args:
+            title: Card title
+            content: Content for this page (already truncated to page size)
+            page: Current page number (1-indexed)
+            total_pages: Total number of pages
+            success: Whether the operation succeeded
+        
+        Returns:
+            Card dict with pagination info
+        """
+        color = CardColor.GREEN if success else CardColor.RED
+        icon = "✅" if success else "❌"
+        elements: List[Dict[str, Any]] = []
+
+        if content:
+            elements.append(_text(content))
+
+        # Add pagination info
+        if total_pages > 1:
+            elements.append(_divider())
+            page_info = f"📄 第 {page}/{total_pages} 页"
+            if page < total_pages:
+                page_info += " | 发送「下一页」查看更多"
+            elements.append(_note(page_info))
+
+        return {
+            "config": {"wide_screen_mode": True},
+            "header": _header(f"{icon} {title} ({page}/{total_pages})", color),
             "elements": elements,
         }
 
@@ -811,3 +872,114 @@ def text_fallback(card: Dict[str, Any]) -> str:
             lines.append("-" * 20)
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Long Content Utilities
+# ---------------------------------------------------------------------------
+
+
+class LongContentSplitter:
+    """Utility class for splitting long content into multiple cards/messages."""
+
+    # Feishu card content limit (conservative estimate)
+    CARD_CONTENT_LIMIT = 7500
+    # Text message limit
+    TEXT_MESSAGE_LIMIT = 20000
+
+    @classmethod
+    def split_for_cards(
+        cls,
+        content: str,
+        max_chars_per_card: int = 7000,
+        preserve_paragraphs: bool = True,
+    ) -> List[str]:
+        """Split long content into chunks suitable for card display.
+        
+        Args:
+            content: The full content to split
+            max_chars_per_card: Maximum characters per card
+            preserve_paragraphs: Try to split at paragraph boundaries
+        
+        Returns:
+            List of content chunks
+        """
+        if len(content) <= max_chars_per_card:
+            return [content]
+
+        chunks = []
+        remaining = content
+
+        while remaining:
+            if len(remaining) <= max_chars_per_card:
+                chunks.append(remaining)
+                break
+
+            # Find best split point
+            split_point = max_chars_per_card
+
+            if preserve_paragraphs:
+                # Try to find paragraph boundary near the limit
+                search_start = max(0, max_chars_per_card - 500)
+                search_end = min(len(remaining), max_chars_per_card + 500)
+                search_text = remaining[search_start:search_end]
+
+                # Look for double newline (paragraph break)
+                para_break = search_text.rfind("\n\n")
+                if para_break != -1:
+                    split_point = search_start + para_break + 2
+                else:
+                    # Try single newline
+                    line_break = search_text.rfind("\n")
+                    if line_break != -1:
+                        split_point = search_start + line_break + 1
+                    else:
+                        # Try sentence end
+                        for marker in [". ", "。", "! ", "！", "? ", "？"]:
+                            idx = search_text.rfind(marker)
+                            if idx != -1:
+                                split_point = search_start + idx + len(marker)
+                                break
+
+            chunks.append(remaining[:split_point])
+            remaining = remaining[split_point:].lstrip()
+
+        return chunks
+
+    @classmethod
+    def create_paginated_cards(
+        cls,
+        title: str,
+        content: str,
+        success: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Create multiple paginated cards for very long content.
+        
+        Args:
+            title: Base title for all cards
+            content: Full content
+            success: Success status
+        
+        Returns:
+            List of card dicts
+        """
+        chunks = cls.split_for_cards(content)
+        cards = []
+        total = len(chunks)
+
+        for i, chunk in enumerate(chunks, 1):
+            card = CardRenderer.result_paginated(
+                title=title,
+                content=chunk,
+                page=i,
+                total_pages=total,
+                success=success,
+            )
+            cards.append(card)
+
+        return cards
+
+    @classmethod
+    def should_paginate(cls, content: str, threshold: int = 8000) -> bool:
+        """Check if content should be split into multiple cards."""
+        return len(content) > threshold

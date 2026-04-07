@@ -22,7 +22,7 @@ class MessageFormatter:
     """Formats messages for display in Feishu with pagination support."""
 
     # Constants
-    MAX_CARD_LENGTH = 3000  # Feishu card max content length
+    MAX_CARD_LENGTH = 8000  # Feishu card max content length (was 3000, increased to 8000)
     SUMMARY_LENGTH = 500  # Length for summary view
     PAGE_SIZE = 2000  # Characters per page
 

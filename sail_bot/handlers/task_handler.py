@@ -24,6 +24,7 @@ from sail_bot.context import ConversationContext
 from sail_bot.card_renderer import CardRenderer
 from sail_bot.async_task_manager import task_manager
 from sail_bot.task_logger import task_logger
+from sail_bot.long_output_handler import LongOutputHandler, handle_long_output
 
 
 class TaskHandler(BaseHandler):
@@ -183,28 +184,40 @@ class TaskHandler(BaseHandler):
                     self.ctx.messaging.update_card(prog_mid, progress_card)
 
             def on_complete(result: str):
-                """Completion callback."""
+                """Completion callback with long output support."""
                 self.ctx.op_tracker.finish(op_id)
                 elapsed = int(time.time() - start_time)
 
                 tool_calls = len([s for s in all_steps if s.step_type == "tool_call"])
 
-                MAX_RESULT_LEN = 3000
-                result_card = CardRenderer.result(
-                    title=f"✅ 任务完成 ({elapsed}s)",
-                    content=result[:MAX_RESULT_LEN]
-                    if len(result) <= MAX_RESULT_LEN
-                    else result[: MAX_RESULT_LEN - 3] + "...",
+                # Use long output handler for better handling of large results
+                handler = LongOutputHandler(self.ctx.messaging)
+                strategy, output = handler.process(
+                    title=f"任务完成 ({elapsed}s)",
+                    content=result,
+                    chat_id=chat_id,
                     success=True,
                     context_path=path,
                 )
 
-                if prog_mid:
-                    self.ctx.messaging.update_card(prog_mid, result_card)
+                # Handle different output types
+                if strategy == "paginate":
+                    # Multiple cards - first replaces progress card, rest are new
+                    cards = output
+                    for i, card in enumerate(cards):
+                        if i == 0 and prog_mid:
+                            self.ctx.messaging.update_card(prog_mid, card)
+                        else:
+                            self.ctx.messaging.send_card(chat_id, card)
                 else:
-                    self.ctx.messaging.send_card(chat_id, result_card)
+                    # Single card
+                    card = output
+                    if prog_mid:
+                        self.ctx.messaging.update_card(prog_mid, card)
+                    else:
+                        self.ctx.messaging.send_card(chat_id, card)
 
-                ctx.push("bot", f"任务完成（{elapsed}s，{tool_calls}次工具调用）")
+                ctx.push("bot", f"任务完成（{elapsed}s，{tool_calls}次工具调用，策略：{strategy}）")
 
             def on_error(error_msg: str):
                 """Error callback."""
