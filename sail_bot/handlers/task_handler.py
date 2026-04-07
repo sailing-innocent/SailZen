@@ -142,9 +142,9 @@ class TaskHandler(BaseHandler):
                 nonlocal last_card_update
                 all_steps.append(step)
 
-                # Update card every 2 seconds
+                # Update card every 5 seconds (avoid Feishu rate limits & mobile flicker)
                 current_time = time.time()
-                if current_time - last_card_update < 2.0:
+                if current_time - last_card_update < 5.0:
                     return
 
                 last_card_update = current_time
@@ -189,11 +189,12 @@ class TaskHandler(BaseHandler):
 
                 tool_calls = len([s for s in all_steps if s.step_type == "tool_call"])
 
+                MAX_RESULT_LEN = 3000
                 result_card = CardRenderer.result(
                     title=f"✅ 任务完成 ({elapsed}s)",
-                    content=result[:2000]
-                    if len(result) <= 2000
-                    else result[:1997] + "...",
+                    content=result[:MAX_RESULT_LEN]
+                    if len(result) <= MAX_RESULT_LEN
+                    else result[: MAX_RESULT_LEN - 3] + "...",
                     success=True,
                     context_path=path,
                 )
@@ -231,8 +232,8 @@ class TaskHandler(BaseHandler):
                 ctx.push("bot", f"任务出错: {error_msg[:50]}")
 
             # Submit async task
-            from sail_bot.log_formatter import task, task_progress
-            task(f"Submitting for session {sess_id[:16]}...")
+            from sail_bot.log_formatter import task as log_task, task_progress
+            log_task(f"Submitting for session {sess_id[:16]}...")
             task = task_manager.submit_task(
                 session_id=sess_id,
                 port=session.port,

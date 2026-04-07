@@ -86,7 +86,8 @@ class BotStateManager:
             max_backups: Maximum number of backups to keep
             backup_ttl_hours: Hours before backups expire
         """
-        self.backup_dir = backup_dir or Path.home() / ".sailzen" / "bot_backups"
+        from sail_bot.paths import BACKUP_DIR
+        self.backup_dir = backup_dir or BACKUP_DIR
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         self.max_backups = max_backups
         self.backup_ttl_hours = backup_ttl_hours

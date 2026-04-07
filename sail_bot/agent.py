@@ -67,7 +67,8 @@ from sail_bot.handlers import (
 class FeishuBotAgent:
     """Feishu bot that bridges messages to OpenCode web sessions."""
 
-    CONTEXT_STATE_FILE = Path.home() / ".config" / "feishu-agent" / "contexts.json"
+    from sail_bot.paths import CONTEXTS_FILE
+    CONTEXT_STATE_FILE = CONTEXTS_FILE
 
     def __init__(self, config: AgentConfig):
         self.config = config

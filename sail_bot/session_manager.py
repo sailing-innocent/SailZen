@@ -13,7 +13,7 @@ Each workspace gets:
 - A client for communicating with that server
 
 Sessions persist across Feishu messages within the same process lifetime.
-State is saved to ~/.config/feishu-agent/sessions.json for restart recovery.
+State is saved to ./data/bot/state/sessions.json for restart recovery.
 """
 
 import json
@@ -53,7 +53,8 @@ class ManagedSession:
 class OpenCodeSessionManager:
     """Manages OpenCode web processes and their API sessions."""
 
-    STATE_FILE = Path.home() / ".config" / "feishu-agent" / "sessions.json"
+    from sail_bot.paths import SESSIONS_FILE
+    STATE_FILE = SESSIONS_FILE
 
     def __init__(self, base_port: int = 4096, state_store: Optional[Any] = None):
         self.base_port = base_port
@@ -137,16 +138,8 @@ class OpenCodeSessionManager:
     ):
         """Send a coding task and yield the complete response.
 
-        This is a simple synchronous wrapper that yields the full response
-        as a single chunk. OpenCode handles streaming internally.
-
-        Args:
-            path: Workspace path
-            task_text: Task description
-            on_chunk: Callback for progress (called once with full response)
-
-        Yields:
-            The complete response text
+        DEPRECATED: Use task_manager.submit_task() with SSE instead.
+        This method is kept for backward compatibility only.
         """
         path = str(Path(path).expanduser().resolve())
         session = self._sessions.get(path)
@@ -160,33 +153,23 @@ class OpenCodeSessionManager:
             yield "Failed to create OpenCode session. The server may not be ready yet."
             return
 
-        client = OpenCodeSessionClient(port=session.port)
-        print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
-        print(f"[OpenCode] Task:\n{'='*60}\n{task_text}\n{'='*60}")
-
+        client = OpenCodeSessionClient(port=session.port, timeout=300.0)
         try:
-            # Use synchronous API - it's reliable and handles long responses
-            message = client.send_message(sess_id, task_text)
-
-            if message and message.text_content:
-                content = message.text_content
-                print(f"[OpenCode] Response received: {len(content)} chars")
-
-                # Call progress callback if provided
-                if on_chunk:
-                    on_chunk(content)
-
-                # Yield the complete content
-                yield content
-            else:
-                yield "(任务已完成，无文字输出)"
-
+            message = client.send_message(sess_id, task_text, timeout=300.0)
+            content = message.text_content if message else "(任务已完成，无文字输出)"
+            if on_chunk:
+                on_chunk(content)
+            yield content
         except Exception as exc:
-            print(f"[OpenCode] Error: {exc}")
             yield f"\n[Error: {exc}]"
+        finally:
+            client.close()
 
     def send_task(self, path: str, task_text: str) -> str:
-        """Send a coding task to the opencode session for `path`."""
+        """Send a coding task to the opencode session for `path`.
+
+        DEPRECATED: Use task_manager.submit_task() with SSE instead.
+        """
         path = str(Path(path).expanduser().resolve())
         session = self._sessions.get(path)
 
@@ -197,10 +180,12 @@ class OpenCodeSessionManager:
         if not sess_id:
             return "Failed to create OpenCode session. The server may not be ready yet."
 
-        client = OpenCodeSessionClient(port=session.port)
-        print(f"[OpenCode] Sending task to session {sess_id} on port {session.port}")
-        msg = client.send_message(sess_id, task_text)
-        return msg.text_content if msg else "(No response)"
+        client = OpenCodeSessionClient(port=session.port, timeout=300.0)
+        try:
+            msg = client.send_message(sess_id, task_text, timeout=300.0)
+            return msg.text_content if msg else "(No response)"
+        finally:
+            client.close()
 
     def stop_session(self, path: str) -> Tuple[bool, str]:
         """Stop the opencode process for a workspace."""
@@ -323,8 +308,8 @@ class OpenCodeSessionManager:
         print(f"[OpenCode] Starting: {' '.join(cmd)}")
         print(f"[OpenCode] Working dir: {session.path}")
 
-        log_dir = Path.home() / ".config" / "feishu-agent" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
+        from sail_bot.paths import OPENCODE_LOG_DIR
+        log_dir = OPENCODE_LOG_DIR
         stdout_log = open(
             log_dir / f"opencode_{session.port}.out.log", "w", encoding="utf-8"
         )

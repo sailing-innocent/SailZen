@@ -29,8 +29,7 @@ from typing import Any, Dict, List, Optional
 # 配置日志
 logger = logging.getLogger("task_history")
 
-TASK_LOG_DIR = Path.home() / ".config" / "feishu-agent" / "task_logs"
-TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
+from sail_bot.paths import TASK_LOG_DIR  # noqa: E402 (centralized path)
 
 
 @dataclass

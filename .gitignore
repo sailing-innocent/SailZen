@@ -1,6 +1,9 @@
 # Logs
 logs
 *.log
+
+# Bot runtime data
+data/bot/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

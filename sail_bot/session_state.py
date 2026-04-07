@@ -22,7 +22,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-STATE_FILE = Path.home() / ".config" / "feishu-agent" / "session_states.json"
+from sail_bot.paths import SESSION_STATES_FILE
+
+STATE_FILE = SESSION_STATES_FILE
 
 _MIN_CARD_UPDATE_INTERVAL = 3.0
 

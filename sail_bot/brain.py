@@ -238,7 +238,12 @@ class BotBrain:
         # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
         if self._gw:
             try:
-                plan = asyncio.run(self._think_llm(text, ctx))
+                # Use a dedicated event loop to avoid conflicts with other threads
+                loop = asyncio.new_event_loop()
+                try:
+                    plan = loop.run_until_complete(self._think_llm(text, ctx))
+                finally:
+                    loop.close()
                 if plan.action != "chat":
                     brain(f"Level 2 matched: {plan.action}")
                     return plan

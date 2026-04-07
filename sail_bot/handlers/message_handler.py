@@ -138,11 +138,15 @@ class MessageHandler(BaseHandler):
         # Use async think_with_feedback to determine intent
         thinking_mid = None
         try:
-            plan, thinking_mid = asyncio.run(
-                self.ctx.brain.think_with_feedback(
-                    text, ctx, chat_id, message_id, self.ctx.agent
+            loop = asyncio.new_event_loop()
+            try:
+                plan, thinking_mid = loop.run_until_complete(
+                    self.ctx.brain.think_with_feedback(
+                        text, ctx, chat_id, message_id, self.ctx.agent
+                    )
                 )
-            )
+            finally:
+                loop.close()
         except Exception as exc:
             print(f"[{chat_id}] think_with_feedback failed: {exc}")
             plan = self.ctx.brain._think_deterministic(text, ctx)
