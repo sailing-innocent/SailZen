@@ -3,15 +3,20 @@
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+import logging
 import yaml
 import sys
 from pathlib import Path
 
+logger = logging.getLogger(__name__)
+
+_VALID_LLM_PROVIDERS = frozenset(
+    ["moonshot", "openai", "google", "deepseek", "anthropic"]
+)
+
 
 @dataclass
 class AgentConfig:
-    """All agent settings."""
-
     app_id: str = ""
     app_secret: str = ""
     base_port: int = 4096
@@ -19,15 +24,36 @@ class AgentConfig:
     callback_timeout: int = 300
     auto_restart: bool = False
     config_path: Optional[str] = None
-    # Named project shortcuts
     projects: List[Dict[str, str]] = field(default_factory=list)
-    # Admin notification settings
-    admin_chat_id: Optional[str] = None  # 管理员chat_id，用于接收启动/关闭通知
+    admin_chat_id: Optional[str] = None
+    llm_provider: Optional[str] = None
+    llm_api_key: Optional[str] = None
 
-
-# ---------------------------------------------------------------------------
-# Config loading
-# ---------------------------------------------------------------------------
+    def validate(self) -> List[str]:
+        """Return list of validation warnings (empty = all good)."""
+        warnings = []
+        if not self.app_id:
+            warnings.append("app_id is empty - Feishu connection will fail")
+        if not self.app_secret:
+            warnings.append("app_secret is empty - Feishu connection will fail")
+        if not (1024 <= self.base_port <= 65535):
+            warnings.append(f"base_port {self.base_port} out of range [1024, 65535]")
+        if self.max_sessions < 1 or self.max_sessions > 50:
+            warnings.append(f"max_sessions {self.max_sessions} out of range [1, 50]")
+        if self.llm_provider and self.llm_provider not in _VALID_LLM_PROVIDERS:
+            warnings.append(
+                f"Unknown llm_provider: {self.llm_provider} (valid: {', '.join(_VALID_LLM_PROVIDERS)})"
+            )
+        for p in self.projects:
+            path = p.get("path", "")
+            if path:
+                try:
+                    resolved = Path(path).expanduser()
+                    if not resolved.exists():
+                        warnings.append(f"Project path does not exist: {path}")
+                except Exception:
+                    warnings.append(f"Invalid project path: {path}")
+        return warnings
 
 
 def load_config(config_path: str) -> AgentConfig:
@@ -54,13 +80,16 @@ def load_config(config_path: str) -> AgentConfig:
             for p in raw_projects
             if p.get("path")
         ]
-        # LLM settings (optional, fallback to environment variables)
         config.llm_provider = data.get("llm_provider") or None
         config.llm_api_key = data.get("llm_api_key") or None
-        # Admin notification settings
         config.admin_chat_id = data.get("admin_chat_id") or None
+
+        warnings = config.validate()
+        for w in warnings:
+            logger.warning("Config: %s", w)
+
     except Exception as exc:
-        print(f"Warning: Failed to load config: {exc}")
+        logger.error("Failed to load config %s: %s", config_path, exc)
     return config
 
 

@@ -12,6 +12,9 @@ clean, testable interfaces for all Feishu messaging operations.
 """
 
 import json
+import time
+import threading
+import logging
 from typing import Optional, Dict, Any
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import (
@@ -28,6 +31,34 @@ from sail_bot.card_renderer import (
     card_to_feishu_content,
     text_fallback,
 )
+
+
+logger = logging.getLogger(__name__)
+
+
+class _RateLimiter:
+    def __init__(self, max_calls: int = 20, period: float = 1.0):
+        self._max = max_calls
+        self._period = period
+        self._tokens = max_calls
+        self._last_refill = time.time()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        while True:
+            with self._lock:
+                now = time.time()
+                elapsed = now - self._last_refill
+                if elapsed >= self._period:
+                    self._tokens = self._max
+                    self._last_refill = now
+                if self._tokens > 0:
+                    self._tokens -= 1
+                    return
+            time.sleep(0.05)
+
+
+_rate_limiter = _RateLimiter(max_calls=20, period=1.0)
 
 
 class FeishuMessagingClient:
@@ -60,9 +91,10 @@ class FeishuMessagingClient:
             True if successful, False otherwise
         """
         if not self.lark_client:
-            print(f"[FeishuMessaging] (no client) Would send to {chat_id}:")
-            print(f"{'='*40}\n{text}\n{'='*40}")
+            logger.warning("(no client) Would send to %s", chat_id)
             return False
+
+        _rate_limiter.acquire()
 
         try:
             content = json.dumps({"text": text}, ensure_ascii=False)
@@ -80,11 +112,11 @@ class FeishuMessagingClient:
             )
             resp = self.lark_client.im.v1.message.create(request)
             if not resp.success():
-                print(f"[FeishuMessaging] Send failed: {resp.msg}")
+                logger.error("Send failed: %s", resp.msg)
                 return False
             return True
         except Exception as exc:
-            print(f"[FeishuMessaging] Send error: {exc}")
+            logger.error("Send error: %s", exc, exc_info=True)
             return False
 
     def reply_text(self, message_id: str, text: str) -> bool:
@@ -98,10 +130,10 @@ class FeishuMessagingClient:
             True if successful, False otherwise
         """
         if not self.lark_client:
-            print(
-                f"[FeishuMessaging] (no client) Would reply to {message_id}: {text[:80]}"
-            )
+            logger.warning("(no client) Would reply to %s: %s", message_id, text[:80])
             return False
+
+        _rate_limiter.acquire()
 
         try:
             content = json.dumps({"text": text}, ensure_ascii=False)
@@ -118,11 +150,11 @@ class FeishuMessagingClient:
             )
             resp = self.lark_client.im.v1.message.reply(request)
             if not resp.success():
-                print(f"[FeishuMessaging] Reply failed: {resp.msg}")
+                logger.error("Reply failed: %s", resp.msg)
                 return False
             return True
         except Exception as exc:
-            print(f"[FeishuMessaging] Reply error: {exc}")
+            logger.error("Reply error: %s", exc, exc_info=True)
             return False
 
     def send_card(
@@ -145,10 +177,10 @@ class FeishuMessagingClient:
         """
         if not self.lark_client:
             title = card.get("header", {}).get("title", {}).get("content", "")
-            print(
-                f"[FeishuMessaging] (no client) Would send card to {chat_id}: {title}"
-            )
+            logger.warning("(no client) Would send card to %s: %s", chat_id, title)
             return None
+
+        _rate_limiter.acquire()
 
         try:
             content = card_to_feishu_content(card)
@@ -171,11 +203,13 @@ class FeishuMessagingClient:
                     self.card_tracker.register(mid, card_type, context or {})
                 return mid
             else:
-                print(f"[FeishuMessaging] Card send failed: {resp.msg}")
+                logger.error("Card send failed: %s", resp.msg)
+                logger.warning("Falling back to text message for card send")
                 self.send_text(chat_id, text_fallback(card))
                 return None
         except Exception as exc:
-            print(f"[FeishuMessaging] Card send error: {exc}")
+            logger.error("Card send error: %s", exc, exc_info=True)
+            logger.warning("Falling back to text message for card send")
             try:
                 self.send_text(chat_id, text_fallback(card))
             except Exception:
@@ -201,8 +235,10 @@ class FeishuMessagingClient:
             Message ID if successful, None otherwise
         """
         if not self.lark_client:
-            print(f"[FeishuMessaging] (no client) Would reply card to {message_id}")
+            logger.warning("(no client) Would reply card to %s", message_id)
             return None
+
+        _rate_limiter.acquire()
 
         try:
             content = card_to_feishu_content(card)
@@ -224,11 +260,13 @@ class FeishuMessagingClient:
                     self.card_tracker.register(mid, card_type, context or {})
                 return mid
             else:
-                print(f"[FeishuMessaging] Card reply failed: {resp.msg}")
+                logger.error("Card reply failed: %s", resp.msg)
+                logger.warning("Falling back to text reply for card")
                 self.reply_text(message_id, text_fallback(card))
                 return None
         except Exception as exc:
-            print(f"[FeishuMessaging] Card reply error: {exc}")
+            logger.error("Card reply error: %s", exc, exc_info=True)
+            logger.warning("Falling back to text reply for card")
             try:
                 self.reply_text(message_id, text_fallback(card))
             except Exception:
@@ -246,8 +284,10 @@ class FeishuMessagingClient:
             True if successful, False otherwise
         """
         if not self.lark_client:
-            print(f"[FeishuMessaging] (no client) Would update card {message_id}")
+            logger.warning("(no client) Would update card %s", message_id)
             return False
+
+        _rate_limiter.acquire()
 
         try:
             content = card_to_feishu_content(card)
@@ -261,11 +301,11 @@ class FeishuMessagingClient:
             )
             resp = self.lark_client.im.v1.message.patch(request)
             if not resp.success():
-                print(f"[FeishuMessaging] Card update failed: {resp.msg}")
+                logger.error("Card update failed: %s", resp.msg)
                 return False
             return True
         except Exception as exc:
-            print(f"[FeishuMessaging] Card update error: {exc}")
+            logger.error("Card update error: %s", exc, exc_info=True)
             return False
 
     def get_card_context(self, message_id: str) -> Optional[dict]:

@@ -13,8 +13,6 @@ allowing clean separation of concerns in the bot agent.
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Any
-import asyncio
-import threading
 
 # Import types only for type checking to avoid circular imports
 if TYPE_CHECKING:
@@ -23,7 +21,11 @@ if TYPE_CHECKING:
     from sail_bot.config import AgentConfig
     from sail_bot.brain import BotBrain
     from sail_bot.context import ConversationContext
-    from sail_bot.session_state import SessionStateStore, OperationTracker, ConfirmationManager
+    from sail_bot.session_state import (
+        SessionStateStore,
+        OperationTracker,
+        ConfirmationManager,
+    )
 
 
 @dataclass
@@ -79,54 +81,15 @@ class HandlerContext:
     ) -> Any:
         """Request self-update of the bot."""
         if self.agent:
-            # Run async method in sync context
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # We're in an async context, create new loop
-                    new_loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(new_loop)
-                    try:
-                        return new_loop.run_until_complete(
-                            self.agent.request_self_update(
-                                trigger_source=trigger_source,
-                                reason=reason,
-                                initiated_by=initiated_by,
-                            )
-                        )
-                    finally:
-                        new_loop.close()
-                        asyncio.set_event_loop(loop)
-                else:
-                    return loop.run_until_complete(
-                        self.agent.request_self_update(
-                            trigger_source=trigger_source,
-                            reason=reason,
-                            initiated_by=initiated_by,
-                        )
-                    )
-            except Exception:
-                # Fallback to threading
-                result = [None]
+            from sail_bot.async_task_manager import run_async
 
-                def run_async():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    try:
-                        result[0] = loop.run_until_complete(
-                            self.agent.request_self_update(
-                                trigger_source=trigger_source,
-                                reason=reason,
-                                initiated_by=initiated_by,
-                            )
-                        )
-                    finally:
-                        loop.close()
-
-                t = threading.Thread(target=run_async)
-                t.start()
-                t.join()
-                return result[0]
+            return run_async(
+                self.agent.request_self_update(
+                    trigger_source=trigger_source,
+                    reason=reason,
+                    initiated_by=initiated_by,
+                )
+            )
         raise NotImplementedError("Agent reference not set")
 
 

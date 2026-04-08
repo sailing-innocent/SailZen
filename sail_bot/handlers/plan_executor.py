@@ -2,40 +2,35 @@
 # @file plan_executor.py
 # @brief Plan execution coordinator
 # @author sailing-innocent
-# @date 2026-04-06
-# @version 1.0
+# @date 2026-04-08
+# @version 2.0
 # ---------------------------------
 """Plan execution coordinator.
 
-This module coordinates the execution of ActionPlans by delegating
-to specific handlers based on the action type.
+Routes ActionPlans to specific handlers via an action registry.
+New actions can be added by registering an entry in _ACTION_REGISTRY.
 """
 
+import logging
 import threading
-import asyncio
-from typing import Optional, Any, Dict
+from typing import Optional, Callable, Dict
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan, ConversationContext
 from sail_bot.card_renderer import CardRenderer
 
+logger = logging.getLogger(__name__)
+
 
 class PlanExecutor(BaseHandler):
     """Executor for ActionPlans.
 
-    Routes actions to appropriate handlers:
-    - show_help -> HelpHandler
-    - show_status -> StatusHandler
-    - start_workspace -> StartWorkspaceHandler
-    - stop_workspace -> StopWorkspaceHandler
-    - switch_workspace -> SwitchWorkspaceHandler
-    - send_task -> TaskHandler
-    - self_update -> SelfUpdateHandler
+    Uses a registry dict to dispatch actions to handlers, making it trivial
+    to add new actions without modifying the execute() method.
     """
 
     def __init__(self, ctx: HandlerContext):
         super().__init__(ctx)
-        # Initialize sub-handlers
         from sail_bot.handlers.command_handlers import HelpHandler, StatusHandler
         from sail_bot.handlers.workspace_handlers import (
             StartWorkspaceHandler,
@@ -45,13 +40,27 @@ class PlanExecutor(BaseHandler):
         from sail_bot.handlers.task_handler import TaskHandler
         from sail_bot.handlers.self_update_handler import SelfUpdateHandler
 
-        self._help_handler = HelpHandler(ctx)
-        self._status_handler = StatusHandler(ctx)
-        self._start_handler = StartWorkspaceHandler(ctx)
-        self._stop_handler = StopWorkspaceHandler(ctx)
-        self._switch_handler = SwitchWorkspaceHandler(ctx)
-        self._task_handler = TaskHandler(ctx)
-        self._update_handler = SelfUpdateHandler(ctx)
+        self._help = HelpHandler(ctx)
+        self._status = StatusHandler(ctx)
+        self._start = StartWorkspaceHandler(ctx)
+        self._stop = StopWorkspaceHandler(ctx)
+        self._switch = SwitchWorkspaceHandler(ctx)
+        self._task = TaskHandler(ctx)
+        self._update = SelfUpdateHandler(ctx)
+
+        self._registry: Dict[str, tuple[Callable, str]] = {
+            "show_help": (self._exec_help, "显示帮助信息"),
+            "show_status": (self._exec_status, "状态已显示"),
+            "switch_workspace": (self._exec_switch, "切换工作区"),
+            "start_workspace": (self._exec_start, "启动工作区"),
+            "stop_workspace": (self._exec_stop, "停止工作区"),
+            "send_task": (self._exec_task, "发送任务"),
+            "self_update": (self._exec_self_update, "自更新"),
+            "confirm_self_update": (
+                self._exec_confirmed_self_update,
+                "正在执行自更新...",
+            ),
+        }
 
     def execute(
         self,
@@ -61,124 +70,98 @@ class PlanExecutor(BaseHandler):
         ctx: ConversationContext,
         thinking_mid: Optional[str] = None,
     ) -> None:
-        """Execute an ActionPlan.
+        """Execute an ActionPlan by dispatching to the registered handler."""
+        entry = self._registry.get(plan.action)
+        if entry:
+            handler_fn, log_msg = entry
+            handler_fn(plan, chat_id, message_id, ctx)
+            ctx.push("bot", log_msg)
+        else:
+            logger.warning("Unknown action: %s", plan.action)
+            self.ctx.messaging.reply_text(message_id, f"未知动作: {plan.action}")
 
-        Args:
-            plan: The action plan to execute
-            chat_id: Target chat ID
-            message_id: Message to reply to
-            ctx: Conversation context
-            thinking_mid: Optional thinking card message ID to update
-        """
-        action = plan.action
-        params = plan.params
-
-        # Handle simple commands
-        if action == "show_help":
-            self._help_handler.handle(chat_id, message_id)
-            ctx.push("bot", "显示帮助信息")
-            return
-
-        if action == "show_status":
-            self._status_handler.handle(chat_id, message_id, ctx)
-            ctx.push("bot", "状态已显示")
-            return
-
-        if action == "switch_workspace":
-            path = params.get("path")
-            if path:
-                self._switch_handler.handle(chat_id, message_id, ctx, path)
-            else:
-                self.ctx.messaging.reply_text(message_id, "请指定工作区路径")
-            return
-
-        if action == "start_workspace":
-            project_slug = params.get("project")
-            raw_path = params.get("path")
-            self._start_handler.handle(
-                chat_id, message_id, ctx, path=raw_path, project_slug=project_slug
-            )
-            return
-
-        if action == "stop_workspace":
-            raw_path = params.get("path")
-            self._stop_handler.handle(chat_id, message_id, ctx, path=raw_path)
-            return
-
-        if action == "send_task":
-            task_text = params.get("task", "")
-            raw_path = params.get("path")
-            self._task_handler.handle(
-                chat_id, message_id, ctx, task_text, path=raw_path
-            )
-            return
-
-        if action == "self_update":
-            trigger_source = params.get("trigger_source", "manual")
-            reason = params.get("reason", "User requested update")
-            self._update_handler.handle(
-                chat_id, message_id, ctx, trigger_source, reason
-            )
-            return
-
-        if action == "confirm_self_update":
-            # User confirmed self-update, execute it directly
-            trigger_source = params.get("trigger_source", "manual")
-            reason = params.get("reason", "User confirmed update")
-            self._handle_confirmed_self_update(chat_id, message_id, trigger_source, reason)
-            ctx.push("bot", "正在执行自更新...")
-            return
-
-        # Unknown action
-        self.ctx.messaging.reply_text(message_id, f"未知动作: {action}")
-
-    def _handle_confirmed_self_update(
-        self,
-        chat_id: str,
-        message_id: str,
-        trigger_source: str,
-        reason: str,
+    def _exec_help(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
-        """Handle confirmed self-update request.
+        self._help.handle(chat_id, mid)
 
-        This runs the self-update in a background thread to avoid blocking.
-        """
+    def _exec_status(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._status.handle(chat_id, mid, ctx)
+
+    def _exec_switch(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        path = plan.params.get("path")
+        if path:
+            self._switch.handle(chat_id, mid, ctx, path)
+        else:
+            self.ctx.messaging.reply_text(mid, "请指定工作区路径")
+
+    def _exec_start(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._start.handle(
+            chat_id,
+            mid,
+            ctx,
+            path=plan.params.get("path"),
+            project_slug=plan.params.get("project"),
+        )
+
+    def _exec_stop(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._stop.handle(chat_id, mid, ctx, path=plan.params.get("path"))
+
+    def _exec_task(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._task.handle(
+            chat_id,
+            mid,
+            ctx,
+            plan.params.get("task", ""),
+            path=plan.params.get("path"),
+        )
+
+    def _exec_self_update(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._update.handle(
+            chat_id,
+            mid,
+            ctx,
+            plan.params.get("trigger_source", "manual"),
+            plan.params.get("reason", "User requested update"),
+        )
+
+    def _exec_confirmed_self_update(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        trigger_source = plan.params.get("trigger_source", "manual")
+        reason = plan.params.get("reason", "User confirmed update")
 
         def do_self_update():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result = self.ctx.request_self_update(
-                    trigger_source=trigger_source,
-                    reason=reason,
-                    initiated_by=chat_id,
+            result = self.ctx.request_self_update(
+                trigger_source=trigger_source,
+                reason=reason,
+                initiated_by=chat_id,
+            )
+            if result and result.get("success"):
+                card = CardRenderer.result(
+                    "更新已启动",
+                    f"阶段: {result.get('phase', 'unknown')}\n"
+                    f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
+                    "旧进程即将退出，新进程将接管。",
+                    success=True,
                 )
+                self.ctx.messaging.send_card(chat_id, card)
+            else:
+                err = result.get("error", "Unknown error") if result else "No response"
+                card = CardRenderer.result("更新失败", err, success=False)
+                self.ctx.messaging.send_card(chat_id, card)
 
-                if result.get("success"):
-                    # Send success message
-                    success_card = CardRenderer.result(
-                        "✅ 更新已启动",
-                        f"阶段: {result.get('phase', 'unknown')}\n"
-                        f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
-                        "旧进程即将退出，新进程将接管。",
-                        success=True,
-                    )
-                    self.ctx.messaging.send_card(chat_id, success_card)
-                else:
-                    # Send error message
-                    error_card = CardRenderer.result(
-                        "❌ 更新失败",
-                        result.get("error", "Unknown error"),
-                        success=False,
-                    )
-                    self.ctx.messaging.send_card(chat_id, error_card)
-            finally:
-                loop.close()
-
-        # Start self-update in background thread
         threading.Thread(target=do_self_update, daemon=True).start()
-
-        # Send immediate acknowledgment
-        self.ctx.messaging.reply_text(
-            message_id, "🔄 正在启动更新，请稍候..."
-        )
+        self.ctx.messaging.reply_text(mid, "正在启动更新，请稍候...")

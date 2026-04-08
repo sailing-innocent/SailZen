@@ -17,8 +17,10 @@ This module handles the message processing pipeline:
 import json
 import re
 import threading
-import asyncio
+import time
 import traceback
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Tuple
 from datetime import datetime
 
@@ -28,6 +30,31 @@ from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan, ConversationContext
 from sail_bot.card_renderer import CardRenderer
 from sail_bot.session_state import RiskLevel, classify_risk
+
+
+logger = logging.getLogger(__name__)
+
+
+class _MessageDeduplicator:
+    def __init__(self, ttl_seconds: int = 300):
+        self._seen: dict[str, float] = {}
+        self._lock = threading.Lock()
+        self._ttl = ttl_seconds
+
+    def is_duplicate(self, message_id: str) -> bool:
+        now = time.time()
+        with self._lock:
+            if len(self._seen) > 500:
+                cutoff = now - self._ttl
+                self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
+            if message_id in self._seen:
+                return True
+            self._seen[message_id] = now
+            return False
+
+
+_dedup = _MessageDeduplicator()
+_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="msg-handler")
 
 
 class MessageHandler(BaseHandler):
@@ -48,9 +75,7 @@ class MessageHandler(BaseHandler):
 
             message = data.event.message
             if message.message_type != "text":
-                print(
-                    f"[MessageHandler] Ignoring non-text message: {message.message_type}"
-                )
+                logger.debug("Ignoring non-text message: %s", message.message_type)
                 return
 
             try:
@@ -62,21 +87,21 @@ class MessageHandler(BaseHandler):
             chat_id = message.chat_id
             message_id = message.message_id
 
+            if _dedup.is_duplicate(message_id):
+                return
+
             if not text or not chat_id:
                 return
 
             from sail_bot.log_formatter import user_message
+
             user_message(text, chat_id)
 
             # Handle in a background thread to avoid blocking the SDK
-            threading.Thread(
-                target=self._process_message,
-                args=(text, chat_id, message_id),
-                daemon=True,
-            ).start()
+            _executor.submit(self._process_message, text, chat_id, message_id)
 
         except Exception as exc:
-            print(f"[MessageHandler] Error: {exc}")
+            logger.error("Message handler error: %s", exc, exc_info=True)
             traceback.print_exc()
 
     def _process_message(self, text: str, chat_id: str, message_id: str) -> None:
@@ -138,17 +163,20 @@ class MessageHandler(BaseHandler):
         # Use async think_with_feedback to determine intent
         thinking_mid = None
         try:
-            loop = asyncio.new_event_loop()
-            try:
-                plan, thinking_mid = loop.run_until_complete(
-                    self.ctx.brain.think_with_feedback(
-                        text, ctx, chat_id, message_id, self.ctx.agent
-                    )
+            from sail_bot.async_task_manager import run_async
+
+            plan, thinking_mid = run_async(
+                self.ctx.brain.think_with_feedback(
+                    text, ctx, chat_id, message_id, self.ctx.agent
                 )
-            finally:
-                loop.close()
+            )
         except Exception as exc:
-            print(f"[{chat_id}] think_with_feedback failed: {exc}")
+            logger.error(
+                "think_with_feedback failed for chat_id=%s: %s",
+                chat_id,
+                exc,
+                exc_info=True,
+            )
             plan = self.ctx.brain._think_deterministic(text, ctx)
             if thinking_mid:
                 fallback_card = CardRenderer.result(

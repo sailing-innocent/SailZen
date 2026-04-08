@@ -232,24 +232,23 @@ class BotBrain:
         if plan.action != "chat":
             # 确定性匹配成功，直接返回
             from sail_bot.log_formatter import brain
+
             brain(f"Level 1 matched: {plan.action}")
             return plan
 
         # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
         if self._gw:
             try:
-                # Use a dedicated event loop to avoid conflicts with other threads
-                loop = asyncio.new_event_loop()
-                try:
-                    plan = loop.run_until_complete(self._think_llm(text, ctx))
-                finally:
-                    loop.close()
+                from sail_bot.async_task_manager import run_async
+
+                plan = run_async(self._think_llm(text, ctx))
                 if plan.action != "chat":
                     brain(f"Level 2 matched: {plan.action}")
                     return plan
                 # LLM 返回 chat，说明它也没理解，继续降级
             except Exception as exc:
                 from sail_bot.log_formatter import error
+
                 error("Brain", f"LLM failed: {exc}")
 
         # Level 3: 优雅降级 - 返回通用 chat

@@ -22,6 +22,7 @@ import json
 import sys
 import threading
 import traceback
+import logging
 from datetime import datetime
 
 import lark_oapi as lark
@@ -64,10 +65,14 @@ from sail_bot.handlers import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class FeishuBotAgent:
     """Feishu bot that bridges messages to OpenCode web sessions."""
 
     from sail_bot.paths import CONTEXTS_FILE
+
     CONTEXT_STATE_FILE = CONTEXTS_FILE
 
     def __init__(self, config: AgentConfig):
@@ -135,7 +140,7 @@ class FeishuBotAgent:
 
         # Start async task manager
         task_manager.start()
-        print("[FeishuBotAgent] Async task manager started")
+        logger.info("Async task manager started")
 
     def _init_self_update(self) -> None:
         """Initialize self-update functionality."""
@@ -149,8 +154,8 @@ class FeishuBotAgent:
             # Check for handover from previous instance
             handover_data = SelfUpdateOrchestrator.check_for_handover()
             if handover_data:
-                print(
-                    f"[SelfUpdate] Detected handover from PID {handover_data.get('old_pid')}"
+                logger.info(
+                    "Detected handover from PID %s", handover_data.get("old_pid")
                 )
                 self._state_manager.restore_from_backup(
                     Path(handover_data.get("backup_path"))
@@ -158,11 +163,12 @@ class FeishuBotAgent:
                     else None
                 )
 
-            print(
-                f"[SelfUpdate] Initialized (session: {self._state_manager.get_current_state().session_id[:16]}...)"
+            logger.info(
+                "Initialized (session: %s...)",
+                self._state_manager.get_current_state().session_id[:16],
             )
         except Exception as exc:
-            print(f"[SelfUpdate] Initialization failed: {exc}")
+            logger.error("Initialization failed: %s", exc, exc_info=True)
             self._self_update_enabled = False
 
     async def request_self_update(
@@ -245,8 +251,8 @@ class FeishuBotAgent:
                         port = entry.port if entry else None
 
                     if not port or not self.session_mgr._is_port_open(port):
-                        print(
-                            f"[Context] Resetting context for {chat_id}: not connected"
+                        logger.warning(
+                            "Resetting context for %s: not connected", chat_id
                         )
                         ctx.mode = "idle"
                         ctx.active_workspace = None
@@ -255,13 +261,13 @@ class FeishuBotAgent:
                 self._contexts[chat_id] = ctx
 
             if self._contexts:
-                print(f"[Context] Loaded {len(self._contexts)} conversation(s)")
+                logger.info("Loaded %s conversation(s)", len(self._contexts))
             if reset_count > 0:
-                print(
-                    f"[Context] Reset {reset_count} context(s) due to missing connection"
+                logger.warning(
+                    "Reset %s context(s) due to missing connection", reset_count
                 )
         except Exception as exc:
-            print(f"[Context] Failed to load: {exc}")
+            logger.error("Failed to load contexts: %s", exc, exc_info=True)
 
     def _save_contexts(self) -> None:
         """Save conversation contexts to disk."""
@@ -275,7 +281,7 @@ class FeishuBotAgent:
             with open(self.CONTEXT_STATE_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         except Exception as exc:
-            print(f"[Context] Failed to save: {exc}")
+            logger.error("Failed to save contexts: %s", exc, exc_info=True)
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -306,7 +312,7 @@ class FeishuBotAgent:
             handler.handle(data)
 
         except Exception as exc:
-            print(f"[FeishuBotAgent] Message handling error: {exc}")
+            logger.error("Message handling error: %s", exc, exc_info=True)
             traceback.print_exc()
 
     def _handle_card_action(self, data) -> Any:
@@ -314,7 +320,7 @@ class FeishuBotAgent:
         try:
             return self._card_action_handler.handle(data)
         except Exception as exc:
-            print(f"[FeishuBotAgent] Card action error: {exc}")
+            logger.error("Card action error: %s", exc, exc_info=True)
             traceback.print_exc()
             return None
 
@@ -330,13 +336,13 @@ class FeishuBotAgent:
             if not chat_id:
                 return
 
-            print(f"[FeishuBotAgent] User entered P2P chat: {chat_id}")
+            logger.info("User entered P2P chat: %s", chat_id)
 
             # Send welcome card
             self._welcome_handler.handle(chat_id)
 
         except Exception as exc:
-            print(f"[FeishuBotAgent] P2P chat entered handling error: {exc}")
+            logger.error("P2P chat entered handling error: %s", exc, exc_info=True)
             traceback.print_exc()
 
     def _health_check_fn(self, path: str, port: int) -> bool:
@@ -420,16 +426,16 @@ class FeishuBotAgent:
         self._lifecycle.cleanup_previous_instances()
 
         print("Feishu OpenCode Bridge v7.0")
-        print(f"  Config: {self.config.config_path}")
+        logger.info("Config: %s", self.config.config_path)
 
         if not self.config.app_id or not self.config.app_secret:
-            print("Error: Feishu credentials not configured")
+            logger.error("Feishu credentials not configured")
             return 1
 
-        print(f"  App ID: {self.config.app_id[:10]}...")
+        logger.info("App ID: %s...", self.config.app_id[:10])
         if self.config.projects:
             slugs = [p.get("slug", "") for p in self.config.projects]
-            print(f"  Projects: {', '.join(slugs)}")
+            logger.info("Projects: %s", ", ".join(slugs))
 
         # Startup
         self._lifecycle.on_startup()
@@ -463,9 +469,9 @@ class FeishuBotAgent:
 
         self._health_monitor.start()
 
-        print("Connecting to Feishu (long connection)...")
-        print("Send '帮助' in Feishu to see available commands.")
-        print("(Ctrl+C to stop)\n")
+        logger.info("Connecting to Feishu (long connection)...")
+        logger.info("Send '帮助' in Feishu to see available commands.")
+        logger.info("(Ctrl+C to stop)")
 
         # Send startup notification
         self._lifecycle._notify_startup()
@@ -485,15 +491,15 @@ class FeishuBotAgent:
                     self._update_orchestrator
                     and self._update_orchestrator.should_exit()
                 ):
-                    print("[FeishuBotAgent] Self-update requested, shutting down...")
+                    logger.warning("Self-update requested, shutting down...")
                     break
                 # Check every 100ms
                 self._shutdown_event.wait(0.1)
         except KeyboardInterrupt:
-            print("\nStopped by user")
+            logger.info("Stopped by user")
             exit_code = 0
         except Exception as exc:
-            print(f"\nFatal error: {exc}")
+            logger.error("Fatal error: %s", exc, exc_info=True)
             traceback.print_exc()
             exit_code = 1
         finally:
@@ -506,6 +512,6 @@ class FeishuBotAgent:
             # Check if we should exit with special code for self-update
             if self._update_orchestrator and self._update_orchestrator.should_exit():
                 exit_code = self._update_orchestrator.get_exit_code()
-                print(f"[FeishuBotAgent] Exiting with code {exit_code} for self-update")
+                logger.info("Exiting with code %s for self-update", exit_code)
 
         return exit_code

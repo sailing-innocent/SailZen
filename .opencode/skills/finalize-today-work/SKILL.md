@@ -56,8 +56,8 @@ pwsh -Command "git status --short"
 ### Step 2 — 查看今天新增的 commit
 
 ```powershell
-# 查看当前分支比 origin/master 多出的所有 commit
-pwsh -Command "git log origin/master..HEAD --oneline"
+# 查看当前分支<branch>比 origin/<branch> 多出的所有 commit
+pwsh -Command "git log origin/<branch>..HEAD --oneline"
 ```
 
 记录 commit 数量，确认内容符合预期。
@@ -74,7 +74,7 @@ pwsh -Command "if (!(Test-Path 'patches')) { New-Item -ItemType Directory -Path 
 
 ```powershell
 # 格式：日期-sailzen-主题.patch
-pwsh -Command "git format-patch origin/master --stdout > 'patches/2026-03-27-sailzen-mixed.patch'"
+pwsh -Command "git format-patch origin/<branch> --stdout > 'patches/2026-03-27-sailzen-mixed.patch'"
 ```
 
 将 `2026-03-27` 替换为实际日期，`mixed` 替换为今天工作的主题词。
@@ -82,7 +82,7 @@ pwsh -Command "git format-patch origin/master --stdout > 'patches/2026-03-27-sai
 **方案 B — 每个 commit 生成独立 patch 文件**
 
 ```powershell
-pwsh -Command "git format-patch origin/master -o patches/"
+pwsh -Command "git format-patch origin/<branch> -o patches/"
 ```
 
 生成的文件按序号命名：`0001-xxx.patch`、`0002-xxx.patch`...  
@@ -127,13 +127,13 @@ pwsh -Command "git status"
 
 ```powershell
 # 1. 检查状态
-pwsh -Command "git status --short; git log origin/master..HEAD --oneline"
+pwsh -Command "git status --short; git log origin/<branch>..HEAD --oneline"
 
 # 2. 确保 patches 目录存在
 pwsh -Command "if (!(Test-Path 'patches')) { New-Item -ItemType Directory -Path 'patches' }"
 
 # 3. 生成 patch（修改日期和主题）
-pwsh -Command "git format-patch origin/master --stdout > 'patches/2026-03-27-sailzen-mixed.patch'"
+pwsh -Command "git format-patch origin/<branch> --stdout > 'patches/2026-03-27-sailzen-mixed.patch'"
 
 # 4. 验证
 pwsh -Command "git apply --stat 'patches/2026-03-27-sailzen-mixed.patch'"
@@ -158,7 +158,7 @@ git apply --check 2026-03-27-sailzen-mixed.patch
 git am < 2026-03-27-sailzen-mixed.patch
 
 # 5. 推送
-git push origin master
+git push origin <branch>
 ```
 
 如果 `git am` 有冲突：

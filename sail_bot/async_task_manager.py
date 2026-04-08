@@ -53,20 +53,31 @@ except ImportError:
 
 try:
     from sail_bot.log_formatter import (
-        async_mgr, task_progress, task_status, log, error, warn,
+        async_mgr,
+        task_progress,
+        task_status,
+        log,
+        error,
+        warn,
     )
 except ImportError:
+
     def async_mgr(msg, task_id="", level="INFO"):
         tid = f"{task_id[:16]}... " if task_id else ""
         print(f"[Async] {tid}{msg}")
+
     def task_progress(tid, action, detail=""):
         print(f"[Async] {action} {tid[:16]}... {detail}")
+
     def task_status(tid, status, elapsed, last_activity="", extra=""):
         print(f"[Async] {tid[:16]}... status={status} elapsed={elapsed}s")
+
     def log(level, comp, msg):
         print(f"[{comp}] {msg}")
+
     def error(comp, msg):
         print(f"[ERROR][{comp}] {msg}")
+
     def warn(comp, msg):
         print(f"[WARN][{comp}] {msg}")
 
@@ -75,8 +86,10 @@ except ImportError:
 # Data types
 # ---------------------------------------------------------------------------
 
+
 class TaskStatus(str, Enum):
     """任务状态"""
+
     PENDING = "pending"
     RUNNING = "running"
     WAITING_INPUT = "waiting_input"
@@ -89,6 +102,7 @@ class TaskStatus(str, Enum):
 @dataclass
 class TaskStep:
     """任务执行步骤"""
+
     step_type: str  # "thinking", "tool_call", "tool_result", "response"
     content: str
     timestamp: datetime = field(default_factory=datetime.now)
@@ -139,6 +153,14 @@ class AsyncTask:
     # Internal: asyncio task handle for cancellation
     _asyncio_task: Optional[Any] = field(default=None, repr=False)
 
+    # Boundary: message IDs that existed before this task's prompt was sent.
+    # Any SSE events for messages with these IDs are stale and must be ignored.
+    _pre_existing_msg_ids: set = field(default_factory=set, repr=False)
+    # The user message ID we sent (to identify our prompt in the stream)
+    _our_user_msg_id: Optional[str] = field(default=None, repr=False)
+    # Whether we've seen a message created *after* our prompt
+    _saw_new_assistant_msg: bool = field(default=False, repr=False)
+
     def add_step(self, step: TaskStep) -> None:
         """添加执行步骤并触发回调"""
         self.steps.append(step)
@@ -160,9 +182,13 @@ class AsyncTask:
 
     def add_tool_call(self, tool_name: str, status: str) -> None:
         """记录工具调用历史"""
-        self._tool_calls.append({
-            "time": time.time(), "tool": tool_name, "status": status,
-        })
+        self._tool_calls.append(
+            {
+                "time": time.time(),
+                "tool": tool_name,
+                "status": status,
+            }
+        )
         if len(self._tool_calls) > 30:
             self._tool_calls = self._tool_calls[-30:]
 
@@ -172,28 +198,31 @@ class AsyncTask:
             return "无"
         icons = {"pending": "⏳", "running": "⚙️", "completed": "✅", "error": "❌"}
         recent = self._tool_calls[-count:]
-        return " → ".join(
-            f"{icons.get(t['status'], '❓')}{t['tool']}" for t in recent
-        )
+        return " → ".join(f"{icons.get(t['status'], '❓')}{t['tool']}" for t in recent)
 
-    def append_text_delta(self, delta: str, part_id: Optional[str] = None, start_time: float = 0) -> None:
+    def append_text_delta(
+        self, delta: str, part_id: Optional[str] = None, start_time: float = 0
+    ) -> None:
         """追加文本增量（来自 message.part.updated/delta）"""
         if not delta:
             return
-            
+
         self._accumulated_text += delta
         if part_id:
             self._text_part_id = part_id
-        
+
         # Throttled logging: log every 5 seconds or every 1000 chars
         current_time = time.time()
         current_len = len(self._accumulated_text)
         time_since_last_log = current_time - self._last_log_time
         chars_since_last_log = current_len - self._last_logged_text_len
-        
+
         if time_since_last_log >= 5.0 or chars_since_last_log >= 1000:
             elapsed = int(current_time - start_time) if start_time else 0
-            async_mgr(f"Streaming: {current_len} chars (+{chars_since_last_log}), {elapsed}s", self.task_id)
+            async_mgr(
+                f"Streaming: {current_len} chars (+{chars_since_last_log}), {elapsed}s",
+                self.task_id,
+            )
             self._last_logged_text_len = current_len
             self._last_log_time = current_time
 
@@ -201,7 +230,9 @@ class AsyncTask:
         """触发完成回调（线程安全）"""
         # Use accumulated text if available and result is empty/generic
         final_result = result
-        if self._accumulated_text.strip() and (not result or result == "（任务已完成）"):
+        if self._accumulated_text.strip() and (
+            not result or result == "（任务已完成）"
+        ):
             final_result = self._accumulated_text.strip()
 
         self.final_result = final_result
@@ -240,6 +271,7 @@ class AsyncTask:
 # AsyncTaskManager - unified asyncio event loop
 # ---------------------------------------------------------------------------
 
+
 class AsyncTaskManager:
     """异步任务管理器 - 基于SSE事件流。
 
@@ -268,7 +300,9 @@ class AsyncTaskManager:
             return
         self._running = True
         self._thread = threading.Thread(
-            target=self._run_loop, daemon=True, name="task-mgr-loop",
+            target=self._run_loop,
+            daemon=True,
+            name="task-mgr-loop",
         )
         self._thread.start()
         # Wait for loop to be ready
@@ -338,8 +372,11 @@ class AsyncTaskManager:
         # Check for concurrent tasks on same session
         existing = self._get_running_tasks_for_session(session_id, exclude=task_id)
         if existing:
-            warn("Async", f"Task {task_id[:16]}... started while session has running: "
-                 f"{[t.task_id[:16] for t in existing]}")
+            warn(
+                "Async",
+                f"Task {task_id[:16]}... started while session has running: "
+                f"{[t.task_id[:16] for t in existing]}",
+            )
 
         # Log to task history
         if task_logger and workspace_path:
@@ -356,9 +393,7 @@ class AsyncTaskManager:
 
         # Schedule on event loop
         if self._loop and self._loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                self._execute_task(task), self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._execute_task(task), self._loop)
         else:
             error("Async", "Event loop not running! Falling back to thread.")
             threading.Thread(
@@ -423,7 +458,8 @@ class AsyncTaskManager:
     ) -> List[AsyncTask]:
         with self._lock:
             return [
-                t for tid, t in self._tasks.items()
+                t
+                for tid, t in self._tasks.items()
                 if t.session_id == session_id
                 and t.status == TaskStatus.RUNNING
                 and tid != exclude
@@ -440,19 +476,34 @@ class AsyncTaskManager:
             task.status = TaskStatus.RUNNING
 
             async with OpenCodeAsyncClient(port=task.port) as client:
-                # 1. Send prompt
+                # 1. Snapshot existing messages BEFORE sending prompt
+                #    This is critical: SSE will replay events for all messages
+                #    in the session, so we must know which ones are stale.
+                try:
+                    existing_msgs = await client.get_messages(task.session_id, limit=50)
+                    task._pre_existing_msg_ids = {m.id for m in existing_msgs if m.id}
+                    async_mgr(
+                        f"Boundary: {len(task._pre_existing_msg_ids)} pre-existing messages",
+                        task.task_id,
+                    )
+                except Exception as exc:
+                    warn("Async", f"Could not snapshot messages: {exc}")
+
+                # 2. Send prompt
                 ok = await client.send_prompt_async(task.session_id, task.original_text)
                 if not ok:
                     task._fire_error("Failed to send prompt (server rejected)")
                     return
 
                 task._user_message_sent = True
-                task.add_step(TaskStep(
-                    step_type="thinking",
-                    content="任务已提交，开始执行...",
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="thinking",
+                        content="任务已提交，开始执行...",
+                    )
+                )
 
-                # 2. Stream SSE events
+                # 3. Stream SSE events (only processing new messages)
                 await self._stream_task_events(client, task)
 
         except asyncio.CancelledError:
@@ -503,10 +554,12 @@ class AsyncTaskManager:
 
                 # Handle reconnection synthetic event
                 if event.event == "__reconnected__":
-                    task.add_step(TaskStep(
-                        step_type="thinking",
-                        content="🔄 连接已恢复，继续监听...",
-                    ))
+                    task.add_step(
+                        TaskStep(
+                            step_type="thinking",
+                            content="🔄 连接已恢复，继续监听...",
+                        )
+                    )
                     continue
 
                 # Filter events by session ID (global event stream includes all sessions)
@@ -523,19 +576,28 @@ class AsyncTaskManager:
             async_mgr("SSE stream ended, fetching final result", task.task_id)
             # If we have accumulated text, consider task complete
             if task._accumulated_text.strip():
-                async_mgr(f"Complete via stream end: {len(task._accumulated_text)} chars", task.task_id)
+                async_mgr(
+                    f"Complete via stream end: {len(task._accumulated_text)} chars",
+                    task.task_id,
+                )
                 task._fire_complete(task._accumulated_text.strip())
             else:
                 try:
                     await asyncio.wait_for(
                         self._fetch_final_result(client, task),
-                        timeout=30.0  # Add timeout to prevent indefinite hang
+                        timeout=30.0,  # Add timeout to prevent indefinite hang
                     )
                 except asyncio.TimeoutError:
-                    async_mgr("Fetch final result timeout, completing with empty result", task.task_id, "WARN")
+                    async_mgr(
+                        "Fetch final result timeout, completing with empty result",
+                        task.task_id,
+                        "WARN",
+                    )
                     task._fire_complete("（任务已完成，但获取详细结果超时）")
                 except Exception as exc:
-                    async_mgr(f"Fetch final result failed: {exc}", task.task_id, "ERROR")
+                    async_mgr(
+                        f"Fetch final result failed: {exc}", task.task_id, "ERROR"
+                    )
                     task._fire_complete("（任务已完成，但获取结果时出错）")
 
         except asyncio.CancelledError:
@@ -558,21 +620,25 @@ class AsyncTaskManager:
             return True
 
         event_type = data.get("type", "")
-        
+
         # Skip server events silently
         if event_type in ("server.connected", "server.heartbeat"):
             return False
-        
+
         # OpenCode wraps event data in properties
         props = data.get("properties", {})
-        
+
         # Check properties.sessionID (official OpenCode type definition)
         event_session_id = props.get("sessionID")
-        
+
         # Fallback for backwards compatibility
         if not event_session_id:
-            event_session_id = props.get("session_id") or data.get("sessionID") or data.get("session_id")
-        
+            event_session_id = (
+                props.get("session_id")
+                or data.get("sessionID")
+                or data.get("session_id")
+            )
+
         # Check in nested info (message events)
         if not event_session_id:
             info = props.get("info", {}) if props else data.get("info", {})
@@ -584,7 +650,9 @@ class AsyncTaskManager:
 
         return event_session_id == session_id
 
-    def _process_sse_event(self, task: AsyncTask, event: SSEEvent, start_time: float) -> bool:
+    def _process_sse_event(
+        self, task: AsyncTask, event: SSEEvent, start_time: float
+    ) -> bool:
         """Process a single SSE event. Returns True if task is completed."""
         data = event.json()
         if data is None:
@@ -618,7 +686,9 @@ class AsyncTaskManager:
 
         return False
 
-    def _handle_part_updated(self, task: AsyncTask, data: Dict[str, Any], start_time: float) -> bool:
+    def _handle_part_updated(
+        self, task: AsyncTask, data: Dict[str, Any], start_time: float
+    ) -> bool:
         """Handle message.part.updated event.
 
         This event is fired when:
@@ -648,10 +718,12 @@ class AsyncTaskManager:
             # Reasoning/thinking content
             text = part.get("text", "").strip()
             if text:
-                task.add_step(TaskStep(
-                    step_type="thinking",
-                    content=f"💭 {text[:150]}{'...' if len(text) > 150 else ''}",
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="thinking",
+                        content=f"💭 {text[:150]}{'...' if len(text) > 150 else ''}",
+                    )
+                )
 
         elif part_type == "tool":
             # Tool call state change
@@ -663,41 +735,52 @@ class AsyncTaskManager:
             task.add_tool_call(tool_name, status)
 
             if status == "pending":
-                task.add_step(TaskStep(
-                    step_type="tool_call",
-                    content=f"🔧 准备调用: {tool_name}",
-                    metadata={"tool": tool_name, "status": status},
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="tool_call",
+                        content=f"🔧 准备调用: {tool_name}",
+                        metadata={"tool": tool_name, "status": status},
+                    )
+                )
             elif status == "running":
-                task.add_step(TaskStep(
-                    step_type="tool_call",
-                    content=f"⏳ 执行中: {title}",
-                    metadata={"tool": tool_name, "status": status},
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="tool_call",
+                        content=f"⏳ 执行中: {title}",
+                        metadata={"tool": tool_name, "status": status},
+                    )
+                )
             elif status == "completed":
-                task.add_step(TaskStep(
-                    step_type="tool_result",
-                    content=f"✅ {title}",
-                    metadata={"tool": tool_name, "status": status},
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="tool_result",
+                        content=f"✅ {title}",
+                        metadata={"tool": tool_name, "status": status},
+                    )
+                )
                 task_progress(task.task_id, "tool", f"{tool_name} (completed)")
             elif status == "error":
                 err = state.get("error", "Unknown error")
-                task.add_step(TaskStep(
-                    step_type="tool_result",
-                    content=f"❌ {tool_name} 失败: {err[:100]}",
-                    metadata={"tool": tool_name, "status": status, "error": err},
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="tool_result",
+                        content=f"❌ {tool_name} 失败: {err[:100]}",
+                        metadata={"tool": tool_name, "status": status, "error": err},
+                    )
+                )
 
             # Auto-answer question/permission tools
-            if tool_name in ("question", "permission", "ask") and status in ("pending", "running"):
-                asyncio.ensure_future(
-                    self._auto_answer_tool(task, tool_name, state)
-                )
+            if tool_name in ("question", "permission", "ask") and status in (
+                "pending",
+                "running",
+            ):
+                asyncio.ensure_future(self._auto_answer_tool(task, tool_name, state))
 
         return False
 
-    def _handle_part_delta(self, task: AsyncTask, data: Dict[str, Any], start_time: float) -> bool:
+    def _handle_part_delta(
+        self, task: AsyncTask, data: Dict[str, Any], start_time: float
+    ) -> bool:
         """Handle message.part.delta event (newer OpenCode versions).
 
         This event provides true incremental streaming.
@@ -723,7 +806,7 @@ class AsyncTaskManager:
         # OpenCode sends message info in data.properties.info or data.info
         props = data.get("properties", {})
         info = props.get("info", {}) if props else data.get("info", {})
-        
+
         role = info.get("role", "")
         msg_id = info.get("id", "")
         created_at = info.get("createdAt", "")
@@ -732,7 +815,9 @@ class AsyncTaskManager:
             # Check if this is a new assistant message after our user message
             if task._user_message_sent:
                 # Track this as our response candidate
-                if not task._assistant_msg_id or (created_at and created_at > (task._assistant_msg_time or "")):
+                if not task._assistant_msg_id or (
+                    created_at and created_at > (task._assistant_msg_time or "")
+                ):
                     task._assistant_msg_id = msg_id
                     task._assistant_msg_time = created_at
 
@@ -743,10 +828,17 @@ class AsyncTaskManager:
         # OpenCode EventSessionIdle: { type: "session.idle", properties: { sessionID: string } }
         props = data.get("properties", {})
         session_id = props.get("sessionID", "")
-        
+
         if session_id == task.session_id:
-            async_mgr(f"Complete via session.idle: {len(task._accumulated_text)} chars", task.task_id)
-            result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
+            async_mgr(
+                f"Complete via session.idle: {len(task._accumulated_text)} chars",
+                task.task_id,
+            )
+            result = (
+                task._accumulated_text.strip()
+                if task._accumulated_text.strip()
+                else "（任务已完成）"
+            )
             task._fire_complete(result)
             return True
         return False
@@ -764,7 +856,7 @@ class AsyncTaskManager:
         session_id = props.get("sessionID", "")
         status = props.get("status", {})
         status_type = status.get("type", "") if isinstance(status, dict) else ""
-        
+
         if session_id != task.session_id:
             return False
 
@@ -772,8 +864,15 @@ class AsyncTaskManager:
             task._session_was_busy = True
         elif status_type == "idle":
             # Session is idle = task complete
-            async_mgr(f"Complete via session.status: {len(task._accumulated_text)} chars", task.task_id)
-            result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
+            async_mgr(
+                f"Complete via session.status: {len(task._accumulated_text)} chars",
+                task.task_id,
+            )
+            result = (
+                task._accumulated_text.strip()
+                if task._accumulated_text.strip()
+                else "（任务已完成）"
+            )
             task._fire_complete(result)
             return True
 
@@ -792,10 +891,12 @@ class AsyncTaskManager:
                     answer = "收到，继续执行。"
 
                 await client.send_message_async(task.session_id, answer)
-                task.add_step(TaskStep(
-                    step_type="thinking",
-                    content=f"🤖 自动回复 {tool_name}: {answer[:50]}",
-                ))
+                task.add_step(
+                    TaskStep(
+                        step_type="thinking",
+                        content=f"🤖 自动回复 {tool_name}: {answer[:50]}",
+                    )
+                )
         except Exception as exc:
             warn("Async", f"Auto-answer {tool_name} failed: {exc}")
 
@@ -805,6 +906,7 @@ class AsyncTaskManager:
         """Fetch the final result from the assistant message associated with this task.
 
         Uses _assistant_msg_id to find the specific message for this task.
+        Only considers messages that were NOT in the session before our prompt.
         """
         if task.status != TaskStatus.RUNNING:
             return
@@ -829,11 +931,24 @@ class AsyncTaskManager:
 
             # Fallback: find the most recent assistant message
             for msg in reversed(messages):
+                # Skip pre-existing messages (from previous conversations)
+                if msg.id and msg.id in task._pre_existing_msg_ids:
+                    continue
                 if msg.role == "assistant" and msg.text_content.strip():
                     task._fire_complete(msg.text_content)
                     return
 
-            # No text content found
+            # No NEW text content found — might still be generating
+            # Wait a moment and try once more
+            await asyncio.sleep(2.0)
+            messages = await client.get_messages(task.session_id, limit=10)
+            for msg in reversed(messages):
+                if msg.id and msg.id in task._pre_existing_msg_ids:
+                    continue
+                if msg.role == "assistant" and msg.text_content.strip():
+                    task._fire_complete(msg.text_content)
+                    return
+
             task._fire_complete("（任务完成，无文字输出）")
         except Exception as exc:
             error("Async", f"Fetch final result error: {exc}")
@@ -853,9 +968,7 @@ class AsyncTaskManager:
             elapsed = time.time() - start_time
             if elapsed > self.max_duration:
                 task.status = TaskStatus.TIMEOUT
-                task._fire_error(
-                    f"任务执行超时（>{int(self.max_duration / 60)}分钟）"
-                )
+                task._fire_error(f"任务执行超时（>{int(self.max_duration / 60)}分钟）")
                 return
 
             try:
@@ -887,6 +1000,13 @@ class AsyncTaskManager:
             task.status = TaskStatus.RUNNING
             client = OpenCodeSessionClient(port=task.port, timeout=30.0)
 
+            # Snapshot existing messages before sending prompt
+            try:
+                existing_msgs = client.get_messages(task.session_id, limit=50)
+                task._pre_existing_msg_ids = {m.id for m in existing_msgs if m.id}
+            except Exception:
+                pass
+
             ok = client.send_prompt_async(task.session_id, task.original_text)
             if not ok:
                 task._fire_error("Failed to send prompt")
@@ -894,10 +1014,12 @@ class AsyncTaskManager:
                 return
 
             task._user_message_sent = True
-            task.add_step(TaskStep(
-                step_type="thinking",
-                content="任务已提交（降级模式），等待完成...",
-            ))
+            task.add_step(
+                TaskStep(
+                    step_type="thinking",
+                    content="任务已提交（降级模式），等待完成...",
+                )
+            )
 
             # Simple status polling
             start = time.time()
@@ -928,13 +1050,19 @@ class AsyncTaskManager:
                         # Try to find the specific message tracked for this task
                         if task._assistant_msg_id:
                             for m in msgs:
-                                if m.id == task._assistant_msg_id and m.text_content.strip():
+                                if (
+                                    m.id == task._assistant_msg_id
+                                    and m.text_content.strip()
+                                ):
                                     task._fire_complete(m.text_content)
                                     client.close()
                                     return
 
                         # Fallback: most recent assistant message
                         for m in reversed(msgs):
+                            # Skip pre-existing messages
+                            if m.id and m.id in task._pre_existing_msg_ids:
+                                continue
                             if m.role == "assistant" and m.text_content.strip():
                                 task._fire_complete(m.text_content)
                                 client.close()
@@ -983,12 +1111,30 @@ class AsyncTaskManager:
                 del self._tasks[task_id]
 
         if to_remove:
-            log("INFO", "Async",
-                f"Cleaned up {len(to_remove)} expired task(s)")
+            log("INFO", "Async", f"Cleaned up {len(to_remove)} expired task(s)")
 
 
 # ---------------------------------------------------------------------------
 # Global singleton
 # ---------------------------------------------------------------------------
+
+
+def run_async(coro):
+    """Run an async coroutine from a sync context using the shared event loop.
+
+    If the task manager's loop is running, schedule on it.
+    Otherwise, create a temporary loop (fallback for startup/shutdown).
+    """
+    mgr = task_manager
+    if mgr._loop and mgr._loop.is_running():
+        future = asyncio.run_coroutine_threadsafe(coro, mgr._loop)
+        return future.result(timeout=60)
+
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
 
 task_manager = AsyncTaskManager()
