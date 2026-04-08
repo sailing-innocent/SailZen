@@ -77,7 +77,7 @@ class TaskHandler(BaseHandler):
                 return
 
         # Start operation tracking
-        op_id = self.ctx.op_tracker.start(path, task_text[:60], timeout=3600.0)
+        op_id = self.ctx.op_tracker.start(path, task_text[:60], timeout=14400.0)  # 4 hours
 
         # Create progress card with cancel button
         progress_card = CardRenderer.progress(

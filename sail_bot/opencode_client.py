@@ -425,7 +425,7 @@ class OpenCodeAsyncClient:
     async def stream_events(
         self,
         session_id: str,
-        timeout: float = 3600.0,
+        timeout: float = 14400.0,  # 4 hours for long tasks
     ) -> AsyncIterator[SSEEvent]:
         """Stream Server-Sent Events from an OpenCode session.
 
@@ -454,7 +454,7 @@ class OpenCodeAsyncClient:
     async def stream_events_robust(
         self,
         session_id: str,
-        timeout: float = 3600.0,
+        timeout: float = 14400.0,  # 4 hours for long tasks
         max_reconnects: int = 5,
         reconnect_delay: float = 2.0,
         on_reconnect: Optional[Callable[[int], None]] = None,

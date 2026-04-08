@@ -249,7 +249,7 @@ class AsyncTaskManager:
 
     def __init__(
         self,
-        max_duration: float = 3600.0,
+        max_duration: float = 14400.0,  # 4 hours for long tasks
         fallback_poll_interval: float = 15.0,
     ):
         self.max_duration = max_duration
@@ -521,7 +521,22 @@ class AsyncTaskManager:
             # Stream ended normally (server closed connection)
             # This usually means the session is idle - fetch final result
             async_mgr("SSE stream ended, fetching final result", task.task_id)
-            await self._fetch_final_result(client, task)
+            # If we have accumulated text, consider task complete
+            if task._accumulated_text.strip():
+                async_mgr(f"Complete via stream end: {len(task._accumulated_text)} chars", task.task_id)
+                task._fire_complete(task._accumulated_text.strip())
+            else:
+                try:
+                    await asyncio.wait_for(
+                        self._fetch_final_result(client, task),
+                        timeout=30.0  # Add timeout to prevent indefinite hang
+                    )
+                except asyncio.TimeoutError:
+                    async_mgr("Fetch final result timeout, completing with empty result", task.task_id, "WARN")
+                    task._fire_complete("（任务已完成，但获取详细结果超时）")
+                except Exception as exc:
+                    async_mgr(f"Fetch final result failed: {exc}", task.task_id, "ERROR")
+                    task._fire_complete("（任务已完成，但获取结果时出错）")
 
         except asyncio.CancelledError:
             raise
@@ -540,31 +555,30 @@ class AsyncTaskManager:
         """
         data = event.json()
         if data is None:
-            return True  # Process events without data (like server.connected)
+            return True
 
-        # OpenCode puts event type in data.type
         event_type = data.get("type", "")
         
-        # Always process these global events
+        # Skip server events silently
         if event_type in ("server.connected", "server.heartbeat"):
-            return False  # Silently skip
+            return False
         
         # OpenCode wraps event data in properties
         props = data.get("properties", {})
         
-        # Check various locations where sessionID might be
-        event_session_id = props.get("sessionID") or props.get("session_id")
+        # Check properties.sessionID (official OpenCode type definition)
+        event_session_id = props.get("sessionID")
         
-        # Fallback to root level (for backwards compatibility)
+        # Fallback for backwards compatibility
         if not event_session_id:
-            event_session_id = data.get("sessionID") or data.get("session_id")
+            event_session_id = props.get("session_id") or data.get("sessionID") or data.get("session_id")
         
         # Check in nested info (message events)
         if not event_session_id:
             info = props.get("info", {}) if props else data.get("info", {})
             event_session_id = info.get("sessionID") or info.get("session_id")
 
-        # If no session ID in event, it's a global event - process it
+        # If no session ID, process cautiously
         if not event_session_id:
             return True
 
@@ -601,8 +615,6 @@ class AsyncTaskManager:
 
         if event_type == "session.status":
             return self._handle_session_status(task, data)
-
-        # Silently ignore other events (server.connected, server.heartbeat, etc.)
 
         return False
 
@@ -728,28 +740,30 @@ class AsyncTaskManager:
 
     def _handle_session_idle(self, task: AsyncTask, data: Dict[str, Any]) -> bool:
         """Handle session.idle event - most reliable signal that task is complete."""
-        # OpenCode sends session info in data.properties.sessionID or data.sessionID
+        # OpenCode EventSessionIdle: { type: "session.idle", properties: { sessionID: string } }
         props = data.get("properties", {})
-        session_id = props.get("sessionID", "") if props else data.get("sessionID", "")
+        session_id = props.get("sessionID", "")
         
         if session_id == task.session_id:
             async_mgr(f"Complete via session.idle: {len(task._accumulated_text)} chars", task.task_id)
             result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
             task._fire_complete(result)
             return True
-        else:
-            async_mgr(f"session.idle wrong session: got={session_id[:16]}..., want={task.session_id[:16]}...", task.task_id)
         return False
 
     def _handle_session_status(self, task: AsyncTask, data: Dict[str, Any]) -> bool:
         """Handle session.status event.
 
-        Track session busy/idle state to detect completion.
+        OpenCode EventSessionStatus: {
+            type: "session.status",
+            properties: { sessionID: string, status: SessionStatus }
+        }
+        SessionStatus = { type: "idle" } | { type: "busy" } | { type: "retry", ... }
         """
-        # OpenCode sends session info in data.properties.sessionID or data.sessionID
         props = data.get("properties", {})
-        session_id = props.get("sessionID", "") if props else data.get("sessionID", "")
-        status_type = props.get("type", "") if props else data.get("type", "")
+        session_id = props.get("sessionID", "")
+        status = props.get("status", {})
+        status_type = status.get("type", "") if isinstance(status, dict) else ""
         
         if session_id != task.session_id:
             return False
@@ -757,12 +771,11 @@ class AsyncTaskManager:
         if status_type == "busy":
             task._session_was_busy = True
         elif status_type == "idle":
-            if task._session_was_busy:
-                # Transition from busy to idle = task complete
-                async_mgr(f"Complete via session.status: {len(task._accumulated_text)} chars", task.task_id)
-                result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
-                task._fire_complete(result)
-                return True
+            # Session is idle = task complete
+            async_mgr(f"Complete via session.status: {len(task._accumulated_text)} chars", task.task_id)
+            result = task._accumulated_text.strip() if task._accumulated_text.strip() else "（任务已完成）"
+            task._fire_complete(result)
+            return True
 
         return False
 
