@@ -104,7 +104,6 @@ class SailServer:
         from sail_server.router.analysis import analysis_router
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.file_storage import router as file_storage_router
-        from sail_server.router.feishu import create_feishu_router
         from sail_server.router.control_plane import router as control_plane_router
         from sail_server.controller.outline_extraction_unified import (
             OutlineExtractionUnifiedController,
@@ -148,7 +147,6 @@ class SailServer:
                 analysis_router,
                 unified_agent_router,
                 file_storage_router,
-                create_feishu_router(),
                 control_plane_router,
                 OutlineExtractionUnifiedController,
             ],
