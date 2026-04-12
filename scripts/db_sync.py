@@ -39,11 +39,6 @@ import argparse
 import logging
 from typing import List, Type, Any
 from contextlib import contextmanager
-
-# 添加项目根目录到路径
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
-
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 from dotenv import load_dotenv
@@ -69,7 +64,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
 
 # 定义表之间的依赖关系（用于确定同步顺序）
 # 格式: '表名': ['依赖的表名列表']
@@ -575,7 +569,6 @@ def main():
         sync.push_table_to_remote(args.table, confirm=not args.no_confirm)
     elif args.command == 'list-tables':
         sync.list_tables()
-
 
 if __name__ == '__main__':
     main()
