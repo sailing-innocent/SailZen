@@ -9,11 +9,14 @@
 from datetime import datetime
 from typing import Optional, List
 
-from sail_server.infrastructure.orm.history import HistoryEvent
+from sail_server.infrastructure.orm.history import HistoryEvent, Person
 from sail_server.application.dto.history import (
     HistoryEventCreateRequest,
     HistoryEventUpdateRequest,
     HistoryEventResponse,
+    PersonCreateRequest,
+    PersonUpdateRequest,
+    PersonResponse,
 )
 
 
@@ -272,3 +275,176 @@ def search_events_by_keyword_impl(
 
     events = query.all()
     return [_orm_to_response(event) for event in events]
+
+
+# ============================================================================
+# Person CRUD Operations
+# ============================================================================
+
+
+def _person_to_response(person: Person) -> PersonResponse:
+    """
+    将 Person ORM 模型转换为响应 DTO
+    
+    Args:
+        person: Person ORM 对象
+        
+    Returns:
+        PersonResponse: 响应 DTO
+    """
+    return PersonResponse(
+        id=person.id,
+        name=person.name,
+        data=person.data,
+        created_at=person.created_at,
+        updated_at=person.updated_at,
+    )
+
+
+def create_person_impl(db, person_create: PersonCreateRequest) -> PersonResponse:
+    """
+    创建新的人物档案
+
+    Args:
+        db: 数据库会话
+        person_create: 创建人物档案请求对象
+
+    Returns:
+        PersonResponse: 创建的人物档案响应
+    """
+    person = Person(
+        name=person_create.name,
+        data=person_create.data,
+    )
+    db.add(person)
+    db.commit()
+    db.refresh(person)
+    return _person_to_response(person)
+
+
+def get_person_impl(db, person_id: int) -> Optional[PersonResponse]:
+    """
+    根据ID获取单个人物档案
+
+    Args:
+        db: 数据库会话
+        person_id: 人物ID
+
+    Returns:
+        PersonResponse: 人物档案响应，如果不存在返回None
+    """
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        return None
+    return _person_to_response(person)
+
+
+def get_persons_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+) -> List[PersonResponse]:
+    """
+    获取人物档案列表
+
+    Args:
+        db: 数据库会话
+        skip: 跳过的记录数
+        limit: 返回的最大记录数，-1表示不限制
+
+    Returns:
+        List[PersonResponse]: 人物档案响应列表
+    """
+    query = db.query(Person)
+    
+    # 按更新时间排序（最新的在前）
+    query = query.order_by(Person.updated_at.desc())
+
+    # 分页
+    if skip > 0:
+        query = query.offset(skip)
+    if limit > 0:
+        query = query.limit(limit)
+
+    persons = query.all()
+    return [_person_to_response(person) for person in persons]
+
+
+def update_person_impl(
+    db, person_id: int, person_update: PersonUpdateRequest
+) -> Optional[PersonResponse]:
+    """
+    更新人物档案
+
+    Args:
+        db: 数据库会话
+        person_id: 人物ID
+        person_update: 更新人物档案请求对象
+
+    Returns:
+        PersonResponse: 更新后的人物档案响应，如果不存在返回None
+    """
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        return None
+
+    # 只更新提供的字段
+    if person_update.name is not None:
+        person.name = person_update.name
+    if person_update.data is not None:
+        person.data = person_update.data
+
+    db.commit()
+    db.refresh(person)
+    return _person_to_response(person)
+
+
+def delete_person_impl(db, person_id: int) -> Optional[PersonResponse]:
+    """
+    删除人物档案
+
+    Args:
+        db: 数据库会话
+        person_id: 人物ID
+
+    Returns:
+        PersonResponse: 被删除的人物档案响应，如果不存在返回None
+    """
+    person = db.query(Person).filter(Person.id == person_id).first()
+    if not person:
+        return None
+
+    person_data = _person_to_response(person)
+    db.delete(person)
+    db.commit()
+    return person_data
+
+
+def search_persons_by_name_impl(
+    db, keyword: str, skip: int = 0, limit: int = 10
+) -> List[PersonResponse]:
+    """
+    通过姓名关键词搜索人物档案
+
+    Args:
+        db: 数据库会话
+        keyword: 搜索关键词
+        skip: 跳过的记录数
+        limit: 返回的最大记录数
+
+    Returns:
+        List[PersonResponse]: 匹配的人物档案列表
+    """
+    query = db.query(Person).filter(
+        Person.name.ilike(f"%{keyword}%")
+    )
+
+    query = query.order_by(Person.updated_at.desc())
+
+    if skip > 0:
+        query = query.offset(skip)
+    if limit > 0:
+        query = query.limit(limit)
+
+    persons = query.all()
+    return [_person_to_response(person) for person in persons]

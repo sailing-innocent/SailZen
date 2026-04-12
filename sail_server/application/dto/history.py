@@ -77,3 +77,44 @@ class HistoryEventListResponse(BaseModel):
     """历史事件列表响应"""
     events: List[HistoryEventResponse]
     total: int
+
+
+# ============================================================================
+# Person DTOs
+# ============================================================================
+
+class PersonBase(BaseModel):
+    """人物档案基础信息"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    name: str = Field(description="人物姓名")
+    data: str = Field(description="人物档案数据（JSON 或文本格式）")
+
+
+class PersonCreateRequest(BaseModel):
+    """创建人物档案请求"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    name: str = Field(description="人物姓名")
+    data: str = Field(description="人物档案数据（JSON 或文本格式）")
+
+
+class PersonUpdateRequest(BaseModel):
+    """更新人物档案请求"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    name: Optional[str] = Field(default=None, description="人物姓名")
+    data: Optional[str] = Field(default=None, description="人物档案数据（JSON 或文本格式）")
+
+
+class PersonResponse(PersonBase):
+    """人物档案响应"""
+    id: int = Field(description="人物ID")
+    created_at: datetime = Field(description="创建时间")
+    updated_at: datetime = Field(description="更新时间")
+
+
+class PersonListResponse(BaseModel):
+    """人物档案列表响应"""
+    persons: List[PersonResponse]
+    total: int

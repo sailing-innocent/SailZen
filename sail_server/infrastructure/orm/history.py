@@ -39,3 +39,22 @@ class HistoryEvent(ORMBase):
     related_events = Column(ARRAY(Integer), default=[])  # 相关事件的ID列表
     parent_event = Column(Integer, nullable=True)  # 父事件ID
     details = Column(JSONB, default={})  # 更多细节信息
+
+
+class Person(ORMBase):
+    """
+    人物档案表
+    用于记录历史和现实中的真实人物档案
+    """
+
+    __tablename__ = "persons"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)  # 人物姓名
+    data = Column(Text, nullable=False)  # 人物档案数据（JSON 或文本格式）
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
