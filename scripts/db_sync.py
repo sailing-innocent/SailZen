@@ -37,11 +37,16 @@ import os
 import sys
 import argparse
 import logging
-from typing import List, Type, Any
+from typing import Dict, List, Set, Type
 from contextlib import contextmanager
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+
+# 设置项目根目录并加入 sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # 设置 PostgreSQL 客户端编码环境变量
 os.environ["PGCLIENTENCODING"] = "UTF8"
@@ -65,74 +70,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 定义表之间的依赖关系（用于确定同步顺序）
-# 格式: '表名': ['依赖的表名列表']
-TABLE_DEPENDENCIES = {
-    # Finance 模块
-    'accounts': [],
-    'budgets': [],
-    'budget_items': ['budgets'],
-    'transactions': ['accounts', 'budgets'],
+
+def _build_table_dependencies() -> Dict[str, Set[str]]:
+    """
+    从 SQLAlchemy MetaData 自动推导表之间的外键依赖关系。
     
-    # Project 模块
-    'projects': [],
-    'missions': ['projects'],
+    遍历所有已注册的 ORM 表的 ForeignKey，构建依赖图。
+    自引用外键（如 containers.parent_id -> containers.id）会被自动忽略。
     
-    # Text 模块
-    'works': [],
-    'editions': ['works'],
-    'document_nodes': ['editions'],
-    'ingest_jobs': ['editions'],
-    
-    # Necessity 模块
-    'residences': [],
-    'containers': ['residences'],
-    'item_categories': [],
-    'items': ['item_categories', 'containers'],
-    'inventories': ['items', 'containers'],
-    'journeys': [],
-    'journey_items': ['journeys'],
-    'consumptions': ['items'],
-    'replenishments': ['items'],
-    
-    # Health 模块
-    'weights': [],
-    'weight_plans': [],
-    'body_size': [],
-    'exercises': [],
-    
-    # History 模块
-    'history_events': [],
-    'persons': [],
-    
-    # Life 模块
-    # life_phenomenon, life_event 等
-    
-    # Analysis 模块 - Character
-    'characters': [],
-    'character_aliases': ['characters'],
-    'character_arcs': ['characters'],
-    'character_attributes': ['characters'],
-    'character_relations': ['characters'],
-    
-    # Analysis 模块 - Setting & Outline
-    'novel_settings': [],
-    'setting_attributes': ['novel_settings'],
-    'setting_relations': ['novel_settings'],
-    'outlines': [],
-    'outline_nodes': ['outlines'],
-    'outline_events': ['outlines'],
-    'text_evidence': ['novel_settings', 'characters'],
-    'character_setting_links': ['characters', 'novel_settings'],
-    
-    # Unified Agent 模块
-    'unified_agent_tasks': [],
-    'unified_agent_steps': ['unified_agent_tasks'],
-    'unified_agent_events': ['unified_agent_tasks'],
-    
-    # Service 模块
-    'service_account': [],
-}
+    Returns:
+        dict: {表名: {依赖的表名集合}}
+    """
+    deps: Dict[str, Set[str]] = {}
+    all_tables = ORMBase.metadata.tables  # dict[str, Table]
+
+    for table_name, table in all_tables.items():
+        referred = set()
+        for fk in table.foreign_keys:
+            referred_table = fk.column.table.name
+            # 排除自引用（如 containers.parent_id -> containers.id）
+            if referred_table != table_name:
+                referred.add(referred_table)
+        deps[table_name] = referred
+
+    return deps
 
 
 def get_all_table_classes() -> List[Type]:
@@ -154,27 +115,57 @@ def get_table_names() -> List[str]:
     return sorted(ORMBase.metadata.tables.keys())
 
 
+def get_table_dependencies() -> Dict[str, Set[str]]:
+    """获取表之间的依赖关系"""
+    return _build_table_dependencies()
+
+
+def get_reverse_dependencies() -> Dict[str, Set[str]]:
+    """
+    获取表的反向依赖关系。
+    
+    Returns:
+        dict: {表名: {依赖于该表的表名集合}}
+    """
+    deps = get_table_dependencies()
+    reverse: Dict[str, Set[str]] = {t: set() for t in deps}
+    for table, referred_tables in deps.items():
+        for ref in referred_tables:
+            if ref in reverse:
+                reverse[ref].add(table)
+    return reverse
+
+
 def get_sync_order() -> List[str]:
     """
-    根据依赖关系计算表的同步顺序
+    根据外键依赖关系做拓扑排序，计算表的同步顺序。
     返回: 按依赖顺序排序的表名列表（被依赖的表在前）
+    
+    Raises:
+        RuntimeError: 如果检测到循环依赖
     """
-    all_tables = get_table_names()
-    visited = set()
-    order = []
+    deps = get_table_dependencies()
+    all_tables = set(deps.keys())
+    visited: Set[str] = set()
+    in_stack: Set[str] = set()  # 用于检测循环依赖
+    order: List[str] = []
     
     def visit(table: str):
+        if table in in_stack:
+            raise RuntimeError(f"检测到循环依赖，涉及表: {table}")
         if table in visited:
             return
         if table not in all_tables:
             return
         visited.add(table)
+        in_stack.add(table)
         # 先访问依赖的表
-        for dep in TABLE_DEPENDENCIES.get(table, []):
+        for dep in deps.get(table, set()):
             visit(dep)
+        in_stack.discard(table)
         order.append(table)
     
-    for table in all_tables:
+    for table in sorted(all_tables):
         visit(table)
     
     return order
@@ -215,7 +206,7 @@ class DatabaseSync:
                     protocol, auth = prefix.split('://', 1)
                     user, _ = auth.rsplit(':', 1)
                     return f"{protocol}://{user}:****@{suffix}"
-        except:
+        except Exception:
             pass
         return uri
     
@@ -265,6 +256,43 @@ class DatabaseSync:
         
         return True
     
+    def _get_existing_tables(self, engine) -> Set[str]:
+        """获取数据库中实际存在的表名集合"""
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(engine)
+        return set(inspector.get_table_names())
+    
+    def _diff_tables(self, engine, label: str) -> tuple[Set[str], Set[str]]:
+        """
+        对比 ORM 定义的表与数据库中实际存在的表。
+        
+        Args:
+            engine: SQLAlchemy engine
+            label: 数据库标签（用于日志，如 "本地" / "云端"）
+        
+        Returns:
+            (existing, missing): 存在的表名集合, 缺失的表名集合
+        """
+        orm_tables = set(get_table_names())
+        db_tables = self._get_existing_tables(engine)
+        
+        existing = orm_tables & db_tables
+        missing = orm_tables - db_tables
+        extra = db_tables - orm_tables
+        
+        if missing:
+            logger.warning(
+                f"⚠️  {label}数据库缺少以下 ORM 表 (将跳过): "
+                f"{', '.join(sorted(missing))}"
+            )
+        if extra:
+            logger.info(
+                f"ℹ️  {label}数据库存在 ORM 未定义的表 (已忽略): "
+                f"{', '.join(sorted(extra))}"
+            )
+        
+        return existing, missing
+    
     def reset_local_database(self):
         """重置本地数据库（删除所有表并重新创建）"""
         logger.warning("⚠️  正在重置本地数据库...")
@@ -301,15 +329,23 @@ class DatabaseSync:
         if not self.test_connections():
             raise RuntimeError("数据库连接测试失败")
         
+        # 检查云端数据库实际存在哪些表
+        remote_existing, remote_missing = self._diff_tables(self.remote_engine, "云端")
+        
         # 重置本地数据库
         self.reset_local_database()
         
-        # 获取同步顺序
-        sync_order = get_sync_order()
-        logger.info(f"\n同步顺序: {' -> '.join(sync_order)}")
+        # 获取同步顺序，过滤掉云端不存在的表
+        sync_order = [t for t in get_sync_order() if t in remote_existing]
+        skipped = sorted(remote_missing)
+        
+        if skipped:
+            logger.warning(f"\n⏭️  将跳过 {len(skipped)} 个云端不存在的表: {', '.join(skipped)}")
+        logger.info(f"\n同步顺序 ({len(sync_order)} 表): {' -> '.join(sync_order)}")
         
         # 按顺序同步每个表
         total_copied = 0
+        failed_tables: List[str] = []
         for table_name in sync_order:
             try:
                 count = self._copy_table_from_remote(table_name)
@@ -317,9 +353,17 @@ class DatabaseSync:
                 logger.info(f"  ✓ {table_name}: 复制了 {count} 条记录")
             except Exception as e:
                 logger.error(f"  ✗ {table_name}: 复制失败 - {e}")
-                raise
+                failed_tables.append(table_name)
+                # 不再直接 raise，继续处理后续无依赖关系的表
         
-        logger.info(f"\n✅ 同步完成！共复制 {total_copied} 条记录")
+        # 输出汇总
+        if failed_tables:
+            logger.warning(
+                f"\n⚠️  同步完成（有错误）！共复制 {total_copied} 条记录，"
+                f"{len(failed_tables)} 个表失败: {', '.join(failed_tables)}"
+            )
+        else:
+            logger.info(f"\n✅ 同步完成！共复制 {total_copied} 条记录")
     
     def _copy_table_from_remote(self, table_name: str) -> int:
         """从云端复制特定表的数据到本地"""
@@ -363,11 +407,19 @@ class DatabaseSync:
             logger.info(f"可用表: {', '.join(all_tables)}")
             return
         
-        # 检查依赖
-        dependencies = TABLE_DEPENDENCIES.get(table_name, [])
+        # 检查依赖（该表依赖哪些表）
+        deps = get_table_dependencies()
+        dependencies = deps.get(table_name, set())
         if dependencies:
-            logger.warning(f"⚠️  表 '{table_name}' 依赖于: {', '.join(dependencies)}")
+            logger.warning(f"⚠️  表 '{table_name}' 依赖于: {', '.join(sorted(dependencies))}")
             logger.warning("    请确保云端数据库中已存在相关记录，否则可能导致外键约束错误")
+        
+        # 检查反向依赖（哪些表依赖该表）
+        reverse_deps = get_reverse_dependencies()
+        dependents = reverse_deps.get(table_name, set())
+        if dependents:
+            logger.warning(f"⚠️  以下表依赖于 '{table_name}': {', '.join(sorted(dependents))}")
+            logger.warning("    推送时会先清空云端该表数据，可能导致依赖表的外键约束报错")
         
         if confirm:
             print("\n" + "=" * 60)
@@ -386,6 +438,24 @@ class DatabaseSync:
         # 测试连接
         if not self.test_connections():
             raise RuntimeError("数据库连接测试失败")
+        
+        # 检查表在本地和云端数据库是否实际存在
+        local_db_tables = self._get_existing_tables(self.local_engine)
+        remote_db_tables = self._get_existing_tables(self.remote_engine)
+        
+        if table_name not in local_db_tables:
+            logger.error(
+                f"✗ 表 '{table_name}' 在本地数据库中不存在，无法推送。"
+                f"请先运行数据库迁移创建该表。"
+            )
+            return
+        
+        if table_name not in remote_db_tables:
+            logger.error(
+                f"✗ 表 '{table_name}' 在云端数据库中不存在，无法推送。"
+                f"请先在云端运行数据库迁移创建该表。"
+            )
+            return
         
         # 推送表
         try:
@@ -427,19 +497,81 @@ class DatabaseSync:
         
         return len(data_list)
     
-    def list_tables(self):
-        """列出所有可用的表"""
-        print("\n可用的表（按依赖顺序）:")
-        print("=" * 60)
+def _print_table_list():
+    """列出所有可用的表（独立函数，无需数据库连接）"""
+    print("\n可用的表（按依赖顺序）:")
+    print("=" * 60)
+    
+    sync_order = get_sync_order()
+    deps = get_table_dependencies()
+    for i, table_name in enumerate(sync_order, 1):
+        table_deps = deps.get(table_name, set())
+        dep_str = f" (依赖: {', '.join(sorted(table_deps))})" if table_deps else ""
+        print(f"  {i:2d}. {table_name}{dep_str}")
+    
+    print("=" * 60)
+    print(f"\n共 {len(sync_order)} 个表")
+
+
+def _print_table_list_with_check(sync: DatabaseSync):
+    """列出所有表并检查与实际数据库的一致性"""
+    if not sync.test_connections():
+        logger.error("数据库连接失败，无法执行一致性检查")
+        return
+    
+    orm_tables = set(get_table_names())
+    local_tables = sync._get_existing_tables(sync.local_engine)
+    remote_tables = sync._get_existing_tables(sync.remote_engine)
+    
+    sync_order = get_sync_order()
+    deps = get_table_dependencies()
+    
+    print("\n表一致性检查 (ORM vs 本地 vs 云端):")
+    print("=" * 75)
+    print(f"  {'#':>3}  {'表名':<30} {'本地':^6} {'云端':^6} {'依赖'}")
+    print("-" * 75)
+    
+    local_missing = []
+    remote_missing = []
+    
+    for i, table_name in enumerate(sync_order, 1):
+        in_local = "✓" if table_name in local_tables else "✗"
+        in_remote = "✓" if table_name in remote_tables else "✗"
         
-        sync_order = get_sync_order()
-        for i, table_name in enumerate(sync_order, 1):
-            deps = TABLE_DEPENDENCIES.get(table_name, [])
-            dep_str = f" (依赖: {', '.join(deps)})" if deps else ""
-            print(f"  {i:2d}. {table_name}{dep_str}")
+        table_deps = deps.get(table_name, set())
+        dep_str = ', '.join(sorted(table_deps)) if table_deps else ""
         
-        print("=" * 60)
-        print(f"\n共 {len(sync_order)} 个表")
+        # 标记有问题的行
+        marker = ""
+        if table_name not in local_tables:
+            marker = " ← 本地缺失"
+            local_missing.append(table_name)
+        if table_name not in remote_tables:
+            marker = " ← 云端缺失" if not marker else " ← 两端缺失"
+            remote_missing.append(table_name)
+        
+        print(f"  {i:3d}. {table_name:<30} {in_local:^6} {in_remote:^6} {dep_str}{marker}")
+    
+    # 检查数据库中有但 ORM 没定义的表
+    local_extra = local_tables - orm_tables
+    remote_extra = remote_tables - orm_tables
+    
+    print("=" * 75)
+    print(f"\n  ORM 定义: {len(orm_tables)} 表")
+    print(f"  本地数据库: {len(local_tables & orm_tables)}/{len(orm_tables)} 表匹配"
+          f"{f'，{len(local_missing)} 缺失' if local_missing else ''}")
+    print(f"  云端数据库: {len(remote_tables & orm_tables)}/{len(orm_tables)} 表匹配"
+          f"{f'，{len(remote_missing)} 缺失' if remote_missing else ''}")
+    
+    if local_extra:
+        print(f"\n  ℹ️  本地数据库多余的表 (ORM 未定义): {', '.join(sorted(local_extra))}")
+    if remote_extra:
+        print(f"  ℹ️  云端数据库多余的表 (ORM 未定义): {', '.join(sorted(remote_extra))}")
+    
+    if not local_missing and not remote_missing:
+        print(f"\n  ✅ 所有表一致，无问题！")
+    else:
+        print(f"\n  ⚠️  存在不一致，请检查是否需要运行数据库迁移。")
 
 
 def load_env_file(env_file: str) -> dict:
@@ -449,20 +581,21 @@ def load_env_file(env_file: str) -> dict:
     
     # 临时清空环境变量，避免干扰
     original_env = dict(os.environ)
-    for key in list(os.environ.keys()):
-        if key not in ['PATH', 'PGCLIENTENCODING']:
-            del os.environ[key]
-    
-    # 加载环境文件
-    load_dotenv(env_file, override=True)
-    
-    config = {
-        'POSTGRE_URI': os.environ.get('POSTGRE_URI'),
-    }
-    
-    # 恢复原始环境
-    os.environ.clear()
-    os.environ.update(original_env)
+    try:
+        for key in list(os.environ.keys()):
+            if key not in ['PATH', 'PGCLIENTENCODING']:
+                del os.environ[key]
+        
+        # 加载环境文件
+        load_dotenv(env_file, override=True)
+        
+        config = {
+            'POSTGRE_URI': os.environ.get('POSTGRE_URI'),
+        }
+    finally:
+        # 无论成功或异常，始终恢复原始环境
+        os.environ.clear()
+        os.environ.update(original_env)
     
     return config
 
@@ -519,9 +652,14 @@ def main():
     )
     
     # list-tables 命令
-    subparsers.add_parser(
+    list_parser = subparsers.add_parser(
         'list-tables',
         help='列出所有可用的表'
+    )
+    list_parser.add_argument(
+        '--check',
+        action='store_true',
+        help='检查本地/云端数据库与 ORM 定义的一致性'
     )
     
     args = parser.parse_args()
@@ -530,7 +668,12 @@ def main():
         parser.print_help()
         sys.exit(1)
     
-    # 加载环境配置
+    # list-tables: 基本模式不需要数据库连接；--check 模式需要
+    if args.command == 'list-tables' and not args.check:
+        _print_table_list()
+        return
+    
+    # 其余命令需要加载环境配置
     env_dev_path = os.path.join(project_root, '.env.dev')
     env_prod_path = os.path.join(project_root, '.env.prod')
     
@@ -567,8 +710,8 @@ def main():
         sync.pull_from_remote(confirm=not args.no_confirm)
     elif args.command == 'push-table':
         sync.push_table_to_remote(args.table, confirm=not args.no_confirm)
-    elif args.command == 'list-tables':
-        sync.list_tables()
+    elif args.command == 'list-tables' and args.check:
+        _print_table_list_with_check(sync)
 
 if __name__ == '__main__':
     main()
