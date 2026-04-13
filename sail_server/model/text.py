@@ -7,7 +7,6 @@
 # ---------------------------------
 
 import re
-import hashlib
 from typing import Optional, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -30,8 +29,6 @@ from sail_server.application.dto.text import (
     DocumentNodeCreateRequest,
     DocumentNodeUpdateRequest,
     DocumentNodeResponse,
-    IngestJobCreateRequest,
-    IngestJobResponse,
 )
 
 
@@ -55,20 +52,6 @@ class ChapterListItem:
 # ============================================================================
 # Text Import Request (Model-specific structure)
 # ============================================================================
-
-
-@dataclass
-class TextImportRequest:
-    """文本导入请求"""
-
-    work_title: str
-    work_author: Optional[str] = None
-    work_synopsis: Optional[str] = None
-    edition_name: Optional[str] = None
-    content: str = ""
-    language: str = "zh"
-    chapter_pattern: Optional[str] = None
-    meta_data: Optional[dict] = None
 
 
 # ============================================================================
@@ -418,21 +401,6 @@ def _update_edition_stats(db: Session, edition_id: int):
         db.commit()
 
 
-# ============================================================================
-# Text Import Logic
-# ============================================================================
-
-# 常用的章节识别模式
-DEFAULT_CHAPTER_PATTERNS = [
-    r"^第[一二三四五六七八九十百千万零〇\d]+章[^\n]*",  # 中文章节: 第一章、第1章
-    r"^第[一二三四五六七八九十百千万零〇\d]+节[^\n]*",  # 中文节: 第一节
-    r"^Chapter\s+\d+[^\n]*",  # 英文章节: Chapter 1
-    r"^CHAPTER\s+\d+[^\n]*",  # 大写英文章节
-    r"^\d+\.\s+[^\n]+",  # 数字章节: 1. Title
-    r"^【[^\】]+】",  # 【章节标题】
-]
-
-
 def sanitize_text(text: str) -> str:
     """
     清理文本内容，移除不支持的特殊字符
@@ -443,230 +411,6 @@ def sanitize_text(text: str) -> str:
         return text
     # 移除 NUL 字符
     return text.replace("\x00", "")
-
-
-def parse_chapters(
-    content: str, pattern: Optional[str] = None
-) -> List[Tuple[str, str, int, int]]:
-    """
-    解析文本内容，识别章节
-
-    返回: [(chapter_title, chapter_content, start_pos, end_pos), ...]
-    """
-    if not content:
-        return []
-
-    # 先清理文本
-    content = sanitize_text(content)
-
-    # 合并所有模式
-    if pattern:
-        patterns = [pattern]
-    else:
-        patterns = DEFAULT_CHAPTER_PATTERNS
-
-    combined_pattern = "|".join(f"({p})" for p in patterns)
-
-    # 查找所有章节标题
-    matches = list(re.finditer(combined_pattern, content, re.MULTILINE))
-
-    if not matches:
-        # 如果没有找到章节，把整个内容作为一章
-        return [("正文", content.strip(), 0, len(content))]
-
-    chapters = []
-    for i, match in enumerate(matches):
-        title = match.group().strip()
-        start = match.start()
-
-        # 确定章节内容的结束位置
-        if i + 1 < len(matches):
-            end = matches[i + 1].start()
-        else:
-            end = len(content)
-
-        # 提取章节内容（不包括标题行）
-        chapter_content = content[match.end() : end].strip()
-
-        chapters.append((title, chapter_content, start, end))
-
-    return chapters
-
-
-def import_text_impl(
-    db: Session, request: TextImportRequest
-) -> Tuple[WorkResponse, EditionResponse, int]:
-    """
-    导入文本内容
-
-    流程:
-    1. 创建或获取作品
-    2. 创建新版本
-    3. 解析章节
-    4. 创建文档节点
-    5. 更新统计信息
-
-    返回: (work_data, edition_data, chapter_count)
-    """
-    # 1. 创建作品
-    slug = _make_slug(request.work_title)
-
-    # 确保 slug 唯一
-    existing = db.query(Work).filter(Work.slug == slug).first()
-    if existing:
-        slug = f"{slug}-{int(datetime.now().timestamp())}"
-
-    work = Work(
-        slug=slug,
-        title=request.work_title,
-        author=request.work_author,
-        synopsis=request.work_synopsis,
-        language_primary=request.language,
-        meta_data=request.meta_data or {},
-    )
-    db.add(work)
-    db.flush()  # 获取ID但不提交
-
-    # 2. 创建版本
-    content_hash = hashlib.sha256(request.content.encode("utf-8")).hexdigest()[:16]
-    edition = Edition(
-        work_id=work.id,
-        edition_name=request.edition_name or "原始导入",
-        language=request.language,
-        source_checksum=content_hash,
-        status="active",
-        meta_data={},
-    )
-    db.add(edition)
-    db.flush()
-
-    # 3. 解析章节
-    chapters = parse_chapters(request.content, request.chapter_pattern)
-
-    # 4. 创建文档节点
-    total_chars = 0
-    for i, (title, content, start, end) in enumerate(chapters):
-        char_count = len(content)
-        total_chars += char_count
-
-        # 尝试分离 label 和 title
-        label, chapter_title = _parse_chapter_title(title)
-
-        node = DocumentNode(
-            edition_id=edition.id,
-            parent_id=None,
-            node_type="chapter",
-            sort_index=i,
-            depth=1,
-            label=label,
-            title=chapter_title,
-            raw_text=content,
-            word_count=len(content.split()),
-            char_count=char_count,
-            path=f"{i:04d}",
-            status="active",
-        )
-        db.add(node)
-
-    # 5. 更新版本统计
-    edition.char_count = total_chars
-    edition.word_count = sum(len(c[1].split()) for c in chapters)
-
-    db.commit()
-    db.refresh(work)
-    db.refresh(edition)
-
-    return (
-        WorkResponse.model_validate(work),
-        EditionResponse.model_validate(edition),
-        len(chapters),
-    )
-
-
-def _parse_chapter_title(title: str) -> Tuple[str, str]:
-    """
-    分离章节标签和标题
-    例如: "第一章 风起云涌" -> ("第一章", "风起云涌")
-    """
-    # 尝试匹配常见格式
-    patterns = [
-        r"^(第[一二三四五六七八九十百千万零〇\d]+章)\s*(.*)$",
-        r"^(第[一二三四五六七八九十百千万零〇\d]+节)\s*(.*)$",
-        r"^(Chapter\s+\d+)\s*(.*)$",
-        r"^(CHAPTER\s+\d+)\s*(.*)$",
-        r"^(\d+\.)\s*(.+)$",
-        r"^【([^\】]+)】\s*(.*)$",
-    ]
-
-    for pattern in patterns:
-        match = re.match(pattern, title, re.IGNORECASE)
-        if match:
-            label = match.group(1).strip()
-            chapter_title = match.group(2).strip() if match.group(2) else None
-            return label, chapter_title
-
-    return title, None
-
-
-def append_chapters_impl(
-    db: Session, edition_id: int, content: str, chapter_pattern: Optional[str] = None
-) -> int:
-    """
-    追加章节到现有版本
-
-    返回: 新增章节数
-    """
-    edition = db.query(Edition).filter(Edition.id == edition_id).first()
-    if not edition:
-        return 0
-
-    # 获取当前最大 sort_index
-    max_index = (
-        db.query(func.max(DocumentNode.sort_index))
-        .filter(
-            DocumentNode.edition_id == edition_id, DocumentNode.node_type == "chapter"
-        )
-        .scalar()
-        or -1
-    )
-
-    # 解析新章节
-    chapters = parse_chapters(content, chapter_pattern)
-
-    # 创建新节点
-    total_new_chars = 0
-    for i, (title, chapter_content, start, end) in enumerate(chapters):
-        char_count = len(chapter_content)
-        total_new_chars += char_count
-
-        label, chapter_title = _parse_chapter_title(title)
-        sort_index = max_index + 1 + i
-
-        node = DocumentNode(
-            edition_id=edition_id,
-            parent_id=None,
-            node_type="chapter",
-            sort_index=sort_index,
-            depth=1,
-            label=label,
-            title=chapter_title,
-            raw_text=chapter_content,
-            word_count=len(chapter_content.split()),
-            char_count=char_count,
-            path=f"{sort_index:04d}",
-            status="active",
-        )
-        db.add(node)
-
-    # 更新版本统计
-    edition.char_count = (edition.char_count or 0) + total_new_chars
-    edition.word_count = (edition.word_count or 0) + sum(
-        len(c[1].split()) for c in chapters
-    )
-
-    db.commit()
-
-    return len(chapters)
 
 
 # ============================================================================

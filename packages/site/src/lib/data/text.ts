@@ -113,32 +113,8 @@ export interface ChapterListItem {
 }
 
 // ============================================================================
-// Import Types
+// Chapter Insert Types
 // ============================================================================
-
-export interface TextImportRequest {
-  work_title: string
-  content: string
-  work_author?: string
-  work_synopsis?: string
-  edition_name?: string
-  language?: string
-  chapter_pattern?: string
-  meta_data?: Record<string, unknown>
-}
-
-export interface ImportResponse {
-  work: Work
-  edition: Edition
-  chapter_count: number
-  message: string
-}
-
-export interface AppendResponse {
-  edition_id: number
-  new_chapter_count: number
-  message: string
-}
 
 export interface ChapterInsertRequest {
   edition_id: number
@@ -183,65 +159,4 @@ export function getWorkTypeLabel(type: string): string {
   return typeMap[type] || type
 }
 
-// ============================================================================
-// Async Import Task Types
-// ============================================================================
 
-export type ImportTaskStatus = 'pending' | 'scheduled' | 'running' | 'completed' | 'failed' | 'cancelled'
-
-export type ImportStage = 'upload' | 'preprocess' | 'parse' | 'store'
-
-export interface ImportTask {
-  id: number
-  task_type: string
-  status: ImportTaskStatus
-  work_title: string
-  work_author?: string
-  progress: number
-  current_phase?: string
-  created_at: string
-  started_at?: string
-  completed_at?: string
-  result?: {
-    work_id?: number
-    edition_id?: number
-    chapter_count?: number
-    total_chars?: number
-    processing_time_seconds?: number
-    warnings?: string[]
-  }
-  error_message?: string
-}
-
-export interface ImportTaskProgress {
-  stage: ImportStage
-  overall_progress: number
-  stage_progress: number
-  message: string
-  chapters_found: number
-  chapters_processed: number
-  eta_seconds?: number
-}
-
-export interface FileUploadResponse {
-  file_id: string
-  file_name: string
-  file_size: number
-  encoding?: string
-  message: string
-}
-
-export interface AsyncImportRequest {
-  file_id: string
-  work_title: string
-  work_author?: string
-  edition_name?: string
-  enable_ai_parsing?: boolean
-  priority?: number
-}
-
-export interface AsyncImportResponse {
-  task_id: number
-  status: string
-  message: string
-}

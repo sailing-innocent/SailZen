@@ -6,6 +6,4 @@
 # @version 1.0
 # ---------------------------------
 
-from .text_import import run_text_import_cli
-
-__all__ = ["run_text_import_cli"]
+__all__ = []
