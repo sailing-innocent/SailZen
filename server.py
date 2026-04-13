@@ -44,6 +44,7 @@ class SailServer:
             "/analysis",
             "/necessity",
             "/file-storage",
+            "/dag-pipeline",
         ]
         self.api_router = None
         self.debug = True
@@ -105,6 +106,7 @@ class SailServer:
         from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.control_plane import router as control_plane_router
+        from sail_server.router.dag_pipeline import router as dag_pipeline_router
         from sail_server.controller.outline_extraction_unified import (
             OutlineExtractionUnifiedController,
         )
@@ -121,18 +123,23 @@ class SailServer:
         except Exception as e:
             logger.warning(f"Failed to initialize control plane database: {e}")
 
-        # 修复数据库序列
-        try:
-            from sail_server.db import get_db_session
-            from sail_server.utils.db_utils import fix_all_sequences
+        # 修复数据库序列（仅 PostgreSQL）
+        from sail_server.db import Database
 
-            with get_db_session() as db:
-                fix_results = fix_all_sequences(db)
-                for table, success in fix_results.items():
-                    if not success:
-                        logger.warning(f"Failed to fix sequence for {table}")
-        except Exception as e:
-            logger.warning(f"Failed to fix sequences: {e}")
+        if Database.get_instance().backend != "sqlite":
+            try:
+                from sail_server.db import get_db_session
+                from sail_server.utils.db_utils import fix_all_sequences
+
+                with get_db_session() as db:
+                    fix_results = fix_all_sequences(db)
+                    for table, success in fix_results.items():
+                        if not success:
+                            logger.warning(f"Failed to fix sequence for {table}")
+            except Exception as e:
+                logger.warning(f"Failed to fix sequences: {e}")
+        else:
+            logger.info("SQLite backend detected, skipping sequence fix")
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -149,6 +156,7 @@ class SailServer:
                 file_storage_router,
                 control_plane_router,
                 OutlineExtractionUnifiedController,
+                dag_pipeline_router,
             ],
         )
 
@@ -194,6 +202,21 @@ class SailServer:
 
         logger = get_logger("sail_server")
         logger.info("Server starting up...")
+
+        # 初始化默认财务标签（幂等）
+        try:
+            from sail_server.model.finance.tag import seed_default_tags_impl
+            from sail_server.db import Database
+
+            db = Database.get_instance().get_db_session()
+            try:
+                created = seed_default_tags_impl(db)
+                if created > 0:
+                    logger.info(f"[Startup] Seeded {created} default finance tags")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to seed finance tags: {e}")
 
         # 执行大纲提取任务恢复
         try:

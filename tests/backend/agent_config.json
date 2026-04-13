@@ -1,9 +1,0 @@
-{
-  "agent_name": "Agent on SIH-D-3015",
-  "role": "worker",
-  "manager_url": "http://localhost:8000",
-  "working_dir": "g:\\repos\\cube_claw\\backend",
-  "opencode_port": 4096,
-  "port": 8080,
-  "agent_id": "win-sih-d-3015-05d4"
-}

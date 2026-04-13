@@ -20,6 +20,7 @@ export const PAGE_ROUTES: PageRoute[] = [
   { name: 'Analysis', path: '/analysis', label: '分析', icon: 'BookOpen', component: React.lazy(() => import('@pages/analysis')) },
   { name: 'Necessity', path: '/necessity', label: '物资', icon: 'Package', component: React.lazy(() => import('@pages/necessity')) },
   { name: 'FileStorage', path: '/file-storage', label: '文件存储', icon: 'HardDrive', component: React.lazy(() => import('@pages/file_storage')) },
+  { name: 'DAGPipeline', path: '/dag-pipeline', label: 'DAG流程', icon: 'GitBranch', component: React.lazy(() => import('@pages/dag_pipeline')) },
 ]
 
 // 通过路径查找组件

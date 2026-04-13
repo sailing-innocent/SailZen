@@ -21,8 +21,10 @@ import uuid
 import json
 from pathlib import Path
 
-# 文件存储目录 - 使用环境变量或默认路径
-STORAGE_DIR = Path(os.environ.get("FILE_STORAGE_PATH", "./data/file_storage"))
+# 文件存储目录 - 通过统一路径配置获取
+from sail_server.config.paths import FILE_STORAGE_DIR
+
+STORAGE_DIR = FILE_STORAGE_DIR
 METADATA_FILE = STORAGE_DIR / ".metadata.json"
 MAX_FILE_SIZE = 10485760  # 10MB
 

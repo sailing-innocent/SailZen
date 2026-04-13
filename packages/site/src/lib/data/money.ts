@@ -419,3 +419,32 @@ export interface PaginatedResponse<T> {
 }
 
 export type PaginatedTransactionResponse = PaginatedResponse<TransactionData>
+
+// ============ Finance Tag Types ============
+
+export interface FinanceTagData {
+  id: number
+  name: string
+  color: string
+  description: string
+  category: string  // 'expense' | 'income' | 'major' | 'custom'
+  sort_order: number
+  is_active: number  // 1=active, 0=inactive
+}
+
+export interface FinanceTagCreateProps {
+  name: string
+  color?: string
+  description?: string
+  category?: string
+  sort_order?: number
+}
+
+export interface FinanceTagUpdateProps {
+  name?: string
+  color?: string
+  description?: string
+  category?: string
+  sort_order?: number
+  is_active?: number
+}

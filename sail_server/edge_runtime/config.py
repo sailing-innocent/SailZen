@@ -26,7 +26,7 @@ class EdgeRuntimeConfig:
     heartbeat_interval_seconds: int = 15
     request_timeout_seconds: int = 15
     offline_mode: bool = False
-    queue_path: str = "data/control_plane/edge_queue.json"
+    queue_path: str = ""  # 运行时从 paths 配置填充
     projects: list[EdgeRuntimeProject] = field(default_factory=list)
 
 
@@ -60,7 +60,10 @@ def load_edge_runtime_config(config_path: str | None = None) -> EdgeRuntimeConfi
         "request_timeout_seconds", config.request_timeout_seconds
     )
     config.offline_mode = data.get("offline_mode", config.offline_mode)
-    config.queue_path = data.get("queue_path", config.queue_path)
+    from sail_server.config.paths import EDGE_QUEUE_PATH
+
+    default_queue = str(EDGE_QUEUE_PATH)
+    config.queue_path = data.get("queue_path", default_queue) or default_queue
     config.projects = [_load_project(item) for item in data.get("projects", [])]
     _validate_runtime_config(config)
     return config

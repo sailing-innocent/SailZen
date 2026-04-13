@@ -11,6 +11,8 @@
 功能:
 1. pull: 清空本地数据库，从云端数据库拉取数据覆盖
 2. push-table: 将本地特定表上传到云端数据库
+3. export-sqlite: 从 PostgreSQL 导出数据到 SQLite 文件（用于本地轻量开发）
+4. import-sqlite: 从 SQLite 文件导入数据到 PostgreSQL
 
 使用方法:
     # 从云端拉取数据到本地（会清空本地数据库！）
@@ -20,6 +22,15 @@
     uv run scripts/db_sync.py push-table --table work
     uv run scripts/db_sync.py push-table --table account
     
+    # 从 PostgreSQL 导出数据到 SQLite（用于本地轻量开发）
+    uv run scripts/db_sync.py export-sqlite
+    uv run scripts/db_sync.py export-sqlite --sqlite-path data/dev.db
+    uv run scripts/db_sync.py export-sqlite --env prod  # 从生产环境导出
+    
+    # 从 SQLite 导入数据回 PostgreSQL
+    uv run scripts/db_sync.py import-sqlite
+    uv run scripts/db_sync.py import-sqlite --sqlite-path data/dev.db
+    
     # 查看帮助
     uv run scripts/db_sync.py --help
 
@@ -27,8 +38,13 @@
     - .env.dev: 本地数据库配置
     - .env.prod: 云端数据库配置（需要配置不同的 POSTGRE_URI）
 
+SQLite 后端配置 (.env.dev):
+    DB_BACKEND=sqlite
+    SQLITE_PATH=data/sailzen.db
+
 注意事项:
     - pull 操作会清空本地数据库，请谨慎使用
+    - export-sqlite 会重建 SQLite 数据库，已有数据将被清空
     - 同步时会自动处理表之间的外键依赖关系
     - 建议在操作前备份重要数据
 """
@@ -497,6 +513,297 @@ class DatabaseSync:
         
         return len(data_list)
     
+class SQLiteSyncManager:
+    """SQLite 与 PostgreSQL 之间的数据同步管理器"""
+    
+    def __init__(self, pg_uri: str, sqlite_path: str):
+        """
+        Args:
+            pg_uri: PostgreSQL 连接 URI
+            sqlite_path: SQLite 文件路径
+        """
+        # PostgreSQL engine
+        if pg_uri.startswith("postgresql://"):
+            pg_uri = pg_uri.replace("postgresql://", "postgresql+psycopg://", 1)
+        self.pg_uri = pg_uri
+        self.pg_engine = create_engine(pg_uri)
+        self.PgSession = sessionmaker(bind=self.pg_engine)
+        
+        # SQLite engine
+        sqlite_dir = os.path.dirname(sqlite_path)
+        if sqlite_dir and not os.path.exists(sqlite_dir):
+            os.makedirs(sqlite_dir, exist_ok=True)
+        self.sqlite_path = sqlite_path
+        self.sqlite_uri = f"sqlite:///{sqlite_path}"
+        self.sqlite_engine = create_engine(
+            self.sqlite_uri,
+            connect_args={"check_same_thread": False},
+        )
+        # 启用 SQLite 外键约束
+        from sqlalchemy import event as sa_event
+        @sa_event.listens_for(self.sqlite_engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+        
+        self.SqliteSession = sessionmaker(bind=self.sqlite_engine)
+        
+        logger.info("SQLite 同步管理器初始化完成")
+        logger.info(f"PostgreSQL: {DatabaseSync._mask_uri(pg_uri)}")
+        logger.info(f"SQLite: {sqlite_path}")
+    
+    @contextmanager
+    def pg_session(self):
+        session = self.PgSession()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    
+    @contextmanager
+    def sqlite_session(self):
+        session = self.SqliteSession()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    
+    def test_pg_connection(self) -> bool:
+        try:
+            with self.pg_engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("✓ PostgreSQL 连接正常")
+            return True
+        except Exception as e:
+            logger.error(f"✗ PostgreSQL 连接失败: {e}")
+            return False
+    
+    def test_sqlite_connection(self) -> bool:
+        try:
+            with self.sqlite_engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("✓ SQLite 连接正常")
+            return True
+        except Exception as e:
+            logger.error(f"✗ SQLite 连接失败: {e}")
+            return False
+    
+    def _get_existing_tables(self, engine) -> Set[str]:
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(engine)
+        return set(inspector.get_table_names())
+    
+    def export_to_sqlite(self, confirm: bool = True):
+        """从 PostgreSQL 导出数据到 SQLite"""
+        if confirm:
+            print("\n" + "=" * 60)
+            print("📦 导出 PostgreSQL -> SQLite")
+            print("=" * 60)
+            print(f"PostgreSQL: {DatabaseSync._mask_uri(self.pg_uri)}")
+            print(f"SQLite:     {self.sqlite_path}")
+            print("=" * 60)
+            print("⚠️  将会重建 SQLite 数据库（删除已有数据）！")
+            
+            response = input("\n确认要继续吗？(输入 'yes' 确认): ")
+            if response.lower() != 'yes':
+                logger.info("操作已取消")
+                return
+        
+        if not self.test_pg_connection():
+            raise RuntimeError("PostgreSQL 连接失败")
+        
+        # 获取 PostgreSQL 中实际存在的表
+        pg_tables = self._get_existing_tables(self.pg_engine)
+        orm_tables = set(get_table_names())
+        available_tables = pg_tables & orm_tables
+        missing = orm_tables - pg_tables
+        
+        if missing:
+            logger.warning(f"⚠️  PostgreSQL 缺少以下表 (将跳过): {', '.join(sorted(missing))}")
+        
+        # 重建 SQLite 数据库
+        logger.info("正在重建 SQLite 数据库...")
+        ORMBase.metadata.drop_all(bind=self.sqlite_engine)
+        ORMBase.metadata.create_all(bind=self.sqlite_engine)
+        logger.info("✓ SQLite 数据库结构已创建")
+        
+        # 按依赖顺序同步
+        sync_order = [t for t in get_sync_order() if t in available_tables]
+        logger.info(f"\n同步顺序 ({len(sync_order)} 表): {' -> '.join(sync_order)}")
+        
+        total_copied = 0
+        failed_tables: List[str] = []
+        
+        for table_name in sync_order:
+            try:
+                cls = get_table_class_by_name(table_name)
+                
+                with self.pg_session() as pg_sess:
+                    records = pg_sess.query(cls).all()
+                    if not records:
+                        logger.info(f"  - {table_name}: 0 条记录 (空表)")
+                        continue
+                    
+                    data_list = []
+                    for record in records:
+                        data = {}
+                        for column in record.__table__.columns:
+                            data[column.name] = getattr(record, column.name)
+                        data_list.append(data)
+                
+                with self.sqlite_session() as sqlite_sess:
+                    for data in data_list:
+                        new_record = cls(**data)
+                        sqlite_sess.add(new_record)
+                
+                total_copied += len(data_list)
+                logger.info(f"  ✓ {table_name}: 复制了 {len(data_list)} 条记录")
+            except Exception as e:
+                logger.error(f"  ✗ {table_name}: 复制失败 - {e}")
+                failed_tables.append(table_name)
+        
+        if failed_tables:
+            logger.warning(
+                f"\n⚠️  导出完成（有错误）！共复制 {total_copied} 条记录，"
+                f"{len(failed_tables)} 个表失败: {', '.join(failed_tables)}"
+            )
+        else:
+            logger.info(f"\n✅ 导出完成！共复制 {total_copied} 条记录到 {self.sqlite_path}")
+    
+    def import_from_sqlite(self, confirm: bool = True):
+        """从 SQLite 导入数据到 PostgreSQL"""
+        if not os.path.exists(self.sqlite_path):
+            logger.error(f"SQLite 文件不存在: {self.sqlite_path}")
+            return
+        
+        if confirm:
+            print("\n" + "=" * 60)
+            print("📥 导入 SQLite -> PostgreSQL")
+            print("=" * 60)
+            print(f"SQLite:     {self.sqlite_path}")
+            print(f"PostgreSQL: {DatabaseSync._mask_uri(self.pg_uri)}")
+            print("=" * 60)
+            print("⚠️  将会清空 PostgreSQL 中对应表的数据！")
+            
+            response = input("\n确认要继续吗？(输入 'yes' 确认): ")
+            if response.lower() != 'yes':
+                logger.info("操作已取消")
+                return
+        
+        if not self.test_pg_connection():
+            raise RuntimeError("PostgreSQL 连接失败")
+        if not self.test_sqlite_connection():
+            raise RuntimeError("SQLite 连接失败")
+        
+        # 获取 SQLite 中实际存在的表
+        sqlite_tables = self._get_existing_tables(self.sqlite_engine)
+        pg_tables = self._get_existing_tables(self.pg_engine)
+        orm_tables = set(get_table_names())
+        
+        available_tables = sqlite_tables & orm_tables & pg_tables
+        sqlite_missing = orm_tables - sqlite_tables
+        pg_missing = orm_tables - pg_tables
+        
+        if sqlite_missing:
+            logger.warning(f"⚠️  SQLite 缺少以下表 (将跳过): {', '.join(sorted(sqlite_missing))}")
+        if pg_missing:
+            logger.warning(f"⚠️  PostgreSQL 缺少以下表 (将跳过): {', '.join(sorted(pg_missing))}")
+        
+        sync_order = [t for t in get_sync_order() if t in available_tables]
+        logger.info(f"\n同步顺序 ({len(sync_order)} 表): {' -> '.join(sync_order)}")
+        
+        # 先按反向顺序清空 PostgreSQL 表（避免外键约束）
+        logger.info("正在清空 PostgreSQL 目标表...")
+        for table_name in reversed(sync_order):
+            try:
+                cls = get_table_class_by_name(table_name)
+                with self.pg_session() as pg_sess:
+                    pg_sess.query(cls).delete()
+                    logger.info(f"  - 已清空 {table_name}")
+            except Exception as e:
+                logger.error(f"  ✗ 清空 {table_name} 失败: {e}")
+        
+        # 按正向顺序导入
+        total_copied = 0
+        failed_tables: List[str] = []
+        
+        for table_name in sync_order:
+            try:
+                cls = get_table_class_by_name(table_name)
+                
+                with self.sqlite_session() as sqlite_sess:
+                    records = sqlite_sess.query(cls).all()
+                    if not records:
+                        logger.info(f"  - {table_name}: 0 条记录 (空表)")
+                        continue
+                    
+                    data_list = []
+                    for record in records:
+                        data = {}
+                        for column in record.__table__.columns:
+                            data[column.name] = getattr(record, column.name)
+                        data_list.append(data)
+                
+                with self.pg_session() as pg_sess:
+                    for data in data_list:
+                        new_record = cls(**data)
+                        pg_sess.add(new_record)
+                
+                total_copied += len(data_list)
+                logger.info(f"  ✓ {table_name}: 复制了 {len(data_list)} 条记录")
+            except Exception as e:
+                logger.error(f"  ✗ {table_name}: 复制失败 - {e}")
+                failed_tables.append(table_name)
+        
+        # 修复 PostgreSQL 序列
+        logger.info("\n正在修复 PostgreSQL 序列...")
+        try:
+            PgSessionLocal = sessionmaker(bind=self.pg_engine)
+            pg_sess = PgSessionLocal()
+            try:
+                for table_name in sync_order:
+                    try:
+                        sequence_name = f"{table_name}_id_seq"
+                        seq_exists = pg_sess.execute(
+                            text("SELECT 1 FROM pg_sequences WHERE sequencename = :seq_name"),
+                            {"seq_name": sequence_name}
+                        ).scalar()
+                        if seq_exists:
+                            max_id = pg_sess.execute(
+                                text(f"SELECT MAX(id) FROM {table_name}")
+                            ).scalar()
+                            if max_id:
+                                pg_sess.execute(
+                                    text(f"SELECT setval('{sequence_name}', {max_id + 1}, false)")
+                                )
+                                logger.info(f"  ✓ 修复序列 {sequence_name} -> {max_id + 1}")
+                    except Exception as e:
+                        logger.debug(f"  - {table_name}: 无需修复序列 ({e})")
+                pg_sess.commit()
+            finally:
+                pg_sess.close()
+        except Exception as e:
+            logger.warning(f"序列修复过程出错: {e}")
+        
+        if failed_tables:
+            logger.warning(
+                f"\n⚠️  导入完成（有错误）！共复制 {total_copied} 条记录，"
+                f"{len(failed_tables)} 个表失败: {', '.join(failed_tables)}"
+            )
+        else:
+            logger.info(f"\n✅ 导入完成！共复制 {total_copied} 条记录到 PostgreSQL")
+
+
 def _print_table_list():
     """列出所有可用的表（独立函数，无需数据库连接）"""
     print("\n可用的表（按依赖顺序）:")
@@ -619,6 +926,15 @@ def main():
     
     # 列出所有可用的表
     uv run scripts/db_sync.py list-tables
+    
+    # 从 PostgreSQL 导出数据到 SQLite（用于本地轻量开发）
+    uv run scripts/db_sync.py export-sqlite
+    uv run scripts/db_sync.py export-sqlite --sqlite-path data/dev.db
+    uv run scripts/db_sync.py export-sqlite --env prod  # 从生产环境导出
+    
+    # 从 SQLite 导入数据回 PostgreSQL
+    uv run scripts/db_sync.py import-sqlite
+    uv run scripts/db_sync.py import-sqlite --sqlite-path data/dev.db
         """
     )
     
@@ -662,6 +978,50 @@ def main():
         help='检查本地/云端数据库与 ORM 定义的一致性'
     )
     
+    # export-sqlite 命令
+    export_sqlite_parser = subparsers.add_parser(
+        'export-sqlite',
+        help='从 PostgreSQL 导出数据到 SQLite 文件（用于本地轻量开发）'
+    )
+    export_sqlite_parser.add_argument(
+        '--sqlite-path',
+        default='data/sailzen.db',
+        help='SQLite 文件路径 (默认: data/sailzen.db)'
+    )
+    export_sqlite_parser.add_argument(
+        '--env',
+        choices=['dev', 'prod'],
+        default='dev',
+        help='PostgreSQL 数据源环境 (默认: dev，即本地 PG；prod 则从云端导出)'
+    )
+    export_sqlite_parser.add_argument(
+        '--no-confirm',
+        action='store_true',
+        help='跳过确认提示'
+    )
+    
+    # import-sqlite 命令
+    import_sqlite_parser = subparsers.add_parser(
+        'import-sqlite',
+        help='从 SQLite 文件导入数据到 PostgreSQL'
+    )
+    import_sqlite_parser.add_argument(
+        '--sqlite-path',
+        default='data/sailzen.db',
+        help='SQLite 文件路径 (默认: data/sailzen.db)'
+    )
+    import_sqlite_parser.add_argument(
+        '--env',
+        choices=['dev', 'prod'],
+        default='dev',
+        help='PostgreSQL 目标环境 (默认: dev，即本地 PG)'
+    )
+    import_sqlite_parser.add_argument(
+        '--no-confirm',
+        action='store_true',
+        help='跳过确认提示'
+    )
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -673,7 +1033,33 @@ def main():
         _print_table_list()
         return
     
-    # 其余命令需要加载环境配置
+    # SQLite 同步命令
+    if args.command in ('export-sqlite', 'import-sqlite'):
+        env_name = args.env
+        env_file = f'.env.{env_name}'
+        env_path = os.path.join(project_root, env_file)
+        
+        try:
+            config = load_env_file(env_path)
+        except FileNotFoundError as e:
+            logger.error(f"加载环境文件失败: {e}")
+            sys.exit(1)
+        
+        pg_uri = config.get('POSTGRE_URI')
+        if not pg_uri:
+            logger.error(f"未在 {env_file} 中找到 POSTGRE_URI 配置")
+            sys.exit(1)
+        
+        sqlite_path = args.sqlite_path
+        sqlite_sync = SQLiteSyncManager(pg_uri, sqlite_path)
+        
+        if args.command == 'export-sqlite':
+            sqlite_sync.export_to_sqlite(confirm=not args.no_confirm)
+        elif args.command == 'import-sqlite':
+            sqlite_sync.import_from_sqlite(confirm=not args.no_confirm)
+        return
+    
+    # 其余命令需要加载 dev + prod 环境配置
     env_dev_path = os.path.join(project_root, '.env.dev')
     env_prod_path = os.path.join(project_root, '.env.prod')
     

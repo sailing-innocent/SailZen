@@ -28,10 +28,10 @@ class ControlPlaneDatabase:
     def __init__(self) -> None:
         uri = os.environ.get("CONTROL_PLANE_DATABASE_URI")
         if not uri:
-            default_path = os.environ.get(
-                "CONTROL_PLANE_SQLITE_PATH", "data/control_plane/control_plane.db"
-            )
-            Path(default_path).parent.mkdir(parents=True, exist_ok=True)
+            from sail_server.config.paths import CONTROL_PLANE_SQLITE_PATH
+
+            default_path = str(CONTROL_PLANE_SQLITE_PATH)
+            CONTROL_PLANE_SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
             uri = f"sqlite:///{default_path}"
 
         self.uri = _normalize_database_uri(uri)

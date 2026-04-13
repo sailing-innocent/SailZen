@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
 @layer base {
   :root {
     --chart-1: oklch(0.646 0.222 41.116);

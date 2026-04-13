@@ -12,6 +12,7 @@ from sail_server.controller.finance import (
     AccountController,
     TransactionController,
     BudgetController,
+    TagController,
 )
 from sail_server.db import get_db_dependency
 
@@ -23,5 +24,6 @@ router = Router(
         AccountController,
         TransactionController,
         BudgetController,
+        TagController,
     ],
 )
