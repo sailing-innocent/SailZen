@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
-# @file postgre.py
-# @brief The PostgreSQL Database
+# @file db.py
+# @brief The Database Layer (supports PostgreSQL and SQLite)
 # @author sailing-innocent
 # @date 2025-01-29
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import Session
 from sqlalchemy import MetaData
 from typing import Generator
 import functools
+import os
 
 from sail_server.infrastructure.orm.orm_base import ORMBase
 
@@ -24,18 +25,55 @@ from sail_server.infrastructure.orm import history
 from sail_server.infrastructure.orm import text
 from sail_server.infrastructure.orm import necessity
 from sail_server.infrastructure.orm import analysis
-import os
+from sail_server.infrastructure.orm import dag_pipeline
 
-# 设置 PostgreSQL 客户端编码环境变量，解决 Windows 中文系统的编码问题
-os.environ["PGCLIENTENCODING"] = "UTF8"
+__all__ = [
+    "Database",
+    "g_db_func",
+    "db_session",
+    "provide_db_session",
+    "get_db_dependency",
+    "get_db_session",
+]
 
-__all__ = ["Database", "g_db_func", "db_session", "provide_db_session", "get_db_dependency", "get_db_session"]
+
+def _get_db_backend() -> str:
+    """获取数据库后端类型: 'postgres' 或 'sqlite'"""
+    return os.environ.get("DB_BACKEND", "postgres").lower().strip()
+
+
+def _get_db_uri() -> str:
+    """根据 DB_BACKEND 环境变量构建数据库 URI"""
+    backend = _get_db_backend()
+
+    if backend == "sqlite":
+        from sail_server.config.paths import SQLITE_DB_PATH
+
+        sqlite_path = str(SQLITE_DB_PATH)
+        # 确保目录存在
+        SQLITE_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        # SQLite URI
+        return f"sqlite:///{sqlite_path}"
+    else:
+        # PostgreSQL
+        os.environ["PGCLIENTENCODING"] = "UTF8"
+        uri = os.environ.get("POSTGRE_URI")
+        if not uri:
+            raise RuntimeError(
+                "POSTGRE_URI environment variable is not set. "
+                "Set DB_BACKEND=sqlite to use SQLite instead."
+            )
+        # 将 postgresql:// 转换为 postgresql+psycopg:// 以使用 psycopg3
+        if uri.startswith("postgresql://"):
+            uri = uri.replace("postgresql://", "postgresql+psycopg://", 1)
+        return uri
 
 
 class Database:
     __instance = None
     __engine = None
     __uri = None
+    __backend = None
 
     @staticmethod
     def get_instance():
@@ -49,17 +87,43 @@ class Database:
         else:
             Database.__instance = self
 
-        __uri = os.environ.get("POSTGRE_URI")
-        # 将 postgresql:// 转换为 postgresql+psycopg:// 以使用 psycopg3
-        if __uri and __uri.startswith("postgresql://"):
-            __uri = __uri.replace("postgresql://", "postgresql+psycopg://", 1)
-        print("Connecting to ", __uri)
-        # psycopg3 对编码处理更好，不需要额外的 client_encoding 参数
-        self.__engine = create_engine(__uri)
+        self.__backend = _get_db_backend()
+        self.__uri = _get_db_uri()
+
+        print(f"[Database] Backend: {self.__backend}")
+        print(f"[Database] Connecting to: {self.__uri}")
+
+        if self.__backend == "sqlite":
+            # SQLite: 启用 WAL 模式以获得更好的并发性能
+            self.__engine = create_engine(
+                self.__uri,
+                connect_args={"check_same_thread": False},
+            )
+
+            # 启用外键约束（SQLite 默认不启用）
+            @event.listens_for(self.__engine, "connect")
+            def _set_sqlite_pragma(dbapi_connection, connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+        else:
+            # PostgreSQL: psycopg3 对编码处理更好，不需要额外的 client_encoding 参数
+            self.__engine = create_engine(self.__uri)
+
         self.SessionLocal = sessionmaker(
             autocommit=False, autoflush=False, bind=self.__engine
         )
         self.create_all()
+
+    @property
+    def backend(self) -> str:
+        """返回当前数据库后端类型: 'postgres' 或 'sqlite'"""
+        return self.__backend
+
+    @property
+    def engine(self):
+        return self.__engine
 
     def drop_all(self):
         ORMBase.metadata.drop_all(bind=self.__engine)
@@ -82,7 +146,7 @@ class Database:
         return self.SessionLocal()
 
     def __str__(self):
-        return "sqlite database in " + str(self.__uri)
+        return f"{self.__backend} database at {self.__uri}"
 
 
 g_db_func = Database.get_instance().get_db
@@ -107,6 +171,7 @@ def db_session(func):
 
 
 from contextlib import contextmanager
+
 
 @contextmanager
 def get_db_session():

@@ -20,6 +20,9 @@ import {
   type BudgetStatsParams,
   type BudgetAnalysis,
   type BudgetConsumeProps,
+  type FinanceTagData,
+  type FinanceTagCreateProps,
+  type FinanceTagUpdateProps,
 } from '@lib/data/money'
 
 import {
@@ -44,6 +47,10 @@ import {
   api_link_transaction_to_budget,
   api_link_transactions_batch,
   api_unlink_transaction_from_budget,
+  api_get_finance_tags,
+  api_create_finance_tag,
+  api_update_finance_tag,
+  api_delete_finance_tag,
   type BatchLinkResult,
 } from '@lib/api/money'
 
@@ -253,7 +260,86 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
     return response.status === 'success'
   },
   getSupportedTags: (): string[] => {
-    return ['零食', '交通', '日用消耗', '大宗电器', '娱乐休闲', '人际交往', '医药健康', '衣物', '大宗收支']
+    // 从 FinanceTagsStore 获取动态标签，如果尚未加载则返回空数组
+    const tagStore = useFinanceTagsStore.getState()
+    if (tagStore.tags.length > 0) {
+      return tagStore.tags.filter(t => t.is_active === 1).map(t => t.name)
+    }
+    // Fallback: 返回空数组，等待 tags store 加载完成
+    return []
+  },
+}))
+
+// ============ Finance Tags Store ============
+
+export interface FinanceTagsState {
+  tags: FinanceTagData[]
+  isLoading: boolean
+  isLoaded: boolean
+  /** 从后端加载标签列表 */
+  fetchTags: (category?: string) => Promise<FinanceTagData[]>
+  /** 创建新标签 */
+  createTag: (tag: FinanceTagCreateProps) => Promise<FinanceTagData>
+  /** 更新标签 */
+  updateTag: (id: number, tag: FinanceTagUpdateProps) => Promise<FinanceTagData>
+  /** 删除标签 */
+  deleteTag: (id: number) => Promise<void>
+  /** 获取标签名称列表（兼容旧接口） */
+  getTagNames: () => string[]
+  /** 获取标签颜色映射 */
+  getTagColors: () => Record<string, string>
+}
+
+export const useFinanceTagsStore: UseBoundStore<StoreApi<FinanceTagsState>> = create<FinanceTagsState>((set) => ({
+  tags: [],
+  isLoading: false,
+  isLoaded: false,
+  fetchTags: async (category?: string): Promise<FinanceTagData[]> => {
+    set({ isLoading: true })
+    try {
+      const tags = await api_get_finance_tags(category, true)
+      set({ tags, isLoading: false, isLoaded: true })
+      return tags
+    } catch (error) {
+      console.error('Failed to fetch finance tags:', error)
+      set({ isLoading: false })
+      throw error
+    }
+  },
+  createTag: async (tag: FinanceTagCreateProps): Promise<FinanceTagData> => {
+    const newTag = await api_create_finance_tag(tag)
+    set((state) => ({
+      ...state,
+      tags: [...state.tags, newTag],
+    }))
+    return newTag
+  },
+  updateTag: async (id: number, tag: FinanceTagUpdateProps): Promise<FinanceTagData> => {
+    const updatedTag = await api_update_finance_tag(id, tag)
+    set((state) => ({
+      ...state,
+      tags: state.tags.map(t => t.id === id ? updatedTag : t),
+    }))
+    return updatedTag
+  },
+  deleteTag: async (id: number): Promise<void> => {
+    await api_delete_finance_tag(id)
+    set((state) => ({
+      ...state,
+      tags: state.tags.filter(t => t.id !== id),
+    }))
+  },
+  getTagNames: (): string[] => {
+    return useFinanceTagsStore.getState().tags
+      .filter(t => t.is_active === 1)
+      .map(t => t.name)
+  },
+  getTagColors: (): Record<string, string> => {
+    const colors: Record<string, string> = {}
+    useFinanceTagsStore.getState().tags.forEach(t => {
+      colors[t.name] = t.color
+    })
+    return colors
   },
 }))
 

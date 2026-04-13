@@ -356,6 +356,52 @@ class BudgetItemData(BaseModel):
     end_time: float = Field(default=0.0, description="结束时间戳")
 
 
+# ============================================================================
+# FinanceTag DTOs
+# ============================================================================
+
+class FinanceTagCreateRequest(BaseModel):
+    """创建标签请求"""
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str = Field(description="标签名称（唯一）")
+    color: str = Field(default="#888888", description="显示颜色（HEX）")
+    description: str = Field(default="", description="标签描述")
+    category: str = Field(default="expense", description="分类: expense / income / major / custom")
+    sort_order: int = Field(default=0, description="排序权重（越小越靠前）")
+
+
+class FinanceTagUpdateRequest(BaseModel):
+    """更新标签请求"""
+    model_config = ConfigDict(from_attributes=True)
+
+    name: Optional[str] = Field(default=None, description="标签名称")
+    color: Optional[str] = Field(default=None, description="显示颜色（HEX）")
+    description: Optional[str] = Field(default=None, description="标签描述")
+    category: Optional[str] = Field(default=None, description="分类")
+    sort_order: Optional[int] = Field(default=None, description="排序权重")
+    is_active: Optional[int] = Field(default=None, description="是否启用 (1=启用, 0=停用)")
+
+
+class FinanceTagResponse(BaseModel):
+    """标签响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int = Field(description="标签ID")
+    name: str = Field(description="标签名称")
+    color: str = Field(default="#888888", description="显示颜色")
+    description: str = Field(default="", description="标签描述")
+    category: str = Field(default="expense", description="分类")
+    sort_order: int = Field(default=0, description="排序权重")
+    is_active: int = Field(default=1, description="是否启用")
+
+
+class FinanceTagListResponse(BaseModel):
+    """标签列表响应"""
+    tags: List[FinanceTagResponse]
+    total: int
+
+
 class BudgetData(BaseModel):
     """预算数据 DTO (向后兼容)"""
     model_config = ConfigDict(from_attributes=True)

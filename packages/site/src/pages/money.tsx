@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import PageLayout from '@components/page_layout'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -5,9 +6,19 @@ import AccountsDataTable from '@components/accounts_data_table'
 import TransactionsDataTable from '@components/transactions_data_table'
 import Statistics from '@components/statistics'
 import BudgetsDataTable from '@components/budgets_data_table'
+import { useFinanceTagsStore } from '@lib/store'
 
 const MoneyPage = () => {
   const isMobile = useIsMobile()
+  const fetchTags = useFinanceTagsStore((state) => state.fetchTags)
+  const isTagsLoaded = useFinanceTagsStore((state) => state.isLoaded)
+
+  // 在页面加载时获取标签（只加载一次）
+  useEffect(() => {
+    if (!isTagsLoaded) {
+      fetchTags().catch((err) => console.error('Failed to load finance tags:', err))
+    }
+  }, [fetchTags, isTagsLoaded])
 
   return (
     <>

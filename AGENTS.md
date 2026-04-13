@@ -245,12 +245,25 @@ uv run scripts/db_sync.py push-table --table accounts
 
 # 列出所有可同步的表
 uv run scripts/db_sync.py list-tables
+
+# 从 PostgreSQL 导出数据到 SQLite（用于本地轻量开发）
+uv run scripts/db_sync.py export-sqlite
+uv run scripts/db_sync.py export-sqlite --env prod  # 从生产环境导出
+
+# 从 SQLite 导入数据回 PostgreSQL
+uv run scripts/db_sync.py import-sqlite
 ```
+
+**数据库后端配置：**
+- 项目支持 PostgreSQL 和 SQLite 两种后端
+- 在 `.env.dev` 中设置 `DB_BACKEND=sqlite` 即可使用 SQLite 轻量开发
+- SQLite 文件默认路径: `data/sailzen.db`（通过 `SQLITE_PATH` 配置）
 
 **数据库同步配置说明：**
 1. 确保 `.env.dev` 配置本地数据库，`POSTGRE_URI` 指向本地 PostgreSQL
 2. 修改 `.env.prod`，将 `POSTGRE_URI` 改为云端数据库地址
 3. 同步时会自动处理表之间的外键依赖关系
+4. 使用 `export-sqlite` 可将 PG 数据导出到 SQLite 用于离线开发
 
 ## Testing Commands
 

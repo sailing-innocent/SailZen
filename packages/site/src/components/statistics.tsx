@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import { useTransactionsStore } from '@lib/store'
+import { useTransactionsStore, useFinanceTagsStore } from '@lib/store'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -88,22 +88,26 @@ const generatePeriods = (timeRange: TimeRange, numPeriods: number = 12): Array<{
   return periods
 }
 
-// 性能优化：将静态配置移到组件外部，避免每次渲染都创建新对象
-const TAG_COLORS: Record<string, string> = {
-  零食: '#8884d8',
-  交通: '#82ca9d',
-  日用消耗: '#ffc658',
-  大宗电器: '#ff7300',
-  娱乐休闲: '#00ff00',
-  人际交往: '#ff00ff',
-  医药健康: '#00ffff',
-  衣物: '#ff0080',
-  大宗收支: '#8000ff',
+// 固定的系统级颜色（非用户自定义标签）
+const SYSTEM_COLORS: Record<string, string> = {
   总支出: '#ff0000',
+  支出总体: '#ff0000',
+  日常零碎支出: '#ffc658',
 }
 
 const Statistics: React.FC = () => {
   const getSupportedTags = useTransactionsStore((state) => state.getSupportedTags)
+  const financeTagsData = useFinanceTagsStore((state) => state.tags)
+
+  // 合并动态标签颜色和系统级颜色（依赖实际的标签数据，而非函数引用）
+  const TAG_COLORS = useMemo(() => {
+    const colors: Record<string, string> = {}
+    financeTagsData.forEach((t) => {
+      colors[t.name] = t.color
+    })
+    return { ...colors, ...SYSTEM_COLORS }
+  }, [financeTagsData])
+
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('monthly')
   const [loading, setLoading] = useState(false)
   const [tagStats, setTagStats] = useState<TagStatistic[]>([])
@@ -321,7 +325,7 @@ const Statistics: React.FC = () => {
     }
 
     fetchStatistics()
-  }, [selectedTimeRange, getSupportedTags])
+  }, [selectedTimeRange, getSupportedTags, TAG_COLORS])
 
   // Build chart config dynamically based on available tags
   const chartConfig = React.useMemo(() => {
@@ -364,7 +368,7 @@ const Statistics: React.FC = () => {
     }
     
     return config
-  }, [getSupportedTags])
+  }, [getSupportedTags, TAG_COLORS])
 
   const regularTagStats = tagStats
 
@@ -504,7 +508,7 @@ const Statistics: React.FC = () => {
                         />
 
                         {regularTagStats.slice(0, 5).map(({ tag }) => (
-                          <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag]} strokeWidth={2} dot={{ r: 4 }} />
+                          <Line key={tag} type="monotone" dataKey={tag} stroke={TAG_COLORS[tag] || '#888888'} strokeWidth={2} dot={{ r: 4 }} />
                         ))}
 
                         <ChartTooltip

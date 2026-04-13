@@ -108,6 +108,26 @@ class Budget(ORMBase):
     )
 
 
+class FinanceTag(ORMBase):
+    """
+    财务标签表
+
+    将 tag 从硬编码字符串提升为独立的数据库实体，
+    支持自定义标签、颜色、分类和统计。
+    """
+
+    __tablename__ = "finance_tags"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)  # 标签名称（唯一）
+    color = Column(String, default="#888888")  # 显示颜色（HEX）
+    description = Column(String, default="")  # 标签描述
+    category = Column(String, default="expense")  # 分类: expense / income / major / custom
+    sort_order = Column(Integer, default=0)  # 排序权重（越小越靠前）
+    is_active = Column(Integer, default=1)  # 是否启用 (1=启用, 0=停用)
+    ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+
 class BudgetItem(ORMBase):
     """
     预算子项 - 通用预算项模型

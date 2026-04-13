@@ -27,6 +27,9 @@ from sail_server.application.dto.finance import (
     BudgetUpdateRequest,
     BudgetItemResponse,
     BudgetItemCreateRequest,
+    FinanceTagResponse,
+    FinanceTagCreateRequest,
+    FinanceTagUpdateRequest,
 )
 from sail_server.model.finance.account import (
     read_account_impl,
@@ -1030,4 +1033,153 @@ class BudgetController(Controller):
             raise
         except Exception as e:
             logger.error(f"Error getting budget detail: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Tag Controller
+# ============================================================================
+
+from sail_server.model.finance.tag import (
+    read_tag_impl,
+    read_tags_impl,
+    create_tag_impl,
+    update_tag_impl,
+    delete_tag_impl,
+    seed_default_tags_impl,
+)
+
+
+class TagController(Controller):
+    path = "/tag"
+
+    @get("/")
+    async def get_tags(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        category: str = "",
+        active_only: bool = True,
+    ) -> list:
+        """
+        获取标签列表
+
+        Args:
+            category: 按分类过滤（空字符串=全部）
+            active_only: 是否只返回启用的标签
+        """
+        try:
+            db = next(router_dependency)
+            tags = read_tags_impl(
+                db,
+                category=category if category else None,
+                active_only=active_only,
+            )
+            return [t.model_dump() for t in tags]
+        except Exception as e:
+            logger.error(f"Error getting tags: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @get("/{tag_id:int}")
+    async def get_tag(
+        self,
+        tag_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """获取单个标签"""
+        try:
+            db = next(router_dependency)
+            tag = read_tag_impl(db, tag_id)
+            if tag is None:
+                raise HTTPException(status_code=404, detail="Tag not found")
+            return tag.model_dump()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error getting tag: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/")
+    async def create_tag(
+        self,
+        data: FinanceTagCreateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """创建标签"""
+        try:
+            db = next(router_dependency)
+            tag = create_tag_impl(db, data)
+            return tag.model_dump()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error(f"Error creating tag: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @put("/{tag_id:int}")
+    async def update_tag(
+        self,
+        tag_id: int,
+        data: FinanceTagUpdateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """更新标签"""
+        try:
+            db = next(router_dependency)
+            tag = update_tag_impl(db, tag_id, data)
+            if tag is None:
+                raise HTTPException(status_code=404, detail="Tag not found")
+            return tag.model_dump()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error updating tag: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @delete("/{tag_id:int}", status_code=200)
+    async def delete_tag(
+        self,
+        tag_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """删除标签"""
+        try:
+            db = next(router_dependency)
+            result = delete_tag_impl(db, tag_id)
+            if not result:
+                raise HTTPException(status_code=404, detail="Tag not found")
+            return {"status": "success", "message": f"Tag {tag_id} deleted"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting tag: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @post("/seed")
+    async def seed_tags(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """
+        初始化默认标签（幂等操作）
+
+        只会创建不存在的标签，不会修改已有标签。
+        """
+        try:
+            db = next(router_dependency)
+            created_count = seed_default_tags_impl(db)
+            return {
+                "status": "success",
+                "created_count": created_count,
+                "message": f"Seeded {created_count} new tags",
+            }
+        except Exception as e:
+            logger.error(f"Error seeding tags: {e}")
             raise HTTPException(status_code=500, detail=str(e))

@@ -25,6 +25,9 @@ import {
   type BudgetAnalysis,
   type BudgetConsumeProps,
   type BudgetResponse,
+  type FinanceTagData,
+  type FinanceTagCreateProps,
+  type FinanceTagUpdateProps,
 } from '@lib/data/money'
 
 import { SERVER_URL, API_BASE } from './config'
@@ -463,6 +466,65 @@ const api_create_budget_with_items = async (
   return api_get_budget_detail(budgetResponse.id)
 }
 
+// ============ Finance Tag API ============
+
+const api_get_finance_tags = async (category?: string, activeOnly: boolean = true): Promise<FinanceTagData[]> => {
+  const params = new URLSearchParams()
+  if (category) params.append('category', category)
+  params.append('active_only', activeOnly.toString())
+  const url = `${SERVER_URL}/${FINANCE_API_BASE}/tag/?${params.toString()}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error('Failed to fetch finance tags')
+  }
+  return response.json()
+}
+
+const api_create_finance_tag = async (tag: FinanceTagCreateProps): Promise<FinanceTagData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/tag/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tag),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'Failed to create finance tag')
+  }
+  return response.json()
+}
+
+const api_update_finance_tag = async (tagId: number, tag: FinanceTagUpdateProps): Promise<FinanceTagData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/tag/${tagId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tag),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || 'Failed to update finance tag')
+  }
+  return response.json()
+}
+
+const api_delete_finance_tag = async (tagId: number): Promise<void> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/tag/${tagId}`, {
+    method: 'DELETE',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to delete finance tag')
+  }
+}
+
+const api_seed_finance_tags = async (): Promise<{ status: string; created_count: number; message: string }> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/tag/seed`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to seed finance tags')
+  }
+  return response.json()
+}
+
 export {
   api_get_account,
   api_create_account,
@@ -498,6 +560,12 @@ export {
   api_get_budget_detail,
   // Unified budget creation
   api_create_budget_with_items,
+  // Finance Tags
+  api_get_finance_tags,
+  api_create_finance_tag,
+  api_update_finance_tag,
+  api_delete_finance_tag,
+  api_seed_finance_tags,
 }
 
 export type { BatchLinkResult }
