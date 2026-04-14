@@ -22,6 +22,10 @@ export default function TextPage() {
     setSelectedWork(response.work)
   }
 
+  const handleDeleteSuccess = () => {
+    setRefreshTrigger((prev) => prev + 1)
+  }
+
   const handleSelectWork = (work: Work) => {
     setSelectedWork(work)
   }
@@ -40,7 +44,11 @@ export default function TextPage() {
             <div className="text-xl md:text-2xl font-bold">文本管理</div>
             <TextImportDialog onImportSuccess={handleImportSuccess} />
           </div>
-          <WorksList onSelectWork={handleSelectWork} refreshTrigger={refreshTrigger} />
+          <WorksList
+            onSelectWork={handleSelectWork}
+            refreshTrigger={refreshTrigger}
+            onDeleteSuccess={handleDeleteSuccess}
+          />
         </>
       )}
     </PageLayout>

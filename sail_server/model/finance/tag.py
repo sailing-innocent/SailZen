@@ -201,6 +201,84 @@ def seed_default_tags_impl(db) -> int:
 
 
 # ============================================================================
+# Tag Statistics (Agent-Friendly)
+# ============================================================================
+
+
+def get_tag_usage_stats_impl(db) -> dict:
+    """
+    获取每个标签的使用次数统计。
+
+    Agent 用此接口了解标签体系的使用情况。
+
+    Returns:
+        Dict containing:
+        - stats: list of {name, category, color, usage_count}
+        - total_tags: 标签总数
+        - total_tagged_transactions: 有标签的交易总数
+    """
+    from sail_server.infrastructure.orm.finance import Transaction
+    from sqlalchemy import or_
+    from collections import Counter
+
+    # 获取所有 active 标签
+    tags = db.query(FinanceTag).filter(FinanceTag.is_active == 1).all()
+    tag_map = {t.name: _orm_to_response(t) for t in tags}
+
+    # 获取所有有标签的交易
+    q = db.query(Transaction).filter(Transaction.state != 0)
+    q = q.filter(
+        Transaction.tags.isnot(None),
+        Transaction.tags != "",
+        Transaction.tags != ",",
+    )
+    tagged_transactions = q.all()
+
+    # 统计每个 tag 的使用次数
+    tag_counter = Counter()
+    for t in tagged_transactions:
+        for tag_name in (t.tags or "").split(","):
+            tag_name = tag_name.strip()
+            if tag_name:
+                tag_counter[tag_name] += 1
+
+    # 构造结果: 先包含数据库中定义的标签，再包含未注册但使用过的标签
+    stats = []
+    for name, resp in tag_map.items():
+        stats.append(
+            {
+                "name": name,
+                "category": resp.category,
+                "color": resp.color,
+                "usage_count": tag_counter.get(name, 0),
+                "is_registered": True,
+            }
+        )
+
+    # 找出使用过但未在 finance_tags 表中注册的标签
+    for name, count in tag_counter.items():
+        if name not in tag_map:
+            stats.append(
+                {
+                    "name": name,
+                    "category": "unknown",
+                    "color": "#cccccc",
+                    "usage_count": count,
+                    "is_registered": False,
+                }
+            )
+
+    stats.sort(key=lambda x: x["usage_count"], reverse=True)
+
+    return {
+        "stats": stats,
+        "total_tags": len(stats),
+        "total_registered_tags": len(tag_map),
+        "total_tagged_transactions": len(tagged_transactions),
+    }
+
+
+# ============================================================================
 # Internal Helpers
 # ============================================================================
 

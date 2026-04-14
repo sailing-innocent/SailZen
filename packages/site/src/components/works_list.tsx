@@ -19,13 +19,15 @@ import WorkEditDialog from './work_edit_dialog'
 interface WorksListProps {
   onSelectWork?: (work: Work) => void
   refreshTrigger?: number
+  onDeleteSuccess?: () => void
 }
 
-export default function WorksList({ onSelectWork, refreshTrigger }: WorksListProps) {
+export default function WorksList({ onSelectWork, refreshTrigger, onDeleteSuccess }: WorksListProps) {
   const [works, setWorks] = useState<Work[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const fetchWorks = async () => {
     setLoading(true)
@@ -54,16 +56,22 @@ export default function WorksList({ onSelectWork, refreshTrigger }: WorksListPro
       return
     }
 
+    setDeletingId(work.id)
     try {
       await api_delete_work(work.id)
-      setWorks(works.filter((w) => w.id !== work.id))
+      // 使用函数式更新避免闭包陷阱，先立即从列表移除
+      setWorks((prev) => prev.filter((w) => w.id !== work.id))
+      // 通知父组件触发刷新，确保与服务端数据一致
+      onDeleteSuccess?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败')
+    } finally {
+      setDeletingId(null)
     }
   }
 
   const handleWorkUpdate = (updatedWork: Work) => {
-    setWorks(works.map((w) => (w.id === updatedWork.id ? updatedWork : w)))
+    setWorks((prev) => prev.map((w) => (w.id === updatedWork.id ? updatedWork : w)))
   }
 
   if (loading) {
@@ -154,8 +162,9 @@ export default function WorksList({ onSelectWork, refreshTrigger }: WorksListPro
                       size="sm"
                       className="text-red-500 hover:text-red-700 hover:bg-red-50"
                       onClick={(e) => handleDelete(work, e)}
+                      disabled={deletingId === work.id}
                     >
-                      删除
+                      {deletingId === work.id ? '删除中...' : '删除'}
                     </Button>
                   </div>
                 </div>
