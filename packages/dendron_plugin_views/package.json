@@ -1,6 +1,6 @@
 {
   "name": "@saili/dendron-plugin-views",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "scripts": {
     "start": "vite",
     "dev": "vite --open dev.html",

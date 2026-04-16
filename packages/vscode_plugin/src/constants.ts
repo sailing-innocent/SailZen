@@ -503,6 +503,11 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Rename Note`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
+  BATCH_RENAME_NOTE: {
+    key: "dendron.batchRenameNote",
+    title: `${CMD_PREFIX} Batch Rename Note`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
+  },
   RENAME_HEADER: {
     key: "dendron.renameHeader",
     title: `${CMD_PREFIX} Rename Header`,

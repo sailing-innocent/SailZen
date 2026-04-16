@@ -67,6 +67,7 @@ import { UpgradeSettingsCommand } from "./UpgradeSettings";
 import { ValidateEngineCommand } from "./ValidateEngineCommand";
 import { VaultAddCommand } from "./VaultAddCommand";
 import { ConvertVaultCommand } from "./ConvertVaultCommand";
+import { BatchRenameNoteCommand } from "./BatchRenameNoteCommand";
 import { RenameNoteCommand } from "./RenameNoteCommand";
 import { CreateNoteCommand } from "./CreateNoteCommand";
 import { MergeNoteCommand } from "./MergeNoteCommand";
@@ -120,6 +121,7 @@ const ALL_COMMANDS = [
   MoveNoteCommand,
   MoveSelectionToCommand,
   RenameNoteCommand,
+  BatchRenameNoteCommand,
   RenameHeaderCommand,
   MoveHeaderCommand,
   RefactorHierarchyCommandV2,
