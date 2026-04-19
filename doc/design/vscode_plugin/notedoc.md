@@ -1,10 +1,6 @@
-# SailZen NoteDoc: 笔记即源码的排版系统设计方案
+# Note Documentation 
 
-> **版本**: 1.0-draft  
-> **目标**: 打通 SailZen 笔记库 (`vault/notes`) 与排版输出库 (`vault/doc`)，实现"笔记即源码"(Note-as-Source)的单源发布体系。  
-> **范围**: 设计文档，不包含具体实现。
-
----
+这一部分专门设计排版和导出功能，之前Dendron的导出功能只考虑了它自己的那一套web方案，我不太满意，希望能设计一套兼容书面排版和PPT的方案。
 
 ## 1. 现状分析
 

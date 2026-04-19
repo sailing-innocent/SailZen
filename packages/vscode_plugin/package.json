@@ -1333,7 +1333,10 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --watch --tsconfig=tsconfig.json",
     "package": "vsce package --no-dependencies",
     "clean": "rimraf dist node_modules",
-    "vscode:prepublish": "pnpm run compile"
+    "vscode:prepublish": "pnpm run compile",
+    "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
   "dependencies": {
     "@saili/api-server": "workspace:^",
@@ -1362,6 +1365,7 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/is-url": "^1.2.32",
+    "@types/jest": "catalog:",
     "@types/lodash": "^4.17.21",
     "@types/luxon": "^3.7.1",
     "@types/markdown-it": "^14.1.2",
@@ -1369,8 +1373,11 @@
     "@types/semver": "^7.7.1",
     "@types/unist": "^3.0.3",
     "@vscode/vsce": "^3.7.1",
+    "cross-env": "^10.1.0",
     "esbuild": "catalog:",
-    "rimraf": "^6.1.2"
+    "jest": "catalog:",
+    "rimraf": "^6.1.2",
+    "ts-jest": "catalog:"
   },
   "capabilities": {
     "untrustedWorkspaces": {
