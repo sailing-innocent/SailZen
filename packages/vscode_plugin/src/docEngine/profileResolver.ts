@@ -32,8 +32,8 @@ export function resolveProfile(
     keywords: Array.isArray(rootNote.tags)
       ? rootNote.tags
       : rootNote.tags
-      ? [rootNote.tags]
-      : undefined,
+        ? [rootNote.tags]
+        : undefined,
   };
 
   const projectName = docFm?.project;

@@ -18,6 +18,7 @@
         "test:common-all": "pnpm --filter=\"./packages/common-all\" run test",
         "test:common-server": "pnpm --filter=\"./packages/common-server\" run test",
         "test:unified": "pnpm --filter=\"./packages/unified\" run test",
+        "test:vscode-plugin": "pnpm --filter=\"./packages/vscode_plugin\" exec jest",
         "test:coverage": "pnpm -r --filter=\"./packages/common-all\" --filter=\"./packages/common-server\" --filter=\"./packages/unified\" run test:coverage",
         "views:dev": "pnpm --filter=@saili/dendron-plugin-views run dev",
         "views:build": "pnpm --filter=@saili/dendron-plugin-views run build",

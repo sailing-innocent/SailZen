@@ -51,6 +51,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "remark-stringify": "^11.0.0",
     "remark-variables": "^1.4.9",
     "unified": "^11.0.5",
     "unified-engine": "^11.2.2",

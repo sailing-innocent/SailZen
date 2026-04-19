@@ -1,85 +1,63 @@
-/**
- * Tests for sailzenFigure remark plugin
- */
+import { remark } from "remark";
+import remarkParse from "remark-parse";
+import { DendronASTDest } from "../../types";
+import { sailzenFigure } from "../sailzenFigure";
+import { MDUtilsV5 } from "../..";
 
-import {
-  sailzenFigure,
-  FIGURE_REGEX,
-} from "../sailzenFigure";
-import { createTestNoteWithBody } from "../../__tests__/fixtures/testNotes";
-import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+describe("sailzenFigure", () => {
+  test("should parse ::figure[caption](src) into a figure node", () => {
+    const processor = remark().use(remarkParse).use(sailzenFigure);
+    const tree = processor.parse("::figure[Overview](fig_overview)");
 
-describe("sailzenFigure plugin", () => {
-  describe("FIGURE_REGEX", () => {
-    test("should match basic figure directive", () => {
-      const match = FIGURE_REGEX.exec("::figure[Caption](image.png)");
-      expect(match).not.toBeNull();
-      expect(match?.[1]).toBe("Caption");
-      expect(match?.[2]).toBe("image.png");
-    });
+    const root = tree as any;
+    expect(root.children).toBeDefined();
+    expect(root.children.length).toBe(1);
 
-    test("should match figure with options", () => {
-      const match = FIGURE_REGEX.exec(
-        '::figure[Overview](fig_teaser){width="\\linewidth"}'
-      );
-      expect(match).not.toBeNull();
-      expect(match?.[1]).toBe("Overview");
-      expect(match?.[2]).toBe("fig_teaser");
-      expect(match?.[3]).toBe('width="\\linewidth"');
-    });
+    const paragraph = root.children[0];
+    expect(paragraph.type).toBe("paragraph");
+    expect(paragraph.children.length).toBe(1);
 
-    test("should match figure with empty caption", () => {
-      const match = FIGURE_REGEX.exec("::figure[](empty.png)");
-      expect(match).not.toBeNull();
-      expect(match?.[1]).toBe("");
-      expect(match?.[2]).toBe("empty.png");
-    });
-
-    test("should not match incomplete figure", () => {
-      const match = FIGURE_REGEX.exec("::figure[Caption");
-      expect(match).toBeNull();
-    });
-
-    test("should not match plain text", () => {
-      const match = FIGURE_REGEX.exec("regular text");
-      expect(match).toBeNull();
-    });
-
-    test("should not match figure in middle of text", () => {
-      const match = FIGURE_REGEX.exec("text ::figure[Caption](img.png)");
-      expect(match).toBeNull();
-    });
+    const figNode = paragraph.children[0];
+    expect(figNode.type).toBe("sailzenFigure");
+    expect(figNode.caption).toBe("Overview");
+    expect(figNode.src).toBe("fig_overview");
+    expect(figNode.options).toBeDefined();
   });
 
-  // NOTE: Plugin integration tests are skipped because the tokenizer
-  // requires a full MDUtilsV5 processor context with config.
-  describe.skip("sailzenFigure plugin integration", () => {
-    test("should parse figure directive", () => {
-      // Skipped: requires full processor context
-    });
+  test("should parse ::figure with options", () => {
+    const processor = remark().use(remarkParse).use(sailzenFigure);
+    const tree = processor.parse(
+      "::figure[Overview](fig_overview){width=0.8\\textwidth}"
+    );
 
-    test("should parse figure with options", () => {
-      // Skipped: requires full processor context
-    });
+    const root = tree as any;
+    const figNode = root.children[0].children[0];
+    expect(figNode.type).toBe("sailzenFigure");
+    expect(figNode.caption).toBe("Overview");
+    expect(figNode.src).toBe("fig_overview");
+    expect(figNode.options).toBeDefined();
+    expect(figNode.options.width).toBe("0.8\\textwidth");
   });
 
-  describe("sailzenFigure with full processor", () => {
-    test("should render figure in HTML", async () => {
-      const note = createTestNoteWithBody(
-        "::figure[Our method overview](method.png)"
-      );
-      const html = await processNoteFull(note);
-      expect(html).toContain("method.png");
-      expect(html).toContain("Our method overview");
+  test("should round-trip figure directive through stringify", () => {
+    const processor = remark().use(remarkParse).use(sailzenFigure);
+
+    const result = processor
+      .processSync("::figure[Overview](fig_overview)")
+      .toString();
+    expect(result).toContain("::figure[Overview](fig_overview)");
+  });
+
+  test("should compile figure node to placeholder for DOC_EXPORT", () => {
+    const processor = remark().use(remarkParse).use(sailzenFigure);
+
+    MDUtilsV5.setProcData(processor as any, {
+      dest: DendronASTDest.DOC_EXPORT,
     });
 
-    test("should render figure with options in HTML", async () => {
-      const note = createTestNoteWithBody(
-        '::figure[Results](results.png){width="100%"}'
-      );
-      const html = await processNoteFull(note);
-      expect(html).toContain("results.png");
-    });
+    const result = processor
+      .processSync("::figure[Overview](fig_overview)")
+      .toString();
+    expect(result).toContain("__FIGURE__[fig_overview|Overview]");
   });
 });

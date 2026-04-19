@@ -10,25 +10,26 @@ export default {
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
     "^vscode$": "<rootDir>/src/__mocks__/vscode.js",
-    "^@saili/common-all$": "<rootDir>/../common-all/src/index.ts",
+
   },
   // Transform ESM-only packages in node_modules (handle pnpm nested structure)
   // Common ESM-only deps: github-slugger, nanoid, vscode-uri
+  // @saili/common-all is symlinked and must be transformed (compiled ESM .js)
   transformIgnorePatterns: [
-    "node_modules/(?!.*(github-slugger|nanoid|vscode-uri))",
+    "node_modules/(?!.*(github-slugger|nanoid|vscode-uri|@saili/common-all))",
   ],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
       {
-        tsconfig: "tsconfig.json",
+        tsconfig: "<rootDir>/tsconfig.test.json",
         useESM: true,
       },
     ],
     "^.+\\.js$": [
       "ts-jest",
       {
-        tsconfig: "tsconfig.json",
+        tsconfig: "<rootDir>/tsconfig.test.json",
         useESM: true,
       },
     ],

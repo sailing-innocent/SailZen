@@ -92,36 +92,48 @@ ${latexBody}
 function markdownToLatex(md: string): string {
   let tex = md;
 
-  // ::cite[keys] → \cite{keys}
-  tex = tex.replace(/::cite\[([^\]]+)\]/g, (_m, keys) => {
+  // Protect special blocks so we can safely process markdown syntax
+  const protectedBlocks: string[] = [];
+  function protect(re: RegExp, replacer: (m: string, ...args: any[]) => string): void {
+    tex = tex.replace(re, (m, ...args) => {
+      const placeholder = `\u0000${protectedBlocks.length}\u0000`;
+      protectedBlocks.push(replacer(m, ...args));
+      return placeholder;
+    });
+  }
+
+  // Protect ::cite directives
+  protect(/::cite\[([^\]]+)\]/g, (_m, keys) => {
     const cleanKeys = keys
       .split(/,\s*/)
       .map((k: string) => k.trim())
       .filter(Boolean)
       .join(", ");
-    return `\cite{${cleanKeys}}`;
+    return `\\cite{${cleanKeys}}`;
   });
 
-  // ::figure[caption](src){opts} → figure environment
-  tex = tex.replace(
+  // Protect ::figure directives
+  protect(
     /::figure\[([^\]]*)\]\s*\(([^)]+)\)(?:\s*\{([^}]*)\})?/g,
     (_m, caption, src, _opts) => {
-      return `\begin{figure}[htbp]
-  \\centering
-  \\includegraphics[width=0.8\\textwidth]{${src}}
-  \\caption{${escapeLatex(caption)}}
-  \\label{fig:${src}}
-\\end{figure}`;
+      return `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${src}}\n  \\caption{${escapeLatex(caption)}}\n  \\label{fig:${src}}\n\\end{figure}`;
     }
   );
 
-  // Block math $$...$$ → \[ ... \]
-  tex = tex.replace(/\$\$([\s\S]*?)\$\$/g, (_m, math) => {
-    return `\[\n${math.trim()}\n\]`;
+  // Protect block math $$...$$
+  protect(/\$\$([\s\S]*?)\$\$/g, (_m, math) => {
+    return `\\[\n${math.trim()}\n\\]`;
   });
 
-  // Inline math $...$ → preserved (but escape $ in other contexts)
-  // This is tricky; we assume $...$ is math and preserve it
+  // Protect inline code `code`
+  protect(/`([^`]+)`/g, (_m, code) => {
+    return `\\texttt{${escapeLatex(code)}}`;
+  });
+
+  // Protect code blocks ```lang\ncode\n```
+  protect(/```(?:\w+)?\n([\s\S]*?)```/g, (_m, code) => {
+    return `\\begin{verbatim}\n${code.trim()}\n\\end{verbatim}`;
+  });
 
   // Headings
   tex = tex.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes, text) => {
@@ -130,46 +142,33 @@ function markdownToLatex(md: string): string {
       level === 1
         ? "section"
         : level === 2
-        ? "subsection"
-        : level === 3
-        ? "subsubsection"
-        : "paragraph";
-    return `\\\\${cmd}{${escapeLatex(text.trim())}}`;
+          ? "subsection"
+          : level === 3
+            ? "subsubsection"
+            : "paragraph";
+    return `\\${cmd}{${escapeLatex(text.trim())}}`;
   });
 
   // Bold **text**
   tex = tex.replace(/\*\*([^*]+)\*\*/g, (_m, text) => {
-    return `\textbf{${escapeLatex(text)}}`;
+    return `\\textbf{${escapeLatex(text)}}`;
   });
 
   // Italic *text* (but not ** which is already handled)
   tex = tex.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, text) => {
-    return `\textit{${escapeLatex(text)}}`;
-  });
-
-  // Code blocks ```lang\ncode\n```
-  tex = tex.replace(
-    /```(?:\w+)?\n([\s\S]*?)```/g,
-    (_m, code) => {
-      return `\begin{verbatim}\n${code.trim()}\n\end{verbatim}`;
-    }
-  );
-
-  // Inline code `code`
-  tex = tex.replace(/`([^`]+)`/g, (_m, code) => {
-    return `\texttt{${escapeLatex(code)}}`;
+    return `\\textit{${escapeLatex(text)}}`;
   });
 
   // Links [text](url)
   tex = tex.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => {
-    return `\href{${url}}{${escapeLatex(text)}}`;
+    return `\\href{${url}}{${escapeLatex(text)}}`;
   });
 
   // Unordered lists (- item)
   tex = tex.replace(/^([ \t]*)-\s+(.+)$/gm, (_m, indent, text) => {
     const depth = indent.length / 2;
     if (depth === 0) {
-      return `\begin{itemize}\n  \\item ${escapeLatex(text)}`;
+      return `\\begin{itemize}\n  \\item ${escapeLatex(text)}`;
     }
     return `  \\item ${escapeLatex(text)}`;
   });
@@ -186,12 +185,32 @@ function markdownToLatex(md: string): string {
   tex = tex.replace(/!?\[\[([^\]]+)\]\]/g, "");
 
   // Horizontal rules
-  tex = tex.replace(/^---+$/gm, "\hrulefill\\n");
+  tex = tex.replace(/^---+/gm, "\\hrulefill\n");
 
   // Blockquotes > text
   tex = tex.replace(/^\u003e\s+(.+)$/gm, (_m, text) => {
-    return `\begin{quote}\n${escapeLatex(text)}\n\end{quote}`;
+    return `\\begin{quote}\n${escapeLatex(text)}\n\\end{quote}`;
   });
+
+  // Protect all LaTeX commands we just generated so escapeLatex won't touch them
+  const latexCommands: string[] = [];
+  tex = tex.replace(
+    /\\[a-zA-Z]+(?:\[[^\]]*\])?(?:\{[^{}]*\})?/g,
+    (m) => {
+      const placeholder = `\u0001${latexCommands.length}\u0001`;
+      latexCommands.push(m);
+      return placeholder;
+    }
+  );
+
+  // Now escape remaining plain text for LaTeX
+  tex = escapeLatex(tex);
+
+  // Restore LaTeX commands
+  tex = tex.replace(/\u0001(\d+)\u0001/g, (_m, idx) => latexCommands[parseInt(idx, 10)]);
+
+  // Restore protected blocks
+  tex = tex.replace(/\u0000(\d+)\u0000/g, (_m, idx) => protectedBlocks[parseInt(idx, 10)]);
 
   // Multiple consecutive newlines → single paragraph break
   tex = tex.replace(/\n{3,}/g, "\n\n");

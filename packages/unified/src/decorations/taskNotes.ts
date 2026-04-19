@@ -33,9 +33,9 @@ export async function decorateTaskNote({
   const vault =
     vaultName && config.workspace.vaults
       ? VaultUtils.getVaultByName({
-          vname: vaultName,
-          vaults: config.workspace.vaults,
-        })
+        vname: vaultName,
+        vaults: config.workspace.vaults,
+      })
       : undefined;
 
   const note = (await engine.findNotesMeta({ fname, vault }))[0];
