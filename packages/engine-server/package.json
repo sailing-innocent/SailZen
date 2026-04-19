@@ -1,6 +1,6 @@
 {
   "name": "@saili/engine-server",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "type": "module",
   "description": "dendron-engine",
   "license": "MIT",

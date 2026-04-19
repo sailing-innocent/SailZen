@@ -1,8 +1,8 @@
 ---
-id: 8710cabf-9a32-475a-9e6a-a4a954cdf972
+id: PcnVj4GZBt7O3HTrwqdFq
 title: Test Paper for Doc Engine MVP
 desc: "Root standalone note for doc engine end-to-end testing"
-updated: 1714300000000
+updated: 1776609216113
 created: 1714300000000
 doc:
   role: standalone

@@ -1,14 +1,21 @@
 import {
   DocExportConfig,
-  DocFrontmatter,
   DocMeta,
   DocProfile,
-  DocRole,
   extractDocFrontmatter,
   NoteProps,
   NotePropsByIdDict,
+  ResolvedAsset,
 } from "@saili/common-all";
 import _ from "lodash";
+
+// Simple inline logger to avoid dependency issues in test environment
+const logger = {
+  info: (payload: any) => {
+    // eslint-disable-next-line no-console
+    console.log(`[${payload.ctx || "profileResolver"}] ${payload.msg}`, payload);
+  },
+};
 
 /**
  * Resolve a DocProfile from a root note and the engine's note dictionary.
@@ -27,13 +34,18 @@ export function resolveProfile(
     { format: "latex", template: "article" },
   ];
 
-  const meta: DocMeta = docFm?.meta || {
-    authors: rootNote.custom?.authors,
-    keywords: Array.isArray(rootNote.tags)
-      ? rootNote.tags
-      : rootNote.tags
-        ? [rootNote.tags]
-        : undefined,
+  const meta: DocMeta = {
+    ...(docFm?.meta || {}),
+    // Fall back to standard frontmatter fields if doc.meta doesn't specify them
+    title: docFm?.meta?.title || rootNote.title,
+    authors: docFm?.meta?.authors || rootNote.custom?.authors,
+    keywords:
+      docFm?.meta?.keywords ||
+      (Array.isArray(rootNote.tags)
+        ? rootNote.tags
+        : rootNote.tags
+          ? [rootNote.tags]
+          : undefined),
   };
 
   const projectName = docFm?.project;
@@ -62,11 +74,37 @@ export function resolveProfile(
     });
   }
 
-  // Collect citations from root note body (simple regex extraction)
-  const citations = extractCitations(rootNote.body);
+  // Collect citations and assets from root note AND all discovered compose notes
+  const allBodies = [rootNote.body];
+  for (const fname of discovered) {
+    const note = findNoteByFname(fname, notesById);
+    if (note) {
+      allBodies.push(note.body);
+    }
+  }
+  const combinedBody = allBodies.join("\n\n");
 
-  // Collect asset references (simple regex extraction)
-  const assets = extractAssetRefs(rootNote.body);
+  const citations = extractCitations(combinedBody);
+  const assetRefs = extractAssetRefs(combinedBody);
+  logger.info({
+    ctx: "resolveProfile",
+    msg: "extracted refs",
+    citationCount: citations.length,
+    assetRefCount: assetRefs.length,
+    assetRefs,
+  });
+
+  const resolvedAssets = resolveAssets(assetRefs, notesById, projectName);
+  logger.info({
+    ctx: "resolveProfile",
+    msg: "resolved assets",
+    resolvedCount: resolvedAssets.length,
+    resolvedAssets: resolvedAssets.map((a) => ({
+      ref: a.ref,
+      path: a.path,
+      width: a.width,
+    })),
+  });
 
   return {
     rootNoteId: rootNote.id,
@@ -77,8 +115,122 @@ export function resolveProfile(
     includes,
     discovered,
     citations,
-    assets,
+    assets: assetRefs,
+    resolvedAssets,
   };
+}
+
+/**
+ * Resolve asset reference keys to actual file paths.
+ *
+ * Resolution order:
+ * 1. Look for an asset note with matching fname pattern: project.<name>.fig.<key>
+ *    or direct fname match. Extract doc.asset.path from its frontmatter.
+ * 2. Fall back to vault-relative path lookup.
+ */
+function resolveAssets(
+  refs: string[],
+  notesById: NotePropsByIdDict,
+  projectName?: string
+): ResolvedAsset[] {
+  const resolved: ResolvedAsset[] = [];
+
+  for (const ref of refs) {
+    let found = false;
+
+    // Strategy 1: Find asset note by project naming convention
+    // e.g., ref "fig_pipeline" → normalized "fig.pipeline" → look for "project.testdoc.fig.pipeline"
+    // The ref itself uses underscore separators that map to dot-separated fname hierarchy.
+    if (projectName) {
+      const normalizedRef = ref.toLowerCase().replace(/_/g, ".");
+      const possibleFnames = [
+        `${projectName}.${normalizedRef}`,   // project.testdoc.fig.pipeline
+        `${projectName}.fig.${ref}`,          // project.testdoc.fig.fig_pipeline (fallback)
+        `${projectName}.asset.${ref}`,        // project.testdoc.asset.fig_pipeline (fallback)
+      ];
+
+      logger.info({
+        ctx: "resolveAssets",
+        msg: `resolving ref "${ref}"`,
+        possibleFnames,
+        availableNoteFnames: Object.values(notesById).map((n) => n.fname),
+      });
+
+      for (const fname of possibleFnames) {
+        const note = findNoteByFname(fname, notesById);
+        if (note) {
+          const docFm = extractDocFrontmatter(note.custom);
+          logger.info({
+            ctx: "resolveAssets",
+            msg: `found note for fname "${fname}"`,
+            noteId: note.id,
+            role: docFm?.role,
+            hasAssetPath: !!docFm?.asset?.path,
+          });
+          if (docFm?.role === "asset" && docFm?.asset?.path) {
+            resolved.push({
+              ref,
+              path: docFm.asset.path,
+              width: docFm.asset.width,
+              height: docFm.asset.height,
+              caption: docFm.asset.caption,
+              label: docFm.asset.label,
+            });
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Strategy 2: Direct fname match (e.g., note fname is exactly "fig_pipeline")
+    if (!found) {
+      const note = findNoteByFname(ref, notesById);
+      if (note) {
+        const docFm = extractDocFrontmatter(note.custom);
+        if (docFm?.role === "asset" && docFm?.asset?.path) {
+          resolved.push({
+            ref,
+            path: docFm.asset.path,
+            width: docFm.asset.width,
+            height: docFm.asset.height,
+            caption: docFm.asset.caption,
+            label: docFm.asset.label,
+          });
+          found = true;
+        }
+      }
+    }
+
+    // Strategy 3: Treat ref as a direct vault-relative path
+    if (!found) {
+      logger.info({
+        ctx: "resolveAssets",
+        msg: `falling back to direct path for ref "${ref}"`,
+      });
+      resolved.push({
+        ref,
+        path: ref,
+      });
+    }
+  }
+
+  return resolved;
+}
+
+/**
+ * Find a note by its fname in the note dictionary.
+ */
+function findNoteByFname(
+  fname: string,
+  notesById: NotePropsByIdDict
+): NoteProps | undefined {
+  for (const note of Object.values(notesById)) {
+    if (note.fname === fname) {
+      return note;
+    }
+  }
+  return undefined;
 }
 
 /**

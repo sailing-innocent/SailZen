@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Dendron",
   "publisher": "SailingInnocent",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -207,6 +207,10 @@
       {
         "command": "dendron.copyCodespaceURL",
         "title": "Dendron: Copy Codespace URL"
+      },
+      {
+        "command": "sailzen.exportNoteToLatex",
+        "title": "SailZen: Export Note to LaTeX"
       },
       {
         "command": "dendron.copyAs",

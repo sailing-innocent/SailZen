@@ -24,6 +24,12 @@ export function assembleDocument(
     (n) => n.id === profile.rootNoteId
   );
   if (!rootNote) {
+    // eslint-disable-next-line no-console
+    console.error("[documentAssembler] Root note not found:", {
+      rootNoteId: profile.rootNoteId,
+      availableIds: Object.keys(notesById),
+      availableCount: Object.keys(notesById).length,
+    });
     throw new Error(`Root note ${profile.rootNoteId} not found`);
   }
 
@@ -39,22 +45,28 @@ export function assembleDocument(
     unresolvedRefs
   );
 
-  // Append discovered compose notes in order
+  // Append discovered compose notes that were NOT already included via note refs
   for (const fname of profile.discovered) {
     const note = findNoteByFname(fname, notesById);
-    if (note) {
-      const noteBody = expandNoteRefs(
-        note.body,
-        notesById,
-        0,
-        includedNotes,
-        unresolvedRefs
-      );
-      body += "\n\n" + noteBody;
-      includedNotes.add(note.id);
-    } else {
+    if (!note) {
       unresolvedRefs.push(fname);
+      continue;
     }
+
+    // Skip if already included via ![[note.ref]] expansion
+    if (includedNotes.has(note.id)) {
+      continue;
+    }
+
+    const noteBody = expandNoteRefs(
+      note.body,
+      notesById,
+      0,
+      includedNotes,
+      unresolvedRefs
+    );
+    body += "\n\n" + noteBody;
+    includedNotes.add(note.id);
   }
 
   return {
@@ -118,11 +130,22 @@ function expandNoteRefs(
       noteBody = extractSection(noteBody, anchor);
     }
 
-    // Recursively expand with increased heading depth
+    // Determine whether to shift headings down.
+    // By default, embedded compose notes have their headings shifted down
+    // by one level. This can be disabled via doc.shiftHeadings: false.
+    const noteDoc = extractDocFrontmatter(note.custom);
+    const shouldShift = noteDoc?.shiftHeadings !== false;
+    const newDepthOffset = shouldShift ? depthOffset + 1 : depthOffset;
+
+    // Recursively expand with (optionally) increased heading depth.
+    // Compose notes embedded via ![[...]] have their own internal heading
+    // structure. We increase depthOffset so that a # Heading inside a
+    // referenced note becomes ## Heading when placed inside a parent that
+    // already has its own top-level headings.
     return expandNoteRefs(
       noteBody,
       notesById,
-      depthOffset + 1,
+      newDepthOffset,
       visited,
       unresolved
     );

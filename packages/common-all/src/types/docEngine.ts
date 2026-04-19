@@ -86,11 +86,33 @@ export type DocFrontmatter = {
   meta?: DocMeta;
   bibtex?: BibTeXEntry;
   asset?: DocAsset;
+  /**
+   * When this compose note is embedded via ![[...]], automatically shift
+   * its headings down by one level (e.g. # → ##). Default: true.
+   * Set to false if the note's headings are already at the desired level.
+   */
+  shiftHeadings?: boolean;
 };
 
 // ============================================================================
 // Doc Profile - resolved document project descriptor
 // ============================================================================
+
+/** Resolved asset reference with its source path */
+export type ResolvedAsset = {
+  /** The reference key used in ::figure[cap](key) */
+  ref: string;
+  /** Absolute or vault-relative path to the image file */
+  path: string;
+  /** Optional width override */
+  width?: string;
+  /** Optional height override */
+  height?: string;
+  /** Optional caption override */
+  caption?: string;
+  /** Optional label override */
+  label?: string;
+};
 
 export type DocProfile = {
   /** The ID of the root (standalone) note */
@@ -109,8 +131,10 @@ export type DocProfile = {
   discovered: string[];
   /** Citation keys referenced in the document */
   citations: string[];
-  /** Asset references */
+  /** Asset references (raw keys from ::figure) */
   assets: string[];
+  /** Resolved asset files with paths */
+  resolvedAssets?: ResolvedAsset[];
 };
 
 // ============================================================================
@@ -137,10 +161,15 @@ export type GeneratedDocument = {
   mainContent: string;
   /** Output file extension */
   ext: string;
-  /** Additional files to write (e.g., .bib, sections/) */
+  /** Additional text files to write (e.g., .bib, latexmkrc) */
   extraFiles: Array<{
     path: string;
     content: string;
+  }>;
+  /** Binary/asset files to copy (e.g., images) */
+  assetFiles: Array<{
+    srcPath: string;
+    destPath: string;
   }>;
   /** Compilation metadata */
   meta: {

@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
+import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import {
@@ -70,7 +71,13 @@ export class ExportNoteToLatexCommand
 
     const engine = ExtensionProvider.getEngine();
     // Fetch all notes for profile resolution
-    const allNotesForProfile = await engine.findNotes({});
+    const allNotesForProfile = await engine.findNotes({ excludeStub: false });
+    Logger.info({
+      ctx: `${this.key}:gatherInputs`,
+      msg: `findNotes({excludeStub: false}) returned ${allNotesForProfile.length} notes`,
+      noteIds: allNotesForProfile.map((n) => n.id),
+      targetNoteId: note.id,
+    });
     const notesByIdForProfile: Record<string, NoteProps> = {};
     for (const n of allNotesForProfile) {
       notesByIdForProfile[n.id] = n;
@@ -104,14 +111,20 @@ export class ExportNoteToLatexCommand
     const { note, exportConfig } = opts;
     const engine = ExtensionProvider.getEngine();
     // Fetch all notes for profile resolution and document assembly
-    const allNotes = await engine.findNotes({});
+    const allNotes = await engine.findNotes({ excludeStub: false });
+    Logger.info({
+      ctx: `${this.key}:execute`,
+      msg: `findNotes({excludeStub: false}) returned ${allNotes.length} notes`,
+      noteIds: allNotes.map((n) => n.id),
+      targetNoteId: note.id,
+    });
     const notesById: Record<string, NoteProps> = {};
     for (const n of allNotes) {
       notesById[n.id] = n;
     }
     const profile = resolveProfile(note, notesById);
 
-    vscode.window.withProgress(
+    return vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
         title: `Exporting ${note.fname} to ${exportConfig.format}...`,
@@ -126,15 +139,39 @@ export class ExportNoteToLatexCommand
           assembled,
           profile,
           exportConfig,
-          notesById
+          notesById,
+          engine.wsRoot
         );
+        // eslint-disable-next-line no-console
+        console.log("[ExportNoteToLatexCommand] generateLatex done, assetFiles=", generated.assetFiles);
+        Logger.info({
+          ctx: `${this.key}:execute`,
+          msg: "generateLatex completed",
+          assetFilesCount: generated.assetFiles.length,
+          assetFiles: generated.assetFiles.map((a) => ({
+            srcPath: a.srcPath,
+            destPath: a.destPath,
+          })),
+        });
 
-        // Determine output directory
+        // Determine output directories
+        // Project-level shared dir (for figures, etc. across formats)
         const wsRoot = engine.wsRoot;
         const projectName = profile.rootNoteFname.replace(/\./g, "_");
-        const outDir = exportConfig.outDir
+        const projectDir = exportConfig.outDir
           ? resolvePath(exportConfig.outDir, wsRoot)
-          : path.join(wsRoot, ".sailzen", "doc", projectName, exportConfig.format);
+          : path.join(wsRoot, ".sailzen", "doc", projectName);
+        // Format-specific dir (latex/ typst/ slidev/)
+        const outDir = path.join(projectDir, exportConfig.format);
+
+        Logger.info({
+          ctx: `${this.key}:execute`,
+          msg: "output directories resolved",
+          wsRoot,
+          projectDir,
+          outDir,
+          projectName,
+        });
 
         await fs.ensureDir(outDir);
 
@@ -142,6 +179,10 @@ export class ExportNoteToLatexCommand
         const mainFileName = `main.${generated.ext}`;
         const mainPath = path.join(outDir, mainFileName);
         await fs.writeFile(mainPath, generated.mainContent, "utf-8");
+        Logger.info({
+          ctx: `${this.key}:execute`,
+          msg: `main file written: ${mainPath}`,
+        });
 
         const files = [mainPath];
 
@@ -151,15 +192,76 @@ export class ExportNoteToLatexCommand
           await fs.ensureDir(path.dirname(extraPath));
           await fs.writeFile(extraPath, extra.content, "utf-8");
           files.push(extraPath);
+          Logger.info({
+            ctx: `${this.key}:execute`,
+            msg: `extra file written: ${extraPath}`,
+          });
         }
+
+        // Copy asset files (images) to project-level shared figures/ directory
+        // so that latex, typst, slidev can all reference the same images.
+        // eslint-disable-next-line no-console
+        console.log("[ExportNoteToLatexCommand] starting asset copy, count=", generated.assetFiles.length, "projectDir=", projectDir);
+        Logger.info({
+          ctx: `${this.key}:execute`,
+          msg: `starting asset copy, count=${generated.assetFiles.length}`,
+        });
+        for (const asset of generated.assetFiles) {
+          const assetDestPath = path.join(projectDir, asset.destPath);
+          const srcExists = await fs.pathExists(asset.srcPath);
+          // eslint-disable-next-line no-console
+          console.log("[ExportNoteToLatexCommand] asset copy item:", { srcPath: asset.srcPath, destPath: assetDestPath, srcExists });
+          Logger.info({
+            ctx: `${this.key}:execute`,
+            msg: `processing asset copy`,
+            srcPath: asset.srcPath,
+            destPath: assetDestPath,
+            srcExists,
+          });
+          await fs.ensureDir(path.dirname(assetDestPath));
+          if (srcExists) {
+            try {
+              await fs.copy(asset.srcPath, assetDestPath);
+              files.push(assetDestPath);
+              // eslint-disable-next-line no-console
+              console.log("[ExportNoteToLatexCommand] asset copied OK:", assetDestPath);
+              Logger.info({
+                ctx: `${this.key}:execute`,
+                msg: `asset copied successfully`,
+                srcPath: asset.srcPath,
+                destPath: assetDestPath,
+              });
+            } catch (copyErr: any) {
+              // eslint-disable-next-line no-console
+              console.error("[ExportNoteToLatexCommand] asset copy FAILED:", copyErr.message);
+              Logger.error({
+                ctx: `${this.key}:execute`,
+                msg: `asset copy failed`,
+                srcPath: asset.srcPath,
+                destPath: assetDestPath,
+                error: copyErr.message,
+              });
+            }
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn("[ExportNoteToLatexCommand] asset src NOT FOUND:", asset.srcPath);
+            Logger.warn({
+              ctx: `${this.key}:execute`,
+              msg: `Asset file not found: ${asset.srcPath}`,
+            });
+          }
+        }
+
+        Logger.info({
+          ctx: `${this.key}:execute`,
+          msg: "export complete",
+          outputDir: outDir,
+          filesWritten: files,
+        });
 
         return { outputDir: outDir, files };
       }
     );
-
-    // The withProgress doesn't return the value directly in this pattern,
-    // so we return a placeholder and show the actual result in showResponse
-    return { outputDir: "", files: [] };
   }
 
   async showResponse(resp: CommandOutput) {
