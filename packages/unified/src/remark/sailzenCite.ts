@@ -15,7 +15,7 @@ import { MDUtilsV5 } from "..";
  * And produces a sailzenCite AST node.
  */
 
-const CITE_REGEX = /^::cite\[([^\]]*)\]/;
+export const CITE_REGEX = /^::cite\[([^\]]*)\]/;
 
 type PluginOpts = {};
 

@@ -16,7 +16,7 @@ import { MDUtilsV5 } from "..";
  */
 
 // Match ::figure[caption](src){opts} where opts is optional
-const FIGURE_REGEX =
+export const FIGURE_REGEX =
   /^::figure\[([^\]]*)\]\s*\(([^)]+)\)(?:\s*\{([^}]*)\})?/;
 
 type PluginOpts = {};

@@ -27,7 +27,7 @@ export const matchBlockAnchor = (
   const match = (matchLoose ? BLOCK_LINK_REGEX_LOOSE : BLOCK_LINK_REGEX).exec(
     text
   );
-  if (match && match.length == 1) return match[1];
+  if (match && match.length >= 2) return match[1];
   return undefined;
 };
 
