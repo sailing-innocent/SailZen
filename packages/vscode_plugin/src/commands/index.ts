@@ -76,6 +76,7 @@ import { MoveSelectionToCommand } from "./MoveSelectionToCommand";
 import { RemoveVaultCommand } from "./RemoveVaultCommand";
 import { CreateNewVaultCommand } from "./CreateNewVaultCommand";
 import { AddExistingVaultCommand } from "./AddExistingVaultCommand";
+import { ExportNoteToLatexCommand } from "./ExportNoteToLatexCommand";
 
 /**
  * Note: this does not contain commands that have parametered constructors, as
@@ -158,6 +159,7 @@ const ALL_COMMANDS = [
   MergeNoteCommand,
   CreateNoteCommand,
   CopyCodespaceURL,
+  ExportNoteToLatexCommand,
 ] as CodeCommandConstructor[];
 
 export { ALL_COMMANDS };

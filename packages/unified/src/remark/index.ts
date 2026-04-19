@@ -2,6 +2,8 @@ export * from "./dendronPub";
 export * from "./hierarchies";
 export * from "./transformLinks";
 export { convertNoteRefToHAST, NoteRefUtils } from "./noteRefsV2";
+export { sailzenCite } from "./sailzenCite";
+export { sailzenFigure } from "./sailzenFigure";
 export {
   LinkUtils,
   AnchorUtils,

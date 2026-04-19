@@ -844,6 +844,12 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     icon: `$(lock)`,
     when: "dendron:pluginActive",
   },
+  // --- SailZen Doc Export
+  EXPORT_NOTE_TO_LATEX: {
+    key: "sailzen.exportNoteToLatex",
+    title: `${CMD_PREFIX} Export Note to LaTeX`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
+  },
   PASTE_FILE: {
     key: "dendron.pasteFile",
     title: `${CMD_PREFIX} Paste File`,

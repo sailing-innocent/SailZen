@@ -40,6 +40,13 @@ export enum DendronASTTypes {
   HASHTAG = "hashtag",
   ZDOCTAG = "zdoctag",
   EXTENDED_IMAGE = "extendedImage",
+  // SailZen Doc extensions
+  SAILZEN_CITE = "sailzenCite",
+  SAILZEN_FIGURE = "sailzenFigure",
+  SAILZEN_TABLE = "sailzenTable",
+  SAILZEN_MATH_ENV = "sailzenMathEnv",
+  SAILZEN_ALGORITHM = "sailzenAlgorithm",
+  SAILZEN_IF_FORMAT = "sailzenIfFormat",
   // Not dendron-specific, included here for convenience
   ROOT = "root",
   HEADING = "heading",
@@ -153,3 +160,40 @@ export type ExtendedImage = DendronASTNode &
     /** User provided props, to set things like width and height. */
     props: { [key: string]: any };
   };
+
+// --- SailZen Doc AST Nodes
+
+/** Citation node: ::cite[key1, key2] */
+export type SailZenCite = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_CITE;
+  keys: string[];
+};
+
+/** Figure node: ::figure[caption](src){opts} */
+export type SailZenFigure = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_FIGURE;
+  caption: string;
+  src: string;
+  options: Record<string, any>;
+};
+
+/** Math environment node: ::theorem, ::proof, ::definition */
+export type SailZenMathEnv = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_MATH_ENV;
+  envType: "theorem" | "proof" | "definition" | "lemma" | "corollary";
+  title?: string;
+  label?: string;
+};
+
+/** Algorithm node: ::algorithm */
+export type SailZenAlgorithm = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_ALGORITHM;
+  title: string;
+  label?: string;
+};
+
+/** Conditional format node: ::if-format[latex] ... ::end */
+export type SailZenIfFormat = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_IF_FORMAT;
+  format: string;
+};
