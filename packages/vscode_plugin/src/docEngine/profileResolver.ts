@@ -38,6 +38,7 @@ export function resolveProfile(
     ...(docFm?.meta || {}),
     // Fall back to standard frontmatter fields if doc.meta doesn't specify them
     title: docFm?.meta?.title || rootNote.title,
+    abstract: docFm?.meta?.abstract || rootNote.desc || undefined,
     authors: docFm?.meta?.authors || rootNote.custom?.authors,
     keywords:
       docFm?.meta?.keywords ||
@@ -74,8 +75,14 @@ export function resolveProfile(
     });
   }
 
-  // Collect citations and assets from root note AND all discovered compose notes
+  // Collect citations and assets from root note AND all included/discovered compose notes
   const allBodies = [rootNote.body];
+  for (const fname of includes) {
+    const note = findNoteByFname(fname, notesById);
+    if (note) {
+      allBodies.push(note.body);
+    }
+  }
   for (const fname of discovered) {
     const note = findNoteByFname(fname, notesById);
     if (note) {
@@ -259,4 +266,58 @@ export function extractAssetRefs(body: string): string[] {
     refs.push(match[1].trim());
   }
   return _.uniq(refs);
+}
+
+/**
+ * Extract ::table label references from markdown text
+ */
+export function extractTableRefs(body: string): string[] {
+  const tableRegex = /::table\[[^\]]*\]\s*\(([^)]+)\)/g;
+  const refs: string[] = [];
+  let match;
+  while ((match = tableRegex.exec(body)) !== null) {
+    refs.push(match[1].trim());
+  }
+  return _.uniq(refs);
+}
+
+/**
+ * Extract algorithm labels from markdown text
+ */
+export function extractAlgorithmRefs(body: string): string[] {
+  const algRegex = /::algorithm\[[^\]]*\](?:\s*\{[^}]*\})?/g;
+  // Algorithms don't have an external ref key in current syntax,
+  // but we can count them for diagnostic purposes.
+  const refs: string[] = [];
+  let match;
+  while ((match = algRegex.exec(body)) !== null) {
+    refs.push(`algorithm_${refs.length}`);
+  }
+  return _.uniq(refs);
+}
+
+/**
+ * Extract math environment names used in the document.
+ */
+export function extractMathEnvs(body: string): string[] {
+  const envRegex = /::(theorem|lemma|corollary|proposition|definition|remark|proof)\b/g;
+  const envs: string[] = [];
+  let match;
+  while ((match = envRegex.exec(body)) !== null) {
+    envs.push(match[1]);
+  }
+  return _.uniq(envs);
+}
+
+/**
+ * Extract conditional format blocks from markdown text.
+ */
+export function extractConditionals(body: string): Array<{ format: string; content: string }> {
+  const condRegex = /::if-format\[([^\]]+)\]\s*\n([\s\S]*?)\n::end/g;
+  const blocks: Array<{ format: string; content: string }> = [];
+  let match;
+  while ((match = condRegex.exec(body)) !== null) {
+    blocks.push({ format: match[1].trim(), content: match[2] });
+  }
+  return blocks;
 }

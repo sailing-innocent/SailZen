@@ -45,6 +45,27 @@ export function assembleDocument(
     unresolvedRefs
   );
 
+  // Append explicitly included notes that were NOT already included via note refs
+  for (const fname of profile.includes) {
+    const note = findNoteByFname(fname, notesById);
+    if (!note) {
+      unresolvedRefs.push(fname);
+      continue;
+    }
+    if (includedNotes.has(note.id)) {
+      continue;
+    }
+    const noteBody = expandNoteRefs(
+      note.body,
+      notesById,
+      0,
+      includedNotes,
+      unresolvedRefs
+    );
+    body += "\n\n" + noteBody;
+    includedNotes.add(note.id);
+  }
+
   // Append discovered compose notes that were NOT already included via note refs
   for (const fname of profile.discovered) {
     const note = findNoteByFname(fname, notesById);

@@ -122,4 +122,27 @@ describe("profileResolver", () => {
       expect(extractAssetRefs("No figures here.")).toEqual([]);
     });
   });
+
+  describe("extractTableRefs", () => {
+    it("should extract label from ::table[caption](label)", () => {
+      expect(extractTableRefs("::table[Results](tab:results)")).toEqual(["tab:results"]);
+    });
+    it("should handle optional opts", () => {
+      expect(extractTableRefs("::table[Comparison](tab:compare){columns=lcc}")).toEqual(["tab:compare"]);
+    });
+    it("should return empty array when no tables", () => {
+      expect(extractTableRefs("No tables here.")).toEqual([]);
+    });
+  });
+
+  describe("extractMathEnvs", () => {
+    it("should extract theorem and proof", () => {
+      const body = "::theorem[Foo]\n...\n::end\n::proof\n...\n::end";
+      expect(extractMathEnvs(body)).toEqual(["theorem", "proof"]);
+    });
+    it("should extract multiple distinct envs", () => {
+      const body = "::definition[Def]\n::lemma[Lem]\n::corollary[Cor]\n::proposition[Prop]\n::remark[Rem]";
+      expect(extractMathEnvs(body)).toEqual(["definition", "lemma", "corollary", "proposition", "remark"]);
+    });
+  });
 });

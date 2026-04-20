@@ -18,6 +18,7 @@ import {
   assembleDocument,
   generateLatex,
   resolveProfile,
+  listBuiltinTemplates,
 } from "../docEngine";
 
 type CommandOpts = {
@@ -84,14 +85,21 @@ export class ExportNoteToLatexCommand
     }
     const profile = resolveProfile(note, notesByIdForProfile);
 
+    // If no exports defined, let user pick from built-in templates
+    let exportConfig: DocExportConfig;
     if (profile.exports.length === 0) {
-      vscode.window.showErrorMessage("No export configurations found for this note.");
-      return;
-    }
-
-    // If multiple exports, let user choose
-    let exportConfig = profile.exports[0];
-    if (profile.exports.length > 1) {
+      const templates = listBuiltinTemplates("latex");
+      const pick = await vscode.window.showQuickPick(
+        templates.map((t) => ({
+          label: t.id,
+          description: t.description,
+          templateId: t.id,
+        })),
+        { placeHolder: "Select LaTeX template" }
+      );
+      if (!pick) return;
+      exportConfig = { format: "latex", template: pick.templateId };
+    } else if (profile.exports.length > 1) {
       const pick = await vscode.window.showQuickPick(
         profile.exports.map((e) => ({
           label: `${e.format}${e.template ? ` (${e.template})` : ""}`,
@@ -102,6 +110,8 @@ export class ExportNoteToLatexCommand
       );
       if (!pick) return;
       exportConfig = pick.exportConfig;
+    } else {
+      exportConfig = profile.exports[0];
     }
 
     return { note, exportConfig };
@@ -196,6 +206,21 @@ export class ExportNoteToLatexCommand
             ctx: `${this.key}:execute`,
             msg: `extra file written: ${extraPath}`,
           });
+        }
+
+        // Write section files if split mode is enabled
+        if (generated.sections && generated.sections.length > 0) {
+          const sectionsDir = path.join(outDir, "sections");
+          await fs.ensureDir(sectionsDir);
+          for (const section of generated.sections) {
+            const sectionPath = path.join(sectionsDir, section.fileName);
+            await fs.writeFile(sectionPath, section.content, "utf-8");
+            files.push(sectionPath);
+            Logger.info({
+              ctx: `${this.key}:execute`,
+              msg: `section file written: ${sectionPath}`,
+            });
+          }
         }
 
         // Copy asset files (images) to project-level shared figures/ directory

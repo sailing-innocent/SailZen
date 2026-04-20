@@ -156,6 +156,45 @@ export type AssembledDocument = {
 // Backend Generation Result
 // ============================================================================
 
+// ============================================================================
+// Document Section - for split-section LaTeX output
+// ============================================================================
+
+export type DocSection = {
+  /** Section title */
+  title: string;
+  /** LaTeX content of the section */
+  content: string;
+  /** Heading level (1=chapter, 2=section, 3=subsection) */
+  level: number;
+  /** Suggested file name */
+  fileName: string;
+};
+
+// ============================================================================
+// Template System Types
+// ============================================================================
+
+export type DocTemplateVariable = {
+  name: string;
+  required?: boolean;
+  type?: "string" | "array" | "boolean";
+  default?: any;
+};
+
+export type DocTemplateConfig = {
+  id: string;
+  format: DocExportFormat;
+  description: string;
+  engine?: "pdflatex" | "xelatex" | "lualatex";
+  requires?: string[];
+  variables?: DocTemplateVariable[];
+  sectioning?: {
+    style: "numbered" | "unnumbered" | "chapter";
+    maxDepth?: number;
+  };
+};
+
 export type GeneratedDocument = {
   /** Main output file content */
   mainContent: string;
@@ -171,11 +210,14 @@ export type GeneratedDocument = {
     srcPath: string;
     destPath: string;
   }>;
+  /** Split sections for multi-file LaTeX projects */
+  sections?: DocSection[];
   /** Compilation metadata */
   meta: {
     templateUsed: string;
     format: DocExportFormat;
     timestamp: number;
+    engine?: string;
   };
 };
 
@@ -195,7 +237,11 @@ export function extractDocFrontmatter(custom: any): DocFrontmatter | undefined {
     doc.exports !== undefined ||
     doc.meta !== undefined ||
     doc.bibtex !== undefined ||
-    doc.asset !== undefined;
+    doc.asset !== undefined ||
+    doc.includes !== undefined ||
+    doc.order !== undefined ||
+    doc.anchors !== undefined ||
+    doc.shiftHeadings !== undefined;
   if (!hasDocField) return undefined;
   return doc as DocFrontmatter;
 }
