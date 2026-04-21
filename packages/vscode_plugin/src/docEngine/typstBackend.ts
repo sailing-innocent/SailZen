@@ -1,7 +1,7 @@
 /**
- * @file latexBackend.ts
- * @brief LaTeX code generation backend for SailZen Doc Engine
- * @description Converts assembled markdown to LaTeX using built-in templates.
+ * @file typstBackend.ts
+ * @brief Typst code generation backend for SailZen Doc Engine
+ * @description Converts assembled markdown to Typst using built-in templates.
  *   Supports ::cite, ::figure, ::table, math environments, algorithms,
  *   conditionals, markdown tables, lists, footnotes, and section splitting.
  */
@@ -24,20 +24,22 @@ import { renderTemplate, resolveTemplateVars } from "./templateEngine";
 // ============================================================================
 
 /**
- * Generate LaTeX output from an assembled document and profile.
+ * Generate Typst output from an assembled document and profile.
  *
- * Enhanced capabilities over MVP:
- * - Template-driven preamble/documentclass selection
+ * Capabilities:
+ * - Template-driven document setup
+ * - ::cite → @key references with #bibliography(...)
+ * - ::figure → #figure(image(...), caption: [...])
  * - ::table directives with markdown table wrapping
  * - ::theorem / ::proof / ::definition / ::lemma / ::corollary / ::proposition / ::remark
  * - ::algorithm with ::input and ::output
- * - ::if-format[latex] conditional blocks
- * - Markdown tables → tabular
- * - Ordered lists → enumerate
- * - Footnotes
- * - Optional section splitting into separate .tex files
+ * - ::if-format[typst] conditional blocks
+ * - Markdown tables → #table(...)
+ * - Ordered/unordered lists
+ * - Footnotes → #footnote(...)
+ * - Optional section splitting into separate .typ files
  */
-export async function generateLatex(
+export async function generateTypst(
   assembled: AssembledDocument,
   profile: DocProfile,
   exportConfig: DocExportConfig,
@@ -53,8 +55,8 @@ export async function generateLatex(
     assetMap.set(asset.ref, asset);
   }
 
-  // Convert markdown body to LaTeX
-  let latexBody = markdownToLatex(body, assetMap);
+  // Convert markdown body to Typst
+  let typstBody = markdownToTypst(body, assetMap);
 
   // Resolve template variables
   const templateVars = resolveTemplateVars(profile, exportConfig);
@@ -63,28 +65,26 @@ export async function generateLatex(
   const splitSections = exportConfig.vars?.splitSections === true;
   let sections: DocSection[] | undefined;
   if (splitSections) {
-    sections = splitIntoSections(latexBody);
+    sections = splitIntoSections(typstBody);
   }
 
-  // Render main.tex via template engine
-  const templateId = exportConfig.template || "article";
+  // Render main.typ via template engine
+  const templateId = exportConfig.template || "research-article";
   const rendered = await renderTemplate(
     templateId,
     templateVars,
-    latexBody,
+    typstBody,
     {
       splitSections,
       sections,
     },
-    wsRoot
+    wsRoot,
+    "typst"
   );
 
-  // Generate bibliography
+  // Generate bibliography (Typst natively supports BibTeX)
   const bibFile = exportConfig.vars?.bibliography || "ref";
   const bibContent = generateBibTeX(profile.citations, notesById);
-
-  // Generate latexmkrc for user-driven compilation
-  const latexmkrcContent = generateLatexmkrc(exportConfig, rendered.engine);
 
   // Collect asset files to copy into the project-level shared figures/ directory.
   const assetFiles: Array<{ srcPath: string; destPath: string }> = [];
@@ -104,24 +104,22 @@ export async function generateLatex(
 
   const extraFiles: Array<{ path: string; content: string }> = [
     { path: `${bibFile}.bib`, content: bibContent },
-    { path: "latexmkrc", content: latexmkrcContent },
   ];
 
-  // Template dependency files (.cls, .sty, etc.) are target-dependent,
-  // so they are returned separately to be placed in the format-specific
-  // output directory rather than the shared project-level directory.
+  // Template dependency files are returned separately to be placed in the
+  // format-specific output directory.
   const templateFiles = rendered.templateAssets || [];
 
   return {
     mainContent: rendered.mainContent,
-    ext: "tex",
+    ext: "typ",
     extraFiles,
     assetFiles,
     templateFiles,
     sections,
     meta: {
       templateUsed: templateId,
-      format: "latex",
+      format: "typst",
       timestamp: Date.now(),
       engine: rendered.engine,
     },
@@ -129,14 +127,14 @@ export async function generateLatex(
 }
 
 // ============================================================================
-// Markdown → LaTeX Converter
+// Markdown → Typst Converter
 // ============================================================================
 
-function markdownToLatex(
+function markdownToTypst(
   md: string,
   assetMap: Map<string, ResolvedAsset>
 ): string {
-  let tex = md;
+  let typ = md;
 
   // ========================================================================
   // Phase 1: Protect special blocks so inline syntax won't accidentally
@@ -147,7 +145,7 @@ function markdownToLatex(
     re: RegExp,
     replacer: (m: string, ...args: any[]) => string
   ): void {
-    tex = tex.replace(re, (m, ...args) => {
+    typ = typ.replace(re, (m, ...args) => {
       const placeholder = `\u0000${protectedBlocks.length}\u0000`;
       protectedBlocks.push(replacer(m, ...args));
       return placeholder;
@@ -155,13 +153,14 @@ function markdownToLatex(
   }
 
   // 1.1 Protect code blocks FIRST (before inline code)
-  protect(/```(?:\w+)?\r?\n([\s\S]*?)```/g, (_m, code) => {
-    return `\\begin{verbatim}\n${code.trimEnd()}\n\\end{verbatim}`;
+  protect(/```(\w+)?\r?\n([\s\S]*?)```/g, (_m, lang, code) => {
+    const safeLang = lang || "text";
+    return `#raw(block: true, lang: "${safeLang}")[${escapeTypstRaw(code.trimEnd())}]`;
   });
 
   // 1.2 Protect block math $$...$$
   protect(/\$\$([\s\S]*?)\$\$/g, (_m, math) => {
-    return `\\[\n${math.trim()}\n\\]`;
+    return `$ ${math.trim()} $`;
   });
 
   // 1.2b Protect inline math $...$ (must come after block math)
@@ -169,14 +168,13 @@ function markdownToLatex(
     return `$${math.trim()}$`;
   });
 
-  // 1.3 Protect ::cite directives
+  // 1.3 Protect ::cite directives → @key references
   protect(/::cite\[([^\]]+)\]/g, (_m, keys) => {
     const cleanKeys = keys
       .split(/,\s*/)
       .map((k: string) => k.trim())
-      .filter(Boolean)
-      .join(", ");
-    return `\\cite{${cleanKeys}}`;
+      .filter(Boolean);
+    return cleanKeys.map((k: string) => `@${k}`).join(", ");
   });
 
   // 1.4 Protect ::figure directives
@@ -187,11 +185,11 @@ function markdownToLatex(
       const fileName = asset?.path
         ? asset.path.replace(/\\/g, "/").split("/").pop() || src
         : src;
-      const latexPath = `../figures/${fileName}`;
+      const typstPath = `../figures/${fileName}`;
       const figCaption = caption || asset?.caption || "";
       let figLabel = asset?.label || `fig:${src}`;
-      let width = asset?.width || "0.8\\textwidth";
-      let placement = "htbp";
+      let width = asset?.width || "80%";
+      let placement = "auto";
 
       // Parse simple opts: width, placement, label overrides
       if (optsStr) {
@@ -203,21 +201,40 @@ function markdownToLatex(
         if (labelMatch) figLabel = labelMatch[1];
       }
 
-      return `\\begin{figure}[${placement}]\n  \\centering\n  \\includegraphics[width=${width}]{${latexPath}}\n  \\caption{${escapeLatex(figCaption)}}\n  \\label{${figLabel}}\n\\end{figure}`;
+      // Convert LaTeX-style widths to Typst
+      let typstWidth = width;
+      if (width.includes("\\textwidth")) {
+        const pct = parseFloat(width) || 100;
+        typstWidth = `${pct}%`;
+      } else if (width.includes("\\linewidth")) {
+        const pct = parseFloat(width) || 100;
+        typstWidth = `${pct}%`;
+      }
+
+      const widthArg = typstWidth ? `, width: ${typstWidth}` : "";
+      const placementArg = placement && placement !== "auto" ? `, placement: ${placement}` : "";
+
+      return `#figure(
+  image("${typstPath}"${widthArg}${placementArg}),
+  caption: [${escapeTypstInline(figCaption)}],
+) <${figLabel}>`;
     }
   );
 
   // 1.4b Protect ::ref directives
   protect(/::ref\[([^\]]+)\]/g, (_m, label) => {
-    return `\\ref{${label}}`;
+    return `@${label}`;
   });
 
   // 1.5 Protect ::table directives + following markdown table
   protect(
     /::table\[([^\]]*)\]\s*\(([^)]+)\)(?:\s*\{([^}]*)\})?\s*\n((?:\|[^\n]*\|[ \t]*(?:\r?\n|$))+)/g,
     (_m, caption, label, _opts, tableMd) => {
-      const tabular = markdownTableToLatex(tableMd);
-      return `\\begin{table}[htbp]\n\\centering\n\\caption{${escapeLatex(caption)}}\\label{${label}}\n${tabular}\n\\end{table}`;
+      const tableBody = markdownTableToTypst(tableMd);
+      return `#figure(
+${tableBody},
+  caption: [${escapeTypstInline(caption)}],
+) <${label}>`;
     }
   );
 
@@ -225,7 +242,10 @@ function markdownToLatex(
   protect(
     /::table\[([^\]]*)\]\s*\(([^)]+)\)(?:\s*\{([^}]*)\})?/g,
     (_m, caption, label, _opts) => {
-      return `\\begin{table}[htbp]\n\\centering\n\\caption{${escapeLatex(caption)}}\\label{${label}}\n\\end{table}`;
+      return `#figure(
+  table(columns: (auto, auto)),
+  caption: [${escapeTypstInline(caption)}],
+) <${label}>`;
     }
   );
 
@@ -234,10 +254,16 @@ function markdownToLatex(
     /::(theorem|lemma|corollary|proposition|definition|remark)\[([^\]]*)\](?:\s*\{([^}]*)\})?\s*\n([\s\S]*?)\n::end/g,
     (_m, env, title, opts, content) => {
       const labelMatch = opts?.match(/label:\s*"([^"]*)"/);
-      const label = labelMatch ? `\\label{${labelMatch[1]}}` : "";
-      const titlePart = title ? `[${escapeLatex(title)}]` : "";
-      const inner = convertInlineMarkdownToLatex(content);
-      return `\\begin{${env}}${titlePart}${label}\n${inner}\n\\end{${env}}`;
+      const label = labelMatch ? ` <${labelMatch[1]}>` : "";
+      const envName = env.charAt(0).toUpperCase() + env.slice(1);
+      const titlePart = title ? ` (${escapeTypstInline(title)})` : "";
+      const inner = convertInlineMarkdownToTypst(content);
+      return `#block(
+  stroke: (left: 2pt + rgb(100, 149, 237)),
+  inset: (left: 8pt, top: 4pt, bottom: 4pt),
+)[
+  *${envName}${titlePart}.* ${inner}
+]${label}`;
     }
   );
 
@@ -245,8 +271,13 @@ function markdownToLatex(
   protect(
     /::proof\s*\n([\s\S]*?)\n::end/g,
     (_m, content) => {
-      const inner = convertInlineMarkdownToLatex(content);
-      return `\\begin{proof}\n${inner}\n\\end{proof}`;
+      const inner = convertInlineMarkdownToTypst(content);
+      return `#block(
+  inset: (left: 8pt, top: 4pt, bottom: 4pt),
+)[
+  *Proof.* ${inner}
+  #align(right)[#square(size: 6pt, stroke: none, fill: black)]
+]`;
     }
   );
 
@@ -255,177 +286,189 @@ function markdownToLatex(
     /::algorithm\[([^\]]*)\](?:\s*\{([^}]*)\})?\s*\n([\s\S]*?)\n::end/g,
     (_m, title, opts, content) => {
       const labelMatch = opts?.match(/label:\s*"([^"]*)"/);
-      const label = labelMatch ? `\\label{${labelMatch[1]}}` : "";
+      const label = labelMatch ? ` <${labelMatch[1]}>` : "";
       let inner = content;
-      inner = inner.replace(/::input\[([^\]]*)\]/g, (_m2: string, inp: string) => `\\Require ${inp}`);
-      inner = inner.replace(/::output\[([^\]]*)\]/g, (_m2: string, out: string) => `\\Ensure ${out}`);
-      // Numbered/bullet steps -> \State
-      inner = inner.replace(/^(\d+)\.\s+(.+)$/gm, (_m2: string, _num: string, step: string) => `\\State ${step}`);
-      inner = inner.replace(/^-\s+(.+)$/gm, (_m2: string, step: string) => `\\State ${step}`);
+      inner = inner.replace(/::input\[([^\]]*)\]/g, (_m2: string, inp: string) => `*Input:* ${inp}`);
+      inner = inner.replace(/::output\[([^\]]*)\]/g, (_m2: string, out: string) => `*Output:* ${out}`);
+      // Numbered/bullet steps
+      inner = inner.replace(/^(\d+)\.\s+(.+)$/gm, (_m2: string, _num: string, step: string) => `+ ${step}`);
+      inner = inner.replace(/^-\s+(.+)$/gm, (_m2: string, step: string) => `+ ${step}`);
       // Indented lines as continuation
       inner = inner.replace(/^[ \t]+(.+)$/gm, (_m2: string, line: string) => `  ${line}`);
-      return `\\begin{algorithm}[htbp]\n\\caption{${escapeLatex(title)}}${label}\n\\begin{algorithmic}\n${inner}\n\\end{algorithmic}\n\\end{algorithm}`;
+      const algoBody = convertInlineMarkdownToTypst(inner);
+      return `#figure(
+  caption: [${escapeTypstInline(title)}],
+)[
+  #set text(size: 0.9em)
+  ${algoBody}
+]${label}`;
     }
   );
 
-  // 1.10 Protect ::if-format[latex] (keep content)
+  // 1.10 Protect ::if-format[typst] (keep content)
   protect(
-    /::if-format\[latex\]\s*\n([\s\S]*?)\n::end/g,
-    (_m, content) => convertInlineMarkdownToLatex(content)
+    /::if-format\[typst\]\s*\n([\s\S]*?)\n::end/g,
+    (_m, content) => convertInlineMarkdownToTypst(content)
   );
 
-  // 1.11 Protect ::if-format[other] (strip content for LaTeX backend)
+  // 1.11 Protect ::if-format[other] (strip content for Typst backend)
   protect(
-    /::if-format\[(?!latex)[^\]]+\]\s*\n([\s\S]*?)\n::end/g,
+    /::if-format\[(?!typst)[^\]]+\]\s*\n([\s\S]*?)\n::end/g,
     () => ""
   );
 
   // 1.12 Protect inline code `code` (AFTER code blocks)
   protect(/`([^`]+)`/g, (_m, code) => {
-    return `\\texttt{${escapeLatexInlineCode(code)}}`;
+    return `#raw(lang: none)[${escapeTypstRaw(code)}]`;
   });
 
   // ========================================================================
-  // Phase 2: Convert remaining markdown syntax to LaTeX
+  // Phase 2: Convert remaining markdown syntax to Typst
   // ========================================================================
 
-  // 2.1 Headings
-  tex = tex.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes, text) => {
+  // 2.1 Headings → Typst heading syntax (=, ==, ===, etc.)
+  typ = typ.replace(/^(#{1,6})\s+(.+)$/gm, (_m, hashes, text) => {
     const level = hashes.length;
-    const cmd =
-      level === 1
-        ? "section"
-        : level === 2
-          ? "subsection"
-          : level === 3
-            ? "subsubsection"
-            : "paragraph";
-    return `\\${cmd}{${escapeLatex(text.trim())}}`;
+    return `${"=".repeat(level)} ${escapeTypstInline(text.trim())}`;
   });
 
-  // 2.2 Bold **text**
-  tex = tex.replace(/\*\*([^*]+)\*\*/g, (_m, text) => {
-    return `\\textbf{${escapeLatex(text)}}`;
+  // 2.2 Bold **text** → *text*
+  typ = typ.replace(/\*\*([^*]+)\*\*/g, (_m, text) => {
+    return `*${escapeTypstInline(text)}*`;
   });
 
-  // 2.3 Italic *text* (but not ** which is already handled)
-  tex = tex.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, text) => {
-    return `\\textit{${escapeLatex(text)}}`;
+  // 2.3 Italic *text* → _text_ (but not ** which is already handled)
+  typ = typ.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, text) => {
+    return `_${escapeTypstInline(text)}_`;
   });
 
-  // 2.4 Links [text](url)
-  tex = tex.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => {
-    return `\\href{${url}}{${escapeLatex(text)}}`;
+  // 2.4 Links [text](url) → #link("url")[text]
+  typ = typ.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => {
+    return `#link("${url}")[${escapeTypstInline(text)}]`;
   });
 
   // 2.5 Wikilinks [[note]] → plain text (but preserve anchors ^block-id)
-  tex = tex.replace(/\[\[([^\]^]+)\^([^\]]+)\]\]/g, (_m, ref, anchor) => {
-    return `${escapeLatex(ref)}~(\\ref{${anchor}})`;
+  typ = typ.replace(/\[\[([^\]^]+)\^([^\]]+)\]\]/g, (_m, ref, anchor) => {
+    return `${escapeTypstInline(ref)}~(@${anchor})`;
   });
-  tex = tex.replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => {
-    return escapeLatex(ref);
+  typ = typ.replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => {
+    return escapeTypstInline(ref);
   });
 
   // 2.6 Note refs ![[note]] → removed (already expanded by assembler)
-  tex = tex.replace(/!?\[\[([^\]]+)\]\]/g, "");
+  typ = typ.replace(/!?\[\[([^\]]+)\]\]/g, "");
 
   // 2.7 Horizontal rules
-  tex = tex.replace(/^---+\s*$/gm, "\\hrulefill\n");
+  typ = typ.replace(/^---+\s*$/gm, "#line(length: 100%)\n");
 
-  // 2.8 Blockquotes > text
-  tex = tex.replace(/^>\s+(.+)$/gm, (_m, text) => {
-    return `\\begin{quote}\n${escapeLatex(text)}\n\\end{quote}`;
+  // 2.8 Blockquotes > text → #quote(block: true)[text]
+  typ = typ.replace(/^>\s+(.+)$/gm, (_m, text) => {
+    return `#quote(block: true)[${escapeTypstInline(text)}]`;
   });
 
   // 2.9 Markdown tables (not already wrapped by ::table)
-  tex = convertMarkdownTables(tex);
+  typ = convertMarkdownTables(typ);
 
   // 2.10 Footnotes
-  tex = convertFootnotes(tex);
+  typ = convertFootnotes(typ);
 
-  // 2.11 Unordered lists
-  tex = processUnorderedLists(tex);
+  // 2.11 Unordered lists (Typst uses - same as markdown)
+  typ = processUnorderedLists(typ);
 
-  // 2.12 Ordered lists
-  tex = processOrderedLists(tex);
+  // 2.12 Ordered lists (convert 1. to + for Typst auto-numbering)
+  typ = processOrderedLists(typ);
 
   // ========================================================================
   // Phase 3: Escape remaining plain text, but protect already-generated
-  // LaTeX commands so escapeLatex won't touch them.
+  // Typst commands so escapeTypst won't touch them.
   // ========================================================================
 
-  // Protect all LaTeX commands we just generated
-  const latexCommands: string[] = [];
-  tex = tex.replace(
-    /\\[a-zA-Z]+(?:\[[^\]]*\])?(?:\{[^{}]*\})?/g,
+  // Protect all Typst commands we just generated
+  const typstCommands: string[] = [];
+  typ = typ.replace(
+    /#[a-zA-Z]+(?:\[[^\]]*\]|\((?:[^()]*|\([^()]*\))*\)|"[^"]*")?/g,
     (m) => {
-      const placeholder = `\u0001${latexCommands.length}\u0001`;
-      latexCommands.push(m);
+      const placeholder = `\u0001${typstCommands.length}\u0001`;
+      typstCommands.push(m);
       return placeholder;
     }
   );
 
-  // Now escape remaining plain text for LaTeX
-  tex = escapeLatex(tex);
+  // Also protect heading lines
+  typ = typ.replace(/^={1,6}\s+.+$/gm, (m) => {
+    const placeholder = `\u0001${typstCommands.length}\u0001`;
+    typstCommands.push(m);
+    return placeholder;
+  });
 
-  // Restore LaTeX commands
-  tex = tex.replace(/\u0001(\d+)\u0001/g, (_m, idx) => latexCommands[parseInt(idx, 10)]);
+  // Also protect list items
+  typ = typ.replace(/^[\-+\d]\.\s+.+$/gm, (m) => {
+    const placeholder = `\u0001${typstCommands.length}\u0001`;
+    typstCommands.push(m);
+    return placeholder;
+  });
+
+  // Now escape remaining plain text for Typst
+  typ = escapeTypst(typ);
+
+  // Restore Typst commands
+  typ = typ.replace(/\u0001(\d+)\u0001/g, (_m, idx) => typstCommands[parseInt(idx, 10)]);
 
   // Restore protected blocks (loop to handle nested placeholders)
-  let prevTex: string;
+  let prevTyp: string;
   do {
-    prevTex = tex;
-    tex = tex.replace(/\u0000(\d+)\u0000/g, (_m, idx) => protectedBlocks[parseInt(idx, 10)]);
-  } while (prevTex !== tex);
+    prevTyp = typ;
+    typ = typ.replace(/\u0000(\d+)\u0000/g, (_m, idx) => protectedBlocks[parseInt(idx, 10)]);
+  } while (prevTyp !== typ);
 
   // Multiple consecutive newlines → single paragraph break
-  tex = tex.replace(/\n{3,}/g, "\n\n");
+  typ = typ.replace(/\n{3,}/g, "\n\n");
 
-  return tex;
+  return typ;
 }
 
 // ============================================================================
 // Inline markdown converter (for use inside protected blocks)
 // ============================================================================
 
-function convertInlineMarkdownToLatex(md: string): string {
-  let tex = md;
+function convertInlineMarkdownToTypst(md: string): string {
+  let typ = md;
 
-  // Protect inline math first so escapeLatex won't touch it
+  // Protect inline math first so escapeTypst won't touch it
   const protectedMath: string[] = [];
-  tex = tex.replace(/\$([^$\n]+?)\$/g, (m) => {
+  typ = typ.replace(/\$([^$\n]+?)\$/g, (m) => {
     const placeholder = `\u0002${protectedMath.length}\u0002`;
     protectedMath.push(m);
     return placeholder;
   });
   // Protect block math
-  tex = tex.replace(/\$\$([\s\S]*?)\$\$/g, (_m, math) => {
+  typ = typ.replace(/\$\$([\s\S]*?)\$\$/g, (_m, math) => {
     const placeholder = `\u0002${protectedMath.length}\u0002`;
-    protectedMath.push(`\\[\n${math.trim()}\n\\]`);
+    protectedMath.push(`$ ${math.trim()} $`);
     return placeholder;
   });
 
   // Bold
-  tex = tex.replace(/\*\*([^*]+)\*\*/g, (_m, text) => `\\textbf{${escapeLatex(text)}}`);
+  typ = typ.replace(/\*\*([^*]+)\*\*/g, (_m, text) => `*${escapeTypstInline(text)}*`);
   // Italic
-  tex = tex.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, text) => `\\textit{${escapeLatex(text)}}`);
+  typ = typ.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, text) => `_${escapeTypstInline(text)}_`);
   // Inline code
-  tex = tex.replace(/`([^`]+)`/g, (_m, code) => `\\texttt{${escapeLatexInlineCode(code)}}`);
+  typ = typ.replace(/`([^`]+)`/g, (_m, code) => `#raw(lang: none)[${escapeTypstRaw(code)}]`);
   // Links
-  tex = tex.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => `\\href{${url}}{${escapeLatex(text)}}`);
+  typ = typ.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => `#link("${url}")[${escapeTypstInline(text)}]`);
   // Escape remaining plain text
-  tex = escapeLatex(tex);
+  typ = escapeTypstInline(typ);
 
   // Restore math
-  tex = tex.replace(/\u0002(\d+)\u0002/g, (_m, idx) => protectedMath[parseInt(idx, 10)]);
-  return tex;
+  typ = typ.replace(/\u0002(\d+)\u0002/g, (_m, idx) => protectedMath[parseInt(idx, 10)]);
+  return typ;
 }
 
 // ============================================================================
-// Markdown table → tabular
+// Markdown table → Typst #table
 // ============================================================================
 
-function markdownTableToLatex(tableMd: string): string {
+function markdownTableToTypst(tableMd: string): string {
   const lines = tableMd.trim().split("\n").filter((l) => l.trim());
   if (lines.length < 2) return "";
 
@@ -439,34 +482,61 @@ function markdownTableToLatex(tableMd: string): string {
     .filter((c) => c !== "");
 
   const aligns = sepCells.map((c) => {
-    if (c.startsWith(":") && c.endsWith(":")) return "c";
-    if (c.endsWith(":")) return "r";
-    return "l";
+    if (c.startsWith(":") && c.endsWith(":")) return "center";
+    if (c.endsWith(":")) return "right";
+    return "left";
   });
-  const colSpec = aligns.join("");
 
-  let latex = `\\begin{tabular}{${colSpec}}\n\\hline\n`;
-  latex += headerCells.map((c) => escapeLatex(c)).join(" & ") + " \\\\\n\\hline\n";
+  // Build columns spec
+  const colCount = headerCells.length;
+  const columnsExpr = `(${Array(colCount).fill("auto").join(", ")})`;
 
+  // Build align function if needed
+  const hasAligns = aligns.some((a) => a !== "left");
+
+  let cells: string[] = [];
+
+  // Header row
+  for (let i = 0; i < headerCells.length; i++) {
+    const align = aligns[i];
+    const cellContent = escapeTypstInline(headerCells[i]);
+    if (hasAligns) {
+      cells.push(`  #align(${align})[${cellContent}]`);
+    } else {
+      cells.push(`  [${cellContent}]`);
+    }
+  }
+
+  // Data rows
   for (let i = 2; i < lines.length; i++) {
-    const cells = lines[i]
+    const rowCells = lines[i]
       .split("|")
       .map((c) => c.trim())
       .filter((c) => c !== "");
-    if (cells.length === 0) continue;
-    latex += cells.map((c) => escapeLatex(c)).join(" & ") + " \\\\\n";
+    if (rowCells.length === 0) continue;
+    for (let j = 0; j < rowCells.length; j++) {
+      const align = aligns[j] || "left";
+      const cellContent = escapeTypstInline(rowCells[j]);
+      if (hasAligns) {
+        cells.push(`  #align(${align})[${cellContent}]`);
+      } else {
+        cells.push(`  [${cellContent}]`);
+      }
+    }
   }
-  latex += "\\hline\n\\end{tabular}";
-  return latex;
+
+  return `  table(
+    columns: ${columnsExpr},
+${cells.join(",\n")},
+  )`;
 }
 
-function convertMarkdownTables(tex: string): string {
+function convertMarkdownTables(typ: string): string {
   // Match standalone markdown tables (not already protected by ::table)
-  // Table must start at beginning of line
   const tableRegex = /^(\|[^\n]*\|[ \t]*\r?\n)(\|[-:\| \t]*\|[ \t]*\r?\n)((?:\|[^\n]*\|[ \t]*(?:\r?\n|$))+)/gm;
-  return tex.replace(tableRegex, (_m, headerLine, sepLine, bodyLines) => {
+  return typ.replace(tableRegex, (_m, headerLine, sepLine, bodyLines) => {
     const tableMd = (headerLine + sepLine + bodyLines).trimEnd();
-    return `\n${markdownTableToLatex(tableMd)}\n`;
+    return `\n${markdownTableToTypst(tableMd)}\n`;
   });
 }
 
@@ -474,14 +544,14 @@ function convertMarkdownTables(tex: string): string {
 // Footnotes
 // ============================================================================
 
-function convertFootnotes(tex: string): string {
-  const lines = tex.split("\n");
+function convertFootnotes(typ: string): string {
+  const lines = typ.split("\n");
   const outLines: string[] = [];
   const footnotes: Record<string, string> = {};
   let i = 0;
 
   while (i < lines.length) {
-    const defMatch = lines[i].match(/^\[\^(\d+)\]:\s+(.*)$/);
+    const defMatch = lines[i].match(/^\[(\^\d+)\]:\s+(.*)$/);
     if (defMatch) {
       let content = defMatch[2];
       i++;
@@ -493,7 +563,7 @@ function convertFootnotes(tex: string): string {
         content += " " + lines[i].trim();
         i++;
       }
-      footnotes[`^${defMatch[1]}`] = content;
+      footnotes[defMatch[1]] = content;
     } else {
       outLines.push(lines[i]);
       i++;
@@ -501,9 +571,9 @@ function convertFootnotes(tex: string): string {
   }
 
   let result = outLines.join("\n");
-  result = result.replace(/\[\^(\d+)\]/g, (_m, num) => {
-    const content = footnotes[`^${num}`];
-    return content ? `\\footnote{${escapeLatex(content)}}` : `\\footnote{${num}}`;
+  result = result.replace(/\[(\^\d+)\]/g, (_m, num) => {
+    const content = footnotes[num];
+    return content ? `#footnote[${escapeTypstInline(content)}]` : `#footnote[${num}]`;
   });
 
   return result;
@@ -513,8 +583,8 @@ function convertFootnotes(tex: string): string {
 // Lists
 // ============================================================================
 
-function processUnorderedLists(tex: string): string {
-  const lines = tex.split("\n");
+function processUnorderedLists(typ: string): string {
+  const lines = typ.split("\n");
   const out: string[] = [];
   let inList = false;
   let lastListLine = -1;
@@ -525,19 +595,22 @@ function processUnorderedLists(tex: string): string {
 
     if (listMatch) {
       if (!inList) {
-        out.push("\\begin{itemize}");
-        inList = true;
+        out.push("");
       }
-      out.push(`  \\item ${listMatch[2]}`);
+      out.push(`- ${listMatch[2]}`);
       lastListLine = out.length - 1;
+      inList = true;
     } else {
       if (inList && line.trim() !== "" && line.match(/^[ \t]+/)) {
         if (lastListLine >= 0) {
           out[lastListLine] += " " + line.trim();
         }
       } else {
-        if (inList) {
-          out.push("\\end{itemize}");
+        if (inList && line.trim() === "") {
+          // Empty line within list: keep it but don't end list yet
+          out.push("");
+        } else if (inList) {
+          out.push("");
           inList = false;
         }
         out.push(line);
@@ -546,37 +619,39 @@ function processUnorderedLists(tex: string): string {
   }
 
   if (inList) {
-    out.push("\\end{itemize}");
+    out.push("");
   }
 
   return out.join("\n");
 }
 
-function processOrderedLists(tex: string): string {
-  const lines = tex.split("\n");
+function processOrderedLists(typ: string): string {
+  const lines = typ.split("\n");
   const out: string[] = [];
   let inList = false;
   let lastListLine = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const listMatch = line.match(/^([ \t]*)\d+\.\s+(.+)$/);
+    const listMatch = line.match(/^[ \t]*\d+\.\s+(.+)$/);
 
     if (listMatch) {
       if (!inList) {
-        out.push("\\begin{enumerate}");
-        inList = true;
+        out.push("");
       }
-      out.push(`  \\item ${listMatch[2]}`);
+      out.push(`+ ${listMatch[1]}`);
       lastListLine = out.length - 1;
+      inList = true;
     } else {
       if (inList && line.trim() !== "" && line.match(/^[ \t]+/)) {
         if (lastListLine >= 0) {
           out[lastListLine] += " " + line.trim();
         }
       } else {
-        if (inList) {
-          out.push("\\end{enumerate}");
+        if (inList && line.trim() === "") {
+          out.push("");
+        } else if (inList) {
+          out.push("");
           inList = false;
         }
         out.push(line);
@@ -585,7 +660,7 @@ function processOrderedLists(tex: string): string {
   }
 
   if (inList) {
-    out.push("\\end{enumerate}");
+    out.push("");
   }
 
   return out.join("\n");
@@ -595,8 +670,8 @@ function processOrderedLists(tex: string): string {
 // Section splitting
 // ============================================================================
 
-function splitIntoSections(latexBody: string): DocSection[] {
-  const lines = latexBody.split("\n");
+function splitIntoSections(typstBody: string): DocSection[] {
+  const lines = typstBody.split("\n");
   const sections: DocSection[] = [];
   let currentSection: DocSection | null = null;
   let currentContent: string[] = [];
@@ -604,9 +679,7 @@ function splitIntoSections(latexBody: string): DocSection[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const match = line.match(
-      /^(\\(chapter|section|subsection|subsubsection))\{([^}]+)\}/
-    );
+    const match = line.match(/^(={1,6})\s+(.+)$/);
 
     if (match) {
       if (currentSection) {
@@ -618,25 +691,18 @@ function splitIntoSections(latexBody: string): DocSection[] {
           preambleLines.join("\n") + "\n\n" + sections[0].content;
       }
 
-      const level =
-        match[2] === "chapter"
-          ? 1
-          : match[2] === "section"
-            ? 2
-            : match[2] === "subsection"
-              ? 3
-              : 4;
+      const level = match[1].length;
 
-      const safeName = match[3]
+      const safeName = match[2]
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_+|_+$/g, "");
 
       currentSection = {
-        title: match[3],
+        title: match[2],
         level,
         content: line,
-        fileName: `${String(sections.length).padStart(2, "0")}_${safeName}.tex`,
+        fileName: `${String(sections.length).padStart(2, "0")}_${safeName}.typ`,
       };
       currentContent = [line];
     } else if (currentSection) {
@@ -663,7 +729,7 @@ function splitIntoSections(latexBody: string): DocSection[] {
 }
 
 // ============================================================================
-// BibTeX Generation
+// BibTeX Generation (Typst natively supports .bib files)
 // ============================================================================
 
 function generateBibTeX(
@@ -704,78 +770,44 @@ function bibEntryToString(entry: {
 }
 
 // ============================================================================
-// latexmkrc Generation
+// Typst Escaping
 // ============================================================================
 
-function generateLatexmkrc(
-  exportConfig: DocExportConfig,
-  engine?: string
-): string {
-  const latexEngine = engine || exportConfig.vars?.latexEngine || "xelatex";
-  const bibEngine = exportConfig.vars?.bibEngine || "bibtex";
-
-  // Map engine name to latexmk $pdf_mode
-  let pdfMode = 5; // default xelatex
-  if (latexEngine === "pdflatex") pdfMode = 1;
-  else if (latexEngine === "lualatex") pdfMode = 4;
-
-  return `# SailZen Auto-Generated latexmkrc
-# Run: latexmk main.tex
-# Or:  latexmk -pdf main.tex
-
-# LaTeX engine
-$pdf_mode = ${pdfMode};
-$pdflatex = "${latexEngine} %O %S";
-$xelatex = "${latexEngine} -shell-escape %O %S";
-$lualatex = "${latexEngine} %O %S";
-
-# Bibliography engine
-$bibtex = "${bibEngine} %O %S";
-$bibtex_use = 2;
-
-# Clean up auxiliary files on cleanup
-$clean_ext = "aux bbl blg log out toc fls fdb_latexmk synctex.gz";
-
-# Preview settings (optional)
-$preview_mode = 0;
-$pdf_previewer = "start";
-`;
-}
-
-// ============================================================================
-// LaTeX Escaping
-// ============================================================================
-
-function escapeLatex(text: string): string {
+/**
+ * Escape plain text for Typst markup mode.
+ * In Typst, backslash escapes the next character.
+ */
+function escapeTypst(text: string): string {
   return (
     text
-      // Intentionally NOT escaping backslash here – all legitimate
-      // LaTeX commands are protected before this function runs.
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
+      .replace(/\\/g, "\\\\")
       .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
+      .replace(/\[/g, "\\[")
+      .replace(/\]/g, "\\]")
+      .replace(/\*/g, "\\*")
       .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-      .replace(/"/g, "''")
+      .replace(/`/g, "\\`")
   );
 }
 
-function escapeLatexInlineCode(text: string): string {
+/**
+ * Escape text that will be placed inside a Typst content block [...].
+ * Inside content blocks, ] ends the block, so we escape it.
+ * [ does not need escaping inside content blocks (it starts a nested block).
+ */
+function escapeTypstInline(text: string): string {
   return (
     text
-      .replace(/\\/g, "\\textbackslash{}")
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
+      .replace(/\\/g, "\\\\")
+      .replace(/\]/g, "\\]")
+      .replace(/\*/g, "\\*")
   );
+}
+
+/**
+ * Escape text that will be placed inside a #raw()[...] block.
+ * We need to escape ] to prevent it from ending the content block.
+ */
+function escapeTypstRaw(text: string): string {
+  return text.replace(/\]/g, "\\]").replace(/\\/g, "\\\\");
 }

@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Dendron",
   "publisher": "SailingInnocent",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"

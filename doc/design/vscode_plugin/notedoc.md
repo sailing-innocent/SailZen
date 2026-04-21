@@ -148,7 +148,7 @@ Markdown File → NoteParserV2 → DendronEngineV3
           ▼                 ▼                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    External Build Toolchain                  │
-│         xmake (LaTeX)  /  typst-cli  /  slidev              │
+│        latexmk (LaTeX)  /  typst-cli  /  slidev              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -467,7 +467,7 @@ output/
 ├── figures/
 │   └── (复制/链接的图片)
 ├── ref.bib               # 自动生成的 BibTeX
-└── xmake.lua             # 自动生成的构建脚本（复用现有体系）
+└── latexmk.src
 ```
 
 **Typst 后端**：
@@ -667,8 +667,8 @@ notes/
 
 **阶段 3：完全切换**
 - 删除 `doc/doc/content/` 中的重复 `.tex` 文件
-- `doc/` 仅保留模板、样式、xmake 构建脚本
-- 构建流程改为：笔记 → `.sailzen/doc/` → xmake → PDF
+- `doc/` 仅保留模板、样式
+- 构建流程改为：笔记 → `.sailzen/doc/` → latexmk/typst-cli/slidev-cli → PDF
 
 ### 8.3 文献管理整合
 
@@ -713,7 +713,6 @@ doc:
 | `unified` + `remark` | AST 处理管线，插入 SailZen Doc 插件 |
 | `NoteProps.custom` | 承载 `doc` frontmatter 扩展 |
 | `ProcFlavor` / `ProcMode` | 新增 `DOC_EXPORT` / `DOC_PREVIEW` 模式 |
-| `xmake` 构建系统 | 后端编译 orchestration |
 | `PreviewPanel` | 扩展为支持 Doc 模式预览 |
 
 ### 9.2 后端（Python）可扩展点
@@ -840,6 +839,10 @@ doc:
 ```
 .sailzen/doc/project.bigs/latex-acmmm/
 ├── main.tex
+├── latexmk
+├── acmart
+│   ├── acmart.cls
+│   ├── ...
 ├── sections/
 │   ├── 00_abstract.tex
 │   ├── 01_introduction.tex
@@ -852,7 +855,7 @@ doc:
 └── ref.bib
 ```
 
-运行 `xmake` 即可编译出与手写版本一致的 `main.pdf`。
+运行latexmk即可
 
 ---
 

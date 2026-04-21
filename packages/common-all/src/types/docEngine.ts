@@ -186,7 +186,7 @@ export type DocTemplateConfig = {
   id: string;
   format: DocExportFormat;
   description: string;
-  engine?: "pdflatex" | "xelatex" | "lualatex";
+  engine?: "pdflatex" | "xelatex" | "lualatex" | "typst";
   requires?: string[];
   variables?: DocTemplateVariable[];
   sectioning?: {
@@ -207,6 +207,11 @@ export type GeneratedDocument = {
   }>;
   /** Binary/asset files to copy (e.g., images) */
   assetFiles: Array<{
+    srcPath: string;
+    destPath: string;
+  }>;
+  /** Template dependency files to copy into the format-specific output directory (e.g., .cls, .sty) */
+  templateFiles?: Array<{
     srcPath: string;
     destPath: string;
   }>;

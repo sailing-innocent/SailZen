@@ -28,7 +28,7 @@ const makeNote = (id: string, fname: string, body: string, custom?: any): NotePr
   } as NoteProps);
 
 describe("DocEngine Integration", () => {
-  it("should generate correct LaTeX for project.testdoc.paper scenario", () => {
+  it("should generate correct LaTeX for project.testdoc.paper scenario", async () => {
     const root = makeNote(
       "PcnVj4GZBt7O3HTrwqdFq",
       "project.testdoc.paper",
@@ -121,7 +121,7 @@ describe("DocEngine Integration", () => {
     expect(assembled.body).toContain("# Conclusion");
 
     const exportConfig = profile.exports[0];
-    const generated = generateLatex(assembled, profile, exportConfig, notesById, "/ws/root");
+    const generated = await generateLatex(assembled, profile, exportConfig, notesById, "/ws/root");
 
     // KEY ASSERTION 3: LaTeX structure is correct
     expect(generated.mainContent).toContain("\\documentclass{article}");

@@ -18,7 +18,7 @@ import {
   assembleDocument,
   generateLatex,
   resolveProfile,
-  listBuiltinTemplates,
+  listTemplates,
 } from "../docEngine";
 
 type CommandOpts = {
@@ -85,10 +85,11 @@ export class ExportNoteToLatexCommand
     }
     const profile = resolveProfile(note, notesByIdForProfile);
 
-    // If no exports defined, let user pick from built-in templates
+    // If no exports defined, let user pick from available templates
     let exportConfig: DocExportConfig;
+    const wsRoot = engine.wsRoot;
     if (profile.exports.length === 0) {
-      const templates = listBuiltinTemplates("latex");
+      const templates = await listTemplates("latex", wsRoot);
       const pick = await vscode.window.showQuickPick(
         templates.map((t) => ({
           label: t.id,
@@ -145,7 +146,7 @@ export class ExportNoteToLatexCommand
         const assembled = assembleDocument(profile, notesById);
 
         // Generate output
-        const generated = generateLatex(
+        const generated = await generateLatex(
           assembled,
           profile,
           exportConfig,
@@ -274,6 +275,63 @@ export class ExportNoteToLatexCommand
               ctx: `${this.key}:execute`,
               msg: `Asset file not found: ${asset.srcPath}`,
             });
+          }
+        }
+
+        // Copy template dependency files (.cls, .sty, etc.) to the format-specific
+        // output directory. These are target-dependent and should not be shared
+        // across different output formats.
+        if (generated.templateFiles && generated.templateFiles.length > 0) {
+          // eslint-disable-next-line no-console
+          console.log("[ExportNoteToLatexCommand] starting template copy, count=", generated.templateFiles.length, "outDir=", outDir);
+          Logger.info({
+            ctx: `${this.key}:execute`,
+            msg: `starting template copy, count=${generated.templateFiles.length}`,
+          });
+          for (const tpl of generated.templateFiles) {
+            const tplDestPath = path.join(outDir, tpl.destPath);
+            const srcExists = await fs.pathExists(tpl.srcPath);
+            // eslint-disable-next-line no-console
+            console.log("[ExportNoteToLatexCommand] template copy item:", { srcPath: tpl.srcPath, destPath: tplDestPath, srcExists });
+            Logger.info({
+              ctx: `${this.key}:execute`,
+              msg: `processing template copy`,
+              srcPath: tpl.srcPath,
+              destPath: tplDestPath,
+              srcExists,
+            });
+            await fs.ensureDir(path.dirname(tplDestPath));
+            if (srcExists) {
+              try {
+                await fs.copy(tpl.srcPath, tplDestPath);
+                files.push(tplDestPath);
+                // eslint-disable-next-line no-console
+                console.log("[ExportNoteToLatexCommand] template copied OK:", tplDestPath);
+                Logger.info({
+                  ctx: `${this.key}:execute`,
+                  msg: `template copied successfully`,
+                  srcPath: tpl.srcPath,
+                  destPath: tplDestPath,
+                });
+              } catch (copyErr: any) {
+                // eslint-disable-next-line no-console
+                console.error("[ExportNoteToLatexCommand] template copy FAILED:", copyErr.message);
+                Logger.error({
+                  ctx: `${this.key}:execute`,
+                  msg: `template copy failed`,
+                  srcPath: tpl.srcPath,
+                  destPath: tplDestPath,
+                  error: copyErr.message,
+                });
+              }
+            } else {
+              // eslint-disable-next-line no-console
+              console.warn("[ExportNoteToLatexCommand] template src NOT FOUND:", tpl.srcPath);
+              Logger.warn({
+                ctx: `${this.key}:execute`,
+                msg: `Template file not found: ${tpl.srcPath}`,
+              });
+            }
           }
         }
 

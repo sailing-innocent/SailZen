@@ -1,0 +1,40 @@
+id: acmart-sigconf
+format: latex
+description: ACM Conference Paper (sigconf) — External Template Example
+engine: pdflatex
+requires:
+  - acmart.cls
+  - acmart-tagged.cls
+  - acmart.dtx
+  - acmart.ins
+  - ACM-Reference-Format.bst
+  - acmauthoryear.bbx
+  - acmauthoryear.cbx
+  - acmdatamodel.dbx
+  - acmnumeric.bbx
+  - acmnumeric.cbx
+variables:
+  - name: title
+    required: true
+  - name: authors
+    type: array
+  - name: abstract
+    type: string
+  - name: keywords
+    type: array
+    default: []
+  - name: conference
+    type: string
+  - name: conference_short
+    type: string
+  - name: conference_date
+    type: string
+  - name: conference_venue
+    type: string
+  - name: year
+    type: string
+  - name: doi
+    type: string
+sectioning:
+  style: numbered
+  maxDepth: 3

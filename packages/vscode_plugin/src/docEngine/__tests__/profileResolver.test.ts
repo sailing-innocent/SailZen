@@ -5,7 +5,7 @@
  */
 
 import { NoteProps, NotePropsByIdDict } from "@saili/common-all";
-import { resolveProfile, extractCitations, extractAssetRefs } from "../profileResolver";
+import { resolveProfile, extractCitations, extractAssetRefs, extractTableRefs, extractMathEnvs } from "../profileResolver";
 
 describe("profileResolver", () => {
   const makeNote = (id: string, fname: string, custom?: any): NoteProps =>

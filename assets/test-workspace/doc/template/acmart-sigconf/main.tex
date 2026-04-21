@@ -1,0 +1,34 @@
+\documentclass[sigconf,authordraft]{acmart}
+
+% Metadata
+\title{{{title}}}
+{{conference_latex}}
+{{year_latex}}
+{{doi_latex}}
+
+{{#each authors}}
+\author{{{name}}}
+\affiliation{%
+  \institution{{{affiliation}}}
+  \country{{{country}}}
+}
+\email{{{email}}}
+
+{{/each}}
+
+\begin{document}
+\begin{abstract}
+{{abstract}}
+\end{abstract}
+
+{{#if keywords}}
+\keywords{{{keywords_latex}}}
+{{/if}}
+
+\maketitle
+
+{{body}}
+
+\bibliography{ref}
+\bibliographystyle{ACM-Reference-Format}
+\end{document}
