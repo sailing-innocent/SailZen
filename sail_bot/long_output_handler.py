@@ -31,7 +31,6 @@ class LongOutputStrategy:
     FILE = "file"              # Save to file (>30K chars)
     DIRECT = "direct"          # Direct output (<8K chars)
 
-
 class LongOutputHandler:
     """Handle long text output with multiple strategies.
     

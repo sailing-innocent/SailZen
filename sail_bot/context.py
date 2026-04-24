@@ -7,37 +7,6 @@ _HISTORY_WINDOW = 6
 # ---------------------------------------------------------------------------
 # Conversation context
 # ---------------------------------------------------------------------------
-
-_CONFIRM_WORDS = frozenset(
-    [
-        "确认",
-        "确定",
-        "是",
-        "yes",
-        "ok",
-        "好",
-        "好的",
-        "执行",
-        "继续",
-        "confirm",
-        "y",
-    ]
-)
-
-_CANCEL_WORDS = frozenset(
-    [
-        "取消",
-        "算了",
-        "不",
-        "no",
-        "cancel",
-        "停",
-        "别",
-        "n",
-    ]
-)
-
-
 @dataclass
 class ActionPlan:
     action: str
@@ -46,13 +15,11 @@ class ActionPlan:
     confirm_summary: str = ""
     reply: str = ""
 
-
 @dataclass
 class TurnRecord:
     role: str
     text: str
     ts: datetime = field(default_factory=datetime.now)
-
 
 @dataclass
 class PendingConfirmation:

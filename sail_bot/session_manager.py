@@ -5,6 +5,7 @@
 # @date 2026-03-25
 # @version 1.0
 # ---------------------------------
+
 """Manages OpenCode serve processes and their API sessions.
 
 Each workspace gets:
@@ -130,45 +131,8 @@ class OpenCodeSessionManager:
             return opencode_session.id
         return None
 
-    def send_task_streaming(
-        self,
-        path: str,
-        task_text: str,
-        on_chunk=None,
-    ):
-        """Send a coding task and yield the complete response.
-
-        DEPRECATED: Use task_manager.submit_task() with SSE instead.
-        This method is kept for backward compatibility only.
-        """
-        path = str(Path(path).expanduser().resolve())
-        session = self._sessions.get(path)
-
-        if not session or session.process_status != "running":
-            yield f"No running session for {path}. Use '启动 {path}' first."
-            return
-
-        sess_id = self.get_or_create_opencode_session(path)
-        if not sess_id:
-            yield "Failed to create OpenCode session. The server may not be ready yet."
-            return
-
-        client = OpenCodeSessionClient(port=session.port, timeout=300.0)
-        try:
-            message = client.send_message(sess_id, task_text, timeout=300.0)
-            content = message.text_content if message else "(任务已完成，无文字输出)"
-            if on_chunk:
-                on_chunk(content)
-            yield content
-        except Exception as exc:
-            yield f"\n[Error: {exc}]"
-        finally:
-            client.close()
-
     def send_task(self, path: str, task_text: str) -> str:
         """Send a coding task to the opencode session for `path`.
-
-        DEPRECATED: Use task_manager.submit_task() with SSE instead.
         """
         path = str(Path(path).expanduser().resolve())
         session = self._sessions.get(path)
@@ -530,7 +494,6 @@ class OpenCodeSessionManager:
 
 # Path resolution utilities
 
-
 def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optional[str]:
     """Extract path from text using patterns or project shortcuts."""
     patterns = [
@@ -556,7 +519,6 @@ def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optiona
             return p.get("path", "")
 
     return None
-
 
 def resolve_path(raw: str, projects: List[Dict[str, str]]) -> Optional[str]:
     """Resolve a path string or project slug to actual path."""

@@ -43,7 +43,6 @@ import time
 
 EXIT_CODE_SELF_UPDATE = 42
 
-
 class UpdatePhase(Enum):
     """Phases of the self-update process."""
 

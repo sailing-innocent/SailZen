@@ -213,6 +213,10 @@
         "title": "SailZen: Export Note to LaTeX"
       },
       {
+        "command": "sailzen.exportNoteToMarkdown",
+        "title": "SailZen: Export Note to Markdown (Blog)"
+      },
+      {
         "command": "dendron.copyAs",
         "title": "Dendron: Copy As"
       },

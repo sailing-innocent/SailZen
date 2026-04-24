@@ -26,13 +26,6 @@ import logging
 from datetime import datetime
 
 import lark_oapi as lark
-from lark_oapi.api.im.v1 import (
-    CreateMessageRequest,
-    CreateMessageRequestBody,
-    ReplyMessageRequest,
-    ReplyMessageRequestBody,
-)
-
 from sail_bot.bot_state_manager import (
     get_state_manager,
 )
@@ -70,11 +63,11 @@ logger = logging.getLogger(__name__)
 
 class FeishuBotAgent:
     """Feishu bot that bridges messages to OpenCode web sessions."""
-
+    
     from sail_bot.paths import CONTEXTS_FILE
-
+    
     CONTEXT_STATE_FILE = CONTEXTS_FILE
-
+    
     def __init__(self, config: AgentConfig):
         self.config = config
 

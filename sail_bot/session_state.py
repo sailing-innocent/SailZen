@@ -26,9 +26,6 @@ from sail_bot.paths import SESSION_STATES_FILE
 
 STATE_FILE = SESSION_STATES_FILE
 
-_MIN_CARD_UPDATE_INTERVAL = 3.0
-
-
 # ---------------------------------------------------------------------------
 # 2.1 SessionState Enum + Transition Validation
 # ---------------------------------------------------------------------------
@@ -62,7 +59,6 @@ def is_valid_transition(current: SessionState, next_state: SessionState) -> bool
 # ---------------------------------------------------------------------------
 # 2.1.4 / 3.3.1 State change event hooks
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class SessionStateEntry:
@@ -117,7 +113,6 @@ class SessionStateEntry:
 
 
 StateChangeHook = Callable[[str, SessionState, SessionState, SessionStateEntry], None]
-
 
 class SessionStateStore:
     def __init__(self) -> None:

@@ -10,6 +10,7 @@ export {
 export { assembleDocument } from "./documentAssembler";
 export { generateLatex } from "./latexBackend";
 export { generateTypst } from "./typstBackend";
+export { generateMarkdown } from "./markdownBackend";
 export {
   renderTemplate,
   resolveTemplateVars,

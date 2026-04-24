@@ -850,6 +850,11 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Export Note to LaTeX`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
+  EXPORT_NOTE_TO_MARKDOWN: {
+    key: "sailzen.exportNoteToMarkdown",
+    title: `${CMD_PREFIX} Export Note to Markdown (Blog)`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
+  },
   PASTE_FILE: {
     key: "dendron.pasteFile",
     title: `${CMD_PREFIX} Paste File`,

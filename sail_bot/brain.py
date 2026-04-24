@@ -39,8 +39,6 @@ from sail_bot.context import (
 from sail_bot.card_renderer import CardRenderer
 from sail_bot.session_manager import extract_path_from_text
 
-
-# 这是什么傻逼实现
 def _make_gateway(
     config_provider: Optional[str] = None, config_api_key: Optional[str] = None
 ):

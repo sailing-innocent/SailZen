@@ -319,6 +319,5 @@ def get_task_logger() -> TaskHistoryTracker:
     """获取任务日志记录器实例"""
     return TaskHistoryTracker()
 
-
 # 全局实例
 task_logger = get_task_logger()
