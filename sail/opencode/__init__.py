@@ -31,11 +31,11 @@ from sail.opencode.client import (
     OpenCodeAsyncClient,
     SSEEvent,
     Session,
+    MessagePart,
     check_health_sync,
 )
 from sail.opencode.sse_parser import (
     EventType,
-    MessagePart,
     ParsedEvent,
     parse_event,
 )
