@@ -325,6 +325,7 @@ class OperationTracker:
     def __init__(self) -> None:
         self._ops: Dict[str, ActiveOperation] = {}
         self._lock = threading.Lock()
+        self._cancel_callbacks: Dict[str, Callable[[], None]] = {}
 
     def start(self, path: str, description: str, timeout: float = 120.0) -> str:
         op_id = str(uuid.uuid4())[:8]
@@ -333,6 +334,15 @@ class OperationTracker:
                 op_id=op_id, path=path, description=description, timeout_seconds=timeout
             )
         return op_id
+
+    def register_cancel_callback(self, op_id: str, callback: Callable[[], None]) -> None:
+        """Register a callback that will be invoked when cancel() is called.
+
+        This is the key mechanism: TaskHandler registers the SessionRunner.cancel
+        method here so CardActionHandler can trigger it by op_id alone.
+        """
+        with self._lock:
+            self._cancel_callbacks[op_id] = callback
 
     def update_progress(self, op_id: str, pct: int) -> None:
         with self._lock:
@@ -350,12 +360,28 @@ class OperationTracker:
     def finish(self, op_id: str) -> None:
         with self._lock:
             self._ops.pop(op_id, None)
+            self._cancel_callbacks.pop(op_id, None)
 
-    def cancel(self, op_id: str) -> None:
+    def cancel(self, op_id: str) -> bool:
+        """Cancel an operation: set the flag AND invoke the cancel callback.
+
+        Returns True if the operation was found and cancel was triggered.
+        """
+        callback: Optional[Callable[[], None]] = None
+        found = False
         with self._lock:
             op = self._ops.get(op_id)
             if op:
+                found = True
                 op.cancelled = True
+                callback = self._cancel_callbacks.get(op_id)
+        # Invoke callback outside the lock to avoid deadlocks
+        if callback:
+            try:
+                callback()
+            except Exception as exc:
+                logger.error("[OperationTracker] cancel callback error for %s: %s", op_id, exc)
+        return found
 
     def get(self, op_id: str) -> Optional[ActiveOperation]:
         with self._lock:
@@ -367,6 +393,12 @@ class OperationTracker:
                 if op.path == path and not op.cancelled:
                     return op
         return None
+
+    def is_cancelled(self, op_id: str) -> bool:
+        """Check if an operation has been cancelled."""
+        with self._lock:
+            op = self._ops.get(op_id)
+            return op.cancelled if op else False
 
     def elapsed(self, op_id: str) -> float:
         with self._lock:
