@@ -37,7 +37,7 @@ from sail_bot.context import (
     _CANCEL_WORDS,
 )
 from sail_bot.card_renderer import CardRenderer
-from sail_bot.session_manager import extract_path_from_text
+from sail.opencode import extract_path_from_text
 
 def _make_gateway(
     config_provider: Optional[str] = None, config_api_key: Optional[str] = None
@@ -237,9 +237,13 @@ class BotBrain:
         # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
         if self._gw:
             try:
-                from sail_bot.async_task_manager import run_async
+                import asyncio
 
-                plan = run_async(self._think_llm(text, ctx))
+                loop = asyncio.new_event_loop()
+                try:
+                    plan = loop.run_until_complete(self._think_llm(text, ctx))
+                finally:
+                    loop.close()
                 if plan.action != "chat":
                     brain(f"Level 2 matched: {plan.action}")
                     return plan
@@ -409,6 +413,9 @@ class BotBrain:
         2. regex 失败才显示 thinking card 并调用 LLM
         3. LLM 失败优雅降级
         """
+        # Resolve messaging client from agent
+        messaging = agent.messaging
+
         # Level 1: 先尝试确定性匹配 (不显示 thinking card)
         plan = self._think_deterministic(text, ctx)
         if plan.action != "chat":
@@ -420,7 +427,7 @@ class BotBrain:
             thinking_card = CardRenderer.progress(
                 "正在理解你的意图", "AI正在分析中，请稍候..."
             )
-            thinking_mid = agent._reply_card(
+            thinking_mid = messaging.reply_card(
                 message_id, thinking_card, "thinking", {"user_text": text[:50]}
             )
         else:
@@ -448,7 +455,7 @@ class BotBrain:
                     "AI理解遇到了问题，正在使用备用模式为你服务。",
                     success=True,
                 )
-                agent._update_card(thinking_mid, fallback_card)
+                messaging.update_card(thinking_mid, fallback_card)
             # 返回降级 plan
             plan = self._create_fallback_plan(text, ctx)
             return plan, thinking_mid

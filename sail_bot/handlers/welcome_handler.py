@@ -29,33 +29,29 @@ class WelcomeHandler(BaseHandler):
         try:
             print(f"[WelcomeHandler] Sending welcome card to {chat_id}")
 
-            # Collect session states for all projects
+            # Collect session states from process manager
             session_states: Dict[str, str] = {}
+            proc_map = {p.path: p for p in self.ctx.process_mgr.list_processes()}
             for proj in self.ctx.config.projects:
                 path = proj.get("path", "")
                 if path:
-                    # Resolve the path to match session_manager's key format
                     try:
                         resolved_path = str(Path(path).expanduser().resolve())
                     except Exception:
                         resolved_path = path
-                    
-                    # Get state from session manager or state store
-                    session = self.ctx.session_mgr._sessions.get(resolved_path)
-                    if session and hasattr(session, "process_status"):
-                        session_states[path] = session.process_status
+
+                    proc = proc_map.get(resolved_path)
+                    if proc:
+                        session_states[path] = proc.status.value
                     else:
-                        entry = self.ctx.state_store.get(resolved_path)
-                        session_states[path] = (
-                            entry.state.value if entry and hasattr(entry, "state") else "idle"
-                        )
+                        session_states[path] = "idle"
 
             # Generate welcome card
             welcome_card = CardRenderer.welcome(
                 projects=self.ctx.config.projects,
                 session_states=session_states,
                 has_llm=self.ctx.brain._gw is not None,
-                has_self_update=self.ctx.self_update_enabled,
+                has_self_update=True,
             )
 
             # Send welcome card

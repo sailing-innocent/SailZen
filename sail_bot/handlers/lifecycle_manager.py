@@ -2,10 +2,12 @@
 # @file lifecycle_manager.py
 # @brief Bot lifecycle management (startup, shutdown, cleanup)
 # @author sailing-innocent
-# @date 2026-04-06
-# @version 1.0
+# @date 2026-04-25
+# @version 2.0
 # ---------------------------------
 """Bot lifecycle manager.
+
+v2.0: 使用 sail.opencode.OpenCodeProcessManager 替代旧的 session_manager。
 
 This module handles:
 - Startup: State recovery, initial cleanup
@@ -40,66 +42,23 @@ class LifecycleManager:
         print("[Startup] 恢复会话状态...")
 
         # Validate project paths
-        valid_projects = []
         for p in self.agent.config.projects:
             path = p.get("path", "")
-            if not path:
-                continue
-            try:
-                resolved = Path(path).expanduser().resolve()
-                if resolved.exists():
-                    valid_projects.append(str(resolved))
-                else:
-                    print(f"[Startup] 警告: 配置项目路径不存在: {path}")
-            except Exception as e:
-                print(f"[Startup] 警告: 无法解析路径 {path}: {e}")
-
-        # Recover session states
-        recovered_count = 0
-        error_count = 0
-
-        for entry in self.agent.state_store.all_entries():
-            path = entry.path
-
-            # Check if path is in valid config
-            if path not in valid_projects:
+            if path:
                 try:
-                    if not Path(path).exists():
-                        print(f"[Startup] 跳过不在配置中的路径: {path}")
-                        self.agent.state_store.force_set(
-                            path,
-                            SessionState.ERROR,
-                            last_error="Path not in configuration",
-                        )
-                        error_count += 1
-                        continue
-                except Exception:
-                    pass
+                    resolved = Path(path).expanduser().resolve()
+                    if not resolved.exists():
+                        print(f"[Startup] 警告: 配置项目路径不存在: {path}")
+                except Exception as e:
+                    print(f"[Startup] 警告: 无法解析路径 {path}: {e}")
 
-            if entry.state in (
-                SessionState.RUNNING,
-                SessionState.STARTING,
-            ):
-                session = self.agent.session_mgr._sessions.get(path)
-                port = entry.port or (session.port if session else None)
-                if port and self.agent.session_mgr._is_port_open(port):
-                    print(f"[Startup] Reconnected to {path} on port {port}")
-                    if session:
-                        session.process_status = "running"
-                    recovered_count += 1
-                else:
-                    print(f"[Startup] Cannot recover {path}, marking error")
-                    self.agent.state_store.force_set(
-                        path,
-                        SessionState.ERROR,
-                        last_error="Process not found on startup",
-                    )
-                    error_count += 1
-
-        if recovered_count > 0 or error_count > 0:
-            print(
-                f"[Startup] 状态恢复完成: {recovered_count} 个成功, {error_count} 个失败"
-            )
+        # Process manager handles state recovery on init via _load_state()
+        procs = self.agent.process_mgr.list_processes()
+        running = [p for p in procs if p.status.value == "running"]
+        if running:
+            print(f"[Startup] 恢复了 {len(running)} 个运行中的进程")
+        else:
+            print("[Startup] 无运行中的进程需要恢复")
 
     def on_shutdown(self) -> None:
         """Handle bot shutdown including cleanup."""
@@ -108,60 +67,28 @@ class LifecycleManager:
         # Send shutdown notification
         self._notify_shutdown()
 
-        self.agent._health_monitor.stop()
-
-        # Stop async task manager
-        from sail_bot.async_task_manager import task_manager
-
-        task_manager.stop()
-        print("[Shutdown] Async task manager stopped")
-
-        # Stop all sessions
-        sessions = self.agent.session_mgr.list_sessions()
-        for s in sessions:
-            if s.process_status in ("running", "starting"):
-                print(f"[Shutdown] Stopping {s.path}")
-                self.agent.session_mgr.stop_session(s.path)
-
-        # Clean up file handles
-        for s in sessions:
-            if s._stdout_log or s._stderr_log:
-                print(f"[Shutdown] Cleaning up file handles for {s.path}")
-                if s._stdout_log:
-                    try:
-                        s._stdout_log.close()
-                    except Exception:
-                        pass
-                    s._stdout_log = None
-                if s._stderr_log:
-                    try:
-                        s._stderr_log.close()
-                    except Exception:
-                        pass
-                    s._stderr_log = None
+        # Stop all opencode processes
+        count = self.agent.process_mgr.stop_all()
+        if count:
+            print(f"[Shutdown] 停止了 {count} 个 opencode 进程")
 
         self.agent.state_store.save_to_disk()
         print("[Shutdown] Cleanup complete")
 
     def cleanup_previous_instances(self) -> None:
         """Cleanup zombie processes from previous instances."""
-        print("\n[Cleanup] 检查之前遗留的进程和文件句柄...")
+        print("\n[Cleanup] 检查之前遗留的进程...")
 
         killed_count = 0
         try:
             if sys.platform == "win32":
-                # Windows: Use tasklist and taskkill
                 result = subprocess.run(
                     ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV", "/V"],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="ignore",
+                    capture_output=True, text=True, encoding="utf-8", errors="ignore",
                 )
-
                 if result.returncode == 0:
                     lines = result.stdout.strip().split("\n")
-                    for line in lines[1:]:  # Skip header
+                    for line in lines[1:]:
                         if "feishu_agent" in line.lower() or "opencode" in line.lower():
                             parts = line.strip('"').split('","')
                             if len(parts) >= 2:
@@ -169,12 +96,10 @@ class LifecycleManager:
                                 print(f"[Cleanup] 发现遗留进程 PID {pid}，正在终止...")
                                 subprocess.run(
                                     ["taskkill", "/PID", pid, "/T", "/F"],
-                                    check=False,
-                                    capture_output=True,
+                                    check=False, capture_output=True,
                                 )
                                 killed_count += 1
             else:
-                # Linux/Mac: Use ps and kill
                 result = subprocess.run(["ps", "aux"], capture_output=True, text=True)
                 for line in result.stdout.split("\n"):
                     if "feishu_agent" in line.lower() or (
@@ -183,73 +108,15 @@ class LifecycleManager:
                         parts = line.split()
                         if len(parts) >= 2:
                             pid = parts[1]
-                            print(f"[Cleanup] 发现遗留进程 PID {pid}，正在终止...")
                             try:
                                 os.kill(int(pid), signal.SIGTERM)
                                 killed_count += 1
-                            except Exception as e:
-                                print(f"[Cleanup] 终止失败: {e}")
+                            except Exception:
+                                pass
         except Exception as e:
             print(f"[Cleanup] 进程检查失败: {e}")
 
-        # Clear ports
-        port_cleared = 0
-        base_port = self.agent.config.base_port
-        for port in range(base_port, base_port + 20):
-            if self.agent.session_mgr._is_port_open(port):
-                print(f"[Cleanup] 端口 {port} 被占用，尝试释放...")
-                try:
-                    if sys.platform == "win32":
-                        result = subprocess.run(
-                            ["netstat", "-ano", "|", "findstr", f":{port}"],
-                            capture_output=True,
-                            text=True,
-                            shell=True,
-                        )
-                        if result.stdout:
-                            for line in result.stdout.split("\n"):
-                                parts = line.strip().split()
-                                if len(parts) >= 5:
-                                    pid = parts[-1]
-                                    print(
-                                        f"[Cleanup] 终止占用端口 {port} 的进程 PID {pid}"
-                                    )
-                                    subprocess.run(
-                                        ["taskkill", "/PID", pid, "/F"],
-                                        check=False,
-                                        capture_output=True,
-                                    )
-                                    port_cleared += 1
-                    else:
-                        result = subprocess.run(
-                            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
-                        )
-                        if result.stdout:
-                            pid = result.stdout.strip()
-                            print(f"[Cleanup] 终止占用端口 {port} 的进程 PID {pid}")
-                            os.kill(int(pid), signal.SIGKILL)
-                            port_cleared += 1
-                except Exception as e:
-                    print(f"[Cleanup] 端口 {port} 释放失败: {e}")
-
-        # Clean invalid sessions
-        invalid_sessions = 0
-        for entry in list(self.agent.state_store.all_entries()):
-            if entry.state in (
-                SessionState.RUNNING,
-                SessionState.STARTING,
-            ):
-                port = entry.port
-                if port and not self.agent.session_mgr._is_port_open(port):
-                    print(f"[Cleanup] 清理无效会话状态: {entry.path}")
-                    self.agent.state_store.force_set(
-                        entry.path,
-                        SessionState.ERROR,
-                        last_error="Process terminated during cleanup",
-                    )
-                    invalid_sessions += 1
-
-        # Clean orphaned entries
+        # Clean orphaned state entries
         config_paths = set()
         for p in self.agent.config.projects:
             if p.get("path"):
@@ -259,28 +126,18 @@ class LifecycleManager:
                 except Exception:
                     config_paths.add(p["path"])
 
-        orphaned_entries = 0
+        orphaned = 0
         for entry in list(self.agent.state_store.all_entries()):
             if entry.path not in config_paths:
-                path_exists = False
                 try:
-                    path_exists = Path(entry.path).exists()
+                    if not Path(entry.path).exists():
+                        self.agent.state_store.remove(entry.path)
+                        orphaned += 1
                 except Exception:
                     pass
 
-                if not path_exists:
-                    print(f"[Cleanup] 清理孤立状态记录: {entry.path}")
-                    self.agent.state_store.remove(entry.path)
-                    orphaned_entries += 1
-
-        total_cleaned = (
-            killed_count + port_cleared + invalid_sessions + orphaned_entries
-        )
-        if total_cleaned > 0:
-            print(
-                f"[Cleanup] 清理完成: 终止 {killed_count} 进程, 释放 {port_cleared} 端口, "
-                f"清理 {invalid_sessions} 会话, 移除 {orphaned_entries} 记录"
-            )
+        if killed_count > 0 or orphaned > 0:
+            print(f"[Cleanup] 清理完成: 终止 {killed_count} 进程, 移除 {orphaned} 记录")
         else:
             print("[Cleanup] 未发现遗留资源")
         print()
@@ -296,8 +153,8 @@ class LifecycleManager:
             system = platform.system()
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            sessions = self.agent.session_mgr.list_sessions()
-            running_count = sum(1 for s in sessions if s.process_status == "running")
+            procs = self.agent.process_mgr.list_processes()
+            running_count = sum(1 for p in procs if p.status.value == "running")
 
             message = (
                 f"🤖 **Feishu Bot 已启动**\n\n"
@@ -309,8 +166,8 @@ class LifecycleManager:
                 f"✅ 机器人已就绪"
             )
 
-            self.agent._send_to_chat(admin_chat_id, message)
-            print(f"[AdminNotify] 启动通知已发送")
+            self.agent.messaging.send_text(admin_chat_id, message)
+            print("[AdminNotify] 启动通知已发送")
         except Exception as exc:
             print(f"[AdminNotify] 启动通知失败: {exc}")
 
@@ -324,8 +181,8 @@ class LifecycleManager:
             hostname = platform.node() or "Unknown"
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            sessions = self.agent.session_mgr.list_sessions()
-            running_count = sum(1 for s in sessions if s.process_status == "running")
+            procs = self.agent.process_mgr.list_processes()
+            running_count = sum(1 for p in procs if p.status.value == "running")
 
             message = (
                 f"🛑 **Feishu Bot 已关闭**\n\n"
@@ -336,7 +193,7 @@ class LifecycleManager:
                 f"⏹️ 机器人已停止"
             )
 
-            self.agent._send_to_chat(admin_chat_id, message)
-            print(f"[AdminNotify] 关闭通知已发送")
+            self.agent.messaging.send_text(admin_chat_id, message)
+            print("[AdminNotify] 关闭通知已发送")
         except Exception:
             pass

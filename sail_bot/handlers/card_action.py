@@ -11,22 +11,22 @@ This module extracts card action handling logic from FeishuBotAgent
 and provides a clean, testable interface for processing button clicks.
 """
 
-import asyncio
 import json
 import threading
 import traceback
 from typing import Optional, Any
 
-# FIX: Move imports to top level
 from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTriggerResponse,
 )
 
+import logging
+
 from sail_bot.handlers.base import BaseHandler, HandlerContext
-from sail_bot.context import ActionPlan, PendingConfirmation
-from sail_bot.session_state import PendingAction, RiskLevel
+from sail_bot.context import ActionPlan
 from sail_bot.card_renderer import CardRenderer
-from sail_bot.async_task_manager import task_manager
+
+logger = logging.getLogger(__name__)
 
 
 class CardActionHandler(BaseHandler):
@@ -247,90 +247,88 @@ class CardActionHandler(BaseHandler):
         )
 
     def _handle_cancel_task(self, value: dict, chat_id: str) -> Any:
-        """Handle task cancellation request."""
-        # Support both "task_id" and "op_id" for compatibility
+        """Handle task cancellation request.
+
+        Cancellation flow:
+        1. Extract task_id from button value
+        2. Call op_tracker.cancel(task_id) which:
+           a. Sets op.cancelled = True
+           b. Invokes the registered cancel callback (SessionRunner.cancel)
+        3. SessionRunner.cancel() sets _cancel_event, causing the SSE loop to exit
+        4. TaskHandler detects was_cancelled and updates card to "已取消"
+        5. TaskHandler calls op_tracker.finish() to clean up
+        """
         task_id = value.get("task_id") or value.get("op_id") if isinstance(value, dict) else None
 
-        if task_id:
-            print(f"[CardActionHandler] Cancelling task: {task_id}")
-            success = task_manager.abort_task(task_id)
-
-            if success:
-                return P2CardActionTriggerResponse(
-                    {
-                        "toast": {
-                            "type": "info",
-                            "content": "正在取消任务...",
-                            "i18n": {
-                                "zh_cn": "正在取消任务...",
-                                "en_us": "Cancelling task...",
-                            },
-                        }
-                    }
-                )
-            else:
-                return P2CardActionTriggerResponse(
-                    {
-                        "toast": {
-                            "type": "error",
-                            "content": "取消任务失败（任务可能已完成或不存在）",
-                            "i18n": {
-                                "zh_cn": "取消任务失败（任务可能已完成或不存在）",
-                                "en_us": "Failed to cancel task (may already completed or not found)",
-                            },
-                        }
-                    }
-                )
-        else:
+        if not task_id:
             return P2CardActionTriggerResponse(
                 {
                     "toast": {
                         "type": "error",
-                        "content": "取消任务失败（任务可能已完成或不存在）",
+                        "content": "取消失败：缺少任务 ID",
                         "i18n": {
-                            "zh_cn": "取消任务失败（任务可能已完成或不存在）",
-                            "en_us": "Failed to cancel task (may already completed or not found)",
+                            "zh_cn": "取消失败：缺少任务 ID",
+                            "en_us": "Cancel failed: missing task ID",
                         },
                     }
                 }
             )
 
+        logger.info("[CardActionHandler] Cancel request for task: %s", task_id)
+        cancelled = self.ctx.op_tracker.cancel(task_id)
+
+        if cancelled:
+            return P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "info",
+                        "content": "正在取消任务...",
+                        "i18n": {
+                            "zh_cn": "正在取消任务...",
+                            "en_us": "Cancelling task...",
+                        },
+                    }
+                }
+            )
+
+        # Operation not found — it may have already completed or been cancelled
+        return P2CardActionTriggerResponse(
+            {
+                "toast": {
+                    "type": "warning",
+                    "content": "任务可能已完成或已取消",
+                    "i18n": {
+                        "zh_cn": "任务可能已完成或已取消",
+                        "en_us": "Task may have already finished or been cancelled",
+                    },
+                }
+            }
+        )
+
     def _handle_confirm_self_update(self, value: dict, chat_id: str) -> Any:
         """Handle self-update confirmation."""
-        trigger_source = value.get("trigger_source", "manual")
-        reason = value.get("reason", "User confirmed update")
+        reason = value.get("reason", "用户确认更新")
 
         # Start self-update in background
         def do_self_update():
-            # FIX: asyncio imported at top level
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                result = self.ctx.request_self_update(
-                    trigger_source=trigger_source,
-                    reason=reason,
-                    initiated_by=chat_id,
-                )
+                result = self.ctx.request_self_update(reason=reason)
 
                 if result.get("success"):
-                    # Send success message
                     success_card = CardRenderer.result(
                         "✅ 更新已启动",
-                        f"阶段: {result.get('phase', 'unknown')}\n"
-                        f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
-                        "旧进程即将退出，新进程将接管。",
+                        f"{result.get('message', '')}\n\n即将退出并由 watcher 重启。",
                         success=True,
                     )
                     self.ctx.messaging.send_card(chat_id, success_card)
                 else:
-                    # Send error message
                     error_card = CardRenderer.error(
                         "❌ 更新失败",
-                        result.get("error", "Unknown error"),
+                        result.get("message", "Unknown error"),
                     )
                     self.ctx.messaging.send_card(chat_id, error_card)
-            finally:
-                loop.close()
+            except Exception as exc:
+                logger.error("[SelfUpdate] Error: %s", exc, exc_info=True)
 
         threading.Thread(target=do_self_update, daemon=True).start()
 

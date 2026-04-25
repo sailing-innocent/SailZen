@@ -129,13 +129,9 @@ class PlanExecutor(BaseHandler):
     def _exec_self_update(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
-        self._update.handle(
-            chat_id,
-            mid,
-            ctx,
-            plan.params.get("trigger_source", "manual"),
-            plan.params.get("reason", "User requested update"),
-        )
+        trigger = plan.params.get("trigger_source", "manual")
+        reason = plan.params.get("reason", "User requested update")
+        self._update.handle(chat_id, mid, ctx, reason=f"[{trigger}] {reason}")
 
     def _exec_confirmed_self_update(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
@@ -145,9 +141,7 @@ class PlanExecutor(BaseHandler):
 
         def do_self_update():
             result = self.ctx.request_self_update(
-                trigger_source=trigger_source,
-                reason=reason,
-                initiated_by=chat_id,
+                reason=f"[{trigger_source}] {reason} (by {chat_id})",
             )
             if result and result.get("success"):
                 card = CardRenderer.result(

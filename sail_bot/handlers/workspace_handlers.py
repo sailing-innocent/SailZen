@@ -3,7 +3,7 @@
 # @brief Workspace operation handlers (start, stop, switch)
 # @author sailing-innocent
 # @date 2026-04-06
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 """Workspace operation handlers.
 
@@ -21,8 +21,8 @@ from typing import Optional
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ConversationContext
 from sail_bot.card_renderer import CardRenderer
-from sail_bot.session_state import SessionState
 from sail_bot.task_logger import task_logger
+from sail.opencode import extract_path_from_text
 
 
 class StartWorkspaceHandler(BaseHandler):
@@ -45,22 +45,18 @@ class StartWorkspaceHandler(BaseHandler):
             path: Direct path to workspace
             project_slug: Project slug to look up path
         """
-        from sail_bot.session_manager import resolve_path
-
-        # Resolve path from project or direct path
+        # Resolve path from project slug or direct path
         if project_slug:
-            path = resolve_path(project_slug, self.ctx.config.projects)
+            path = extract_path_from_text(project_slug, self.ctx.config.projects)
         elif path:
-            path = resolve_path(path, self.ctx.config.projects)
+            path = extract_path_from_text(path, self.ctx.config.projects)
 
         if not path:
-            # Show workspace selection
-            from sail_bot.session_manager import resolve_path
-
+            # Show workspace selection card
             projects = self.ctx.config.projects
             state_map = {}
-            for s in self.ctx.session_mgr.list_sessions():
-                state_map[s.path] = s.process_status
+            for proc in self.ctx.process_mgr.list_processes():
+                state_map[proc.path] = proc.status.value
             card = CardRenderer.workspace_selection(projects, session_states=state_map)
             self.ctx.messaging.reply_card(message_id, card, "workspace_selection")
             return
@@ -76,23 +72,23 @@ class StartWorkspaceHandler(BaseHandler):
         )
 
         def do_start() -> None:
-            ok, session, msg = self.ctx.session_mgr.ensure_running(path, chat_id)
+            ok, proc, msg = self.ctx.process_mgr.ensure_running(path, chat_id)
             self.ctx.op_tracker.finish(op_id)
 
             if ok:
                 ctx.mode = "coding"
-                ctx.active_workspace = session.path
-                ctx.clear_pending()  # Clear any pending confirmation
+                ctx.active_workspace = proc.path
+                ctx.clear_pending()
                 self.ctx.save_contexts()
 
                 entry = self.ctx.state_store.get(path)
                 activities = entry.recent_activities() if entry else []
 
                 result_card = CardRenderer.session_status(
-                    path=session.path,
+                    path=proc.path,
                     state="running",
-                    port=session.port,
-                    pid=session.pid,
+                    port=proc.port,
+                    pid=proc.pid,
                     activities=activities,
                 )
                 if prog_mid:
@@ -104,13 +100,13 @@ class StartWorkspaceHandler(BaseHandler):
 
                 # Send current workspace card
                 workspace_card = CardRenderer.current_workspace(
-                    session.path, mode="coding"
+                    proc.path, mode="coding"
                 )
                 self.ctx.messaging.send_card(
                     chat_id, workspace_card, "current_workspace", {"path": path}
                 )
 
-                ctx.push("bot", "OpenCode 已启动: " + session.path)
+                ctx.push("bot", "OpenCode 已启动: " + proc.path)
             else:
                 err_card = CardRenderer.error(
                     "启动失败",
@@ -137,15 +133,13 @@ class StopWorkspaceHandler(BaseHandler):
         path: Optional[str] = None,
     ) -> None:
         """Stop a workspace."""
-        from sail_bot.session_manager import resolve_path
-
         if path:
-            path = resolve_path(path, self.ctx.config.projects)
+            path = extract_path_from_text(path, self.ctx.config.projects) or path
 
         undo_deadline = time.time() + 30.0
 
         if path:
-            ok, msg = self.ctx.session_mgr.stop_session(path)
+            ok, msg = self.ctx.process_mgr.stop(path)
             if ok:
                 ctx.mode = "idle"
                 ctx.active_workspace = None
@@ -168,16 +162,16 @@ class StopWorkspaceHandler(BaseHandler):
             )
             ctx.push("bot", "已停止: " + path)
         else:
-            # Stop all sessions
-            sessions = self.ctx.session_mgr.list_sessions()
-            if not sessions:
+            # Stop all processes
+            procs = self.ctx.process_mgr.list_processes()
+            if not procs:
                 self.ctx.messaging.reply_text(message_id, "没有正在运行的会话。")
                 return
 
             results = []
-            for s in sessions:
-                ok, msg = self.ctx.session_mgr.stop_session(s.path)
-                results.append(Path(s.path).name + ": " + ("已停止" if ok else msg))
+            for p in procs:
+                ok, msg = self.ctx.process_mgr.stop(p.path)
+                results.append(Path(p.path).name + ": " + ("已停止" if ok else msg))
 
             ctx.mode = "idle"
             ctx.active_workspace = None

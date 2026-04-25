@@ -244,3 +244,182 @@ uv run bot_watcher.py -c bot/opencode.bot.yaml
 | Phase 3+ | 主动式助手, 笔记/数据桥接 |
 
 `sail_server/control_plane/` 和 `sail_server/edge_runtime/` 已有基础实现, 等待与 sail_bot 集成。
+
+
+好，让我系统性地检查 handlers 层的所有文件，查找残余引用和完整流程断点。----
+
+现在让我搜索旧模块的残余引用：-
+
+**发现了关键问题！** `brain.py` 第 429 行和 457 行调用了 `agent._reply_card` 和 `agent._update_card`，这两个是旧 API——在 v3.0 重构后 agent 不再直接暴露这些方法，消息操作已全部迁移到 `FeishuMessagingClient`。
+
+让我确认 agent 中是否还存在这些方法：-
+
+确认了！`agent._reply_card` 和 `agent._update_card` 已经不存在了（搜索返回 0 结果）。这是 **运行时必崩的断裂点**。
+
+再检查 `plan_executor.py` 中 `request_self_update` 的签名问题：-
+
+现在我已经完成了完整的审计。让我来修复发现的问题。
+
+---
+
+## 审计报告
+
+### 🔴 严重问题（运行时必崩）
+
+**`brain.py:429` 和 `brain.py:457`** — 调用了已删除的 `agent._reply_card()` 和 `agent._update_card()`
+
+```python
+# brain.py line 429 — 已不存在的方法
+thinking_mid = agent._reply_card(message_id, thinking_card, ...)
+
+# brain.py line 457 — 已不存在的方法  
+agent._update_card(thinking_mid, fallback_card)
+```
+
+v3.0 重构后 agent 不再直接暴露消息方法，所有消息操作应通过 `agent.messaging`（即 `FeishuMessagingClient`）。
+
+### 🟡 中等问题（签名不匹配）
+
+**`plan_executor.py:147-151`** — `request_self_update()` 传入了 `trigger_source` 和 `initiated_by` 参数，但 `HandlerContext.request_self_update()` 只接受 `reason` 参数：
+
+```python
+# plan_executor.py line 147-151
+result = self.ctx.request_self_update(
+    trigger_source=trigger_source,
+    reason=reason,
+    initiated_by=chat_id,
+)
+```
+
+但 `HandlerContext.request_self_update` 签名是 `(self, reason: str)`，而底层 `SelfUpdateOrchestrator.request_update` 签名是 `(self, reason: str, perform_git_pull: bool)`。
+
+### 🟢 无问题（仅注释中的引用）
+
+`agent.py:11`, `handlers/base.py:10,44`, `task_handler.py:10`, `lifecycle_manager.py:10` — 这些都是注释/docstring 中解释重构历史的文字，不影响运行。
+
+---
+
+现在修复。先修复 `brain.py` 中的残余旧 API 调用：-
+
+现在修复 `plan_executor.py` 中 `request_self_update` 的签名不匹配问题：-
+
+现在让我再做一轮检查，看还有没有遗漏：--
+
+这两个是正常的——`HandlerContext` 对 agent 的引用，调用的 `_get_context` 和 `_save_contexts` 都确认存在于 `agent.py` 中。
+
+现在来检查 `self_update_handler.py` 的 `handle` 方法签名与 `plan_executor.py` 的调用是否一致：
+
+`plan_executor.py:132-138`:
+```python
+self._update.handle(
+    chat_id, mid, ctx,
+    plan.params.get("trigger_source", "manual"),
+    plan.params.get("reason", "User requested update"),
+)
+```
+
+但 `self_update_handler.py:23-28`:
+```python
+def handle(self, chat_id, message_id, ctx, reason="用户手动触发"):
+```
+
+`handle` 只接受 4 个参数（chat_id, message_id, ctx, reason），但调用方传了 5 个（多了一个 `trigger_source`）。这又是一个签名不匹配！-
+
+现在做最后一轮搜索，确认没有其他残余问题：-
+
+所有 import 都正确。注意到 `card_action.py` 导入了 `asyncio` 但实际上没有使用它（在之前的取消重构后，旧的异步取消逻辑已移除）。不过这只是一个 lint 警告，不会影响运行。
+
+最后做一个完整的 `unused import` 检查：-
+
+`card_action.py` 中有几个 unused imports：`asyncio`, `PendingConfirmation`, `PendingAction`, `RiskLevel`。让我确认它们在代码体中是否被使用：只出现在 import 行，确认全是 unused imports。清理掉：-
+
+所有修复完成。下面给你完整的审计总结和流程验证。
+
+---
+
+## 完整审计总结
+
+### 一、handlers 层残余引用检查
+
+| 文件 | 问题 | 严重度 | 状态 |
+|------|------|--------|------|
+| `brain.py:429` | `agent._reply_card()` — 调用已删除方法 | 🔴 运行时必崩 | ✅ 已修复 → `messaging.reply_card()` |
+| `brain.py:457` | `agent._update_card()` — 调用已删除方法 | 🔴 运行时必崩 | ✅ 已修复 → `messaging.update_card()` |
+| `plan_executor.py:147` | `request_self_update(trigger_source=..., initiated_by=...)` — 签名不匹配 | 🟡 运行时 TypeError | ✅ 已修复 → 合并到 `reason` 参数 |
+| `plan_executor.py:132` | `self._update.handle()` 传 5 个参数，签名只接受 4 个 | 🟡 运行时 TypeError | ✅ 已修复 → 合并 trigger+reason |
+| `card_action.py` | `asyncio`, `PendingConfirmation`, `PendingAction`, `RiskLevel` unused imports | 🟢 lint 警告 | ✅ 已清理 |
+| 其余注释引用 | `agent.py:11`, `base.py:10,44`, `task_handler.py:10`, `lifecycle_manager.py:10` 仅为历史说明 | ⚪ 无影响 | — |
+
+### 二、完整流程验证：message → brain → task_handler → session_runner → card_update
+
+```
+1. 用户发送飞书消息 "帮我重构这段代码"
+   ↓
+2. MessageHandler.handle(data)
+   ├── 解析 text, chat_id, message_id
+   ├── 去重检查 (_MessageDeduplicator)
+   └── _executor.submit(_process_message)
+       ↓
+3. _process_message(text, chat_id, message_id)
+   ├── ctx = self.ctx.get_or_create_context(chat_id)  ✅ 正确调用 agent._get_context()
+   └── plan, thinking_mid = _dispatch_message()
+       ↓
+4. _dispatch_message()
+   ├── Level 1: brain._think_deterministic(text, ctx)
+   │   └── mode=="coding" + no "!" → ActionPlan(action="send_task")  ✅
+   │
+   ├── Level 2: brain.think_with_feedback(text, ctx, chat_id, msg_id, agent)
+   │   ├── messaging = agent.messaging  ✅ 修复后正确获取
+   │   ├── thinking_mid = messaging.reply_card(...)  ✅ 修复后正确调用
+   │   └── _think_llm() → ActionPlan  ✅
+   │
+   └── risk check (classify_risk) → confirmation if needed  ✅
+       ↓
+5. PlanExecutor.execute(plan, chat_id, message_id, ctx)
+   └── _exec_task(plan, chat_id, mid, ctx)
+       └── TaskHandler.handle(chat_id, mid, ctx, task_text, path)
+           ↓
+6. TaskHandler.handle()
+   ├── op_id = op_tracker.start(path, desc, timeout=14400)  ✅
+   ├── progress_card = CardRenderer.progress(show_cancel_button=True,
+   │     cancel_action_data={"action":"cancel_task","task_id":op_id})  ✅
+   ├── prog_mid = messaging.reply_card(message_id, progress_card)  ✅
+   └── Thread → do_async_task → _execute_task()
+       ↓
+7. _execute_task() (async, 后台线程)
+   ├── process_mgr.ensure_running_async(path)  ✅
+   ├── process_mgr.get_or_create_api_session(path)  ✅
+   ├── runner = SessionRunner(port=proc.port, callbacks=...)  ✅
+   ├── op_tracker.register_cancel_callback(op_id, runner.cancel)  ✅ 新增关键注册
+   ├── result = await runner.run(prompt, session_id, timeout)  ✅
+   │   ├── SSE 流中实时回调 on_tool → CardRenderer.progress → messaging.update_card  ✅
+   │   └── 检测 _cancel_event → result.was_cancelled=True  ✅
+   ├── op_tracker.finish(op_id)  ✅ 清理 op + callback
+   └── 结果处理:
+       ├── success → _handle_success → LongOutputHandler → messaging.update_card  ✅
+       ├── was_cancelled → CardRenderer.result("任务已取消") → messaging.update_card  ✅
+       └── error → _handle_error → messaging.update_card  ✅
+```
+
+### 三、取消流程验证
+
+```
+用户点击 "❌ 取消任务" 按钮
+  ↓
+CardActionHandler._handle_cancel_task(value, chat_id)
+  ├── task_id = value["task_id"]  ✅
+  └── cancelled = op_tracker.cancel(task_id)  ✅
+      ├── op.cancelled = True  ✅
+      └── callback() → runner.cancel() → _cancel_event.set()  ✅
+          ↓
+SessionRunner.run() 的 SSE 循环:
+  if self._cancel_event.is_set():
+      result.was_cancelled = True
+      return result  ✅
+          ↓
+TaskHandler._execute_task():
+  ├── op_tracker.finish(op_id)  ✅ 清理资源
+  └── result.was_cancelled → messaging.update_card(prog_mid, "任务已取消")  ✅
+```
+
+**整条链路端到端闭环，没有断裂点。** 你可以开始进行端到端验证了。
