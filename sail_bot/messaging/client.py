@@ -35,7 +35,6 @@ from sail_bot.card_renderer import (
 
 logger = logging.getLogger(__name__)
 
-
 class _RateLimiter:
     def __init__(self, max_calls: int = 20, period: float = 1.0):
         self._max = max_calls
@@ -72,13 +71,57 @@ class FeishuMessagingClient:
     - Track card metadata
     """
 
-    def __init__(self, lark_client: Optional[lark.Client] = None):
+    def __init__(self, lark_client: Optional[lark.Client] = None, default_chat_id: Optional[str] = None):
         self.lark_client = lark_client
+        self.default_chat_id = default_chat_id
         self.card_tracker = CardMessageTracker()
 
     def set_client(self, lark_client: lark.Client) -> None:
         """Set the Lark client (used after initialization)."""
         self.lark_client = lark_client
+
+    def set_default_chat_id(self, chat_id: Optional[str]) -> None:
+        """Set the default chat_id for proactive messages."""
+        self.default_chat_id = chat_id
+
+    def send_text_to_default(self, text: str) -> bool:
+        """Send a text message to the default chat.
+
+        This is useful for proactive notifications from long-running tasks.
+
+        Args:
+            text: Message text content
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.default_chat_id:
+            logger.warning("No default_chat_id configured, cannot send proactive message")
+            return False
+        return self.send_text(self.default_chat_id, text)
+
+    def send_card_to_default(
+        self,
+        card: dict,
+        card_type: str = "",
+        context: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Send an interactive card to the default chat.
+
+        This is useful for proactive card notifications from long-running tasks.
+
+        Args:
+            card: Card content dictionary
+            card_type: Type identifier for the card
+            context: Additional context to track with the card
+
+        Returns:
+            Message ID if successful, None otherwise
+        """
+        if not self.default_chat_id:
+            logger.warning("No default_chat_id configured, cannot send proactive card")
+            return None
+        return self.send_card(self.default_chat_id, card, card_type, context)
 
     def send_text(self, chat_id: str, text: str) -> bool:
         """Send a text message to a Feishu chat.

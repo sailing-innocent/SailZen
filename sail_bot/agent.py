@@ -77,7 +77,7 @@ class FeishuBotAgent:
         self.confirm_mgr = ConfirmationManager()
 
         # Messaging client
-        self.messaging = FeishuMessagingClient()
+        self.messaging = FeishuMessagingClient(default_chat_id=config.default_chat_id)
         self.lark_client: Optional[lark.Client] = None
 
         # AI brain

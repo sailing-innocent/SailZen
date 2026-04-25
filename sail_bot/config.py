@@ -26,6 +26,7 @@ class AgentConfig:
     config_path: Optional[str] = None
     projects: List[Dict[str, str]] = field(default_factory=list)
     admin_chat_id: Optional[str] = None
+    default_chat_id: Optional[str] = None
     llm_provider: Optional[str] = None
     llm_api_key: Optional[str] = None
 
@@ -83,6 +84,7 @@ def load_config(config_path: str) -> AgentConfig:
         config.llm_provider = data.get("llm_provider") or None
         config.llm_api_key = data.get("llm_api_key") or None
         config.admin_chat_id = data.get("admin_chat_id") or None
+        config.default_chat_id = data.get("default_chat_id") or None
 
         warnings = config.validate()
         for w in warnings:
@@ -128,6 +130,10 @@ auto_restart: false
 # admin_chat_id: "oc_xxxxxxxxxxxxxxxx"  # 管理员的chat_id，用于接收启动/关闭通知
 # 可以通过在飞书中 @机器人 并查看消息的 chat_id 获取
 # 或者先跟机器人单聊，然后查看收到的消息的 chat_id
+
+# Optional: Default chat for proactive messages
+# default_chat_id: "oc_xxxxxxxxxxxxxxxx"  # 默认chat_id，用于机器人主动发送消息（如长期任务通知）
+# 不设置时，主动发送功能将不可用
 """
     with open(p, "w", encoding="utf-8") as f:
         f.write(content)

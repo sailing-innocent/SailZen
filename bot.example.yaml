@@ -52,6 +52,12 @@ app_secret: ""
 # queue_path: "data/control_plane/edge_queue.json"
 
 # =============================================================================
+# OPTIONAL: Default Chat for Proactive Messages
+# =============================================================================
+# Bot can send proactive messages to this chat (e.g., long-running task notifications)
+# default_chat_id: "oc_xxxxxxxxxxxxxxxx"
+
+# =============================================================================
 # OPTIONAL: Session Settings
 # =============================================================================
 

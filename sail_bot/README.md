@@ -1,8 +1,3 @@
-# Feishu Bot
+# Sail Bot
 
-- config
-- init
-- restore_state
-
-FeishuBotAgent
-
+一个飞书Bot
