@@ -293,11 +293,6 @@ nano bot/myconfig.bot.yaml
 app_id: "cli_xxxxxxxxxxxxxxxx"
 app_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-# OPTIONAL: Control Plane Settings (如需服务器集成)
-# control_plane_url: "https://your-server.com/api/v1/remote-dev/control-plane"
-# edge_node_key: "home-macbook-pro"
-# heartbeat_interval_seconds: 15
-
 # OPTIONAL: Session Settings
 base_port: 4096
 max_sessions: 10
