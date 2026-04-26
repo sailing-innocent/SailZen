@@ -11,7 +11,7 @@ This module re-exports from `feishu_card_kit.handler` with SailZen-specific
 defaults (OUTPUT_DIR). All core implementation is in `feishu_card_kit`.
 
 New code should use:
-    from feishu_card_kit import LongOutputHandler
+    from sail.feishu_card_kit import LongOutputHandler
 
 Existing code can continue using:
     from sail_bot.long_output_handler import LongOutputHandler
@@ -22,14 +22,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from feishu_card_kit import (
+from sail.feishu_card_kit import (
     CardRenderer,
     LongContentSplitter,
     LongOutputStrategy,
     LongOutputHandler as _BaseLongOutputHandler,
     handle_long_output as _base_handle_long_output,
 )
-from feishu_card_kit.core import divider, note, text
+from sail.feishu_card_kit.core import divider, note, text
 
 from sail_bot.paths import OUTPUT_DIR
 

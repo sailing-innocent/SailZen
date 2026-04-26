@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from feishu_card_kit.core import (
+from sail.feishu_card_kit.core import (
     CardColor,
     ButtonStyle,
     header,

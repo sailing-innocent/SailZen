@@ -14,7 +14,7 @@ from typing import Any, Dict
 from pathlib import Path
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
-from feishu_card_kit.renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 
 
 class WelcomeHandler(BaseHandler):

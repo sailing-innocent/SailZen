@@ -11,7 +11,7 @@ This package provides everything you need to create rich, mobile-optimized
 interactive cards for Feishu bots, without any external dependencies.
 
 Quick Start:
-    from feishu_card_kit import CardRenderer, card_to_feishu_content
+    from sail.feishu_card_kit import CardRenderer, card_to_feishu_content
 
     # Create a result card
     card = CardRenderer.result(
@@ -34,7 +34,7 @@ All modules use only Python standard library — no external dependencies.
 
 __version__ = "1.0.0"
 
-from feishu_card_kit.core import (
+from sail.feishu_card_kit.core import (
     CardColor,
     ButtonStyle,
     header,
@@ -51,15 +51,15 @@ from feishu_card_kit.core import (
     get_state_label,
 )
 
-from feishu_card_kit.renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 
-from feishu_card_kit.tracker import (
+from sail.feishu_card_kit.tracker import (
     CardMessageTracker,
     card_to_feishu_content,
     text_fallback,
 )
 
-from feishu_card_kit.handler import (
+from sail.feishu_card_kit.handler import (
     LongContentSplitter,
     LongOutputStrategy,
     LongOutputHandler,

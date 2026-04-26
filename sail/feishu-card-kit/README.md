@@ -25,7 +25,7 @@ pip install packages/feishu-card-kit
 ## Quick Start
 
 ```python
-from feishu_card_kit import CardRenderer, card_to_feishu_content
+from sail.feishu_card_kit import CardRenderer, card_to_feishu_content
 
 # Create a progress card
 card = CardRenderer.progress(
@@ -134,7 +134,7 @@ CardRenderer.help(
 For custom cards, use the atomic builders:
 
 ```python
-from feishu_card_kit import (
+from sail.feishu_card_kit import (
     card, header, text, note, divider,
     button, action_row, field_row,
     CardColor, ButtonStyle,
@@ -158,7 +158,7 @@ my_card = card(
 ## Long Content Handling
 
 ```python
-from feishu_card_kit import LongOutputHandler
+from sail.feishu_card_kit import LongOutputHandler
 
 handler = LongOutputHandler(output_dir="/tmp/bot_output")
 strategy, result = handler.process(
@@ -173,7 +173,7 @@ strategy, result = handler.process(
 ## Card Tracking
 
 ```python
-from feishu_card_kit import CardMessageTracker
+from sail.feishu_card_kit import CardMessageTracker
 
 tracker = CardMessageTracker()
 tracker.register("om_xxx", "progress", {"task_id": "123"})
@@ -187,7 +187,7 @@ mid = tracker.find_by_context("progress", "task_id", "123")
 When card API fails, extract plain text:
 
 ```python
-from feishu_card_kit import text_fallback
+from sail.feishu_card_kit import text_fallback
 
 text_msg = text_fallback(card_dict)
 # Send text_msg as fallback

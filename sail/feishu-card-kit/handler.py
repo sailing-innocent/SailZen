@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Callable
 
-from feishu_card_kit.renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +356,7 @@ Length: {len(content)} characters
         color = "green" if success else "red"
         icon = "✅" if success else "❌"
 
-        from feishu_card_kit.core import divider, note, text
+        from sail.feishu_card_kit.core import divider, note, text
 
         elements: List[Dict[str, Any]] = [
             text(f"{icon} **{title}**", bold=True),

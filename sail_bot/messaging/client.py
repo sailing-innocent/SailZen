@@ -26,7 +26,7 @@ from lark_oapi.api.im.v1 import (
     ReplyMessageRequestBody,
 )
 
-from feishu_card_kit.tracker import (
+from sail.feishu_card_kit.tracker import (
     CardMessageTracker,
     card_to_feishu_content,
     text_fallback,
