@@ -102,7 +102,6 @@ class SailServer:
         from sail_server.router.history import router as history_router
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
-        from sail_server.router.analysis import analysis_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.dag_pipeline import router as dag_pipeline_router
         # 修复数据库序列（仅 PostgreSQL）
@@ -133,9 +132,7 @@ class SailServer:
                 history_router,
                 text_router,
                 necessity_router,
-                analysis_router,
                 file_storage_router,
-                OutlineExtractionUnifiedController,
                 dag_pipeline_router,
             ],
         )

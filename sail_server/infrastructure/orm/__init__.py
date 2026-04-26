@@ -13,15 +13,6 @@ SQLAlchemy ORM 模型包
 
 from sail_server.infrastructure.orm.orm_base import ORMBase
 
-# Analysis Models
-from sail_server.infrastructure.orm.analysis import (
-    Outline, OutlineNode, OutlineEvent,
-    Character, CharacterAlias, CharacterAttribute, CharacterArc, CharacterRelation,
-    Setting, SettingAttribute, SettingRelation, CharacterSettingLink,
-    TextEvidence,
-    AnalysisTask, AnalysisResult,
-)
-
 # Health Models
 from sail_server.infrastructure.orm.health import (
     Weight, BodySize, Exercise, WeightPlan,
@@ -68,8 +59,6 @@ __all__ = [
     "Character", "CharacterAlias", "CharacterAttribute", "CharacterArc", "CharacterRelation",
     "Setting", "SettingAttribute", "SettingRelation", "CharacterSettingLink",
     "TextEvidence",
-    "AnalysisTask", "AnalysisResult",
-    
     # Health
     "Weight", "BodySize", "Exercise", "WeightPlan",
     

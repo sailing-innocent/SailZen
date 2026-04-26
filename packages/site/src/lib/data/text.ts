@@ -113,41 +113,6 @@ export interface ChapterListItem {
 }
 
 // ============================================================================
-// Import Types
-// ============================================================================
-
-export interface TextImportRequest {
-  work_title: string
-  content: string
-  work_author?: string
-  work_synopsis?: string
-  edition_name?: string
-  language?: string
-  chapter_pattern?: string
-  meta_data?: Record<string, unknown>
-}
-
-export interface AppendResponse {
-  edition_id: number
-  new_chapter_count: number
-  message: string
-}
-
-export interface ChapterInsertRequest {
-  edition_id: number
-  sort_index: number  // 插入位置（0-based），插入后该位置及之后的章节会后移
-  label?: string      // 章节标签，如 "第一章"
-  title?: string      // 章节标题
-  content: string     // 章节内容
-  meta_data?: Record<string, unknown>
-}
-
-export interface ChapterInsertResponse {
-  chapter: DocumentNode
-  message: string
-}
-
-// ============================================================================
 // Helper Functions
 // ============================================================================
 

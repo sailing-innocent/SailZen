@@ -39,20 +39,11 @@ import {
   api_update_node,
   api_get_edition,
 } from '@lib/api/text'
-import {
-  api_create_evidence,
-  api_get_chapter_evidence,
-  api_update_evidence,
-  api_delete_evidence,
-} from '@lib/api/analysis'
-import type { Work, Edition, ChapterListItem, DocumentNode, ChapterInsertResponse } from '@lib/data/text'
+
 import { formatCharCount } from '@lib/data/text'
-import type { TextEvidence } from '@lib/data/analysis'
-import { useTextSelection } from '@hooks/useTextSelection'
 import { EvidenceToolbar } from './evidence_toolbar'
 import { EvidenceHighlighter } from './evidence_highlighter'
 import { EvidenceCard } from './evidence_card'
-import ChapterInsertDialog from './chapter_insert_dialog'
 import { Highlighter, List, BookOpen, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface ChapterReaderProps {
@@ -131,7 +122,7 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
     // 获取 sort_index 用于 API 调用
     const chapterItem = chapters[arrayIndex]
     if (!chapterItem) return
-    
+
     const sortIndex = chapterItem.sort_index
 
     setContentLoading(true)
@@ -342,9 +333,8 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
       {chapters.map((chapter, arrayIdx) => (
         <li
           key={chapter.id}
-          className={`px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${
-            currentIndex === arrayIdx ? 'bg-muted font-medium' : ''
-          }`}
+          className={`px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${currentIndex === arrayIdx ? 'bg-muted font-medium' : ''
+            }`}
           onClick={() => (onSelect ? onSelect(arrayIdx) : loadChapter(arrayIdx))}
         >
           <div className="text-sm truncate">

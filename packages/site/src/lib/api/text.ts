@@ -13,11 +13,6 @@ import type {
   DocumentNode,
   DocumentNodeUpdate,
   ChapterListItem,
-  TextImportRequest,
-  ImportResponse,
-  AppendResponse,
-  ChapterInsertRequest,
-  ChapterInsertResponse,
 } from '@lib/data/text'
 import { SERVER_URL, API_BASE } from './config'
 
@@ -194,65 +189,6 @@ export async function api_update_node(node_id: number, data: DocumentNodeUpdate)
   })
   if (!response.ok) {
     throw new Error(`Failed to update node: ${response.statusText}`)
-  }
-  return response.json()
-}
-
-// ============================================================================
-// Import API
-// ============================================================================
-
-export async function api_import_text(data: TextImportRequest): Promise<ImportResponse> {
-  const response = await fetch(`${SERVER_URL}/${TEXT_API_BASE}/import/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to import text: ${response.statusText} - ${errorText}`)
-  }
-  return response.json()
-}
-
-export async function api_append_chapters(
-  edition_id: number,
-  content: string,
-  chapter_pattern?: string
-): Promise<AppendResponse> {
-  const params = new URLSearchParams()
-  params.append('content', content)
-  if (chapter_pattern) {
-    params.append('chapter_pattern', chapter_pattern)
-  }
-
-  const response = await fetch(`${SERVER_URL}/${TEXT_API_BASE}/import/append/${edition_id}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  })
-  if (!response.ok) {
-    throw new Error(`Failed to append chapters: ${response.statusText}`)
-  }
-  return response.json()
-}
-
-// ============================================================================
-// Chapter Insert API
-// ============================================================================
-
-export async function api_insert_chapter(
-  edition_id: number,
-  data: Omit<ChapterInsertRequest, 'edition_id'>
-): Promise<ChapterInsertResponse> {
-  const response = await fetch(`${SERVER_URL}/${TEXT_API_BASE}/edition/${edition_id}/chapter/insert`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...data, edition_id }),
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to insert chapter: ${response.statusText} - ${errorText}`)
   }
   return response.json()
 }

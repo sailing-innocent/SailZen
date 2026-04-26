@@ -24,7 +24,6 @@ from sail_server.infrastructure.orm import project
 from sail_server.infrastructure.orm import history
 from sail_server.infrastructure.orm import text
 from sail_server.infrastructure.orm import necessity
-from sail_server.infrastructure.orm import analysis
 from sail_server.infrastructure.orm import dag_pipeline
 
 __all__ = [
@@ -159,7 +158,6 @@ async def get_db_dependency():
 def provide_db_session():
     """Litestar dependency that provides a database session (for analysis router)."""
     yield from Database.get_instance().get_db()
-
 
 def db_session(func):
     @functools.wraps(func)

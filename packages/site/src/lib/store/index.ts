@@ -8,9 +8,6 @@
 export * from './money'
 export * from './project'
 
-// Unified Agent Store (Phase 8)
-export * from './unifiedAgentStore'
-
 export { useBudgetsStore, useFinanceTagsStore } from './money'
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
