@@ -71,6 +71,7 @@ class FeishuBotAgent:
         self.process_mgr = OpenCodeProcessManager(
             base_port=config.base_port,
             projects=config.projects,
+            cli_tool=config.cli_tool,
         )
 
         self.op_tracker = OperationTracker()
@@ -276,7 +277,7 @@ class FeishuBotAgent:
         """
         self._lifecycle.cleanup_previous_instances()
 
-        print("Feishu OpenCode Bridge v8.0 (sail.opencode)")
+        print(f"Feishu Agent Bridge v8.0 (tool={config.cli_tool})")
         logger.info("Config: %s", self.config.config_path)
 
         if not self.config.app_id or not self.config.app_secret:

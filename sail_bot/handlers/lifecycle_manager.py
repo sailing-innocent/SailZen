@@ -67,10 +67,10 @@ class LifecycleManager:
         # Send shutdown notification
         self._notify_shutdown()
 
-        # Stop all opencode processes
+        # Stop all agent processes
         count = self.agent.process_mgr.stop_all()
         if count:
-            print(f"[Shutdown] 停止了 {count} 个 opencode 进程")
+            print(f"[Shutdown] 停止了 {count} 个 agent 进程")
 
         self.agent.state_store.save_to_disk()
         print("[Shutdown] Cleanup complete")

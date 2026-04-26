@@ -52,7 +52,7 @@ class ProcessStatus(str, Enum):
 
 @dataclass
 class ManagedProcess:
-    """追踪一个 opencode serve 进程实例。"""
+    """追踪一个 agent serve 进程实例。"""
 
     path: str
     port: int
@@ -62,6 +62,7 @@ class ManagedProcess:
     started_at: Optional[str] = None
     last_error: Optional[str] = None
     chat_id: Optional[str] = None
+    cli_tool: str = "opencode-cli"
 
     _process: Optional[subprocess.Popen] = field(default=None, repr=False)
     _stdout_log: Optional[Any] = field(default=None, repr=False)
@@ -77,6 +78,7 @@ class ManagedProcess:
             "started_at": self.started_at,
             "last_error": self.last_error,
             "chat_id": self.chat_id,
+            "cli_tool": self.cli_tool,
         }
 
     @classmethod
@@ -89,6 +91,7 @@ class ManagedProcess:
             started_at=data.get("started_at"),
             last_error=data.get("last_error"),
             chat_id=data.get("chat_id"),
+            cli_tool=data.get("cli_tool", "opencode-cli"),
         )
         try:
             proc.status = ProcessStatus(data.get("status", "stopped"))
@@ -107,7 +110,7 @@ class ManagedProcess:
 
 
 class OpenCodeProcessManager:
-    """opencode serve 进程生命周期管理器。"""
+    """agent serve 进程生命周期管理器。"""
 
     def __init__(
         self,
@@ -116,8 +119,10 @@ class OpenCodeProcessManager:
         log_dir: Optional[Path] = None,
         startup_timeout: int = _STARTUP_TIMEOUT_SEC,
         projects: Optional[List[Dict[str, Any]]] = None,
+        cli_tool: str = "opencode-cli",
     ) -> None:
         self.base_port = base_port
+        self._cli_tool = cli_tool
         self._state_file = state_file or _DEFAULT_STATE_FILE
         self._log_dir = log_dir or _DEFAULT_LOG_DIR
         self._startup_timeout = startup_timeout
@@ -147,11 +152,12 @@ class OpenCodeProcessManager:
 
         port = self._allocate_port()
         if proc is None:
-            proc = ManagedProcess(path=path, port=port, chat_id=chat_id)
+            proc = ManagedProcess(path=path, port=port, chat_id=chat_id, cli_tool=self._cli_tool)
             self._processes[path] = proc
         else:
             proc.port = port
             proc.session_id = None
+            proc.cli_tool = self._cli_tool
 
         return self._start_process(proc)
 
@@ -210,8 +216,8 @@ class OpenCodeProcessManager:
 
     def get_status_text(self) -> str:
         if not self._processes:
-            return "当前无 opencode 进程。"
-        lines = ["=== OpenCode 进程状态 ==="]
+            return "当前无 agent 进程。"
+        lines = [f"=== {self._cli_tool} 进程状态 ==="]
         for proc in self._processes.values():
             alive = proc.is_alive
             icon = (
@@ -263,11 +269,11 @@ class OpenCodeProcessManager:
             return False, proc, proc.last_error
 
         self._log_dir.mkdir(parents=True, exist_ok=True)
-        out_log_path = self._log_dir / f"opencode_{proc.port}.out.log"
-        err_log_path = self._log_dir / f"opencode_{proc.port}.err.log"
+        out_log_path = self._log_dir / f"agent_{proc.port}.out.log"
+        err_log_path = self._log_dir / f"agent_{proc.port}.err.log"
 
         cmd = [
-            "opencode-cli", "serve",
+            proc.cli_tool, "serve",
             "--hostname", "127.0.0.1",
             "--port", str(proc.port),
         ]
@@ -292,7 +298,7 @@ class OpenCodeProcessManager:
             proc.started_at = datetime.now().isoformat()
         except FileNotFoundError:
             proc.status = ProcessStatus.ERROR
-            proc.last_error = "opencode-cli 命令未找到。请确认已安装并在 PATH 中。"
+            proc.last_error = f"{proc.cli_tool} 命令未找到。请确认已安装并在 PATH 中。"
             return False, proc, proc.last_error
         except Exception as exc:
             proc.status = ProcessStatus.ERROR
@@ -311,7 +317,7 @@ class OpenCodeProcessManager:
         self._kill_process(proc)
         proc.status = ProcessStatus.ERROR
         proc.last_error = (
-            f"opencode serve 在 {self._startup_timeout}s 内未就绪 "
+            f"{proc.cli_tool} serve 在 {self._startup_timeout}s 内未就绪 "
             f"(port={proc.port})。请检查日志: {err_log_path}"
         )
         return False, proc, proc.last_error

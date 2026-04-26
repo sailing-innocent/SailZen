@@ -5,12 +5,12 @@
 # @date 2026-04-25
 # @version 2.0
 # ---------------------------------
-"""Task execution handler for sending tasks to OpenCode.
+"""Task execution handler for sending tasks to Agent runtime.
 
 v2.0: 使用 sail.opencode.SessionRunner 替代旧的 async_task_manager。
 整个执行流程:
 1. 确认工作区进程已运行 (process_mgr)
-2. 获取/创建 opencode session
+2. 获取/创建 agent session
 3. 通过 SessionRunner 发送 prompt 并监听 SSE 流
 4. 实时更新飞书卡片进度
 5. 完成后展示结果（支持长输出分页）
@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
+
 from sail_bot.context import ConversationContext
 from feishu_card_kit.renderer import CardRenderer
 from sail_bot.task_logger import task_logger
@@ -69,7 +70,7 @@ class TaskHandler(BaseHandler):
             if not running:
                 card = CardRenderer.error(
                     "未找到会话",
-                    "没有正在运行的 OpenCode 会话。\n请先启动一个，例如：启动 sailzen",
+                    "没有正在运行的 Agent 会话。\n请先启动一个，例如：启动 sailzen",
                 )
                 self.ctx.messaging.reply_card(message_id, card)
                 return
@@ -146,7 +147,7 @@ class TaskHandler(BaseHandler):
         if not task_text:
             self.ctx.op_tracker.finish(op_id)
             card = CardRenderer.result(
-                "就绪", "OpenCode 已就绪，请描述你的任务。",
+                "就绪", "Agent 已就绪，请描述你的任务。",
                 success=True, context_path=path,
             )
             if prog_mid:
@@ -159,7 +160,7 @@ class TaskHandler(BaseHandler):
             self.ctx.op_tracker.finish(op_id)
             err_card = CardRenderer.error(
                 "会话创建失败",
-                "无法创建 OpenCode 会话，请检查服务状态。",
+                "无法创建 Agent 会话，请检查服务状态。",
                 context_path=path,
             )
             if prog_mid:

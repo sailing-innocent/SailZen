@@ -65,7 +65,7 @@ class StartWorkspaceHandler(BaseHandler):
         op_id = self.ctx.op_tracker.start(path, "启动 " + Path(path).name, timeout=30.0)
 
         progress_card = CardRenderer.progress(
-            "正在启动 " + Path(path).name, "初始化 OpenCode 服务..."
+            "正在启动 " + Path(path).name, "初始化 Agent 服务..."
         )
         prog_mid = self.ctx.messaging.reply_card(
             message_id, progress_card, "progress", {"op_id": op_id, "path": path}
@@ -106,7 +106,7 @@ class StartWorkspaceHandler(BaseHandler):
                     chat_id, workspace_card, "current_workspace", {"path": path}
                 )
 
-                ctx.push("bot", "OpenCode 已启动: " + proc.path)
+                ctx.push("bot", "Agent 已启动: " + proc.path)
             else:
                 err_card = CardRenderer.error(
                     "启动失败",

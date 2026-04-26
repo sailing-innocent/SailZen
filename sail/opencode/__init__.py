@@ -54,6 +54,10 @@ from sail.opencode.session_runner import (
     SessionRunner,
     run_prompt,
 )
+from sail.opencode.compatibility import (
+    CompatibilityReport,
+    check_cli_compatibility,
+)
 
 __all__ = [
     # client
@@ -78,4 +82,7 @@ __all__ = [
     "RunResult",
     "SessionRunner",
     "run_prompt",
+    # compatibility
+    "CompatibilityReport",
+    "check_cli_compatibility",
 ]

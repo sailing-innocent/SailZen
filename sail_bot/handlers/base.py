@@ -29,19 +29,9 @@ if TYPE_CHECKING:
 @dataclass
 class HandlerContext:
     """Context object passed to all handlers.
-
     所有 handler 通过此对象访问依赖，避免与 agent 类紧耦合。
-
-    v2.0 变化:
-    - session_mgr → process_mgr (OpenCodeProcessManager)
-    - 移除 self_update_enabled 标记（self_update 总是可用）
-    - request_self_update 直接调用精简后的 orchestrator
     """
-
-    # Messaging
     messaging: "FeishuMessagingClient"
-
-    # Process management (替代旧的 OpenCodeSessionManager)
     process_mgr: "OpenCodeProcessManager"
     state_store: "SessionStateStore"
 

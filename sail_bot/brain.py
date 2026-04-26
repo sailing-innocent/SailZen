@@ -121,7 +121,7 @@ def _make_gateway(
 # LLM-driven brain
 # ---------------------------------------------------------------------------
 
-_BRAIN_SYSTEM = """你是飞书机器人，帮用户控制OpenCode开发环境。理解自然语言（可能有错别字），返回JSON行动计划。
+_BRAIN_SYSTEM = """你是飞书机器人，帮用户控制Agent开发环境。理解自然语言（可能有错别字），返回JSON行动计划。
 
 上下文：mode={mode}, workspace={active_workspace}, projects={projects}
 历史：{history}
@@ -269,7 +269,7 @@ class BotBrain:
         return ActionPlan(
             action="chat",
             reply=(
-                "我可以帮你控制 OpenCode 开发环境。试试这些指令：\n"
+                "我可以帮你控制 Agent 开发环境。试试这些指令：\n"
                 "• 打开 sailzen\n"
                 "• 启动 ~/projects/myapp\n"
                 "• 查看状态\n"
@@ -531,7 +531,7 @@ class BotBrain:
             正常执行三级意图匹配（关键词 → LLM → 降级）
 
         状态2 - 在工作区（coding）:
-            绝大部分消息直接转发给OpenCode
+            绝大部分消息直接转发给Agent
             只有以感叹号开头的消息才在Bot层执行控制指令
         """
         t = text.lower().strip()
@@ -586,7 +586,7 @@ class BotBrain:
                     reply=f"未知的控制指令: {cmd_text}\n\n可用的控制指令:\n• !状态 / !status / !s - 查看当前状态\n• !启动 <项目> - 启动工作区\n• !停止 - 停止工作区\n• !切换 <项目> - 切换工作区\n• !帮助 / !help - 显示帮助",
                 )
 
-            # 非感叹号开头的消息 -> 直接转发给OpenCode
+            # 非感叹号开头的消息 -> 直接转发给Agent
             return ActionPlan(
                 action="send_task", params={"task": text, "path": ctx.active_workspace}
             )
