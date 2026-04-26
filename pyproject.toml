@@ -8,6 +8,7 @@ requires-python = ">=3.13"
 dependencies = [
     "aiohttp>=3.13.3",
     "dotenv>=0.9.9",
+    "feishu-card-kit",
     "google-genai>=1.0.0",
     "httpx>=0.28.0",
     "litestar>=2.15.2",
@@ -36,6 +37,12 @@ dependencies = [
 [[tool.uv.index]]
 name = "tencent"
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
+
+[tool.uv.workspace]
+members = ["packages/feishu-card-kit"]
+
+[tool.uv.sources]
+feishu-card-kit = { workspace = true }
 
 [tool.pytest.ini_options]
 python_paths=[

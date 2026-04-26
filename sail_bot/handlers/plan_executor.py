@@ -139,6 +139,14 @@ class PlanExecutor(BaseHandler):
         trigger_source = plan.params.get("trigger_source", "manual")
         reason = plan.params.get("reason", "User confirmed update")
 
+        # Save pending update context BEFORE starting the update
+        from sail_bot.self_update_orchestrator import SelfUpdateOrchestrator
+
+        SelfUpdateOrchestrator.save_pending_update(
+            chat_id=chat_id,
+            reason=f"[{trigger_source}] {reason}",
+        )
+
         def do_self_update():
             result = self.ctx.request_self_update(
                 reason=f"[{trigger_source}] {reason} (by {chat_id})",
@@ -146,13 +154,13 @@ class PlanExecutor(BaseHandler):
             if result and result.get("success"):
                 card = CardRenderer.result(
                     "更新已启动",
-                    f"阶段: {result.get('phase', 'unknown')}\n"
-                    f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
-                    "旧进程即将退出，新进程将接管。",
+                    f"Bot 即将退出并由 watcher 重启。",
                     success=True,
                 )
                 self.ctx.messaging.send_card(chat_id, card)
             else:
+                # Clear pending update on failure
+                SelfUpdateOrchestrator.load_and_clear_pending_update()
                 err = result.get("error", "Unknown error") if result else "No response"
                 card = CardRenderer.result("更新失败", err, success=False)
                 self.ctx.messaging.send_card(chat_id, card)

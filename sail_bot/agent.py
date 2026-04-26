@@ -55,11 +55,11 @@ logger = logging.getLogger(__name__)
 
 class FeishuBotAgent:
     """Feishu bot that bridges messages to OpenCode web sessions."""
-    
+
     from sail_bot.paths import CONTEXTS_FILE
-    
+
     CONTEXT_STATE_FILE = CONTEXTS_FILE
-    
+
     def __init__(self, config: AgentConfig):
         self.config = config
 
@@ -158,7 +158,9 @@ class FeishuBotAgent:
             if self._contexts:
                 logger.info("Loaded %s conversation(s)", len(self._contexts))
             if reset_count > 0:
-                logger.warning("Reset %s context(s) due to missing connection", reset_count)
+                logger.warning(
+                    "Reset %s context(s) due to missing connection", reset_count
+                )
         except Exception as exc:
             logger.error("Failed to load contexts: %s", exc, exc_info=True)
 
@@ -209,6 +211,57 @@ class FeishuBotAgent:
                 self._welcome_handler.handle(chat_id)
         except Exception as exc:
             logger.error("P2P chat entered error: %s", exc, exc_info=True)
+
+    def _check_and_notify_update_completion(self) -> None:
+        """检查是否有待完成的更新通知，并在 Bot 重启后发送完成消息。
+
+        这是 self-update 流程的最后一步：当 watcher 执行 git pull 并重启 Bot 后，
+        新进程会读取持久化的更新上下文，向用户发送更新已完成的消息。
+        """
+        try:
+            pending = SelfUpdateOrchestrator.load_and_clear_pending_update()
+            if not pending:
+                return
+
+            chat_id = pending.get("chat_id")
+            reason = pending.get("reason", "")
+            if not chat_id:
+                logger.warning("[UpdateNotify] Pending update has no chat_id")
+                return
+
+            # Build completion message card
+            from sail_bot.card_renderer import CardRenderer
+            import platform
+            from datetime import datetime
+
+            hostname = platform.node() or "Unknown"
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            content = (
+                f"🤖 Bot 已成功重启并恢复服务\n\n"
+                f"📍 **主机**: {hostname}\n"
+                f"🕐 **完成时间**: {now}\n"
+            )
+            if reason:
+                content += f"📝 **更新原因**: {reason}\n"
+            content += "\n✅ 更新流程全部完成"
+
+            completion_card = CardRenderer.result(
+                "🎉 更新完成",
+                content,
+                success=True,
+            )
+            self.messaging.send_card(chat_id, completion_card)
+            logger.info(
+                "[UpdateNotify] Update completion notification sent to %s", chat_id
+            )
+
+        except Exception as exc:
+            logger.error(
+                "[UpdateNotify] Failed to send update completion notification: %s",
+                exc,
+                exc_info=True,
+            )
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -270,6 +323,9 @@ class FeishuBotAgent:
 
         # Send startup notification
         self._lifecycle._notify_startup()
+
+        # Check for pending update completion (from self-update restart)
+        self._check_and_notify_update_completion()
 
         exit_code = 0
         shutdown_event = threading.Event()

@@ -17,19 +17,28 @@
     # ... 在主循环中检查 ...
     if orchestrator.should_exit():
         return orchestrator.exit_code  # 42
+
+更新完成通知机制:
+    1. 请求更新前调用 save_pending_update(chat_id, message_id, reason) 持久化上下文
+    2. Bot 以 exit code 42 退出，watcher 执行 git pull 并重启
+    3. Bot 重启后调用 load_and_clear_pending_update() 获取上下文并发送完成通知
 """
 
+import json
 import logging
 import os
 import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 EXIT_CODE_SELF_UPDATE = 42
+
+# 持久化文件路径：用于在更新重启后通知用户
+PENDING_UPDATE_FILE = Path.home() / ".sailzen" / "pending_update.json"
 
 
 class SelfUpdateOrchestrator:
@@ -81,7 +90,10 @@ class SelfUpdateOrchestrator:
             self._exit_code = EXIT_CODE_SELF_UPDATE
 
         logger.info("[SelfUpdate] 已标记退出 (code=%d)", EXIT_CODE_SELF_UPDATE)
-        return {"success": True, "message": f"更新已触发，即将重启 (exit code {EXIT_CODE_SELF_UPDATE})"}
+        return {
+            "success": True,
+            "message": f"更新已触发，即将重启 (exit code {EXIT_CODE_SELF_UPDATE})",
+        }
 
     def should_exit(self) -> bool:
         """主循环轮询：是否应该退出。"""
@@ -93,6 +105,75 @@ class SelfUpdateOrchestrator:
         """获取退出码。"""
         with self._lock:
             return self._exit_code
+
+    # ── 更新完成通知持久化 ─────────────────────────────────────────
+
+    @staticmethod
+    def save_pending_update(
+        chat_id: str,
+        message_id: Optional[str] = None,
+        reason: str = "",
+    ) -> None:
+        """保存更新上下文到持久化文件，供重启后读取。
+
+        Args:
+            chat_id: 目标会话 ID（必需）
+            message_id: 原卡片消息 ID（可选，用于更新原卡片）
+            reason: 更新原因
+        """
+        try:
+            PENDING_UPDATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data: Dict[str, Any] = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "reason": reason,
+                "updated_at": datetime.now().isoformat(),
+            }
+            PENDING_UPDATE_FILE.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.info(
+                "[SelfUpdate] Pending update context saved for chat %s", chat_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "[SelfUpdate] Failed to save pending update context: %s", exc
+            )
+
+    @staticmethod
+    def load_and_clear_pending_update() -> Optional[Dict[str, Any]]:
+        """加载并清除更新上下文。
+
+        Returns:
+            更新上下文字典，如果没有则返回 None
+        """
+        if not PENDING_UPDATE_FILE.exists():
+            return None
+
+        try:
+            data = json.loads(PENDING_UPDATE_FILE.read_text(encoding="utf-8"))
+            # 检查时间戳，超过 10 分钟的视为过期
+            updated_at_str = data.get("updated_at", "")
+            if updated_at_str:
+                updated_at = datetime.fromisoformat(updated_at_str)
+                if (datetime.now() - updated_at).total_seconds() > 600:
+                    logger.info("[SelfUpdate] Pending update expired, ignoring")
+                    PENDING_UPDATE_FILE.unlink(missing_ok=True)
+                    return None
+
+            PENDING_UPDATE_FILE.unlink(missing_ok=True)
+            logger.info(
+                "[SelfUpdate] Pending update context loaded for chat %s",
+                data.get("chat_id"),
+            )
+            return data
+        except Exception as exc:
+            logger.warning(
+                "[SelfUpdate] Failed to load pending update context: %s", exc
+            )
+            PENDING_UPDATE_FILE.unlink(missing_ok=True)
+            return None
 
     # ── 内部方法 ──────────────────────────────────────────────────
 
@@ -119,7 +200,9 @@ class SelfUpdateOrchestrator:
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--show-toplevel"],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             return Path(result.stdout.strip())
         except Exception:

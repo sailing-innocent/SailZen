@@ -13,6 +13,7 @@ and provides a clean, testable interface for processing button clicks.
 
 import json
 import threading
+import time
 import traceback
 from typing import Optional, Any
 
@@ -258,7 +259,11 @@ class CardActionHandler(BaseHandler):
         4. TaskHandler detects was_cancelled and updates card to "已取消"
         5. TaskHandler calls op_tracker.finish() to clean up
         """
-        task_id = value.get("task_id") or value.get("op_id") if isinstance(value, dict) else None
+        task_id = (
+            value.get("task_id") or value.get("op_id")
+            if isinstance(value, dict)
+            else None
+        )
 
         if not task_id:
             return P2CardActionTriggerResponse(
@@ -309,9 +314,30 @@ class CardActionHandler(BaseHandler):
         """Handle self-update confirmation."""
         reason = value.get("reason", "用户确认更新")
 
+        # Extract message_id from event context for updating the original card later
+        # Note: message_id is captured from the card action event
+        # We need to pass it through so the restarted bot can update the card
+        # However, the message_id from card action is the *original* message that contains the card
+        # After restart, we can only send a new message (cannot update old card without message_id)
+        # So we save chat_id and reason; the restarted bot will send a new completion card
+
+        # Save pending update context BEFORE starting the update
+        # so that even if the process exits immediately, the context is persisted
+        from sail_bot.self_update_orchestrator import SelfUpdateOrchestrator
+
+        SelfUpdateOrchestrator.save_pending_update(
+            chat_id=chat_id,
+            reason=reason,
+        )
+
         # Start self-update in background
         def do_self_update():
             try:
+                # Give a moment for the save to complete and card response to return
+                import time
+
+                time.sleep(0.5)
+
                 result = self.ctx.request_self_update(reason=reason)
 
                 if result.get("success"):
@@ -322,6 +348,8 @@ class CardActionHandler(BaseHandler):
                     )
                     self.ctx.messaging.send_card(chat_id, success_card)
                 else:
+                    # Clear pending update on failure
+                    SelfUpdateOrchestrator.load_and_clear_pending_update()
                     error_card = CardRenderer.error(
                         "❌ 更新失败",
                         result.get("message", "Unknown error"),
@@ -329,6 +357,8 @@ class CardActionHandler(BaseHandler):
                     self.ctx.messaging.send_card(chat_id, error_card)
             except Exception as exc:
                 logger.error("[SelfUpdate] Error: %s", exc, exc_info=True)
+                # Clear pending update on exception
+                SelfUpdateOrchestrator.load_and_clear_pending_update()
 
         threading.Thread(target=do_self_update, daemon=True).start()
 
