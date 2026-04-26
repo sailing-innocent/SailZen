@@ -36,7 +36,7 @@ from sail_bot.context import (
     _CONFIRM_WORDS,
     _CANCEL_WORDS,
 )
-from sail_bot.card_renderer import CardRenderer
+from feishu_card_kit.renderer import CardRenderer
 from sail.opencode import extract_path_from_text
 
 def _make_gateway(

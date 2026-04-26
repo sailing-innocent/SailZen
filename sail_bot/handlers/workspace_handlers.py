@@ -20,7 +20,7 @@ from typing import Optional
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ConversationContext
-from sail_bot.card_renderer import CardRenderer
+from feishu_card_kit.renderer import CardRenderer
 from sail_bot.task_logger import task_logger
 from sail.opencode import extract_path_from_text
 

@@ -25,7 +25,7 @@ import logging
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan
-from sail_bot.card_renderer import CardRenderer
+from feishu_card_kit.renderer import CardRenderer
 
 logger = logging.getLogger(__name__)
 

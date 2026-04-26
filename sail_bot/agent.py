@@ -230,7 +230,7 @@ class FeishuBotAgent:
                 return
 
             # Build completion message card
-            from sail_bot.card_renderer import CardRenderer
+            from feishu_card_kit.renderer import CardRenderer
             import platform
             from datetime import datetime
 

@@ -28,7 +28,7 @@ import lark_oapi as lark
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan, ConversationContext
-from sail_bot.card_renderer import CardRenderer
+from feishu_card_kit.renderer import CardRenderer
 from sail_bot.session_state import RiskLevel, classify_risk
 
 

@@ -26,12 +26,11 @@ from lark_oapi.api.im.v1 import (
     ReplyMessageRequestBody,
 )
 
-from sail_bot.card_renderer import (
+from feishu_card_kit.tracker import (
     CardMessageTracker,
     card_to_feishu_content,
     text_fallback,
 )
-
 
 logger = logging.getLogger(__name__)
 
