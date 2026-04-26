@@ -81,8 +81,6 @@ SailZen/
 │   │   ├── necessity.py        # 必需品路由
 │   │   ├── project.py          # 项目路由
 │   │   ├── text.py             # 文本路由
-│   │   ├── feishu.py           # 飞书路由 (Phase 0)
-│   │   └── unified_agent.py    # 统一Agent路由
 │   ├── agent/                  # Agent 相关基础设施
 │   ├── controller/             # 业务逻辑控制器
 │   ├── model/                  # SQLAlchemy 模型

@@ -38,22 +38,8 @@ def run_task_mode(args):
         logger.error(f"Error: {e}")
 
 
-def run_import_text_mode():
-    """运行文本导入模式"""
-    from sail_server.cli.text_import import run_text_import_cli
-
-    run_text_import_cli()
-
 
 def main():
-    """主入口函数"""
-    # 检查是否是文本导入模式
-    if "--import-text" in sys.argv:
-        run_import_text_mode()
-        return
-
-    # 原有的任务调度模式
-
     parser = argparse.ArgumentParser(
         description="SailZen 主入口脚本",
         formatter_class=argparse.RawDescriptionHelpFormatter,

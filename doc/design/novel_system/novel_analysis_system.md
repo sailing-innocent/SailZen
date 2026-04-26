@@ -30,7 +30,6 @@
 | OpenCode Client | `sail_bot/opencode_client.py` | Session CRUD、SSE 流、异步执行 | ✅ 可用 |
 | DAG Pipeline 前端 | `packages/site/src/pages/dag_pipeline.tsx` | DAG 画布、节点详情、运行历史 | ✅ 可用 |
 | Text 前端 | `packages/site/src/pages/text.tsx` | 作品列表、章节阅读器 | ✅ 可用 |
-| Unified Agent | `router/unified_agent.py` | 统一任务调度、WebSocket 推送 | ✅ 基础可用 |
 
 ## 3. 系统架构总览
 

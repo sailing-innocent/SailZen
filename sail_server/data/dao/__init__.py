@@ -16,17 +16,6 @@ Phase 4 重构目标：将数据访问逻辑从 Model 层提取到 DAO 层
 2. DAO 返回 ORM 对象或原始数据
 3. 业务逻辑保留在 Model/Service 层
 4. 支持依赖注入
-
-当前迁移状态：
-- [x] analysis 模块
-- [x] finance 模块
-- [x] health 模块
-- [x] history 模块
-- [x] life 模块
-- [x] necessity 模块
-- [x] project 模块
-- [x] text 模块
-- [x] unified_agent 模块
 """
 
 from .base import BaseDAO
@@ -63,10 +52,6 @@ from .history import HistoryEventDAO
 # Life
 from .life import ServiceAccountDAO
 
-# Unified Agent
-from .unified_agent import (
-    UnifiedAgentTaskDAO, UnifiedAgentStepDAO, UnifiedAgentEventDAO
-)
 
 __all__ = [
     "BaseDAO",
@@ -90,6 +75,4 @@ __all__ = [
     "HistoryEventDAO",
     # Life
     "ServiceAccountDAO",
-    # Unified Agent
-    "UnifiedAgentTaskDAO", "UnifiedAgentStepDAO", "UnifiedAgentEventDAO",
 ]

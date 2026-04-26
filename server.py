@@ -103,18 +103,8 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.analysis import analysis_router
-        from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.dag_pipeline import router as dag_pipeline_router
-        from sail_server.controller.outline_extraction_unified import (
-            OutlineExtractionUnifiedController,
-        )
-
-        # 自动注册 Agent
-        from sail_server.agent import auto_register_agents
-
-        auto_register_agents()
-
         # 修复数据库序列（仅 PostgreSQL）
         from sail_server.db import Database
 
@@ -144,7 +134,6 @@ class SailServer:
                 text_router,
                 necessity_router,
                 analysis_router,
-                unified_agent_router,
                 file_storage_router,
                 OutlineExtractionUnifiedController,
                 dag_pipeline_router,

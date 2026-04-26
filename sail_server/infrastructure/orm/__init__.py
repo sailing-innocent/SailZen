@@ -59,12 +59,6 @@ from sail_server.infrastructure.orm.life import (
 from sail_server.infrastructure.orm.finance import (
     Account, Transaction, Budget, BudgetItem,
 )
-
-# Unified Agent Models
-from sail_server.infrastructure.orm.unified_agent import (
-    UnifiedAgentTask, UnifiedAgentStep, UnifiedAgentEvent,
-)
-
 __all__ = [
     # Base
     "ORMBase",
@@ -100,7 +94,4 @@ __all__ = [
     
     # Finance
     "Account", "Transaction", "Budget", "BudgetItem",
-    
-    # Unified Agent
-    "UnifiedAgentTask", "UnifiedAgentStep", "UnifiedAgentEvent",
 ]

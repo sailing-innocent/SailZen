@@ -15,7 +15,6 @@ sail_server/
 │   ├── necessity.py          # 物资管理路由
 │   ├── project.py            # 项目管理路由
 │   ├── text.py               # 文本管理路由
-│   └── unified_agent.py      # 统一 Agent 路由
 │
 ├── controller/                # 控制器层 (Application Layer)
 │   ├── analysis.py           # 文本分析控制器
@@ -44,7 +43,6 @@ sail_server/
 │   │   ├── necessity.py      # 物资模块 DTOs
 │   │   ├── project.py        # 项目模块 DTOs
 │   │   ├── text.py           # 文本模块 DTOs
-│   │   └── unified_agent.py  # Agent 模块 DTOs
 │   └── service/              # [预留] 应用服务层
 │       └── __init__.py
 │
@@ -72,8 +70,6 @@ sail_server/
 │   ├── project.py            # 项目模型
 │   ├── service.py            # 服务模型
 │   ├── text.py               # 文本模型
-│   ├── unified_agent.py      # 统一 Agent 模型
-│   └── unified_scheduler.py  # 统一调度器模型
 │
 ├── agent/                     # Agent 层 (Domain Layer)
 │   ├── __init__.py           # Agent 导出与自动注册
@@ -96,7 +92,6 @@ sail_server/
 │       ├── necessity.py      # 物资模块 DAO
 │       ├── project.py        # 项目模块 DAO
 │       ├── text.py           # 文本模块 DAO
-│       └── unified_agent.py  # Agent 模块 DAO
 │
 ├── infrastructure/            # 基础设施层 (Infrastructure Layer)
 │   ├── __init__.py
@@ -111,7 +106,6 @@ sail_server/
 │   │   ├── necessity.py      # 物资模块 ORM
 │   │   ├── project.py        # 项目模块 ORM
 │   │   ├── text.py           # 文本模块 ORM
-│   │   └── unified_agent.py  # Agent 模块 ORM
 │   └── external/             # [预留] 外部服务集成
 │       └── __init__.py
 │
@@ -402,7 +396,6 @@ HTTP Response
 | analysis (文本分析) | ✅ 完整 | 角色、大纲、设定提取 |
 | health (健康管理) | 🔶 部分 | 体重追踪基础功能 |
 | history (历史记录) | ✅ 完整 | 时间线事件追踪 |
-| unified_agent (统一 Agent) | ✅ 完整 | 任务调度、Agent 注册 |
 
 ## 扩展指南
 

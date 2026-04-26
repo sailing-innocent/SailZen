@@ -1,1 +1,0 @@
-INSERT INTO body_size (waist, hip, chest, tag) VALUES (111,107,107,'raw');
