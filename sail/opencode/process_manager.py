@@ -427,12 +427,21 @@ def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optiona
     """从文本中提取路径（支持项目快捷名和绝对路径）。"""
     import re
     text = text.strip()
+    text_lower = text.lower()
     for p in projects:
         slug = p.get("slug", "")
         label = p.get("label", "")
-        if slug and text.lower() == slug.lower():
+        if slug and text_lower == slug.lower():
             return p.get("path", "")
-        if label and text.lower() == label.lower():
+        if label and text_lower == label.lower():
+            return p.get("path", "")
+    # 子串匹配：在文本中查找项目 slug/label（如 "启动 sz" 中的 sz）
+    for p in projects:
+        slug = p.get("slug", "")
+        label = p.get("label", "")
+        if slug and slug.lower() in text_lower:
+            return p.get("path", "")
+        if label and label.lower() in text_lower:
             return p.get("path", "")
     for pattern in [r"([~/][^\s]+)", r"([A-Z]:\\[^\s]+)", r"([A-Z]:/[^\s]+)"]:
         m = re.search(pattern, text)
