@@ -277,7 +277,7 @@ class FeishuBotAgent:
         """
         self._lifecycle.cleanup_previous_instances()
 
-        print(f"Feishu Agent Bridge v8.0 (tool={config.cli_tool})")
+        print(f"Feishu Agent Bridge v8.0 (tool={self.config.cli_tool})")
         logger.info("Config: %s", self.config.config_path)
 
         if not self.config.app_id or not self.config.app_secret:

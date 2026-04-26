@@ -46,12 +46,17 @@ class WelcomeHandler(BaseHandler):
                     else:
                         session_states[path] = "idle"
 
+            # Build feature status list
+            features: list[tuple[str, str]] = [
+                ("LLM", "就绪" if self.ctx.brain._gw is not None else "未配置"),
+                ("自更新", "已启用"),
+            ]
+
             # Generate welcome card
             welcome_card = CardRenderer.welcome(
                 projects=self.ctx.config.projects,
                 session_states=session_states,
-                has_llm=self.ctx.brain._gw is not None,
-                has_self_update=True,
+                features=features,
             )
 
             # Send welcome card

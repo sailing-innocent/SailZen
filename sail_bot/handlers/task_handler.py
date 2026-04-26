@@ -264,7 +264,6 @@ class TaskHandler(BaseHandler):
         strategy, output = handler.process(
             title=f"任务完成 ({elapsed}s)",
             content=result.full_text or result.summary or "（任务已完成）",
-            chat_id=chat_id,
             success=True,
             context_path=path,
         )

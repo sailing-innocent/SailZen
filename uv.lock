@@ -6,12 +6,6 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
-[manifest]
-members = [
-    "feishu-card-kit",
-    "sailserver",
-]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
@@ -395,11 +389,6 @@ sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/5e/77/1c3ff07b6
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/46/ec/91a434c8a53d40c3598966621dea9c50512bec6ce8e76fa1751015e74cef/faker-40.1.2-py3-none-any.whl", hash = "sha256:93503165c165d330260e4379fd6dc07c94da90c611ed3191a0174d2ab9966a42" },
 ]
-
-[[package]]
-name = "feishu-card-kit"
-version = "1.0.0"
-source = { editable = "packages/feishu-card-kit" }
 
 [[package]]
 name = "fonttools"
@@ -1585,7 +1574,6 @@ source = { virtual = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "dotenv" },
-    { name = "feishu-card-kit" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "lark-oapi" },
@@ -1615,7 +1603,6 @@ dependencies = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.3" },
     { name = "dotenv", specifier = ">=0.9.9" },
-    { name = "feishu-card-kit", editable = "packages/feishu-card-kit" },
     { name = "google-genai", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.28.0" },
     { name = "lark-oapi", specifier = ">=1.5.0" },
