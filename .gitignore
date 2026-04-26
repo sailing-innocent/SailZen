@@ -51,4 +51,5 @@ __pycache__
 *.vsix
 *.patch
 packages/engine-server/src/drivers/generated-prisma-client/*
-bot,yaml
+bot.yaml
+.kimix_cache
