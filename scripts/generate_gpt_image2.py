@@ -97,23 +97,16 @@ def main():
     print(f"🔑 API Key: {api_key[:8]}...{api_key[-4:]}")
 
     # -----------------------------------------------------------
-    # Approach 1: Use raw httpx to call /v1/chat/completions
-    # This avoids SDK parameter validation issues and gives full
-    # control over the request body.
+    # Use raw httpx with OpenAI SDK-style headers (x-stainless-*)
     # -----------------------------------------------------------
+    import platform
+    import sys as _sys
+
     request_body = {
         "model": "gpt-image-2",
-        "messages": [
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
+        "messages": [{"role": "user", "content": prompt}],
         "modalities": ["image"],
-        "image": {
-            "size": args.size,
-            "quality": args.quality,
-        },
+        "image": {"size": args.size, "quality": args.quality},
     }
 
     url = f"{base_url}/chat/completions"
@@ -132,7 +125,6 @@ def main():
         print(f"❌ Connection failed: {e}")
         sys.exit(1)
 
-    # Debug: print status and response preview
     print(f"📬 Status: {resp.status_code}")
     if resp.status_code != 200:
         print(f"❌ Server rejected the request ({resp.status_code})")
