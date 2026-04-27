@@ -381,13 +381,30 @@ class OpenCodeAsyncClient:
         配合 sse_parser.parse_event(event, session_id) 过滤。
         """
         url = f"{self._base_url}/event"
-        async with httpx.AsyncClient(
+        stream_client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout, connect=10.0, read=timeout)
-        ) as stream_client:
-            async with stream_client.stream("GET", url) as response:
-                response.raise_for_status()
-                async for event in _parse_sse_stream(response):
-                    yield event
+        )
+        response_ctx = None
+        try:
+            response_ctx = stream_client.stream("GET", url)
+            response = await response_ctx.__aenter__()
+            response.raise_for_status()
+            async for event in _parse_sse_stream(response):
+                yield event
+        except (asyncio.CancelledError, GeneratorExit):
+            # 被外部中断（Ctrl+C / task cancel），静默退出
+            return
+        finally:
+            # 确保按正确顺序关闭资源，忽略关闭期间的错误
+            if response_ctx is not None:
+                try:
+                    await response_ctx.__aexit__(None, None, None)
+                except Exception:
+                    pass
+            try:
+                await stream_client.aclose()
+            except Exception:
+                pass
 
     async def stream_events_robust(
         self,

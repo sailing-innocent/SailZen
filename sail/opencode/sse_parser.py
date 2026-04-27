@@ -33,11 +33,15 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
 
 from sail.opencode.client import SSEEvent
+
+logger = logging.getLogger(__name__)
 
 
 # ── 事件类型枚举 ──────────────────────────────────────────────────
@@ -65,16 +69,20 @@ class EventType(str, Enum):
 @dataclass
 class ParsedEvent:
     """SSE 事件的结构化解析结果。"""
-
     type: EventType = EventType.UNKNOWN
     text: str = ""
     delta: str = ""
     tool_name: str = ""
     tool_status: str = ""
+    tool_input: str = ""
+    tool_output: str = ""
+    tool_error: str = ""
+    tool_call_id: str = ""
     tool_title: str = ""
     permission_id: str = ""
     finished: bool = False
     cost: float = 0.0
+    created_at: float = 0.0
     tokens: Dict[str, Any] = field(default_factory=dict)
     raw: Dict[str, Any] = field(default_factory=dict)
 
@@ -102,30 +110,47 @@ def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
     Returns:
         ParsedEvent，type == EventType.SKIP 时可安全忽略。
     """
+    # ── debug: 打印原始 SSE 事件 ──────────────────────────────────
+    if logger.isEnabledFor(logging.DEBUG):
+        raw_data_preview = event.data[:500] if event.data else "<empty>"
+        logger.debug(
+            "[RAW SSE] event=%s  id=%s  data=%s",
+            event.event,
+            event.id or "-",
+            raw_data_preview,
+        )
+
     # ── 重连哨兵 ──────────────────────────────────────────────────
     if event.event == "__reconnected__":
-        return ParsedEvent(
+        parsed = ParsedEvent(
             type=EventType.RECONNECTED,
             text=f"SSE reconnected (attempt {event.data})",
         )
+        logger.debug("[PARSED] type=%s  text=%s", parsed.type.value, parsed.text)
+        return parsed
 
     data = event.json()
     if not data:
+        logger.debug("[PARSED] type=SKIP  reason=empty_json")
         return ParsedEvent(type=EventType.SKIP)
 
     event_type: str = data.get("type", "")
 
     # ── 全局事件过滤 ──────────────────────────────────────────────
     if event_type in ("server.connected", "server.heartbeat"):
+        logger.debug("[PARSED] type=SKIP  reason=global_filter  event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
     # ── Session 过滤 ──────────────────────────────────────────────
     if session_id and not _matches_session(data, session_id):
+        logger.debug("[PARSED] type=SKIP  reason=session_mismatch  event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
     # ── 格式 A: opencode 原生事件 ─────────────────────────────────
     if event_type == "message.part.updated":
-        return _parse_part_updated(data)
+        parsed = _parse_part_updated(data)
+        _log_parsed(parsed, event_type)
+        return parsed
 
     if event_type in (
         "message.updated",
@@ -134,24 +159,50 @@ def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
         "session.created",
         "session.diff",
     ):
+        logger.debug("[PARSED] type=SKIP  reason=ignored_event  event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
     if event_type == "message.part.delta":
-        return _parse_part_delta(data)
+        parsed = _parse_part_delta(data)
+        _log_parsed(parsed, event_type)
+        return parsed
 
     if event_type in ("session.idle", "session.status"):
-        return _parse_session_status(data, event_type)
+        parsed = _parse_session_status(data, event_type)
+        _log_parsed(parsed, event_type)
+        return parsed
 
     if event_type in ("session.permission", "permission"):
         perm_id = data.get("id", data.get("permissionID", ""))
-        return ParsedEvent(
+        parsed = ParsedEvent(
             type=EventType.PERMISSION,
             permission_id=perm_id,
             raw=data,
         )
+        _log_parsed(parsed, event_type)
+        return parsed
 
     # ── 格式 B: 简化事件 ──────────────────────────────────────────
-    return _parse_simple_event(data, event_type)
+    parsed = _parse_simple_event(data, event_type)
+    _log_parsed(parsed, event_type)
+    return parsed
+
+
+def _log_parsed(parsed: ParsedEvent, event_type: str) -> None:
+    """Debug 日志：打印解析后的事件摘要。"""
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    parts = [f"type={parsed.type.value}", f"sse_type={event_type}"]
+    if parsed.delta:
+        preview = parsed.delta[:80].replace("\n", "\\n")
+        parts.append(f"delta={preview!r}")
+    if parsed.tool_name:
+        parts.append(f"tool={parsed.tool_name}")
+    if parsed.tool_status:
+        parts.append(f"status={parsed.tool_status}")
+    if parsed.finished:
+        parts.append("finished=True")
+    logger.debug("[PARSED] %s", "  ".join(parts))
 
 
 # ── 格式 A 解析器 ──────────────────────────────────────────────────
