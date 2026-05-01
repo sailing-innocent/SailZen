@@ -104,6 +104,7 @@ class SailServer:
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.dag_pipeline import router as dag_pipeline_router
+
         # 修复数据库序列（仅 PostgreSQL）
         from sail_server.db import Database
 
@@ -194,19 +195,6 @@ class SailServer:
                 db.close()
         except Exception as e:
             logger.warning(f"[Startup] Failed to seed finance tags: {e}")
-
-        # 执行大纲提取任务恢复
-        try:
-            from sail_server.service.startup_recovery import perform_startup_recovery
-
-            result = perform_startup_recovery()
-            if result["recovered_count"] > 0:
-                logger.info(
-                    f"[Startup] Recovered {result['recovered_count']} outline extraction tasks "
-                    f"to paused state"
-                )
-        except Exception as e:
-            logger.warning(f"[Startup] Failed to recover outline extraction tasks: {e}")
 
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger

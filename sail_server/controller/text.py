@@ -38,20 +38,16 @@ from sail_server.model.text import (
     get_chapter_list_impl,
     get_chapter_content_impl,
     update_document_node_impl,
-    import_text_impl,
-    append_chapters_impl,
     insert_chapter_impl,
     search_works_impl,
     search_content_impl,
-    create_work_with_edition_impl,
     batch_insert_chapters_impl,
     get_chapter_count_impl,
     ChapterBatchItem,
 )
 
 from sqlalchemy.orm import Session
-from typing import Generator, List, Optional, Dict, Any
-from datetime import datetime
+from typing import Generator, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -442,14 +438,6 @@ class EditionController(Controller):
         db = next(router_dependency)
         count = get_chapter_count_impl(db, edition_id)
         return {"edition_id": edition_id, "count": count}
-        if not chapter:
-            raise NotFoundException(detail=f"Edition with ID {edition_id} not found")
-        logger.info(
-            f"Inserted chapter at position {data.sort_index} in edition {edition_id}"
-        )
-        return ChapterInsertResponse(
-            chapter=chapter, message=f"成功插入章节到位置 {data.sort_index}"
-        )
 
 
 # ============================================================================
@@ -493,4 +481,3 @@ class DocumentNodeController(Controller):
             raise NotFoundException(detail=f"Node with ID {node_id} not found")
         logger.info(f"Updated node {node_id}")
         return node
-
