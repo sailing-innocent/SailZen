@@ -214,6 +214,10 @@ class OpenCodeProcessManager:
     def list_processes(self) -> List[ManagedProcess]:
         return list(self._processes.values())
 
+    def update_projects(self, projects: Optional[List[Dict[str, Any]]]) -> None:
+        """Update the project list used for path resolution."""
+        self._projects = projects or []
+
     def get_status_text(self) -> str:
         if not self._processes:
             return "当前无 agent 进程。"

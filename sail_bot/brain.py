@@ -140,6 +140,10 @@ _BRAIN_FALLBACK_ACTIONS = {
     "help": ("show_help", {}),
     "状态": ("show_status", {}),
     "status": ("show_status", {}),
+    "工作区": ("show_workspace_dashboard", {}),
+    "面板": ("show_workspace_dashboard", {}),
+    "workspace": ("show_workspace_dashboard", {}),
+    "dashboard": ("show_workspace_dashboard", {}),
     # Phase 0: Self-update commands
     "更新": (
         "self_update",
@@ -553,6 +557,10 @@ class BotBrain:
                 if cmd_lower in ["状态", "status", "s"]:
                     return ActionPlan(action="show_status", params={})
 
+                # 工作区面板指令
+                if cmd_lower in ["工作区", "面板", "workspace", "dashboard"]:
+                    return ActionPlan(action="show_workspace_dashboard", params={})
+
                 # 解析工作区控制指令（启动、停止、切换等）
                 if any(
                     k in cmd_lower for k in ["启动", "打开", "开启", "start", "open"]
@@ -596,6 +604,10 @@ class BotBrain:
         for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
             if t == kw:
                 return ActionPlan(action=action, params=params)
+
+        # 工作区面板指令
+        if any(k in t for k in ["工作区", "面板", "workspace", "dashboard"]):
+            return ActionPlan(action="show_workspace_dashboard", params={})
 
         # 启动指令（进入coding模式）
         if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):

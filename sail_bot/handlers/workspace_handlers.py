@@ -11,6 +11,7 @@ This module handles workspace lifecycle operations:
 - start_workspace: Start a new workspace
 - stop_workspace: Stop a running workspace
 - switch_workspace: Switch to another workspace
+- show_dashboard: Show interactive workspace dashboard
 """
 
 import time
@@ -45,6 +46,7 @@ class StartWorkspaceHandler(BaseHandler):
             path: Direct path to workspace
             project_slug: Project slug to look up path
         """
+        self.ctx.reload_config()
         # Resolve path from project slug or direct path
         if project_slug:
             path = extract_path_from_text(project_slug, self.ctx.config.projects)
@@ -261,3 +263,82 @@ class SwitchWorkspaceHandler(BaseHandler):
             message_id, card, "workspace_switched", {"path": path}
         )
         ctx.push("bot", f"已切换到工作区: {workspace_name}")
+
+
+class WorkspaceDashboardHandler(BaseHandler):
+    """Handler for showing and refreshing the workspace dashboard."""
+
+    def handle(self, chat_id: str, message_id: Optional[str] = None) -> None:
+        """Show the workspace dashboard card.
+
+        Args:
+            chat_id: Target chat ID
+            message_id: Optional message ID to reply to (if None, sends new message)
+        """
+        self.ctx.reload_config()
+        # Build session state map
+        session_states: Dict[str, str] = {}
+        proc_map = {p.path: p for p in self.ctx.process_mgr.list_processes()}
+
+        for proj in self.ctx.config.projects:
+            path = proj.get("path", "")
+            if path:
+                try:
+                    resolved_path = str(Path(path).expanduser().resolve())
+                except Exception:
+                    resolved_path = path
+
+                proc = proc_map.get(resolved_path)
+                if proc:
+                    session_states[resolved_path] = proc.status.value
+                else:
+                    session_states[resolved_path] = "idle"
+
+        # Get current workspace from context
+        ctx = self.ctx.get_or_create_context(chat_id)
+        current_workspace = ctx.active_workspace
+
+        dashboard_card = CardRenderer.workspace_dashboard(
+            projects=self.ctx.config.projects,
+            session_states=session_states,
+            current_workspace=current_workspace,
+        )
+
+        if message_id:
+            self.ctx.messaging.reply_card(
+                message_id, dashboard_card, "workspace_dashboard"
+            )
+        else:
+            self.ctx.messaging.send_card(
+                chat_id, dashboard_card, "workspace_dashboard"
+            )
+
+    def refresh(
+        self, chat_id: str, message_id: str, ctx: ConversationContext
+    ) -> None:
+        """Refresh an existing dashboard card in place."""
+        self.ctx.reload_config()
+        # Build session state map
+        session_states: Dict[str, str] = {}
+        proc_map = {p.path: p for p in self.ctx.process_mgr.list_processes()}
+
+        for proj in self.ctx.config.projects:
+            path = proj.get("path", "")
+            if path:
+                try:
+                    resolved_path = str(Path(path).expanduser().resolve())
+                except Exception:
+                    resolved_path = path
+
+                proc = proc_map.get(resolved_path)
+                if proc:
+                    session_states[resolved_path] = proc.status.value
+                else:
+                    session_states[resolved_path] = "idle"
+
+        dashboard_card = CardRenderer.workspace_dashboard(
+            projects=self.ctx.config.projects,
+            session_states=session_states,
+            current_workspace=ctx.active_workspace,
+        )
+        self.ctx.messaging.update_card(message_id, dashboard_card)
