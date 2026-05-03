@@ -193,6 +193,18 @@ _BRAIN_FALLBACK_ACTIONS = {
         "self_update",
         {"trigger_source": "manual", "reason": "User requested self-update"},
     ),
+    "生成图片": (
+        "enter_image_gen",
+        {},
+    ),
+    "画图": (
+        "enter_image_gen",
+        {},
+    ),
+    "image": (
+        "enter_image_gen",
+        {},
+    ),
 }
 
 
@@ -540,6 +552,36 @@ class BotBrain:
         """
         t = text.lower().strip()
 
+        # === 状态3：图片生成工作流 ===
+        if ctx.mode == "image_gen":
+            t = text.strip()
+            lower = t.lower()
+
+            # 退出
+            if lower in ["退出", "exit", "quit", "q", "结束", "关闭"]:
+                return ActionPlan(action="exit_image_gen", params={})
+
+            # 保存
+            save_match = re.match(r"^保存\s+(\S+\.\w+)", t)
+            if save_match:
+                return ActionPlan(
+                    action="save_image",
+                    params={"filename": save_match.group(1)},
+                )
+
+            # 重新进入工作流
+            if any(k in t for k in ["生成图片", "画图", "image"]):
+                return ActionPlan(action="enter_image_gen", params={})
+
+            # 显式生成意图 → 生成新图（即使有 last_image_path）
+            if any(k in t for k in ["生成", "画一张", "画个", "重新生成", "再来一张", "新建"]):
+                return ActionPlan(action="generate_image", params={"prompt": t})
+
+            # 编辑或生成
+            if ctx.image_gen and ctx.image_gen.last_image_path:
+                return ActionPlan(action="edit_image", params={"prompt": t})
+            return ActionPlan(action="generate_image", params={"prompt": t})
+
         # === 状态2：在工作区 ===
         if ctx.mode == "coding" and ctx.active_workspace:
             # 感叹号开头的消息 -> 在Bot层执行控制指令（去掉感叹号后的内容）
@@ -633,6 +675,10 @@ class BotBrain:
             path = extract_path_from_text(text, self.projects)
             if path:
                 return ActionPlan(action="switch_workspace", params={"path": path})
+
+        # 启动图片生成模式
+        if any(k in t for k in ["生成图片", "画图", "image"]):
+            return ActionPlan(action="enter_image_gen", params={})
 
         # 返回 chat action 表示需要 LLM 处理（Level 2）
         return ActionPlan(action="chat")

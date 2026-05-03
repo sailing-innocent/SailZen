@@ -40,6 +40,7 @@ class PlanExecutor(BaseHandler):
         )
         from sail_bot.handlers.task_handler import TaskHandler
         from sail_bot.handlers.self_update_handler import SelfUpdateHandler
+        from sail_bot.handlers.image_gen_handler import ImageGenHandler
 
         self._help = HelpHandler(ctx)
         self._status = StatusHandler(ctx)
@@ -49,6 +50,7 @@ class PlanExecutor(BaseHandler):
         self._dashboard = WorkspaceDashboardHandler(ctx)
         self._task = TaskHandler(ctx)
         self._update = SelfUpdateHandler(ctx)
+        self._image_gen = ImageGenHandler(ctx)
 
         self._registry: Dict[str, tuple[Callable, str]] = {
             "show_help": (self._exec_help, "显示帮助信息"),
@@ -63,6 +65,11 @@ class PlanExecutor(BaseHandler):
                 self._exec_confirmed_self_update,
                 "正在执行自更新...",
             ),
+            "enter_image_gen": (self._exec_enter_image_gen, "进入图片生成模式"),
+            "generate_image": (self._exec_generate_image, "生成图片"),
+            "edit_image": (self._exec_edit_image, "编辑图片"),
+            "save_image": (self._exec_save_image, "保存图片"),
+            "exit_image_gen": (self._exec_exit_image_gen, "退出图片生成模式"),
         }
 
     def execute(
@@ -175,3 +182,28 @@ class PlanExecutor(BaseHandler):
 
         threading.Thread(target=do_self_update, daemon=True).start()
         self.ctx.messaging.reply_text(mid, "正在启动更新，请稍候...")
+
+    def _exec_enter_image_gen(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_enter(chat_id, mid, ctx)
+
+    def _exec_generate_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_generate(plan, chat_id, mid, ctx)
+
+    def _exec_edit_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_edit(plan, chat_id, mid, ctx)
+
+    def _exec_save_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_save(plan, chat_id, mid, ctx)
+
+    def _exec_exit_image_gen(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_exit(chat_id, mid, ctx)

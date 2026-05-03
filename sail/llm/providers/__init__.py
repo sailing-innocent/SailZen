@@ -6,12 +6,13 @@
 # @version 1.0
 # ---------------------------------
 
-from .base import BaseProvider, ProviderConfig, ProviderResponse, ProviderError
+from .base import BaseProvider, ProviderConfig, ProviderResponse, ProviderError, ImageGenerationConfig, ImageResponse
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .google_provider import GoogleProvider
 from .moonshot_provider import MoonshotProvider
 from .deepseek_provider import DeepseekProvider
+from .openai_compat_provider import OpenAICompatProvider
 
 __all__ = [
     'BaseProvider',
@@ -23,4 +24,7 @@ __all__ = [
     'GoogleProvider',
     'MoonshotProvider',
     'DeepseekProvider',
+    'OpenAICompatProvider',
+    'ImageGenerationConfig',
+    'ImageResponse',
 ]

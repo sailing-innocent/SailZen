@@ -26,6 +26,13 @@ class TurnRecord:
     ts: datetime = field(default_factory=datetime.now)
 
 @dataclass
+class ImageGenState:
+    """图片生成工作流状态"""
+    last_image_path: Optional[str] = None
+    last_prompt: Optional[str] = None
+
+
+@dataclass
 class PendingConfirmation:
     action: str
     params: Dict[str, Any]
@@ -43,9 +50,10 @@ class ConversationContext:
 
     chat_id: str
     history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY_WINDOW))
-    mode: str = "idle"
+    mode: str = "idle"  # idle | coding | image_gen
     active_workspace: Optional[str] = None
     pending: Optional[PendingConfirmation] = None
+    image_gen: Optional[ImageGenState] = None
 
     def push(self, role: str, text: str) -> None:
         self.history.append(TurnRecord(role=role, text=text))
@@ -69,6 +77,10 @@ class ConversationContext:
             "chat_id": self.chat_id,
             "mode": self.mode,
             "active_workspace": self.active_workspace,
+            "image_gen": {
+                "last_image_path": self.image_gen.last_image_path,
+                "last_prompt": self.image_gen.last_prompt,
+            } if self.image_gen else None,
         }
 
     @classmethod
@@ -79,4 +91,10 @@ class ConversationContext:
             mode=data.get("mode", "idle"),
             active_workspace=data.get("active_workspace"),
         )
+        ig = data.get("image_gen")
+        if ig:
+            ctx.image_gen = ImageGenState(
+                last_image_path=ig.get("last_image_path"),
+                last_prompt=ig.get("last_prompt"),
+            )
         return ctx
