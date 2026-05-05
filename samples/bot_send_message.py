@@ -9,22 +9,28 @@ from lark_oapi.api.im.v1 import *
 # 复制该 Demo 后, 需要将 "YOUR_APP_ID", "YOUR_APP_SECRET" 替换为自己应用的 APP_ID, APP_SECRET.
 def main():
     # 创建client
-    client = lark.Client.builder() \
-        .app_id("YOUR_APP_ID") \
-        .app_secret("YOUR_APP_SECRET") \
-        .log_level(lark.LogLevel.DEBUG) \
+    client = (
+        lark.Client.builder()
+        .app_id("YOUR_APP_ID")
+        .app_secret("YOUR_APP_SECRET")
+        .log_level(lark.LogLevel.DEBUG)
         .build()
+    )
 
     # 构造请求对象
-    request: CreateMessageRequest = CreateMessageRequest.builder() \
-        .receive_id_type("chat_id") \
-        .request_body(CreateMessageRequestBody.builder()
+    request: CreateMessageRequest = (
+        CreateMessageRequest.builder()
+        .receive_id_type("chat_id")
+        .request_body(
+            CreateMessageRequestBody.builder()
             .receive_id("oc_65f861d7e0dc09ed69b490047ef45f1c")
             .msg_type("text")
-            .content("{\"text\":\"test content\"}")
+            .content('{"text":"test content"}')
             .uuid("选填，每次调用前请更换，如a0d69e20-1dd1-458b-k525-dfeca4015204")
-            .build()) \
+            .build()
+        )
         .build()
+    )
 
     # 发起请求
     response: CreateMessageResponse = client.im.v1.message.create(request)
@@ -32,7 +38,8 @@ def main():
     # 处理失败返回
     if not response.success():
         lark.logger.error(
-            f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}, resp: \n{json.dumps(json.loads(response.raw.content), indent=4, ensure_ascii=False)}")
+            f"client.im.v1.message.create failed, code: {response.code}, msg: {response.msg}, log_id: {response.get_log_id()}, resp: \n{json.dumps(json.loads(response.raw.content), indent=4, ensure_ascii=False)}"
+        )
         return
 
     # 处理业务结果

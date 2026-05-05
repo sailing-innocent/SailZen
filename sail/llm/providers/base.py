@@ -12,7 +12,7 @@ import abc
 import time
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, AsyncIterator
+from typing import Optional, Dict, Any, AsyncIterator, List, Union
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,27 @@ class ProviderResponse:
 
 
 @dataclass
+@dataclass
+class ImageGenerationConfig:
+    """图像生成配置"""
+
+    width: int = 1024
+    height: int = 1024
+    num_images: int = 1
+    reference_media: Optional[Union[str, List[str]]] = None
+
+
+@dataclass
+class ImageResponse:
+    """图像生成响应"""
+
+    image_bytes: bytes
+    mime_type: str = "image/png"
+    usage: Dict[str, Any] = field(default_factory=dict)
+    model: str = ""
+    cost_usd: float = 0.0
+
+
 class CircuitBreakerState:
     """熔断器状态"""
 

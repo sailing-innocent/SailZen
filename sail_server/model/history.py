@@ -23,10 +23,10 @@ from sail_server.application.dto.history import (
 def _orm_to_response(event: HistoryEvent) -> HistoryEventResponse:
     """
     将 ORM 模型转换为响应 DTO
-    
+
     Args:
         event: HistoryEvent ORM 对象
-        
+
     Returns:
         HistoryEventResponse: 响应 DTO
     """
@@ -45,7 +45,9 @@ def _orm_to_response(event: HistoryEvent) -> HistoryEventResponse:
     )
 
 
-def create_event_impl(db, event_create: HistoryEventCreateRequest) -> HistoryEventResponse:
+def create_event_impl(
+    db, event_create: HistoryEventCreateRequest
+) -> HistoryEventResponse:
     """
     创建新的历史事件
 
@@ -285,10 +287,10 @@ def search_events_by_keyword_impl(
 def _person_to_response(person: Person) -> PersonResponse:
     """
     将 Person ORM 模型转换为响应 DTO
-    
+
     Args:
         person: Person ORM 对象
-        
+
     Returns:
         PersonResponse: 响应 DTO
     """
@@ -356,7 +358,7 @@ def get_persons_impl(
         List[PersonResponse]: 人物档案响应列表
     """
     query = db.query(Person)
-    
+
     # 按更新时间排序（最新的在前）
     query = query.order_by(Person.updated_at.desc())
 
@@ -435,9 +437,7 @@ def search_persons_by_name_impl(
     Returns:
         List[PersonResponse]: 匹配的人物档案列表
     """
-    query = db.query(Person).filter(
-        Person.name.ilike(f"%{keyword}%")
-    )
+    query = db.query(Person).filter(Person.name.ilike(f"%{keyword}%"))
 
     query = query.order_by(Person.updated_at.desc())
 

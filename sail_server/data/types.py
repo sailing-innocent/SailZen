@@ -21,30 +21,35 @@ from sqlalchemy.dialects.postgresql import ARRAY as PGARRAY
 class JSONB(TypeDecorator):
     """
     Cross-database JSONB type.
-    
+
     Uses PostgreSQL's native JSONB when available,
     falls back to Text with JSON serialization for SQLite.
     """
+
     impl = Text
     cache_ok = True
-    
+
     def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return dialect.type_descriptor(PGJSONB())
         else:
             return dialect.type_descriptor(Text())
-    
-    def process_bind_param(self, value: Optional[Dict[str, Any]], dialect) -> Optional[str]:
+
+    def process_bind_param(
+        self, value: Optional[Dict[str, Any]], dialect
+    ) -> Optional[str]:
         if value is None:
             return None
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return value
         return json.dumps(value)
-    
-    def process_result_value(self, value: Optional[str], dialect) -> Optional[Dict[str, Any]]:
+
+    def process_result_value(
+        self, value: Optional[str], dialect
+    ) -> Optional[Dict[str, Any]]:
         if value is None:
             return None
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return value
         if isinstance(value, str):
             return json.loads(value)
@@ -54,35 +59,40 @@ class JSONB(TypeDecorator):
 class ARRAY(TypeDecorator):
     """
     Cross-database ARRAY type.
-    
+
     Uses PostgreSQL's native ARRAY when available,
     falls back to Text with JSON serialization for SQLite.
     """
+
     impl = Text
     cache_ok = True
-    
+
     def __init__(self, item_type: Type = String, dimensions: int = 1, **kwargs):
         self.item_type = item_type
         self.dimensions = dimensions
         super().__init__(**kwargs)
-    
+
     def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(PGARRAY(self.item_type, dimensions=self.dimensions))
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(
+                PGARRAY(self.item_type, dimensions=self.dimensions)
+            )
         else:
             return dialect.type_descriptor(Text())
-    
+
     def process_bind_param(self, value: Optional[List[Any]], dialect) -> Optional[str]:
         if value is None:
             return None
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return value
         return json.dumps(value)
-    
-    def process_result_value(self, value: Optional[str], dialect) -> Optional[List[Any]]:
+
+    def process_result_value(
+        self, value: Optional[str], dialect
+    ) -> Optional[List[Any]]:
         if value is None:
             return None
-        if dialect.name == 'postgresql':
+        if dialect.name == "postgresql":
             return value
         if isinstance(value, str):
             return json.loads(value)

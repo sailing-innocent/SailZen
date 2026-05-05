@@ -3,7 +3,7 @@ import { type WeightCreateProps, type ExerciseCreateProps, type WeightPlanCreate
 import { type HealthState, useHealthStore } from '@lib/store/health'
 
 import PageLayout from '@components/page_layout'
-import WeightChart from '@components/weight_chart'
+import WeightChart from '@components/health/weight_chart'
 import DatePicker from '@components/date_picker'
 
 import {

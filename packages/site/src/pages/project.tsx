@@ -1,13 +1,12 @@
 import PageLayout from '@components/page_layout'
-import ProjectMissionBoard from '@components/project_mission_board'
-import AddProjectDialog from '@components/project_add_dialog'
-import AddMissionDialog from '@components/mission_add_dialog'
+import ProjectMissionBoard from '@components/project/project_mission_board'
+import AddProjectDialog from '@components/project/project_add_dialog'
+import AddMissionDialog from '@components/project/mission_add_dialog'
+import ChallengeView from '@components/project/challenge_view'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FolderKanban, Target } from 'lucide-react'
 import { useState } from 'react'
 
-// 动态导入 ChallengeView 以避免循环依赖
-import ChallengeView from '@components/challenge_view'
 
 const ProjectPage = () => {
     const [activeTab, setActiveTab] = useState('missions')

@@ -116,6 +116,7 @@ from sail_server.model.necessity.journey import (
 # Residence Controller
 # -------------
 
+
 class ResidenceController(Controller):
     path = "/residence"
 
@@ -234,6 +235,7 @@ class ResidenceController(Controller):
 # Container Controller
 # -------------
 
+
 class ContainerController(Controller):
     path = "/container"
 
@@ -326,6 +328,7 @@ class ContainerController(Controller):
 # -------------
 # Category Controller
 # -------------
+
 
 class CategoryController(Controller):
     path = "/category"
@@ -426,6 +429,7 @@ class CategoryController(Controller):
 # Item Controller
 # -------------
 
+
 class ItemController(Controller):
     path = "/item"
 
@@ -456,7 +460,9 @@ class ItemController(Controller):
         """Get items with optional filtering"""
         db = next(router_dependency)
         return read_items_impl(
-            db, skip, limit,
+            db,
+            skip,
+            limit,
             category_id=category_id,
             item_type=item_type,
             state=item_state,
@@ -585,6 +591,7 @@ class ItemController(Controller):
 # -------------
 # Inventory Controller
 # -------------
+
 
 class InventoryController(Controller):
     path = "/inventory"
@@ -746,6 +753,7 @@ class InventoryController(Controller):
 # Journey Controller
 # -------------
 
+
 class JourneyController(Controller):
     path = "/journey"
 
@@ -775,7 +783,9 @@ class JourneyController(Controller):
         """Get journeys with optional filtering"""
         db = next(router_dependency)
         return read_journeys_impl(
-            db, skip, limit,
+            db,
+            skip,
+            limit,
             status=status,
             from_residence_id=from_residence_id,
             to_residence_id=to_residence_id,

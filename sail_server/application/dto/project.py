@@ -22,14 +22,16 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 # Project State Classes
 # ============================================================================
 
+
 class ProjectState:
     """项目状态管理类"""
-    INVALID = 0   # 无效
-    VALID = 1     # 有效
-    PREPARE = 2   # 准备中
+
+    INVALID = 0  # 无效
+    VALID = 1  # 有效
+    PREPARE = 2  # 准备中
     TRACKING = 3  # 跟踪中
-    PENDING = 4   # 挂起
-    DONE = 5      # 完成
+    PENDING = 4  # 挂起
+    DONE = 5  # 完成
     CANCELED = 6  # 取消
 
     STATE_MAP = {
@@ -75,10 +77,11 @@ class ProjectState:
 
 class MissionState:
     """任务状态管理类"""
-    PENDING = 0   # 待处理
-    READY = 1     # 就绪
-    DOING = 2     # 进行中
-    DONE = 3      # 完成
+
+    PENDING = 0  # 待处理
+    READY = 1  # 就绪
+    DOING = 2  # 进行中
+    DONE = 3  # 完成
     CANCELED = 4  # 取消
 
     STATE_MAP = {
@@ -118,10 +121,12 @@ class MissionState:
 # Project DTOs
 # ============================================================================
 
+
 class ProjectBase(BaseModel):
     """项目基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="项目名称")
     description: str = Field(default="", description="项目描述")
     state: Optional[int] = Field(default=0, description="项目状态")
@@ -131,8 +136,9 @@ class ProjectBase(BaseModel):
 
 class ProjectCreateRequest(BaseModel):
     """创建项目请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="项目名称")
     description: str = Field(default="", description="项目描述")
     start_time_qbw: Optional[int] = Field(default=None, description="开始时间(QBW格式)")
@@ -141,8 +147,9 @@ class ProjectCreateRequest(BaseModel):
 
 class ProjectUpdateRequest(BaseModel):
     """更新项目请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="项目名称")
     description: Optional[str] = Field(default=None, description="项目描述")
     state: Optional[int] = Field(default=None, description="项目状态")
@@ -152,6 +159,7 @@ class ProjectUpdateRequest(BaseModel):
 
 class ProjectResponse(ProjectBase):
     """项目响应"""
+
     id: int = Field(description="项目ID")
     ctime: Optional[datetime] = Field(default=None, description="创建时间")
     mtime: Optional[datetime] = Field(default=None, description="修改时间")
@@ -159,6 +167,7 @@ class ProjectResponse(ProjectBase):
 
 class ProjectListResponse(BaseModel):
     """项目列表响应"""
+
     projects: List[ProjectResponse]
     total: int
 
@@ -167,10 +176,12 @@ class ProjectListResponse(BaseModel):
 # Mission DTOs
 # ============================================================================
 
+
 class MissionBase(BaseModel):
     """任务基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="任务名称")
     description: str = Field(default="", description="任务描述")
     parent_id: Optional[int] = Field(default=None, description="父任务ID")
@@ -181,23 +192,24 @@ class MissionBase(BaseModel):
 
 class MissionCreateRequest(BaseModel):
     """创建任务请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="任务名称")
     description: str = Field(default="", description="任务描述")
     parent_id: Optional[int] = Field(default=None, description="父任务ID")
     project_id: Optional[int] = Field(default=None, description="所属项目ID")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
-    
-    @field_validator('parent_id', 'project_id', mode='before')
+
+    @field_validator("parent_id", "project_id", mode="before")
     @classmethod
     def convert_zero_to_none(cls, v):
         """Convert 0 to None to avoid foreign key constraint violations"""
         if v == 0 or v == "0":
             return None
         return v
-    
-    @field_validator('ddl', mode='before')
+
+    @field_validator("ddl", mode="before")
     @classmethod
     def convert_timestamp_to_datetime(cls, v):
         """Convert Unix timestamp (int/float) to datetime"""
@@ -210,14 +222,15 @@ class MissionCreateRequest(BaseModel):
 
 class MissionUpdateRequest(BaseModel):
     """更新任务请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="任务名称")
     description: Optional[str] = Field(default=None, description="任务描述")
     state: Optional[int] = Field(default=None, description="任务状态")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
-    
-    @field_validator('ddl', mode='before')
+
+    @field_validator("ddl", mode="before")
     @classmethod
     def convert_timestamp_to_datetime(cls, v):
         """Convert Unix timestamp (int/float) to datetime"""
@@ -230,6 +243,7 @@ class MissionUpdateRequest(BaseModel):
 
 class MissionResponse(MissionBase):
     """任务响应"""
+
     id: int = Field(description="任务ID")
     lft: Optional[int] = Field(default=None, description="左值(树形结构)")
     rgt: Optional[int] = Field(default=None, description="右值(树形结构)")
@@ -240,11 +254,13 @@ class MissionResponse(MissionBase):
 
 class MissionListResponse(BaseModel):
     """任务列表响应"""
+
     missions: List[MissionResponse]
     total: int
 
 
 class MissionTreeResponse(BaseModel):
     """任务树响应"""
+
     missions: List[MissionResponse]
     total: int

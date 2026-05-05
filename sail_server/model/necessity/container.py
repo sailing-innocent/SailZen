@@ -47,7 +47,9 @@ def _container_to_response(container: Container) -> ContainerResponse:
     )
 
 
-def create_container_impl(db: Session, data: ContainerCreateRequest) -> ContainerResponse:
+def create_container_impl(
+    db: Session, data: ContainerCreateRequest
+) -> ContainerResponse:
     """Create a new container"""
     container = Container(
         residence_id=data.residence_id,
@@ -78,12 +80,12 @@ def read_containers_impl(
 ) -> List[ContainerResponse]:
     """Read all containers"""
     q = db.query(Container)
-    
+
     if skip > 0:
         q = q.offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    
+
     containers = q.all()
     return [_container_to_response(c) for c in containers]
 
@@ -93,7 +95,9 @@ def read_containers_by_residence_impl(
     residence_id: int,
 ) -> List[ContainerResponse]:
     """Read all containers in a residence"""
-    containers = db.query(Container).filter(Container.residence_id == residence_id).all()
+    containers = (
+        db.query(Container).filter(Container.residence_id == residence_id).all()
+    )
     return [_container_to_response(c) for c in containers]
 
 
@@ -106,7 +110,7 @@ def update_container_impl(
     container = db.query(Container).filter(Container.id == container_id).first()
     if container is None:
         return None
-    
+
     if data.name is not None:
         container.name = data.name
     if data.type is not None:
@@ -116,7 +120,7 @@ def update_container_impl(
     if data.capacity is not None:
         container.capacity = data.capacity
     container.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(container)
     return _container_to_response(container)
@@ -127,7 +131,7 @@ def delete_container_impl(db: Session, container_id: int) -> Optional[dict]:
     container = db.query(Container).filter(Container.id == container_id).first()
     if container is None:
         return None
-    
+
     db.delete(container)
     db.commit()
     return {"id": container_id, "status": "deleted"}
@@ -135,23 +139,28 @@ def delete_container_impl(db: Session, container_id: int) -> Optional[dict]:
 
 def get_container_tree_impl(db: Session, residence_id: int) -> List[dict]:
     """Get container tree structure for a residence"""
-    containers = db.query(Container).filter(Container.residence_id == residence_id).all()
-    
+    containers = (
+        db.query(Container).filter(Container.residence_id == residence_id).all()
+    )
+
     # Build tree structure
-    container_map = {c.id: {
-        "id": c.id,
-        "name": c.name,
-        "type": c.type,
-        "description": c.description or "",
-        "parent_id": c.parent_id,
-        "children": [],
-    } for c in containers}
-    
+    container_map = {
+        c.id: {
+            "id": c.id,
+            "name": c.name,
+            "type": c.type,
+            "description": c.description or "",
+            "parent_id": c.parent_id,
+            "children": [],
+        }
+        for c in containers
+    }
+
     tree = []
     for c in containers:
         if c.parent_id is None or c.parent_id not in container_map:
             tree.append(container_map[c.id])
         else:
             container_map[c.parent_id]["children"].append(container_map[c.id])
-    
+
     return tree

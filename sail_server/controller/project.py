@@ -18,6 +18,7 @@ from sail_server.application.dto.project import (
     MissionUpdateRequest,
     MissionResponse,
 )
+
 from sail_server.model.project import (
     create_project_impl,
     get_project_impl,
@@ -53,7 +54,7 @@ class ProjectController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         skip: int = 0,
-        limit: int = -1
+        limit: int = -1,
     ) -> List[ProjectResponse]:
         db = next(router_dependency)
         projects = get_projects_impl(db, skip, limit)
@@ -125,7 +126,11 @@ class ProjectController(Controller):
         logger.info(f"Deleted project {project_id}")
         if not project:
             raise NotFoundException(detail=f"Project with ID {project_id} not found")
-        return {"id": project_id, "status": "success", "message": "Project deleted successfully"}
+        return {
+            "id": project_id,
+            "status": "success",
+            "message": "Project deleted successfully",
+        }
 
 
 class MissionController(Controller):
@@ -214,7 +219,11 @@ class MissionController(Controller):
         logger.info(f"Deleted mission {mission_id}")
         if not mission:
             raise NotFoundException(detail=f"Mission with ID {mission_id} not found")
-        return {"id": mission_id, "status": "success", "message": "Mission deleted successfully"}
+        return {
+            "id": mission_id,
+            "status": "success",
+            "message": "Mission deleted successfully",
+        }
 
     # ------------------------------------------------
     # Mission State Transition APIs

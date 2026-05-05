@@ -48,7 +48,9 @@ def _residence_to_response(residence: Residence) -> ResidenceResponse:
     )
 
 
-def create_residence_impl(db: Session, data: ResidenceCreateRequest) -> ResidenceResponse:
+def create_residence_impl(
+    db: Session, data: ResidenceCreateRequest
+) -> ResidenceResponse:
     """Create a new residence"""
     residence = Residence(
         name=data.name,
@@ -81,17 +83,17 @@ def read_residences_impl(
 ) -> List[ResidenceResponse]:
     """Read all residences with optional filtering"""
     q = db.query(Residence)
-    
+
     if residence_type is not None:
         q = q.filter(Residence.type == residence_type)
-    
+
     q = q.order_by(Residence.priority.asc())
-    
+
     if skip > 0:
         q = q.offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    
+
     residences = q.all()
     return [_residence_to_response(r) for r in residences]
 
@@ -105,7 +107,7 @@ def update_residence_impl(
     residence = db.query(Residence).filter(Residence.id == residence_id).first()
     if residence is None:
         return None
-    
+
     if data.name is not None:
         residence.name = data.name
     if data.code is not None:
@@ -121,7 +123,7 @@ def update_residence_impl(
     if data.priority is not None:
         residence.priority = data.priority
     residence.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(residence)
     return _residence_to_response(residence)
@@ -132,7 +134,7 @@ def delete_residence_impl(db: Session, residence_id: int) -> Optional[dict]:
     residence = db.query(Residence).filter(Residence.id == residence_id).first()
     if residence is None:
         return None
-    
+
     db.delete(residence)
     db.commit()
     return {"id": residence_id, "status": "deleted"}

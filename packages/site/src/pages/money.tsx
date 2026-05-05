@@ -2,10 +2,10 @@ import { useEffect } from 'react'
 import PageLayout from '@components/page_layout'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import AccountsDataTable from '@components/accounts_data_table'
-import TransactionsDataTable from '@components/transactions_data_table'
-import Statistics from '@components/statistics'
-import BudgetsDataTable from '@components/budgets_data_table'
+import AccountsDataTable from '@components/finance/accounts_data_table'
+import TransactionsDataTable from '@components/finance/transactions_data_table'
+import Statistics from '@components/finance/statistics'
+import BudgetsDataTable from '@components/finance/budgets_data_table'
 import { useFinanceTagsStore } from '@lib/store'
 
 const MoneyPage = () => {

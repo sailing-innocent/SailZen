@@ -97,17 +97,25 @@ def _replenishment_to_response(replenishment: Replenishment) -> ReplenishmentRes
     )
 
 
-def create_inventory_impl(db: Session, data: InventoryCreateRequest) -> InventoryResponse:
+def create_inventory_impl(
+    db: Session, data: InventoryCreateRequest
+) -> InventoryResponse:
     """Create a new inventory record"""
     # Check if inventory already exists for this item/residence/container combination
-    existing = db.query(Inventory).filter(
-        and_(
-            Inventory.item_id == data.item_id,
-            Inventory.residence_id == data.residence_id,
-            Inventory.container_id == data.container_id if data.container_id else Inventory.container_id.is_(None),
+    existing = (
+        db.query(Inventory)
+        .filter(
+            and_(
+                Inventory.item_id == data.item_id,
+                Inventory.residence_id == data.residence_id,
+                Inventory.container_id == data.container_id
+                if data.container_id
+                else Inventory.container_id.is_(None),
+            )
         )
-    ).first()
-    
+        .first()
+    )
+
     if existing:
         # Update existing inventory
         existing.quantity = (existing.quantity or Decimal("0")) + data.quantity
@@ -115,7 +123,7 @@ def create_inventory_impl(db: Session, data: InventoryCreateRequest) -> Inventor
         db.commit()
         db.refresh(existing)
         return _inventory_to_response(existing)
-    
+
     inventory = Inventory(
         item_id=data.item_id,
         residence_id=data.residence_id,
@@ -147,12 +155,12 @@ def read_inventories_impl(
 ) -> List[InventoryResponse]:
     """Read all inventory records"""
     q = db.query(Inventory)
-    
+
     if skip > 0:
         q = q.offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    
+
     inventories = q.all()
     return [_inventory_to_response(i) for i in inventories]
 
@@ -162,9 +170,9 @@ def read_inventories_by_residence_impl(
     residence_id: int,
 ) -> List[InventoryResponse]:
     """Read all inventory records for a residence"""
-    inventories = db.query(Inventory).filter(
-        Inventory.residence_id == residence_id
-    ).all()
+    inventories = (
+        db.query(Inventory).filter(Inventory.residence_id == residence_id).all()
+    )
     return [_inventory_to_response(i) for i in inventories]
 
 
@@ -173,9 +181,7 @@ def read_inventories_by_item_impl(
     item_id: int,
 ) -> List[InventoryResponse]:
     """Read all inventory records for an item (locations)"""
-    inventories = db.query(Inventory).filter(
-        Inventory.item_id == item_id
-    ).all()
+    inventories = db.query(Inventory).filter(Inventory.item_id == item_id).all()
     return [_inventory_to_response(i) for i in inventories]
 
 
@@ -188,7 +194,7 @@ def update_inventory_impl(
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         return None
-    
+
     if data.container_id is not None:
         inventory.container_id = data.container_id
     if data.quantity is not None:
@@ -202,7 +208,7 @@ def update_inventory_impl(
     if data.notes is not None:
         inventory.notes = data.notes
     inventory.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(inventory)
     return _inventory_to_response(inventory)
@@ -213,7 +219,7 @@ def delete_inventory_impl(db: Session, inventory_id: int) -> Optional[dict]:
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         return None
-    
+
     db.delete(inventory)
     db.commit()
     return {"id": inventory_id, "status": "deleted"}
@@ -228,7 +234,7 @@ def record_consumption_impl(
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         raise ValueError(f"Inventory {inventory_id} not found")
-    
+
     # Create consumption record
     consumption = Consumption(
         inventory_id=inventory_id,
@@ -237,14 +243,14 @@ def record_consumption_impl(
         htime=data.htime or datetime.now(),
     )
     db.add(consumption)
-    
+
     # Update inventory quantity
     inventory.quantity = (inventory.quantity or Decimal("0")) - data.quantity
     inventory.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(inventory)
-    
+
     return _inventory_to_response(inventory)
 
 
@@ -257,7 +263,7 @@ def record_replenishment_impl(
     inventory = db.query(Inventory).filter(Inventory.id == inventory_id).first()
     if inventory is None:
         raise ValueError(f"Inventory {inventory_id} not found")
-    
+
     # Create replenishment record
     replenishment = Replenishment(
         inventory_id=inventory_id,
@@ -270,14 +276,14 @@ def record_replenishment_impl(
         htime=data.htime or datetime.now(),
     )
     db.add(replenishment)
-    
+
     # Update inventory quantity
     inventory.quantity = (inventory.quantity or Decimal("0")) + data.quantity
     inventory.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(inventory)
-    
+
     return _inventory_to_response(inventory)
 
 
@@ -298,18 +304,18 @@ def transfer_inventory_impl(
     )
     if from_container_id:
         source_filter = and_(source_filter, Inventory.container_id == from_container_id)
-    
+
     source_inv = db.query(Inventory).filter(source_filter).first()
     if source_inv is None:
         raise ValueError("Source inventory not found")
-    
+
     if source_inv.quantity < quantity:
         raise ValueError("Insufficient quantity in source inventory")
-    
+
     # Decrease source inventory
     source_inv.quantity = source_inv.quantity - quantity
     source_inv.mtime = datetime.now()
-    
+
     # Find or create destination inventory
     dest_filter = and_(
         Inventory.item_id == item_id,
@@ -319,9 +325,9 @@ def transfer_inventory_impl(
         dest_filter = and_(dest_filter, Inventory.container_id == to_container_id)
     else:
         dest_filter = and_(dest_filter, Inventory.container_id.is_(None))
-    
+
     dest_inv = db.query(Inventory).filter(dest_filter).first()
-    
+
     if dest_inv:
         dest_inv.quantity = dest_inv.quantity + quantity
         dest_inv.mtime = datetime.now()
@@ -334,9 +340,9 @@ def transfer_inventory_impl(
             unit=source_inv.unit,
         )
         db.add(dest_inv)
-    
+
     db.commit()
-    
+
     return {
         "source": _inventory_to_response(source_inv),
         "destination": _inventory_to_response(dest_inv),
@@ -353,10 +359,10 @@ def get_low_stock_impl(
         Inventory.quantity <= Inventory.min_quantity,
         Inventory.min_quantity > 0,
     )
-    
+
     if residence_id:
         q = q.filter(Inventory.residence_id == residence_id)
-    
+
     inventories = q.all()
     return [_inventory_to_response(i) for i in inventories]
 
@@ -367,19 +373,18 @@ def get_inventory_stats_impl(
 ) -> dict:
     """Get inventory statistics"""
     q = db.query(Inventory)
-    
+
     if residence_id:
         q = q.filter(Inventory.residence_id == residence_id)
-    
+
     inventories = q.all()
-    
+
     total_items = len(inventories)
     total_quantity = sum(float(i.quantity or 0) for i in inventories)
     low_stock_count = sum(
-        1 for i in inventories
-        if i.min_quantity and i.quantity <= i.min_quantity
+        1 for i in inventories if i.min_quantity and i.quantity <= i.min_quantity
     )
-    
+
     return {
         "total_items": total_items,
         "total_quantity": str(total_quantity),

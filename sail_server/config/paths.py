@@ -73,5 +73,3 @@ FILE_STORAGE_DIR: Path = Path(
 SQLITE_DB_PATH: Path = Path(
     os.environ.get("SQLITE_PATH", str(SERVER_DATA_DIR / "sailzen.db"))
 ).resolve()
-
-

@@ -117,6 +117,31 @@ class FeishuBotAgent:
         logger.info("FeishuBotAgent initialized (v3.0)")
 
     # ------------------------------------------------------------------
+    # Config reload
+    # ------------------------------------------------------------------
+
+    def reload_config(self) -> bool:
+        """Reload config from disk and update all dependent components.
+
+        Returns:
+            True if config was reloaded successfully, False otherwise.
+        """
+        if not self.config or not self.config.config_path:
+            return False
+        try:
+            from sail_bot.config import load_config
+            new_config = load_config(self.config.config_path)
+            self.config = new_config
+            self._handler_ctx.config = new_config
+            self.process_mgr.update_projects(new_config.projects)
+            self.brain.projects = new_config.projects
+            logger.info("Config reloaded from %s", new_config.config_path)
+            return True
+        except Exception as exc:
+            logger.error("Failed to reload config: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------
     # Context management
     # ------------------------------------------------------------------
 

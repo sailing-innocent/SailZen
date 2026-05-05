@@ -59,6 +59,12 @@ class HandlerContext:
         if self.agent:
             self.agent._save_contexts()
 
+    def reload_config(self) -> bool:
+        """Reload config from disk via agent."""
+        if self.agent and hasattr(self.agent, "reload_config"):
+            return self.agent.reload_config()
+        return False
+
     def request_self_update(
         self,
         reason: str = "用户手动触发",

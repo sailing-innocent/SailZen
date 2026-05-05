@@ -21,10 +21,11 @@ from pydantic import BaseModel, Field, ConfigDict
 # ServiceAccount DTOs
 # ============================================================================
 
+
 class ServiceAccountBase(BaseModel):
     """服务账户基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
     name: str = Field(description="账户名称")
     entry: str = Field(description="入口网站/应用名称")
     username: str = Field(description="用户名")
@@ -35,13 +36,15 @@ class ServiceAccountBase(BaseModel):
 
 class ServiceAccountCreateRequest(ServiceAccountBase):
     """创建服务账户请求"""
+
     pass
 
 
 class ServiceAccountUpdateRequest(BaseModel):
     """更新服务账户请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="账户名称")
     entry: Optional[str] = Field(default=None, description="入口网站/应用名称")
     username: Optional[str] = Field(default=None, description="用户名")
@@ -52,10 +55,12 @@ class ServiceAccountUpdateRequest(BaseModel):
 
 class ServiceAccountResponse(ServiceAccountBase):
     """服务账户响应"""
+
     id: int = Field(description="账户ID")
 
 
 class ServiceAccountListResponse(BaseModel):
     """服务账户列表响应"""
+
     accounts: list[ServiceAccountResponse]
     total: int

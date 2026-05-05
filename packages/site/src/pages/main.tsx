@@ -1,6 +1,6 @@
 import React from 'react'
 import PageLayout from '@components/page_layout'
-import ReminderTodoList from '@components/reminder_todo_list'
+import ReminderTodoList from '@components/project/reminder_todo_list'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useServerStore } from '@lib/store/'

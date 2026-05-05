@@ -1,5 +1,9 @@
 from sail_server.infrastructure.orm.finance import Account, Transaction
-from sail_server.application.dto.finance import TransactionData, AccountState, TransactionState
+from sail_server.application.dto.finance import (
+    TransactionData,
+    AccountState,
+    TransactionState,
+)
 from sail_server.utils.finance_helpers import _acc, _acc_inv, _htime, _htime_inv
 
 from sail_server.utils.money import Money
@@ -126,7 +130,7 @@ def _build_transaction_query(
 ):
     """Build the base query for transactions with filtering."""
     q = db.query(Transaction).filter(Transaction.state != 0)
-    
+
     if len(_tags) > 0:
         condition = None
         for tag in _tags:
@@ -140,7 +144,7 @@ def _build_transaction_query(
                         condition = condition & Transaction.tags.like(f"%{tag}%")
         if condition is not None:
             q = q.filter(condition)
-    
+
     if _desc is not None:
         q = q.filter(Transaction.description.like(f"%{_desc}%"))
     if from_time is not None:
@@ -151,7 +155,7 @@ def _build_transaction_query(
         q = q.filter(Transaction.value >= str(min_value))
     if max_value is not None:
         q = q.filter(Transaction.value <= str(max_value))
-    
+
     return q
 
 
@@ -167,7 +171,7 @@ def read_transactions_impl(
 ):
     q = _build_transaction_query(db, from_time, to_time, _tags, tag_op, _desc)
     q = q.order_by(Transaction.htime.desc())
-    
+
     if skip >= 0:
         q = q.offset(skip)
     if limit > 0:
@@ -195,7 +199,7 @@ def read_transactions_paginated_impl(
 ):
     """
     Get transactions with pagination support.
-    
+
     Returns:
         Dict with pagination metadata and data:
         {
@@ -209,29 +213,31 @@ def read_transactions_paginated_impl(
         }
     """
     from sqlalchemy import func
-    
+
     # Build base query
-    q = _build_transaction_query(db, from_time, to_time, _tags, tag_op, _desc, min_value, max_value)
-    
+    q = _build_transaction_query(
+        db, from_time, to_time, _tags, tag_op, _desc, min_value, max_value
+    )
+
     # Get total count (without pagination)
     total = q.count()
-    
+
     # Apply sorting
     sort_column = getattr(Transaction, sort_by, Transaction.htime)
     if sort_order == "asc":
         q = q.order_by(sort_column.asc())
     else:
         q = q.order_by(sort_column.desc())
-    
+
     # Apply pagination
     skip = (page - 1) * page_size
     q = q.offset(skip).limit(page_size)
-    
+
     transactions = q.all()
     data = [read_from_trans(t) for t in transactions] if transactions else []
-    
+
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
-    
+
     return {
         "data": data,
         "total": total,
@@ -333,7 +339,11 @@ def update_transaction_impl(
     # if -1 means third party, write NULL
     transaction.from_acc_id = _acc(transaction_update.from_acc_id)
     transaction.to_acc_id = _acc(transaction_update.to_acc_id)
-    transaction.budget_id = transaction_update.budget_id if transaction_update.budget_id is not None else None
+    transaction.budget_id = (
+        transaction_update.budget_id
+        if transaction_update.budget_id is not None
+        else None
+    )
     transaction.prev_value = transaction.value
     transaction.value = transaction_update.value
     transaction.description = transaction_update.description
@@ -421,7 +431,7 @@ def get_tag_patterns_impl(
 
     Returns:
         Dict containing:
-        - patterns: list of {description, tags, count, example_ids} 
+        - patterns: list of {description, tags, count, example_ids}
         - total_tagged: 已标签交易总数
         - total_untagged: 未标签交易总数
         - tag_vocabulary: 所有出现过的 tag 列表
@@ -532,9 +542,7 @@ def batch_tag_transactions_impl(
             continue
 
         try:
-            transaction = (
-                db.query(Transaction).filter(Transaction.id == tid).first()
-            )
+            transaction = db.query(Transaction).filter(Transaction.id == tid).first()
             if transaction is None:
                 failed.append({"id": tid, "error": "Transaction not found"})
                 continue
@@ -572,7 +580,7 @@ def get_transaction_stats_impl(
 ):
     """
     Get transaction statistics with filtering options.
-    
+
     Args:
         db: Database session
         skip: Number of records to skip
@@ -585,7 +593,7 @@ def get_transaction_stats_impl(
         min_value: Minimum transaction value
         max_value: Maximum transaction value
         return_list: If True, include transaction data in response; if False, only return stats
-    
+
     Returns:
         Dict with statistics and optional data field:
         {
@@ -599,7 +607,7 @@ def get_transaction_stats_impl(
         }
     """
     q = db.query(Transaction).filter(Transaction.state != 0)
-    
+
     # Apply tag filtering
     if len(_tags) > 0:
         condition = None
@@ -614,28 +622,28 @@ def get_transaction_stats_impl(
                         condition = condition & Transaction.tags.like(f"%{tag}%")
         if condition is not None:
             q = q.filter(condition)
-    
+
     # Apply description filtering
     if _desc is not None:
         q = q.filter(Transaction.description.like(f"%{_desc}%"))
-    
+
     # Apply time filtering
     if from_time is not None:
         q = q.filter(Transaction.htime >= _htime(from_time))
     if to_time is not None:
         q = q.filter(Transaction.htime <= _htime(to_time))
-    
+
     # Apply value filtering
     if min_value is not None:
         q = q.filter(Transaction.value >= str(min_value))
     if max_value is not None:
         q = q.filter(Transaction.value <= str(max_value))
-    
+
     q = q.order_by(Transaction.htime.desc())
-    
+
     # Get all transactions for statistics calculation
     all_transactions = q.all()
-    
+
     # Calculate statistics
     if all_transactions is None:
         stats = {
@@ -644,19 +652,19 @@ def get_transaction_stats_impl(
             "expense_count": 0,
             "income_total": "0.0",
             "expense_total": "0.0",
-            "net_total": "0.0"
+            "net_total": "0.0",
         }
     else:
         income_total = Money("0.0")
         expense_total = Money("0.0")
         income_count = 0
         expense_count = 0
-        
+
         for transaction in all_transactions:
             from_acc_id = _acc_inv(transaction.from_acc_id)
             to_acc_id = _acc_inv(transaction.to_acc_id)
             value = Money(transaction.value)
-            
+
             # Income: from_acc_id=-1, to_acc_id>0
             if from_acc_id == -1 and to_acc_id > 0:
                 income_total += value
@@ -665,18 +673,18 @@ def get_transaction_stats_impl(
             elif from_acc_id > 0 and to_acc_id == -1:
                 expense_total += value
                 expense_count += 1
-        
+
         net_total = income_total - expense_total
-        
+
         stats = {
             "total_count": len(all_transactions),
             "income_count": income_count,
             "expense_count": expense_count,
             "income_total": str(income_total),
             "expense_total": str(expense_total),
-            "net_total": str(net_total)
+            "net_total": str(net_total),
         }
-    
+
     # Add data field if return_list is True
     if return_list:
         # Apply pagination for data
@@ -685,11 +693,13 @@ def get_transaction_stats_impl(
             data_q = data_q.offset(skip)
         if limit > 0:
             data_q = data_q.limit(limit)
-        
+
         transactions = data_q.all()
         if transactions is None:
             stats["data"] = []
         else:
-            stats["data"] = [read_from_trans(transaction) for transaction in transactions]
-    
+            stats["data"] = [
+                read_from_trans(transaction) for transaction in transactions
+            ]
+
     return stats

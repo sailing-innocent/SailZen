@@ -118,7 +118,9 @@ def create_tag_impl(db, req: FinanceTagCreateRequest) -> FinanceTagResponse:
     return _orm_to_response(tag)
 
 
-def update_tag_impl(db, tag_id: int, req: FinanceTagUpdateRequest) -> Optional[FinanceTagResponse]:
+def update_tag_impl(
+    db, tag_id: int, req: FinanceTagUpdateRequest
+) -> Optional[FinanceTagResponse]:
     """更新标签"""
     tag = db.query(FinanceTag).filter(FinanceTag.id == tag_id).first()
     if tag is None:
@@ -177,7 +179,9 @@ def seed_default_tags_impl(db) -> int:
     """
     created_count = 0
     for tag_data in DEFAULT_TAGS:
-        existing = db.query(FinanceTag).filter(FinanceTag.name == tag_data["name"]).first()
+        existing = (
+            db.query(FinanceTag).filter(FinanceTag.name == tag_data["name"]).first()
+        )
         if existing is None:
             tag = FinanceTag(
                 name=tag_data["name"],

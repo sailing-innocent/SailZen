@@ -16,7 +16,14 @@
 """
 
 from sail_server.infrastructure.orm.finance import Budget, BudgetItem, Transaction
-from sail_server.application.dto.finance import BudgetData, BudgetItemData, TransactionData, BudgetDirectionEnum, ItemTypeEnum, ItemStatusEnum
+from sail_server.application.dto.finance import (
+    BudgetData,
+    BudgetItemData,
+    TransactionData,
+    BudgetDirectionEnum,
+    ItemTypeEnum,
+    ItemStatusEnum,
+)
 
 # 向后兼容的别名
 BudgetDirection = BudgetDirectionEnum
@@ -33,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 # ============ Conversion Functions ============
 
+
 def budget_item_to_data(item: BudgetItem) -> BudgetItemData:
     """Convert BudgetItem ORM to BudgetItemData"""
     # Calculate total amount
@@ -40,7 +48,7 @@ def budget_item_to_data(item: BudgetItem) -> BudgetItemData:
         total = item.amount or "0.0"
     else:
         total = (Money(item.amount or "0.0") * (item.period_count or 1)).value_str
-    
+
     return BudgetItemData(
         id=item.id,
         budget_id=item.budget_id,
@@ -87,7 +95,7 @@ def budget_to_data(budget: Budget, include_items: bool = True) -> BudgetData:
     items = []
     if include_items and budget.items:
         items = [budget_item_to_data(item) for item in budget.items]
-    
+
     return BudgetData(
         id=budget.id,
         name=budget.name or "",
@@ -113,7 +121,7 @@ def budget_from_data(data: BudgetData) -> Budget:
         start_date=_htime(data.start_date) if data.start_date else None,
         end_date=_htime(data.end_date) if data.end_date else None,
         total_amount=data.total_amount,
-        direction=data.direction if hasattr(data, 'direction') else 0,
+        direction=data.direction if hasattr(data, "direction") else 0,
         htime=_htime(data.htime) if data.htime else datetime.now(),
         ctime=datetime.now(),
         mtime=datetime.now(),
@@ -144,59 +152,66 @@ def calculate_budget_direction(items: List[BudgetItem]) -> int:
     """
     expense_total = Money("0.0")
     income_total = Money("0.0")
-    
+
     for item in items:
         if item.item_type == ItemType.FIXED:
             item_total = Money(item.amount or "0.0")
         else:
             item_total = Money(item.amount or "0.0") * (item.period_count or 1)
-        
+
         if item.direction == BudgetDirection.INCOME:
             income_total += item_total
         else:
             expense_total += item_total
-    
+
     # If income total is greater, it's an income budget
-    return BudgetDirection.INCOME if income_total > expense_total else BudgetDirection.EXPENSE
+    return (
+        BudgetDirection.INCOME
+        if income_total > expense_total
+        else BudgetDirection.EXPENSE
+    )
 
 
 # ============ Budget CRUD ============
 
+
 def create_budget_impl(db, data: BudgetData) -> BudgetData:
     """
     Create a budget with items.
-    
+
     This is the unified API for creating any type of budget.
     The caller provides the budget info and a list of items.
     """
     budget = budget_from_data(data)
     db.add(budget)
     db.flush()  # Get the budget ID
-    
+
     # Create items if provided
     if data.items:
         for item_data in data.items:
             item = budget_item_from_data(item_data)
             item.budget_id = budget.id
             db.add(item)
-    
+
     db.flush()
-    
+
     # Use provided total_amount if valid, otherwise recalculate from items
     if data.total_amount and data.total_amount != "0.0":
         budget.total_amount = data.total_amount
     else:
         budget.total_amount = calculate_budget_total(budget.items).value_str
-    
+
     # Calculate direction from items
     budget.direction = calculate_budget_direction(budget.items)
-    
+
     db.commit()
     db.refresh(budget)
     return budget_to_data(budget)
 
 
-def read_budget_impl(db, budget_id: int, include_items: bool = True) -> Optional[BudgetData]:
+def read_budget_impl(
+    db, budget_id: int, include_items: bool = True
+) -> Optional[BudgetData]:
     """Read a budget by ID"""
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if budget is None:
@@ -264,13 +279,13 @@ def update_budget_impl(db, budget_id: int, data: BudgetData) -> Optional[BudgetD
     budget.end_date = _htime(data.end_date) if data.end_date else None
     budget.htime = _htime(data.htime) if data.htime else budget.htime
     budget.mtime = datetime.now()
-    
+
     # Update total_amount if provided, otherwise recalculate from items
     if data.total_amount and data.total_amount != "0.0":
         budget.total_amount = data.total_amount
     else:
         budget.total_amount = calculate_budget_total(budget.items).value_str
-    
+
     # Recalculate direction from items
     budget.direction = calculate_budget_direction(budget.items)
 
@@ -296,21 +311,22 @@ def delete_budget_impl(db, budget_id: int) -> Optional[dict]:
 
 # ============ Budget Item CRUD ============
 
+
 def create_item_impl(db, budget_id: int, data: BudgetItemData) -> BudgetItemData:
     """Create a budget item"""
     budget = db.query(Budget).filter(Budget.id == budget_id).first()
     if budget is None:
         raise ValueError(f"Budget {budget_id} not found")
-    
+
     item = budget_item_from_data(data)
     item.budget_id = budget_id
     db.add(item)
     db.flush()
-    
+
     # Update budget total
     budget.total_amount = calculate_budget_total(budget.items).value_str
     budget.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(item)
     return budget_item_to_data(item)
@@ -318,7 +334,12 @@ def create_item_impl(db, budget_id: int, data: BudgetItemData) -> BudgetItemData
 
 def read_items_impl(db, budget_id: int) -> List[BudgetItemData]:
     """Read all items for a budget"""
-    items = db.query(BudgetItem).filter(BudgetItem.budget_id == budget_id).order_by(BudgetItem.id).all()
+    items = (
+        db.query(BudgetItem)
+        .filter(BudgetItem.budget_id == budget_id)
+        .order_by(BudgetItem.id)
+        .all()
+    )
     return [budget_item_to_data(item) for item in items]
 
 
@@ -330,12 +351,14 @@ def read_item_impl(db, item_id: int) -> Optional[BudgetItemData]:
     return budget_item_to_data(item)
 
 
-def update_item_impl(db, item_id: int, data: BudgetItemData) -> Optional[BudgetItemData]:
+def update_item_impl(
+    db, item_id: int, data: BudgetItemData
+) -> Optional[BudgetItemData]:
     """Update a budget item"""
     item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
     if item is None:
         return None
-    
+
     item.name = data.name
     item.description = data.description
     item.direction = data.direction
@@ -348,13 +371,13 @@ def update_item_impl(db, item_id: int, data: BudgetItemData) -> Optional[BudgetI
     item.status = data.status
     item.due_date = _htime(data.due_date) if data.due_date else None
     item.mtime = datetime.now()
-    
+
     # Update budget total
     budget = item.budget
     if budget:
         budget.total_amount = calculate_budget_total(budget.items).value_str
         budget.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(item)
     return budget_item_to_data(item)
@@ -365,38 +388,39 @@ def delete_item_impl(db, item_id: int) -> Optional[dict]:
     item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
     if item is None:
         return None
-    
+
     budget = item.budget
     db.delete(item)
-    
+
     # Update budget total
     if budget:
         db.flush()
         budget.total_amount = calculate_budget_total(budget.items).value_str
         budget.mtime = datetime.now()
-    
+
     db.commit()
     return {"id": item_id, "status": "success", "message": "Item deleted"}
 
 
 # ============ Item Operations ============
 
+
 def advance_period_impl(db, item_id: int) -> BudgetItemData:
     """Advance a periodic item to the next period"""
     item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
     if item is None:
         raise ValueError(f"Item {item_id} not found")
-    
+
     if item.current_period >= item.period_count:
         raise ValueError(f"Item {item_id} has completed all periods")
-    
+
     item.current_period += 1
     if item.current_period >= item.period_count:
         item.status = ItemStatus.COMPLETED
     else:
         item.status = ItemStatus.IN_PROGRESS
     item.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(item)
     return budget_item_to_data(item)
@@ -407,33 +431,36 @@ def record_refund_impl(db, item_id: int, refund_amount: str) -> BudgetItemData:
     item = db.query(BudgetItem).filter(BudgetItem.id == item_id).first()
     if item is None:
         raise ValueError(f"Item {item_id} not found")
-    
+
     if not item.is_refundable:
         raise ValueError(f"Item {item_id} is not refundable")
-    
+
     current_refund = Money(item.refund_amount or "0.0")
     new_refund = current_refund + Money(refund_amount)
-    
+
     # Calculate item total
     if item.item_type == ItemType.FIXED:
         item_total = Money(item.amount or "0.0")
     else:
         item_total = Money(item.amount or "0.0") * item.period_count
-    
+
     if new_refund > item_total:
-        raise ValueError(f"Refund exceeds item total. Max: {item_total - current_refund}")
-    
+        raise ValueError(
+            f"Refund exceeds item total. Max: {item_total - current_refund}"
+        )
+
     item.refund_amount = str(new_refund)
     if new_refund >= item_total:
         item.status = ItemStatus.REFUNDED
     item.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(item)
     return budget_item_to_data(item)
 
 
 # ============ Budget Statistics ============
+
 
 def get_budget_used_amount_impl(
     db, budget: Budget, from_time: float = None, to_time: float = None
@@ -447,28 +474,27 @@ def get_budget_used_amount_impl(
 
     # Query transactions linked to this budget
     q = db.query(Transaction).filter(
-        Transaction.state != 0,
-        Transaction.budget_id == budget.id
+        Transaction.state != 0, Transaction.budget_id == budget.id
     )
-    
+
     if from_time is not None:
         q = q.filter(Transaction.htime >= _htime(from_time))
     if to_time is not None:
         q = q.filter(Transaction.htime <= _htime(to_time))
-    
+
     transactions = q.all()
-    
+
     for trans in transactions:
         from_acc_id = trans.from_acc_id if trans.from_acc_id is not None else -1
         to_acc_id = trans.to_acc_id if trans.to_acc_id is not None else -1
-        
+
         # Expense: from account to external
         if from_acc_id > 0 and to_acc_id == -1:
             expense_amount += Money(trans.value)
         # Income: from external to account
         elif from_acc_id == -1 and to_acc_id > 0:
             income_amount += Money(trans.value)
-    
+
     return {"expense": expense_amount, "income": income_amount}
 
 
@@ -504,7 +530,7 @@ def get_budget_stats_impl(
 
         budget_amount = Money(budget_data.total_amount)
         used = get_budget_used_amount_impl(db, budget, from_time, to_time)
-        
+
         # Calculate used amount (expense - income for net spending)
         used_amount = used["expense"]
         remaining_amount = budget_amount - used_amount
@@ -514,8 +540,7 @@ def get_budget_stats_impl(
 
         # Count transactions
         q = db.query(Transaction).filter(
-            Transaction.state != 0,
-            Transaction.budget_id == budget.id
+            Transaction.state != 0, Transaction.budget_id == budget.id
         )
         if from_time is not None:
             q = q.filter(Transaction.htime >= _htime(from_time))
@@ -523,15 +548,17 @@ def get_budget_stats_impl(
             q = q.filter(Transaction.htime <= _htime(to_time))
         transaction_count = q.count()
 
-        budget_details.append({
-            "budget": budget_data,
-            "used_amount": used_amount.value_str,
-            "remaining_amount": remaining_amount.value_str,
-            "transaction_count": transaction_count,
-        })
+        budget_details.append(
+            {
+                "budget": budget_data,
+                "used_amount": used_amount.value_str,
+                "remaining_amount": remaining_amount.value_str,
+                "transaction_count": transaction_count,
+            }
+        )
 
     total_remaining = total_budget_amount - total_used_amount
-    
+
     result = {
         "total_budget_count": len(budgets),
         "total_budget_amount": total_budget_amount.value_str,
@@ -554,23 +581,24 @@ def get_budget_analysis_impl(db, budget_id: int) -> Optional[Dict]:
     budget_data = budget_to_data(budget, include_items=True)
     budget_amount = Money(budget_data.total_amount)
     used = get_budget_used_amount_impl(db, budget)
-    
+
     # Calculate used amount (expense for spending tracking)
     used_amount = used["expense"]
     remaining_amount = budget_amount - used_amount
-    
+
     usage_percentage = 0.0
     if budget_amount.value > 0:
         usage_percentage = float((used_amount.value / budget_amount.value) * 100)
 
     # Get transactions
     from sail_server.model.finance.transaction import read_from_trans
-    
-    q = db.query(Transaction).filter(
-        Transaction.state != 0,
-        Transaction.budget_id == budget.id
-    ).order_by(Transaction.htime.desc())
-    
+
+    q = (
+        db.query(Transaction)
+        .filter(Transaction.state != 0, Transaction.budget_id == budget.id)
+        .order_by(Transaction.htime.desc())
+    )
+
     transactions = [read_from_trans(t) for t in q.all()]
 
     # Group by tag
@@ -582,7 +610,7 @@ def get_budget_analysis_impl(db, budget_id: int) -> Optional[Dict]:
                 if tag:
                     if tag not in by_tag:
                         by_tag[tag] = {"amount": Money("0.0"), "count": 0}
-                    
+
                     by_tag[tag]["amount"] += Money(trans.value)
                     by_tag[tag]["count"] += 1
 
@@ -601,6 +629,7 @@ def get_budget_analysis_impl(db, budget_id: int) -> Optional[Dict]:
 
 
 # ============ Transaction Linking ============
+
 
 def consume_budget_impl(
     db, budget_id: int, transaction_create: TransactionData
@@ -668,16 +697,19 @@ def link_transaction_impl(db, budget_id: int, transaction_id: int) -> Transactio
         raise ValueError(f"Transaction {transaction_id} not found")
 
     if transaction.budget_id is not None and transaction.budget_id != budget_id:
-        raise ValueError(f"Transaction is already linked to budget {transaction.budget_id}")
+        raise ValueError(
+            f"Transaction is already linked to budget {transaction.budget_id}"
+        )
 
     transaction.budget_id = budget_id
     transaction.mtime = datetime.now()
     budget.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(transaction)
 
     from sail_server.model.finance.transaction import read_from_trans
+
     return read_from_trans(transaction)
 
 
@@ -702,11 +734,13 @@ def unlink_transaction_impl(db, transaction_id: int) -> TransactionData:
     db.refresh(transaction)
 
     from sail_server.model.finance.transaction import read_from_trans
+
     return read_from_trans(transaction)
 
 
 # ============ Legacy Compatibility ============
 # Keep old function names for backward compatibility
+
 
 def read_from_budget(budget: Budget, include_items: bool = False) -> BudgetData:
     """Legacy: Use budget_to_data instead"""

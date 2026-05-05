@@ -24,6 +24,8 @@ from lark_oapi.api.im.v1 import (
     PatchMessageRequestBody,
     ReplyMessageRequest,
     ReplyMessageRequestBody,
+    CreateImageRequest,
+    CreateImageRequestBody,
 )
 
 from sail.feishu_card_kit.tracker import (
@@ -348,6 +350,82 @@ class FeishuMessagingClient:
             return True
         except Exception as exc:
             logger.error("Card update error: %s", exc, exc_info=True)
+            return False
+
+    # ------------------------------------------------------------------
+    # Image helpers
+    # ------------------------------------------------------------------
+
+    def _upload_image(self, image_bytes: bytes, image_type: str = "message") -> Optional[str]:
+        """Upload image to Feishu and return image_key."""
+        import io
+        if not self.lark_client:
+            logger.warning("(no client) Would upload image")
+            return None
+        try:
+            body = (
+                CreateImageRequestBody.builder()
+                .image(io.BytesIO(image_bytes))
+                .image_type(image_type)
+                .build()
+            )
+            req = CreateImageRequest.builder().request_body(body).build()
+            resp = self.lark_client.im.v1.image.create(req)
+            if resp.success() and resp.data and resp.data.image_key:
+                return resp.data.image_key
+            logger.error("Image upload failed: %s", resp.msg)
+            return None
+        except Exception as exc:
+            logger.error("Image upload error: %s", exc, exc_info=True)
+            return None
+
+    def send_image(self, chat_id: str, image_bytes: bytes) -> bool:
+        """Send an image to a chat."""
+        image_key = self._upload_image(image_bytes)
+        if not image_key:
+            return False
+        try:
+            content = json.dumps({"image_key": image_key}, ensure_ascii=False)
+            request = (
+                CreateMessageRequest.builder()
+                .receive_id_type("chat_id")
+                .request_body(
+                    CreateMessageRequestBody.builder()
+                    .receive_id(chat_id)
+                    .msg_type("image")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.create(request)
+            return resp.success()
+        except Exception as exc:
+            logger.error("Send image error: %s", exc, exc_info=True)
+            return False
+
+    def reply_image(self, message_id: str, image_bytes: bytes) -> bool:
+        """Reply with an image to a specific message."""
+        image_key = self._upload_image(image_bytes)
+        if not image_key:
+            return False
+        try:
+            content = json.dumps({"image_key": image_key}, ensure_ascii=False)
+            request = (
+                ReplyMessageRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    ReplyMessageRequestBody.builder()
+                    .content(content)
+                    .msg_type("image")
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.reply(request)
+            return resp.success()
+        except Exception as exc:
+            logger.error("Reply image error: %s", exc, exc_info=True)
             return False
 
     def get_card_context(self, message_id: str) -> Optional[dict]:

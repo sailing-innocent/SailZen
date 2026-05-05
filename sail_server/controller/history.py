@@ -33,6 +33,7 @@ from typing import Generator, List, Optional
 
 class HistoryEventController(Controller):
     """历史事件控制器"""
+
     path = "/event"
 
     @get("")
@@ -47,7 +48,7 @@ class HistoryEventController(Controller):
     ) -> List[HistoryEventResponse]:
         """
         获取历史事件列表
-        
+
         Query Parameters:
         - skip: 跳过的记录数
         - limit: 返回的最大记录数
@@ -55,18 +56,14 @@ class HistoryEventController(Controller):
         - tags: 标签过滤，多个标签用逗号分隔
         """
         db = next(router_dependency)
-        
+
         # 解析标签
         tag_list = None
         if tags:
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-        
+
         events = get_events_impl(
-            db, 
-            skip=skip, 
-            limit=limit, 
-            parent_id=parent_id, 
-            tags=tag_list
+            db, skip=skip, limit=limit, parent_id=parent_id, tags=tag_list
         )
         logger.info(f"Get events: {len(events)}")
         return events
@@ -82,7 +79,7 @@ class HistoryEventController(Controller):
     ) -> List[HistoryEventResponse]:
         """
         通过关键词搜索历史事件
-        
+
         Query Parameters:
         - keyword: 搜索关键词
         - skip: 跳过的记录数
@@ -125,7 +122,7 @@ class HistoryEventController(Controller):
         parent_event = get_event_impl(db, event_id)
         if not parent_event:
             raise NotFoundException(detail=f"Parent event with ID {event_id} not found")
-        
+
         children = get_child_events_impl(db, event_id)
         logger.info(f"Get child events for {event_id}: {len(children)}")
         return children
@@ -145,7 +142,7 @@ class HistoryEventController(Controller):
         event = get_event_impl(db, event_id)
         if not event:
             raise NotFoundException(detail=f"Event with ID {event_id} not found")
-        
+
         related = get_related_events_impl(db, event_id)
         logger.info(f"Get related events for {event_id}: {len(related)}")
         return related
@@ -159,7 +156,7 @@ class HistoryEventController(Controller):
     ) -> HistoryEventResponse:
         """
         创建新的历史事件
-        
+
         最低要求：title + description
         """
         db = next(router_dependency)
@@ -177,7 +174,7 @@ class HistoryEventController(Controller):
     ) -> HistoryEventResponse:
         """
         更新历史事件
-        
+
         可以部分更新，补充其他信息
         """
         db = next(router_dependency)

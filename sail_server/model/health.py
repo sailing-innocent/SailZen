@@ -48,7 +48,9 @@ def create_weight_impl(db, weight_create: WeightCreateRequest) -> WeightResponse
     """Create a new weight record"""
     weight = Weight(
         value=str(weight_create.value),
-        htime=datetime.fromtimestamp(weight_create.htime) if weight_create.htime else datetime.now(),
+        htime=datetime.fromtimestamp(weight_create.htime)
+        if weight_create.htime
+        else datetime.now(),
         tag=weight_create.tag,
         description=weight_create.description,
     )
@@ -58,7 +60,9 @@ def create_weight_impl(db, weight_create: WeightCreateRequest) -> WeightResponse
     return read_from_weight(weight)
 
 
-def read_weight_impl(db, weight_record_id: int = -1, _tag: str = None) -> WeightResponse | None:
+def read_weight_impl(
+    db, weight_record_id: int = -1, _tag: str = None
+) -> WeightResponse | None:
     """Read a single weight record by ID or tag"""
     q = db.query(Weight)
     if _tag is not None:
@@ -237,11 +241,13 @@ def analyze_weight_trend_impl(
 
     # Add actual data points
     for w in weights:
-        predicted_weights.append({
-            "htime": w.htime,
-            "value": float(w.value),
-            "is_actual": True,
-        })
+        predicted_weights.append(
+            {
+                "htime": w.htime,
+                "value": float(w.value),
+                "is_actual": True,
+            }
+        )
 
     # Add prediction points for next 30 days
     last_time = weights[-1].htime
@@ -256,11 +262,13 @@ def analyze_weight_trend_impl(
         else:
             pred_value = np.polyval(coeffs, future_day)
 
-        predicted_weights.append({
-            "htime": future_time,
-            "value": float(pred_value),
-            "is_actual": False,
-        })
+        predicted_weights.append(
+            {
+                "htime": future_time,
+                "value": float(pred_value),
+                "is_actual": False,
+            }
+        )
 
     return {
         "model_type": model_type,
@@ -331,7 +339,9 @@ def read_from_weight_plan(plan: WeightPlan) -> WeightPlanResponse:
     )
 
 
-def create_weight_plan_impl(db, plan_data: WeightPlanCreateRequest) -> WeightPlanResponse:
+def create_weight_plan_impl(
+    db, plan_data: WeightPlanCreateRequest
+) -> WeightPlanResponse:
     """Create a new weight plan"""
     plan = WeightPlan(
         target_weight=plan_data.target_weight,
@@ -370,7 +380,9 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
     now = datetime.now().timestamp()
 
     # Get actual weights from plan start to now
-    actual_weights = read_weights_impl(db, 0, -1, plan_data.start_time.timestamp(), now, "raw")
+    actual_weights = read_weights_impl(
+        db, 0, -1, plan_data.start_time.timestamp(), now, "raw"
+    )
 
     if not actual_weights:
         return {
@@ -387,7 +399,9 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
     # Calculate expected weight progression (linear from start to target)
     start_weight = float(actual_weights[0].value)
     target_weight = float(plan_data.target_weight)
-    total_days = (plan_data.target_time.timestamp() - plan_data.start_time.timestamp()) / 86400
+    total_days = (
+        plan_data.target_time.timestamp() - plan_data.start_time.timestamp()
+    ) / 86400
     days_passed = (now - plan_data.start_time.timestamp()) / 86400
 
     # Linear interpolation for expected weight at current time
@@ -424,12 +438,14 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
                 actual_for_day = float(w.value)
                 break
 
-        daily_predictions.append({
-            "htime": day_time,
-            "expected_weight": float(expected_weight),
-            "actual_weight": actual_for_day,
-            "day": day,
-        })
+        daily_predictions.append(
+            {
+                "htime": day_time,
+                "expected_weight": float(expected_weight),
+                "actual_weight": actual_for_day,
+                "day": day,
+            }
+        )
 
     return {
         "plan": plan_data.model_dump(),
@@ -449,12 +465,12 @@ def get_weights_with_plan_status_impl(
 ) -> list[dict]:
     """
     Get weight records with comparison status against plan.
-    
+
     Args:
         start_time: Start timestamp for weight records (None = no limit)
         end_time: End timestamp for weight records (None = no limit)
         plan_id: Specific plan ID, or None to use latest plan
-        
+
     Returns:
         List of dicts with comparison info
     """
@@ -463,10 +479,10 @@ def get_weights_with_plan_status_impl(
         plan = db.query(WeightPlan).filter(WeightPlan.id == plan_id).first()
     else:
         plan = db.query(WeightPlan).order_by(WeightPlan.created_at.desc()).first()
-    
+
     # Get weight records (no default time limit, return all if not specified)
     weights = read_weights_impl(db, 0, -1, start_time, end_time, "raw")
-    
+
     if not plan:
         # No plan, return records without status
         return [
@@ -480,27 +496,33 @@ def get_weights_with_plan_status_impl(
             }
             for w in weights
         ]
-    
+
     plan_data = read_from_weight_plan(plan)
-    
+
     # Get start weight (first weight at or after plan start)
-    weights_after_start = read_weights_impl(db, 0, -1, plan_data.start_time.timestamp(), None, "raw")
+    weights_after_start = read_weights_impl(
+        db, 0, -1, plan_data.start_time.timestamp(), None, "raw"
+    )
     if weights_after_start:
         start_weight = float(weights_after_start[0].value)
     else:
-        start_weight = float(weights[0].value) if weights else float(plan_data.target_weight)
-    
+        start_weight = (
+            float(weights[0].value) if weights else float(plan_data.target_weight)
+        )
+
     target_weight = float(plan_data.target_weight)
-    total_days = (plan_data.target_time.timestamp() - plan_data.start_time.timestamp()) / 86400
-    
+    total_days = (
+        plan_data.target_time.timestamp() - plan_data.start_time.timestamp()
+    ) / 86400
+
     # Calculate status for each weight record
     result = []
     tolerance = 0.5  # kg tolerance for "normal" status
-    
+
     for w in weights:
         weight_value = float(w.value)
         weight_time = w.htime
-        
+
         # Calculate expected weight at this time
         if weight_time < plan_data.start_time.timestamp():
             # Before plan start, no expectation
@@ -522,7 +544,7 @@ def get_weights_with_plan_status_impl(
             days_from_start = (weight_time - plan_data.start_time.timestamp()) / 86400
             progress = days_from_start / total_days if total_days > 0 else 1.0
             expected_value = start_weight + (target_weight - start_weight) * progress
-            
+
             diff = weight_value - expected_value
             if diff > tolerance:
                 status = "above"  # Above expected (red)
@@ -530,16 +552,18 @@ def get_weights_with_plan_status_impl(
                 status = "below"  # Below expected (green)
             else:
                 status = "normal"  # Within tolerance (blue)
-        
-        result.append({
-            "id": w.id,
-            "value": weight_value,
-            "htime": weight_time,
-            "expected_value": float(expected_value),
-            "status": status,
-            "diff": float(diff),
-        })
-    
+
+        result.append(
+            {
+                "id": w.id,
+                "value": weight_value,
+                "htime": weight_time,
+                "expected_value": float(expected_value),
+                "status": status,
+                "diff": float(diff),
+            }
+        )
+
     return result
 
 
@@ -557,10 +581,14 @@ def read_from_exercise(exercise: Exercise) -> ExerciseResponse:
     )
 
 
-def create_exercise_impl(db, exercise_create: ExerciseCreateRequest) -> ExerciseResponse:
+def create_exercise_impl(
+    db, exercise_create: ExerciseCreateRequest
+) -> ExerciseResponse:
     """Create a new exercise record"""
     exercise = Exercise(
-        htime=datetime.fromtimestamp(exercise_create.htime) if exercise_create.htime else datetime.now(),
+        htime=datetime.fromtimestamp(exercise_create.htime)
+        if exercise_create.htime
+        else datetime.now(),
         description=exercise_create.description,
     )
     db.add(exercise)
@@ -595,7 +623,9 @@ def read_exercises_impl(
     return [read_from_exercise(exercise) for exercise in exercises]
 
 
-def update_exercise_impl(db, id: int, exercise: ExerciseBase) -> ExerciseResponse | None:
+def update_exercise_impl(
+    db, id: int, exercise: ExerciseBase
+) -> ExerciseResponse | None:
     """Update an existing exercise record"""
     exercise_rec = db.query(Exercise).filter(Exercise.id == id).first()
     if exercise_rec is None:

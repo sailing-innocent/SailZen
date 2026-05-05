@@ -48,7 +48,9 @@ def _category_to_response(category: ItemCategory) -> ItemCategoryResponse:
     )
 
 
-def create_category_impl(db: Session, data: ItemCategoryCreateRequest) -> ItemCategoryResponse:
+def create_category_impl(
+    db: Session, data: ItemCategoryCreateRequest
+) -> ItemCategoryResponse:
     """Create a new category"""
     category = ItemCategory(
         parent_id=data.parent_id,
@@ -80,12 +82,12 @@ def read_categories_impl(
 ) -> List[ItemCategoryResponse]:
     """Read all categories"""
     q = db.query(ItemCategory)
-    
+
     if skip > 0:
         q = q.offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    
+
     categories = q.all()
     return [_category_to_response(c) for c in categories]
 
@@ -99,7 +101,7 @@ def update_category_impl(
     category = db.query(ItemCategory).filter(ItemCategory.id == category_id).first()
     if category is None:
         return None
-    
+
     if data.name is not None:
         category.name = data.name
     if data.code is not None:
@@ -113,7 +115,7 @@ def update_category_impl(
     if data.description is not None:
         category.description = data.description
     category.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(category)
     return _category_to_response(category)
@@ -124,7 +126,7 @@ def delete_category_impl(db: Session, category_id: int) -> Optional[dict]:
     category = db.query(ItemCategory).filter(ItemCategory.id == category_id).first()
     if category is None:
         return None
-    
+
     db.delete(category)
     db.commit()
     return {"id": category_id, "status": "deleted"}
@@ -133,26 +135,29 @@ def delete_category_impl(db: Session, category_id: int) -> Optional[dict]:
 def get_category_tree_impl(db: Session) -> List[dict]:
     """Get category tree structure"""
     categories = db.query(ItemCategory).all()
-    
+
     # Build tree structure
-    category_map = {c.id: {
-        "id": c.id,
-        "name": c.name,
-        "code": c.code or "",
-        "icon": c.icon or "",
-        "is_consumable": c.is_consumable or False,
-        "default_unit": c.default_unit or "个",
-        "parent_id": c.parent_id,
-        "children": [],
-    } for c in categories}
-    
+    category_map = {
+        c.id: {
+            "id": c.id,
+            "name": c.name,
+            "code": c.code or "",
+            "icon": c.icon or "",
+            "is_consumable": c.is_consumable or False,
+            "default_unit": c.default_unit or "个",
+            "parent_id": c.parent_id,
+            "children": [],
+        }
+        for c in categories
+    }
+
     tree = []
     for c in categories:
         if c.parent_id is None or c.parent_id not in category_map:
             tree.append(category_map[c.id])
         else:
             category_map[c.parent_id]["children"].append(category_map[c.id])
-    
+
     return tree
 
 
@@ -162,21 +167,36 @@ def seed_default_categories_impl(db: Session) -> List[ItemCategoryResponse]:
     existing = db.query(ItemCategory).first()
     if existing:
         return read_categories_impl(db)
-    
+
     # Default categories based on design doc
     default_categories = [
         # 一级类别
-        {"name": "证件文件", "code": "DOCUMENT", "icon": "file-text", "is_consumable": False},
-        {"name": "电子设备", "code": "ELECTRONICS", "icon": "smartphone", "is_consumable": False},
+        {
+            "name": "证件文件",
+            "code": "DOCUMENT",
+            "icon": "file-text",
+            "is_consumable": False,
+        },
+        {
+            "name": "电子设备",
+            "code": "ELECTRONICS",
+            "icon": "smartphone",
+            "is_consumable": False,
+        },
         {"name": "衣物", "code": "CLOTHING", "icon": "shirt", "is_consumable": False},
-        {"name": "日用消耗", "code": "DAILY_CONSUMABLE", "icon": "package", "is_consumable": True},
+        {
+            "name": "日用消耗",
+            "code": "DAILY_CONSUMABLE",
+            "icon": "package",
+            "is_consumable": True,
+        },
         {"name": "家居用品", "code": "HOME", "icon": "home", "is_consumable": False},
         {"name": "健康护理", "code": "HEALTH", "icon": "heart", "is_consumable": True},
     ]
-    
+
     created = []
     parent_map = {}
-    
+
     # Create parent categories first
     for cat_data in default_categories:
         category = ItemCategory(
@@ -190,7 +210,7 @@ def seed_default_categories_impl(db: Session) -> List[ItemCategoryResponse]:
         db.flush()
         parent_map[cat_data["code"]] = category.id
         created.append(category)
-    
+
     # Sub-categories
     sub_categories = [
         # 证件文件子类
@@ -207,17 +227,37 @@ def seed_default_categories_impl(db: Session) -> List[ItemCategoryResponse]:
         {"parent": "CLOTHING", "name": "内衣", "code": "UNDERWEAR"},
         {"parent": "CLOTHING", "name": "鞋袜", "code": "FOOTWEAR"},
         # 日用消耗子类
-        {"parent": "DAILY_CONSUMABLE", "name": "洗漱用品", "code": "TOILETRY", "is_consumable": True},
-        {"parent": "DAILY_CONSUMABLE", "name": "护理用品", "code": "CARE_PRODUCT", "is_consumable": True},
-        {"parent": "DAILY_CONSUMABLE", "name": "清洁用品", "code": "CLEANING", "is_consumable": True},
+        {
+            "parent": "DAILY_CONSUMABLE",
+            "name": "洗漱用品",
+            "code": "TOILETRY",
+            "is_consumable": True,
+        },
+        {
+            "parent": "DAILY_CONSUMABLE",
+            "name": "护理用品",
+            "code": "CARE_PRODUCT",
+            "is_consumable": True,
+        },
+        {
+            "parent": "DAILY_CONSUMABLE",
+            "name": "清洁用品",
+            "code": "CLEANING",
+            "is_consumable": True,
+        },
         # 家居用品子类
         {"parent": "HOME", "name": "床上用品", "code": "BEDDING"},
         {"parent": "HOME", "name": "厨房用品", "code": "KITCHEN"},
         # 健康护理子类
-        {"parent": "HEALTH", "name": "常备药品", "code": "MEDICINE", "is_consumable": True},
+        {
+            "parent": "HEALTH",
+            "name": "常备药品",
+            "code": "MEDICINE",
+            "is_consumable": True,
+        },
         {"parent": "HEALTH", "name": "护理器具", "code": "CARE_TOOL"},
     ]
-    
+
     for sub_data in sub_categories:
         category = ItemCategory(
             parent_id=parent_map.get(sub_data["parent"]),
@@ -228,7 +268,7 @@ def seed_default_categories_impl(db: Session) -> List[ItemCategoryResponse]:
         )
         db.add(category)
         created.append(category)
-    
+
     db.commit()
-    
+
     return [_category_to_response(c) for c in created]
