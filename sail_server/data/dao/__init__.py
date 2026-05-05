@@ -22,9 +22,14 @@ from .base import BaseDAO
 
 # Analysis
 from .analysis import (
-    CharacterDAO, CharacterAliasDAO, CharacterAttributeDAO,
-    OutlineDAO, OutlineNodeDAO, OutlineEventDAO,
-    SettingDAO, SettingAttributeDAO,
+    CharacterDAO,
+    CharacterAliasDAO,
+    CharacterAttributeDAO,
+    OutlineDAO,
+    OutlineNodeDAO,
+    OutlineEventDAO,
+    SettingDAO,
+    SettingAttributeDAO,
     TextEvidenceDAO,
 )
 
@@ -35,15 +40,20 @@ from .finance import AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
 from .health import WeightDAO, BodySizeDAO, ExerciseDAO, WeightPlanDAO
 
 # Text
-from .text import WorkDAO, EditionDAO, DocumentNodeDAO, IngestJobDAO
+from .text import WorkDAO, EditionDAO, DocumentNodeDAO
 
 # Project
 from .project import ProjectDAO, MissionDAO
 
 # Necessity
 from .necessity import (
-    ResidenceDAO, ContainerDAO, ItemCategoryDAO, ItemDAO,
-    InventoryDAO, JourneyDAO, JourneyItemDAO,
+    ResidenceDAO,
+    ContainerDAO,
+    ItemCategoryDAO,
+    ItemDAO,
+    InventoryDAO,
+    JourneyDAO,
+    JourneyItemDAO,
 )
 
 # History
@@ -56,21 +66,40 @@ from .life import ServiceAccountDAO
 __all__ = [
     "BaseDAO",
     # Analysis
-    "CharacterDAO", "CharacterAliasDAO", "CharacterAttributeDAO",
-    "OutlineDAO", "OutlineNodeDAO", "OutlineEventDAO",
-    "SettingDAO", "SettingAttributeDAO",
+    "CharacterDAO",
+    "CharacterAliasDAO",
+    "CharacterAttributeDAO",
+    "OutlineDAO",
+    "OutlineNodeDAO",
+    "OutlineEventDAO",
+    "SettingDAO",
+    "SettingAttributeDAO",
     "TextEvidenceDAO",
     # Finance
-    "AccountDAO", "TransactionDAO", "BudgetDAO", "BudgetItemDAO",
+    "AccountDAO",
+    "TransactionDAO",
+    "BudgetDAO",
+    "BudgetItemDAO",
     # Health
-    "WeightDAO", "BodySizeDAO", "ExerciseDAO", "WeightPlanDAO",
+    "WeightDAO",
+    "BodySizeDAO",
+    "ExerciseDAO",
+    "WeightPlanDAO",
     # Text
-    "WorkDAO", "EditionDAO", "DocumentNodeDAO", "IngestJobDAO",
+    "WorkDAO",
+    "EditionDAO",
+    "DocumentNodeDAO",
     # Project
-    "ProjectDAO", "MissionDAO",
+    "ProjectDAO",
+    "MissionDAO",
     # Necessity
-    "ResidenceDAO", "ContainerDAO", "ItemCategoryDAO",
-    "ItemDAO", "InventoryDAO", "JourneyDAO", "JourneyItemDAO",
+    "ResidenceDAO",
+    "ContainerDAO",
+    "ItemCategoryDAO",
+    "ItemDAO",
+    "InventoryDAO",
+    "JourneyDAO",
+    "JourneyItemDAO",
     # History
     "HistoryEventDAO",
     # Life

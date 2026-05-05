@@ -253,8 +253,6 @@ class TransactionController(Controller):
             return None
         return TransactionResponse.model_validate(transaction)
 
-
-
     @get()
     async def get_transaction_list(
         self,
@@ -288,7 +286,7 @@ class TransactionController(Controller):
     ) -> dict:
         """
         Get paginated transaction list with filtering and sorting.
-        
+
         Query Parameters:
         - page: Page number (1-based, default: 1)
         - page_size: Number of items per page (default: 20, max: 100)
@@ -301,7 +299,7 @@ class TransactionController(Controller):
         - max_value: Maximum transaction value
         - sort_by: Field to sort by (default: "htime")
         - sort_order: "asc" or "desc" (default: "desc")
-        
+
         Returns:
         - Paginated response:
           {
@@ -316,16 +314,16 @@ class TransactionController(Controller):
         """
         try:
             db = next(router_dependency)
-            
+
             # Validate and clamp page_size
             page_size = min(max(1, page_size), 100)
             page = max(1, page)
-            
+
             # Parse tags from comma-separated string
             tag_list = []
             if tags and tags.strip():
                 tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-            
+
             result = read_transactions_paginated_impl(
                 db=db,
                 page=page,
@@ -340,17 +338,24 @@ class TransactionController(Controller):
                 sort_by=sort_by,
                 sort_order=sort_order,
             )
-            
+
             # Convert transactions to Pydantic models
             if "data" in result:
-                result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
-            
-            logger.info(f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}")
+                result["data"] = [
+                    TransactionResponse.model_validate(t) for t in result["data"]
+                ]
+
+            logger.info(
+                f"Get paginated transactions: page={page}, page_size={page_size}, total={result['total']}"
+            )
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting paginated transactions: {e}")
-            raise HTTPException(status_code=500, detail=f"Error getting paginated transactions: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error getting paginated transactions: {str(e)}",
+            )
 
     @post()
     async def create_transaction(
@@ -597,7 +602,7 @@ class TransactionController(Controller):
     ) -> list[dict]:
         """
         Get transaction statistics for multiple queries in a single request.
-        
+
         Request Body:
         - Array of stat request objects, each containing:
           {
@@ -608,7 +613,7 @@ class TransactionController(Controller):
             "tag_op": "and" | "or",
             "return_list": bool
           }
-        
+
         Returns:
         - Array of results, each containing:
           {
@@ -619,15 +624,17 @@ class TransactionController(Controller):
         try:
             db = next(router_dependency)
             results = []
-            
+
             for query in data:
                 query_id = query.get("id", "")
                 try:
                     tag_list = []
                     tags_str = query.get("tags", "")
                     if tags_str and tags_str.strip():
-                        tag_list = [tag.strip() for tag in tags_str.split(",") if tag.strip()]
-                    
+                        tag_list = [
+                            tag.strip() for tag in tags_str.split(",") if tag.strip()
+                        ]
+
                     stats = get_transaction_stats_impl(
                         db=db,
                         skip=query.get("skip", 0),
@@ -645,13 +652,15 @@ class TransactionController(Controller):
                 except Exception as e:
                     logger.error(f"Error getting stats for query {query_id}: {e}")
                     results.append({"id": query_id, "stats": None, "error": str(e)})
-            
+
             logger.info(f"Batch stats: processed {len(results)} queries")
             return results
-            
+
         except Exception as e:
             logger.error(f"Error in batch stats: {e}")
-            raise HTTPException(status_code=500, detail=f"Error in batch stats: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error in batch stats: {str(e)}"
+            )
 
     @get("/stats/")
     async def get_transaction_stats(
@@ -671,7 +680,7 @@ class TransactionController(Controller):
     ) -> dict:
         """
         Get transaction statistics with filtering options.
-        
+
         Query Parameters:
         - skip: Number of records to skip (default: 0)
         - limit: Maximum number of records to return (default: -1 for no limit)
@@ -683,7 +692,7 @@ class TransactionController(Controller):
         - min_value: Minimum transaction value
         - max_value: Maximum transaction value
         - return_list: If True, include transaction data in response; if False, only return stats (default: False)
-        
+
         Returns:
         - Dict with statistics and optional data field:
           {
@@ -698,12 +707,12 @@ class TransactionController(Controller):
         """
         try:
             db = next(router_dependency)
-            
+
             # Parse tags from comma-separated string
             tag_list = []
             if tags and tags.strip():
                 tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-            
+
             result = get_transaction_stats_impl(
                 db=db,
                 skip=skip,
@@ -717,18 +726,24 @@ class TransactionController(Controller):
                 max_value=max_value,
                 return_list=return_list,
             )
-            
+
             # Convert transactions to Pydantic models if present
             if return_list and "data" in result:
-                result["data"] = [TransactionResponse.model_validate(t) for t in result["data"]]
-            
+                result["data"] = [
+                    TransactionResponse.model_validate(t) for t in result["data"]
+                ]
+
             data_count = len(result.get("data", [])) if return_list else 0
-            logger.info(f"Get transaction stats: total={result['total_count']}, income={result['income_count']}, expense={result['expense_count']}, data_items={data_count}")
+            logger.info(
+                f"Get transaction stats: total={result['total_count']}, income={result['income_count']}, expense={result['expense_count']}, data_items={data_count}"
+            )
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting transaction stats: {e}")
-            raise HTTPException(status_code=500, detail=f"Error getting transaction stats: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error getting transaction stats: {str(e)}"
+            )
 
 
 # -------------
@@ -775,12 +790,12 @@ class BudgetController(Controller):
         Get the budget data list.
         """
         db = next(router_dependency)
-        
+
         # Parse tags from comma-separated string
         tag_list = []
         if tags and tags.strip():
             tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-        
+
         budgets = read_budgets_impl(
             db,
             skip=skip,
@@ -791,17 +806,20 @@ class BudgetController(Controller):
             tag_op=tag_op,
         )
         # Convert BudgetData to BudgetResponse (field name mapping)
-        return [BudgetResponse(
-            id=b.id,
-            name=b.name,
-            description=b.description,
-            start_time=b.start_date,
-            end_time=b.end_date,
-            status=b.status,
-            total_amount=b.total_amount,
-            direction=b.direction,
-            items=[],  # Items are not included in list view for performance
-        ) for b in budgets]
+        return [
+            BudgetResponse(
+                id=b.id,
+                name=b.name,
+                description=b.description,
+                start_time=b.start_date,
+                end_time=b.end_date,
+                status=b.status,
+                total_amount=b.total_amount,
+                direction=b.direction,
+                items=[],  # Items are not included in list view for performance
+            )
+            for b in budgets
+        ]
 
     @post()
     async def create_budget(
@@ -822,7 +840,7 @@ class BudgetController(Controller):
         if len(name) > 100:
             logger.error("Budget name is too long.")
             raise HTTPException(status_code=400, detail="Budget name is too long.")
-        
+
         budget = create_budget_impl(db, data)
         logger.info(f"Create budget: {budget}")
         if budget is None:
@@ -846,7 +864,7 @@ class BudgetController(Controller):
         if not name:
             logger.error("Budget name cannot be empty.")
             raise HTTPException(status_code=400, detail="Budget name cannot be empty.")
-        
+
         budget = update_budget_impl(db, budget_id, data)
         logger.info(f"Update budget: {budget}")
         if budget is None:
@@ -887,12 +905,12 @@ class BudgetController(Controller):
         """
         try:
             db = next(router_dependency)
-            
+
             # Parse tags from comma-separated string
             tag_list = []
             if tags and tags.strip():
                 tag_list = [tag.strip() for tag in tags.split(",") if tag.strip()]
-            
+
             result = get_budget_stats_impl(
                 db=db,
                 from_time=from_time,
@@ -901,13 +919,17 @@ class BudgetController(Controller):
                 tag_op=tag_op,
                 return_list=return_list,
             )
-            
-            logger.info(f"Get budget stats: total_count={result['total_budget_count']}, total_amount={result['total_budget_amount']}")
+
+            logger.info(
+                f"Get budget stats: total_count={result['total_budget_count']}, total_amount={result['total_budget_amount']}"
+            )
             return result
-            
+
         except Exception as e:
             logger.error(f"Error getting budget stats: {e}")
-            raise HTTPException(status_code=500, detail=f"Error getting budget stats: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error getting budget stats: {str(e)}"
+            )
 
     @get("/{budget_id:int}/analysis")
     async def get_budget_analysis(
@@ -930,7 +952,9 @@ class BudgetController(Controller):
             raise
         except Exception as e:
             logger.error(f"Error getting budget analysis: {e}")
-            raise HTTPException(status_code=500, detail=f"Error getting budget analysis: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error getting budget analysis: {str(e)}"
+            )
 
     @post("/{budget_id:int}/consume")
     async def consume_budget(
@@ -945,20 +969,26 @@ class BudgetController(Controller):
         """
         try:
             db = next(router_dependency)
-            
+
             # Validate transaction data
             if not data.value or float(data.value) <= 0:
-                raise HTTPException(status_code=400, detail="Transaction value must be positive")
-            
+                raise HTTPException(
+                    status_code=400, detail="Transaction value must be positive"
+                )
+
             transaction = consume_budget_impl(db, budget_id, data)
-            logger.info(f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}")
+            logger.info(
+                f"Consume budget: budget_id={budget_id}, transaction_id={transaction.id}"
+            )
             return TransactionResponse.model_validate(transaction)
         except ValueError as e:
             logger.error(f"Error consuming budget: {e}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(f"Error consuming budget: {e}")
-            raise HTTPException(status_code=500, detail=f"Error consuming budget: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error consuming budget: {str(e)}"
+            )
 
     @post("/{budget_id:int}/link/{transaction_id:int}")
     async def link_transaction(
@@ -983,7 +1013,9 @@ class BudgetController(Controller):
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(f"Error linking transaction: {e}")
-            raise HTTPException(status_code=500, detail=f"Error linking transaction: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error linking transaction: {str(e)}"
+            )
 
     @post("/{budget_id:int}/link-batch")
     async def link_transactions_batch(
@@ -995,12 +1027,12 @@ class BudgetController(Controller):
     ) -> dict:
         """
         Batch link multiple transactions to a budget.
-        
+
         Request Body:
         {
             "transaction_ids": [int]  # List of transaction IDs to link
         }
-        
+
         Returns:
         {
             "success": [int],        # Successfully linked transaction IDs
@@ -1013,13 +1045,15 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             transaction_ids = data.get("transaction_ids", [])
-            
+
             if not transaction_ids or not isinstance(transaction_ids, list):
-                raise HTTPException(status_code=400, detail="transaction_ids must be a non-empty list")
-            
+                raise HTTPException(
+                    status_code=400, detail="transaction_ids must be a non-empty list"
+                )
+
             success = []
             failed = []
-            
+
             for transaction_id in transaction_ids:
                 try:
                     link_transaction_impl(db, budget_id, transaction_id)
@@ -1027,13 +1061,15 @@ class BudgetController(Controller):
                 except ValueError as e:
                     failed.append({"id": transaction_id, "error": str(e)})
                 except Exception as e:
-                    failed.append({"id": transaction_id, "error": f"Unexpected error: {str(e)}"})
-            
+                    failed.append(
+                        {"id": transaction_id, "error": f"Unexpected error: {str(e)}"}
+                    )
+
             logger.info(
                 f"Batch link transactions: budget_id={budget_id}, "
                 f"total={len(transaction_ids)}, success={len(success)}, failed={len(failed)}"
             )
-            
+
             return {
                 "success": success,
                 "failed": failed,
@@ -1041,12 +1077,14 @@ class BudgetController(Controller):
                 "success_count": len(success),
                 "failed_count": len(failed),
             }
-            
+
         except HTTPException:
             raise
         except Exception as e:
             logger.error(f"Error in batch link transactions: {e}")
-            raise HTTPException(status_code=500, detail=f"Error in batch link transactions: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error in batch link transactions: {str(e)}"
+            )
 
     @delete("/unlink/{transaction_id:int}", status_code=200)
     async def unlink_transaction(
@@ -1068,7 +1106,9 @@ class BudgetController(Controller):
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(f"Error unlinking transaction: {e}")
-            raise HTTPException(status_code=500, detail=f"Error unlinking transaction: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error unlinking transaction: {str(e)}"
+            )
 
     # ============ Budget Items ============
 
@@ -1083,7 +1123,9 @@ class BudgetController(Controller):
         try:
             db = next(router_dependency)
             items = read_items_impl(db, budget_id)
-            return [BudgetItemResponse.model_validate(item).model_dump() for item in items]
+            return [
+                BudgetItemResponse.model_validate(item).model_dump() for item in items
+            ]
         except Exception as e:
             logger.error(f"Error getting budget items: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -1205,8 +1247,11 @@ class BudgetController(Controller):
             if budget is None:
                 raise HTTPException(status_code=404, detail="Budget not found")
             result = BudgetResponse.model_validate(budget).model_dump()
-            if hasattr(budget, 'items'):
-                result['items'] = [BudgetItemResponse.model_validate(item).model_dump() for item in budget.items]
+            if hasattr(budget, "items"):
+                result["items"] = [
+                    BudgetItemResponse.model_validate(item).model_dump()
+                    for item in budget.items
+                ]
             return result
         except HTTPException:
             raise

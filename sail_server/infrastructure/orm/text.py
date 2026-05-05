@@ -135,25 +135,3 @@ class DocumentNode(ORMBase):
         "DocumentNode", back_populates="parent", cascade="all, delete-orphan"
     )
     parent = relationship("DocumentNode", back_populates="children", remote_side=[id])
-
-
-class IngestJob(ORMBase):
-    """
-    导入作业表 - 跟踪文本导入任务
-    """
-
-    __tablename__ = "ingest_jobs"
-
-    id = Column(Integer, primary_key=True)
-    edition_id = Column(
-        Integer, ForeignKey("editions.id", ondelete="CASCADE"), nullable=False
-    )
-    job_type = Column(String, default="initial_import")
-    status = Column(String, default="pending")  # pending | running | completed | failed
-    payload = Column(JSONB, default={})
-    started_at = Column(TIMESTAMP, nullable=True)
-    finished_at = Column(TIMESTAMP, nullable=True)
-    error_message = Column(Text, nullable=True)
-    progress = Column(Integer, default=0)  # 0-100 百分比
-    total_items = Column(Integer, default=0)
-    processed_items = Column(Integer, default=0)

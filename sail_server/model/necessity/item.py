@@ -106,7 +106,7 @@ def read_items_impl(
 ) -> List[ItemResponse]:
     """Read items with optional filtering"""
     q = db.query(Item)
-    
+
     if category_id is not None:
         q = q.filter(Item.category_id == category_id)
     if item_type is not None:
@@ -119,14 +119,14 @@ def read_items_impl(
         if tag_list:
             tag_filters = [Item.tags.contains(tag) for tag in tag_list]
             q = q.filter(or_(*tag_filters))
-    
+
     q = q.order_by(Item.importance.desc(), Item.mtime.desc())
-    
+
     if skip > 0:
         q = q.offset(skip)
     if limit > 0:
         q = q.limit(limit)
-    
+
     items = q.all()
     return [_item_to_response(i) for i in items]
 
@@ -145,7 +145,7 @@ def read_items_paginated_impl(
 ) -> dict:
     """Read items with pagination"""
     q = db.query(Item)
-    
+
     if category_id is not None:
         q = q.filter(Item.category_id == category_id)
     if item_type is not None:
@@ -158,30 +158,32 @@ def read_items_paginated_impl(
             tag_filters = [Item.tags.contains(tag) for tag in tag_list]
             q = q.filter(or_(*tag_filters))
     if keyword:
-        q = q.filter(or_(
-            Item.name.ilike(f"%{keyword}%"),
-            Item.description.ilike(f"%{keyword}%"),
-            Item.brand.ilike(f"%{keyword}%"),
-            Item.model.ilike(f"%{keyword}%"),
-        ))
-    
+        q = q.filter(
+            or_(
+                Item.name.ilike(f"%{keyword}%"),
+                Item.description.ilike(f"%{keyword}%"),
+                Item.brand.ilike(f"%{keyword}%"),
+                Item.model.ilike(f"%{keyword}%"),
+            )
+        )
+
     # Get total count
     total = q.count()
-    
+
     # Sorting
     sort_column = getattr(Item, sort_by, Item.mtime)
     if sort_order == "asc":
         q = q.order_by(sort_column.asc())
     else:
         q = q.order_by(sort_column.desc())
-    
+
     # Pagination
     offset = (page - 1) * page_size
     q = q.offset(offset).limit(page_size)
-    
+
     items = q.all()
     total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
-    
+
     return {
         "data": [_item_to_response(i) for i in items],
         "total": total,
@@ -202,7 +204,7 @@ def update_item_impl(
     item = db.query(Item).filter(Item.id == item_id).first()
     if item is None:
         return None
-    
+
     if data.name is not None:
         item.name = data.name
     if data.category_id is not None:
@@ -228,7 +230,7 @@ def update_item_impl(
     if data.state is not None:
         item.state = data.state
     item.mtime = datetime.now()
-    
+
     db.commit()
     db.refresh(item)
     return _item_to_response(item)
@@ -239,7 +241,7 @@ def delete_item_impl(db: Session, item_id: int) -> Optional[dict]:
     item = db.query(Item).filter(Item.id == item_id).first()
     if item is None:
         return None
-    
+
     db.delete(item)
     db.commit()
     return {"id": item_id, "status": "deleted"}
@@ -251,14 +253,16 @@ def search_items_impl(
     limit: int = 20,
 ) -> List[ItemResponse]:
     """Search items by keyword"""
-    q = db.query(Item).filter(or_(
-        Item.name.ilike(f"%{keyword}%"),
-        Item.description.ilike(f"%{keyword}%"),
-        Item.brand.ilike(f"%{keyword}%"),
-        Item.model.ilike(f"%{keyword}%"),
-        Item.tags.ilike(f"%{keyword}%"),
-    ))
-    
+    q = db.query(Item).filter(
+        or_(
+            Item.name.ilike(f"%{keyword}%"),
+            Item.description.ilike(f"%{keyword}%"),
+            Item.brand.ilike(f"%{keyword}%"),
+            Item.model.ilike(f"%{keyword}%"),
+            Item.tags.ilike(f"%{keyword}%"),
+        )
+    )
+
     items = q.limit(limit).all()
     return [_item_to_response(i) for i in items]
 
@@ -269,23 +273,31 @@ def get_expiring_items_impl(
 ) -> List[dict]:
     """Get items that will expire within the specified days"""
     from datetime import timedelta
+
     threshold_date = datetime.now() + timedelta(days=days_ahead)
-    
-    items = db.query(Item).filter(
-        Item.expire_date.isnot(None),
-        Item.expire_date <= threshold_date,
-        Item.state == 0,  # Only active items
-    ).order_by(Item.expire_date.asc()).all()
-    
+
+    items = (
+        db.query(Item)
+        .filter(
+            Item.expire_date.isnot(None),
+            Item.expire_date <= threshold_date,
+            Item.state == 0,  # Only active items
+        )
+        .order_by(Item.expire_date.asc())
+        .all()
+    )
+
     result = []
     for item in items:
         days_remaining = (item.expire_date - datetime.now()).days
-        result.append({
-            "item": _item_to_response(item),
-            "days_remaining": days_remaining,
-            "severity": "urgent" if days_remaining <= 7 else "warning",
-        })
-    
+        result.append(
+            {
+                "item": _item_to_response(item),
+                "days_remaining": days_remaining,
+                "severity": "urgent" if days_remaining <= 7 else "warning",
+            }
+        )
+
     return result
 
 
@@ -294,9 +306,14 @@ def get_portable_items_impl(
     min_portability: int = 4,
 ) -> List[ItemResponse]:
     """Get items that are highly portable (for travel suggestions)"""
-    items = db.query(Item).filter(
-        Item.portability >= min_portability,
-        Item.state == 0,  # Only active items
-    ).order_by(Item.importance.desc()).all()
-    
+    items = (
+        db.query(Item)
+        .filter(
+            Item.portability >= min_portability,
+            Item.state == 0,  # Only active items
+        )
+        .order_by(Item.importance.desc())
+        .all()
+    )
+
     return [_item_to_response(i) for i in items]

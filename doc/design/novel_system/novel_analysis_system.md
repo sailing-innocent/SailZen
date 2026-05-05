@@ -22,7 +22,6 @@
 | DAG Pipeline ORM | `infrastructure/orm/dag_pipeline.py` | PipelineRun / NodeRun 持久化，状态机 | ✅ 可用 |
 | DAG Executor | `service/dag_executor.py` | 依赖解析、并行执行、动态生成节点、失败传播 | ✅ 可用 |
 | Pipeline Loader | `service/dag_pipeline_loader.py` | JSON 定义加载、模板变量解析 | ✅ 可用 |
-| Text ORM | `infrastructure/orm/text.py` | Work / Edition / DocumentNode / IngestJob | ✅ 可用 |
 | Text DAO | `data/dao/text.py` | CRUD + 查询方法 | ✅ 可用 |
 | Analysis ORM | `infrastructure/orm/analysis/` | Character / Outline / Setting / Evidence | ✅ 可用 |
 | Analysis Router | `router/analysis.py` | 大纲提取、人物检测、设定提取 Controller | ✅ 可用 |

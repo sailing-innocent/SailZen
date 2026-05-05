@@ -18,7 +18,6 @@ from sail_server.infrastructure.orm.text import (
     Work,
     Edition,
     DocumentNode,
-    IngestJob,
 )
 from sail_server.application.dto.text import (
     WorkCreateRequest,
@@ -30,8 +29,6 @@ from sail_server.application.dto.text import (
     DocumentNodeCreateRequest,
     DocumentNodeUpdateRequest,
     DocumentNodeResponse,
-    IngestJobCreateRequest,
-    IngestJobResponse,
 )
 
 

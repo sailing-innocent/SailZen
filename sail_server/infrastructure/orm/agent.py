@@ -2,7 +2,7 @@
 # @file agent.py
 # @brief Agent ORM Models
 # @author sailing-innocent
-# @date 2026-08-24
+# @date 2026-04-24
 # @version 1.0
 # ---------------------------------
 
@@ -50,7 +50,11 @@ class AgentJob(ORMBase):
     started_at = Column(TIMESTAMP, nullable=True)
     completed_at = Column(TIMESTAMP, nullable=True)
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
-    mtime = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    mtime = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
 
 class AgentConfig(ORMBase):
@@ -58,4 +62,8 @@ class AgentConfig(ORMBase):
 
     key = Column(String(128), primary_key=True)
     value = Column(JSON, nullable=False)
-    mtime = Column(TIMESTAMP, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    mtime = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )

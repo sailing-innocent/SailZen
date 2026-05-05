@@ -145,7 +145,10 @@ class ItemDAO(BaseDAO[Item]):
     def get_by_name(self, name: str) -> List[Item]:
         """通过名称模糊搜索物资"""
         return (
-            self.db.query(Item).filter(Item.name.ilike(f"%{name}%")).order_by(Item.name).all()
+            self.db.query(Item)
+            .filter(Item.name.ilike(f"%{name}%"))
+            .order_by(Item.name)
+            .all()
         )
 
     def get_active_items(self) -> List[Item]:
@@ -159,11 +162,7 @@ class ItemDAO(BaseDAO[Item]):
 
     def get_by_serial_number(self, serial_number: str) -> Optional[Item]:
         """通过序列号获取物资"""
-        return (
-            self.db.query(Item)
-            .filter(Item.serial_number == serial_number)
-            .first()
-        )
+        return self.db.query(Item).filter(Item.serial_number == serial_number).first()
 
     def get_by_tags(self, tags: str) -> List[Item]:
         """通过标签搜索物资（模糊匹配）"""

@@ -19,6 +19,7 @@ from sail_server.infrastructure.orm import ORMBase
 
 class Weight(ORMBase):
     """体重记录"""
+
     __tablename__ = "weights"
     id = Column(Integer, primary_key=True)
     value = Column(String)  # float in kg
@@ -31,6 +32,7 @@ class Weight(ORMBase):
 
 class BodySize(ORMBase):
     """身体尺寸记录"""
+
     __tablename__ = "body_size"
     id = Column(Integer, primary_key=True)
     waist = Column(String)  # waist circumference in cm
@@ -44,6 +46,7 @@ class BodySize(ORMBase):
 
 class Exercise(ORMBase):
     """运动记录"""
+
     __tablename__ = "exercises"
     id = Column(Integer, primary_key=True)
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
@@ -52,6 +55,7 @@ class Exercise(ORMBase):
 
 class WeightPlan(ORMBase):
     """体重计划"""
+
     __tablename__ = "weight_plans"
     id = Column(Integer, primary_key=True)
     target_weight = Column(String)  # target weight value in kg
