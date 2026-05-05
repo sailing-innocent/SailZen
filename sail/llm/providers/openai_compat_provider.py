@@ -11,7 +11,6 @@
 # 可兼容 dogapi.cc 等代理服务。
 
 import base64
-import json
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
@@ -22,7 +21,6 @@ import requests
 
 from .base import (
     BaseProvider,
-    ProviderConfig,
     ProviderResponse,
     ProviderError,
     ImageGenerationConfig,
