@@ -103,25 +103,6 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.file_storage import router as file_storage_router
-        from sail_server.router.dag_pipeline import router as dag_pipeline_router
-
-        # 修复数据库序列（仅 PostgreSQL）
-        from sail_server.db import Database
-
-        if Database.get_instance().backend != "sqlite":
-            try:
-                from sail_server.db import get_db_session
-                from sail_server.utils.db_utils import fix_all_sequences
-
-                with get_db_session() as db:
-                    fix_results = fix_all_sequences(db)
-                    for table, success in fix_results.items():
-                        if not success:
-                            logger.warning(f"Failed to fix sequence for {table}")
-            except Exception as e:
-                logger.warning(f"Failed to fix sequences: {e}")
-        else:
-            logger.info("SQLite backend detected, skipping sequence fix")
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -134,7 +115,6 @@ class SailServer:
                 text_router,
                 necessity_router,
                 file_storage_router,
-                dag_pipeline_router,
             ],
         )
 
