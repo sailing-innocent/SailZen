@@ -84,7 +84,10 @@ class LifecycleManager:
             if sys.platform == "win32":
                 result = subprocess.run(
                     ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV", "/V"],
-                    capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="ignore",
                 )
                 if result.returncode == 0:
                     lines = result.stdout.strip().split("\n")
@@ -96,7 +99,8 @@ class LifecycleManager:
                                 print(f"[Cleanup] 发现遗留进程 PID {pid}，正在终止...")
                                 subprocess.run(
                                     ["taskkill", "/PID", pid, "/T", "/F"],
-                                    check=False, capture_output=True,
+                                    check=False,
+                                    capture_output=True,
                                 )
                                 killed_count += 1
             else:

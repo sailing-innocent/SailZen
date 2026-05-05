@@ -65,6 +65,7 @@ export function showWelcome(assetUri: vscode.Uri) {
       async (message) => {
         switch (message.command) {
           case "loaded":
+            vscode.window.showInformationMessage('请使用"帮助"来获取更多信息');
             return;
 
           case "initializeWorkspace": {
