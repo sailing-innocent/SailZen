@@ -36,11 +36,9 @@ from sail_bot.context import (
     _CONFIRM_WORDS,
     _CANCEL_WORDS,
 )
-from sail_bot.card_renderer import CardRenderer
-from sail_bot.session_manager import extract_path_from_text
+from sail.feishu_card_kit.renderer import CardRenderer
+from sail.opencode import extract_path_from_text
 
-
-# 这是什么傻逼实现
 def _make_gateway(
     config_provider: Optional[str] = None, config_api_key: Optional[str] = None
 ):
@@ -123,7 +121,7 @@ def _make_gateway(
 # LLM-driven brain
 # ---------------------------------------------------------------------------
 
-_BRAIN_SYSTEM = """你是飞书机器人，帮用户控制OpenCode开发环境。理解自然语言（可能有错别字），返回JSON行动计划。
+_BRAIN_SYSTEM = """你是飞书机器人，帮用户控制Agent开发环境。理解自然语言（可能有错别字），返回JSON行动计划。
 
 上下文：mode={mode}, workspace={active_workspace}, projects={projects}
 历史：{history}
@@ -142,6 +140,10 @@ _BRAIN_FALLBACK_ACTIONS = {
     "help": ("show_help", {}),
     "状态": ("show_status", {}),
     "status": ("show_status", {}),
+    "工作区": ("show_workspace_dashboard", {}),
+    "面板": ("show_workspace_dashboard", {}),
+    "workspace": ("show_workspace_dashboard", {}),
+    "dashboard": ("show_workspace_dashboard", {}),
     # Phase 0: Self-update commands
     "更新": (
         "self_update",
@@ -191,6 +193,18 @@ _BRAIN_FALLBACK_ACTIONS = {
         "self_update",
         {"trigger_source": "manual", "reason": "User requested self-update"},
     ),
+    "生成图片": (
+        "enter_image_gen",
+        {},
+    ),
+    "画图": (
+        "enter_image_gen",
+        {},
+    ),
+    "image": (
+        "enter_image_gen",
+        {},
+    ),
 }
 
 
@@ -239,9 +253,13 @@ class BotBrain:
         # Level 2: 简单匹配失败，且用户可能说了复杂内容，尝试 LLM
         if self._gw:
             try:
-                from sail_bot.async_task_manager import run_async
+                import asyncio
 
-                plan = run_async(self._think_llm(text, ctx))
+                loop = asyncio.new_event_loop()
+                try:
+                    plan = loop.run_until_complete(self._think_llm(text, ctx))
+                finally:
+                    loop.close()
                 if plan.action != "chat":
                     brain(f"Level 2 matched: {plan.action}")
                     return plan
@@ -267,7 +285,7 @@ class BotBrain:
         return ActionPlan(
             action="chat",
             reply=(
-                "我可以帮你控制 OpenCode 开发环境。试试这些指令：\n"
+                "我可以帮你控制 Agent 开发环境。试试这些指令：\n"
                 "• 打开 sailzen\n"
                 "• 启动 ~/projects/myapp\n"
                 "• 查看状态\n"
@@ -411,6 +429,9 @@ class BotBrain:
         2. regex 失败才显示 thinking card 并调用 LLM
         3. LLM 失败优雅降级
         """
+        # Resolve messaging client from agent
+        messaging = agent.messaging
+
         # Level 1: 先尝试确定性匹配 (不显示 thinking card)
         plan = self._think_deterministic(text, ctx)
         if plan.action != "chat":
@@ -422,7 +443,7 @@ class BotBrain:
             thinking_card = CardRenderer.progress(
                 "正在理解你的意图", "AI正在分析中，请稍候..."
             )
-            thinking_mid = agent._reply_card(
+            thinking_mid = messaging.reply_card(
                 message_id, thinking_card, "thinking", {"user_text": text[:50]}
             )
         else:
@@ -450,7 +471,7 @@ class BotBrain:
                     "AI理解遇到了问题，正在使用备用模式为你服务。",
                     success=True,
                 )
-                agent._update_card(thinking_mid, fallback_card)
+                messaging.update_card(thinking_mid, fallback_card)
             # 返回降级 plan
             plan = self._create_fallback_plan(text, ctx)
             return plan, thinking_mid
@@ -526,10 +547,40 @@ class BotBrain:
             正常执行三级意图匹配（关键词 → LLM → 降级）
 
         状态2 - 在工作区（coding）:
-            绝大部分消息直接转发给OpenCode
+            绝大部分消息直接转发给Agent
             只有以感叹号开头的消息才在Bot层执行控制指令
         """
         t = text.lower().strip()
+
+        # === 状态3：图片生成工作流 ===
+        if ctx.mode == "image_gen":
+            t = text.strip()
+            lower = t.lower()
+
+            # 退出
+            if lower in ["退出", "exit", "quit", "q", "结束", "关闭"]:
+                return ActionPlan(action="exit_image_gen", params={})
+
+            # 保存
+            save_match = re.match(r"^保存\s+(\S+\.\w+)", t)
+            if save_match:
+                return ActionPlan(
+                    action="save_image",
+                    params={"filename": save_match.group(1)},
+                )
+
+            # 重新进入工作流
+            if any(k in t for k in ["生成图片", "画图", "image"]):
+                return ActionPlan(action="enter_image_gen", params={})
+
+            # 显式生成意图 → 生成新图（即使有 last_image_path）
+            if any(k in t for k in ["生成", "画一张", "画个", "重新生成", "再来一张", "新建"]):
+                return ActionPlan(action="generate_image", params={"prompt": t})
+
+            # 编辑或生成
+            if ctx.image_gen and ctx.image_gen.last_image_path:
+                return ActionPlan(action="edit_image", params={"prompt": t})
+            return ActionPlan(action="generate_image", params={"prompt": t})
 
         # === 状态2：在工作区 ===
         if ctx.mode == "coding" and ctx.active_workspace:
@@ -547,6 +598,10 @@ class BotBrain:
                 # 状态查询指令（!状态 或 !status）
                 if cmd_lower in ["状态", "status", "s"]:
                     return ActionPlan(action="show_status", params={})
+
+                # 工作区面板指令
+                if cmd_lower in ["工作区", "面板", "workspace", "dashboard"]:
+                    return ActionPlan(action="show_workspace_dashboard", params={})
 
                 # 解析工作区控制指令（启动、停止、切换等）
                 if any(
@@ -581,7 +636,7 @@ class BotBrain:
                     reply=f"未知的控制指令: {cmd_text}\n\n可用的控制指令:\n• !状态 / !status / !s - 查看当前状态\n• !启动 <项目> - 启动工作区\n• !停止 - 停止工作区\n• !切换 <项目> - 切换工作区\n• !帮助 / !help - 显示帮助",
                 )
 
-            # 非感叹号开头的消息 -> 直接转发给OpenCode
+            # 非感叹号开头的消息 -> 直接转发给Agent
             return ActionPlan(
                 action="send_task", params={"task": text, "path": ctx.active_workspace}
             )
@@ -591,6 +646,10 @@ class BotBrain:
         for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
             if t == kw:
                 return ActionPlan(action=action, params=params)
+
+        # 工作区面板指令
+        if any(k in t for k in ["工作区", "面板", "workspace", "dashboard"]):
+            return ActionPlan(action="show_workspace_dashboard", params={})
 
         # 启动指令（进入coding模式）
         if any(k in t for k in ["start", "启动", "开启", "打开", "open"]):
@@ -616,6 +675,10 @@ class BotBrain:
             path = extract_path_from_text(text, self.projects)
             if path:
                 return ActionPlan(action="switch_workspace", params={"path": path})
+
+        # 启动图片生成模式
+        if any(k in t for k in ["生成图片", "画图", "image"]):
+            return ActionPlan(action="enter_image_gen", params={})
 
         # 返回 chat action 表示需要 LLM 处理（Level 2）
         return ActionPlan(action="chat")

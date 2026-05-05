@@ -4,40 +4,13 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 _HISTORY_WINDOW = 6
+
+_CONFIRM_WORDS = {"是", "是的", "确认", "确定", "y", "yes", "ok", "好", "行", "可以", "没错", "对", "对的"}
+_CANCEL_WORDS = {"否", "不是", "取消", "不", "n", "no", "算了", "别", "不要", "拒绝"}
+
 # ---------------------------------------------------------------------------
 # Conversation context
 # ---------------------------------------------------------------------------
-
-_CONFIRM_WORDS = frozenset(
-    [
-        "确认",
-        "确定",
-        "是",
-        "yes",
-        "ok",
-        "好",
-        "好的",
-        "执行",
-        "继续",
-        "confirm",
-        "y",
-    ]
-)
-
-_CANCEL_WORDS = frozenset(
-    [
-        "取消",
-        "算了",
-        "不",
-        "no",
-        "cancel",
-        "停",
-        "别",
-        "n",
-    ]
-)
-
-
 @dataclass
 class ActionPlan:
     action: str
@@ -46,12 +19,17 @@ class ActionPlan:
     confirm_summary: str = ""
     reply: str = ""
 
-
 @dataclass
 class TurnRecord:
     role: str
     text: str
     ts: datetime = field(default_factory=datetime.now)
+
+@dataclass
+class ImageGenState:
+    """图片生成工作流状态"""
+    last_image_path: Optional[str] = None
+    last_prompt: Optional[str] = None
 
 
 @dataclass
@@ -72,9 +50,10 @@ class ConversationContext:
 
     chat_id: str
     history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY_WINDOW))
-    mode: str = "idle"
+    mode: str = "idle"  # idle | coding | image_gen
     active_workspace: Optional[str] = None
     pending: Optional[PendingConfirmation] = None
+    image_gen: Optional[ImageGenState] = None
 
     def push(self, role: str, text: str) -> None:
         self.history.append(TurnRecord(role=role, text=text))
@@ -98,6 +77,10 @@ class ConversationContext:
             "chat_id": self.chat_id,
             "mode": self.mode,
             "active_workspace": self.active_workspace,
+            "image_gen": {
+                "last_image_path": self.image_gen.last_image_path,
+                "last_prompt": self.image_gen.last_prompt,
+            } if self.image_gen else None,
         }
 
     @classmethod
@@ -108,4 +91,10 @@ class ConversationContext:
             mode=data.get("mode", "idle"),
             active_workspace=data.get("active_workspace"),
         )
+        ig = data.get("image_gen")
+        if ig:
+            ctx.image_gen = ImageGenState(
+                last_image_path=ig.get("last_image_path"),
+                last_prompt=ig.get("last_prompt"),
+            )
         return ctx

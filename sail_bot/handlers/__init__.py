@@ -31,6 +31,7 @@ from sail_bot.handlers.workspace_handlers import (
 )
 from sail_bot.handlers.task_handler import TaskHandler
 from sail_bot.handlers.self_update_handler import SelfUpdateHandler
+from sail_bot.handlers.image_gen_handler import ImageGenHandler
 from sail_bot.handlers.lifecycle_manager import LifecycleManager
 from sail_bot.handlers.welcome_handler import WelcomeHandler
 
@@ -47,6 +48,7 @@ __all__ = [
     "SwitchWorkspaceHandler",
     "TaskHandler",
     "SelfUpdateHandler",
+    "ImageGenHandler",
     "LifecycleManager",
     "WelcomeHandler",
 ]

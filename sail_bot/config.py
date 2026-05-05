@@ -26,8 +26,10 @@ class AgentConfig:
     config_path: Optional[str] = None
     projects: List[Dict[str, str]] = field(default_factory=list)
     admin_chat_id: Optional[str] = None
+    default_chat_id: Optional[str] = None
     llm_provider: Optional[str] = None
     llm_api_key: Optional[str] = None
+    cli_tool: str = "opencode-cli"
 
     def validate(self) -> List[str]:
         """Return list of validation warnings (empty = all good)."""
@@ -83,6 +85,8 @@ def load_config(config_path: str) -> AgentConfig:
         config.llm_provider = data.get("llm_provider") or None
         config.llm_api_key = data.get("llm_api_key") or None
         config.admin_chat_id = data.get("admin_chat_id") or None
+        config.default_chat_id = data.get("default_chat_id") or None
+        config.cli_tool = data.get("cli_tool", "opencode-cli")
 
         warnings = config.validate()
         for w in warnings:
@@ -97,7 +101,7 @@ def create_default_config(config_path: str) -> None:
     p = Path(config_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     content = """\
-# Feishu OpenCode Bridge Configuration
+# Feishu Agent Bridge Configuration
 # Usage: uv run bot/feishu_agent.py -c bot/opencode.bot.yaml
 
 # Feishu App Credentials (Required)
@@ -112,8 +116,12 @@ projects:
     path: "~/repos/SailZen"
     label: "SailZen"
 
+# CLI tool for agent runtime (must support `serve` subcommand with opencode-compatible API)
+# Examples: opencode-cli, kimix
+cli_tool: "opencode-cli"
+
 # Session settings
-base_port: 4096     # Starting port for opencode serve instances
+base_port: 4096     # Starting port for agent serve instances
 max_sessions: 10
 callback_timeout: 300
 auto_restart: false
@@ -128,6 +136,10 @@ auto_restart: false
 # admin_chat_id: "oc_xxxxxxxxxxxxxxxx"  # 管理员的chat_id，用于接收启动/关闭通知
 # 可以通过在飞书中 @机器人 并查看消息的 chat_id 获取
 # 或者先跟机器人单聊，然后查看收到的消息的 chat_id
+
+# Optional: Default chat for proactive messages
+# default_chat_id: "oc_xxxxxxxxxxxxxxxx"  # 默认chat_id，用于机器人主动发送消息（如长期任务通知）
+# 不设置时，主动发送功能将不可用
 """
     with open(p, "w", encoding="utf-8") as f:
         f.write(content)

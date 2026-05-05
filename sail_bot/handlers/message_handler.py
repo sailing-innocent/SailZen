@@ -28,7 +28,7 @@ import lark_oapi as lark
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan, ConversationContext
-from sail_bot.card_renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 from sail_bot.session_state import RiskLevel, classify_risk
 
 
@@ -163,13 +163,17 @@ class MessageHandler(BaseHandler):
         # Use async think_with_feedback to determine intent
         thinking_mid = None
         try:
-            from sail_bot.async_task_manager import run_async
+            import asyncio
 
-            plan, thinking_mid = run_async(
-                self.ctx.brain.think_with_feedback(
-                    text, ctx, chat_id, message_id, self.ctx.agent
+            loop = asyncio.new_event_loop()
+            try:
+                plan, thinking_mid = loop.run_until_complete(
+                    self.ctx.brain.think_with_feedback(
+                        text, ctx, chat_id, message_id, self.ctx.agent
+                    )
                 )
-            )
+            finally:
+                loop.close()
         except Exception as exc:
             logger.error(
                 "think_with_feedback failed for chat_id=%s: %s",
@@ -200,7 +204,7 @@ class MessageHandler(BaseHandler):
         # Check for risk level and confirmation requirements
         task_text = plan.params.get("task", "")
         has_running = any(
-            s.process_status == "running" for s in self.ctx.session_mgr.list_sessions()
+            p.status.value == "running" for p in self.ctx.process_mgr.list_processes()
         )
         risk = classify_risk(plan.action, task_text, has_running)
 
@@ -245,8 +249,8 @@ class MessageHandler(BaseHandler):
         if risk == RiskLevel.GUARDED and not force_flag:
             running_count = sum(
                 1
-                for s in self.ctx.session_mgr.list_sessions()
-                if s.process_status == "running"
+                for p in self.ctx.process_mgr.list_processes()
+                if p.status.value == "running"
             )
             if running_count >= 3:
                 card = CardRenderer.result(

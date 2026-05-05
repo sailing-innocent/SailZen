@@ -10,12 +10,6 @@ export * from './money'
 export * from './health'
 export * from './project'
 
-// Unified Agent API (Phase 8)
-export * from './unifiedAgent'
-
-// Outline Extraction API with Unified Agent Integration
-export * from './outlineExtraction'
-
 import { SERVER_URL, API_BASE } from './config'
 
 export const api_get_health = async (): Promise<boolean> => {

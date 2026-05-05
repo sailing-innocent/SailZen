@@ -13,8 +13,11 @@ import type {
   DocumentNode,
   DocumentNodeUpdate,
   ChapterListItem,
+<<<<<<< HEAD
   ChapterInsertRequest,
   ChapterInsertResponse,
+=======
+>>>>>>> ai
 } from '@lib/data/text'
 import { SERVER_URL, API_BASE } from './config'
 
@@ -194,6 +197,7 @@ export async function api_update_node(node_id: number, data: DocumentNodeUpdate)
   }
   return response.json()
 }
+<<<<<<< HEAD
 
 // ============================================================================
 // Chapter Insert API
@@ -214,3 +218,5 @@ export async function api_insert_chapter(
   }
   return response.json()
 }
+=======
+>>>>>>> ai

@@ -102,44 +102,7 @@ class SailServer:
         from sail_server.router.history import router as history_router
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
-        from sail_server.router.analysis import analysis_router
-        from sail_server.router.unified_agent import unified_agent_router
         from sail_server.router.file_storage import router as file_storage_router
-        from sail_server.router.control_plane import router as control_plane_router
-        from sail_server.router.dag_pipeline import router as dag_pipeline_router
-        from sail_server.controller.outline_extraction_unified import (
-            OutlineExtractionUnifiedController,
-        )
-
-        # 自动注册 Agent
-        from sail_server.agent import auto_register_agents
-
-        auto_register_agents()
-
-        try:
-            from sail_server.control_plane.db import ControlPlaneDatabase
-
-            ControlPlaneDatabase.get_instance().create_all()
-        except Exception as e:
-            logger.warning(f"Failed to initialize control plane database: {e}")
-
-        # 修复数据库序列（仅 PostgreSQL）
-        from sail_server.db import Database
-
-        if Database.get_instance().backend != "sqlite":
-            try:
-                from sail_server.db import get_db_session
-                from sail_server.utils.db_utils import fix_all_sequences
-
-                with get_db_session() as db:
-                    fix_results = fix_all_sequences(db)
-                    for table, success in fix_results.items():
-                        if not success:
-                            logger.warning(f"Failed to fix sequence for {table}")
-            except Exception as e:
-                logger.warning(f"Failed to fix sequences: {e}")
-        else:
-            logger.info("SQLite backend detected, skipping sequence fix")
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -151,12 +114,7 @@ class SailServer:
                 history_router,
                 text_router,
                 necessity_router,
-                analysis_router,
-                unified_agent_router,
                 file_storage_router,
-                control_plane_router,
-                OutlineExtractionUnifiedController,
-                dag_pipeline_router,
             ],
         )
 
@@ -217,19 +175,6 @@ class SailServer:
                 db.close()
         except Exception as e:
             logger.warning(f"[Startup] Failed to seed finance tags: {e}")
-
-        # 执行大纲提取任务恢复
-        try:
-            from sail_server.service.startup_recovery import perform_startup_recovery
-
-            result = perform_startup_recovery()
-            if result["recovered_count"] > 0:
-                logger.info(
-                    f"[Startup] Recovered {result['recovered_count']} outline extraction tasks "
-                    f"to paused state"
-                )
-        except Exception as e:
-            logger.warning(f"[Startup] Failed to recover outline extraction tasks: {e}")
 
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger

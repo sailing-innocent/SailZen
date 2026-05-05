@@ -17,7 +17,6 @@ from sail_server.infrastructure.orm.text import (
     Work,
     Edition,
     DocumentNode,
-    IngestJob,
 )
 from sail_server.application.dto.text import (
     WorkCreateRequest,

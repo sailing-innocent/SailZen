@@ -503,6 +503,11 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Rename Note`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
+  BATCH_RENAME_NOTE: {
+    key: "dendron.batchRenameNote",
+    title: `${CMD_PREFIX} Batch Rename Note`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
+  },
   RENAME_HEADER: {
     key: "dendron.renameHeader",
     title: `${CMD_PREFIX} Rename Header`,
@@ -838,6 +843,17 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Toggle Preview Lock`,
     icon: `$(lock)`,
     when: "dendron:pluginActive",
+  },
+  // --- SailZen Doc Export
+  EXPORT_NOTE_TO_LATEX: {
+    key: "sailzen.exportNoteToLatex",
+    title: `${CMD_PREFIX} Export Note to LaTeX`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
+  },
+  EXPORT_NOTE_TO_MARKDOWN: {
+    key: "sailzen.exportNoteToMarkdown",
+    title: `${CMD_PREFIX} Export Note to Markdown (Blog)`,
+    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
   PASTE_FILE: {
     key: "dendron.pasteFile",

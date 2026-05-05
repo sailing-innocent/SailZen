@@ -24,9 +24,6 @@ app_secret: ""
 # OPTIONAL: Control Plane Settings
 # =============================================================================
 
-# Server control plane URL (optional, for server integration)
-# control_plane_url: "http://127.0.0.1:8000/api/v1/remote-dev/control-plane"
-
 # Edge node identifier (optional)
 # edge_node_key: "home-dev-host"
 
@@ -48,8 +45,11 @@ app_secret: ""
 # Offline mode - don't connect to control plane (default: false)
 # offline_mode: false
 
-# Queue file path for offline message buffering (optional)
-# queue_path: "data/control_plane/edge_queue.json"
+# =============================================================================
+# OPTIONAL: Default Chat for Proactive Messages
+# =============================================================================
+# Bot can send proactive messages to this chat (e.g., long-running task notifications)
+# default_chat_id: "oc_xxxxxxxxxxxxxxxx"
 
 # =============================================================================
 # OPTIONAL: Session Settings

@@ -17,9 +17,9 @@ from typing import Optional
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ConversationContext
-from sail_bot.card_renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 from sail_bot.task_logger import task_logger
-from sail_bot.opencode_client import OpenCodeSessionClient
+from sail.opencode import check_health_sync
 
 
 class HelpHandler(BaseHandler):
@@ -30,7 +30,7 @@ class HelpHandler(BaseHandler):
         help_card = CardRenderer.help(
             projects=self.ctx.config.projects,
             has_llm=self.ctx.brain._gw is not None,
-            has_self_update=self.ctx.self_update_enabled,
+            has_self_update=True,
         )
         self.ctx.messaging.reply_card(message_id, help_card, "help")
 
@@ -96,49 +96,42 @@ class StatusHandler(BaseHandler):
 
         # 2. Workspace connectivity status
         status_lines.append("🔍 **工作区连接状态**")
-        sessions = self.ctx.session_mgr.list_sessions()
+        procs = self.ctx.process_mgr.list_processes()
 
-        if not sessions:
+        if not procs:
             status_lines.append("❌ 没有运行中的工作区")
             status_lines.append(
                 "💡 使用 `!启动 <项目名>` 或 `启动 <项目名>` 开启工作区"
             )
         else:
-            for session in sessions:
-                name = Path(session.path).name
-                port = session.port
-
-                # Test port
-                port_open = self.ctx.session_mgr._is_port_open(port)
+            for proc in procs:
+                name = Path(proc.path).name
+                port = proc.port
 
                 # Test API health
                 api_healthy = False
-                api_info = "unknown"
-                if port_open:
+                if proc.is_alive:
                     try:
-                        client = OpenCodeSessionClient(port=port)
-                        api_healthy = client.is_healthy()
-                        api_info = "connected" if api_healthy else "unhealthy"
-                    except Exception as exc:
-                        api_healthy = False
-                        api_info = f"error: {str(exc)[:30]}"
+                        api_healthy = check_health_sync(port)
+                    except Exception:
+                        pass
 
                 # Status icon
-                if port_open and api_healthy:
+                if proc.is_alive and api_healthy:
                     icon = "✅"
-                    status_desc = f"运行正常 ({api_info})"
-                elif port_open and not api_healthy:
+                    status_desc = "运行正常"
+                elif proc.is_alive and not api_healthy:
                     icon = "⚠️"
-                    status_desc = f"端口开放但 API 异常 ({api_info})"
+                    status_desc = "端口开放但 API 异常"
                 else:
                     icon = "❌"
                     status_desc = "未运行"
 
-                is_current = ctx and ctx.active_workspace == session.path
+                is_current = ctx and ctx.active_workspace == proc.path
                 current_marker = " 👈 当前" if is_current else ""
 
                 status_lines.append(f"{icon} **{name}**{current_marker}")
-                status_lines.append(f"   路径: `{session.path}`")
+                status_lines.append(f"   路径: `{proc.path}`")
                 status_lines.append(f"   端口: {port}")
                 status_lines.append(f"   状态: {status_desc}")
                 status_lines.append("")
@@ -150,7 +143,7 @@ class StatusHandler(BaseHandler):
                 slug = proj.get("slug", "")
                 path = proj.get("path", "")
                 label = proj.get("label", slug)
-                is_running = any(s.path == path for s in sessions)
+                is_running = any(p.path == path for p in procs)
                 run_icon = "✅" if is_running else "⚪"
                 status_lines.append(f"{run_icon} {label} (`{slug}`)")
             status_lines.append("")

@@ -10,6 +10,15 @@ export enum DendronASTDest {
   MD_REGULAR = "MD_REGULAR",
   MD_DENDRON = "MD_DENDRON",
   HTML = "HTML",
+  /**
+   * SailZen Doc export mode: AST is processed for document generation
+   * (LaTeX, Typst, Slidev, etc.)
+   */
+  DOC_EXPORT = "DOC_EXPORT",
+  /**
+   * SailZen Doc preview mode: lightweight preview of document formatting
+   */
+  DOC_PREVIEW = "DOC_PREVIEW",
 }
 
 /**

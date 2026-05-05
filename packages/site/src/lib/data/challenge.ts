@@ -87,6 +87,14 @@ export interface ChallengeData {
 }
 
 // 每日打卡记录
+
+export enum CheckInStatus {
+  PENDING = 'pending',   // 未打卡
+  SUCCESS = 'success',   // 成功 (MissionState.DONE)
+  FAILED = 'failed',     // 失败 (MissionState.CANCELED)
+  FUTURE = 'future',     // 未来日期（还未到）
+}
+
 export interface CheckInData {
   day: number             // 第几天 (1-based)
   mission: MissionData    // 原始 Mission 数据
@@ -94,12 +102,6 @@ export interface CheckInData {
   date: Date              // 该天对应的日期
 }
 
-export const CheckInStatus = {
-  PENDING: 'pending',   // 未打卡
-  SUCCESS: 'success',   // 成功 (MissionState.DONE)
-  FAILED: 'failed',     // 失败 (MissionState.CANCELED)
-  FUTURE: 'future',     // 未来日期（还未到）
-} as const
 
 export type CheckInStatusValue = typeof CheckInStatus[keyof typeof CheckInStatus]
 

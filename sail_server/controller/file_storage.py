@@ -19,7 +19,6 @@ import os
 import hashlib
 import uuid
 import json
-from pathlib import Path
 
 # 文件存储目录 - 通过统一路径配置获取
 from sail_server.config.paths import FILE_STORAGE_DIR

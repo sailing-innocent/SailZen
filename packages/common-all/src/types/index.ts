@@ -22,6 +22,7 @@ export * from "./DWorkspace";
 export * from "./FindNoteOpts";
 export * from "./SeedEntry";
 export * from "./configs";
+export * from "./docEngine";
 
 export type Stage = "dev" | "prod" | "test";
 

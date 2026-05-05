@@ -17,7 +17,7 @@ from typing import Optional, Callable, Dict
 
 from sail_bot.handlers.base import BaseHandler, HandlerContext
 from sail_bot.context import ActionPlan, ConversationContext
-from sail_bot.card_renderer import CardRenderer
+from sail.feishu_card_kit.renderer import CardRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -36,21 +36,26 @@ class PlanExecutor(BaseHandler):
             StartWorkspaceHandler,
             StopWorkspaceHandler,
             SwitchWorkspaceHandler,
+            WorkspaceDashboardHandler,
         )
         from sail_bot.handlers.task_handler import TaskHandler
         from sail_bot.handlers.self_update_handler import SelfUpdateHandler
+        from sail_bot.handlers.image_gen_handler import ImageGenHandler
 
         self._help = HelpHandler(ctx)
         self._status = StatusHandler(ctx)
         self._start = StartWorkspaceHandler(ctx)
         self._stop = StopWorkspaceHandler(ctx)
         self._switch = SwitchWorkspaceHandler(ctx)
+        self._dashboard = WorkspaceDashboardHandler(ctx)
         self._task = TaskHandler(ctx)
         self._update = SelfUpdateHandler(ctx)
+        self._image_gen = ImageGenHandler(ctx)
 
         self._registry: Dict[str, tuple[Callable, str]] = {
             "show_help": (self._exec_help, "显示帮助信息"),
             "show_status": (self._exec_status, "状态已显示"),
+            "show_workspace_dashboard": (self._exec_dashboard, "显示工作区面板"),
             "switch_workspace": (self._exec_switch, "切换工作区"),
             "start_workspace": (self._exec_start, "启动工作区"),
             "stop_workspace": (self._exec_stop, "停止工作区"),
@@ -60,6 +65,11 @@ class PlanExecutor(BaseHandler):
                 self._exec_confirmed_self_update,
                 "正在执行自更新...",
             ),
+            "enter_image_gen": (self._exec_enter_image_gen, "进入图片生成模式"),
+            "generate_image": (self._exec_generate_image, "生成图片"),
+            "edit_image": (self._exec_edit_image, "编辑图片"),
+            "save_image": (self._exec_save_image, "保存图片"),
+            "exit_image_gen": (self._exec_exit_image_gen, "退出图片生成模式"),
         }
 
     def execute(
@@ -89,6 +99,11 @@ class PlanExecutor(BaseHandler):
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
         self._status.handle(chat_id, mid, ctx)
+
+    def _exec_dashboard(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._dashboard.handle(chat_id, mid)
 
     def _exec_switch(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
@@ -129,13 +144,9 @@ class PlanExecutor(BaseHandler):
     def _exec_self_update(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
-        self._update.handle(
-            chat_id,
-            mid,
-            ctx,
-            plan.params.get("trigger_source", "manual"),
-            plan.params.get("reason", "User requested update"),
-        )
+        trigger = plan.params.get("trigger_source", "manual")
+        reason = plan.params.get("reason", "User requested update")
+        self._update.handle(chat_id, mid, ctx, reason=f"[{trigger}] {reason}")
 
     def _exec_confirmed_self_update(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
@@ -143,25 +154,56 @@ class PlanExecutor(BaseHandler):
         trigger_source = plan.params.get("trigger_source", "manual")
         reason = plan.params.get("reason", "User confirmed update")
 
+        # Save pending update context BEFORE starting the update
+        from sail_bot.self_update_orchestrator import SelfUpdateOrchestrator
+
+        SelfUpdateOrchestrator.save_pending_update(
+            chat_id=chat_id,
+            reason=f"[{trigger_source}] {reason}",
+        )
+
         def do_self_update():
             result = self.ctx.request_self_update(
-                trigger_source=trigger_source,
-                reason=reason,
-                initiated_by=chat_id,
+                reason=f"[{trigger_source}] {reason} (by {chat_id})",
             )
             if result and result.get("success"):
                 card = CardRenderer.result(
                     "更新已启动",
-                    f"阶段: {result.get('phase', 'unknown')}\n"
-                    f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
-                    "旧进程即将退出，新进程将接管。",
+                    f"Bot 即将退出并由 watcher 重启。",
                     success=True,
                 )
                 self.ctx.messaging.send_card(chat_id, card)
             else:
+                # Clear pending update on failure
+                SelfUpdateOrchestrator.load_and_clear_pending_update()
                 err = result.get("error", "Unknown error") if result else "No response"
                 card = CardRenderer.result("更新失败", err, success=False)
                 self.ctx.messaging.send_card(chat_id, card)
 
         threading.Thread(target=do_self_update, daemon=True).start()
         self.ctx.messaging.reply_text(mid, "正在启动更新，请稍候...")
+
+    def _exec_enter_image_gen(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_enter(chat_id, mid, ctx)
+
+    def _exec_generate_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_generate(plan, chat_id, mid, ctx)
+
+    def _exec_edit_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_edit(plan, chat_id, mid, ctx)
+
+    def _exec_save_image(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_save(plan, chat_id, mid, ctx)
+
+    def _exec_exit_image_gen(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._image_gen.handle_exit(chat_id, mid, ctx)

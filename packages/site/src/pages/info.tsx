@@ -1,7 +1,7 @@
 import PageLayout from '@components/page_layout'
 import { useIsMobile } from '@/hooks/use-mobile'
-import AddHistoryEventDialog from '@components/history_event_add_dialog'
-import HistoryEventsDataTable from '@components/history_events_data_table'
+import AddHistoryEventDialog from '@components/history/history_event_add_dialog'
+import HistoryEventsDataTable from '@components/history/history_events_data_table'
 
 const InfoPage = () => {
   const isMobile = useIsMobile()

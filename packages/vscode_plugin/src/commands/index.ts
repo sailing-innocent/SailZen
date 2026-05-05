@@ -67,6 +67,7 @@ import { UpgradeSettingsCommand } from "./UpgradeSettings";
 import { ValidateEngineCommand } from "./ValidateEngineCommand";
 import { VaultAddCommand } from "./VaultAddCommand";
 import { ConvertVaultCommand } from "./ConvertVaultCommand";
+import { BatchRenameNoteCommand } from "./BatchRenameNoteCommand";
 import { RenameNoteCommand } from "./RenameNoteCommand";
 import { CreateNoteCommand } from "./CreateNoteCommand";
 import { MergeNoteCommand } from "./MergeNoteCommand";
@@ -75,6 +76,8 @@ import { MoveSelectionToCommand } from "./MoveSelectionToCommand";
 import { RemoveVaultCommand } from "./RemoveVaultCommand";
 import { CreateNewVaultCommand } from "./CreateNewVaultCommand";
 import { AddExistingVaultCommand } from "./AddExistingVaultCommand";
+import { ExportNoteToLatexCommand } from "./ExportNoteToLatexCommand";
+import { ExportNoteToMarkdownCommand } from "./ExportNoteToMarkdownCommand";
 
 /**
  * Note: this does not contain commands that have parametered constructors, as
@@ -120,6 +123,7 @@ const ALL_COMMANDS = [
   MoveNoteCommand,
   MoveSelectionToCommand,
   RenameNoteCommand,
+  BatchRenameNoteCommand,
   RenameHeaderCommand,
   MoveHeaderCommand,
   RefactorHierarchyCommandV2,
@@ -156,6 +160,8 @@ const ALL_COMMANDS = [
   MergeNoteCommand,
   CreateNoteCommand,
   CopyCodespaceURL,
+  ExportNoteToLatexCommand,
+  ExportNoteToMarkdownCommand,
 ] as CodeCommandConstructor[];
 
 export { ALL_COMMANDS };

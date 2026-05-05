@@ -38,7 +38,6 @@ def get_data_path(*parts: str) -> Path:
 
     Examples:
         get_data_path("pipelines")           -> <SERVER_DATA_DIR>/pipelines
-        get_data_path("control_plane", "db")  -> <SERVER_DATA_DIR>/control_plane/db
     """
     p = SERVER_DATA_DIR.joinpath(*parts)
     return p
@@ -70,26 +69,7 @@ FILE_STORAGE_DIR: Path = Path(
     os.environ.get("FILE_STORAGE_PATH", str(SERVER_DATA_DIR / "file_storage"))
 ).resolve()
 
-# Control Plane 数据目录
-CONTROL_PLANE_DIR: Path = SERVER_DATA_DIR / "control_plane"
-
 # SQLite 数据库文件路径
 SQLITE_DB_PATH: Path = Path(
     os.environ.get("SQLITE_PATH", str(SERVER_DATA_DIR / "sailzen.db"))
-).resolve()
-
-# Control Plane SQLite 数据库文件路径
-CONTROL_PLANE_SQLITE_PATH: Path = Path(
-    os.environ.get(
-        "CONTROL_PLANE_SQLITE_PATH",
-        str(CONTROL_PLANE_DIR / "control_plane.db"),
-    )
-).resolve()
-
-# Edge Runtime 离线队列文件
-EDGE_QUEUE_PATH: Path = Path(
-    os.environ.get(
-        "EDGE_QUEUE_PATH",
-        str(CONTROL_PLANE_DIR / "edge_queue.json"),
-    )
 ).resolve()

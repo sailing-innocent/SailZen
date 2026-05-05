@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Dendron",
   "publisher": "SailingInnocent",
-  "version": "0.3.6",
+  "version": "0.3.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -209,6 +209,14 @@
         "title": "Dendron: Copy Codespace URL"
       },
       {
+        "command": "sailzen.exportNoteToLatex",
+        "title": "SailZen: Export Note to LaTeX"
+      },
+      {
+        "command": "sailzen.exportNoteToMarkdown",
+        "title": "SailZen: Export Note to Markdown (Blog)"
+      },
+      {
         "command": "dendron.copyAs",
         "title": "Dendron: Copy As"
       },
@@ -247,6 +255,10 @@
       {
         "command": "dendron.renameNote",
         "title": "Dendron: Rename Note"
+      },
+      {
+        "command": "dendron.batchRenameNote",
+        "title": "Dendron: Batch Rename Note"
       },
       {
         "command": "dendron.renameHeader",
@@ -639,6 +651,10 @@
         },
         {
           "command": "dendron.renameNote",
+          "when": "dendron:pluginActive && shellExecutionSupported"
+        },
+        {
+          "command": "dendron.batchRenameNote",
           "when": "dendron:pluginActive && shellExecutionSupported"
         },
         {
@@ -1325,7 +1341,10 @@
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --watch --tsconfig=tsconfig.json",
     "package": "vsce package --no-dependencies",
     "clean": "rimraf dist node_modules",
-    "vscode:prepublish": "pnpm run compile"
+    "vscode:prepublish": "pnpm run compile",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@saili/api-server": "workspace:^",
@@ -1354,6 +1373,7 @@
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/is-url": "^1.2.32",
+    "@types/jest": "catalog:",
     "@types/lodash": "^4.17.21",
     "@types/luxon": "^3.7.1",
     "@types/markdown-it": "^14.1.2",
@@ -1361,8 +1381,11 @@
     "@types/semver": "^7.7.1",
     "@types/unist": "^3.0.3",
     "@vscode/vsce": "^3.7.1",
+    "cross-env": "^10.1.0",
     "esbuild": "catalog:",
-    "rimraf": "^6.1.2"
+    "jest": "catalog:",
+    "rimraf": "^6.1.2",
+    "ts-jest": "catalog:"
   },
   "capabilities": {
     "untrustedWorkspaces": {

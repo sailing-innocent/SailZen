@@ -57,8 +57,12 @@ def create_project_impl(db, project_create: ProjectCreateRequest) -> ProjectResp
         name=project_create.name,
         description=project_create.description,
         state=ProjectState.INVALID,
-        start_time_qbw=project_create.start_time_qbw if project_create.start_time_qbw is not None else now,
-        end_time_qbw=project_create.end_time_qbw if project_create.end_time_qbw is not None else now + 1,
+        start_time_qbw=project_create.start_time_qbw
+        if project_create.start_time_qbw is not None
+        else now,
+        end_time_qbw=project_create.end_time_qbw
+        if project_create.end_time_qbw is not None
+        else now + 1,
     )
     db.add(project)
     db.commit()
@@ -66,7 +70,9 @@ def create_project_impl(db, project_create: ProjectCreateRequest) -> ProjectResp
     return _project_to_response(project)
 
 
-def change_project_state_impl(db, project_id: int, change_func: callable) -> Optional[ProjectResponse]:
+def change_project_state_impl(
+    db, project_id: int, change_func: callable
+) -> Optional[ProjectResponse]:
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         return None
@@ -124,11 +130,13 @@ def get_projects_impl(db, skip: int = 0, limit: int = -1) -> List[ProjectRespons
     return [_project_to_response(project) for project in projects]
 
 
-def update_project_impl(db, project_id: int, project_update: ProjectUpdateRequest) -> Optional[ProjectResponse]:
+def update_project_impl(
+    db, project_id: int, project_update: ProjectUpdateRequest
+) -> Optional[ProjectResponse]:
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         return None
-    
+
     # Update only provided fields
     if project_update.name is not None:
         project.name = project_update.name
@@ -140,7 +148,7 @@ def update_project_impl(db, project_id: int, project_update: ProjectUpdateReques
         project.start_time_qbw = project_update.start_time_qbw
     if project_update.end_time_qbw is not None:
         project.end_time_qbw = project_update.end_time_qbw
-    
+
     project.mtime = datetime.now()
     db.commit()
     db.refresh(project)
@@ -198,7 +206,9 @@ def create_mission_impl(db, mission_create: MissionCreateRequest) -> MissionResp
     return _mission_to_response(mission)
 
 
-def change_mission_state_impl(db, mission_id: int, change_func: callable) -> Optional[MissionResponse]:
+def change_mission_state_impl(
+    db, mission_id: int, change_func: callable
+) -> Optional[MissionResponse]:
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         return None
@@ -258,7 +268,9 @@ def get_missions_impl(
     return [_mission_to_response(mission) for mission in missions]
 
 
-def update_mission_impl(db, mission_id: int, mission_update: MissionUpdateRequest) -> Optional[MissionResponse]:
+def update_mission_impl(
+    db, mission_id: int, mission_update: MissionUpdateRequest
+) -> Optional[MissionResponse]:
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
         return None
@@ -295,7 +307,9 @@ def delete_mission_impl(db, mission_id: int) -> Optional[MissionResponse]:
 # Any state can transition to any other state for flexibility
 
 
-def postpone_mission_impl(db, mission_id: int, days: int = 7) -> Optional[MissionResponse]:
+def postpone_mission_impl(
+    db, mission_id: int, days: int = 7
+) -> Optional[MissionResponse]:
     """Postpone mission deadline by specified days."""
     mission = db.query(Mission).filter(Mission.id == mission_id).first()
     if not mission:
@@ -314,27 +328,38 @@ def postpone_mission_impl(db, mission_id: int, days: int = 7) -> Optional[Missio
 # Mission Reminder Queries
 # ------------------------------------------------
 
+
 def get_upcoming_missions_impl(db, hours: int = 24) -> List[MissionResponse]:
     """Get missions with deadlines within specified hours that are not done/canceled."""
     now = datetime.now()
     deadline_threshold = now + timedelta(hours=hours)
-    
-    missions = db.query(Mission).filter(
-        Mission.ddl >= now,
-        Mission.ddl <= deadline_threshold,
-        Mission.state.notin_([MissionState.DONE, MissionState.CANCELED])
-    ).order_by(Mission.ddl.asc()).all()
-    
+
+    missions = (
+        db.query(Mission)
+        .filter(
+            Mission.ddl >= now,
+            Mission.ddl <= deadline_threshold,
+            Mission.state.notin_([MissionState.DONE, MissionState.CANCELED]),
+        )
+        .order_by(Mission.ddl.asc())
+        .all()
+    )
+
     return [_mission_to_response(m) for m in missions]
 
 
 def get_overdue_missions_impl(db) -> List[MissionResponse]:
     """Get all overdue missions (past deadline, not done/canceled)."""
     now = datetime.now()
-    
-    missions = db.query(Mission).filter(
-        Mission.ddl < now,
-        Mission.state.notin_([MissionState.DONE, MissionState.CANCELED])
-    ).order_by(Mission.ddl.asc()).all()
-    
+
+    missions = (
+        db.query(Mission)
+        .filter(
+            Mission.ddl < now,
+            Mission.state.notin_([MissionState.DONE, MissionState.CANCELED]),
+        )
+        .order_by(Mission.ddl.asc())
+        .all()
+    )
+
     return [_mission_to_response(m) for m in missions]

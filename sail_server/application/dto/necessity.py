@@ -23,10 +23,12 @@ from pydantic import BaseModel, Field, ConfigDict
 # Residence DTOs
 # ============================================================================
 
+
 class ResidenceBase(BaseModel):
     """住所基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="住所名称")
     code: str = Field(default="", description="住所代码")
     type: int = Field(default=2, description="住所类型")
@@ -38,13 +40,15 @@ class ResidenceBase(BaseModel):
 
 class ResidenceCreateRequest(ResidenceBase):
     """创建住所请求"""
+
     pass
 
 
 class ResidenceUpdateRequest(BaseModel):
     """更新住所请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="住所名称")
     code: Optional[str] = Field(default=None, description="住所代码")
     type: Optional[int] = Field(default=None, description="住所类型")
@@ -56,6 +60,7 @@ class ResidenceUpdateRequest(BaseModel):
 
 class ResidenceResponse(ResidenceBase):
     """住所响应"""
+
     id: int = Field(description="住所ID")
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
@@ -63,6 +68,7 @@ class ResidenceResponse(ResidenceBase):
 
 class ResidenceListResponse(BaseModel):
     """住所列表响应"""
+
     residences: List[ResidenceResponse]
     total: int
 
@@ -71,10 +77,12 @@ class ResidenceListResponse(BaseModel):
 # Container DTOs
 # ============================================================================
 
+
 class ContainerBase(BaseModel):
     """容器基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     residence_id: int = Field(description="所属住所ID")
     parent_id: Optional[int] = Field(default=None, description="父容器ID")
     name: str = Field(description="容器名称")
@@ -85,13 +93,15 @@ class ContainerBase(BaseModel):
 
 class ContainerCreateRequest(ContainerBase):
     """创建容器请求"""
+
     pass
 
 
 class ContainerUpdateRequest(BaseModel):
     """更新容器请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="容器名称")
     type: Optional[int] = Field(default=None, description="容器类型")
     description: Optional[str] = Field(default=None, description="描述")
@@ -100,6 +110,7 @@ class ContainerUpdateRequest(BaseModel):
 
 class ContainerResponse(ContainerBase):
     """容器响应"""
+
     id: int = Field(description="容器ID")
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
@@ -107,6 +118,7 @@ class ContainerResponse(ContainerBase):
 
 class ContainerListResponse(BaseModel):
     """容器列表响应"""
+
     containers: List[ContainerResponse]
     total: int
 
@@ -115,10 +127,12 @@ class ContainerListResponse(BaseModel):
 # ItemCategory DTOs
 # ============================================================================
 
+
 class ItemCategoryBase(BaseModel):
     """物资类别基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     parent_id: Optional[int] = Field(default=None, description="父类别ID")
     name: str = Field(description="类别名称")
     code: str = Field(default="", description="类别代码")
@@ -130,13 +144,15 @@ class ItemCategoryBase(BaseModel):
 
 class ItemCategoryCreateRequest(ItemCategoryBase):
     """创建物资类别请求"""
+
     pass
 
 
 class ItemCategoryUpdateRequest(BaseModel):
     """更新物资类别请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="类别名称")
     code: Optional[str] = Field(default=None, description="类别代码")
     icon: Optional[str] = Field(default=None, description="图标")
@@ -147,6 +163,7 @@ class ItemCategoryUpdateRequest(BaseModel):
 
 class ItemCategoryResponse(ItemCategoryBase):
     """物资类别响应"""
+
     id: int = Field(description="类别ID")
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
@@ -154,6 +171,7 @@ class ItemCategoryResponse(ItemCategoryBase):
 
 class ItemCategoryListResponse(BaseModel):
     """物资类别列表响应"""
+
     categories: List[ItemCategoryResponse]
     total: int
 
@@ -162,10 +180,12 @@ class ItemCategoryListResponse(BaseModel):
 # Item DTOs
 # ============================================================================
 
+
 class ItemBase(BaseModel):
     """物资基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: str = Field(description="物资名称")
     category_id: Optional[int] = Field(default=None, description="所属类别ID")
     type: int = Field(default=0, description="物资类型")
@@ -182,6 +202,7 @@ class ItemBase(BaseModel):
 
 class ItemCreateRequest(ItemBase):
     """创建物资请求"""
+
     purchase_date: Optional[datetime] = Field(default=None, description="购买日期")
     purchase_price: str = Field(default="", description="购买价格")
     warranty_until: Optional[datetime] = Field(default=None, description="保修截止日期")
@@ -190,8 +211,9 @@ class ItemCreateRequest(ItemBase):
 
 class ItemUpdateRequest(BaseModel):
     """更新物资请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     name: Optional[str] = Field(default=None, description="物资名称")
     category_id: Optional[int] = Field(default=None, description="所属类别ID")
     type: Optional[int] = Field(default=None, description="物资类型")
@@ -208,6 +230,7 @@ class ItemUpdateRequest(BaseModel):
 
 class ItemResponse(ItemBase):
     """物资响应"""
+
     id: int = Field(description="物资ID")
     purchase_date: Optional[datetime] = Field(default=None, description="购买日期")
     purchase_price: str = Field(default="", description="购买价格")
@@ -219,6 +242,7 @@ class ItemResponse(ItemBase):
 
 class ItemListResponse(BaseModel):
     """物资列表响应"""
+
     items: List[ItemResponse]
     total: int
 
@@ -227,10 +251,12 @@ class ItemListResponse(BaseModel):
 # Inventory DTOs
 # ============================================================================
 
+
 class InventoryBase(BaseModel):
     """库存基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     item_id: int = Field(description="物资ID")
     residence_id: int = Field(description="所属住所ID")
     container_id: Optional[int] = Field(default=None, description="所属容器ID")
@@ -243,13 +269,15 @@ class InventoryBase(BaseModel):
 
 class InventoryCreateRequest(InventoryBase):
     """创建库存请求"""
+
     pass
 
 
 class InventoryUpdateRequest(BaseModel):
     """更新库存请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     container_id: Optional[int] = Field(default=None, description="所属容器ID")
     quantity: Optional[Decimal] = Field(default=None, description="数量")
     unit: Optional[str] = Field(default=None, description="单位")
@@ -260,8 +288,11 @@ class InventoryUpdateRequest(BaseModel):
 
 class InventoryResponse(InventoryBase):
     """库存响应"""
+
     id: int = Field(description="库存ID")
-    last_check_time: Optional[datetime] = Field(default=None, description="最后检查时间")
+    last_check_time: Optional[datetime] = Field(
+        default=None, description="最后检查时间"
+    )
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
     # 扩展字段
@@ -272,6 +303,7 @@ class InventoryResponse(InventoryBase):
 
 class InventoryListResponse(BaseModel):
     """库存列表响应"""
+
     inventories: List[InventoryResponse]
     total: int
 
@@ -280,10 +312,12 @@ class InventoryListResponse(BaseModel):
 # Journey DTOs
 # ============================================================================
 
+
 class JourneyBase(BaseModel):
     """旅程基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     from_residence_id: int = Field(description="出发住所ID")
     to_residence_id: int = Field(description="目标住所ID")
     depart_time: Optional[datetime] = Field(default=None, description="出发时间")
@@ -295,13 +329,15 @@ class JourneyBase(BaseModel):
 
 class JourneyCreateRequest(JourneyBase):
     """创建旅程请求"""
+
     pass
 
 
 class JourneyUpdateRequest(BaseModel):
     """更新旅程请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     depart_time: Optional[datetime] = Field(default=None, description="出发时间")
     arrive_time: Optional[datetime] = Field(default=None, description="到达时间")
     status: Optional[int] = Field(default=None, description="旅程状态")
@@ -311,6 +347,7 @@ class JourneyUpdateRequest(BaseModel):
 
 class JourneyResponse(JourneyBase):
     """旅程响应"""
+
     id: int = Field(description="旅程ID")
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
@@ -321,6 +358,7 @@ class JourneyResponse(JourneyBase):
 
 class JourneyListResponse(BaseModel):
     """旅程列表响应"""
+
     journeys: List[JourneyResponse]
     total: int
 
@@ -329,10 +367,12 @@ class JourneyListResponse(BaseModel):
 # JourneyItem DTOs
 # ============================================================================
 
+
 class JourneyItemBase(BaseModel):
     """旅程物资基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     journey_id: int = Field(description="所属旅程ID")
     item_id: int = Field(description="物资ID")
     quantity: Decimal = Field(default=Decimal("1"), description="数量")
@@ -345,13 +385,15 @@ class JourneyItemBase(BaseModel):
 
 class JourneyItemCreateRequest(JourneyItemBase):
     """创建旅程物资请求"""
+
     pass
 
 
 class JourneyItemUpdateRequest(BaseModel):
     """更新旅程物资请求"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     quantity: Optional[Decimal] = Field(default=None, description="数量")
     is_return: Optional[bool] = Field(default=None, description="是否归还")
     from_container_id: Optional[int] = Field(default=None, description="出发容器ID")
@@ -362,6 +404,7 @@ class JourneyItemUpdateRequest(BaseModel):
 
 class JourneyItemResponse(JourneyItemBase):
     """旅程物资响应"""
+
     id: int = Field(description="旅程物资ID")
     ctime: datetime = Field(description="创建时间")
     mtime: datetime = Field(description="修改时间")
@@ -371,6 +414,7 @@ class JourneyItemResponse(JourneyItemBase):
 
 class JourneyItemListResponse(BaseModel):
     """旅程物资列表响应"""
+
     items: List[JourneyItemResponse]
     total: int
 
@@ -379,10 +423,12 @@ class JourneyItemListResponse(BaseModel):
 # Consumption DTOs
 # ============================================================================
 
+
 class ConsumptionBase(BaseModel):
     """消耗记录基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     inventory_id: int = Field(description="库存ID")
     quantity: Decimal = Field(description="消耗数量")
     htime: Optional[datetime] = Field(default=None, description="发生时间")
@@ -391,17 +437,20 @@ class ConsumptionBase(BaseModel):
 
 class ConsumptionCreateRequest(ConsumptionBase):
     """创建消耗记录请求"""
+
     pass
 
 
 class ConsumptionResponse(ConsumptionBase):
     """消耗记录响应"""
+
     id: int = Field(description="消耗记录ID")
     ctime: datetime = Field(description="创建时间")
 
 
 class ConsumptionListResponse(BaseModel):
     """消耗记录列表响应"""
+
     consumptions: List[ConsumptionResponse]
     total: int
 
@@ -410,10 +459,12 @@ class ConsumptionListResponse(BaseModel):
 # Replenishment DTOs
 # ============================================================================
 
+
 class ReplenishmentBase(BaseModel):
     """补货记录基础信息"""
+
     model_config = ConfigDict(from_attributes=True)
-    
+
     inventory_id: int = Field(description="库存ID")
     quantity: Decimal = Field(description="补货数量")
     source: int = Field(default=0, description="来源")
@@ -426,16 +477,19 @@ class ReplenishmentBase(BaseModel):
 
 class ReplenishmentCreateRequest(ReplenishmentBase):
     """创建补货记录请求"""
+
     pass
 
 
 class ReplenishmentResponse(ReplenishmentBase):
     """补货记录响应"""
+
     id: int = Field(description="补货记录ID")
     ctime: datetime = Field(description="创建时间")
 
 
 class ReplenishmentListResponse(BaseModel):
     """补货记录列表响应"""
+
     replenishments: List[ReplenishmentResponse]
     total: int

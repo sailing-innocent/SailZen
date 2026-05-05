@@ -1,6 +1,6 @@
 {
   "name": "@saili/unified",
-  "version": "0.3.6",
+  "version": "0.3.9",
   "type": "module",
   "description": "Unified parser utilities for Dendron",
   "license": "MIT",
@@ -51,6 +51,7 @@
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
+    "remark-stringify": "^11.0.0",
     "remark-variables": "^1.4.9",
     "unified": "^11.0.5",
     "unified-engine": "^11.2.2",

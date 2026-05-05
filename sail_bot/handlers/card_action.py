@@ -11,22 +11,23 @@ This module extracts card action handling logic from FeishuBotAgent
 and provides a clean, testable interface for processing button clicks.
 """
 
-import asyncio
 import json
 import threading
+import time
 import traceback
 from typing import Optional, Any
 
-# FIX: Move imports to top level
 from lark_oapi.event.callback.model.p2_card_action_trigger import (
     P2CardActionTriggerResponse,
 )
 
+import logging
+
 from sail_bot.handlers.base import BaseHandler, HandlerContext
-from sail_bot.context import ActionPlan, PendingConfirmation
-from sail_bot.session_state import PendingAction, RiskLevel
-from sail_bot.card_renderer import CardRenderer
-from sail_bot.async_task_manager import task_manager
+from sail_bot.context import ActionPlan
+from sail.feishu_card_kit.renderer import CardRenderer
+
+logger = logging.getLogger(__name__)
 
 
 class CardActionHandler(BaseHandler):
@@ -89,6 +90,19 @@ class CardActionHandler(BaseHandler):
             # Handle confirm_self_update action
             if action_type == "confirm_self_update":
                 return self._handle_confirm_self_update(value, chat_id)
+
+            # Handle workspace button actions
+            if action_type in (
+                "btn_start_workspace",
+                "btn_stop_workspace",
+                "btn_switch_workspace",
+                "btn_show_dashboard",
+                "btn_refresh_dashboard",
+                "btn_stop_all",
+            ):
+                return self._handle_workspace_button(
+                    action_type, value, chat_id, message_id
+                )
 
             # Route other actions to background execution
             return self._route_to_background(action_type, path, chat_id, message_id)
@@ -247,90 +261,117 @@ class CardActionHandler(BaseHandler):
         )
 
     def _handle_cancel_task(self, value: dict, chat_id: str) -> Any:
-        """Handle task cancellation request."""
-        # Support both "task_id" and "op_id" for compatibility
-        task_id = value.get("task_id") or value.get("op_id") if isinstance(value, dict) else None
+        """Handle task cancellation request.
 
-        if task_id:
-            print(f"[CardActionHandler] Cancelling task: {task_id}")
-            success = task_manager.abort_task(task_id)
+        Cancellation flow:
+        1. Extract task_id from button value
+        2. Call op_tracker.cancel(task_id) which:
+           a. Sets op.cancelled = True
+           b. Invokes the registered cancel callback (SessionRunner.cancel)
+        3. SessionRunner.cancel() sets _cancel_event, causing the SSE loop to exit
+        4. TaskHandler detects was_cancelled and updates card to "已取消"
+        5. TaskHandler calls op_tracker.finish() to clean up
+        """
+        task_id = (
+            value.get("task_id") or value.get("op_id")
+            if isinstance(value, dict)
+            else None
+        )
 
-            if success:
-                return P2CardActionTriggerResponse(
-                    {
-                        "toast": {
-                            "type": "info",
-                            "content": "正在取消任务...",
-                            "i18n": {
-                                "zh_cn": "正在取消任务...",
-                                "en_us": "Cancelling task...",
-                            },
-                        }
-                    }
-                )
-            else:
-                return P2CardActionTriggerResponse(
-                    {
-                        "toast": {
-                            "type": "error",
-                            "content": "取消任务失败（任务可能已完成或不存在）",
-                            "i18n": {
-                                "zh_cn": "取消任务失败（任务可能已完成或不存在）",
-                                "en_us": "Failed to cancel task (may already completed or not found)",
-                            },
-                        }
-                    }
-                )
-        else:
+        if not task_id:
             return P2CardActionTriggerResponse(
                 {
                     "toast": {
                         "type": "error",
-                        "content": "取消任务失败（任务可能已完成或不存在）",
+                        "content": "取消失败：缺少任务 ID",
                         "i18n": {
-                            "zh_cn": "取消任务失败（任务可能已完成或不存在）",
-                            "en_us": "Failed to cancel task (may already completed or not found)",
+                            "zh_cn": "取消失败：缺少任务 ID",
+                            "en_us": "Cancel failed: missing task ID",
                         },
                     }
                 }
             )
 
+        logger.info("[CardActionHandler] Cancel request for task: %s", task_id)
+        cancelled = self.ctx.op_tracker.cancel(task_id)
+
+        if cancelled:
+            return P2CardActionTriggerResponse(
+                {
+                    "toast": {
+                        "type": "info",
+                        "content": "正在取消任务...",
+                        "i18n": {
+                            "zh_cn": "正在取消任务...",
+                            "en_us": "Cancelling task...",
+                        },
+                    }
+                }
+            )
+
+        # Operation not found — it may have already completed or been cancelled
+        return P2CardActionTriggerResponse(
+            {
+                "toast": {
+                    "type": "warning",
+                    "content": "任务可能已完成或已取消",
+                    "i18n": {
+                        "zh_cn": "任务可能已完成或已取消",
+                        "en_us": "Task may have already finished or been cancelled",
+                    },
+                }
+            }
+        )
+
     def _handle_confirm_self_update(self, value: dict, chat_id: str) -> Any:
         """Handle self-update confirmation."""
-        trigger_source = value.get("trigger_source", "manual")
-        reason = value.get("reason", "User confirmed update")
+        reason = value.get("reason", "用户确认更新")
+
+        # Extract message_id from event context for updating the original card later
+        # Note: message_id is captured from the card action event
+        # We need to pass it through so the restarted bot can update the card
+        # However, the message_id from card action is the *original* message that contains the card
+        # After restart, we can only send a new message (cannot update old card without message_id)
+        # So we save chat_id and reason; the restarted bot will send a new completion card
+
+        # Save pending update context BEFORE starting the update
+        # so that even if the process exits immediately, the context is persisted
+        from sail_bot.self_update_orchestrator import SelfUpdateOrchestrator
+
+        SelfUpdateOrchestrator.save_pending_update(
+            chat_id=chat_id,
+            reason=reason,
+        )
 
         # Start self-update in background
         def do_self_update():
-            # FIX: asyncio imported at top level
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                result = self.ctx.request_self_update(
-                    trigger_source=trigger_source,
-                    reason=reason,
-                    initiated_by=chat_id,
-                )
+                # Give a moment for the save to complete and card response to return
+                import time
+
+                time.sleep(0.5)
+
+                result = self.ctx.request_self_update(reason=reason)
 
                 if result.get("success"):
-                    # Send success message
                     success_card = CardRenderer.result(
                         "✅ 更新已启动",
-                        f"阶段: {result.get('phase', 'unknown')}\n"
-                        f"备份路径: {result.get('backup_path', 'N/A')}\n\n"
-                        "旧进程即将退出，新进程将接管。",
+                        f"{result.get('message', '')}\n\n即将退出并由 watcher 重启。",
                         success=True,
                     )
                     self.ctx.messaging.send_card(chat_id, success_card)
                 else:
-                    # Send error message
+                    # Clear pending update on failure
+                    SelfUpdateOrchestrator.load_and_clear_pending_update()
                     error_card = CardRenderer.error(
                         "❌ 更新失败",
-                        result.get("error", "Unknown error"),
+                        result.get("message", "Unknown error"),
                     )
                     self.ctx.messaging.send_card(chat_id, error_card)
-            finally:
-                loop.close()
+            except Exception as exc:
+                logger.error("[SelfUpdate] Error: %s", exc, exc_info=True)
+                # Clear pending update on exception
+                SelfUpdateOrchestrator.load_and_clear_pending_update()
 
         threading.Thread(target=do_self_update, daemon=True).start()
 
@@ -343,6 +384,119 @@ class CardActionHandler(BaseHandler):
                     "i18n": {
                         "zh_cn": "正在启动更新...",
                         "en_us": "Starting update...",
+                    },
+                }
+            }
+        )
+
+    def _handle_workspace_button(
+        self, action_type: str, value: dict, chat_id: str, message_id: str
+    ) -> Any:
+        """Handle workspace dashboard button clicks.
+
+        These actions are processed in background threads to meet the 3s
+        response requirement for card actions.
+        """
+        path = value.get("path") if isinstance(value, dict) else None
+        ctx = self.ctx.get_or_create_context(chat_id)
+
+        def execute() -> None:
+            try:
+                if action_type == "btn_show_dashboard":
+                    from sail_bot.handlers.workspace_handlers import (
+                        WorkspaceDashboardHandler,
+                    )
+
+                    handler = WorkspaceDashboardHandler(self.ctx)
+                    handler.handle(chat_id, message_id)
+
+                elif action_type == "btn_refresh_dashboard":
+                    from sail_bot.handlers.workspace_handlers import (
+                        WorkspaceDashboardHandler,
+                    )
+
+                    handler = WorkspaceDashboardHandler(self.ctx)
+                    handler.refresh(chat_id, message_id, ctx)
+
+                elif action_type == "btn_start_workspace":
+                    if path:
+                        from sail_bot.handlers.workspace_handlers import (
+                            StartWorkspaceHandler,
+                        )
+
+                        handler = StartWorkspaceHandler(self.ctx)
+                        handler.handle(chat_id, message_id, ctx, path=path)
+                    else:
+                        self.ctx.messaging.reply_text(
+                            message_id, "❌ 未指定工作区路径"
+                        )
+
+                elif action_type == "btn_stop_workspace":
+                    if path:
+                        from sail_bot.handlers.workspace_handlers import (
+                            StopWorkspaceHandler,
+                        )
+
+                        handler = StopWorkspaceHandler(self.ctx)
+                        handler.handle(chat_id, message_id, ctx, path=path)
+                    else:
+                        # Stop all
+                        from sail_bot.handlers.workspace_handlers import (
+                            StopWorkspaceHandler,
+                        )
+
+                        handler = StopWorkspaceHandler(self.ctx)
+                        handler.handle(chat_id, message_id, ctx)
+
+                elif action_type == "btn_stop_all":
+                    from sail_bot.handlers.workspace_handlers import (
+                        StopWorkspaceHandler,
+                    )
+
+                    handler = StopWorkspaceHandler(self.ctx)
+                    handler.handle(chat_id, message_id, ctx)
+
+                elif action_type == "btn_switch_workspace":
+                    if path:
+                        from sail_bot.handlers.workspace_handlers import (
+                            SwitchWorkspaceHandler,
+                        )
+
+                        handler = SwitchWorkspaceHandler(self.ctx)
+                        handler.handle(chat_id, message_id, ctx, path=path)
+                    else:
+                        self.ctx.messaging.reply_text(
+                            message_id, "❌ 未指定工作区路径"
+                        )
+
+            except Exception as exc:
+                print(f"[CardActionHandler] Workspace button error: {exc}")
+                traceback.print_exc()
+                error_card = CardRenderer.error(
+                    "操作失败", f"执行操作时出错: {str(exc)}"
+                )
+                self.ctx.messaging.update_card(message_id, error_card)
+
+        threading.Thread(target=execute, daemon=True).start()
+
+        # Return immediate toast response
+        toast_messages = {
+            "btn_start_workspace": "正在启动工作区...",
+            "btn_stop_workspace": "正在停止工作区...",
+            "btn_switch_workspace": "正在切换工作区...",
+            "btn_show_dashboard": "正在打开面板...",
+            "btn_refresh_dashboard": "正在刷新...",
+            "btn_stop_all": "正在停止全部工作区...",
+        }
+
+        return P2CardActionTriggerResponse(
+            {
+                "toast": {
+                    "type": "info",
+                    "content": toast_messages.get(action_type, "处理中..."),
+                    "i18n": {
+                        "zh_cn": toast_messages.get(action_type, "处理中..."),
+                        "en_us": "Processing...",
                     },
                 }
             }

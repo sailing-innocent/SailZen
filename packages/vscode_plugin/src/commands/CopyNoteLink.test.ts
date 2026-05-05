@@ -101,7 +101,7 @@ describe("CopyNoteLinkCommand", () => {
 
       // Mock clipboard
       const { clipboard } = await import("../utils");
-      (clipboard.writeText as jest.Mock).mockImplementation(() => {});
+      (clipboard.writeText as jest.Mock).mockImplementation(() => { });
 
       // Mock window.showInformationMessage
       const { window } = await import("vscode");
@@ -160,7 +160,7 @@ describe("CopyNoteLinkCommand", () => {
 
       // Mock clipboard
       const { clipboard } = await import("../utils");
-      (clipboard.writeText as jest.Mock).mockImplementation(() => {});
+      (clipboard.writeText as jest.Mock).mockImplementation(() => { });
 
       // Mock window.showInformationMessage
       const { window } = await import("vscode");
@@ -216,7 +216,7 @@ describe("CopyNoteLinkCommand", () => {
 
       // Mock clipboard
       const { clipboard } = await import("../utils");
-      (clipboard.writeText as jest.Mock).mockImplementation(() => {});
+      (clipboard.writeText as jest.Mock).mockImplementation(() => { });
 
       // Mock window.showInformationMessage
       const { window } = await import("vscode");
@@ -266,7 +266,7 @@ describe("CopyNoteLinkCommand", () => {
 
       // Mock clipboard
       const { clipboard } = await import("../utils");
-      (clipboard.writeText as jest.Mock).mockImplementation(() => {});
+      (clipboard.writeText as jest.Mock).mockImplementation(() => { });
 
       // Mock window.showInformationMessage
       const { window } = await import("vscode");
@@ -342,7 +342,7 @@ describe("CopyNoteLinkCommand", () => {
 
       // Mock clipboard
       const { clipboard } = await import("../utils");
-      (clipboard.writeText as jest.Mock).mockImplementation(() => {});
+      (clipboard.writeText as jest.Mock).mockImplementation(() => { });
 
       // Mock window.showInformationMessage
       const { window } = await import("vscode");

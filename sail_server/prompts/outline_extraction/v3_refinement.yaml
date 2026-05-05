@@ -1,0 +1,178 @@
+id: outline_extraction_v3_refinement
+name: "大纲提取 V3 - 全局精炼"
+description: "基于粗纲进行全局视角精炼，识别跨章节线索、合并重复节点、修正层级关系"
+task_type: outline_refinement
+version: "3.0"
+
+system_prompt: |
+  你是一位资深小说编辑和文学批评家，擅长从全局视角审视故事结构。
+
+  你的任务是基于已提取的小说粗纲，以"全书读者视角"进行全局精炼：
+  1. 识别跨章节的伏笔、呼应、对称结构
+  2. 合并重复或过度细分的节点（如连续多个相似场景）
+  3. 修正层级关系，确保父节点确实涵盖所有子节点
+  4. 补充只有全局视角才能发现的情节线索（如暗线、象征、主题呼应）
+  5. 为关键节点添加 "global_insight" 字段，说明其在全书结构中的意义
+
+  输出要求：
+  - 必须输出合法的 JSON 格式
+  - 保持所有节点的 position_anchor 不变（确保顺序稳定）
+  - 可以修改、合并、删除节点，也可以新增全局视角节点
+  - 不要输出任何解释性文字，只输出 JSON
+
+user_prompt_template: |
+  【任务】全局大纲精炼
+
+  【作品】{{work_title}}
+  【总章节数】{{total_chapters}}
+  【原始节点数】{{total_nodes}}
+
+  【粗纲结构】
+  {{outline_summary}}
+
+  【候选实体列表】
+  {{candidate_entities}}
+
+  【精炼要求】
+  1. 合并相似节点
+     - 标题高度相似（≥80% 重复字）的相邻节点应合并
+     - 同一事件被重复描述（如 "战斗开始" / "继续战斗" / "战斗结束"）应合并为一个节点
+
+  2. 识别并标注跨章节线索
+     - 伏笔（早期章节埋下的线索在后期回收）
+     - 呼应（前后情节的对称或对比）
+     - 反转（读者预期与实际发展的差异）
+     - 将这些线索添加到 metadata.cross_chapter_threads
+
+  3. 确保层级合理
+     - 父节点的摘要应能概括所有直接子节点
+     - 如果父节点无法概括，考虑提升子节点层级或拆分父节点
+     - 深度建议：act(0) → arc(1) → scene(2) → beat(3)，不要超过 4 层
+
+  4. 为重要节点添加全局洞察
+     - 在 metadata 或节点描述中说明该节点在全书结构中的功能
+     - 例如："此为第一幕高潮，标志主角从被动转为主动"
+
+  5. 删除过于细碎的节点
+     - 保留 significance = critical / major 的节点
+     - significance = normal 的节点如过于细碎（字数 <20 且无明显情节推动）可删除
+     - significance = minor 的节点原则上删除，除非有全局意义
+
+  【输出格式】
+  输出与输入相同的 JSON 结构，在 metadata 中增加以下字段：
+  - refinement_changes: 变更列表，每项包含 {"type": "merge|delete|update|add", "description": "...", "node_ids": ["..."]}
+  - cross_chapter_threads: 跨章节线索列表，每项包含 {"type": "foreshadowing|echo|twist|theme", "description": "...", "chapter_range": "第X章-第Y章"}
+  - global_insights: 全局洞察列表
+
+  ```json
+  {
+    "outline_nodes": [...],
+    "turning_points": [...],
+    "metadata": {
+      "total_nodes": 42,
+      "max_depth": 3,
+      "refinement_changes": [...],
+      "cross_chapter_threads": [...],
+      "global_insights": [...]
+    }
+  }
+  ```
+
+output_schema:
+  type: object
+  properties:
+    outline_nodes:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          node_type:
+            type: string
+            enum: ["act", "arc", "scene", "beat", "turning_point"]
+          title:
+            type: string
+          summary:
+            type: string
+          significance:
+            type: string
+            enum: ["critical", "major", "normal", "minor"]
+          parent_id:
+            type: ["string", "null"]
+          depth:
+            type: integer
+          position_anchor:
+            type: object
+            properties:
+              chapter_index:
+                type: integer
+              in_chapter_order:
+                type: integer
+              char_offset:
+                type: integer
+              chapter_title:
+                type: string
+          characters:
+            type: array
+            items:
+              type: string
+          evidence_list:
+            type: array
+            items:
+              type: object
+        required: ["id", "node_type", "title", "summary", "significance"]
+    turning_points:
+      type: array
+      items:
+        type: object
+        properties:
+          node_id:
+            type: string
+          turning_point_type:
+            type: string
+          description:
+            type: string
+    metadata:
+      type: object
+      properties:
+        total_nodes:
+          type: integer
+        max_depth:
+          type: integer
+        refinement_changes:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: ["merge", "delete", "update", "add"]
+              description:
+                type: string
+              node_ids:
+                type: array
+                items:
+                  type: string
+        cross_chapter_threads:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: ["foreshadowing", "echo", "twist", "theme"]
+              description:
+                type: string
+              chapter_range:
+                type: string
+        global_insights:
+          type: array
+          items:
+            type: object
+            properties:
+              node_id:
+                type: string
+              insight:
+                type: string
+  required: ["outline_nodes", "metadata"]

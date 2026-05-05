@@ -24,17 +24,17 @@ from lark_oapi.api.im.v1 import (
     PatchMessageRequestBody,
     ReplyMessageRequest,
     ReplyMessageRequestBody,
+    CreateImageRequest,
+    CreateImageRequestBody,
 )
 
-from sail_bot.card_renderer import (
+from sail.feishu_card_kit.tracker import (
     CardMessageTracker,
     card_to_feishu_content,
     text_fallback,
 )
 
-
 logger = logging.getLogger(__name__)
-
 
 class _RateLimiter:
     def __init__(self, max_calls: int = 20, period: float = 1.0):
@@ -72,13 +72,57 @@ class FeishuMessagingClient:
     - Track card metadata
     """
 
-    def __init__(self, lark_client: Optional[lark.Client] = None):
+    def __init__(self, lark_client: Optional[lark.Client] = None, default_chat_id: Optional[str] = None):
         self.lark_client = lark_client
+        self.default_chat_id = default_chat_id
         self.card_tracker = CardMessageTracker()
 
     def set_client(self, lark_client: lark.Client) -> None:
         """Set the Lark client (used after initialization)."""
         self.lark_client = lark_client
+
+    def set_default_chat_id(self, chat_id: Optional[str]) -> None:
+        """Set the default chat_id for proactive messages."""
+        self.default_chat_id = chat_id
+
+    def send_text_to_default(self, text: str) -> bool:
+        """Send a text message to the default chat.
+
+        This is useful for proactive notifications from long-running tasks.
+
+        Args:
+            text: Message text content
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.default_chat_id:
+            logger.warning("No default_chat_id configured, cannot send proactive message")
+            return False
+        return self.send_text(self.default_chat_id, text)
+
+    def send_card_to_default(
+        self,
+        card: dict,
+        card_type: str = "",
+        context: Optional[dict] = None,
+    ) -> Optional[str]:
+        """Send an interactive card to the default chat.
+
+        This is useful for proactive card notifications from long-running tasks.
+
+        Args:
+            card: Card content dictionary
+            card_type: Type identifier for the card
+            context: Additional context to track with the card
+
+        Returns:
+            Message ID if successful, None otherwise
+        """
+        if not self.default_chat_id:
+            logger.warning("No default_chat_id configured, cannot send proactive card")
+            return None
+        return self.send_card(self.default_chat_id, card, card_type, context)
 
     def send_text(self, chat_id: str, text: str) -> bool:
         """Send a text message to a Feishu chat.
@@ -306,6 +350,82 @@ class FeishuMessagingClient:
             return True
         except Exception as exc:
             logger.error("Card update error: %s", exc, exc_info=True)
+            return False
+
+    # ------------------------------------------------------------------
+    # Image helpers
+    # ------------------------------------------------------------------
+
+    def _upload_image(self, image_bytes: bytes, image_type: str = "message") -> Optional[str]:
+        """Upload image to Feishu and return image_key."""
+        import io
+        if not self.lark_client:
+            logger.warning("(no client) Would upload image")
+            return None
+        try:
+            body = (
+                CreateImageRequestBody.builder()
+                .image(io.BytesIO(image_bytes))
+                .image_type(image_type)
+                .build()
+            )
+            req = CreateImageRequest.builder().request_body(body).build()
+            resp = self.lark_client.im.v1.image.create(req)
+            if resp.success() and resp.data and resp.data.image_key:
+                return resp.data.image_key
+            logger.error("Image upload failed: %s", resp.msg)
+            return None
+        except Exception as exc:
+            logger.error("Image upload error: %s", exc, exc_info=True)
+            return None
+
+    def send_image(self, chat_id: str, image_bytes: bytes) -> bool:
+        """Send an image to a chat."""
+        image_key = self._upload_image(image_bytes)
+        if not image_key:
+            return False
+        try:
+            content = json.dumps({"image_key": image_key}, ensure_ascii=False)
+            request = (
+                CreateMessageRequest.builder()
+                .receive_id_type("chat_id")
+                .request_body(
+                    CreateMessageRequestBody.builder()
+                    .receive_id(chat_id)
+                    .msg_type("image")
+                    .content(content)
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.create(request)
+            return resp.success()
+        except Exception as exc:
+            logger.error("Send image error: %s", exc, exc_info=True)
+            return False
+
+    def reply_image(self, message_id: str, image_bytes: bytes) -> bool:
+        """Reply with an image to a specific message."""
+        image_key = self._upload_image(image_bytes)
+        if not image_key:
+            return False
+        try:
+            content = json.dumps({"image_key": image_key}, ensure_ascii=False)
+            request = (
+                ReplyMessageRequest.builder()
+                .message_id(message_id)
+                .request_body(
+                    ReplyMessageRequestBody.builder()
+                    .content(content)
+                    .msg_type("image")
+                    .build()
+                )
+                .build()
+            )
+            resp = self.lark_client.im.v1.message.reply(request)
+            return resp.success()
+        except Exception as exc:
+            logger.error("Reply image error: %s", exc, exc_info=True)
             return False
 
     def get_card_context(self, message_id: str) -> Optional[dict]:

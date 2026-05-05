@@ -2,22 +2,19 @@
 # @file base.py
 # @brief Handler base class and context
 # @author sailing-innocent
-# @date 2026-04-06
-# @version 1.0
+# @date 2026-04-25
+# @version 2.0
 # ---------------------------------
 """Base handler class and context for all handlers.
 
-This module provides the foundation for the handler pattern,
-allowing clean separation of concerns in the bot agent.
+v2.0: 使用 sail.opencode 基础设施层替代旧的 session_manager/async_task_manager。
 """
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Any
 
-# Import types only for type checking to avoid circular imports
 if TYPE_CHECKING:
     from sail_bot.messaging.client import FeishuMessagingClient
-    from sail_bot.session_manager import OpenCodeSessionManager
     from sail_bot.config import AgentConfig
     from sail_bot.brain import BotBrain
     from sail_bot.context import ConversationContext
@@ -26,21 +23,16 @@ if TYPE_CHECKING:
         OperationTracker,
         ConfirmationManager,
     )
+    from sail.opencode import OpenCodeProcessManager
 
 
 @dataclass
 class HandlerContext:
     """Context object passed to all handlers.
-
-    This provides handlers with access to all necessary dependencies
-    without creating tight coupling to the agent class.
+    所有 handler 通过此对象访问依赖，避免与 agent 类紧耦合。
     """
-
-    # Messaging
     messaging: "FeishuMessagingClient"
-
-    # Session management
-    session_mgr: "OpenCodeSessionManager"
+    process_mgr: "OpenCodeProcessManager"
     state_store: "SessionStateStore"
 
     # Operation tracking
@@ -53,17 +45,11 @@ class HandlerContext:
     # Configuration
     config: "AgentConfig"
 
-    # Self-update support
-    self_update_enabled: bool = True
-
-    # Bot reference for callbacks (optional)
+    # Bot reference for callbacks
     agent: Optional[Any] = None
 
     def get_or_create_context(self, chat_id: str) -> "ConversationContext":
-        """Get or create conversation context for a chat.
-
-        This is implemented by the agent and passed through.
-        """
+        """Get or create conversation context for a chat."""
         if self.agent:
             return self.agent._get_context(chat_id)
         raise NotImplementedError("Agent reference not set")
@@ -73,32 +59,24 @@ class HandlerContext:
         if self.agent:
             self.agent._save_contexts()
 
+    def reload_config(self) -> bool:
+        """Reload config from disk via agent."""
+        if self.agent and hasattr(self.agent, "reload_config"):
+            return self.agent.reload_config()
+        return False
+
     def request_self_update(
         self,
-        trigger_source: str = "manual",
-        reason: str = "User requested update",
-        initiated_by: Optional[str] = None,
-    ) -> Any:
-        """Request self-update of the bot."""
-        if self.agent:
-            from sail_bot.async_task_manager import run_async
-
-            return run_async(
-                self.agent.request_self_update(
-                    trigger_source=trigger_source,
-                    reason=reason,
-                    initiated_by=initiated_by,
-                )
-            )
-        raise NotImplementedError("Agent reference not set")
+        reason: str = "用户手动触发",
+    ) -> dict:
+        """Request self-update of the bot. Returns {"success": bool, "message": str}."""
+        if self.agent and hasattr(self.agent, "_update_orchestrator"):
+            return self.agent._update_orchestrator.request_update(reason=reason)
+        return {"success": False, "message": "Self-update not available"}
 
 
 class BaseHandler:
-    """Base class for all handlers.
-
-    Handlers encapsulate specific functionality and receive
-    all dependencies through HandlerContext.
-    """
+    """Base class for all handlers."""
 
     def __init__(self, ctx: HandlerContext):
         self.ctx = ctx
