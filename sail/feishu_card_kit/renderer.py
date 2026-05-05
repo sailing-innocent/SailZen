@@ -91,9 +91,7 @@ class CardRenderer:
 
             # Project info line
             current_marker = " 👈 当前" if is_current else ""
-            elements.append(
-                text(f"{icon} **{label}** ({slug}){current_marker}")
-            )
+            elements.append(text(f"{icon} **{label}** ({slug}){current_marker}"))
             elements.append(note(f"状态: {state_label}"))
 
             # Action buttons based on state
@@ -160,8 +158,7 @@ class CardRenderer:
 
         # Check if any process is running
         has_running = any(
-            session_states.get(p.get("path", ""), "idle") == "running"
-            for p in projects
+            session_states.get(p.get("path", ""), "idle") == "running" for p in projects
         )
         if has_running:
             global_buttons.append(
@@ -174,9 +171,7 @@ class CardRenderer:
             )
 
         elements.append(action_row(global_buttons))
-        elements.append(
-            note("💡 也可直接发送文字指令，如：启动 sailzen / 停止 / 状态")
-        )
+        elements.append(note("💡 也可直接发送文字指令，如：启动 sailzen / 停止 / 状态"))
 
         return card(
             elements=elements,

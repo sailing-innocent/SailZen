@@ -28,9 +28,11 @@ class HelpHandler(BaseHandler):
     def handle(self, chat_id: str, message_id: str) -> None:
         """Send help information."""
         help_card = CardRenderer.help(
+            commands=[
+                ("启动 <项目>", "启动工作区", "启动 sz"),
+                ("停止", "停止工作区", "停止 sz"),
+            ],
             projects=self.ctx.config.projects,
-            has_llm=self.ctx.brain._gw is not None,
-            has_self_update=True,
         )
         self.ctx.messaging.reply_card(message_id, help_card, "help")
 
