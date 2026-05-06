@@ -133,7 +133,7 @@ interface IDoRequestArgs {
 // --- Requests
 export type WorkspaceInitRequest = {
   uri: string;
-  config: {
+  config?: {
     vaults: DVault[];
   };
 };

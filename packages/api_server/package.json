@@ -1,6 +1,6 @@
 {
   "name": "@saili/api-server",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "type": "module",
   "description": "",
   "license": "MIT",
@@ -20,7 +20,10 @@
     "start:local": "cross-env PORT=3005 LOG_LEVEL=info nodemon --watch 'src/**/*.ts' lib/start.js",
     "start": "cross-env PORT=3005 LOG_LEVEL=info node lib/start.js",
     "start:integ:debug": "cross-env PORT=3005 TS_NODE_LOG_ERROR=1 NODE_OPTIONS='--loader ts-node/esm' node --inspect ./src/start.ts",
-    "start:integ:watch": "cross-env PORT=3005 LOG_DST=../../logs/api-server.log LOG_LEVEL=debug NODE_OPTIONS='--loader ts-node/esm' nodemon --watch 'src/**/*.ts' --ignore 'src/**/*.spec.ts' ./src/start.ts"
+    "start:integ:watch": "cross-env PORT=3005 LOG_DST=../../logs/api-server.log LOG_LEVEL=debug NODE_OPTIONS='--loader ts-node/esm' nodemon --watch 'src/**/*.ts' --ignore 'src/**/*.spec.ts' ./src/start.ts",
+    "vault-server": "node lib/standalone.js",
+    "vault-server:dev": "cross-env PORT=3005 tsx src/standalone.ts",
+    "vault-server:watch": "cross-env PORT=3005 nodemon --watch 'src/**/*.ts' --exec 'tsx src/standalone.ts'"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

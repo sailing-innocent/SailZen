@@ -54,3 +54,5 @@ packages/engine-server/src/drivers/generated-prisma-client/*
 bot.yaml
 .kimix_cache
 ./*.png
+
+*.egg-info

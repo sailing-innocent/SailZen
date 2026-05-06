@@ -2,7 +2,7 @@
 id: PcnVj4GZBt7O3HTrwqdFq
 title: Test Paper for Doc Engine MVP
 desc: "Root standalone note for doc engine end-to-end testing"
-updated: 1776609216113
+updated: 1778038069075
 created: 1714300000000
 doc:
   role: standalone
@@ -31,3 +31,5 @@ This is a test paper for the SailZen Doc Engine MVP. It demonstrates the complet
 # Conclusion
 
 The doc engine successfully assembled this paper from multiple compose notes ::cite[foo, bar].
+
+[[Recipe|recipe]]

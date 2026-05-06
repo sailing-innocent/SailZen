@@ -4,7 +4,6 @@ version = "0.2.0"
 description = "My Personal SailServer for daily management"
 readme = "README.md"
 requires-python = ">=3.13"
-
 dependencies = [
     "aiohttp>=3.13.3",
     "dotenv>=0.9.9",
@@ -32,6 +31,12 @@ dependencies = [
     "uvicorn>=0.34.2",
     "websockets>=15.0.0",
 ]
+
+[project.scripts]
+sailzen = "sailzen.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["sailzen*"]
 
 [[tool.uv.index]]
 name = "tencent"

@@ -373,9 +373,11 @@ export async function getReferenceAtPosition({
     .replace("![[", "")
     .replace("[[", "")
     .replace("]]", "");
+  console.log("[getReferenceAtPosition DEBUG] docText:", docText, "refText:", refText);
 
   // don't incldue surrounding fluff for definition
   const { ref, label, anchorStart, anchorEnd, vaultName } = parseRef(refText);
+  console.log("[getReferenceAtPosition DEBUG] parsed ref:", ref, "label:", label);
 
   const startChar = rangeWithLink.start.character;
   // because
@@ -408,6 +410,7 @@ export const parseRef = (rawRef: string): RefT => {
   if (_.isNull(parsed)) throw new Error(`Unable to parse reference ${rawRef}`);
   const { fname, alias } = parsed.from;
   const { anchorStart, anchorEnd, vaultName } = parsed.data;
+  console.log("[parseRef DEBUG] rawRef:", rawRef, "=> fname:", fname, "alias:", alias);
 
   return {
     label: alias || "",

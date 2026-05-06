@@ -1,66 +1,351 @@
-{"level":30,"time":1776757851723,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"appModule:start","dirPath":"F:\\repos\\myrepo\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":30,"time":1776757851771,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"launch","msg":"exit","port":51872,"LOG_DST":"f:\\repos\\myrepo\\SailZen\\packages\\dendron.server.log","root":"F:\\repos\\myrepo\\SailZen\\packages\\vscode_plugin\\dist"}
-{"level":30,"time":1776757851867,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"WorkspaceController:init","msg":"enter","uri":"f:\\repos\\myrepo\\SailZen\\assets\\test-workspace"}
-{"level":30,"time":1776757851870,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
-{"level":30,"time":1776757851873,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","msg":"enter"}
-{"level":30,"time":1776757851894,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1776757851894,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
-{"level":30,"time":1776757851895,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1776757851896,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
-{"level":30,"time":1776757851900,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["dendron.schema.yml","root.schema.yml"]}
-{"level":30,"time":1776757851900,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["dendron.schema.yml","root.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
-{"level":30,"time":1776757851910,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"]}
-{"level":30,"time":1776757851910,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
-{"level":30,"time":1776757851911,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
-{"level":30,"time":1776757851911,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
-{"level":30,"time":1776757852028,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","msg":"enter"}
-{"level":30,"time":1776757852075,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
-POST /api/workspace/initialize 200 346.453 ms - 1107185 - 365
-{"level":30,"time":1776757852078,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1776757852079,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1776757852084,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1776757852086,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1776757852086,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":16,"numCacheUpdates":0}
-{"level":30,"time":1776757852087,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
-{"level":30,"time":1776757852090,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1776757852091,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1776757852092,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1776757852092,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1776757852092,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":11,"numCacheUpdates":0}
-{"level":30,"time":1776757852095,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
-{"level":30,"time":1776757852097,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1776757852098,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1776757852115,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1776757852116,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1776757852116,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":71,"numCacheUpdates":0}
-{"level":30,"time":1776757852117,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
-{"level":30,"time":1776757852119,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1776757852119,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1776757852119,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1776757852119,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1776757852119,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":1,"numCacheUpdates":0}
-{"level":30,"time":1776757852127,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
-{"level":30,"time":1776757852130,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
-{"level":30,"time":1776757852132,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
-{"level":30,"time":1776757852180,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
-{"level":30,"time":1776757852184,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
-{"level":30,"time":1776757852185,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":176,"numCacheUpdates":1}
-{"level":30,"time":1776757852197,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"169\" ms"}
-{"level":30,"time":1776757852203,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
-{"level":30,"time":1776757852203,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"WorkspaceController:init","msg":"finish init","duration":336,"uri":"f:\\repos\\myrepo\\SailZen\\assets\\test-workspace"}
-POST /api/note/findMeta 200 34.743 ms - 988852 - 79
-{"level":30,"time":1776757853295,"pid":13968,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:querySchema","msg":"exit"}
-POST /api/schema/query 200 2.676 ms - 7966 - 68
-POST /api/note/find 200 124.985 ms - 1909 - 118
-GET /api/note/get?id=PcnVj4GZBt7O3HTrwqdFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 128.513 ms - 1907 - -
-POST /api/note/find 200 72.217 ms - 1680 - 126
-GET /api/note/get?id=PcnVj4GZBt9O3HTrwqcFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 110.310 ms - 1678 - -
-POST /api/note/find 200 28.721 ms - 1680 - 126
-POST /api/note/find 200 27.611 ms - 1680 - 126
-POST /api/note/find 200 26.069 ms - 1680 - 126
-POST /api/note/find 200 21.849 ms - 1680 - 126
-POST /api/note/find 200 100.432 ms - 1680 - 126
-POST /api/note/find 200 3.453 ms - 1680 - 126
-POST /api/note/decorations 200 38.706 ms - 44 - 1558
-GET /api/note/query?qs=project.testdoc.content.intro&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 200 49.476 ms - 11 - -
-POST /api/note/find 200 0.882 ms - 11 - 133
+{"level":30,"time":1778038056079,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"appModule:start","dirPath":"F:\\repos\\myrepo\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1778038056091,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"launch","msg":"exit","port":50486,"LOG_DST":"f:\\repos\\myrepo\\SailZen\\packages\\dendron.server.log","root":"F:\\repos\\myrepo\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1778038056235,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"WorkspaceController:init","msg":"enter","uri":"f:\\repos\\myrepo\\SailZen\\assets\\test-workspace"}
+{"level":30,"time":1778038056239,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
+{"level":30,"time":1778038056242,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","msg":"enter"}
+{"level":30,"time":1778038056322,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1778038056322,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+{"level":30,"time":1778038056323,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1778038056323,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1778038056326,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["dendron.schema.yml","root.schema.yml"]}
+{"level":30,"time":1778038056326,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["dendron.schema.yml","root.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1778038056331,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"]}
+{"level":30,"time":1778038056331,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","dendron.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
+{"level":30,"time":1778038056332,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1778038056332,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
+{"level":50,"time":1778038056388,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"appModule:ErrorHandler","error":{"0":"N","1":"o","2":" ","3":"E","4":"n","5":"g","6":"i","7":"n","8":"e","9":":","10":" ","11":"f","12":":","13":"\\","14":"r","15":"e","16":"p","17":"o","18":"s","19":"\\","20":"m","21":"y","22":"r","23":"e","24":"p","25":"o","26":"\\","27":"S","28":"a","29":"i","30":"l","31":"Z","32":"e","33":"n","34":"\\","35":"a","36":"s","37":"s","38":"e","39":"t","40":"s","41":"\\","42":"t","43":"e","44":"s","45":"t","46":"-","47":"w","48":"o","49":"r","50":"k","51":"s","52":"p","53":"a","54":"c","55":"e","length":56}}
+POST /api/note/findMeta 500 1.965 ms - 512 - 99
+{"level":30,"time":1778038056459,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","msg":"enter"}
+{"level":30,"time":1778038056463,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+POST /api/workspace/initialize 200 419.678 ms - 1124238 - 365
+{"level":30,"time":1778038056467,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1778038056467,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1778038056473,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1778038056475,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1778038056476,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":16,"numCacheUpdates":0}
+{"level":30,"time":1778038056477,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1778038056479,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1778038056480,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1778038056481,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1778038056481,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1778038056481,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":11,"numCacheUpdates":0}
+{"level":30,"time":1778038056485,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1778038056487,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1778038056488,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1778038056516,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1778038056521,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1778038056521,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":74,"numCacheUpdates":1}
+{"level":30,"time":1778038056521,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
+{"level":30,"time":1778038056524,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1778038056524,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1778038056524,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1778038056524,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1778038056524,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":1,"numCacheUpdates":0}
+{"level":30,"time":1778038056537,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
+{"level":30,"time":1778038056540,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1778038056547,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1778038056613,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1778038056620,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1778038056620,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":178,"numCacheUpdates":3}
+{"level":30,"time":1778038056636,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"176\" ms"}
+{"level":30,"time":1778038056643,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
+{"level":30,"time":1778038056643,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"WorkspaceController:init","msg":"finish init","duration":407,"uri":"f:\\repos\\myrepo\\SailZen\\assets\\test-workspace"}
+POST /api/note/findMeta 200 26.975 ms - 998060 - 79
+POST /api/note/find 200 33.904 ms - 1909 - 118
+{"level":30,"time":1778038057294,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:querySchema","msg":"exit"}
+POST /api/note/find 200 32.768 ms - 8316 - 133
+POST /api/note/find 200 32.000 ms - 1909 - 118
+POST /api/schema/query 200 1.820 ms - 7966 - 68
+POST /api/note/decorations 200 22.590 ms - 44 - 1898
+POST /api/note/decorations 200 35.057 ms - 287 - 9152
+POST /api/note/find 200 132.260 ms - 1909 - 118
+POST /api/note/find 200 131.618 ms - 1909 - 118
+POST /api/note/find 200 127.431 ms - 1909 - 118
+POST /api/note/find 200 74.662 ms - 1909 - 118
+GET /api/note/query?qs=project.testdoc.paper&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 200 71.123 ms - 11 - -
+POST /api/note/find 200 48.286 ms - 610 - 114
+GET /api/note/get?id=w53fee39jcyc4zs887o7x24&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 65.669 ms - 608 - -
+POST /api/note/find 200 29.574 ms - 1680 - 126
+POST /api/note/find 200 28.423 ms - 1909 - 118
+POST /api/note/find 200 34.300 ms - 1909 - 118
+GET /api/note/get?id=PcnVj4GZBt9O3HTrwqcFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 39.753 ms - 1678 - -
+POST /api/note/find 200 8.109 ms - 1909 - 118
+POST /api/note/decorations 200 18.364 ms - 44 - 1898
+POST /api/note/find 200 0.584 ms - 11 - 125
+POST /api/note/find 200 12.981 ms - 497 - 103
+GET /api/note/get?id=PcnVj4GZBt7O3HTrwqcFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 14.419 ms - 495 - -
+POST /api/note/find 200 5.969 ms - 497 - 103
+POST /api/note/find 200 5.252 ms - 497 - 103
+POST /api/note/find 200 4.567 ms - 497 - 103
+POST /api/note/find 200 88.282 ms - 497 - 103
+POST /api/note/find 200 62.546 ms - 497 - 103
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 200 121.605 ms - 11 - -
+POST /api/note/decorations 200 89.083 ms - 165 - 650
+POST /api/note/find 200 0.973 ms - 11 - 110
+POST /api/note/find 200 1.132 ms - 497 - 103
+POST /api/note/find 200 4.676 ms - 1909 - 118
+POST /api/note/find 200 4.275 ms - 1909 - 118
+POST /api/note/find 200 3.822 ms - 1909 - 118
+POST /api/note/find 200 14.584 ms - 1909 - 118
+POST /api/note/find 200 14.143 ms - 1909 - 118
+POST /api/note/find 200 1.228 ms - 1909 - 118
+POST /api/note/find 200 1.124 ms - 1909 - 118
+POST /api/note/decorations 200 6.640 ms - 44 - 1898
+GET /api/note/query?qs=project.testdoc.paper&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 4.561 ms - - - -
+POST /api/note/find 200 0.462 ms - 11 - 125
+POST /api/note/find 200 1.271 ms - 1909 - 118
+POST /api/note/find 200 0.989 ms - 1909 - 118
+POST /api/note/decorations 200 5.818 ms - 44 - 1906
+POST /api/note/find 200 1.099 ms - 1909 - 118
+POST /api/note/find 200 1.137 ms - 1909 - 118
+POST /api/note/decorations 200 7.424 ms - 429 - 1940
+POST /api/note/find 200 5.205 ms - 1909 - 118
+POST /api/note/find 200 4.924 ms - 1909 - 118
+POST /api/note/find 200 27.738 ms - 1934 - 118
+POST /api/note/find 200 13.583 ms - 1934 - 118
+GET /api/note/get?id=PcnVj4GZBt7O3HTrwqdFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 15.312 ms - 1932 - -
+{"level":30,"time":1778038069248,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"project.testdoc.paper","id":"PcnVj4GZBt7O3HTrwqdFq","children":[],"vault":{"fsPath":"vault"},"parent":"eyzjvdv8pxsux427wcqmyl5"}}
+{"level":30,"time":1778038069253,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"fin:RunHooks"}
+POST /api/note/decorations 200 36.151 ms - 429 - 1948
+{"level":30,"time":1778038069255,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"dendron.hist.2026.05.06","id":"qkh53yqd0qtzglxkoj57ifu","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1778038069258,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+POST /api/note/write 500 20.279 ms - 540 - 417
+{"level":30,"time":1778038069286,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"recipe","id":"PcnVj4GZBt7O3HTrwqcFq","children":[],"vault":{"fsPath":"vault"},"parent":"b8064760-d3e6-4aac-ad62-eb44a52b01be"},{"fname":"project.testdoc.paper","id":"PcnVj4GZBt7O3HTrwqdFq","children":[],"vault":{"fsPath":"vault"},"parent":"eyzjvdv8pxsux427wcqmyl5"}]}
+POST /api/note/write 200 39.006 ms - 5428 - 2309
+{"level":30,"time":1778038070205,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[recipe]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 7.302 ms - 28 - 412
+{"level":30,"time":1778038070211,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[recipe]]","duration":6,"msg":"Render preview finished."}
+POST /api/note/find 200 3.101 ms - 723 - 103
+POST /api/note/find 200 2.783 ms - 723 - 103
+POST /api/note/find 200 2.318 ms - 723 - 103
+POST /api/note/find 200 0.948 ms - 723 - 103
+POST /api/note/find 200 0.982 ms - 723 - 103
+POST /api/note/decorations 200 10.104 ms - 165 - 650
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 1.786 ms - - - -
+POST /api/note/find 200 0.480 ms - 11 - 110
+POST /api/note/find 200 1.022 ms - 723 - 103
+POST /api/note/find 200 0.970 ms - 723 - 103
+POST /api/note/find 200 1.157 ms - 723 - 103
+POST /api/note/find 200 1.097 ms - 723 - 103
+POST /api/note/decorations 200 4.618 ms - 165 - 650
+POST /api/note/find 200 1.069 ms - 723 - 103
+POST /api/note/find 200 0.930 ms - 723 - 103
+POST /api/note/find 200 1.114 ms - 723 - 103
+POST /api/note/find 200 1.940 ms - 723 - 103
+POST /api/note/decorations 200 5.966 ms - 165 - 650
+POST /api/note/find 200 1.086 ms - 723 - 103
+POST /api/note/decorations 200 4.858 ms - 165 - 650
+POST /api/note/find 200 6.122 ms - 2230 - 118
+POST /api/note/find 200 5.125 ms - 2230 - 118
+POST /api/note/find 200 4.045 ms - 2230 - 118
+POST /api/note/find 200 20.636 ms - 2230 - 118
+POST /api/note/find 200 1.957 ms - 2230 - 118
+POST /api/note/find 200 2.207 ms - 2230 - 118
+POST /api/note/decorations 200 7.359 ms - 429 - 1948
+POST /api/note/find 200 0.492 ms - 11 - 125
+GET /api/note/query?qs=project.testdoc.paper&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 3.060 ms - - - -
+POST /api/note/find 200 1.190 ms - 2230 - 118
+POST /api/note/find 200 1.180 ms - 2230 - 118
+POST /api/note/find 200 1.100 ms - 2230 - 118
+POST /api/note/find 200 1.235 ms - 2230 - 118
+POST /api/note/decorations 200 7.131 ms - 429 - 1948
+{"level":30,"time":1778038129217,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[recipe]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 4.787 ms - 28 - 412
+{"level":30,"time":1778038129221,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[recipe]]","duration":4,"msg":"Render preview finished."}
+POST /api/note/find 200 3.227 ms - 723 - 103
+POST /api/note/find 200 2.690 ms - 723 - 103
+POST /api/note/find 200 2.482 ms - 723 - 103
+POST /api/note/find 200 1.092 ms - 723 - 103
+POST /api/note/find 200 1.147 ms - 723 - 103
+POST /api/note/decorations 200 4.775 ms - 165 - 650
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 2.758 ms - - - -
+POST /api/note/find 200 0.471 ms - 11 - 110
+POST /api/note/find 200 3.410 ms - 8316 - 133
+POST /api/note/find 200 2.945 ms - 8316 - 133
+POST /api/note/find 200 2.515 ms - 8316 - 133
+POST /api/note/find 200 1.209 ms - 8316 - 133
+GET /api/note/query?qs=project.test-mark.sample-markdown-01&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 200 12.602 ms - 11 - -
+POST /api/note/find 200 1.052 ms - 8316 - 133
+POST /api/note/decorations 200 13.704 ms - 287 - 9152
+POST /api/note/find 200 17.292 ms - 468 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 18.449 ms - 466 - -
+POST /api/note/find 200 12.299 ms - 468 - 125
+POST /api/note/find 200 11.625 ms - 468 - 125
+POST /api/note/find 200 10.957 ms - 468 - 125
+POST /api/note/find 200 1.923 ms - 468 - 125
+POST /api/note/find 200 1.272 ms - 468 - 125
+POST /api/note/decorations 200 4.648 ms - 165 - 676
+GET /api/note/query?qs=hijacked.dendron.blog.entry1&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 200 3.327 ms - 11 - -
+POST /api/note/find 200 0.681 ms - 11 - 132
+POST /api/note/find 200 1.013 ms - 468 - 125
+POST /api/note/find 200 3.159 ms - 8316 - 133
+POST /api/note/find 200 2.865 ms - 8316 - 133
+POST /api/note/find 200 2.458 ms - 8316 - 133
+POST /api/note/find 200 1.562 ms - 8316 - 133
+POST /api/note/find 200 1.361 ms - 8316 - 133
+POST /api/note/decorations 200 15.305 ms - 287 - 9152
+GET /api/note/query?qs=project.test-mark.sample-markdown-01&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 5.856 ms - - - -
+POST /api/note/find 200 4.329 ms - 723 - 103
+POST /api/note/find 200 2.657 ms - 723 - 103
+POST /api/note/find 200 2.026 ms - 723 - 103
+POST /api/note/find 200 1.172 ms - 723 - 103
+POST /api/note/find 200 0.973 ms - 723 - 103
+POST /api/note/decorations 200 4.479 ms - 165 - 650
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 2.161 ms - - - -
+POST /api/note/find 200 1.055 ms - 723 - 103
+POST /api/note/find 200 1.156 ms - 723 - 103
+POST /api/note/decorations 200 5.013 ms - 165 - 658
+POST /api/note/find 200 0.970 ms - 723 - 103
+POST /api/note/find 200 2.737 ms - 723 - 103
+POST /api/note/decorations 200 4.115 ms - 165 - 666
+POST /api/note/find 200 1.112 ms - 723 - 103
+POST /api/note/find 200 1.003 ms - 723 - 103
+POST /api/note/decorations 200 4.580 ms - 573 - 744
+POST /api/note/find 200 1.666 ms - 723 - 103
+POST /api/note/find 200 1.215 ms - 723 - 103
+POST /api/note/find 200 7.811 ms - 774 - 103
+POST /api/note/find 200 6.461 ms - 774 - 103
+GET /api/note/get?id=PcnVj4GZBt7O3HTrwqcFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 7.865 ms - 772 - -
+{"level":30,"time":1778038150143,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"recipe","id":"PcnVj4GZBt7O3HTrwqcFq","children":[],"vault":{"fsPath":"vault"},"parent":"b8064760-d3e6-4aac-ad62-eb44a52b01be"}}
+{"level":30,"time":1778038150146,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"fin:RunHooks"}
+{"level":30,"time":1778038150148,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"dendron.hist.2026.05.06","id":"dwnar34tep52zax3tl2lz6o","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1778038150151,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+POST /api/note/decorations 200 13.310 ms - 573 - 752
+POST /api/note/write 500 12.907 ms - 540 - 417
+{"level":30,"time":1778038150174,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"hijacked.dendron.blog.entry1","id":"1rKZc0Ga1stHHSJbp2j4b","children":[],"vault":{"fsPath":"vault"},"parent":"ka3rfbtzbyb3v0azuqc9fd7"},{"fname":"recipe","id":"PcnVj4GZBt7O3HTrwqcFq","children":[],"vault":{"fsPath":"vault"},"parent":"b8064760-d3e6-4aac-ad62-eb44a52b01be"}]}
+POST /api/note/write 200 31.536 ms - 3082 - 1125
+POST /api/note/find 200 1.874 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 3.281 ms - 697 - -
+{"level":30,"time":1778038151666,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 3.800 ms - 50 - 500
+{"level":30,"time":1778038151670,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","duration":3,"msg":"Render preview finished."}
+{"level":30,"time":1778038151866,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 3.940 ms - 50 - 500
+{"level":30,"time":1778038151869,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","duration":3,"msg":"Render preview finished."}
+POST /api/note/find 200 1.220 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 2.178 ms - 697 - -
+POST /api/note/find 200 1.988 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 3.449 ms - 697 - -
+POST /api/note/find 200 6.922 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 8.255 ms - 697 - -
+POST /api/note/find 200 6.458 ms - 699 - 125
+POST /api/note/find 200 5.920 ms - 699 - 125
+POST /api/note/find 200 5.163 ms - 699 - 125
+POST /api/note/find 200 1.241 ms - 699 - 125
+POST /api/note/find 200 1.012 ms - 699 - 125
+POST /api/note/decorations 200 4.782 ms - 165 - 676
+GET /api/note/query?qs=hijacked.dendron.blog.entry1&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 6.184 ms - - - -
+POST /api/note/find 200 0.503 ms - 11 - 132
+POST /api/note/find 200 3.445 ms - 1097 - 103
+POST /api/note/find 200 2.954 ms - 1097 - 103
+POST /api/note/find 200 2.212 ms - 1097 - 103
+POST /api/note/find 200 1.255 ms - 1097 - 103
+POST /api/note/find 200 1.243 ms - 1097 - 103
+POST /api/note/decorations 200 5.134 ms - 573 - 752
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 2.279 ms - - - -
+POST /api/note/find 200 0.464 ms - 11 - 110
+POST /api/note/find 200 1.241 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 2.120 ms - 697 - -
+{"level":30,"time":1778038162203,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 4.316 ms - 50 - 500
+{"level":30,"time":1778038162207,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","duration":4,"msg":"Render preview finished."}
+POST /api/note/find 200 20.575 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 44.256 ms - 697 - -
+POST /api/note/find 200 11.910 ms - 699 - 125
+POST /api/note/find 200 11.224 ms - 699 - 125
+POST /api/note/find 200 10.684 ms - 699 - 125
+POST /api/note/find 200 1.099 ms - 699 - 125
+GET /api/note/query?qs=hijacked.dendron.blog.entry1&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 5.615 ms - - - -
+POST /api/note/find 200 1.101 ms - 699 - 125
+POST /api/note/decorations 200 5.695 ms - 165 - 676
+POST /api/note/find 200 0.464 ms - 11 - 132
+POST /api/note/find 200 2.112 ms - 1097 - 103
+POST /api/note/find 200 3.408 ms - 1097 - 103
+POST /api/note/find 200 2.043 ms - 1097 - 103
+POST /api/note/find 200 1.045 ms - 1097 - 103
+POST /api/note/find 200 0.944 ms - 1097 - 103
+POST /api/note/decorations 200 5.164 ms - 573 - 752
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 4.455 ms - - - -
+POST /api/note/find 200 0.504 ms - 11 - 110
+POST /api/note/find 200 1.217 ms - 8316 - 133
+POST /api/note/find 200 1.163 ms - 8316 - 133
+POST /api/note/find 200 2.002 ms - 8316 - 133
+POST /api/note/find 200 1.499 ms - 8316 - 133
+POST /api/note/decorations 200 15.103 ms - 287 - 9912
+POST /api/note/find 200 1.104 ms - 8316 - 133
+POST /api/note/find 200 1.393 ms - 8316 - 133
+POST /api/note/decorations 200 13.938 ms - 287 - 9953
+POST /api/note/find 200 1.537 ms - 8316 - 133
+POST /api/note/find 200 1.238 ms - 8316 - 133
+POST /api/note/find 200 2.179 ms - 8316 - 133
+POST /api/note/find 200 1.713 ms - 8316 - 133
+POST /api/note/decorations 200 13.181 ms - 287 - 9985
+POST /api/note/find 200 1.188 ms - 8316 - 133
+POST /api/note/decorations 200 13.205 ms - 287 - 9985
+{"level":30,"time":1778038182674,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 5.214 ms - 50 - 500
+{"level":30,"time":1778038182679,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[hijacked.dendron.blog.entry1]]","duration":4,"msg":"Render preview finished."}
+POST /api/note/find 200 2.880 ms - 8316 - 133
+POST /api/note/find 200 2.581 ms - 8316 - 133
+POST /api/note/find 200 13.527 ms - 8316 - 133
+POST /api/note/find 200 1.361 ms - 8316 - 133
+POST /api/note/find 200 1.132 ms - 8316 - 133
+POST /api/note/decorations 200 17.410 ms - 287 - 9985
+GET /api/note/query?qs=project.test-mark.sample-markdown-01&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 6.340 ms - - - -
+POST /api/note/find 200 2.146 ms - 8316 - 133
+POST /api/note/find 200 1.001 ms - 8316 - 133
+POST /api/note/find 200 1.125 ms - 8316 - 133
+POST /api/note/find 200 2.614 ms - 8316 - 133
+POST /api/note/find 200 1.592 ms - 8316 - 133
+POST /api/note/decorations 200 12.735 ms - 287 - 9912
+POST /api/note/find 200 2.819 ms - 8316 - 133
+POST /api/note/decorations 200 15.604 ms - 287 - 9912
+POST /api/note/find 200 3.790 ms - 8316 - 133
+POST /api/note/find 200 1.894 ms - 8316 - 133
+POST /api/note/find 200 1.322 ms - 8316 - 133
+POST /api/note/decorations 200 11.908 ms - 287 - 9152
+POST /api/note/find 200 5.159 ms - 8316 - 133
+POST /api/note/find 200 2.773 ms - 1097 - 103
+POST /api/note/find 200 2.018 ms - 1097 - 103
+POST /api/note/find 200 12.233 ms - 1097 - 103
+POST /api/note/find 200 1.147 ms - 1097 - 103
+GET /api/note/query?qs=recipe&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 1.622 ms - - - -
+POST /api/note/find 200 1.158 ms - 1097 - 103
+POST /api/note/decorations 200 5.248 ms - 573 - 752
+POST /api/note/find 200 1.397 ms - 1097 - 103
+POST /api/note/find 200 1.372 ms - 1097 - 103
+POST /api/note/decorations 200 4.631 ms - 573 - 760
+POST /api/note/find 200 1.678 ms - 1097 - 103
+POST /api/note/find 200 0.981 ms - 1097 - 103
+POST /api/note/decorations 200 7.744 ms - 1002 - 878
+POST /api/note/find 200 2.787 ms - 1097 - 103
+POST /api/note/find 200 3.047 ms - 1097 - 103
+POST /api/note/find 200 7.026 ms - 1164 - 103
+POST /api/note/find 200 6.803 ms - 1164 - 103
+GET /api/note/get?id=PcnVj4GZBt7O3HTrwqcFq&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 24.046 ms - 1162 - -
+{"level":30,"time":1778038189134,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"recipe","id":"PcnVj4GZBt7O3HTrwqcFq","children":[],"vault":{"fsPath":"vault"},"parent":"b8064760-d3e6-4aac-ad62-eb44a52b01be"}}
+{"level":30,"time":1778038189138,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"fin:RunHooks"}
+{"level":30,"time":1778038189140,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"dendron.hist.2026.05.06","id":"9iyixkrmv4c82qb53h50m0d","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1778038189142,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+POST /api/note/decorations 200 20.594 ms - 1002 - 886
+POST /api/note/write 500 18.511 ms - 540 - 417
+{"level":30,"time":1778038189168,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"project.test-mark.sample-markdown-01","id":"6tn9i0xof167d3l6tqmt9ry","children":[],"vault":{"fsPath":"vault"},"parent":"w53fee39jcyc4zs887o7x24"},{"fname":"recipe","id":"PcnVj4GZBt7O3HTrwqcFq","children":[],"vault":{"fsPath":"vault"},"parent":"b8064760-d3e6-4aac-ad62-eb44a52b01be"}]}
+POST /api/note/write 200 34.205 ms - 19595 - 1543
+POST /api/note/find 200 1.210 ms - 699 - 125
+GET /api/note/get?id=1rKZc0Ga1stHHSJbp2j4b&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace 200 2.125 ms - 697 - -
+{"level":30,"time":1778038190011,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[project.test-mark.sample-markdown-01]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 3.766 ms - 58 - 544
+{"level":30,"time":1778038190014,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[project.test-mark.sample-markdown-01]]","duration":3,"msg":"Render preview finished."}
+{"level":30,"time":1778038190215,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[project.test-mark.sample-markdown-01]]","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render 200 3.571 ms - 58 - 544
+{"level":30,"time":1778038190218,"pid":15180,"hostname":"SIH-D-3015","name":"dendron.server","ctx":"DEngine:renderNote","id":"fake-note.id-![[project.test-mark.sample-markdown-01]]","duration":3,"msg":"Render preview finished."}
+POST /api/note/find 200 3.815 ms - 8556 - 133
+POST /api/note/find 200 3.344 ms - 8556 - 133
+POST /api/note/find 200 2.861 ms - 8556 - 133
+POST /api/note/find 200 1.432 ms - 8556 - 133
+POST /api/note/find 200 1.226 ms - 8556 - 133
+POST /api/note/decorations 200 23.096 ms - 287 - 9152
+GET /api/note/query?qs=project.test-mark.sample-markdown-01&ws=f%3A%5Crepos%5Cmyrepo%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22vault%22%7D 304 22.579 ms - - - -
+POST /api/note/find 200 1.235 ms - 8556 - 133
+POST /api/note/find 200 1.136 ms - 8556 - 133
+POST /api/note/decorations 200 12.416 ms - 287 - 9651
