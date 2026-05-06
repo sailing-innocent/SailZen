@@ -42,10 +42,12 @@ export function assembleDocument(
     notesById,
     0,
     includedNotes,
-    unresolvedRefs
+    unresolvedRefs,
+    rootNote.fname
   );
 
-  // Append explicitly included notes that were NOT already included via note refs
+  // Append explicitly included notes that were NOT already included via note refs.
+  // profile.includes fnames come from resolveProfile and are always full fnames.
   for (const fname of profile.includes) {
     const note = findNoteByFname(fname, notesById);
     if (!note) {
@@ -60,13 +62,15 @@ export function assembleDocument(
       notesById,
       0,
       includedNotes,
-      unresolvedRefs
+      unresolvedRefs,
+      note.fname
     );
     body += "\n\n" + noteBody;
     includedNotes.add(note.id);
   }
 
-  // Append discovered compose notes that were NOT already included via note refs
+  // Append discovered compose notes that were NOT already included via note refs.
+  // profile.discovered fnames come from resolveProfile and are always full fnames.
   for (const fname of profile.discovered) {
     const note = findNoteByFname(fname, notesById);
     if (!note) {
@@ -84,7 +88,8 @@ export function assembleDocument(
       notesById,
       0,
       includedNotes,
-      unresolvedRefs
+      unresolvedRefs,
+      note.fname
     );
     body += "\n\n" + noteBody;
     includedNotes.add(note.id);
@@ -101,11 +106,18 @@ export function assembleDocument(
 /**
  * Recursively expand ![[note.ref]] patterns in markdown text.
  *
+ * Supported Dendron embed-ref syntax variants:
+ *   ![[note.fname]]
+ *   ![[note.fname#anchor]]
+ *   ![[Alias|note.fname]]
+ *   ![[Alias|note.fname#anchor]]
+ *
  * @param text - Markdown body text
  * @param notesById - Engine note dictionary
  * @param depthOffset - How many levels to shift headings down
  * @param visited - Set of already-included note IDs (prevents cycles)
  * @param unresolved - Accumulator for unresolved references
+ * @param contextFname - The fname of the note being expanded (used for suffix-match disambiguation)
  * @returns Expanded markdown text
  */
 function expandNoteRefs(
@@ -113,7 +125,8 @@ function expandNoteRefs(
   notesById: NotePropsByIdDict,
   depthOffset: number,
   visited: Set<string>,
-  unresolved: string[]
+  unresolved: string[],
+  contextFname?: string
 ): string {
   if (!text) return "";
 
@@ -127,13 +140,16 @@ function expandNoteRefs(
   }
 
   // Replace note refs
-  const result = adjusted.replace(NOTE_REF_REGEX, (match, ref) => {
-    const fname = ref.split("#")[0].trim(); // Strip anchor
-    const anchor = ref.includes("#")
-      ? ref.split("#").slice(1).join("#")
+  const result = adjusted.replace(NOTE_REF_REGEX, (_match, ref) => {
+    // Step 1: strip alias prefix — "Alias|note.fname#anchor" → "note.fname#anchor"
+    const refWithoutAlias = ref.includes("|") ? ref.split("|").slice(1).join("|") : ref;
+    // Step 2: strip anchor — "note.fname#anchor" → fname="note.fname", anchor="anchor"
+    const fname = refWithoutAlias.split("#")[0].trim();
+    const anchor = refWithoutAlias.includes("#")
+      ? refWithoutAlias.split("#").slice(1).join("#")
       : undefined;
 
-    const note = findNoteByFname(fname, notesById);
+    const note = findNoteByFname(fname, notesById, contextFname);
     if (!note) {
       unresolved.push(fname);
       return `\n\n> **Unresolved reference**: [[${fname}]]\n\n`;
@@ -168,7 +184,8 @@ function expandNoteRefs(
       notesById,
       newDepthOffset,
       visited,
-      unresolved
+      unresolved,
+      note.fname  // pass resolved note fname as context for nested refs
     );
   });
 
@@ -177,17 +194,93 @@ function expandNoteRefs(
 
 /**
  * Find a note by its fname in the note dictionary.
+ *
+ * Resolution order:
+ *  1. Exact match: note.fname === fname
+ *  2. Suffix match: note.fname ends with ".<fname>" (handles short refs like "overview"
+ *     matching "project.myproject.overview")
+ *
+ * When multiple suffix matches exist, the one sharing the longest common prefix with
+ * contextFname wins (sibling preference). Ties broken by shortest fname.
  */
 function findNoteByFname(
   fname: string,
-  notesById: NotePropsByIdDict
+  notesById: NotePropsByIdDict,
+  contextFname?: string
 ): NoteProps | undefined {
+  // 1. Exact match
   for (const note of Object.values(notesById)) {
     if (note.fname === fname) {
       return note;
     }
   }
-  return undefined;
+
+  // 2. Suffix match – collect all candidates that end with ".<fname>"
+  const suffix = "." + fname;
+  const candidates: NoteProps[] = [];
+  for (const note of Object.values(notesById)) {
+    if (note.fname.endsWith(suffix)) {
+      candidates.push(note);
+    }
+  }
+
+  if (candidates.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[documentAssembler] findNoteByFname: no match for "${fname}"` +
+      (contextFname ? ` (referenced from "${contextFname}")` : "") +
+      `. Available fnames (sample): [${
+        Object.values(notesById)
+          .slice(0, 10)
+          .map((n) => n.fname)
+          .join(", ")
+      }${Object.keys(notesById).length > 10 ? ", …" : ""}]`
+    );
+    return undefined;
+  }
+
+  if (candidates.length === 1) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[documentAssembler] findNoteByFname: suffix-matched "${fname}" → "${candidates[0].fname}"`
+    );
+    return candidates[0];
+  }
+
+  // Multiple candidates – prefer the one sharing the longest common prefix with contextFname,
+  // then fall back to the shortest fname (closest to root).
+  if (contextFname) {
+    const contextParts = contextFname.split(".");
+    let bestNote: NoteProps = candidates[0];
+    let bestScore = -1;
+    for (const c of candidates) {
+      const parts = c.fname.split(".");
+      let shared = 0;
+      for (let i = 0; i < Math.min(contextParts.length, parts.length - 1); i++) {
+        if (contextParts[i] === parts[i]) shared++;
+        else break;
+      }
+      if (shared > bestScore || (shared === bestScore && c.fname.length < bestNote.fname.length)) {
+        bestScore = shared;
+        bestNote = c;
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(
+      `[documentAssembler] findNoteByFname: multi-candidate suffix-match "${fname}" → "${bestNote.fname}" ` +
+      `(from context "${contextFname}", candidates: [${candidates.map((c) => c.fname).join(", ")}])`
+    );
+    return bestNote;
+  }
+
+  // No context – pick shortest fname
+  candidates.sort((a, b) => a.fname.length - b.fname.length);
+  // eslint-disable-next-line no-console
+  console.log(
+    `[documentAssembler] findNoteByFname: multi-candidate suffix-match "${fname}" → "${candidates[0].fname}" ` +
+    `(no context, shortest wins; all: [${candidates.map((c) => c.fname).join(", ")}])`
+  );
+  return candidates[0];
 }
 
 /**

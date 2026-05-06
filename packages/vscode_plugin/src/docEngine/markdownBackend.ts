@@ -241,10 +241,17 @@ function assembledBodyToMarkdown(
 
   text = text.replace(/!\[\[([^\]]+)\]\]/g, "");
 
+  // [[alias|fname#anchor]] or [[alias|fname]] — alias-form wikilink: just show alias
+  text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_m, alias, _ref) =>
+    alias.trim()
+  );
+
+  // [[fname#anchor]] — heading anchor link: show anchor text with hyphens → spaces
   text = text.replace(/\[\[([^\]#]+)#([^\]]+)\]\]/g, (_m, _fname, anchor) =>
     anchor.replace(/-/g, " ")
   );
 
+  // [[fname]] — plain fname: look up title, fall back to last segment
   text = text.replace(/\[\[([^\]]+)\]\]/g, (_m, fname) => {
     const key = fname.trim();
     const note = Object.values(notesById).find((n) => n.fname === key);
