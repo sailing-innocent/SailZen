@@ -54,6 +54,7 @@ sailzen <module> <command> [options]
 | `list-accounts` | `la` | 列出远程服务器上的所有账户 |
 | `pull` | — | 拉取 transaction 记录并导出为 CSV |
 | `push` | — | 从 CSV 读取修改并推送回服务器 |
+| `create-from-csv` | `create` | 从 CSV 创建新 transaction（id 为空或缺失的行） |
 
 ### list-accounts — 列出账户
 
@@ -141,6 +142,48 @@ sailzen finance push transactions_1.csv -n --server http://192.168.1.100:8000
 - 部分失败不影响其他成功项
 - 输出最终统计：成功数 / 失败数 / 错误详情
 
+### create-from-csv — 从 CSV 创建新交易
+
+用于批量导入**全新**的交易记录。CSV 中 `id` 列为空或缺失的行会被视为新交易，调用 `POST /api/v1/finance/transaction` 创建；有 `id` 的行会被跳过。
+
+```bash
+# 从 CSV 创建新交易
+sailzen finance create-from-csv new_transactions.csv --server http://192.168.1.100:8000
+
+# 使用别名
+sailzen finance create new_transactions.csv --server http://192.168.1.100:8000
+
+# 预览模式
+sailzen finance create-from-csv new_transactions.csv --server http://192.168.1.100:8000 --dry-run
+```
+
+**参数说明：**
+
+| 参数 | 简写 | 说明 |
+|------|------|------|
+| `csv` | (位置参数) | CSV 文件路径 |
+| `--dry-run` | `-n` | 仅预览，不实际发送请求 |
+| `--server` | — | sail_server 地址 |
+
+**新建 CSV 必填字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `from_acc_id` | int | 转出账户 ID |
+| `to_acc_id` | int | 转入账户 ID |
+| `value` | str | 交易金额 |
+
+**新建 CSV 可选字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `description` | str | 交易描述 |
+| `tags` | str | 交易标签（逗号分隔） |
+| `budget_id` | int | 关联预算 ID |
+| `htime` | float/ISO | 发生时间（默认当前时间） |
+
+> ⚠️ **注意**：`id` 列必须为空或缺失，否则该行会被跳过（不会创建）。可以复用 `pull` 导出的 CSV 格式，只需删除 `id` 列的内容即可批量复制为新增记录。
+
 ## 典型工作流
 
 ### 场景：批量修改某账户的交易标签
@@ -171,6 +214,24 @@ sailzen finance pull --server http://192.168.1.100:8000
 # → 生成 transactions_all.csv
 ```
 
+### 场景：从 CSV 批量导入新交易
+
+```bash
+# Step 1: 查看有哪些账户，确认 from_acc_id / to_acc_id
+sailzen finance list-accounts --server http://192.168.1.100:8000
+
+# Step 2: 准备 CSV（例如 new_tx.csv），id 列为空
+# from_acc_id,to_acc_id,value,description,tags,htime
+# 1,2,100.00,午餐,餐饮,2026-05-10T12:00:00
+# 2,1,5000.00,工资收入,收入,2026-05-01T09:00:00
+
+# Step 3: 预览将要创建的记录
+sailzen finance create-from-csv new_tx.csv --server http://192.168.1.100:8000 --dry-run
+
+# Step 4: 确认无误后导入
+sailzen finance create-from-csv new_tx.csv --server http://192.168.1.100:8000
+```
+
 ## 底层 API 映射
 
 CLI 工具通过以下 HTTP API 与 sail_server 交互：
@@ -180,6 +241,7 @@ CLI 工具通过以下 HTTP API 与 sail_server 交互：
 | `list-accounts` | `GET` | `/api/v1/finance/account` |
 | `pull` | `GET` | `/api/v1/finance/transaction/paginated/` (分页循环) |
 | `push` | `PUT` | `/api/v1/finance/transaction/{id}` (逐条) |
+| `create-from-csv` | `POST` | `/api/v1/finance/transaction` (逐条) |
 
 **API 基础路径**：`{server_url}/api/v1/finance`
 
@@ -192,7 +254,8 @@ CLI 工具通过以下 HTTP API 与 sail_server 交互：
 5. **htime 格式** — 导出时转为 ISO 格式方便阅读，导入时自动转回时间戳
 6. **dry-run 安全** — 推送前建议先用 `--dry-run` 预览
 7. **幂等性** — `push` 是覆盖写入，重复推送相同数据不会产生副作用
-8. **请求限速** — 每次 PUT 请求间隔 0.1 秒，HTTP 超时 30 秒
+8. **请求限速** — 每次 PUT/POST 请求间隔 0.1 秒，HTTP 超时 30 秒
+9. **create-from-csv 跳过已有 id 的行** — 有 `id` 的行会被忽略，不会更新现有记录
 
 ## 故障排除
 

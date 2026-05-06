@@ -194,6 +194,21 @@ class FinanceClient:
         resp.raise_for_status()
         return resp.json()
 
+    def create_transaction(self, data: dict) -> dict:
+        """
+        创建新 transaction。
+
+        Args:
+            data: 创建数据（from_acc_id, to_acc_id, value 必填）
+
+        Returns:
+            创建后的 transaction 数据
+        """
+        url = f"{self.base_api}/transaction"
+        resp = self.session.post(url, json=data, timeout=API_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+
     # ------------------------------------------------------------------
     # CSV 导出 / 导入
     # ------------------------------------------------------------------
@@ -332,6 +347,76 @@ class FinanceClient:
 
         return {"success": success, "failed": failed, "errors": errors}
 
+    def create_from_csv(
+        self,
+        csv_path: str,
+        dry_run: bool = False,
+    ) -> dict:
+        """
+        从 CSV 读取并创建新 transaction（id 为空或缺失的行会被视为新建）。
+
+        Args:
+            csv_path: CSV 文件路径
+            dry_run: 如果为 True，只打印将要执行的操作，不实际发送请求
+
+        Returns:
+            {"success": int, "failed": int, "errors": list}
+        """
+        transactions = self.import_from_csv(csv_path)
+        success = 0
+        failed = 0
+        errors: list[dict] = []
+
+        # 新建交易所需字段（与 TransactionCreateRequest 对应）
+        CREATE_FIELDS = [
+            "from_acc_id",
+            "to_acc_id",
+            "value",
+            "description",
+            "tags",
+            "budget_id",
+            "htime",
+        ]
+
+        for t in transactions:
+            tid = t.get("id")
+            if tid:
+                # 有 id 的行跳过，仅处理无 id 的新记录
+                continue
+
+            # 必填校验
+            if t.get("from_acc_id") is None or t.get("to_acc_id") is None or not t.get("value"):
+                errors.append({"row": t.get("description", ""), "error": "Missing required fields: from_acc_id, to_acc_id, value"})
+                failed += 1
+                continue
+
+            create_data = {}
+            for field in CREATE_FIELDS:
+                if field in t and t[field] is not None:
+                    create_data[field] = t[field]
+
+            if dry_run:
+                print(f"[DRY RUN] Would create transaction: {json.dumps(create_data, ensure_ascii=False)}")
+                success += 1
+                continue
+
+            try:
+                result = self.create_transaction(create_data)
+                print(f"[OK] Created transaction: {result.get('description', '')[:50]} (ID: {result.get('id')})")
+                success += 1
+                time.sleep(REQUEST_DELAY)
+            except requests.HTTPError as e:
+                msg = f"HTTP {e.response.status_code}: {e.response.text[:200]}"
+                print(f"[FAIL] Create transaction: {msg}", file=sys.stderr)
+                errors.append({"row": t.get("description", ""), "error": msg})
+                failed += 1
+            except Exception as e:
+                print(f"[FAIL] Create transaction: {e}", file=sys.stderr)
+                errors.append({"row": t.get("description", ""), "error": str(e)})
+                failed += 1
+
+        return {"success": success, "failed": failed, "errors": errors}
+
 
 # ============================================================================
 # CLI Commands
@@ -412,6 +497,28 @@ def cmd_push(args):
             print(f"  - ID {err['id']}: {err['error']}")
 
 
+def cmd_create_from_csv(args):
+    """从 CSV 读取并创建新 transaction（id 为空或缺失的行）"""
+    csv_path = args.csv
+    if not os.path.exists(csv_path):
+        print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
+        sys.exit(1)
+
+    client = FinanceClient(args.server)
+    print(f"Creating new transactions from {csv_path} to {args.server} ...")
+
+    if args.dry_run:
+        print("[DRY RUN MODE] No actual requests will be sent.\n")
+
+    result = client.create_from_csv(csv_path, dry_run=args.dry_run)
+
+    print(f"\nDone. Created: {result['success']}, Failed: {result['failed']}")
+    if result["errors"]:
+        print(f"\nErrors:")
+        for err in result["errors"]:
+            print(f"  - Row '{err['row']}': {err['error']}")
+
+
 # ============================================================================
 # Main Entry
 # ============================================================================
@@ -473,6 +580,20 @@ def main():
         help="仅预览，不实际发送请求",
     )
     p_push.set_defaults(func=cmd_push)
+
+    # ---- create-from-csv ----
+    p_create = subparsers.add_parser("create-from-csv", aliases=["create"], help="从 CSV 创建新 transaction（id 为空或缺失的行）")
+    add_server_arg(p_create)
+    p_create.add_argument(
+        "csv",
+        help="CSV 文件路径",
+    )
+    p_create.add_argument(
+        "--dry-run", "-n",
+        action="store_true",
+        help="仅预览，不实际发送请求",
+    )
+    p_create.set_defaults(func=cmd_create_from_csv)
 
     # ----
     args = parser.parse_args()
