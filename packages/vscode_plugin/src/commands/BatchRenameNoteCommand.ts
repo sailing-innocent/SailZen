@@ -2,6 +2,7 @@ import {
   DNodeProps,
   DNodeUtils,
   extractNoteChangeEntryCounts,
+  NoteChangeEntry,
   NoteUtils,
 } from "@saili/common-all";
 import { vault2Path } from "@saili/common-server";
@@ -9,13 +10,13 @@ import fs from "fs-extra";
 import _ from "lodash";
 import _md from "markdown-it";
 import path from "path";
-import { ProgressLocation, Uri, ViewColumn, window } from "vscode";
+import { ProgressLocation, Uri, ViewColumn, window, workspace } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtilsV2 } from "../WSUtilsV2";
 import { BasicCommand } from "./base";
-import { RenameNoteOutputV2a, RenameNoteV2aCommand } from "./RenameNoteV2a";
+import { RenameNoteOutputV2a } from "./RenameNoteV2a";
 import { IDendronExtension } from "../dendronExtensionInterface";
 
 const md = _md();
@@ -251,40 +252,45 @@ export class BatchRenameNoteCommand extends BasicCommand<
   }
 
   /**
-   * Run all rename operations sequentially.
+   * Run all rename operations directly against the file system.
+   *
+   * Batch rename intentionally does not go through `engine.renameNote` for every
+   * file: engine rename resolves the old note from the current in-memory index
+   * and then deletes by note id, which is fragile when a whole hierarchy is being
+   * renamed in one batch. The file name is the source of truth here; after the
+   * file moves are done, we rebuild the index once.
    */
   private async runOperations(
     operations: RenameOperation[]
   ): Promise<RenameNoteOutputV2a> {
     const ctx = "BatchRenameNote:runOperations";
-    const renameCmd = new RenameNoteV2aCommand();
 
-    const out = await _.reduce<
-      RenameOperation,
-      Promise<RenameNoteOutputV2a>
-    >(
+    await _.reduce<RenameOperation, Promise<void>>(
       operations,
       async (respPromise, op) => {
-        const acc = await respPromise;
+        await respPromise;
         this.L.info({
           ctx,
           orig: op.oldUri.fsPath,
           replace: op.newUri.fsPath,
         });
-        const resp = await renameCmd.execute({
-          files: [op],
-          silent: true,
-          closeCurrentFile: false,
-          openNewFile: false,
-          noModifyWatcher: true,
-        });
-        acc.changed = resp.changed.concat(acc.changed);
-        return acc;
+        await workspace.fs.rename(op.oldUri, op.newUri, { overwrite: false });
       },
-      Promise.resolve({ changed: [] })
+      Promise.resolve()
     );
 
-    return out;
+    this.L.info({ ctx, msg: "reload index after file-system batch rename" });
+    await WSUtilsV2.instance().reloadWorkspace();
+
+    return {
+      changed: operations.map((op) =>
+        ({
+          note: {
+            fname: DNodeUtils.fname(op.newUri.fsPath),
+          },
+        } as NoteChangeEntry)
+      ),
+    };
   }
 
   async execute(opts: CommandOpts): Promise<CommandOutput> {
@@ -333,31 +339,36 @@ export class BatchRenameNoteCommand extends BasicCommand<
       }
     }
 
-    // 6. Pause file watcher
+    // 6. Pause file watcher. We move files directly and rebuild the index once
+    // after the batch, instead of letting per-file watcher events race with a
+    // half-renamed hierarchy.
     if (ext.fileWatcher) {
       ext.fileWatcher.pause = true;
     }
 
-    // 7. Execute all rename operations with progress
-    const out = await window.withProgress(
-      {
-        location: ProgressLocation.Notification,
-        title: "Batch renaming notes...",
-        cancellable: false,
-      },
-      async () => {
-        return this.runOperations(operations);
-      }
-    );
-
-    // 8. Resume file watcher
-    if (ext.fileWatcher) {
-      setTimeout(() => {
-        if (ext.fileWatcher) {
-          ext.fileWatcher.pause = false;
+    let out: RenameNoteOutputV2a;
+    try {
+      // 7. Execute all rename operations with progress
+      out = await window.withProgress(
+        {
+          location: ProgressLocation.Notification,
+          title: "Batch renaming notes...",
+          cancellable: false,
+        },
+        async () => {
+          return this.runOperations(operations);
         }
-        this.L.info({ ctx, state: "exit:pause_filewatcher" });
-      }, 3000);
+      );
+    } finally {
+      // 8. Resume file watcher
+      if (ext.fileWatcher) {
+        setTimeout(() => {
+          if (ext.fileWatcher) {
+            ext.fileWatcher.pause = false;
+          }
+          this.L.info({ ctx, state: "exit:pause_filewatcher" });
+        }, 3000);
+      }
     }
 
     return { ...out, operations };
