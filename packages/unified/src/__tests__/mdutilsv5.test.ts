@@ -6,11 +6,46 @@ import {
   ProcFlavor
 } from "../utilsv5";
 
-import { NoteProps, DVault, DendronConfig, genDefaultDendronConfig, NoteUtils } from "@saili/common-all";
+import { NoteProps, DVault, DendronConfig, genDefaultDendronConfig, NoteUtils, DendronASTDest } from "@saili/common-all";
 
 describe("MDUtilsV5", () => {
   describe("procRehypeFull", () => {
-    it("should process markdown with wiki links and math", async () => {
+    it("should stringify task lists without invalid listItemIndent", () => {
+      const dvault: DVault = {
+        fsPath: "/test/dvault",
+      };
+      const note: NoteProps = {
+        id: "test-task-list-id",
+        fname: "test-task-list",
+        title: "Test Task List",
+        desc: "",
+        created: 234899,
+        updated: 248990,
+        links: [],
+        anchors: {},
+        type: "note",
+        parent: "",
+        children: [],
+        stub: false,
+        custom: {},
+        tags: [],
+        traits: [],
+        vault: dvault,
+        data: {},
+        body: "- [ ] todo\n  - [x] done"
+      };
+      const config: DendronConfig = genDefaultDendronConfig();
+      const proc = MDUtilsV5.procRemarkFull({
+        noteToRender: note,
+        fname: note.fname,
+        vault: note.vault,
+        config,
+        dest: DendronASTDest.MD_DENDRON,
+      });
+      const tree = proc.parse(note.body);
+      expect(() => proc.stringify(tree)).not.toThrow();
+    });
+
       const dvault: DVault = {
         fsPath: "/test/dvault",
       };
