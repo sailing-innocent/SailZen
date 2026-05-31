@@ -28,9 +28,9 @@ from bot_server.database import Database
 from bot_server.repositories import DatabaseCompat
 from bot_server.scheduler import TaskScheduler
 from bot_server.models import make_event_log
-from cube.command_bus import CommandBus
-from cube.event_bus import EventBus
-from cube.paths import resolve_data_path
+from sail.dag.command_bus import CommandBus
+from sail.dag.event_bus import EventBus
+from sail.paths import resolve_data_path
 
 # ── deps 层 ─────────────────────────────────────────────────────────
 from bot_server import deps
@@ -188,8 +188,8 @@ async def on_startup() -> None:
     cm_log_dir = resolve_data_path(cm_cfg.get("log_dir"), "bot/codemaker_logs", _config, config_path=config_path)
     if "transcript_dir" in cm_cfg:
         cm_cfg["transcript_dir"] = str(resolve_data_path(cm_cfg.get("transcript_dir"), "transcripts", _config, config_path=config_path))
-    from cube.codemaker.process_manager import CodemakerProcessManager
-    codemaker_mgr = CodemakerProcessManager(
+    from sail.opencode.process_manager import OpenCodeProcessManager
+    codemaker_mgr = OpenCodeProcessManager(
         base_port=cm_base_port,
         state_file=cm_state_file,
         log_dir=cm_log_dir,
@@ -214,8 +214,8 @@ async def on_shutdown() -> None:
                 logger.info("Stopped %d managed CodeMaker process(es)", stopped)
         else:
             # fallback: 尝试用无参实例清理（可能无效，但聊胜于无）
-            from cube.codemaker.process_manager import CodemakerProcessManager
-            stopped = CodemakerProcessManager().stop_all()
+            from sail.opencode.process_manager import OpenCodeProcessManager
+            stopped = OpenCodeProcessManager().stop_all()
             if stopped:
                 logger.info("Stopped %d managed CodeMaker process(es) [fallback]", stopped)
     except Exception as exc:

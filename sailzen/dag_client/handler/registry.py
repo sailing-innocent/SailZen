@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from cube.command_bus import CommandBus
+from sail.dag.command_bus import CommandBus
 from bot_server.handler import (
     health as h_health,
     project as h_project,

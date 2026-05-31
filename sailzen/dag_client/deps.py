@@ -12,9 +12,9 @@ from typing import Optional
 from bot_server.database import Database
 from bot_server.repositories import DatabaseCompat
 from bot_server.scheduler import TaskScheduler
-from cube.command_bus import CommandBus
-from cube.codemaker.process_manager import CodemakerProcessManager
-from cube.event_bus import EventBus
+from sail.dag.command_bus import CommandBus
+from sail.opencode.process_manager import OpenCodeProcessManager
+from sail.dag.event_bus import EventBus
 
 # ── 全局单例 ────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ _db: Optional[DatabaseCompat] = None
 _scheduler: Optional[TaskScheduler] = None
 _command_bus: Optional[CommandBus] = None
 _event_bus: Optional[EventBus] = None
-_codemaker_mgr: Optional[CodemakerProcessManager] = None
+_codemaker_mgr: Optional[OpenCodeProcessManager] = None
 _popo_bridge = None
 _background_tasks: set[asyncio.Task] = set()
 
@@ -50,7 +50,7 @@ def get_event_bus() -> EventBus:
     return _event_bus
 
 
-def get_codemaker_mgr() -> Optional[CodemakerProcessManager]:
+def get_codemaker_mgr() -> Optional[OpenCodeProcessManager]:
     return _codemaker_mgr
 
 
@@ -101,7 +101,7 @@ def set_event_bus(eb: EventBus) -> None:
     _event_bus = eb
 
 
-def set_codemaker_mgr(mgr: CodemakerProcessManager) -> None:
+def set_codemaker_mgr(mgr: OpenCodeProcessManager) -> None:
     global _codemaker_mgr
     _codemaker_mgr = mgr
 

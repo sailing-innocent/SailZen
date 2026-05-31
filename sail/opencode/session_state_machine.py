@@ -1,4 +1,10 @@
-"""State machine for codemaker session interaction."""
+# -*- coding: utf-8 -*-
+# @file session_state_machine.py
+# @brief Explicit state machine for opencode session interaction.
+# @author sailing-innocent
+# @date 2026-05-31
+# @version 1.0
+# ---------------------------------
 
 from __future__ import annotations
 
@@ -10,20 +16,20 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional, Set
 
-from cube.codemaker.client import CodemakerAsyncClient
-from cube.codemaker.session_dependencies import SessionRunDependencies
-from cube.codemaker.session_fallbacks import (
+from sail.opencode.client import OpencodeAsyncClient
+from sail.opencode.session_dependencies import SessionRunDependencies
+from sail.opencode.session_fallbacks import (
     fetch_final_message,
     poll_until_idle,
     snapshot_message_ids,
 )
-from cube.codemaker.session_handlers import (
+from sail.opencode.session_handlers import (
     DEFAULT_EVENT_HANDLERS,
     EventHandler,
     SessionAccumulator,
 )
-from cube.codemaker.session_models import TaskResult, TaskRunConfig
-from cube.codemaker.sse_parser import EventType, parse_event
+from sail.opencode.session_models import TaskResult, TaskRunConfig
+from sail.opencode.sse_parser import EventType, parse_event
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +48,9 @@ class SessionRunState(str, Enum):
 
 @dataclass
 class SessionStateMachine:
-    """Run one codemaker task through explicit interaction states."""
+    """Run one opencode task through explicit interaction states."""
 
-    client: CodemakerAsyncClient
+    client: OpencodeAsyncClient
     prompt: str
     cfg: TaskRunConfig
     deps: SessionRunDependencies
@@ -85,14 +91,16 @@ class SessionStateMachine:
         self.state = SessionRunState.HEALTH_CHECK
         healthy = await self.client.health_check()
         if not healthy:
-            raise RuntimeError(f"Codemaker 服务不可用: {self.cfg.host}:{self.cfg.port}")
+            raise RuntimeError(
+                f"服务不可用: {self.cfg.host}:{self.cfg.port}"
+            )
 
     async def _ensure_session(self) -> None:
         self.state = SessionRunState.SESSION_READY
         if self.cfg.session_id:
             self.session_id = self.cfg.session_id
             return
-        title = self.cfg.session_title or f"CubeClaw {self.label}"
+        title = self.cfg.session_title or f"SailZen {self.label}"
         session = await self.client.create_session(title=title)
         self.session_id = session.id
         logger.info("[%s] 创建 session: %s", self.label, self.session_id[:16])
@@ -122,7 +130,11 @@ class SessionStateMachine:
 
     async def _send_prompt(self) -> None:
         self.state = SessionRunState.PROMPT_SENT
-        prompt_brief = self.prompt[:80] + "..." + self.prompt[-80:] if len(self.prompt) > 160 else self.prompt
+        prompt_brief = (
+            self.prompt[:80] + "..." + self.prompt[-80:]
+            if len(self.prompt) > 160
+            else self.prompt
+        )
         logger.info(
             "[%s] 发送 prompt (agent=%s): %s",
             self.label,
@@ -241,7 +253,7 @@ class SessionStateMachine:
                 self.state = SessionRunState.COMPLETED
                 return self._success(self.accumulator.finish_reason)
             logger.info(
-                "[%s] foreground finish delayed: background/session_result still running",
+                "[%s] foreground finish delayed: background still running",
                 self.label,
             )
             self._mark_delayed_finish()
@@ -256,7 +268,6 @@ class SessionStateMachine:
             self.delayed_finish_heartbeats_sent = 0
 
     def _is_delayed_finish_resume_event(self, event_type: EventType) -> bool:
-        """Return True when delayed foreground finish has resumed normal work."""
         if self.delayed_finish_started_at <= 0:
             return False
         return event_type in {
@@ -293,13 +304,13 @@ class SessionStateMachine:
         max_heartbeats = max(1, int(self.cfg.delayed_finish_max_heartbeats))
         if self.delayed_finish_heartbeats_sent >= max_heartbeats:
             raise RuntimeError(
-                "Codemaker 前台 terminate 后仍有后台任务，但心跳激活连续无回复，判定超时"
+                "前台 terminate 后仍有后台任务，但心跳激活连续无回复，判定超时"
             )
 
         self.delayed_finish_heartbeats_sent += 1
         self.delayed_finish_last_heartbeat_at = now
         logger.warning(
-            "[%s] delayed foreground finish heartbeat %d/%d after %.0fs without terminates/progress events",
+            "[%s] delayed foreground finish heartbeat %d/%d after %.0fs without progress",
             self.label,
             self.delayed_finish_heartbeats_sent,
             max_heartbeats,
@@ -313,7 +324,10 @@ class SessionStateMachine:
             logger.warning("[%s] delayed finish heartbeat rejected by server", self.label)
 
     async def _delayed_finish_watchdog_loop(self) -> None:
-        interval = min(5.0, max(1.0, float(self.cfg.delayed_finish_heartbeat_sec) / 10.0))
+        interval = min(
+            5.0,
+            max(1.0, float(self.cfg.delayed_finish_heartbeat_sec) / 10.0),
+        )
         while True:
             await asyncio.sleep(interval)
             await self._tick_delayed_finish_watchdog()

@@ -5,7 +5,7 @@ from __future__ import annotations
 from litestar import get
 
 from bot_server.deps import get_bus
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 
 def _dash_cmd(name: str, **args) -> Command:

@@ -26,9 +26,9 @@ from bot_server.service.task_runner import (
     productive_task_runner,
 )
 from bot_server.service.gb_init import create_init_batch, execute_init
-from cube.command_bus import Command, CommandResult
-from cube.codemaker import CodemakerProcessManager
-from cube.paths import resolve_data_path
+from sail.dag.command_bus import Command, CommandResult
+from sail.opencode import OpenCodeProcessManager
+from sail.paths import resolve_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ async def _ensure_codemaker_running(codemaker_cfg: dict) -> dict | None:
     base_port = codemaker_cfg.get("port", 4096)
 
     def _do_ensure():
-        mgr = CodemakerProcessManager(
+        mgr = OpenCodeProcessManager(
             base_port=base_port,
             state_file=codemaker_cfg.get("state_file"),
             log_dir=codemaker_cfg.get("log_dir"),

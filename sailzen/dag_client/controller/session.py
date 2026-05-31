@@ -8,7 +8,7 @@ from litestar import get, post
 from litestar.response import Response
 
 from bot_server.deps import get_bus, get_popo_bridge
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 
 def _dash_cmd(name: str, **args) -> Command:

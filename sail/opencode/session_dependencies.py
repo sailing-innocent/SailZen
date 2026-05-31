@@ -1,4 +1,10 @@
-"""Dependency interfaces and default implementations for session runs."""
+# -*- coding: utf-8 -*-
+# @file session_dependencies.py
+# @brief Dependency interfaces and default implementations for session runs.
+# @author sailing-innocent
+# @date 2026-05-31
+# @version 1.0
+# ---------------------------------
 
 from __future__ import annotations
 
@@ -6,8 +12,8 @@ import logging
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional, Protocol, Union
 
-from cube.codemaker.client import CodemakerAsyncClient
-from cube.codemaker.sse_parser import ParsedEvent
+from sail.opencode.client import OpencodeAsyncClient
+from sail.opencode.sse_parser import ParsedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +31,7 @@ class EventSink(Protocol):
 class AgentResolver(Protocol):
     async def resolve(
         self,
-        client: CodemakerAsyncClient,
+        client: OpencodeAsyncClient,
         preferred: Optional[str],
         label: str,
     ) -> Optional[str]:
@@ -35,7 +41,7 @@ class AgentResolver(Protocol):
 class PermissionResponder(Protocol):
     async def approve(
         self,
-        client: CodemakerAsyncClient,
+        client: OpencodeAsyncClient,
         session_id: str,
         permission_id: str,
         label: str,
@@ -64,7 +70,7 @@ class DefaultAgentResolver:
 
     async def resolve(
         self,
-        client: CodemakerAsyncClient,
+        client: OpencodeAsyncClient,
         preferred: Optional[str],
         label: str,
     ) -> Optional[str]:
@@ -96,17 +102,19 @@ class DefaultAgentResolver:
 
 
 class DefaultPermissionResponder:
-    """Approve explicit codemaker permission requests."""
+    """Approve explicit permission requests automatically."""
 
     async def approve(
         self,
-        client: CodemakerAsyncClient,
+        client: OpencodeAsyncClient,
         session_id: str,
         permission_id: str,
         label: str,
     ) -> bool:
         if not permission_id:
-            logger.warning("[%s] 收到权限事件但缺少 permission_id，跳过自动批准", label)
+            logger.warning(
+                "[%s] 收到权限事件但缺少 permission_id，跳过自动批准", label
+            )
             return False
         try:
             ok = await client.respond_permission(

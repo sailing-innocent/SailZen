@@ -1,30 +1,14 @@
 # -*- coding: utf-8 -*-
 # @file client.py
-# @brief OpenCode (opencode) 异步 HTTP / SSE 客户端
+# @brief Generic OpenCode-compatible async HTTP / SSE client
 # @author sailing-innocent
-# @date 2026-04-25
-# @version 1.0
+# @date 2026-05-31
+# @version 2.0
 # ---------------------------------
-"""sail.opencode.client — OpenCode 异步 HTTP / SSE 客户端。
+"""sail.opencode.client — Generic OpenCode-compatible async HTTP / SSE client.
 
-**只提供异步客户端 OpenCodeAsyncClient**。
-
-进程管理中需要同步健康检查的场景（如 subprocess.Popen 等待启动），
-请使用模块级辅助函数 check_health_sync(port)。
-
-SSE 格式说明
------------
-OpenCode 的 /event 全局端点推送两种格式:
-
-格式 A (opencode 原生):
-    message.part.updated  — 文本/工具/推理部分更新
-    message.part.delta    — 增量文本
-    session.idle          — 任务完成
-
-格式 B (简化格式):
-    text / reasoning / tool / step-start / step-finish
-
-两种格式均由 sail.opencode.sse_parser.parse_event 统一解码。
+Supports arbitrary service names via the ``name`` parameter, useful when
+wrapping forks (codemaker, kimix, etc.) that share the same opencode API.
 """
 
 from __future__ import annotations
@@ -143,6 +127,7 @@ class Session:
 @dataclass
 class SSEEvent:
     """Parsed Server-Sent Event."""
+
     event: str = ""
     data: str = ""
     id: Optional[str] = None
@@ -160,7 +145,7 @@ class SSEEvent:
         return self.event == "__reconnected__"
 
 
-# ── 同步辅助函数（无需创建客户端对象）────────────────────────────
+# ── Sync helpers ──────────────────────────────────────────────────
 
 
 def check_health_sync(
@@ -168,9 +153,12 @@ def check_health_sync(
     host: str = "127.0.0.1",
     timeout: float = 3.0,
 ) -> bool:
-    """同步健康检查，用于进程管理等同步上下文。"""
+    """Synchronous health check for use in sync contexts (e.g. subprocess polling)."""
     try:
-        with httpx.Client(timeout=httpx.Timeout(timeout)) as c:
+        with httpx.Client(
+            timeout=httpx.Timeout(timeout),
+            trust_env=False,
+        ) as c:
             resp = c.get(f"http://{host}:{port}/global/health")
             return bool(resp.json().get("healthy", False))
     except Exception:
@@ -183,9 +171,12 @@ def abort_session_sync(
     host: str = "127.0.0.1",
     timeout: float = 10.0,
 ) -> bool:
-    """同步中止 session，适用于无法使用 async 的回调中。"""
+    """Synchronous session abort for sync callbacks."""
     try:
-        with httpx.Client(timeout=httpx.Timeout(timeout)) as c:
+        with httpx.Client(
+            timeout=httpx.Timeout(timeout),
+            trust_env=False,
+        ) as c:
             resp = c.post(f"http://{host}:{port}/session/{session_id}/abort")
             return resp.status_code == 200
     except Exception:
@@ -195,20 +186,14 @@ def abort_session_sync(
 # ── Async Client ──────────────────────────────────────────────────
 
 
-class OpenCodeAsyncClient:
-    """异步 OpenCode 客户端，内置 SSE 事件流支持。
+class OpencodeAsyncClient:
+    """Generic async OpenCode-compatible client with SSE support.
 
-    推荐用于所有任务执行和实时进度监听。
-
-    Example::
-
-        async with OpenCodeAsyncClient(port=4096) as client:
-            sess = await client.create_session("My Task")
-            ok = await client.send_prompt_async(sess.id, "write tests")
-            async for event in client.stream_events_robust(sess.id):
-                parsed = parse_event(event, sess.id)
-                if parsed.type == EventType.TEXT:
-                    print(parsed.delta, end="", flush=True)
+    Args:
+        host: Server hostname.
+        port: Server port.
+        timeout: Default HTTP timeout.
+        name: Service name used in log messages (e.g. ``"opencode"``, ``"codemaker"``).
     """
 
     def __init__(
@@ -216,16 +201,21 @@ class OpenCodeAsyncClient:
         host: str = "127.0.0.1",
         port: int = 4096,
         timeout: float = 30.0,
+        name: str = "opencode",
     ) -> None:
         self.host = host
         self.port = port
+        self.name = name
         self._base_url = f"http://{host}:{port}"
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(timeout))
+        self._client = httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout),
+            trust_env=False,
+        )
 
     async def close(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "OpenCodeAsyncClient":
+    async def __aenter__(self) -> "OpencodeAsyncClient":
         return self
 
     async def __aexit__(self, *args: Any) -> bool:
@@ -235,24 +225,26 @@ class OpenCodeAsyncClient:
     # ── Health ────────────────────────────────────────────────────
 
     async def health_check(self) -> bool:
-        """异步健康检查。"""
         try:
             resp = await self._client.get(f"{self._base_url}/global/health")
             data = resp.json()
             healthy = data.get("healthy", False)
             if not healthy:
                 logger.warning(
-                    "[OpenCode] health_check: healthy=False, response=%s", data
+                    "[%s] health_check: healthy=False, response=%s", self.name, data
                 )
             return bool(healthy)
         except httpx.ConnectError as exc:
             logger.warning(
-                "[OpenCode] health_check: 无法连接 %s — %s", self._base_url, exc
+                "[%s] health_check: cannot connect %s — %s",
+                self.name,
+                self._base_url,
+                exc,
             )
             return False
         except Exception as exc:
             logger.warning(
-                "[OpenCode] health_check: %s: %s", type(exc).__name__, exc
+                "[%s] health_check: %s: %s", self.name, type(exc).__name__, exc
             )
             return False
 
@@ -288,6 +280,31 @@ class OpenCodeAsyncClient:
         resp.raise_for_status()
         return [Message.from_dict(m) for m in resp.json()]
 
+    async def get_session_transcript(
+        self, session_id: str, limit: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Fetch full message transcript (with parts) for archiving."""
+        params: Dict[str, Any] = {}
+        if limit > 0:
+            params["limit"] = limit
+        resp = await self._client.get(
+            f"{self._base_url}/session/{session_id}/message",
+            params=params,
+        )
+        resp.raise_for_status()
+        raw = resp.json()
+        if raw and isinstance(raw[0], dict) and "info" in raw[0]:
+            return raw
+        return [{"info": m, "parts": []} for m in raw]
+
+    async def get_session_children(self, session_id: str) -> List[Dict[str, Any]]:
+        resp = await self._client.get(
+            f"{self._base_url}/session/{session_id}/children"
+        )
+        resp.raise_for_status()
+        raw = resp.json()
+        return raw if isinstance(raw, list) else []
+
     async def get_session_status(self) -> Dict[str, Any]:
         resp = await self._client.get(f"{self._base_url}/session/status")
         resp.raise_for_status()
@@ -302,7 +319,6 @@ class OpenCodeAsyncClient:
         agent: Optional[str] = None,
         model: Optional[str] = None,
     ) -> bool:
-        """Fire-and-forget prompt (HTTP 204)。"""
         body: Dict[str, Any] = {"parts": [{"type": "text", "text": text}]}
         if agent:
             body["agent"] = agent
@@ -321,7 +337,6 @@ class OpenCodeAsyncClient:
         model: Optional[str] = None,
         timeout: float = 600.0,
     ) -> Message:
-        """发送消息并等待响应（阻塞直到 LLM 回复）。"""
         body: Dict[str, Any] = {"parts": [{"type": "text", "text": text}]}
         if agent:
             body["agent"] = agent
@@ -353,20 +368,49 @@ class OpenCodeAsyncClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def update_config(self, patch: Dict[str, Any]) -> Dict[str, Any]:
+        resp = await self._client.patch(f"{self._base_url}/config", json=patch)
+        resp.raise_for_status()
+        return resp.json()
+
     async def respond_permission(
         self,
         session_id: str,
         permission_id: str,
-        response: str = "allow",
+        response: str = "always",
         remember: bool = True,
     ) -> bool:
-        """响应权限请求 (allow / deny)。"""
-        body = {"response": response, "remember": remember}
+        """Respond to a permission request.
+
+        Modern opencode-compatible servers use ``once`` / ``always`` / ``reject``.
+        Legacy ``allow`` / ``deny`` values are mapped automatically.
+        """
+        reply = response
+        if response == "allow":
+            reply = "always" if remember else "once"
+        elif response == "deny":
+            reply = "reject"
+        if reply not in {"once", "always", "reject"}:
+            reply = "always"
+
         resp = await self._client.post(
-            f"{self._base_url}/session/{session_id}/permissions/{permission_id}",
-            json=body,
+            f"{self._base_url}/permission/{permission_id}/reply",
+            json={"reply": reply},
         )
-        return resp.status_code == 200
+        if resp.status_code == 200:
+            return True
+        if resp.status_code not in {404, 405}:
+            resp.raise_for_status()
+            return False
+
+        legacy_resp = await self._client.post(
+            f"{self._base_url}/session/{session_id}/permissions/{permission_id}",
+            json={"response": reply},
+        )
+        if legacy_resp.status_code == 200:
+            return True
+        legacy_resp.raise_for_status()
+        return False
 
     # ── SSE Streaming ─────────────────────────────────────────────
 
@@ -375,14 +419,11 @@ class OpenCodeAsyncClient:
         session_id: str,
         timeout: float = 14400.0,
     ) -> AsyncIterator[SSEEvent]:
-        """从全局 /event 端点流式读取 SSE 事件。
-
-        注意: /event 是全局端点，会推送所有 session 的事件。
-        配合 sse_parser.parse_event(event, session_id) 过滤。
-        """
+        """Stream raw SSE events from the global ``/event`` endpoint."""
         url = f"{self._base_url}/event"
         stream_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout, connect=10.0, read=timeout)
+            timeout=httpx.Timeout(timeout, connect=10.0, read=timeout),
+            trust_env=False,
         )
         response_ctx = None
         try:
@@ -392,10 +433,8 @@ class OpenCodeAsyncClient:
             async for event in _parse_sse_stream(response):
                 yield event
         except (asyncio.CancelledError, GeneratorExit):
-            # 被外部中断（Ctrl+C / task cancel），静默退出
             return
         finally:
-            # 确保按正确顺序关闭资源，忽略关闭期间的错误
             if response_ctx is not None:
                 try:
                     await response_ctx.__aexit__(None, None, None)
@@ -414,11 +453,7 @@ class OpenCodeAsyncClient:
         reconnect_delay: float = 2.0,
         on_reconnect: Optional[Callable[[int], None]] = None,
     ) -> AsyncIterator[SSEEvent]:
-        """带自动重连的 SSE 事件流。
-
-        断线时自动重连，每次重连前产生一个
-        ``SSEEvent(event="__reconnected__")`` 哨兵事件。
-        """
+        """SSE stream with automatic reconnect."""
         reconnects = 0
         while reconnects <= max_reconnects:
             try:
@@ -435,18 +470,28 @@ class OpenCodeAsyncClient:
                 reconnects += 1
                 if reconnects > max_reconnects:
                     logger.error(
-                        "[SSE] Max reconnects reached for session %s: %s",
-                        session_id[:16], exc,
+                        "[%s] Max reconnects reached for session %s: %s",
+                        self.name,
+                        session_id[:16],
+                        exc,
                     )
                     raise
                 logger.warning(
-                    "[SSE] Reconnecting session %s (%d/%d): %s",
-                    session_id[:16], reconnects, max_reconnects, exc,
+                    "[%s] Reconnecting session %s (%d/%d): %s",
+                    self.name,
+                    session_id[:16],
+                    reconnects,
+                    max_reconnects,
+                    exc,
                 )
                 if on_reconnect:
                     on_reconnect(reconnects)
                 await asyncio.sleep(reconnect_delay * reconnects)
                 yield SSEEvent(event="__reconnected__", data=str(reconnects))
+
+
+# Backward-compatible alias
+OpenCodeAsyncClient = OpencodeAsyncClient
 
 
 # ── SSE Stream Parser (internal) ──────────────────────────────────
@@ -455,7 +500,7 @@ class OpenCodeAsyncClient:
 async def _parse_sse_stream(
     response: httpx.Response,
 ) -> AsyncIterator[SSEEvent]:
-    """将 HTTP 响应体解析为 SSEEvent 流（内部使用）。"""
+    """Parse an HTTP response body into a stream of SSEEvents."""
     current = SSEEvent()
     data_lines: List[str] = []
 
@@ -471,7 +516,7 @@ async def _parse_sse_stream(
             continue
 
         if line.startswith(":"):
-            continue  # SSE 注释行（心跳）
+            continue  # SSE comment / heartbeat
 
         if ":" in line:
             field_name, _, value = line.partition(":")

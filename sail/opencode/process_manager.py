@@ -1,18 +1,12 @@
 # -*- coding: utf-8 -*-
 # @file process_manager.py
-# @brief opencode serve 进程生命周期管理
+# @brief Generic opencode-compatible process lifecycle manager
 # @author sailing-innocent
-# @date 2026-04-25
-# @version 1.0
+# @date 2026-05-31
+# @version 2.0
 # ---------------------------------
-"""sail.opencode.process_manager — opencode serve 进程生命周期管理。
-
-每个工作区路径对应一个 opencode serve 进程和一个端口。
-
-设计原则:
-1. 唯一性：同一工作区路径只会映射到一个进程和一个端口
-2. 持久化：进程状态写入 data/bot/state/sessions.json，重启后可恢复
-3. 可观测：每个进程的 stdout/stderr 写入独立日志文件
+"""sail.opencode.process_manager — Process lifecycle manager for any
+opencode-compatible CLI tool (opencode, codemaker, kimix, etc.).
 """
 
 from __future__ import annotations
@@ -20,9 +14,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -38,9 +35,7 @@ _DEFAULT_STATE_FILE = Path("data/bot/state/sessions.json")
 _DEFAULT_LOG_DIR = Path("data/bot/opencode_logs")
 _STARTUP_TIMEOUT_SEC = 20
 _HEALTH_POLL_INTERVAL = 1
-
-
-# ── 数据类 ────────────────────────────────────────────────────────
+_PORT_ALLOC_LOCK = threading.Lock()
 
 
 class ProcessStatus(str, Enum):
@@ -52,8 +47,6 @@ class ProcessStatus(str, Enum):
 
 @dataclass
 class ManagedProcess:
-    """追踪一个 agent serve 进程实例。"""
-
     path: str
     port: int
     pid: Optional[int] = None
@@ -106,11 +99,17 @@ class ManagedProcess:
         return _port_open(self.port)
 
 
-# ── 主管理器 ──────────────────────────────────────────────────────
-
-
 class OpenCodeProcessManager:
-    """agent serve 进程生命周期管理器。"""
+    """Manage opencode-compatible serve processes.
+
+    Args:
+        base_port: Starting port for allocation.
+        state_file: Path to JSON state file (default: ``data/bot/state/sessions.json``).
+        log_dir: Directory for stdout/stderr logs.
+        startup_timeout: Seconds to wait for health check.
+        projects: List of project dicts with ``slug``, ``label``, ``path``.
+        cli_tool: CLI binary name (e.g. ``"opencode-cli"``, ``"codemaker"``).
+    """
 
     def __init__(
         self,
@@ -130,7 +129,7 @@ class OpenCodeProcessManager:
         self._processes: Dict[str, ManagedProcess] = {}
         self._load_state()
 
-    # ── 公共 API（同步）───────────────────────────────────────────
+    # ── Public API (sync) ─────────────────────────────────────────
 
     def ensure_running(
         self,
@@ -152,7 +151,9 @@ class OpenCodeProcessManager:
 
         port = self._allocate_port()
         if proc is None:
-            proc = ManagedProcess(path=path, port=port, chat_id=chat_id, cli_tool=self._cli_tool)
+            proc = ManagedProcess(
+                path=path, port=port, chat_id=chat_id, cli_tool=self._cli_tool
+            )
             self._processes[path] = proc
         else:
             proc.port = port
@@ -161,10 +162,44 @@ class OpenCodeProcessManager:
 
         return self._start_process(proc)
 
+    def ensure_running_unique(
+        self,
+        path: str,
+        key: str,
+        chat_id: Optional[str] = None,
+    ) -> Tuple[bool, ManagedProcess, str]:
+        """Start an isolated process keyed by *key* (cwd still uses *path*)."""
+        resolved = self._resolve_path(path)
+        if resolved is None:
+            dummy = ManagedProcess(path=path, port=0)
+            dummy.status = ProcessStatus.ERROR
+            dummy.last_error = f"路径不存在或无效: {path}"
+            return False, dummy, dummy.last_error
+
+        proc_key = key or resolved
+        proc = self._processes.get(proc_key)
+        if proc and proc.is_alive:
+            proc.status = ProcessStatus.RUNNING
+            return True, proc, f"已在端口 {proc.port} 运行"
+
+        port = self._allocate_port()
+        if proc is None:
+            proc = ManagedProcess(path=resolved, port=port, chat_id=chat_id)
+            self._processes[proc_key] = proc
+        else:
+            proc.path = resolved
+            proc.port = port
+            proc.session_id = None
+
+        return self._start_process(proc)
+
     def stop(self, path: str) -> Tuple[bool, str]:
         resolved = self._resolve_path(path, must_exist=False)
-        path = resolved or path
-        proc = self._processes.get(path)
+        proc_key = path
+        proc = self._processes.get(proc_key)
+        if proc is None and resolved:
+            proc_key = resolved
+            proc = self._processes.get(proc_key)
         if not proc:
             return False, f"未找到 {path} 的进程"
 
@@ -173,7 +208,7 @@ class OpenCodeProcessManager:
         proc.pid = None
         proc.session_id = None
         self._save_state()
-        logger.info("[ProcessManager] 已停止: %s", path)
+        logger.info("[ProcessManager] 已停止: %s", proc_key)
         return True, "已停止"
 
     def stop_all(self) -> int:
@@ -195,6 +230,7 @@ class OpenCodeProcessManager:
 
         try:
             import httpx
+
             title = f"SailZen - {Path(path).name}"
             with httpx.Client(timeout=10.0) as c:
                 resp = c.post(
@@ -203,6 +239,7 @@ class OpenCodeProcessManager:
                 )
                 resp.raise_for_status()
                 from sail.opencode.client import Session
+
                 sess = Session.from_dict(resp.json())
                 proc.session_id = sess.id
                 self._save_state()
@@ -215,7 +252,6 @@ class OpenCodeProcessManager:
         return list(self._processes.values())
 
     def update_projects(self, projects: Optional[List[Dict[str, Any]]]) -> None:
-        """Update the project list used for path resolution."""
         self._projects = projects or []
 
     def get_status_text(self) -> str:
@@ -225,7 +261,8 @@ class OpenCodeProcessManager:
         for proc in self._processes.values():
             alive = proc.is_alive
             icon = (
-                "🟢" if alive
+                "🟢"
+                if alive
                 else {"stopped": "⚪", "starting": "🟡", "error": "🔴"}.get(
                     proc.status.value, "⚪"
                 )
@@ -245,13 +282,21 @@ class OpenCodeProcessManager:
                 return p.get("path", "")
         return None
 
-    # ── 公共 API（异步）───────────────────────────────────────────
+    # ── Public API (async) ────────────────────────────────────────
 
     async def ensure_running_async(
-        self, path: str, chat_id: Optional[str] = None,
+        self, path: str, chat_id: Optional[str] = None
     ) -> Tuple[bool, ManagedProcess, str]:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.ensure_running, path, chat_id)
+
+    async def ensure_running_unique_async(
+        self, path: str, key: str, chat_id: Optional[str] = None
+    ) -> Tuple[bool, ManagedProcess, str]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, self.ensure_running_unique, path, key, chat_id
+        )
 
     async def stop_async(self, path: str) -> Tuple[bool, str]:
         loop = asyncio.get_event_loop()
@@ -261,7 +306,7 @@ class OpenCodeProcessManager:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.get_status_text)
 
-    # ── 内部：进程控制 ────────────────────────────────────────────
+    # ── Internal: process control ─────────────────────────────────
 
     def _start_process(
         self, proc: ManagedProcess
@@ -277,22 +322,31 @@ class OpenCodeProcessManager:
         err_log_path = self._log_dir / f"agent_{proc.port}.err.log"
 
         cmd = [
-            proc.cli_tool, "serve",
-            "--hostname", "127.0.0.1",
-            "--port", str(proc.port),
+            proc.cli_tool,
+            "serve",
+            "--hostname",
+            "127.0.0.1",
+            "--port",
+            str(proc.port),
         ]
         kwargs: Dict[str, Any] = {}
         if sys.platform == "win32":
             kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
             kwargs["shell"] = True
 
-        logger.info("[ProcessManager] 启动: %s (cwd=%s)", " ".join(cmd), proc.path)
+        logger.info(
+            "[ProcessManager] 启动: %s (cwd=%s)", " ".join(cmd), proc.path
+        )
 
         try:
             stdout_fh = open(out_log_path, "w", encoding="utf-8")
             stderr_fh = open(err_log_path, "w", encoding="utf-8")
             process = subprocess.Popen(
-                cmd, cwd=proc.path, stdout=stdout_fh, stderr=stderr_fh, **kwargs,
+                cmd,
+                cwd=proc.path,
+                stdout=stdout_fh,
+                stderr=stderr_fh,
+                **kwargs,
             )
             proc.pid = process.pid
             proc._process = process
@@ -302,21 +356,37 @@ class OpenCodeProcessManager:
             proc.started_at = datetime.now().isoformat()
         except FileNotFoundError:
             proc.status = ProcessStatus.ERROR
-            proc.last_error = f"{proc.cli_tool} 命令未找到。请确认已安装并在 PATH 中。"
+            proc.last_error = (
+                f"{proc.cli_tool} 命令未找到。请确认已安装并在 PATH 中。"
+            )
             return False, proc, proc.last_error
         except Exception as exc:
             proc.status = ProcessStatus.ERROR
             proc.last_error = str(exc)
             return False, proc, proc.last_error
 
+        _t_start = time.time()
+        _t_last_log = _t_start
         for _ in range(self._startup_timeout):
             time.sleep(_HEALTH_POLL_INTERVAL)
+            elapsed_s = time.time() - _t_start
             if check_health_sync(proc.port):
                 proc.status = ProcessStatus.RUNNING
                 self._save_state()
                 msg = f"已启动 port={proc.port} PID={proc.pid}"
-                logger.info("[ProcessManager] %s", msg)
+                logger.info(
+                    "[ProcessManager] %s (耗时 %.1fs)", msg, elapsed_s
+                )
                 return True, proc, msg
+            now = time.time()
+            if now - _t_last_log >= 5.0:
+                logger.info(
+                    "[ProcessManager] 仍在等待就绪: port=%d elapsed=%.0fs/timeout=%ds",
+                    proc.port,
+                    elapsed_s,
+                    self._startup_timeout,
+                )
+                _t_last_log = now
 
         self._kill_process(proc)
         proc.status = ProcessStatus.ERROR
@@ -332,7 +402,8 @@ class OpenCodeProcessManager:
                 if sys.platform == "win32":
                     subprocess.run(
                         ["taskkill", "/PID", str(proc._process.pid), "/T", "/F"],
-                        check=False, capture_output=True,
+                        check=False,
+                        capture_output=True,
                     )
                 else:
                     proc._process.terminate()
@@ -344,6 +415,26 @@ class OpenCodeProcessManager:
             except Exception as exc:
                 logger.warning("[ProcessManager] 终止进程异常: %s", exc)
             proc._process = None
+        elif proc.pid:
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                        check=False,
+                        capture_output=True,
+                    )
+                else:
+                    os.kill(proc.pid, signal.SIGTERM)
+                logger.info(
+                    "[ProcessManager] 通过 pid 强制终止: PID %d", proc.pid
+                )
+            except (ProcessLookupError, PermissionError, OSError) as exc:
+                logger.warning(
+                    "[ProcessManager] 通过 pid 终止失败 (PID %d): %s",
+                    proc.pid,
+                    exc,
+                )
+            proc.pid = None
 
         for fh in (proc._stdout_log, proc._stderr_log):
             if fh:
@@ -353,23 +444,43 @@ class OpenCodeProcessManager:
                     pass
         proc._stdout_log = proc._stderr_log = None
 
-    # ── 内部：端口分配 ────────────────────────────────────────────
+    # ── Internal: port allocation ─────────────────────────────────
 
     def _allocate_port(self) -> int:
-        used = {p.port for p in self._processes.values() if p.port}
-        port = self.base_port
-        while port in used or _port_open(port):
-            port += 1
-        return port
+        with _PORT_ALLOC_LOCK:
+            used = {p.port for p in self._processes.values() if p.port}
+            port = self.base_port
+            while True:
+                if port in used or _port_open(port):
+                    port += 1
+                    continue
+                try:
+                    with socket.socket(
+                        socket.AF_INET, socket.SOCK_STREAM
+                    ) as probe:
+                        probe.setsockopt(
+                            socket.SOL_SOCKET, socket.SO_REUSEADDR, 0
+                        )
+                        probe.bind(("127.0.0.1", port))
+                    break
+                except OSError:
+                    port += 1
+                    continue
+            return port
 
-    # ── 内部：路径解析 ────────────────────────────────────────────
+    # ── Internal: path resolution ─────────────────────────────────
 
-    def _resolve_path(self, path: str, must_exist: bool = True) -> Optional[str]:
+    def _resolve_path(
+        self, path: str, must_exist: bool = True
+    ) -> Optional[str]:
         if not path:
             return None
         lower = path.strip().lower()
         for p in self._projects:
-            if p.get("slug", "").lower() == lower or p.get("label", "").lower() == lower:
+            if (
+                p.get("slug", "").lower() == lower
+                or p.get("label", "").lower() == lower
+            ):
                 raw = p.get("path", "")
                 if raw:
                     return self._resolve_path(raw, must_exist=must_exist)
@@ -381,7 +492,7 @@ class OpenCodeProcessManager:
         except Exception:
             return None
 
-    # ── 内部：状态持久化 ──────────────────────────────────────────
+    # ── Internal: state persistence ───────────────────────────────
 
     def _save_state(self) -> None:
         try:
@@ -400,10 +511,12 @@ class OpenCodeProcessManager:
                 data = json.load(f)
 
             recovered = 0
+            skipped = 0
             for item in data:
                 path = item.get("path", "")
                 port = item.get("port", 0)
                 if not path or not port:
+                    skipped += 1
                     continue
                 if _port_open(port):
                     try:
@@ -415,27 +528,35 @@ class OpenCodeProcessManager:
                             continue
                     except Exception:
                         pass
+                skipped += 1
 
             if recovered:
                 logger.info("[ProcessManager] 恢复 %d 个进程", recovered)
+            if skipped:
+                logger.info("[ProcessManager] 跳过 %d 个失效进程", skipped)
             self._save_state()
         except Exception as exc:
             logger.error("[ProcessManager] 加载状态失败: %s", exc)
             self._processes.clear()
 
 
-# ── 辅助函数 ──────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────
 
 
-def _port_open(port: int, host: str = "127.0.0.1", timeout: float = 1.0) -> bool:
+def _port_open(
+    port: int, host: str = "127.0.0.1", timeout: float = 1.0
+) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
         return s.connect_ex((host, port)) == 0
 
 
-def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optional[str]:
-    """从文本中提取路径（支持项目快捷名和绝对路径）。"""
+def extract_path_from_text(
+    text: str, projects: List[Dict[str, str]]
+) -> Optional[str]:
+    """Extract a workspace path from *text* using project slug/label or raw path."""
     import re
+
     text = text.strip()
     text_lower = text.lower()
     for p in projects:
@@ -445,7 +566,6 @@ def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optiona
             return p.get("path", "")
         if label and text_lower == label.lower():
             return p.get("path", "")
-    # 子串匹配：在文本中查找项目 slug/label（如 "启动 sz" 中的 sz）
     for p in projects:
         slug = p.get("slug", "")
         label = p.get("label", "")
@@ -453,8 +573,30 @@ def extract_path_from_text(text: str, projects: List[Dict[str, str]]) -> Optiona
             return p.get("path", "")
         if label and label.lower() in text_lower:
             return p.get("path", "")
-    for pattern in [r"([~/][^\s]+)", r"([A-Z]:\\[^\s]+)", r"([A-Z]:/[^\s]+)"]:
+    for pattern in [
+        r"([~/][^\s]+)",
+        r"([A-Z]:\\[^\s]+)",
+        r"([A-Z]:/[^\s]+)",
+    ]:
         m = re.search(pattern, text)
         if m:
             return m.group(1)
     return None
+
+
+def resolve_workspace_path(
+    slug_or_path: str,
+    projects: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Resolve a workspace absolute path from slug, label, or raw path."""
+    if not slug_or_path:
+        return None
+    for p in projects:
+        if p.get("slug") == slug_or_path:
+            return p.get("path")
+        if p.get("label", "").lower() == slug_or_path.lower():
+            return p.get("path")
+    try:
+        return str(Path(slug_or_path).expanduser().resolve())
+    except Exception:
+        return None

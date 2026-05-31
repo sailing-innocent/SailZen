@@ -1,33 +1,13 @@
 # -*- coding: utf-8 -*-
 # @file sse_printer.py
-# @brief SSE 事件终端可视化打印器 + 飞书通知适配
+# @brief SSE event terminal visualizer + external callback adapter
 # @author sailing-innocent
-# @date 2026-04-25
-# @version 1.0
+# @date 2026-05-31
+# @version 2.0
 # ---------------------------------
-"""sail.opencode.sse_printer — SSE 事件可视化打印器。
+"""sail.opencode.sse_printer — Structured SSE event printer.
 
-功能:
-- 彩色终端输出（ANSI），自动兼容 Windows
-- verbose 模式：展开所有文本 / reasoning
-- 非 verbose 模式：进度点号 + 里程碑行
-- 完整统计摘要（耗时、字符数、工具调用表格、成本）
-- 支持外部回调：用于飞书卡片更新等
-
-使用示例::
-
-    from sail.opencode import OpenCodeAsyncClient, parse_event, SSEPrinter
-    from sail.opencode.sse_parser import EventType
-
-    async with OpenCodeAsyncClient(port=4096) as client:
-        printer = SSEPrinter(verbose=True, session_id=session_id)
-        async for raw in client.stream_events_robust(session_id):
-            parsed = parse_event(raw, session_id)
-            printer.handle_event(parsed)
-            if parsed.is_terminal():
-                break
-        printer.print_summary()
-"""
+Compatible with any opencode-compatible server."""
 
 from __future__ import annotations
 
@@ -42,31 +22,18 @@ from dataclasses import dataclass
 from sail.opencode.sse_parser import EventType, ParsedEvent
 
 
-# ── 回调接口 ─────────────────────────────────────────────────────
+# ── Callback interface ────────────────────────────────────────────
 
 
 @dataclass
 class PrinterCallbacks:
-    """SSEPrinter 的外部回调接口。
-
-    用于将事件通知到飞书卡片等外部系统。
-    所有回调均为可选，未设置时不触发。
-    """
-
     on_tool: Optional[Callable[..., None]] = None
-    """工具事件回调: fn(tool_name: str, status: str, content: str)"""
-
     on_text: Optional[Callable[..., None]] = None
-    """文本增量回调: fn(delta: str)"""
-
     on_finish: Optional[Callable[..., None]] = None
-    """完成回调: fn(summary: str)"""
-
     on_permission: Optional[Callable[..., None]] = None
-    """权限请求回调: fn(permission_id: str, raw_data: dict)"""
 
 
-# ── ANSI 颜色 ─────────────────────────────────────────────────────
+# ── ANSI colors ───────────────────────────────────────────────────
 
 
 class AnsiColor:
@@ -95,6 +62,7 @@ class AnsiColor:
             return
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
             kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
         except Exception:
@@ -104,7 +72,7 @@ class AnsiColor:
 C = AnsiColor
 
 
-# ── 辅助函数 ──────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────
 
 
 def _ts() -> str:
@@ -118,7 +86,6 @@ def _truncate(text: str, max_len: int = 80) -> str:
 
 
 def format_tool_table(tool_calls: List[Dict[str, Any]]) -> str:
-    """将工具调用列表格式化为可读统计表格。"""
     if not tool_calls:
         return "    (无工具调用)"
     lines = []
@@ -142,12 +109,10 @@ def format_tool_table(tool_calls: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-# ── SSE 统计累加器 ────────────────────────────────────────────────
+# ── Stats ─────────────────────────────────────────────────────────
 
 
 class SSEStats:
-    """累积 SSE 事件统计。"""
-
     def __init__(self) -> None:
         self.t0 = time.time()
         self.text_chars: int = 0
@@ -178,31 +143,16 @@ class SSEStats:
         return f"{int(m)}m{s:.0f}s"
 
 
-# ── SSE 事件打印器 ────────────────────────────────────────────────
+# ── Printer ───────────────────────────────────────────────────────
 
 
 class SSEPrinter:
-    """结构化 SSE 事件终端打印器。
-
-    接收 ParsedEvent，以彩色格式输出到终端，并可选地触发外部回调。
-
-    Args:
-        verbose:     是否展开所有文本流
-        log_file:    可选日志文件路径
-        session_id:  当前 session ID
-        on_tool:     工具事件回调 fn(tool_name, status, title)
-        on_text:     文本增量回调 fn(delta, total_chars)
-        on_finish:   完成回调 fn(reason, cost, tokens)
-        on_permission: 权限请求回调 fn(permission_id, raw_data)
-    """
-
     def __init__(
         self,
         verbose: bool = False,
         log_file: Optional[str] = None,
         session_id: str = "",
         callbacks: Optional[PrinterCallbacks] = None,
-        # Legacy individual callbacks (prefer using `callbacks` dataclass)
         on_tool: Optional[Callable[..., None]] = None,
         on_text: Optional[Callable[..., None]] = None,
         on_finish: Optional[Callable[..., None]] = None,
@@ -217,7 +167,6 @@ class SSEPrinter:
         self._in_text_block = False
         self._log_fh = None
 
-        # External callbacks: prefer PrinterCallbacks, fallback to individual args
         cb = callbacks or PrinterCallbacks()
         self._on_tool = cb.on_tool or on_tool
         self._on_text = cb.on_text or on_text
@@ -236,8 +185,6 @@ class SSEPrinter:
             self._log_fh.close()
             self._log_fh = None
 
-    # ── 内部输出工具 ──────────────────────────────────────────────
-
     def _log_raw(self, text: str) -> None:
         if self._log_fh:
             self._log_fh.write(AnsiColor.strip(text) + "\n")
@@ -254,10 +201,7 @@ class SSEPrinter:
         print(line)
         self._log_raw(line)
 
-    # ── 主入口 ────────────────────────────────────────────────────
-
     def handle_event(self, parsed: ParsedEvent) -> None:
-        """处理单个已解析的 SSE 事件。"""
         self.stats.event_count += 1
         t = self.stats.elapsed_str()
         etype = parsed.type
@@ -303,7 +247,9 @@ class SSEPrinter:
 
         if etype == EventType.SESSION_IDLE:
             if self._in_text_block:
-                sys.stdout.write(f" {C.DIM}({self.stats.text_chars}c){C.RESET}\n")
+                sys.stdout.write(
+                    f" {C.DIM}({self.stats.text_chars}c){C.RESET}\n"
+                )
                 sys.stdout.flush()
                 self._in_text_block = False
             self.finished = True
@@ -313,17 +259,15 @@ class SSEPrinter:
                 f"  {C.GRAY}[{t}]{C.RESET} "
                 f"{C.GREEN}{C.BOLD}✅ session idle (任务完成){C.RESET}"
             )
-            if self._on_finish:
-                try:
-                    self._on_finish("session_idle", self.stats.step_cost, self.stats.step_tokens)
-                except Exception:
-                    pass
             return
 
         # UNKNOWN
         self.stats.unknown_events += 1
-
-    # ── 事件类型处理器 ─────────────────────────────────────────────
+        preview = json.dumps(parsed.raw, ensure_ascii=False) if parsed.raw else ""
+        self._print_line(
+            f"  {C.GRAY}[{t}]{C.RESET} "
+            f"{C.DIM}📦 {etype}: {_truncate(preview, 100)}{C.RESET}"
+        )
 
     def _handle_text(self, parsed: ParsedEvent, t: str) -> None:
         txt = parsed.delta or parsed.text
@@ -346,20 +290,29 @@ class SSEPrinter:
 
         if self.verbose:
             if not self._in_text_block:
-                sys.stdout.write(f"  {C.GRAY}[{t}]{C.RESET} {C.DIM}📝 text:{C.RESET} ")
+                sys.stdout.write(
+                    f"  {C.GRAY}[{t}]{C.RESET} {C.DIM}📝 text:{C.RESET} "
+                )
                 self._in_text_block = True
             sys.stdout.write(txt)
             sys.stdout.flush()
         else:
             if not self._in_text_block:
                 self._in_text_block = True
-                sys.stdout.write(f"  {C.GRAY}[{t}]{C.RESET} {C.DIM}📝 text streaming ")
+                sys.stdout.write(
+                    f"  {C.GRAY}[{t}]{C.RESET} {C.DIM}📝 text streaming "
+                )
                 sys.stdout.flush()
             dots = self.stats.text_chars // 500
             prev_dots = (self.stats.text_chars - len(txt)) // 500
             if dots > prev_dots:
                 sys.stdout.write("·")
                 sys.stdout.flush()
+
+        self._log_raw(
+            f"  [text +{len(txt)}c] total={len(self.accumulated_text)}c"
+            + (f" | {txt[:200]}" if self.verbose else "")
+        )
 
     def _handle_reasoning(self, parsed: ParsedEvent, t: str) -> None:
         txt = parsed.text
@@ -368,10 +321,13 @@ class SSEPrinter:
         self.stats.reasoning_chars += len(txt)
         if self.verbose:
             if not self._in_text_block:
-                sys.stdout.write(f"  {C.GRAY}[{t}]{C.RESET} {C.GRAY}💭 reasoning:{C.RESET} ")
+                sys.stdout.write(
+                    f"  {C.GRAY}[{t}]{C.RESET} {C.GRAY}💭 reasoning:{C.RESET} "
+                )
                 self._in_text_block = True
             sys.stdout.write(f"{C.GRAY}{txt}{C.RESET}")
             sys.stdout.flush()
+        self._log_raw(f"  [reasoning +{len(txt)}c] {txt[:200]}")
 
     def _handle_tool(self, parsed: ParsedEvent, t: str) -> None:
         tool_name = parsed.tool_name
@@ -421,6 +377,13 @@ class SSEPrinter:
             f"{C.BG_YELLOW}{C.BOLD} 🔒 PERMISSION REQUEST {C.RESET} "
             f"id={C.YELLOW}{perm_id[:20] if perm_id else 'N/A'}{C.RESET}"
         )
+        desc = (parsed.raw or {}).get(
+            "description", (parsed.raw or {}).get("message", "")
+        )
+        if desc:
+            self._print_line(
+                f"         {C.YELLOW}→ {_truncate(desc, 120)}{C.RESET}"
+            )
         if self._on_permission:
             try:
                 self._on_permission(perm_id, parsed.raw)
@@ -471,8 +434,6 @@ class SSEPrinter:
                 f"{C.DIM}(reason={reason} → 等待工具执行{token_info}){C.RESET}"
             )
 
-    # ── 摘要打印 ──────────────────────────────────────────────────
-
     def print_summary(self, session_id: str = "") -> None:
         s = self.stats
         elapsed = s.elapsed_str()
@@ -495,6 +456,15 @@ class SSEPrinter:
         print(f"    行数:         {s.text_lines:,}")
         if s.reasoning_chars:
             print(f"    推理字符:     {s.reasoning_chars:,}")
+
+        if self.accumulated_text.strip():
+            preview = self.accumulated_text.strip()
+            if len(preview) > 500:
+                preview = preview[:500] + f"... ({len(self.accumulated_text)}c total)"
+            print(f"    {'─' * 40}")
+            for line in preview.split("\n"):
+                print(f"    {C.DIM}{line}{C.RESET}")
+            print(f"    {'─' * 40}")
         print()
 
         print(f"  {C.CYAN}  🔧 工具调用{C.RESET}")
@@ -503,6 +473,10 @@ class SSEPrinter:
 
         if s.permissions:
             print(f"  {C.YELLOW}  🔒 权限请求: {len(s.permissions)} 次{C.RESET}")
+            for p in s.permissions:
+                print(
+                    f"    [{p['time']}] id={p['id'][:20] if p['id'] else 'N/A'}"
+                )
             print()
 
         if s.errors:
@@ -520,11 +494,22 @@ class SSEPrinter:
                 print(f"    Tokens:       {json.dumps(s.step_tokens)}")
             print()
 
+        if s.reconnects:
+            print(f"    SSE 重连:     {s.reconnects} 次")
+        if s.unknown_events:
+            print(f"    未知事件:     {s.unknown_events}")
+
         print(f"  {C.BOLD}{'═' * 56}{C.RESET}")
         print()
 
+        self._log_raw(f"\n{'=' * 56}")
+        self._log_raw(
+            f"SSE Summary: elapsed={elapsed}, events={s.event_count}, "
+            f"text={s.text_chars}c, tools={len(s.tool_calls)}, "
+            f"permissions={len(s.permissions)}, errors={len(s.errors)}"
+        )
+
     def get_summary_text(self) -> str:
-        """返回纯文本摘要（用于飞书通知）。"""
         s = self.stats
         lines = [
             f"📊 任务摘要 ({s.elapsed_str()})",

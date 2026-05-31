@@ -11,7 +11,7 @@ from litestar.response import Response, Stream
 
 from bot_server.deps import get_bus, get_db, get_event_bus
 from bot_server.service.converter import batch_to_pipeline_run
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 
 def _dash_cmd(name: str, **args) -> Command:

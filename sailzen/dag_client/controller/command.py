@@ -6,7 +6,7 @@ from litestar import post
 from litestar.response import Response
 
 from bot_server.deps import get_bus
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 
 @post("/commands")

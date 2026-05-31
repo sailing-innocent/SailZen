@@ -12,8 +12,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from cube.codemaker import CodemakerProcessManager
-from cube.codemaker.client import CodemakerAsyncClient
+from sail.opencode import OpenCodeProcessManager
+from sail.opencode.client import OpencodeAsyncClient
 
 from .base import DEFAULT_AGENT_NAME, DEFAULT_CODEMAKER_HOST, DEFAULT_CODEMAKER_PORT
 
@@ -48,7 +48,7 @@ async def ensure_codemaker_for_workdir(
     task_key = str(codemaker_config.get("task_id_short") or task_id[:8] or "")
     process_key = f"{working_dir}#task-{task_key}" if task_key else working_dir
 
-    mgr = CodemakerProcessManager(
+    mgr = OpenCodeProcessManager(
         base_port=base_port,
         state_file=Path(state_file) if state_file else None,
         log_dir=Path(log_dir) if log_dir else None,
@@ -85,7 +85,7 @@ async def ensure_codemaker_for_workdir(
 
 
 async def discover_agent(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     preferred_name: str = DEFAULT_AGENT_NAME,
 ) -> Optional[str]:
     """在 Codemaker 中查找目标 Agent。
@@ -133,7 +133,7 @@ async def discover_agent(
 
 
 async def auto_respond_permission(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     permission_id: str,
     task_label: str,

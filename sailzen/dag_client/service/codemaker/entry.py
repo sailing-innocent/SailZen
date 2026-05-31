@@ -1,7 +1,7 @@
 """DAG-aware Codemaker task runner.
 
 This module keeps bot_server orchestration concerns in one place while using
-``cube.codemaker`` for the actual Codemaker session lifecycle and SSE handling.
+``sail.opencode`` for the actual Codemaker session lifecycle and SSE handling.
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from cube.codemaker.session_dependencies import default_dependencies
-from cube.codemaker.session_models import TaskResult, TaskRunConfig
-from cube.codemaker.session_runner import run_task
-from cube.paths import path_under_data_dir
+from sail.opencode.session_dependencies import default_dependencies
+from sail.opencode.session_models import TaskResult, TaskRunConfig
+from sail.opencode.session_runner import run_task
+from sail.paths import path_under_data_dir
 
 from bot_server.models import SessionStatus, TaskRunStatus, make_session, make_task_run, now_iso
 
@@ -93,7 +93,7 @@ async def run_prompt_via_codemaker(
     sse_timeout: float,
     extra_result: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Run a DAG Codemaker task through the shared cube.codemaker session runner."""
+    """Run a DAG Codemaker task through the shared sail.opencode session runner."""
     ctx = CodemakerTaskContext(
         task_label=task_label,
         task=task,
@@ -563,11 +563,11 @@ async def _persist_final_records(ctx: CodemakerTaskContext) -> None:
 async def _archive_transcript_if_possible(ctx: CodemakerTaskContext) -> None:
     if not ctx.session_id or not ctx.final_result:
         return
-    from cube.codemaker.client import CodemakerAsyncClient
+    from sail.opencode.client import OpencodeAsyncClient
 
     transcript_dir = str(path_under_data_dir(ctx.process_config.get("transcript_dir", "transcripts")))
     try:
-        async with CodemakerAsyncClient(
+        async with OpencodeAsyncClient(
             host=ctx.host,
             port=ctx.port,
             timeout=float(ctx.process_config.get("http_timeout", 120.0)),

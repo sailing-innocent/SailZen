@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from cube.codemaker.client import CodemakerAsyncClient
+from sail.opencode.client import OpencodeAsyncClient
 
 from bot_server.models import TaskRunStatus
 
@@ -128,7 +128,7 @@ async def wait_for_background_session_result(
     missing_since: Optional[float] = None
     last_running_fingerprint = ""
 
-    async with CodemakerAsyncClient(host=client_host, port=client_port) as client:
+    async with OpencodeAsyncClient(host=client_host, port=client_port) as client:
         while time.time() < deadline:
             data = await load_session_result_if_exists(session_result_path)
             if not data:
