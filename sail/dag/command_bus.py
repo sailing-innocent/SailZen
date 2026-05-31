@@ -1,13 +1,13 @@
 """CubeClaw CommandBus — 统一交互层。
 
-所有操作（Dashboard / POPO / Bot 自动化）最终归结为 Command，
+所有操作（Dashboard / IM / Bot 自动化）最终归结为 Command，
 由 CommandBus 统一调度、权限检查、执行并产生 Event。
 
 权限模型:
   ADMIN > OPERATOR > REVIEWER > VIEWER > BOT
 
   Dashboard  = ADMIN（全量管理）
-  POPO User  = OPERATOR / REVIEWER（按用户配置）
+  IM User  = OPERATOR / REVIEWER（按用户配置）
   Bot 自动化 = BOT（可被打断，需 auto_run 开关）
 """
 
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class Role(IntEnum):
     """权限等级，数值越大权限越高。"""
+
     BOT = 0
     VIEWER = 10
     REVIEWER = 20
@@ -36,7 +37,7 @@ class Role(IntEnum):
 # 来源标识
 class Source:
     DASHBOARD = "dashboard"
-    POPO = "popo"
+    IM = "IM"
     BOT = "bot"
     SYSTEM = "system"  # 内部调度
 
@@ -47,12 +48,13 @@ class Source:
 @dataclass
 class Command:
     """统一命令对象。"""
-    name: str                          # 命令名，如 "status", "retry_task", "create_batch"
+
+    name: str  # 命令名，如 "status", "retry_task", "create_batch"
     args: Dict[str, Any] = field(default_factory=dict)
-    source: str = Source.SYSTEM        # 来源: dashboard / popo / bot / system
-    actor: str = "system"              # 执行者标识（user_id / "dashboard" / "bot"）
-    role: Role = Role.VIEWER           # 执行者权限
-    reply_to: Optional[str] = None     # POPO 回复目标 (chat_id / group_id)
+    source: str = Source.SYSTEM  # 来源: dashboard / IM / bot / system
+    actor: str = "system"  # 执行者标识（user_id / "dashboard" / "bot"）
+    role: Role = Role.VIEWER  # 执行者权限
+    reply_to: Optional[str] = None  # IM 回复目标 (chat_id / group_id)
 
     @property
     def required_role(self) -> Role:
@@ -84,7 +86,6 @@ _COMMAND_ROLES: Dict[str, Role] = {
     "pipeline_definitions": Role.VIEWER,
     "list_pipeline_runs": Role.VIEWER,
     "get_pipeline_run": Role.VIEWER,
-
     # 操作类 — OPERATOR
     "retry_task": Role.OPERATOR,
     "pause": Role.OPERATOR,
@@ -99,28 +100,24 @@ _COMMAND_ROLES: Dict[str, Role] = {
     "assign_task": Role.OPERATOR,
     "heartbeat": Role.OPERATOR,
     "register_agent": Role.OPERATOR,
-
     # 审批类 — REVIEWER
     "resolve_task": Role.REVIEWER,
     "skip_task": Role.REVIEWER,
     "approve_batch": Role.REVIEWER,
     "complete_task": Role.REVIEWER,
-
     # 管理类 — ADMIN
     "create_project": Role.ADMIN,
     "create_workspace": Role.ADMIN,
     "delete_batch": Role.ADMIN,
     "config_set": Role.ADMIN,
     "maintenance_agent": Role.ADMIN,
-    "popo_manage": Role.ADMIN,
-
+    "IM_manage": Role.ADMIN,
     # Codemaker 会话 — OPERATOR
     "cm_start": Role.OPERATOR,
     "cm_stop": Role.OPERATOR,
     "cm_status": Role.VIEWER,
     "cm_send_task": Role.OPERATOR,
     "cm_list": Role.VIEWER,
-
     # 系统 — BOT 级别（自动化可调用）
     "auto_schedule": Role.BOT,
     "auto_complete_task": Role.BOT,
@@ -133,12 +130,13 @@ _COMMAND_ROLES: Dict[str, Role] = {
 @dataclass
 class CommandResult:
     """命令执行结果。"""
+
     success: bool
     data: Any = None
     error: Optional[str] = None
     events: List[Dict[str, Any]] = field(default_factory=list)
 
-    # 方便 POPO 回复的文本摘要
+    # 方便 IM 回复的文本摘要
     text: Optional[str] = None
 
     @staticmethod
@@ -231,7 +229,10 @@ class CommandBus:
             else:
                 logger.warning(
                     "权限拒绝: %s (source=%s, role=%s, required=%s)",
-                    cmd.name, cmd.source, cmd.role.name, cmd.required_role.name,
+                    cmd.name,
+                    cmd.source,
+                    cmd.role.name,
+                    cmd.required_role.name,
                 )
                 return CommandResult.permission_denied(cmd)
 
@@ -264,7 +265,8 @@ class CommandBus:
     def list_commands(self, role: Role = Role.VIEWER) -> List[str]:
         """列出指定权限可用的命令。"""
         return sorted(
-            name for name, handler in self._handlers.items()
+            name
+            for name, handler in self._handlers.items()
             if _COMMAND_ROLES.get(name, Role.VIEWER) <= role
         )
 

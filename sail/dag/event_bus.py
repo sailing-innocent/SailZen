@@ -1,10 +1,9 @@
-"""CubeClaw EventBus — 统一事件分发层。
+"""EventBus — 统一事件分发层。
 
 职责:
   1. 接收 CommandBus 产生的事件
   2. 分发到 SSE 订阅者（Dashboard 实时更新）
-  3. 分发到 POPO 通知（重要事件自动推送）
-  4. 写入 event_logs 表（持久化审计）
+  3. 写入 event_logs 表（持久化审计）
 
 事件格式:
   {
@@ -12,7 +11,7 @@
     "entity_type": "task",
     "entity_id": "xxx",
     "data": {...},
-    "source": "dashboard" | "popo" | "bot" | "system",
+    "source": "dashboard" | "IM" | "bot" | "system",
     "actor": "user_id",
     "timestamp": "ISO8601",
   }
@@ -31,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 # ── 事件重要性分级 ──────────────────────────────────────────────────
 
-# 这些事件类型会自动推送到 POPO
-_POPO_NOTIFY_EVENTS: Set[str] = {
+# 这些事件类型会自动推送到 IM
+_IM_NOTIFY_EVENTS: Set[str] = {
     "batch.completed",
     "batch.failed",
     "task.completed",
@@ -46,9 +45,7 @@ _POPO_NOTIFY_EVENTS: Set[str] = {
 }
 
 # 所有事件都推送到 SSE
-# 只有上面列出的重要事件推送到 POPO
-
-
+# 只有上面列出的重要事件推送到 IM
 # ── EventBus ────────────────────────────────────────────────────────
 
 
@@ -58,7 +55,7 @@ class EventBus:
     Usage::
 
         bus = EventBus()
-        bus.set_popo_sender(popo_bridge.send_notification)
+        bus.set_im_sender(im_bridge.send_notification)
         bus.set_db_logger(database.log_event)
 
         # 从 CommandBus 接收事件
@@ -74,16 +71,16 @@ class EventBus:
         self._sse_subscribers: Dict[str, List[asyncio.Queue]] = {}
         # 全局 SSE 订阅（监听所有事件）
         self._global_subscribers: List[asyncio.Queue] = []
-        # POPO 发送回调
-        self._popo_sender: Optional[Callable] = None
+        # IM 发送回调
+        self._im_sender: Optional[Callable] = None
         # DB 事件记录回调
         self._db_logger: Optional[Callable] = None
 
     # ── 配置 ────────────────────────────────────────────────────────
 
-    def set_popo_sender(self, sender: Callable) -> None:
-        """设置 POPO 通知发送函数。签名: async (text: str, **kwargs) -> None"""
-        self._popo_sender = sender
+    def set_im_sender(self, sender: Callable) -> None:
+        """设置 IM 通知发送函数。签名: async (text: str, **kwargs) -> None"""
+        self._im_sender = sender
 
     def set_db_logger(self, logger_fn: Callable) -> None:
         """设置 DB 事件日志函数。签名: async (event_dict) -> None"""
@@ -105,14 +102,14 @@ class EventBus:
         # 2. SSE 推送
         await self._broadcast_sse(event)
 
-        # 3. POPO 通知（仅重要事件）
-        if event.get("type") in _POPO_NOTIFY_EVENTS and self._popo_sender:
+        # 3. IM 通知（仅重要事件）
+        if event.get("type") in _im_NOTIFY_EVENTS and self._im_sender:
             try:
-                text = self._format_popo_notification(event)
+                text = self._format_im_notification(event)
                 if text:
-                    await self._popo_sender(text)
+                    await self._im_sender(text)
             except Exception:
-                logger.exception("EventBus: POPO 通知发送失败")
+                logger.exception("EventBus: IM 通知发送失败")
 
     # ── SSE 订阅管理 ────────────────────────────────────────────────
 
@@ -120,8 +117,9 @@ class EventBus:
         """创建一个 SSE 订阅队列。"""
         queue: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
         self._sse_subscribers.setdefault(run_id, []).append(queue)
-        logger.debug("SSE 订阅: run_id=%s (total=%d)", run_id,
-                      len(self._sse_subscribers[run_id]))
+        logger.debug(
+            "SSE 订阅: run_id=%s (total=%d)", run_id, len(self._sse_subscribers[run_id])
+        )
         return queue
 
     def unsubscribe(self, run_id: str, queue: asyncio.Queue) -> None:
@@ -179,8 +177,8 @@ class EventBus:
             if q in self._global_subscribers:
                 self._global_subscribers.remove(q)
 
-    def _format_popo_notification(self, event: Dict[str, Any]) -> Optional[str]:
-        """将事件格式化为 POPO 通知文本。"""
+    def _format_im_notification(self, event: Dict[str, Any]) -> Optional[str]:
+        """将事件格式化为 IM 通知文本。"""
         etype = event.get("type", "")
         data = event.get("data", {})
         entity_id = event.get("entity_id", "")[:16]
@@ -222,7 +220,9 @@ class EventBus:
 
         if init:
             lines.append(f"  基准分支: {init.get('predecessor_branch', '?')}")
-            lines.append(f"  总 commit: {init.get('total_commits', '?')}, Tasks: {tasks}")
+            lines.append(
+                f"  总 commit: {init.get('total_commits', '?')}, Tasks: {tasks}"
+            )
 
             sbs = init.get("subbatches", [])
             if sbs:
@@ -234,8 +234,7 @@ class EventBus:
                     end = sb.get("end_commit", "?")
                     branch = sb.get("branch", "")
                     lines.append(
-                        f"  _{suffix}: {start}..{end} ({count} commits)"
-                        f"  → {branch}"
+                        f"  _{suffix}: {start}..{end} ({count} commits)  → {branch}"
                     )
         else:
             lines.append(f"  Tasks: {tasks}")
@@ -251,14 +250,9 @@ class EventBus:
         summary_text = data.get("summary", "")
 
         if task_type == "summary" and summary_text:
-            return (
-                f"📋 Summary 完成: {label} [{pipeline}]\n"
-                f"  {summary_text}"
-            )
+            return f"📋 Summary 完成: {label} [{pipeline}]\n  {summary_text}"
 
-        return (
-            f"📋 Task 完成: {label} [{pipeline}]"
-        )
+        return f"📋 Task 完成: {label} [{pipeline}]"
 
     # ── 统计 ────────────────────────────────────────────────────────
 
