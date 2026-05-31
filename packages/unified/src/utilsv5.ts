@@ -272,7 +272,7 @@ export class MDUtilsV5 {
       .use(remarkParse, { gfm: true })
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
-      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } } as any)
+      .use({ settings: { listItemIndent: "one", fences: true, bullet: "-" } } as any)
       .use(noteRefsV2)
       .use(blockAnchors)
       .use(hashtags)

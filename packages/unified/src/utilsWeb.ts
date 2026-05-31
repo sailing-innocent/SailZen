@@ -68,7 +68,7 @@ export class MDUtilsV5Web {
       .use(remarkParse, { gfm: true })
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
-      .use({ settings: { listItemIndent: "1", fences: true, bullet: "-" } } as any)
+      .use({ settings: { listItemIndent: "one", fences: true, bullet: "-" } } as any)
       // .use(noteRefsV2) TODO: Add in note ref functionalit
       .use(blockAnchors)
       .use(hashtags)

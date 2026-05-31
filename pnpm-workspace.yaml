@@ -1,6 +1,16 @@
 packages:
   - packages/*
 
+allowBuilds:
+  '@parcel/watcher': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@vscode/vsce-sign': true
+  esbuild: true
+  keytar: true
+  prisma: true
+  unrs-resolver: true
+
 catalog:
   '@types/jest': ^29.5.14
   '@types/lodash': ^4.17.21
