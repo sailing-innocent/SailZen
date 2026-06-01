@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bot_server.deps import get_event_bus, get_popo_bridge
 from bot_server.models import now_iso
-from cube.command_bus import Command, CommandResult
+from sail.dag.command_bus import Command, CommandResult
 
 
 def register(bus, db, scheduler) -> dict:

@@ -1,4 +1,10 @@
-"""Data models for codemaker session execution."""
+# -*- coding: utf-8 -*-
+# @file session_models.py
+# @brief Task config and result data classes for DI-based session runs.
+# @author sailing-innocent
+# @date 2026-05-31
+# @version 1.0
+# ---------------------------------
 
 from __future__ import annotations
 
@@ -14,7 +20,7 @@ PROGRESS_THROTTLE_SEC = 5.0
 
 @dataclass
 class TaskRunConfig:
-    """Configuration for one codemaker task run."""
+    """Configuration for one opencode task run."""
 
     host: str = "127.0.0.1"
     port: int = 4096
@@ -35,7 +41,9 @@ class TaskRunConfig:
     finish_on_terminal_step: bool = True
     delayed_finish_heartbeat_sec: float = 300.0
     delayed_finish_max_heartbeats: int = 3
-    delayed_finish_heartbeat_prompt: str = "请继续推进当前任务，检查后台任务结果并在完成后写入最终 session_result.json。"
+    delayed_finish_heartbeat_prompt: str = (
+        "请继续推进当前任务，检查后台任务结果并在完成后写入最终 session_result.json。"
+    )
 
 
 @dataclass

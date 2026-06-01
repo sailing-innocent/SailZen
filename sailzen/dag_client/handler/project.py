@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from bot_server.models import make_project, make_workspace
-from cube.command_bus import Command, CommandResult
+from sail.dag.command_bus import Command, CommandResult
 
 
 def register(bus, db, scheduler) -> dict:

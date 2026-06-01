@@ -1,4 +1,10 @@
-"""Message and status fallback helpers for codemaker sessions."""
+# -*- coding: utf-8 -*-
+# @file session_fallbacks.py
+# @brief Fallback helpers for codemaker sessions.
+# @author sailing-innocent
+# @date 2026-05-31
+# @version 1.0
+# ---------------------------------
 
 from __future__ import annotations
 
@@ -7,13 +13,13 @@ import logging
 import time
 from typing import Set
 
-from cube.codemaker.client import CodemakerAsyncClient
+from sail.opencode.client import OpencodeAsyncClient
 
 logger = logging.getLogger(__name__)
 
 
 async def snapshot_message_ids(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     limit: int = 50,
 ) -> Set[str]:
@@ -27,7 +33,7 @@ async def snapshot_message_ids(
 
 
 async def fetch_final_message(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     pre_existing_ids: Set[str],
     retries: int = 2,
@@ -49,14 +55,14 @@ async def fetch_final_message(
 
 
 async def poll_until_idle(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     pre_existing_ids: Set[str],
     timeout: float,
     started_at: float,
     poll_interval: float = 10.0,
 ) -> str:
-    """Poll session status until the session stays idle, then fetch final message."""
+    """Poll session status until idle, then fetch final message."""
     idle_count = 0
     while time.time() - started_at < timeout:
         try:
@@ -68,9 +74,7 @@ async def poll_until_idle(
                 idle_count = 0
             if idle_count >= 2:
                 return await fetch_final_message(
-                    client,
-                    session_id,
-                    pre_existing_ids,
+                    client, session_id, pre_existing_ids
                 )
         except Exception as exc:
             logger.debug("poll_until_idle status check failed: %s", exc)

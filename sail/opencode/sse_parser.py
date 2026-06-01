@@ -1,35 +1,12 @@
 # -*- coding: utf-8 -*-
 # @file sse_parser.py
-# @brief SSE 事件统一解析器
+# @brief Unified SSE event parser (opencode native + simplified format B)
 # @author sailing-innocent
-# @date 2026-04-25
-# @version 1.0
+# @date 2026-05-31
+# @version 2.0
 # ---------------------------------
-"""sail.opencode.sse_parser — SSE 事件统一解析器。
-
-将 OpenCode /event 端点推送的原始 SSEEvent 解码为
-结构化的 ParsedEvent，兼容 opencode 原生格式和简化格式。
-
-格式 A — opencode 原生格式
-    message.part.updated  → type = text | tool | reasoning | step-start | step-finish
-    message.part.delta    → type = text_delta
-    session.idle          → type = session_idle
-
-格式 B — 简化格式
-    text / reasoning / tool / step-start / step-finish
-
-会话过滤
-    /event 是全局端点，传入 session_id 后自动过滤非本 session 的事件。
-
-使用示例::
-
-    async for raw_event in client.stream_events_robust(session_id):
-        parsed = parse_event(raw_event, session_id)
-        if parsed.type == EventType.TEXT:
-            print(parsed.delta, end="", flush=True)
-        elif parsed.type == EventType.SESSION_IDLE:
-            break
-"""
+"""sail.opencode.sse_parser — SSE event parser supporting opencode-native
+(format A) and simplified (format B) events."""
 
 from __future__ import annotations
 
@@ -44,12 +21,7 @@ from sail.opencode.client import SSEEvent
 logger = logging.getLogger(__name__)
 
 
-# ── 事件类型枚举 ──────────────────────────────────────────────────
-
-
 class EventType(str, Enum):
-    """解析后的事件类型。"""
-
     TEXT = "text"
     TEXT_DELTA = "text_delta"
     REASONING = "reasoning"
@@ -63,12 +35,8 @@ class EventType(str, Enum):
     UNKNOWN = "unknown"
 
 
-# ── 结构化解析结果 ────────────────────────────────────────────────
-
-
 @dataclass
 class ParsedEvent:
-    """SSE 事件的结构化解析结果。"""
     type: EventType = EventType.UNKNOWN
     text: str = ""
     delta: str = ""
@@ -87,7 +55,6 @@ class ParsedEvent:
     raw: Dict[str, Any] = field(default_factory=dict)
 
     def is_terminal(self) -> bool:
-        """是否是最终完成事件。"""
         if self.type == EventType.SESSION_IDLE:
             return True
         if self.type == EventType.STEP_FINISH:
@@ -95,58 +62,37 @@ class ParsedEvent:
         return False
 
 
-# ── 主解析函数 ────────────────────────────────────────────────────
-
-
 def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
-    """将原始 SSEEvent 解析为 ParsedEvent。
-
-    兼容 opencode 原生格式 A 和简化格式 B。
-
-    Args:
-        event:      原始 SSE 事件
-        session_id: 当前会话 ID，用于过滤。传空字符串则不过滤。
-
-    Returns:
-        ParsedEvent，type == EventType.SKIP 时可安全忽略。
-    """
-    # ── debug: 打印原始 SSE 事件 ──────────────────────────────────
     if logger.isEnabledFor(logging.DEBUG):
-        raw_data_preview = event.data[:500] if event.data else "<empty>"
+        preview = event.data[:500] if event.data else "<empty>"
         logger.debug(
-            "[RAW SSE] event=%s  id=%s  data=%s",
-            event.event,
-            event.id or "-",
-            raw_data_preview,
+            "[RAW SSE] event=%s id=%s data=%s", event.event, event.id or "-", preview
         )
 
-    # ── 重连哨兵 ──────────────────────────────────────────────────
     if event.event == "__reconnected__":
         parsed = ParsedEvent(
             type=EventType.RECONNECTED,
             text=f"SSE reconnected (attempt {event.data})",
         )
-        logger.debug("[PARSED] type=%s  text=%s", parsed.type.value, parsed.text)
+        logger.debug("[PARSED] type=%s text=%s", parsed.type.value, parsed.text)
         return parsed
 
     data = event.json()
     if not data:
-        logger.debug("[PARSED] type=SKIP  reason=empty_json")
+        logger.debug("[PARSED] type=SKIP reason=empty_json")
         return ParsedEvent(type=EventType.SKIP)
 
     event_type: str = data.get("type", "")
 
-    # ── 全局事件过滤 ──────────────────────────────────────────────
     if event_type in ("server.connected", "server.heartbeat"):
-        logger.debug("[PARSED] type=SKIP  reason=global_filter  event_type=%s", event_type)
+        logger.debug("[PARSED] type=SKIP reason=global_filter event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
-    # ── Session 过滤 ──────────────────────────────────────────────
     if session_id and not _matches_session(data, session_id):
-        logger.debug("[PARSED] type=SKIP  reason=session_mismatch  event_type=%s", event_type)
+        logger.debug("[PARSED] type=SKIP reason=session_mismatch event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
-    # ── 格式 A: opencode 原生事件 ─────────────────────────────────
+    # ── Format A: opencode native ─────────────────────────────────
     if event_type == "message.part.updated":
         parsed = _parse_part_updated(data)
         _log_parsed(parsed, event_type)
@@ -159,7 +105,30 @@ def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
         "session.created",
         "session.diff",
     ):
-        logger.debug("[PARSED] type=SKIP  reason=ignored_event  event_type=%s", event_type)
+        if event_type in ("message.updated", "message.created"):
+            props = data.get("properties", {})
+            info = props.get("info", {}) if props else {}
+            if not info:
+                info = data.get("info", {})
+            role = info.get("role", "")
+            model_id = info.get("modelID", "")
+            provider_id = info.get("providerID", "")
+            agent = info.get("agent", "")
+            finish = info.get("finish", "")
+            cost = info.get("cost", 0)
+            if role == "assistant" and (model_id or agent):
+                logger.info(
+                    "[SSE] %s: role=%s agent=%s provider=%s model=%s finish=%s cost=$%.4f",
+                    event_type,
+                    role,
+                    agent or "?",
+                    provider_id or "?",
+                    model_id or "?",
+                    finish or "-",
+                    float(cost or 0),
+                )
+        else:
+            logger.debug("[PARSED] type=SKIP reason=ignored_event event_type=%s", event_type)
         return ParsedEvent(type=EventType.SKIP)
 
     if event_type == "message.part.delta":
@@ -172,8 +141,12 @@ def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
         _log_parsed(parsed, event_type)
         return parsed
 
-    if event_type in ("session.permission", "permission"):
-        perm_id = data.get("id", data.get("permissionID", ""))
+    if event_type in ("session.permission", "permission", "permission.asked"):
+        props = data.get("properties", {})
+        perm_id = (
+            data.get("id", data.get("permissionID", ""))
+            or props.get("id", props.get("permissionID", ""))
+        )
         parsed = ParsedEvent(
             type=EventType.PERMISSION,
             permission_id=perm_id,
@@ -182,14 +155,13 @@ def parse_event(event: SSEEvent, session_id: str = "") -> ParsedEvent:
         _log_parsed(parsed, event_type)
         return parsed
 
-    # ── 格式 B: 简化事件 ──────────────────────────────────────────
+    # ── Format B: simplified events ───────────────────────────────
     parsed = _parse_simple_event(data, event_type)
     _log_parsed(parsed, event_type)
     return parsed
 
 
 def _log_parsed(parsed: ParsedEvent, event_type: str) -> None:
-    """Debug 日志：打印解析后的事件摘要。"""
     if not logger.isEnabledFor(logging.DEBUG):
         return
     parts = [f"type={parsed.type.value}", f"sse_type={event_type}"]
@@ -203,9 +175,6 @@ def _log_parsed(parsed: ParsedEvent, event_type: str) -> None:
     if parsed.finished:
         parts.append("finished=True")
     logger.debug("[PARSED] %s", "  ".join(parts))
-
-
-# ── 格式 A 解析器 ──────────────────────────────────────────────────
 
 
 def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
@@ -227,6 +196,12 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
         tool_name = part.get("tool", "unknown")
         status = state.get("status", "")
         title = state.get("title", tool_name)
+        call_id = part.get("callID", part.get("id", ""))
+        tool_input = ""
+        if isinstance(state.get("input"), dict):
+            tool_input = json.dumps(state["input"], ensure_ascii=False)
+        elif isinstance(state.get("input"), str):
+            tool_input = state["input"]
 
         if tool_name in ("permission", "question", "ask"):
             if status in ("pending", "running"):
@@ -235,7 +210,7 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
                     tool_name=tool_name,
                     tool_status=status,
                     tool_title=title,
-                    permission_id=state.get("id", ""),
+                    permission_id=state.get("id", "") or part.get("id", ""),
                     raw=data,
                 )
 
@@ -244,6 +219,8 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
             tool_name=tool_name,
             tool_status=status,
             tool_title=title,
+            tool_call_id=call_id,
+            tool_input=tool_input,
             raw=data,
         )
 
@@ -256,6 +233,19 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
         )
 
     if part_type == "step-start":
+        msg_info = props.get("message", {}) or {}
+        model_id = msg_info.get("modelID", "")
+        provider_id = msg_info.get("providerID", "")
+        agent = msg_info.get("agent", "")
+        if model_id or agent:
+            logger.info(
+                "[SSE] step-start: agent=%s provider=%s model=%s",
+                agent or "?",
+                provider_id or "?",
+                model_id or "?",
+            )
+        else:
+            logger.info("[SSE] step-start")
         return ParsedEvent(type=EventType.STEP_START, raw=data)
 
     if part_type == "step-finish":
@@ -263,6 +253,18 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
         cost = part.get("cost", 0.0) or 0.0
         tokens = part.get("tokens", {}) or {}
         finished = reason not in ("tool-calls", "tool_calls")
+        _fmt_tokens = (
+            f"in={tokens.get('input', 0)} out={tokens.get('output', 0)} "
+            f"cache_r={tokens.get('cache', {}).get('read', 0)} "
+            f"cache_w={tokens.get('cache', {}).get('write', 0)}"
+        )
+        logger.info(
+            "[SSE] step-finish: reason=%r terminal=%s cost=$%.4f tokens=[%s]",
+            reason,
+            finished,
+            float(cost),
+            _fmt_tokens,
+        )
         return ParsedEvent(
             type=EventType.STEP_FINISH,
             text=reason,
@@ -272,6 +274,41 @@ def _parse_part_updated(data: Dict[str, Any]) -> ParsedEvent:
             raw=data,
         )
 
+    if part_type == "retry":
+        attempt = part.get("attempt", "?")
+        err = part.get("error", {}) or {}
+        err_msg = err.get("data", {}).get("message", "") or err.get("message", "") or str(err)
+        logger.info("[SSE] retry: attempt=%s error=%s", attempt, err_msg[:120])
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type == "agent":
+        agent_name = part.get("name", "?")
+        logger.info("[SSE] agent: name=%s", agent_name)
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type == "subtask":
+        desc = part.get("description", "")
+        agent = part.get("agent", "?")
+        logger.info("[SSE] subtask: agent=%s description=%s", agent, desc[:80])
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type == "compaction":
+        auto = part.get("auto", False)
+        overflow = part.get("overflow", False)
+        logger.info("[SSE] compaction: auto=%s overflow=%s", auto, overflow)
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type == "patch":
+        files = part.get("files", [])
+        logger.info("[SSE] patch: %d file(s) changed: %s", len(files), files[:5])
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type == "snapshot":
+        logger.debug("[SSE] snapshot part (skipped)")
+        return ParsedEvent(type=EventType.SKIP, raw=data)
+
+    if part_type:
+        logger.warning("[SSE] unknown part_type=%r in message.part.updated", part_type)
     return ParsedEvent(type=EventType.SKIP)
 
 
@@ -279,7 +316,6 @@ def _parse_part_delta(data: Dict[str, Any]) -> ParsedEvent:
     props = data.get("properties", {})
     delta = props.get("delta", "")
     field_name = props.get("field", "")
-
     if delta and field_name in ("text", "reasoning"):
         return ParsedEvent(
             type=EventType.TEXT_DELTA,
@@ -295,8 +331,16 @@ def _parse_session_status(data: Dict[str, Any], event_type: str) -> ParsedEvent:
         props = data.get("properties", {})
         status = props.get("status", {})
         status_type = status.get("type", "") if isinstance(status, dict) else ""
+        logger.info(
+            "[SSE] session.status: status_type=%r — %s",
+            status_type,
+            "→ SESSION_IDLE" if status_type == "idle" else "skip (non-idle)",
+        )
         if status_type != "idle":
             return ParsedEvent(type=EventType.SKIP)
+
+    elif event_type == "session.idle":
+        logger.info("[SSE] session.idle received → SESSION_IDLE")
 
     return ParsedEvent(
         type=EventType.SESSION_IDLE,
@@ -305,12 +349,7 @@ def _parse_session_status(data: Dict[str, Any], event_type: str) -> ParsedEvent:
     )
 
 
-# ── 格式 B 解析器 ──────────────────────────────────────────────────
-
-
-def _parse_simple_event(
-    data: Dict[str, Any], event_type: str
-) -> ParsedEvent:
+def _parse_simple_event(data: Dict[str, Any], event_type: str) -> ParsedEvent:
     if event_type == "text":
         txt = data.get("text", "")
         return ParsedEvent(type=EventType.TEXT, text=txt, delta=txt, raw=data)
@@ -327,7 +366,6 @@ def _parse_simple_event(
         tool_name = data.get("tool", "")
         status = state.get("status", "")
         title = state.get("title", tool_name)
-
         if tool_name in ("permission", "question", "ask"):
             if status in ("pending", "running"):
                 return ParsedEvent(
@@ -338,7 +376,6 @@ def _parse_simple_event(
                     permission_id=state.get("id", ""),
                     raw=data,
                 )
-
         return ParsedEvent(
             type=EventType.TOOL,
             tool_name=tool_name,
@@ -367,11 +404,7 @@ def _parse_simple_event(
     return ParsedEvent(type=EventType.UNKNOWN, raw=data)
 
 
-# ── 会话匹配 ──────────────────────────────────────────────────────
-
-
 def _matches_session(data: Dict[str, Any], session_id: str) -> bool:
-    """检查 SSE 事件是否属于指定 session。"""
     props = data.get("properties", {})
     sid: Optional[str] = (
         props.get("sessionID")
@@ -381,5 +414,4 @@ def _matches_session(data: Dict[str, Any], session_id: str) -> bool:
     if not sid:
         info = props.get("info", {}) if props else {}
         sid = info.get("sessionID")
-
     return not sid or sid == session_id

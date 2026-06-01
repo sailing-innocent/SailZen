@@ -22,7 +22,7 @@ from bot_server.service.commit_analyzer import (
     _read_agent_session_log,  # for solve_session linkage
 )
 from bot_server.controller.task import _find_transcript_archive_by_session
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 logger = logging.getLogger(__name__)
 

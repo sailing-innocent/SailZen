@@ -9,7 +9,7 @@ from litestar import Controller, get, Request
 from litestar.response import Stream
 
 from bot_server.deps import get_bus, get_event_bus
-from cube.command_bus import Command, Source, Role
+from sail.dag.command_bus import Command, Source, Role
 
 
 def _dash_cmd(name: str, **args) -> Command:

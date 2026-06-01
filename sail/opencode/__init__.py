@@ -1,38 +1,49 @@
 # -*- coding: utf-8 -*-
 # @file __init__.py
-# @brief sail.opencode — OpenCode/CodeMaker 基础设施层
+# @brief sail.opencode — OpenCode-compatible client infrastructure
 # @author sailing-innocent
-# @date 2026-04-25
-# @version 1.0
+# @date 2026-05-31
+# @version 2.0
 # ---------------------------------
-"""sail.opencode — OpenCode/CodeMaker 异步客户端基础设施包。
+"""sail.opencode — OpenCode-compatible async client infrastructure.
 
-这是一个纯基础设施层，不依赖 sail_bot 的任何组件。
-上层（如 sail_bot）通过导入本包来与 opencode serve 交互。
+Public API
+----------
+**Client**
+    ``OpencodeAsyncClient`` (alias ``OpenCodeAsyncClient``)
 
-公共 API:
-    # 底层客户端
-    from sail.opencode import OpenCodeAsyncClient, SSEEvent, Session
+**SSE parsing**
+    ``parse_event``, ``ParsedEvent``, ``EventType``
 
-    # SSE 解析
-    from sail.opencode import parse_event, ParsedEvent, EventType
+**Visualization / callbacks**
+    ``SSEPrinter``, ``PrinterCallbacks``
 
-    # 可视化 / 回调
-    from sail.opencode import SSEPrinter, PrinterCallbacks
+**Process management**
+    ``OpenCodeProcessManager``, ``ManagedProcess``, ``ProcessStatus``,
+    ``extract_path_from_text``, ``resolve_workspace_path``
 
-    # 进程管理
-    from sail.opencode import OpenCodeProcessManager, ManagedProcess, ProcessStatus
+**High-level execution (legacy simple)**
+    ``SessionRunner``, ``RunResult``, ``run_prompt``
 
-    # 高层级执行
-    from sail.opencode import SessionRunner, RunResult, run_prompt
+**High-level execution (DI-based)**
+    ``run_task``, ``TaskResult``, ``TaskRunConfig``,
+    ``SessionRunDependencies``, ``default_dependencies``,
+    ``SessionStateMachine``
+
+**Compatibility**
+    ``CompatibilityReport``, ``check_cli_compatibility``
 """
 
 from sail.opencode.client import (
-    OpenCodeAsyncClient,
+    OpencodeAsyncClient,
+    OpenCodeAsyncClient,  # backward-compatible alias
     SSEEvent,
     Session,
+    Message,
     MessagePart,
+    MessagePartType,
     check_health_sync,
+    abort_session_sync,
 )
 from sail.opencode.sse_parser import (
     EventType,
@@ -48,11 +59,18 @@ from sail.opencode.process_manager import (
     OpenCodeProcessManager,
     ProcessStatus,
     extract_path_from_text,
+    resolve_workspace_path,
 )
 from sail.opencode.session_runner import (
     RunResult,
     SessionRunner,
     run_prompt,
+    run_task,
+    TaskResult,
+    TaskRunConfig,
+    SessionRunDependencies,
+    default_dependencies,
+    SessionStateMachine,
 )
 from sail.opencode.compatibility import (
     CompatibilityReport,
@@ -61,13 +79,17 @@ from sail.opencode.compatibility import (
 
 __all__ = [
     # client
+    "OpencodeAsyncClient",
     "OpenCodeAsyncClient",
     "SSEEvent",
     "Session",
+    "Message",
+    "MessagePart",
+    "MessagePartType",
     "check_health_sync",
+    "abort_session_sync",
     # sse_parser
     "EventType",
-    "MessagePart",
     "ParsedEvent",
     "parse_event",
     # sse_printer
@@ -78,10 +100,17 @@ __all__ = [
     "OpenCodeProcessManager",
     "ProcessStatus",
     "extract_path_from_text",
-    # session_runner
+    "resolve_workspace_path",
+    # session_runner (legacy + DI)
     "RunResult",
     "SessionRunner",
     "run_prompt",
+    "run_task",
+    "TaskResult",
+    "TaskRunConfig",
+    "SessionRunDependencies",
+    "default_dependencies",
+    "SessionStateMachine",
     # compatibility
     "CompatibilityReport",
     "check_cli_compatibility",

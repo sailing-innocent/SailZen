@@ -8,13 +8,13 @@ import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from cube.codemaker.client import CodemakerAsyncClient
+from sail.opencode.client import OpencodeAsyncClient
 
 logger = logging.getLogger(__name__)
 
 
 async def collect_session_transcript_tree(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     task_label: str,
     *,
@@ -144,7 +144,7 @@ def summarize_transcript_tree(root: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def archive_session_transcript(
-    client: CodemakerAsyncClient,
+    client: OpencodeAsyncClient,
     session_id: str,
     task_label: str,
     task_id: str = "",

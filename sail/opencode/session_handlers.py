@@ -1,4 +1,10 @@
-"""Event handlers for codemaker session state machine."""
+# -*- coding: utf-8 -*-
+# @file session_handlers.py
+# @brief Event handlers for the session state machine.
+# @author sailing-innocent
+# @date 2026-05-31
+# @version 1.0
+# ---------------------------------
 
 from __future__ import annotations
 
@@ -8,18 +14,16 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from cube.codemaker.client import CodemakerAsyncClient
-from cube.codemaker.session_dependencies import SessionRunDependencies
-from cube.codemaker.session_models import PROGRESS_THROTTLE_SEC, TaskRunConfig
-from cube.codemaker.sse_parser import EventType, ParsedEvent
+from sail.opencode.client import OpencodeAsyncClient
+from sail.opencode.session_dependencies import SessionRunDependencies
+from sail.opencode.session_models import PROGRESS_THROTTLE_SEC, TaskRunConfig
+from sail.opencode.sse_parser import EventType, ParsedEvent
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SessionAccumulator:
-    """Mutable state collected while streaming events."""
-
     text: str = ""
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     permissions_granted: int = 0
@@ -53,7 +57,7 @@ class EventHandler:
 
 
 class SessionStateMachineProtocol:
-    client: CodemakerAsyncClient
+    client: OpencodeAsyncClient
     session_id: str
     cfg: TaskRunConfig
     deps: SessionRunDependencies

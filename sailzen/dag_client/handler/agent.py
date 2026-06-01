@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bot_server.models import AgentStatus, make_agent, new_id, now_iso
 from bot_server.service.converter import task_type_to_capability
-from cube.command_bus import Command, CommandResult
+from sail.dag.command_bus import Command, CommandResult
 
 
 def register(bus, db, scheduler) -> dict:

@@ -8,7 +8,7 @@
 模块划分：
     base.py             公共常量、session_result 工具函数、校验逻辑
     process_manager.py  Codemaker 进程管理、Agent 发现、权限自动响应
-    entry.py           DAG-aware Codemaker task entry；调用 cube.codemaker.run_task
+    entry.py           DAG-aware Codemaker task entry；调用 sail.opencode.run_task
     result_state.py    session_result、retry、后台 running 等待逻辑
     skill_runner.py     依赖注入分发核心，按 task type 调用对应 handler
     task_handlers/
