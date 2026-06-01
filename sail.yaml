@@ -1,0 +1,106 @@
+# SailZen DAG Client 配置示例
+# 放置于项目根目录或工作目录，或设置 SAIL_CONFIG 环境变量指向此文件
+
+dag_client:
+  # 实例名称
+  name: "default"
+
+  # 数据存储路径（相对于此配置文件）
+  db_path: "data/dag_client.db"
+  data_dir: "data/dag"
+  log_dir: "logs/dag"
+
+  # API 服务配置
+  api_port: 9050
+  api_host: "0.0.0.0"
+
+  # 是否自动启动执行器
+  auto_start: true
+
+  # 最大并发运行数
+  max_concurrent_runs: 5
+
+  # Agent 心跳间隔（秒）
+  heartbeat_interval: 30
+
+  # OpenCode 服务器连接配置
+  opencode:
+    host: "127.0.0.1"
+    port: 4096
+    timeout: 30.0
+    sse_timeout: 14400.0
+
+  # 节点类型定义
+  # 内置类型: skill, shell, python
+  # 自定义类型通过 handler 指定导入路径
+  node_types:
+    - name: "skill"
+      handler: "sailzen.dag_client.nodes.skill_node.SkillNode"
+      default_timeout: 3600
+    - name: "shell"
+      handler: "sailzen.dag_client.nodes.shell_node.ShellNode"
+      default_timeout: 300
+    - name: "python"
+      handler: "sailzen.dag_client.nodes.python_node.PythonNode"
+      default_timeout: 300
+
+  # 框架必需的 skills（启动时会检查可用性）
+  required_skills:
+    - "sailzen-dev-guide"
+
+  # 预定义流水线模板
+  # 可通过 API POST /api/v1/dag/runs 基于 definition_id 创建运行
+  pipelines:
+    - id: "example_pipeline"
+      name: "示例流水线"
+      description: "一个展示 DAG 能力的示例流水线"
+      nodes:
+        - id: "init"
+          type: "shell"
+          name: "初始化"
+          params:
+            command: "echo 'Starting pipeline...'"
+
+        - id: "analysis"
+          type: "skill"
+          name: "分析"
+          depends_on: ["init"]
+          params:
+            skill: "sailzen-dev-guide"
+            prompt: "分析当前项目结构"
+
+        - id: "report"
+          type: "python"
+          name: "生成报告"
+          depends_on: ["analysis"]
+          params:
+            code: |
+              result = {
+                  "message": "Pipeline completed",
+                  "upstream": ctx.upstream_results
+              }
+              print(result)
+
+    - id: "build_pipeline"
+      name: "构建流水线"
+      description: "编译与测试"
+      nodes:
+        - id: "lint"
+          type: "shell"
+          name: "代码检查"
+          params:
+            command: "echo 'Running linter...'"
+
+        - id: "build"
+          type: "shell"
+          name: "编译"
+          depends_on: ["lint"]
+          params:
+            command: "echo 'Building...'"
+
+        - id: "test"
+          type: "shell"
+          name: "测试"
+          depends_on: ["build"]
+          params:
+            command: "echo 'Running tests...'"

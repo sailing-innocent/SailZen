@@ -1,70 +1,40 @@
-"""Repository 层 — 各实体的异步 CRUD 操作。
+# -*- coding: utf-8 -*-
+# @file repositories.py
+# @brief 通用 DAG 数据访问层
+# @author sailing-innocent
+# @date 2025-06-02
+# @version 3.0
+# ---------------------------------
+"""SailZen DAG Client Repository 层。
 
-所有数据库操作通过 Repository 类封装，对外暴露 dict 接口（兼容旧代码），
-内部使用 SQLAlchemy ORM 进行类型安全的查询。
-
-Repository 统一入口:
-  repos = Repositories(db)
-  project = await repos.project.upsert(data)
-  tasks = await repos.task.get_by_batch(batch_id)
-
-向后兼容:
-  为了让 scheduler.py / app.py 的迁移代价最小，
-  提供了 DatabaseCompat 类，保持 db.upsert_project() 等老接口签名，
-  内部委托给 Repository 实现。
+所有数据库操作通过 Repository 类封装，对外暴露 dict 接口。
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot_server.database import Database
-from bot_server.models import (
-    # ORM models
-    DBProject, DBWorkspace, DBBatch, DBSubBatch, DBTask, DBTaskRun,
-    DBAgent, DBSession, DBEventLog, DBMessage, DBSnapshot,
-    # Conversion helpers
+from sailzen.dag_client.database import Database
+from sailzen.dag_client.models import (
+    DBDAGDefinition, DBDAGRun, DBDAGNode, DBDAGEdge, DBNodeRun,
+    DBAgent, DBEventLog, DBRequiredSkill,
     orm_to_dict, dict_to_orm, _json_encode, _json_decode, _JSON_FIELDS,
-    # Helpers
-    now_iso, TaskStatus, TaskRunStatus,
+    _now_iso, NodeStatus, RunStatus,
+    status_rank, is_terminal,
 )
 
 logger = logging.getLogger(__name__)
 
 
-# Task runtime transitions must be monotonic.  A smaller rank must never be
-# written over a larger rank by a stale runner snapshot.
-_TASK_STATUS_RANK = {
-    TaskStatus.PENDING.value: 0,
-    TaskStatus.QUEUED.value: 1,
-    TaskStatus.ASSIGNED.value: 2,
-    TaskStatus.RUNNING.value: 3,
-    TaskStatus.SUCCESS.value: 4,
-    TaskStatus.FAILED.value: 4,
-    TaskStatus.BLOCKED.value: 4,
-    TaskStatus.CANCELLED.value: 4,
-    TaskStatus.SUPERSEDED.value: 4,
-}
-_TASK_TERMINAL_STATUSES = {
-    TaskStatus.SUCCESS.value,
-    TaskStatus.FAILED.value,
-    TaskStatus.BLOCKED.value,
-    TaskStatus.CANCELLED.value,
-    TaskStatus.SUPERSEDED.value,
-}
-
-
+# ═══════════════════════════════════════════════════════════════════════
+#  BaseRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
 class BaseRepository:
-    """Repository 基类，持有 Database 引用。"""
-
     def __init__(self, db: Database):
         self._db = db
 
@@ -73,256 +43,148 @@ class BaseRepository:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  ProjectRepository
+#  DAGDefinitionRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
-class ProjectRepository(BaseRepository):
-
+class DAGDefinitionRepository(BaseRepository):
     async def upsert(self, data: dict) -> dict:
         async with self._session() as session:
-            obj = dict_to_orm(DBProject, data)
+            obj = dict_to_orm(DBDAGDefinition, data)
             merged = await session.merge(obj)
             await session.commit()
             return orm_to_dict(merged)
 
-    async def get(self, project_id: str) -> Optional[dict]:
+    async def get(self, def_id: str) -> Optional[dict]:
         async with self._session() as session:
-            result = await session.get(DBProject, project_id)
+            result = await session.get(DBDAGDefinition, def_id)
             return orm_to_dict(result) if result else None
 
     async def get_all(self) -> List[dict]:
         async with self._session() as session:
             result = await session.execute(
-                select(DBProject).order_by(DBProject.created_at)
+                select(DBDAGDefinition).order_by(DBDAGDefinition.created_at)
             )
             return [orm_to_dict(r) for r in result.scalars().all()]
 
-
-# ═══════════════════════════════════════════════════════════════════════
-#  WorkspaceRepository
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class WorkspaceRepository(BaseRepository):
-
-    async def upsert(self, data: dict) -> dict:
+    async def delete(self, def_id: str) -> bool:
         async with self._session() as session:
-            obj = dict_to_orm(DBWorkspace, data)
-            merged = await session.merge(obj)
+            obj = await session.get(DBDAGDefinition, def_id)
+            if not obj:
+                return False
+            await session.delete(obj)
             await session.commit()
-            return orm_to_dict(merged)
-
-    async def get(self, ws_id: str) -> Optional[dict]:
-        async with self._session() as session:
-            result = await session.get(DBWorkspace, ws_id)
-            return orm_to_dict(result) if result else None
-
-    async def get_by_project(self, project_id: str) -> List[dict]:
-        async with self._session() as session:
-            result = await session.execute(
-                select(DBWorkspace)
-                .where(DBWorkspace.project_id == project_id)
-                .order_by(DBWorkspace.created_at)
-            )
-            return [orm_to_dict(r) for r in result.scalars().all()]
+            return True
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  BatchRepository
+#  DAGRunRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
-class BatchRepository(BaseRepository):
-
-    async def upsert(self, data: dict) -> dict:
+class DAGRunRepository(BaseRepository):
+    async def create(self, data: dict) -> dict:
         async with self._session() as session:
-            obj = dict_to_orm(DBBatch, data)
-            merged = await session.merge(obj)
+            obj = dict_to_orm(DBDAGRun, data)
+            session.add(obj)
             await session.commit()
-            return orm_to_dict(merged)
+            await session.refresh(obj)
+            return orm_to_dict(obj)
 
-    async def get(self, batch_id: str) -> Optional[dict]:
+    async def get(self, run_id: str) -> Optional[dict]:
         async with self._session() as session:
-            result = await session.get(DBBatch, batch_id)
+            result = await session.get(DBDAGRun, run_id)
             return orm_to_dict(result) if result else None
 
     async def get_all(
         self,
-        workspace_id: Optional[str] = None,
+        definition_id: Optional[str] = None,
         status: Optional[str] = None,
-        lifecycle: Optional[str] = None,
+        limit: int = 100,
     ) -> List[dict]:
         async with self._session() as session:
-            stmt = select(DBBatch)
-            if workspace_id:
-                stmt = stmt.where(DBBatch.workspace_id == workspace_id)
+            stmt = select(DBDAGRun)
+            if definition_id:
+                stmt = stmt.where(DBDAGRun.definition_id == definition_id)
             if status:
-                stmt = stmt.where(DBBatch.status == status)
-            if lifecycle:
-                stmt = stmt.where(DBBatch.lifecycle == lifecycle)
-            stmt = stmt.order_by(DBBatch.created_at.desc())
+                stmt = stmt.where(DBDAGRun.status == status)
+            stmt = stmt.order_by(DBDAGRun.created_at.desc()).limit(limit)
             result = await session.execute(stmt)
             return [orm_to_dict(r) for r in result.scalars().all()]
 
-    async def update_status(self, batch_id: str, status: str, **kwargs: Any) -> None:
+    async def update_status(self, run_id: str, status: str, **kwargs: Any) -> bool:
         async with self._session() as session:
-            obj = await session.get(DBBatch, batch_id)
+            obj = await session.get(DBDAGRun, run_id)
             if not obj:
-                return
+                return False
             obj.status = status
             for key, value in kwargs.items():
                 if key in _JSON_FIELDS:
                     value = _json_encode(value)
                 attr_name = "metadata_" if key == "metadata" else key
                 setattr(obj, attr_name, value)
+            obj.updated_at = _now_iso()
             await session.commit()
+            return True
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  SubBatchRepository
+#  DAGNodeRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
-class SubBatchRepository(BaseRepository):
-
-    async def upsert(self, data: dict) -> dict:
+class DAGNodeRepository(BaseRepository):
+    async def create(self, data: dict) -> dict:
         async with self._session() as session:
-            obj = dict_to_orm(DBSubBatch, data)
-            merged = await session.merge(obj)
-            await session.commit()
-            return orm_to_dict(merged)
-
-    async def get(self, sb_id: str) -> Optional[dict]:
-        async with self._session() as session:
-            result = await session.get(DBSubBatch, sb_id)
-            return orm_to_dict(result) if result else None
-
-    async def get_by_batch(self, batch_id: str) -> List[dict]:
-        async with self._session() as session:
-            result = await session.execute(
-                select(DBSubBatch)
-                .where(DBSubBatch.batch_id == batch_id)
-                .order_by(DBSubBatch.index_num)
-            )
-            return [orm_to_dict(r) for r in result.scalars().all()]
-
-    async def update_status(self, sb_id: str, status: str) -> None:
-        async with self._session() as session:
-            obj = await session.get(DBSubBatch, sb_id)
-            if not obj:
-                return
-            obj.status = status
-            obj.updated_at = now_iso()
-            await session.commit()
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  TaskRepository
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class TaskRepository(BaseRepository):
-
-    def _merge_runtime_safe_task(self, existing: dict, incoming: dict) -> dict:
-        """Merge task rows without letting stale snapshots move runtime state backwards.
-
-        `upsert_task` is used while building the DAG and by some legacy/debug paths.
-        During execution it must not be able to overwrite a newer runtime state such
-        as success/running with an older detached dict such as pending/queued.
-        """
-        if not existing:
-            return dict(incoming)
-
-        merged = dict(incoming)
-        existing_status = existing.get("status")
-        incoming_status = incoming.get("status")
-        existing_rank = _TASK_STATUS_RANK.get(existing_status, -1)
-        incoming_rank = _TASK_STATUS_RANK.get(incoming_status, -1)
-        if existing_status and (incoming_status is None or incoming_rank < existing_rank):
-            merged["status"] = existing_status
-
-        for key in ("created_at", "queued_at", "started_at", "completed_at"):
-            value = existing.get(key) or incoming.get(key)
-            if value is not None:
-                merged[key] = value
-        for key in ("result", "error"):
-            if existing.get(key) is not None:
-                merged[key] = existing.get(key)
-            elif incoming.get(key) is not None:
-                merged[key] = incoming.get(key)
-        return merged
-
-    async def upsert(self, data: dict) -> dict:
-        async with self._session() as session:
-            existing_obj = None
-            existing_data: Optional[dict] = None
-            if data.get("id"):
-                existing_obj = await session.get(DBTask, data["id"])
-                if existing_obj:
-                    existing_data = orm_to_dict(existing_obj)
-            data_to_write = self._merge_runtime_safe_task(existing_data or {}, data)
-
-            values: Dict[str, Any] = {}
-            for col in DBTask.__table__.columns:
-                key = col.key
-                if key not in data_to_write:
-                    continue
-                val = data_to_write[key]
-                if key in _JSON_FIELDS:
-                    val = _json_encode(val)
-                attr_name = "metadata_" if key == "metadata" else key
-                values[attr_name] = val
-
-            if existing_obj:
-                for attr_name, value in values.items():
-                    setattr(existing_obj, attr_name, value)
-                await session.commit()
-                await session.refresh(existing_obj)
-                return orm_to_dict(existing_obj)
-
-            obj = dict_to_orm(DBTask, data_to_write)
+            obj = dict_to_orm(DBDAGNode, data)
             session.add(obj)
             await session.commit()
             await session.refresh(obj)
             return orm_to_dict(obj)
 
-    async def get(self, task_id: str) -> Optional[dict]:
+    async def upsert(self, data: dict) -> dict:
         async with self._session() as session:
-            result = await session.get(DBTask, task_id)
+            existing = None
+            if data.get("id"):
+                existing = await session.get(DBDAGNode, data["id"])
+            if existing:
+                for col in DBDAGNode.__table__.columns:
+                    key = col.key
+                    if key in data:
+                        val = data[key]
+                        if key in _JSON_FIELDS:
+                            val = _json_encode(val)
+                        attr_name = "metadata_" if key == "metadata" else key
+                        setattr(existing, attr_name, val)
+                await session.commit()
+                await session.refresh(existing)
+                return orm_to_dict(existing)
+            else:
+                return await self.create(data)
+
+    async def get(self, node_db_id: str) -> Optional[dict]:
+        async with self._session() as session:
+            result = await session.get(DBDAGNode, node_db_id)
             return orm_to_dict(result) if result else None
 
-    async def get_all(
-        self,
-        sub_batch_id: Optional[str] = None,
-        status: Optional[str] = None,
-        task_type: Optional[str] = None,
-    ) -> List[dict]:
+    async def get_by_run(self, run_id: str, status: Optional[str] = None) -> List[dict]:
         async with self._session() as session:
-            stmt = select(DBTask)
-            if sub_batch_id:
-                stmt = stmt.where(DBTask.sub_batch_id == sub_batch_id)
+            stmt = select(DBDAGNode).where(DBDAGNode.run_id == run_id)
             if status:
-                stmt = stmt.where(DBTask.status == status)
-            if task_type:
-                stmt = stmt.where(DBTask.type == task_type)
-            stmt = stmt.order_by(DBTask.priority.asc(), DBTask.created_at.asc())
+                stmt = stmt.where(DBDAGNode.status == status)
+            stmt = stmt.order_by(DBDAGNode.priority.asc(), DBDAGNode.created_at.asc())
             result = await session.execute(stmt)
             return [orm_to_dict(r) for r in result.scalars().all()]
 
-    async def get_by_batch(self, batch_id: str) -> List[dict]:
+    async def get_by_node_id(self, run_id: str, node_id: str) -> Optional[dict]:
         async with self._session() as session:
             result = await session.execute(
-                select(DBTask)
-                .join(DBSubBatch, DBTask.sub_batch_id == DBSubBatch.id)
-                .where(DBSubBatch.batch_id == batch_id)
-                .order_by(DBTask.priority.asc(), DBTask.created_at.asc())
+                select(DBDAGNode)
+                .where(DBDAGNode.run_id == run_id, DBDAGNode.node_id == node_id)
             )
-            return [orm_to_dict(r) for r in result.scalars().all()]
+            obj = result.scalar_one_or_none()
+            return orm_to_dict(obj) if obj else None
 
     async def update_status(
         self,
-        task_id: str,
+        node_db_id: str,
         status: str,
         *,
         expected_statuses: Optional[List[str]] = None,
@@ -330,94 +192,126 @@ class TaskRepository(BaseRepository):
         **kwargs: Any,
     ) -> bool:
         async with self._session() as session:
-            existing = await session.get(DBTask, task_id)
-            if not existing:
+            obj = await session.get(DBDAGNode, node_db_id)
+            if not obj:
                 return False
-            if expected_statuses is not None and existing.status not in expected_statuses:
+            if expected_statuses is not None and obj.status not in expected_statuses:
                 return False
             if not force:
-                current_rank = _TASK_STATUS_RANK.get(existing.status, -1)
-                target_rank = _TASK_STATUS_RANK.get(status, -1)
-                if existing.status in _TASK_TERMINAL_STATUSES and existing.status != status:
+                current_rank = status_rank(obj.status, "node")
+                target_rank = status_rank(status, "node")
+                if obj.status in _NODE_TERMINAL_STATUSES and obj.status != status:
                     logger.warning(
-                        "Refuse task terminal-state overwrite: task=%s current=%s target=%s",
-                        task_id[:8], existing.status, status,
+                        "Refuse node terminal-state overwrite: %s current=%s target=%s",
+                        node_db_id[:8], obj.status, status,
                     )
                     return False
                 if target_rank < current_rank:
                     logger.warning(
-                        "Refuse task status regression: task=%s current=%s target=%s",
-                        task_id[:8], existing.status, status,
+                        "Refuse node status regression: %s current=%s target=%s",
+                        node_db_id[:8], obj.status, status,
                     )
                     return False
-            elif existing.status != status:
-                logger.info(
-                    "[update_status] forced override: task=%s current=%s target=%s",
-                    task_id[:8], existing.status, status,
-                )
-            existing.status = status
+            obj.status = status
             for k, v in kwargs.items():
                 if k in _JSON_FIELDS:
                     v = _json_encode(v)
                 attr_name = "metadata_" if k == "metadata" else k
-                setattr(existing, attr_name, v)
+                setattr(obj, attr_name, v)
             await session.commit()
-            logger.info("[update_status] task=%s commit ok status=%s kwargs=%s",task_id[:8], status, list(kwargs.keys()))
             return True
 
-    async def transition_status(
-        self,
-        task_id: str,
-        from_statuses: List[str],
-        to_status: str,
-        **kwargs: Any,
-    ) -> bool:
-        return await self.update_status(
-            task_id,
-            to_status,
-            expected_statuses=from_statuses,
-            **kwargs,
-        )
 
-    async def queue_pending(self, task_id: str, **kwargs: Any) -> bool:
-        return await self.transition_status(
-            task_id,
-            [TaskStatus.PENDING.value],
-            TaskStatus.QUEUED.value,
-            **kwargs,
-        )
+# ═══════════════════════════════════════════════════════════════════════
+#  DAGEdgeRepository
+# ═══════════════════════════════════════════════════════════════════════
 
-    async def complete_running(self, task_id: str, success: bool, **kwargs: Any) -> bool:
-        target = TaskStatus.SUCCESS.value if success else kwargs.pop("failure_status", TaskStatus.BLOCKED.value)
-        return await self.transition_status(
-            task_id,
-            [TaskStatus.RUNNING.value, TaskStatus.ASSIGNED.value],
-            target,
-            **kwargs,
-        )
-
-    async def claim_queued(self, task_id: str, **kwargs: Any) -> bool:
+class DAGEdgeRepository(BaseRepository):
+    async def create(self, data: dict) -> dict:
         async with self._session() as session:
-            existing = await session.get(DBTask, task_id)
-            if not existing or existing.status != TaskStatus.QUEUED.value:
+            obj = dict_to_orm(DBDAGEdge, data)
+            session.add(obj)
+            await session.commit()
+            await session.refresh(obj)
+            return orm_to_dict(obj)
+
+    async def get_by_run(self, run_id: str) -> List[dict]:
+        async with self._session() as session:
+            result = await session.execute(
+                select(DBDAGEdge)
+                .where(DBDAGEdge.run_id == run_id)
+                .order_by(DBDAGEdge.created_at)
+            )
+            return [orm_to_dict(r) for r in result.scalars().all()]
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  NodeRunRepository
+# ═══════════════════════════════════════════════════════════════════════
+
+class NodeRunRepository(BaseRepository):
+    async def create(self, data: dict) -> dict:
+        async with self._session() as session:
+            obj = dict_to_orm(DBNodeRun, data)
+            session.add(obj)
+            await session.commit()
+            await session.refresh(obj)
+            return orm_to_dict(obj)
+
+    async def get(self, run_id: str) -> Optional[dict]:
+        async with self._session() as session:
+            result = await session.get(DBNodeRun, run_id)
+            return orm_to_dict(result) if result else None
+
+    async def get_by_node(self, node_db_id: str) -> List[dict]:
+        async with self._session() as session:
+            result = await session.execute(
+                select(DBNodeRun)
+                .where(DBNodeRun.node_id == node_db_id)
+                .order_by(DBNodeRun.attempt.asc(), DBNodeRun.started_at.asc())
+            )
+            return [orm_to_dict(r) for r in result.scalars().all()]
+
+    async def next_attempt(self, node_db_id: str) -> int:
+        async with self._session() as session:
+            result = await session.execute(
+                select(DBNodeRun.attempt)
+                .where(DBNodeRun.node_id == node_db_id)
+                .order_by(DBNodeRun.attempt.desc())
+                .limit(1)
+            )
+            latest = result.scalar_one_or_none()
+            return int(latest or 0) + 1
+
+    async def update(self, run_id: str, **kwargs: Any) -> bool:
+        async with self._session() as session:
+            obj = await session.get(DBNodeRun, run_id)
+            if not obj:
                 return False
-            existing.status = TaskStatus.RUNNING.value
             for k, v in kwargs.items():
                 if k in _JSON_FIELDS:
                     v = _json_encode(v)
                 attr_name = "metadata_" if k == "metadata" else k
-                setattr(existing, attr_name, v)
+                setattr(obj, attr_name, v)
             await session.commit()
             return True
+
+    async def complete(self, run_id: str, success: bool, result: Any = None, error: Any = None) -> bool:
+        status = NodeStatus.SUCCESS.value if success else NodeStatus.FAILED.value
+        return await self.update(
+            run_id,
+            status=status,
+            result=result,
+            error=error,
+            completed_at=_now_iso(),
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 #  AgentRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
 class AgentRepository(BaseRepository):
-
     async def upsert(self, data: dict) -> dict:
         async with self._session() as session:
             obj = dict_to_orm(DBAgent, data)
@@ -454,107 +348,10 @@ class AgentRepository(BaseRepository):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  SessionRepository
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class SessionRepository(BaseRepository):
-
-    async def upsert(self, data: dict) -> dict:
-        async with self._session() as session:
-            obj = dict_to_orm(DBSession, data)
-            merged = await session.merge(obj)
-            await session.commit()
-            return orm_to_dict(merged)
-
-    async def get_all(self, task_id: Optional[str] = None) -> List[dict]:
-        async with self._session() as session:
-            stmt = select(DBSession)
-            if task_id:
-                stmt = stmt.where(DBSession.task_id == task_id).order_by(DBSession.started_at)
-            else:
-                stmt = stmt.order_by(DBSession.started_at.desc()).limit(100)
-            result = await session.execute(stmt)
-            return [orm_to_dict(r) for r in result.scalars().all()]
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  TaskRunRepository
-# ═══════════════════════════════════════════════════════════════════════
-
-class TaskRunRepository(BaseRepository):
-
-    async def create(self, data: dict) -> dict:
-        async with self._session() as session:
-            obj = dict_to_orm(DBTaskRun, data)
-            session.add(obj)
-            await session.commit()
-            await session.refresh(obj)
-            return orm_to_dict(obj)
-
-    async def get(self, run_id: str) -> Optional[dict]:
-        async with self._session() as session:
-            result = await session.get(DBTaskRun, run_id)
-            return orm_to_dict(result) if result else None
-
-    async def get_all(self, task_id: Optional[str] = None) -> List[dict]:
-        async with self._session() as session:
-            stmt = select(DBTaskRun)
-            if task_id:
-                stmt = stmt.where(DBTaskRun.task_id == task_id).order_by(DBTaskRun.attempt.asc(), DBTaskRun.started_at.asc())
-            else:
-                stmt = stmt.order_by(DBTaskRun.started_at.desc()).limit(100)
-            result = await session.execute(stmt)
-            return [orm_to_dict(r) for r in result.scalars().all()]
-
-    async def get_latest(self, task_id: str) -> Optional[dict]:
-        runs = await self.get_all(task_id)
-        return runs[-1] if runs else None
-
-    async def next_attempt(self, task_id: str) -> int:
-        async with self._session() as session:
-            result = await session.execute(
-                select(DBTaskRun.attempt)
-                .where(DBTaskRun.task_id == task_id)
-                .order_by(DBTaskRun.attempt.desc())
-                .limit(1)
-            )
-            latest = result.scalar_one_or_none()
-            return int(latest or 0) + 1
-
-    async def update(self, run_id: str, **kwargs: Any) -> bool:
-        async with self._session() as session:
-            obj = await session.get(DBTaskRun, run_id)
-            if not obj:
-                return False
-            for k, v in kwargs.items():
-                if k in _JSON_FIELDS:
-                    v = _json_encode(v)
-                attr_name = "metadata_" if k == "metadata" else k
-                setattr(obj, attr_name, v)
-            await session.commit()
-            return True
-
-    async def complete(self, run_id: str, success: bool, result: Any = None, error: Any = None, **kwargs: Any) -> bool:
-        status = TaskRunStatus.SUCCESS.value if success else TaskRunStatus.FAILED.value
-        return await self.update(
-            run_id,
-            status=status,
-            result=result,
-            error=error,
-            completed_at=now_iso(),
-            last_activity_at=now_iso(),
-            **kwargs,
-        )
-
-
-# ═══════════════════════════════════════════════════════════════════════
 #  EventLogRepository
 # ═══════════════════════════════════════════════════════════════════════
 
-
 class EventLogRepository(BaseRepository):
-
     async def log(self, data: dict) -> int:
         async with self._session() as session:
             obj = dict_to_orm(DBEventLog, data)
@@ -580,48 +377,58 @@ class EventLogRepository(BaseRepository):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+#  RequiredSkillRepository
+# ═══════════════════════════════════════════════════════════════════════
+
+class RequiredSkillRepository(BaseRepository):
+    async def upsert(self, data: dict) -> dict:
+        async with self._session() as session:
+            obj = dict_to_orm(DBRequiredSkill, data)
+            merged = await session.merge(obj)
+            await session.commit()
+            return orm_to_dict(merged)
+
+    async def get_all(self) -> List[dict]:
+        async with self._session() as session:
+            result = await session.execute(select(DBRequiredSkill))
+            return [orm_to_dict(r) for r in result.scalars().all()]
+
+    async def update_status(self, skill_name: str, status: str) -> None:
+        async with self._session() as session:
+            result = await session.execute(
+                select(DBRequiredSkill).where(DBRequiredSkill.skill_name == skill_name)
+            )
+            obj = result.scalar_one_or_none()
+            if obj:
+                obj.status = status
+                obj.checked_at = _now_iso()
+                await session.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════
 #  Repositories — 统一入口
 # ═══════════════════════════════════════════════════════════════════════
 
-
 class Repositories:
-    """所有 Repository 的聚合入口。
-
-    Usage::
-        repos = Repositories(db)
-        await repos.project.upsert(data)
-        await repos.task.get_by_batch(batch_id)
-    """
+    """所有 Repository 的聚合入口。"""
 
     def __init__(self, db: Database):
-        self.project = ProjectRepository(db)
-        self.workspace = WorkspaceRepository(db)
-        self.batch = BatchRepository(db)
-        self.sub_batch = SubBatchRepository(db)
-        self.task = TaskRepository(db)
-        self.task_run = TaskRunRepository(db)
+        self.definition = DAGDefinitionRepository(db)
+        self.run = DAGRunRepository(db)
+        self.node = DAGNodeRepository(db)
+        self.edge = DAGEdgeRepository(db)
+        self.node_run = NodeRunRepository(db)
         self.agent = AgentRepository(db)
-        self.session = SessionRepository(db)
         self.event_log = EventLogRepository(db)
+        self.required_skill = RequiredSkillRepository(db)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  DatabaseCompat — 向后兼容层
+#  DatabaseCompat — 向后兼容接口
 # ═══════════════════════════════════════════════════════════════════════
-
 
 class DatabaseCompat:
-    """向后兼容的 Database 接口。
-
-    保持 scheduler.py / app.py 现有调用签名不变，
-    内部委托给 Repositories + Database。
-
-    Usage::
-        db = Database("cubeclaw.db")
-        await db.connect()
-        compat = DatabaseCompat(db)
-        await compat.upsert_project(data)  # 兼容旧接口
-    """
+    """向后兼容的 Database 接口。"""
 
     def __init__(self, db: Database):
         self._db = db
@@ -630,8 +437,6 @@ class DatabaseCompat:
     @property
     def repos(self) -> Repositories:
         return self._repos
-
-    # ── 直接代理 Database 方法 ────────────────────────────────────────
 
     async def connect(self) -> None:
         await self._db.connect()
@@ -645,142 +450,71 @@ class DatabaseCompat:
     async def get_stats(self) -> dict:
         return await self._db.get_stats()
 
-    # ── Projects ───────────────────────────────────────────────────────
+    # DAGDefinition
+    async def upsert_definition(self, data: dict) -> dict:
+        return await self._repos.definition.upsert(data)
 
-    async def upsert_project(self, project: dict) -> dict:
-        return await self._repos.project.upsert(project)
+    async def get_definition(self, def_id: str) -> Optional[dict]:
+        return await self._repos.definition.get(def_id)
 
-    async def get_project(self, project_id: str) -> Optional[dict]:
-        return await self._repos.project.get(project_id)
+    async def get_definitions(self) -> List[dict]:
+        return await self._repos.definition.get_all()
 
-    async def get_projects(self) -> List[dict]:
-        return await self._repos.project.get_all()
+    # DAGRun
+    async def create_run(self, data: dict) -> dict:
+        return await self._repos.run.create(data)
 
-    # ── Workspaces ─────────────────────────────────────────────────────
+    async def get_run(self, run_id: str) -> Optional[dict]:
+        return await self._repos.run.get(run_id)
 
-    async def upsert_workspace(self, ws: dict) -> dict:
-        return await self._repos.workspace.upsert(ws)
+    async def get_runs(self, definition_id: Optional[str] = None, status: Optional[str] = None) -> List[dict]:
+        return await self._repos.run.get_all(definition_id, status)
 
-    async def get_workspace(self, ws_id: str) -> Optional[dict]:
-        return await self._repos.workspace.get(ws_id)
+    async def update_run_status(self, run_id: str, status: str, **kwargs: Any) -> bool:
+        return await self._repos.run.update_status(run_id, status, **kwargs)
 
-    async def get_workspaces(self, project_id: str) -> List[dict]:
-        return await self._repos.workspace.get_by_project(project_id)
+    # DAGNode
+    async def create_node(self, data: dict) -> dict:
+        return await self._repos.node.create(data)
 
-    # ── Batches ────────────────────────────────────────────────────────
+    async def upsert_node(self, data: dict) -> dict:
+        return await self._repos.node.upsert(data)
 
-    async def upsert_batch(self, b: dict) -> dict:
-        return await self._repos.batch.upsert(b)
+    async def get_node(self, node_db_id: str) -> Optional[dict]:
+        return await self._repos.node.get(node_db_id)
 
-    async def get_batch(self, batch_id: str) -> Optional[dict]:
-        return await self._repos.batch.get(batch_id)
+    async def get_nodes(self, run_id: str, status: Optional[str] = None) -> List[dict]:
+        return await self._repos.node.get_by_run(run_id, status)
 
-    async def get_batches(
-        self,
-        workspace_id: Optional[str] = None,
-        status: Optional[str] = None,
-        lifecycle: Optional[str] = None,
-    ) -> List[dict]:
-        return await self._repos.batch.get_all(workspace_id, status, lifecycle)
+    async def get_node_by_template_id(self, run_id: str, node_id: str) -> Optional[dict]:
+        return await self._repos.node.get_by_node_id(run_id, node_id)
 
-    async def update_batch_status(self, batch_id: str, status: str, **kwargs: Any) -> None:
-        await self._repos.batch.update_status(batch_id, status, **kwargs)
+    async def update_node_status(self, node_db_id: str, status: str, **kwargs: Any) -> bool:
+        return await self._repos.node.update_status(node_db_id, status, **kwargs)
 
-    # ── SubBatches ─────────────────────────────────────────────────────
+    # DAGEdge
+    async def create_edge(self, data: dict) -> dict:
+        return await self._repos.edge.create(data)
 
-    async def upsert_sub_batch(self, sb: dict) -> dict:
-        return await self._repos.sub_batch.upsert(sb)
+    async def get_edges(self, run_id: str) -> List[dict]:
+        return await self._repos.edge.get_by_run(run_id)
 
-    async def get_sub_batch(self, sb_id: str) -> Optional[dict]:
-        return await self._repos.sub_batch.get(sb_id)
+    # NodeRun
+    async def create_node_run(self, data: dict) -> dict:
+        return await self._repos.node_run.create(data)
 
-    async def get_sub_batches(self, batch_id: str) -> List[dict]:
-        return await self._repos.sub_batch.get_by_batch(batch_id)
+    async def get_node_runs(self, node_db_id: str) -> List[dict]:
+        return await self._repos.node_run.get_by_node(node_db_id)
 
-    async def update_sub_batch_status(self, sb_id: str, status: str) -> None:
-        await self._repos.sub_batch.update_status(sb_id, status)
+    async def next_node_run_attempt(self, node_db_id: str) -> int:
+        return await self._repos.node_run.next_attempt(node_db_id)
 
-    # ── Tasks ──────────────────────────────────────────────────────────
+    async def complete_node_run(self, run_id: str, success: bool, **kwargs: Any) -> bool:
+        return await self._repos.node_run.complete(run_id, success, **kwargs)
 
-    async def upsert_task(self, t: dict) -> dict:
-        return await self._repos.task.upsert(t)
-
-    async def get_task(self, task_id: str) -> Optional[dict]:
-        return await self._repos.task.get(task_id)
-
-    async def get_tasks(
-        self,
-        sub_batch_id: Optional[str] = None,
-        status: Optional[str] = None,
-        task_type: Optional[str] = None,
-    ) -> List[dict]:
-        return await self._repos.task.get_all(sub_batch_id, status, task_type)
-
-    async def get_tasks_by_batch(self, batch_id: str) -> List[dict]:
-        return await self._repos.task.get_by_batch(batch_id)
-
-    async def update_task_status(
-        self,
-        task_id: str,
-        status: str,
-        *,
-        expected_statuses: Optional[List[str]] = None,
-        force: bool = False,
-        **kwargs: Any,
-    ) -> bool:
-        return await self._repos.task.update_status(
-            task_id,
-            status,
-            expected_statuses=expected_statuses,
-            force=force,
-            **kwargs,
-        )
-
-    async def transition_task_status(
-        self,
-        task_id: str,
-        from_statuses: List[str],
-        to_status: str,
-        **kwargs: Any,
-    ) -> bool:
-        return await self._repos.task.transition_status(task_id, from_statuses, to_status, **kwargs)
-
-    async def queue_pending_task(self, task_id: str, **kwargs: Any) -> bool:
-        return await self._repos.task.queue_pending(task_id, **kwargs)
-
-    async def complete_running_task(self, task_id: str, success: bool, **kwargs: Any) -> bool:
-        return await self._repos.task.complete_running(task_id, success, **kwargs)
-
-    async def claim_queued_task(self, task_id: str, **kwargs: Any) -> bool:
-        return await self._repos.task.claim_queued(task_id, **kwargs)
-
-    # ── TaskRuns ────────────────────────────────────────────────────────
-
-    async def create_task_run(self, run: dict) -> dict:
-        return await self._repos.task_run.create(run)
-
-    async def get_task_run(self, run_id: str) -> Optional[dict]:
-        return await self._repos.task_run.get(run_id)
-
-    async def get_task_runs(self, task_id: Optional[str] = None) -> List[dict]:
-        return await self._repos.task_run.get_all(task_id)
-
-    async def get_latest_task_run(self, task_id: str) -> Optional[dict]:
-        return await self._repos.task_run.get_latest(task_id)
-
-    async def next_task_run_attempt(self, task_id: str) -> int:
-        return await self._repos.task_run.next_attempt(task_id)
-
-    async def update_task_run(self, run_id: str, **kwargs: Any) -> bool:
-        return await self._repos.task_run.update(run_id, **kwargs)
-
-    async def complete_task_run(self, run_id: str, success: bool, result: Any = None, error: Any = None, **kwargs: Any) -> bool:
-        return await self._repos.task_run.complete(run_id, success, result, error, **kwargs)
-
-    # ── Agents ─────────────────────────────────────────────────────────
-
-    async def upsert_agent(self, a: dict) -> dict:
-        return await self._repos.agent.upsert(a)
+    # Agent
+    async def upsert_agent(self, data: dict) -> dict:
+        return await self._repos.agent.upsert(data)
 
     async def get_agent(self, agent_id: str) -> Optional[dict]:
         return await self._repos.agent.get(agent_id)
@@ -791,23 +525,20 @@ class DatabaseCompat:
     async def update_agent_status(self, agent_id: str, status: str, **kwargs: Any) -> None:
         await self._repos.agent.update_status(agent_id, status, **kwargs)
 
-    # ── Sessions ───────────────────────────────────────────────────────
-
-    async def upsert_session(self, s: dict) -> dict:
-        return await self._repos.session.upsert(s)
-
-    async def get_sessions(self, task_id: Optional[str] = None) -> List[dict]:
-        return await self._repos.session.get_all(task_id)
-
-    # ── Event Logs ─────────────────────────────────────────────────────
-
+    # EventLog
     async def log_event(self, event: dict) -> int:
         return await self._repos.event_log.log(event)
 
-    async def get_event_logs(
-        self,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[str] = None,
-        limit: int = 100,
-    ) -> List[dict]:
+    async def get_event_logs(self, entity_type: Optional[str] = None,
+                             entity_id: Optional[str] = None, limit: int = 100) -> List[dict]:
         return await self._repos.event_log.get_all(entity_type, entity_id, limit)
+
+    # RequiredSkill
+    async def upsert_required_skill(self, data: dict) -> dict:
+        return await self._repos.required_skill.upsert(data)
+
+    async def get_required_skills(self) -> List[dict]:
+        return await self._repos.required_skill.get_all()
+
+    async def update_required_skill_status(self, skill_name: str, status: str) -> None:
+        await self._repos.required_skill.update_status(skill_name, status)
