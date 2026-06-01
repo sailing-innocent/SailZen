@@ -4,5 +4,4 @@
 
 - 使用 `${executable} serve` 开启一个server
 - 支持如下API接口
-    - /health
-    - 
+    - /healt
