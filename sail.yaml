@@ -43,6 +43,21 @@ dag_client:
     - name: "python"
       handler: "sailzen.dag_client.nodes.python_node.PythonNode"
       default_timeout: 300
+    - name: "text_fetch"
+      handler: "sailzen.dag_client.nodes.text_fetch_node.TextFetchNode"
+      default_timeout: 60
+    - name: "batch_split"
+      handler: "sailzen.dag_client.nodes.novel_analysis_nodes.BatchSplitNode"
+      default_timeout: 60
+    - name: "batch_merge"
+      handler: "sailzen.dag_client.nodes.novel_analysis_nodes.BatchMergeNode"
+      default_timeout: 60
+    - name: "report"
+      handler: "sailzen.dag_client.nodes.novel_analysis_nodes.ReportNode"
+      default_timeout: 60
+    - name: "batch_text_collector"
+      handler: "sailzen.dag_client.nodes.novel_analysis_nodes.BatchTextCollectorNode"
+      default_timeout: 300
 
   # 框架必需的 skills（启动时会检查可用性）
   required_skills:
@@ -104,3 +119,85 @@ dag_client:
           depends_on: ["build"]
           params:
             command: "echo 'Running tests...'"
+
+    - id: "novel_analysis"
+      name: "网文拆解分析"
+      description: "超长网文的多维度拆解分析流水线"
+      global_params:
+        sail_server_url: "http://localhost:8000"
+        batch_size: 100
+        max_workers: 4
+        analysis_types: ["character", "plot", "setting", "emotion"]
+      nodes:
+        - id: "fetch_work_meta"
+          type: "text_fetch"
+          name: "获取作品元数据"
+          params:
+            endpoint: "work_meta"
+            # 运行时通过 POST /runs 的 params.work_id 传入
+            work_id: null
+
+        - id: "fetch_chapter_index"
+          type: "text_fetch"
+          name: "获取章节索引"
+          depends_on: ["fetch_work_meta"]
+          params:
+            endpoint: "chapters"
+            # 运行时通过 POST /runs 的 params.edition_id 传入
+            edition_id: null
+
+        - id: "batch_split"
+          type: "batch_split"
+          name: "批次切分"
+          depends_on: ["fetch_chapter_index"]
+          params:
+            batch_size: 100
+            overlap: 0
+            strategy: "by_count"
+
+        # 注意: batch_fetch_N 和 analyze_*_N 节点由 batch_split 动态生成
+        # 以下占位节点用于展示模板结构，实际运行时动态创建
+
+        - id: "merge_character"
+          type: "batch_merge"
+          name: "合并角色分析"
+          depends_on: ["batch_split"]
+          params:
+            dimension: "character"
+            merge_strategy: "dedup"
+
+        - id: "merge_plot"
+          type: "batch_merge"
+          name: "合并剧情分析"
+          depends_on: ["batch_split"]
+          params:
+            dimension: "plot"
+            merge_strategy: "concat"
+
+        - id: "merge_setting"
+          type: "batch_merge"
+          name: "合并设定分析"
+          depends_on: ["batch_split"]
+          params:
+            dimension: "setting"
+            merge_strategy: "concat"
+
+        - id: "merge_emotion"
+          type: "batch_merge"
+          name: "合并情感分析"
+          depends_on: ["batch_split"]
+          params:
+            dimension: "emotion"
+            merge_strategy: "concat"
+
+        - id: "generate_report"
+          type: "report"
+          name: "生成综合报告"
+          depends_on:
+            - "merge_character"
+            - "merge_plot"
+            - "merge_setting"
+            - "merge_emotion"
+          params:
+            template: "default"
+            include_raw: false

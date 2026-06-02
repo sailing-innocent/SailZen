@@ -122,12 +122,14 @@ class DAGExecutor:
         # 构建上下文
         run = await self.db.get_run(node["run_id"])
         global_params = run.get("params", {}) if run else {}
+        # global_params 作为节点参数的默认值，节点自身 params 优先级更高
+        node_params = {**global_params, **node.get("params", {})}
 
         ctx = NodeContext(
             run_id=node["run_id"],
             node_id=node["node_id"],
             node_type=node_type,
-            params=node.get("params", {}),
+            params=node_params,
             upstream_results=upstream_results,
             global_params=global_params,
             store=self.store,

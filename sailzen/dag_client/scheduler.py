@@ -102,22 +102,40 @@ def build_dag_from_template(
 
 
 def get_ready_nodes(nodes: List[dict], edges: List[dict]) -> List[dict]:
-    """获取依赖已全部 SUCCESS 的 PENDING 节点。"""
-    completed_ids = {n["node_id"] for n in nodes if n["status"] == NodeStatus.SUCCESS.value}
+    """获取依赖已全部 SUCCESS 的 PENDING 节点。
 
-    # 构建依赖映射: node_id -> [依赖的 node_id]
+    支持 dependency 和 trigger 两种边类型：
+      - dependency: 标准依赖，所有前驱必须 SUCCESS
+      - trigger: 父节点完成后自动触发（用于动态分支）
+    """
+    terminal_statuses = {
+        NodeStatus.SUCCESS.value,
+        NodeStatus.SKIPPED.value,
+        NodeStatus.CANCELLED.value,
+    }
+    completed_ids = {n["node_id"] for n in nodes if n["status"] in terminal_statuses}
+
     deps_map: Dict[str, Set[str]] = {}
+    trigger_map: Dict[str, Set[str]] = {}
     for e in edges:
         if e["edge_type"] == "dependency":
             deps_map.setdefault(e["to_node"], set()).add(e["from_node"])
+        elif e["edge_type"] == "trigger":
+            trigger_map.setdefault(e["to_node"], set()).add(e["from_node"])
 
     ready = []
     for n in nodes:
         if n["status"] != NodeStatus.PENDING.value:
             continue
         deps = deps_map.get(n["node_id"], set())
-        if all(d in completed_ids for d in deps):
-            ready.append(n)
+        triggers = trigger_map.get(n["node_id"], set())
+        # dependency 必须全部完成
+        if deps and not all(d in completed_ids for d in deps):
+            continue
+        # trigger 边也必须全部完成（父节点触发）
+        if triggers and not all(d in completed_ids for d in triggers):
+            continue
+        ready.append(n)
     return ready
 
 
@@ -270,27 +288,41 @@ class DAGScheduler:
         nodes = await self.db.get_nodes(run_id)
         edges = await self.db.get_edges(run_id)
 
-        completed_ids = {n["node_id"] for n in nodes if n["status"] == NodeStatus.SUCCESS.value}
+        terminal_statuses = {
+            NodeStatus.SUCCESS.value,
+            NodeStatus.SKIPPED.value,
+            NodeStatus.CANCELLED.value,
+        }
+        completed_ids = {n["node_id"] for n in nodes if n["status"] in terminal_statuses}
         completed_ids.add(completed_node["node_id"])
 
         deps_map: Dict[str, Set[str]] = {}
+        trigger_map: Dict[str, Set[str]] = {}
         for e in edges:
             if e["edge_type"] == "dependency":
                 deps_map.setdefault(e["to_node"], set()).add(e["from_node"])
+            elif e["edge_type"] == "trigger":
+                trigger_map.setdefault(e["to_node"], set()).add(e["from_node"])
 
         for n in nodes:
             if n["status"] != NodeStatus.PENDING.value:
                 continue
             deps = deps_map.get(n["node_id"], set())
-            if deps and all(d in completed_ids for d in deps):
-                queued = await self.db.update_node_status(
-                    n["id"],
-                    NodeStatus.QUEUED.value,
-                    expected_statuses=[NodeStatus.PENDING.value],
-                    queued_at=_now_iso(),
-                )
-                if queued:
-                    logger.info("Unlocked node %s (%s)", n["id"][:8], n["node_id"])
+            triggers = trigger_map.get(n["node_id"], set())
+            # dependency 必须全部完成
+            if deps and not all(d in completed_ids for d in deps):
+                continue
+            # trigger 边也必须全部完成
+            if triggers and not all(d in completed_ids for d in triggers):
+                continue
+            queued = await self.db.update_node_status(
+                n["id"],
+                NodeStatus.QUEUED.value,
+                expected_statuses=[NodeStatus.PENDING.value],
+                queued_at=_now_iso(),
+            )
+            if queued:
+                logger.info("Unlocked node %s (%s)", n["id"][:8], n["node_id"])
 
     async def _check_run_completion(self, run_id: str) -> None:
         """检查 DAGRun 是否已完成。"""

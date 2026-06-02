@@ -57,6 +57,23 @@ class NodeRegistry:
         except Exception as exc:
             logger.warning("Failed to register python node: %s", exc)
 
+        try:
+            from sailzen.dag_client.nodes.text_fetch_node import TextFetchNode
+            self.register("text_fetch", TextFetchNode)
+        except Exception as exc:
+            logger.warning("Failed to register text_fetch node: %s", exc)
+
+        try:
+            from sailzen.dag_client.nodes.novel_analysis_nodes import (
+                BatchSplitNode, BatchMergeNode, ReportNode, BatchTextCollectorNode
+            )
+            self.register("batch_split", BatchSplitNode)
+            self.register("batch_merge", BatchMergeNode)
+            self.register("report", ReportNode)
+            self.register("batch_text_collector", BatchTextCollectorNode)
+        except Exception as exc:
+            logger.warning("Failed to register novel analysis nodes: %s", exc)
+
     def register(self, node_type: str, executor_cls: Type[NodeExecutor]) -> None:
         """注册节点类型。"""
         if not issubclass(executor_cls, NodeExecutor):
