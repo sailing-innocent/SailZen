@@ -137,7 +137,7 @@ export const refactorProvider: CodeActionProvider = {
           arguments: [
             {
               selectionType: LookupSelectionTypeEnum.selectionExtract,
-              source: ContextualUIEvents.ContextualUICodeAction,
+              source: "ContextualUICodeAction",
             },
           ],
         },
@@ -163,7 +163,7 @@ export const refactorProvider: CodeActionProvider = {
           title: "Wrap as Markdown Link",
           arguments: [
             {
-              source: ContextualUIEvents.ContextualUICodeAction,
+              source: "ContextualUICodeAction",
               link: text,
               selection,
             },
