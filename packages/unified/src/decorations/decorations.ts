@@ -106,25 +106,6 @@ export async function runAllDecorators(
     }
     const tree = proc.parse(text);
 
-    // DEBUG: Log parsed tree structure
-    // const collectNodeTypes = (node: any, types: string[] = []): string[] => {
-    //   if (node.type) types.push(node.type);
-    //   if (node.children) {
-    //     for (const child of node.children) {
-    //       collectNodeTypes(child, types);
-    //     }
-    //   }
-    //   return types;
-    // };
-    // const nodeTypes = collectNodeTypes(tree);
-    // console.log("[runAllDecorators] Parsed tree", {
-    //   textLength: text.length,
-    //   textPreview: text.substring(0, 200),
-    //   nodeTypesInTree: nodeTypes,
-    //   hasWikiLink: nodeTypes.includes("wikiLink"),
-    //   wikiLinkCount: nodeTypes.filter(t => t === "wikiLink").length,
-    // });
-
     // eslint-disable-next-line no-await-in-loop
     await MdastUtils.visitAsync(tree, [], async (nodeIn) => {
       // This was parsed, it must have a position

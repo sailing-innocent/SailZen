@@ -46,10 +46,11 @@ describe("MDUtilsV5", () => {
       expect(() => proc.stringify(tree)).not.toThrow();
     });
 
+    it("should process markdown with wiki links and math", async () => {
       const dvault: DVault = {
         fsPath: "/test/dvault",
       };
-      let md = "[[World|src://world]] $\\frac{1}{2}$";
+      let md = "[[World|src://world]] $\frac{1}{2}$";
       md = "# Header \n some content \n\n ## Subheader \n\n" + md;
       const note: NoteProps = {
         id: "test-id",

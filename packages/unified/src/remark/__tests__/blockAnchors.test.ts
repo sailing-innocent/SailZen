@@ -74,12 +74,12 @@ describe("blockAnchors plugin", () => {
   describe("matchBlockAnchor", () => {
     test("should extract anchor with loose match (default)", () => {
       const result = matchBlockAnchor("^my-anchor", true);
-      expect(result).toBeUndefined();
+      expect(result).toBe("my-anchor");
     });
 
     test("should extract anchor with strict match", () => {
       const result = matchBlockAnchor("^my-anchor\n", false);
-      expect(result).toBeUndefined();
+      expect(result).toBe("my-anchor");
     });
 
     test("should return undefined for non-anchor text", () => {
