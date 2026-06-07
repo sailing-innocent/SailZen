@@ -10,4 +10,4 @@ A personal knowledge management and productivity tool based on VSCode extension.
 pnpm version:patch
 pnpm build-plugin
 pnpm package-plugin
-```
+``` 
