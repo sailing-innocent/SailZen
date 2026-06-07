@@ -37,13 +37,35 @@ sailzen <module> <command> [options]
 
 ## 服务器地址
 
-所有命令都需要指定远程 sail_server 地址，通过 `--server` 参数传入：
+`sailzen` 会自动解析远程 sail_server 地址，**无需每次手动指定 `--server`**。
+
+### 地址解析优先级（从高到低）
+
+1. **`--server` 参数** — 命令行显式传入，最高优先级
+2. **`SAIL_SERVER_URL` 环境变量**
+3. **`.env.prod` 文件** — 读取 `SERVER_HOST` 和 `SERVER_PORT`（推荐，项目根目录下）
+4. **`.env.dev` 文件** — 同上，`.env.prod` 不存在时回退
+5. **`.env` 文件** — 同上，前两者都不存在时回退
+6. **默认回退** — `http://localhost:8000`
+
+### `.env.prod` 格式示例
+
+在项目根目录放置 `.env.prod`：
+
+```env
+SERVER_HOST=192.168.1.100
+SERVER_PORT=8000
+```
+
+`sailzen` 会自动拼接为 `http://192.168.1.100:8000`。
+
+### 显式指定服务器地址
+
+如需临时连接到其他服务器，使用 `--server` 参数覆盖：
 
 ```bash
 --server http://<host>:<port>
 ```
-
-默认值：`http://localhost:8000`（可通过环境变量 `SAIL_SERVER_URL` 覆盖）
 
 ## Finance 模块
 
@@ -59,9 +81,12 @@ sailzen <module> <command> [options]
 ### list-accounts — 列出账户
 
 ```bash
-sailzen finance list-accounts --server http://192.168.1.100:8000
+sailzen finance list-accounts
 # 或使用别名
-sailzen finance la --server http://192.168.1.100:8000
+sailzen finance la
+
+# 临时指定其他服务器
+sailzen finance list-accounts --server http://192.168.1.100:8000
 ```
 
 输出示例：
@@ -75,17 +100,20 @@ sailzen finance la --server http://192.168.1.100:8000
 ### pull — 拉取交易并导出 CSV
 
 ```bash
-# 拉取 account 1 的所有 transaction
-sailzen finance pull --account 1 --server http://192.168.1.100:8000
+# 拉取 account 1 的所有 transaction（自动从 .env.prod 读取服务器地址）
+sailzen finance pull --account 1
 
 # 指定输出文件名
-sailzen finance pull --account 1 --output my_transactions.csv --server http://192.168.1.100:8000
+sailzen finance pull --account 1 --output my_transactions.csv
 
 # 拉取全部 transaction（不按 account 过滤）
-sailzen finance pull --server http://192.168.1.100:8000
+sailzen finance pull
 
 # 自定义分页大小
-sailzen finance pull --account 1 --page-size 50 --server http://192.168.1.100:8000
+sailzen finance pull --account 1 --page-size 50
+
+# 临时指定其他服务器
+sailzen finance pull --account 1 --server http://192.168.1.100:8000
 ```
 
 **参数说明：**
@@ -95,7 +123,7 @@ sailzen finance pull --account 1 --page-size 50 --server http://192.168.1.100:80
 | `--account` | `-a` | None | 按 account_id 过滤（可选） |
 | `--output` | `-o` | `transactions_{id}.csv` | 输出 CSV 文件路径 |
 | `--page-size` | — | 100 | 每页拉取数量（最大 100） |
-| `--server` | — | `http://localhost:8000` | sail_server 地址 |
+| `--server` | — | 自动解析（见上方"服务器地址"章节） | sail_server 地址 |
 
 **CSV 导出字段：**
 
@@ -120,11 +148,11 @@ sailzen finance pull --account 1 --page-size 50 --server http://192.168.1.100:80
 
 ```bash
 # 推送 CSV 中的修改
-sailzen finance push transactions_1.csv --server http://192.168.1.100:8000
+sailzen finance push transactions_1.csv
 
 # 预览模式（不实际发送请求）
-sailzen finance push transactions_1.csv --server http://192.168.1.100:8000 --dry-run
-sailzen finance push transactions_1.csv -n --server http://192.168.1.100:8000
+sailzen finance push transactions_1.csv --dry-run
+sailzen finance push transactions_1.csv -n
 ```
 
 **参数说明：**
@@ -148,13 +176,13 @@ sailzen finance push transactions_1.csv -n --server http://192.168.1.100:8000
 
 ```bash
 # 从 CSV 创建新交易
-sailzen finance create-from-csv new_transactions.csv --server http://192.168.1.100:8000
+sailzen finance create-from-csv new_transactions.csv
 
 # 使用别名
-sailzen finance create new_transactions.csv --server http://192.168.1.100:8000
+sailzen finance create new_transactions.csv
 
 # 预览模式
-sailzen finance create-from-csv new_transactions.csv --server http://192.168.1.100:8000 --dry-run
+sailzen finance create-from-csv new_transactions.csv --dry-run
 ```
 
 **参数说明：**
@@ -189,28 +217,28 @@ sailzen finance create-from-csv new_transactions.csv --server http://192.168.1.1
 ### 场景：批量修改某账户的交易标签
 
 ```bash
-# Step 1: 查看有哪些账户
-sailzen finance list-accounts --server http://192.168.1.100:8000
+# Step 1: 查看有哪些账户（自动读取 .env.prod 中的服务器地址）
+sailzen finance list-accounts
 
 # Step 2: 拉取 account 1 的交易到 CSV
-sailzen finance pull --account 1 --server http://192.168.1.100:8000
+sailzen finance pull --account 1
 # → 生成 transactions_1.csv
 
 # Step 3: 用户在 Excel / VS Code 中编辑 CSV
 # 修改 tags 列、description 列等
 
 # Step 4: 预览将要推送的修改
-sailzen finance push transactions_1.csv --server http://192.168.1.100:8000 --dry-run
+sailzen finance push transactions_1.csv --dry-run
 
 # Step 5: 确认无误后推送
-sailzen finance push transactions_1.csv --server http://192.168.1.100:8000
+sailzen finance push transactions_1.csv
 ```
 
 ### 场景：拉取全部交易做数据分析
 
 ```bash
 # 不指定 --account，拉取全部
-sailzen finance pull --server http://192.168.1.100:8000
+sailzen finance pull
 # → 生成 transactions_all.csv
 ```
 
@@ -218,7 +246,7 @@ sailzen finance pull --server http://192.168.1.100:8000
 
 ```bash
 # Step 1: 查看有哪些账户，确认 from_acc_id / to_acc_id
-sailzen finance list-accounts --server http://192.168.1.100:8000
+sailzen finance list-accounts
 
 # Step 2: 准备 CSV（例如 new_tx.csv），id 列为空
 # from_acc_id,to_acc_id,value,description,tags,htime
@@ -226,10 +254,10 @@ sailzen finance list-accounts --server http://192.168.1.100:8000
 # 2,1,5000.00,工资收入,收入,2026-05-01T09:00:00
 
 # Step 3: 预览将要创建的记录
-sailzen finance create-from-csv new_tx.csv --server http://192.168.1.100:8000 --dry-run
+sailzen finance create-from-csv new_tx.csv --dry-run
 
 # Step 4: 确认无误后导入
-sailzen finance create-from-csv new_tx.csv --server http://192.168.1.100:8000
+sailzen finance create-from-csv new_tx.csv
 ```
 
 ## 底层 API 映射
@@ -261,11 +289,12 @@ CLI 工具通过以下 HTTP API 与 sail_server 交互：
 
 | 问题 | 可能原因 | 解决方案 |
 |------|----------|----------|
-| `Connection refused` | sail_server 未启动 | 确认远程服务器上 sail_server 正在运行 |
+| `Connection refused` | sail_server 未启动或地址错误 | 1) 确认远程服务器运行中；2) 检查 `.env.prod` 中的 `SERVER_HOST`/`SERVER_PORT` 是否正确；3) 使用 `--server` 显式指定 |
 | `Account X not found` | account_id 不存在 | 先用 `list-accounts` 确认正确的 ID |
 | `CSV file not found` | 文件路径错误 | 检查 CSV 文件路径是否正确 |
 | push 后数据未变化 | 只编辑了只读字段 | 确认修改的是可编辑字段（见上表） |
 | 中文乱码 | CSV 编码问题 | 确保用 UTF-8 编码保存 CSV |
+| 连接到错误的 localhost:8000 | `.env.prod` 文件不存在或不在当前目录 | 确认在项目根目录执行命令，或检查 `.env.prod` 是否存在 |
 
 ## 扩展
 
