@@ -41,6 +41,58 @@ import requests
 
 
 # ============================================================================
+# Environment / Server URL Resolution
+# ============================================================================
+
+def _load_env_file(env_path: str) -> dict:
+    """手动解析 .env 文件（不依赖 python-dotenv）"""
+    env = {}
+    if not os.path.isfile(env_path):
+        return env
+    with open(env_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                env[key] = value
+    return env
+
+
+def _resolve_default_server_url() -> str:
+    """
+    解析默认服务器地址。
+    优先级：
+      1. SAIL_SERVER_URL 环境变量
+      2. .env.prod / .env.dev 中的 SERVER_HOST + SERVER_PORT
+      3. http://localhost:8000
+    """
+    # 1. 环境变量
+    env_url = os.environ.get("SAIL_SERVER_URL")
+    if env_url:
+        return env_url
+
+    # 2. 尝试读取 .env 文件
+    cwd = os.getcwd()
+    for env_name in (".env.prod", ".env.dev", ".env"):
+        env_path = os.path.join(cwd, env_name)
+        if os.path.isfile(env_path):
+            env = _load_env_file(env_path)
+            host = env.get("SERVER_HOST", "localhost")
+            port = env.get("SERVER_PORT", "8000")
+            return f"http://{host}:{port}"
+
+    # 3. 回退默认值
+    return "http://localhost:8000"
+
+
+DEFAULT_SERVER_URL = _resolve_default_server_url()
+
+
+# ============================================================================
 # Constants
 # ============================================================================
 
@@ -536,8 +588,8 @@ def main():
     def add_server_arg(p):
         p.add_argument(
             "--server",
-            default=os.environ.get("SAIL_SERVER_URL", "http://localhost:8000"),
-            help="sail_server 地址 (默认: http://localhost:8000, 环境变量: SAIL_SERVER_URL)",
+            default=os.environ.get("SAIL_SERVER_URL", DEFAULT_SERVER_URL),
+            help=f"sail_server 地址 (默认: {DEFAULT_SERVER_URL}, 环境变量: SAIL_SERVER_URL)",
         )
 
     # ---- list-accounts ----
