@@ -46,6 +46,9 @@ import { hashtags } from "./remark/hashtag";
 import { noteRefsV2 } from "./remark/noteRefsV2";
 import { zdocTags } from "./remark/zdocTags";
 import { wikiLinks, WikiLinksOpts } from "./remark/wikiLinks";
+import { sailzenCite } from "./remark/sailzenCite";
+import { sailzenFigure } from "./remark/sailzenFigure";
+import { sailzenBlocks } from "./remark/sailzenBlocks";
 import { DendronASTDest, UnistNode } from "./types";
 import path from "path";
 import { Parent } from "unist";
@@ -282,6 +285,17 @@ export class MDUtilsV5 {
       .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
       .data("errors" as any, errors) as any;
+
+    // Add SailZen Doc syntax extensions for export/preview modes
+    if (
+      data.dest === DendronASTDest.DOC_EXPORT ||
+      data.dest === DendronASTDest.DOC_PREVIEW
+    ) {
+      proc = proc
+        .use(sailzenCite)
+        .use(sailzenFigure)
+        .use(sailzenBlocks) as any;
+    }
 
     //do not convert wikilinks if convertLinks set to false. Used by gdoc export pod. It uses HTMLPublish pod to do the md-->html conversion
     if (

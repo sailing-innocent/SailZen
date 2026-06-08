@@ -317,7 +317,7 @@ export async function renderExternalTemplate(
 ): Promise<{ mainContent: string }> {
   if (!external.mainTemplatePath) {
     throw new Error(
-      `External template "${external.id}" has no skeleton`
+      `External template "${external.id}" has no main.tex skeleton`
     );
   }
 
@@ -337,6 +337,20 @@ export async function renderExternalTemplate(
         country: escapeLatexSimple(a.country || "USA"),
         email: escapeLatexSimple(a.email || ""),
       }));
+    }
+
+    if (!enrichedVars.authors_latex && Array.isArray(vars.authors)) {
+      enrichedVars.authors_latex = vars.authors
+        .map((a: any) => {
+          const name = escapeLatexSimple(a.name || "");
+          const aff = a.affiliation ? escapeLatexSimple(a.affiliation) : "";
+          const email = a.email ? escapeLatexSimple(a.email) : "";
+          let line = `\\author{${name}}`;
+          if (aff) line += `\n\\affiliation{%\n  \\institution{${aff}}\n  \\country{USA}\n}`;
+          if (email) line += `\n\\email{${email}}`;
+          return line;
+        })
+        .join("\n");
     }
 
     if (!enrichedVars.keywords_latex && Array.isArray(vars.keywords)) {

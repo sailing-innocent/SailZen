@@ -8,6 +8,7 @@ import {
 } from "@saili/common-all";
 import { Heading, Image, Parent, Root } from "mdast";
 import { Processor } from "unified";
+import type { Node as UnistNode } from "unist";
 import { DendronPubOpts } from "./remark/dendronPub";
 import { WikiLinksOpts } from "./remark/wikiLinks";
 
@@ -177,10 +178,19 @@ export type SailZenFigure = DendronASTNode & {
   options: Record<string, any>;
 };
 
+/** Table node: ::table[caption](label){opts} ... markdown table ... ::end */
+export type SailZenTable = DendronASTNode & {
+  type: DendronASTTypes.SAILZEN_TABLE;
+  caption: string;
+  label: string;
+  options: Record<string, any>;
+  table?: any; // mdast Table node
+};
+
 /** Math environment node: ::theorem, ::proof, ::definition */
 export type SailZenMathEnv = DendronASTNode & {
   type: DendronASTTypes.SAILZEN_MATH_ENV;
-  envType: "theorem" | "proof" | "definition" | "lemma" | "corollary";
+  envType: "theorem" | "proof" | "definition" | "lemma" | "corollary" | "proposition" | "remark";
   title?: string;
   label?: string;
 };
@@ -190,10 +200,12 @@ export type SailZenAlgorithm = DendronASTNode & {
   type: DendronASTTypes.SAILZEN_ALGORITHM;
   title: string;
   label?: string;
+  children?: UnistNode[];
 };
 
 /** Conditional format node: ::if-format[latex] ... ::end */
 export type SailZenIfFormat = DendronASTNode & {
   type: DendronASTTypes.SAILZEN_IF_FORMAT;
   format: string;
+  children?: UnistNode[];
 };

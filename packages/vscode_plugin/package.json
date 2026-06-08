@@ -119,6 +119,14 @@
         "title": "Open PDF from Zotero"
       },
       {
+        "command": "dendron.zotero.importAsBibNote",
+        "title": "Zotero: Import as Bib Note"
+      },
+      {
+        "command": "sailzen.compileDocument",
+        "title": "SailZen: Compile Document"
+      },
+      {
         "command": "dendron.backlinks.sortByLastUpdated",
         "title": "Sort by Last Updated"
       },
@@ -1193,6 +1201,20 @@
           "type": "boolean",
           "default": true,
           "description": "When enabled, newly created workspaces will be created as self contained vaults."
+        },
+        "sailzen.doc.useASTPipeline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the new AST-based document pipeline (unified/remark) instead of regex-driven conversion."
+        },
+        "sailzen.doc.defaultBuildEngine": {
+          "type": "string",
+          "default": "latexmk",
+          "description": "Default build engine for LaTeX documents.",
+          "enum": [
+            "latexmk",
+            "xmake"
+          ]
         }
       }
     },

@@ -16,7 +16,7 @@ export default {
   // Common ESM-only deps: github-slugger, nanoid, vscode-uri
   // @saili/common-all is symlinked and must be transformed (compiled ESM .js)
   transformIgnorePatterns: [
-    "node_modules/(?!.*(github-slugger|nanoid|vscode-uri|@saili/common-all))",
+    "node_modules/(?!.*(github-slugger|nanoid|vscode-uri|@saili/common-all|unified|unist-|mdast-|remark|vfile|micromark|decode-named-character-reference|character-entities|trim-lines|stringify-entities|ccount|markdown-table|longest-streak|escape-string-regexp|is-.*|hast-|property-information|space-separated-tokens|comma-separated-tokens|web-namespaces|zwitch|fault))",
   ],
   transform: {
     "^.+\\.tsx?$": [

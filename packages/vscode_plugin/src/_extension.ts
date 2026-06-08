@@ -64,6 +64,7 @@ import { StateService } from "./services/stateService";
 import { Extensions } from "./settings";
 import { CreateScratchNoteKeybindingTip } from "./showcase/CreateScratchNoteKeybindingTip";
 import { FeatureShowcaseToaster } from "./showcase/FeatureShowcaseToaster";
+import { DocStatusBarProvider } from "./features/DocStatusBar";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
 import { StartupPrompts } from "./utils/StartupPrompts";
 import { StartupUtils } from "./utils/StartupUtils";
@@ -385,6 +386,11 @@ export async function _activate(
         await PreviewPanelFactory.create(getExtension()).show(note);
       }
       StartupUtils.showUninstallMarkdownLinksExtensionMessage();
+
+      // Activate SailZen Doc status bar
+      const docStatusBar = new DocStatusBarProvider();
+      docStatusBar.activate(context);
+
       return true;
     }
     return false;

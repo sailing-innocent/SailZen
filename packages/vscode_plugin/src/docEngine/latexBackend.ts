@@ -17,7 +17,9 @@ import {
   ResolvedAsset,
 } from "@saili/common-all";
 import path from "path";
+import type { Root } from "mdast";
 import { renderTemplate, resolveTemplateVars } from "./templateEngine";
+import { mdastToLatex } from "./astLatexTransformer";
 
 // ============================================================================
 // Public API
@@ -42,7 +44,8 @@ export async function generateLatex(
   profile: DocProfile,
   exportConfig: DocExportConfig,
   notesById: NotePropsByIdDict,
-  wsRoot?: string
+  wsRoot?: string,
+  opts?: { ast?: Root; useAST?: boolean }
 ): Promise<GeneratedDocument> {
   const { body } = assembled;
   const { meta } = profile;
@@ -54,7 +57,17 @@ export async function generateLatex(
   }
 
   // Convert markdown body to LaTeX
-  let latexBody = markdownToLatex(body, assetMap);
+  let latexBody: string;
+  if (opts?.useAST && opts?.ast) {
+    latexBody = mdastToLatex(
+      opts.ast,
+      profile,
+      notesById,
+      exportConfig.vars?.bibliography as string
+    );
+  } else {
+    latexBody = markdownToLatex(body, assetMap);
+  }
 
   // Resolve template variables
   const templateVars = resolveTemplateVars(profile, exportConfig);

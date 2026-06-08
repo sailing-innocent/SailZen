@@ -7,10 +7,19 @@ export {
   extractMathEnvs,
   extractConditionals,
 } from "./profileResolver";
+export {
+  resolveProfileAST,
+  extractReferencesFromAST,
+} from "./astProfileResolver";
 export { assembleDocument } from "./documentAssembler";
+export {
+  assembleDocumentAST,
+  astToAssembledDocument,
+} from "./astDocumentAssembler";
 export { generateLatex } from "./latexBackend";
 export { generateTypst } from "./typstBackend";
 export { generateMarkdown } from "./markdownBackend";
+export { mdastToLatex } from "./astLatexTransformer";
 export {
   renderTemplate,
   resolveTemplateVars,

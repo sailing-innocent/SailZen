@@ -202,6 +202,74 @@ ${bodyContent}
 `;
     },
   },
+  "acmart-sigconf": {
+    id: "acmart-sigconf",
+    format: "latex",
+    description: "ACM Conference Paper (sigconf)",
+    engine: "pdflatex",
+    requires: [],
+    packages: [...COMMON_PACKAGES],
+    variables: [
+      { name: "title", required: true },
+      { name: "authors", type: "array", default: [] },
+      { name: "abstract", type: "string" },
+      { name: "keywords", type: "array", default: [] },
+      { name: "bibliography", default: "ref" },
+      { name: "bibliographystyle", default: "ACM-Reference-Format" },
+      { name: "conference", type: "string" },
+      { name: "year" },
+      { name: "doi" },
+    ],
+    sectioning: { style: "numbered", maxDepth: 3 },
+    renderMain(vars, body, options) {
+      const authors = formatAcmAuthors(vars.authors);
+      const abstract = vars.abstract
+        ? `\\begin{abstract}\n${vars.abstract}\n\\end{abstract}`
+        : "";
+      const keywords = (vars.keywords || []).length
+        ? `\\keywords{${vars.keywords.map(escapeLatex).join("; ")}}`
+        : "";
+      const bibStyle = vars.bibliographystyle || "ACM-Reference-Format";
+      const bibFile = vars.bibliography || "ref";
+      const bodyContent = buildBodyContent(body, options, "latex");
+
+      let conferenceLine = "";
+      if (vars.conference) {
+        if (typeof vars.conference === "string") {
+          conferenceLine = `\\acmConference{${escapeLatex(vars.conference)}}{}{}`;
+        } else if (typeof vars.conference === "object" && vars.conference !== null) {
+          const short = vars.conference.short ? `[${escapeLatex(vars.conference.short)}]` : "";
+          const name = escapeLatex(vars.conference.name || "");
+          const date = escapeLatex(vars.conference.date || "");
+          const venue = escapeLatex(vars.conference.venue || "");
+          conferenceLine = `\\acmConference${short}{${name}}{${date}}{${venue}}`;
+        }
+      }
+      const yearLine = vars.year ? `\\acmYear{${vars.year}}` : "";
+      const doiLine = vars.doi ? `\\acmDOI{${escapeLatex(String(vars.doi))}}` : "";
+
+      return `\\documentclass[sigconf,authordraft]{acmart}
+${buildPreamble(this.packages || [])}
+
+\\title{${escapeLatex(vars.title || "Untitled")}}
+${authors}
+${conferenceLine}
+${yearLine}
+${doiLine}
+
+\\begin{document}
+\\maketitle
+${abstract}
+${keywords}
+
+${bodyContent}
+
+\\bibliographystyle{${bibStyle}}
+\\bibliography{${bibFile}}
+\\end{document}
+`;
+    },
+  },
   "research-article": {
     id: "research-article",
     format: "typst",

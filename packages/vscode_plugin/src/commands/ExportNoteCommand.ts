@@ -16,12 +16,16 @@ import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import {
   assembleDocument,
+  assembleDocumentAST,
+  astToAssembledDocument,
   generateLatex,
   generateTypst,
   generateMarkdown,
   resolveProfile,
+  resolveProfileAST,
   listTemplates,
 } from "../docEngine";
+import { compileDocument } from "../docEngine/compileService";
 
 // ============================================================================
 // Types
@@ -107,7 +111,7 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
     for (const n of allNotes) {
       notesById[n.id] = n;
     }
-    const profile = resolveProfile(note, notesById);
+    let profile = resolveProfile(note, notesById);
     const wsRoot = engine.wsRoot;
 
     // -------------------------------------------------------------------------
@@ -307,7 +311,7 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
     for (const n of allNotes) {
       notesById[n.id] = n;
     }
-    const profile = resolveProfile(note, notesById);
+    let profile = resolveProfile(note, notesById);
     const formatLabel = FORMAT_LABELS[exportConfig.format] ?? exportConfig.format;
 
     return vscode.window.withProgress(
@@ -317,7 +321,22 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
         cancellable: false,
       },
       async () => {
-        const assembled = assembleDocument(profile, notesById);
+        const useAST = vscode.workspace
+          .getConfiguration("sailzen.doc")
+          .get<boolean>("useASTPipeline", true);
+
+        let assembled;
+        let ast;
+        if (useAST) {
+          const astResult = assembleDocumentAST(profile, notesById);
+          ast = astResult.ast;
+          assembled = astToAssembledDocument(astResult);
+          // Re-resolve profile with AST for accurate reference extraction
+          profile = resolveProfileAST(note, notesById, ast);
+        } else {
+          assembled = assembleDocument(profile, notesById);
+        }
+
         const wsRoot = engine.wsRoot;
         const projectName = profile.rootNoteFname.replace(/\./g, "_");
 
@@ -349,7 +368,8 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
               profile,
               exportConfig,
               notesById,
-              wsRoot
+              wsRoot,
+              useAST ? { ast, useAST: true } : undefined
             );
             Logger.info({ ctx: `${this.key}:execute`, msg: "latex backend done" });
             await this._writeGeneratedFiles(generated, outDir, projectDir, files);
@@ -508,9 +528,11 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
     }
 
     const openDir = "Open Output Directory";
+    const compileNow = "Compile Now";
     const choice = await vscode.window.showInformationMessage(
       `Exported ${resp.files.length} file(s) to ${resp.outputDir}`,
-      openDir
+      openDir,
+      compileNow
     );
 
     if (choice === openDir) {
@@ -518,6 +540,8 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
         "revealFileInOS",
         vscode.Uri.file(resp.outputDir)
       );
+    } else if (choice === compileNow) {
+      vscode.commands.executeCommand("sailzen.compileDocument");
     }
   }
 }

@@ -1,136 +1,190 @@
 /**
  * @file Zotero.ts
- * @brief The Dendron Zotero Command
+ * @brief Zotero / Better BibTeX integration commands for SailZen
  * @author sailing-innocent
  * @date 2025-06-03
  */
 
-import * as vscode from 'vscode';
-import { Logger } from '../logger';
+import * as vscode from "vscode";
+import { Logger } from "../logger";
+import {
+  pickCitations,
+  getBibTeXEntry,
+  buildBibNoteFrontmatter,
+  isZoteroRunning,
+} from "../services/ZoteroService";
 
+/**
+ * Show Zotero CAYW picker and insert ::cite[key] into the active editor.
+ */
 export async function showZoteroPicker(): Promise<void> {
   try {
-    // const url = "http://127.0.0.1:23119/better-bibtex/cayw?format=pandoc"
-    const url = "http://127.0.0.1:23119/better-bibtex/cayw?format=translate&translator=csljson"
-    const response = await fetch(url);
-    const result = await response.text();
+    const running = await isZoteroRunning();
+    if (!running) {
+      vscode.window.showErrorMessage(
+        "Zotero Citations: could not connect to Zotero. Are you sure it is running with Better BibTeX?"
+      );
+      return;
+    }
 
-    if (result) {
-      const parsedResult = JSON.parse(result);
-      console.log('Zotero citation fetched:', parsedResult);
-      console.log('Zotero citation fetched:', parsedResult[0]);
-      Logger.info(`Zotero citation fetched [LOG_INFO]: ${result}`);
+    const items = await pickCitations("citekeys");
+    if (!items || items.length === 0) return;
 
-      // Uncomment if you want to insert the ID into the active editor
+    const keys = items.map((i) => i.citationKey);
+    const citeStr = `::cite[${keys.join(", ")}]`;
 
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      await editor.edit((editBuilder) => {
+        editor.selections.forEach((selection) => {
+          editBuilder.replace(selection, citeStr);
+        });
+      });
+    }
+  } catch (err: any) {
+    Logger.error({ ctx: "ZoteroPicker", msg: err.message });
+    vscode.window.showErrorMessage(
+      `Zotero Citations: ${err.message}`
+    );
+  }
+}
+
+/**
+ * Import the selected Zotero item as a SailZen bib note.
+ */
+export async function importZoteroAsBibNote(): Promise<void> {
+  try {
+    const running = await isZoteroRunning();
+    if (!running) {
+      vscode.window.showErrorMessage("Zotero not running with Better BibTeX.");
+      return;
+    }
+
+    const items = await pickCitations("citekeys");
+    if (!items || items.length === 0) return;
+
+    for (const item of items) {
+      const entry = await getBibTeXEntry(item.citationKey);
+      if (!entry) {
+        vscode.window.showWarningMessage(
+          `Could not fetch BibTeX for ${item.citationKey}`
+        );
+        continue;
+      }
+
+      const fm = buildBibNoteFrontmatter(entry);
       const editor = vscode.window.activeTextEditor;
       if (editor) {
-          editor.edit(editBuilder => {
-            editor.selections.forEach(selection => {
-              editBuilder.delete(selection);
-              if (parsedResult.length == 1) {
-                editBuilder.insert(selection.start, `${parsedResult[0].title} \\cite{${parsedResult[0].id}}`);
-              }
-              else{
-                parsedResult.forEach((item: any) => {
-                  editBuilder.insert(selection.start, `- ${item.title} \\cite{${item.id}}\n`);
-                })
-              }
-            });
-          });
+        const doc = editor.document;
+        const endPos = new vscode.Position(doc.lineCount, 0);
+        await editor.edit((eb) => {
+          eb.insert(endPos, "\n\n" + fm);
+        });
+      } else {
+        vscode.env.clipboard.writeText(fm);
+        vscode.window.showInformationMessage(
+          `Bib note frontmatter for ${item.citationKey} copied to clipboard.`
+        );
       }
     }
   } catch (err: any) {
-    console.log('Failed to fetch citation: %j', err.message);
-    vscode.window.showErrorMessage('Zotero Citations: could not connect to Zotero. Are you sure it is running?');
+    Logger.error({ ctx: "ZoteroImport", msg: err.message });
+    vscode.window.showErrorMessage(`Zotero import failed: ${err.message}`);
   }
 }
 
 async function openInZotero(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
 
-  if (!editor) {
-    return;
-  }
-
-  let citeKey: string = '';
-
+  let citeKey = "";
   if (editor.selection.isEmpty) {
-    const range = editor.document.getWordRangeAtPosition(editor.selection.active);
+    const range = editor.document.getWordRangeAtPosition(
+      editor.selection.active
+    );
     if (range) {
       citeKey = editor.document.getText(range);
     }
   } else {
-    citeKey = editor.document.getText(new vscode.Range(editor.selection.start, editor.selection.end));
+    citeKey = editor.document.getText(
+      new vscode.Range(editor.selection.start, editor.selection.end)
+    );
   }
 
-  console.log(`Opening ${citeKey} in Zotero`);
+  if (!citeKey) return;
   const uri = vscode.Uri.parse(`zotero://select/items/bbt:${citeKey}`);
   await vscode.env.openExternal(uri);
 }
 
 async function openPDFZotero(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
 
-  if (!editor) {
-    return;
-  }
-
-  let citeKey: string = '';
-
+  let citeKey = "";
   if (editor.selection.isEmpty) {
-    const range = editor.document.getWordRangeAtPosition(editor.selection.active);
+    const range = editor.document.getWordRangeAtPosition(
+      editor.selection.active
+    );
     if (range) {
       citeKey = editor.document.getText(range);
     }
   } else {
-    citeKey = editor.document.getText(new vscode.Range(editor.selection.start, editor.selection.end));
+    citeKey = editor.document.getText(
+      new vscode.Range(editor.selection.start, editor.selection.end)
+    );
   }
 
-  console.log(`Opening ${citeKey} in Zotero`);
+  if (!citeKey) return;
 
   let uri = vscode.Uri.parse(`zotero://select/items/bbt:${citeKey}`);
-
   try {
-    const response = await fetch('http://localhost:23119/better-bibtex/json-rpc', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        'jsonrpc': '2.0',
-        'method': 'item.attachments',
-        'params': [citeKey]
-      }),
-    });
+    const response = await fetch(
+      "http://localhost:23119/better-bibtex/json-rpc",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "item.attachments",
+          params: [citeKey],
+        }),
+      }
+    );
     const repos: any = await response.json();
-    console.log(repos['result']);
-    console.log('User has %d repos', repos['result'].length);
-    for (const elt of repos['result']) {
-      if (elt['path'].endsWith('.pdf')) {
-        uri = vscode.Uri.parse(elt['open']);
+    for (const elt of repos["result"] || []) {
+      if (elt["path"]?.endsWith(".pdf")) {
+        uri = vscode.Uri.parse(elt["open"]);
         break;
       }
     }
-    console.log(uri);
     await vscode.env.openExternal(uri);
   } catch (err: any) {
-    console.log('API open PDF in Zotero failed', err);
+    Logger.error({ ctx: "ZoteroPDF", msg: err.message });
+    await vscode.env.openExternal(uri);
   }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(vscode.commands.registerCommand('dendron.zotero.openInZotero', openInZotero));
-  context.subscriptions.push(vscode.commands.registerCommand('dendron.zotero.openPDFZotero', openPDFZotero));
-
-  let disposable = vscode.commands.registerCommand('dendron.zotero.CitationPicker', () => {
-    showZoteroPicker();
-  });
-
-  context.subscriptions.push(disposable);
+  context.subscriptions.push(
+    vscode.commands.registerCommand("dendron.zotero.openInZotero", openInZotero)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("dendron.zotero.openPDFZotero", openPDFZotero)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("dendron.zotero.CitationPicker", showZoteroPicker)
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "dendron.zotero.importAsBibNote",
+      importZoteroAsBibNote
+    )
+  );
 }
 
 export function deactivate(): void {
-  // This function is called when the extension is deactivated
+  // cleanup
 }
