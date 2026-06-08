@@ -1,4 +1,16 @@
-# Shadow Agent — 24h 自动化笔记助手设计
+> ⚠️ **DEPRECATED — DO NOT IMPLEMENT**
+>
+> This document has been **superseded** by the autonomous-agent redesign.
+> See: `doc/design/agent-system/autonomous-agent.md`
+>
+> The shadow-agent architecture (agent inside sail_server, shared DB, `sail_server/agent/` directory)
+> was identified as an architectural error and is explicitly rejected.
+>
+> **Date of deprecation**: 2025-06-02
+
+---
+
+# Shadow Agent — 24h 自动化笔记助手设计 (DEPRECATED v1)
 
 > **目标**：让 SailZen 成为一个真正的"影子助手"，运行在服务器和开发机上，永不休眠。自动同步知识库、发现补全任务、生成 patch，并通过 CLI 与 AI 交互。
 

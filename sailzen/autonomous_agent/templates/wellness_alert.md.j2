@@ -1,0 +1,26 @@
+# ⚠️ Wellness 警报
+
+**检测时间**: {{ detected_at | default(now) }}
+**严重程度**: {{ severity | default("warning") }}
+
+---
+
+## 📊 异常摘要
+
+{{ anomaly_summary | default("检测到异常指标") }}
+
+---
+
+## 📈 相关数据
+
+{{ related_data | default("详细数据见附件或日志。") }}
+
+---
+
+## 💡 建议
+
+{{ recommendations | default("请查看详细报告以获取建议。") }}
+
+---
+
+*由 SailZen Autonomous Agent 自动检测*

@@ -92,6 +92,7 @@ class DAGClientConfig:
     auto_start: bool = True
     max_concurrent_runs: int = 5
     heartbeat_interval: int = 30
+    agent_pipelines_dir: Optional[str] = None  # Optional: agent pipeline definitions directory
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -215,6 +216,7 @@ def load_config(path: Optional[str] = None) -> DAGClientConfig:
         auto_start=dag_raw.get("auto_start", True),
         max_concurrent_runs=dag_raw.get("max_concurrent_runs", 5),
         heartbeat_interval=dag_raw.get("heartbeat_interval", 30),
+        agent_pipelines_dir=dag_raw.get("agent_pipelines_dir", None),
     )
 
     _env_override(cfg)
@@ -224,5 +226,7 @@ def load_config(path: Optional[str] = None) -> DAGClientConfig:
     cfg.db_path = str((config_root / cfg.db_path).resolve())
     cfg.data_dir = str((config_root / cfg.data_dir).resolve())
     cfg.log_dir = str((config_root / cfg.log_dir).resolve())
+    if cfg.agent_pipelines_dir and not Path(cfg.agent_pipelines_dir).is_absolute():
+        cfg.agent_pipelines_dir = str((config_root / cfg.agent_pipelines_dir).resolve())
 
     return cfg

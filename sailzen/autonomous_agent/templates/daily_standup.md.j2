@@ -1,0 +1,26 @@
+# 🌅 今日 Standup 摘要
+
+**日期**: {{ date | default(now) }}
+**生成时间**: {{ generated_at | default(now) }}
+
+---
+
+## 📅 今日日程
+
+{{ schedule_summary | default("暂无日程数据") }}
+
+---
+
+## ✅ 待办任务
+
+{{ tasks_summary | default("暂无任务数据") }}
+
+---
+
+## 🎯 今日重点
+
+{{ focus_items | default("根据当前状态，建议优先处理以上事项。") }}
+
+---
+
+*由 SailZen Autonomous Agent 自动生成*

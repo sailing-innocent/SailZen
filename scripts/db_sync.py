@@ -1033,6 +1033,17 @@ def main():
         _print_table_list()
         return
     
+    # 排除 agent 数据库路径
+    AGENT_EXCLUDED_PATHS = ['data/agent', 'data/agent.db', 'agent.db']
+    def _check_agent_exclusion(path: str) -> bool:
+        path_normalized = os.path.normpath(path)
+        for excluded in AGENT_EXCLUDED_PATHS:
+            if excluded in path_normalized or path_normalized.endswith(excluded):
+                logger.error(f"❌ 禁止同步 Agent 独立数据库: {path}")
+                logger.error("   Agent 数据完全隔离，不应被 db_sync 触及。")
+                return False
+        return True
+
     # SQLite 同步命令
     if args.command in ('export-sqlite', 'import-sqlite'):
         env_name = args.env
@@ -1051,6 +1062,8 @@ def main():
             sys.exit(1)
         
         sqlite_path = args.sqlite_path
+        if not _check_agent_exclusion(sqlite_path):
+            sys.exit(1)
         sqlite_sync = SQLiteSyncManager(pg_uri, sqlite_path)
         
         if args.command == 'export-sqlite':

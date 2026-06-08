@@ -1,0 +1,27 @@
+[Unit]
+Description=SailZen Autonomous Agent Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=%I
+WorkingDirectory=/home/%I/SailZen
+ExecStart=/usr/local/bin/uv run python -m sailzen.autonomous_agent --fg
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sailzen-agent
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="AGENT_CONFIG=agent.yaml"
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/%I/SailZen/data/agent /home/%I/SailZen/logs/agent
+
+[Install]
+WantedBy=multi-user.target

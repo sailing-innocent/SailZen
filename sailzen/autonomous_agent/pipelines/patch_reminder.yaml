@@ -1,0 +1,73 @@
+id: patch_reminder
+name: Patch Generation Nudge
+description: >
+  Checks for unpushed commits and reminds to generate patches.
+  Schedule: 0 23 * * * (11:00 PM daily)
+
+autonomy_level: suggestion_only
+
+nodes:
+  - id: check_commits
+    type: shell
+    name: Check unpushed commits
+    params:
+      command: git log origin/$(git branch --show-current)..HEAD --oneline
+
+  - id: has_commits
+    type: condition
+    name: Check if commits exist
+    depends_on: [check_commits]
+    params:
+      condition: "upstream.check_commits.stdout.strip() != ''"
+      true_next: [infer_topic, emit_reminder, send_reminder]
+      false_next: [log_no_commits]
+
+  - id: infer_topic
+    type: llm_reasoning
+    name: Infer patch topic
+    depends_on: [has_commits]
+    params:
+      prompt_template: |
+        Based on these commit messages, infer a concise topic
+        for the patch (max 5 words):
+
+        {{ upstream.check_commits.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 200
+
+  - id: emit_reminder
+    type: reminder_emit
+    name: Queue patch reminder
+    depends_on: [infer_topic]
+    params:
+      title: "Patch Reminder"
+      content: |
+        You have un-patched commits.
+        Topic: {{ upstream.infer_topic.response }}
+        Commits:
+        {{ upstream.check_commits.stdout }}
+      priority: normal
+      channel: lark_im
+
+  - id: send_reminder
+    type: lark_notify
+    name: Send patch reminder
+    depends_on: [infer_topic]
+    params:
+      channel: im
+      content: |
+        📦 Patch Reminder
+
+        You have unpushed commits ahead of origin.
+        Topic: {{ upstream.infer_topic.response }}
+
+        Run `finalize-today-work` skill to generate the patch.
+      content_type: markdown
+
+  - id: log_no_commits
+    type: shell
+    name: Log no commits
+    depends_on: [has_commits]
+    params:
+      command: echo "No unpushed commits — nothing to patch."

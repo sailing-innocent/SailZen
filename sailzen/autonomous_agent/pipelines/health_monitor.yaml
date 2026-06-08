@@ -1,0 +1,60 @@
+id: health_monitor
+name: Health Metric Tracking
+description: >
+  Tracks health metrics hourly and alerts on significant changes.
+  Schedule: interval 3600 (hourly)
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: check_data_available
+    type: state_check
+    name: Check if health data endpoint is available
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 5
+
+  - id: pull_weight
+    type: sailzen_cli
+    name: Pull today's weight
+    depends_on: [check_data_available]
+    params:
+      module: health
+      command: pull-weight
+      args: ["--start", "today", "--end", "today"]
+      timeout: 60
+
+  - id: analyze_change
+    type: llm_reasoning
+    name: Analyze weight change
+    depends_on: [pull_weight]
+    params:
+      prompt_template: |
+        Based on the following weight data, determine if there is
+        a significant change (>1kg day-over-day). Respond with
+        "SIGNIFICANT" or "NORMAL" and a brief explanation.
+
+        {{ upstream.pull_weight.stdout }}
+      provider: kimi
+      temperature: 0.2
+      max_tokens: 500
+
+  - id: check_significant
+    type: condition
+    name: Check if weight change is significant
+    depends_on: [analyze_change]
+    params:
+      condition: "'SIGNIFICANT' in upstream.analyze_change.response.upper()"
+      true_next: [emit_health_alert]
+      false_next: []
+
+  - id: emit_health_alert
+    type: reminder_emit
+    name: Emit health alert
+    depends_on: [check_significant]
+    params:
+      title: "Health Alert: Significant Weight Change"
+      content: "{{ upstream.analyze_change.response }}"
+      priority: high
+      channel: lark_im

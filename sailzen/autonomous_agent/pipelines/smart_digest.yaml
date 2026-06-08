@@ -1,0 +1,83 @@
+id: smart_digest
+name: Adaptive Smart Digest
+description: >
+  Lightweight periodic digest that checks for actionable items
+  and sends notifications only when user is free.
+  Schedule: interval 1800 (every 30 minutes)
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: quick_health_check
+    type: state_check
+    name: Quick service health check
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 5
+
+  - id: check_actionable
+    type: llm_reasoning
+    name: Check for actionable items
+    depends_on: [quick_health_check]
+    params:
+      prompt_template: |
+        Check if there are any actionable items requiring attention
+        based on the current system state.
+        Respond with "ACTIONABLE: <brief list>" or "CLEAR: no action needed".
+      provider: kimi
+      temperature: 0.2
+      max_tokens: 500
+
+  - id: is_actionable
+    type: condition
+    name: Check if actionable items exist
+    depends_on: [check_actionable]
+    params:
+      condition: "'ACTIONABLE' in upstream.check_actionable.response.upper()"
+      true_next: [check_user_free]
+      false_next: [log_clear]
+
+  - id: check_user_free
+    type: skill
+    name: Check if user is free
+    depends_on: [is_actionable]
+    params:
+      skill: lark-calendar
+      command: +freebusy
+      # Returns free/busy status
+
+  - id: user_is_free
+    type: condition
+    name: Check if user is currently free
+    depends_on: [check_user_free]
+    params:
+      condition: "'free' in upstream.check_user_free.response.lower()"
+      true_next: [send_digest]
+      false_next: [log_busy]
+
+  - id: send_digest
+    type: lark_notify
+    name: Send smart digest
+    depends_on: [user_is_free]
+    params:
+      channel: im
+      content: |
+        💡 Smart Digest
+
+        {{ upstream.check_actionable.response }}
+      content_type: markdown
+
+  - id: log_clear
+    type: shell
+    name: Log no action needed
+    depends_on: [is_actionable]
+    params:
+      command: 'echo "Smart digest: no actionable items."'
+
+  - id: log_busy
+    type: shell
+    name: Log user is busy
+    depends_on: [user_is_free]
+    params:
+      command: 'echo "Smart digest: user is busy, notification deferred."'

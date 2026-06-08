@@ -1,0 +1,28 @@
+# 💰 财务日报
+
+**日期**: {{ date | default(now) }}
+**账户**: {{ account | default("全部账户") }}
+
+---
+
+## 📋 交易摘要
+
+{{ transaction_summary | default("今日无交易记录") }}
+
+---
+
+## 🔍 异常检测
+
+{{ anomaly_check | default("未发现异常") }}
+
+---
+
+## 📊 统计
+
+- 总收入: {{ total_income | default("0.00") }}
+- 总支出: {{ total_expense | default("0.00") }}
+- 净额: {{ net_amount | default("0.00") }}
+
+---
+
+*由 SailZen Autonomous Agent 自动生成*

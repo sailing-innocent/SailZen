@@ -1,0 +1,71 @@
+id: finance_anomaly_scan
+name: Daily Finance Anomaly Detection
+description: >
+  Analyzes yesterday's transactions for anomalies.
+  Schedule: 0 22 * * * (10:00 PM daily)
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: pull_daily
+    type: sailzen_cli
+    name: Pull daily transactions
+    params:
+      module: finance
+      command: pull
+      args: ["--days", "1", "--output", "daily.csv"]
+      timeout: 120
+
+  - id: analyze_anomalies
+    type: llm_reasoning
+    name: Analyze for anomalies
+    depends_on: [pull_daily]
+    params:
+      prompt_template: |
+        Analyze the following daily finance transactions.
+        Identify any anomalies, unusual patterns, or suspicious activity:
+
+        {{ upstream.pull_daily.stdout }}
+
+        Rate the anomaly risk from 0-10 and explain why.
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 2000
+
+  - id: check_risk
+    type: condition
+    name: Check anomaly risk threshold
+    depends_on: [analyze_anomalies]
+    params:
+      condition: "'risk' in upstream.analyze_anomalies.response and '10' not in upstream.analyze_anomalies.response.split('risk')[0].split()[-1]"
+      true_next: [emit_alert, send_alert]
+      false_next: [log_result]
+
+  - id: emit_alert
+    type: reminder_emit
+    name: Queue high-priority alert
+    depends_on: [check_risk]
+    params:
+      title: "Finance Anomaly Detected"
+      content: "{{ upstream.analyze_anomalies.response }}"
+      priority: high
+      channel: lark_im
+
+  - id: send_alert
+    type: lark_notify
+    name: Send alert notification
+    depends_on: [check_risk]
+    params:
+      channel: im
+      content: |
+        ⚠️ 财务异常检测
+
+        {{ upstream.analyze_anomalies.response }}
+      content_type: markdown
+
+  - id: log_result
+    type: shell
+    name: Log normal result
+    depends_on: [check_risk]
+    params:
+      command: echo "Finance anomaly scan completed — no anomalies detected."

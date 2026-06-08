@@ -1,0 +1,63 @@
+id: daily_standup
+name: Daily Standup & Agenda Digest
+description: >
+  Fetches calendar and tasks, summarizes today's focus,
+  and sends a digest via Lark IM.
+  Schedule: 0 8 * * 1-5 (8:00 AM, Mon-Fri)
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: standup_skill
+    type: skill
+    name: Fetch standup report
+    depends_on: [health_check]
+    params:
+      skill: lark-workflow-standup-report
+      command: +agenda
+      output_format: json
+
+  - id: summarize
+    type: llm_reasoning
+    name: Summarize and prioritize
+    depends_on: [standup_skill]
+    params:
+      prompt_template: |
+        Based on the following agenda data, summarize today's focus
+        and prioritize the top 3 items:
+
+        {{ upstream.standup_skill }}
+
+        Output a brief digest in Chinese.
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1500
+
+  - id: check_priority
+    type: condition
+    name: Check if high-priority items exist
+    depends_on: [summarize]
+    params:
+      condition: "upstream.summarize is not none"
+      true_next: [send_digest]
+      false_next: []
+
+  - id: send_digest
+    type: lark_notify
+    name: Send digest to user IM
+    depends_on: [check_priority]
+    params:
+      channel: im
+      content: |
+        🌅 今日Standup摘要
+
+        {{ upstream.summarize.response }}
+      content_type: markdown

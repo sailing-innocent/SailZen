@@ -1,0 +1,84 @@
+id: weekly_wellness
+name: Weekly Financial & Health Check
+description: >
+  Runs wellness analysis for the past 7 days,
+  identifies trends and anomalies, sends summary report.
+  Schedule: 0 21 * * 0 (Sunday 9:00 PM)
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: pull_health
+    type: sailzen_cli
+    name: Pull health data
+    params:
+      module: health
+      command: pull-weight
+      args: ["--days", "7"]
+      timeout: 120
+
+  - id: pull_finance
+    type: sailzen_cli
+    name: Pull finance data
+    params:
+      module: finance
+      command: pull
+      args: ["--days", "7", "--output", "weekly_finance.csv"]
+      timeout: 120
+
+  - id: wellness_analysis
+    type: wellness
+    name: Run wellness analysis
+    depends_on: [pull_health, pull_finance]
+    params:
+      start_date: "{{ global_params.start_date | default('7_days_ago') }}"
+      end_date: "{{ global_params.end_date | default('today') }}"
+      label: weekly_wellness
+      output_format: markdown
+
+  - id: analyze_trends
+    type: llm_reasoning
+    name: Identify trends and anomalies
+    depends_on: [wellness_analysis]
+    params:
+      prompt_template: |
+        Analyze the following wellness report and identify any
+        trends or anomalies in health and finance data:
+
+        {{ upstream.wellness_analysis }}
+
+        Flag anything that needs attention.
+      provider: deepseek
+      temperature: 0.4
+      max_tokens: 2000
+
+  - id: check_anomalies
+    type: condition
+    name: Check for anomalies
+    depends_on: [analyze_trends]
+    params:
+      condition: "'anomaly' in upstream.analyze_trends.response.lower() or 'alert' in upstream.analyze_trends.response.lower()"
+      true_next: [emit_alert, send_summary]
+      false_next: [send_summary]
+
+  - id: emit_alert
+    type: reminder_emit
+    name: Queue wellness alert
+    depends_on: [check_anomalies]
+    params:
+      title: "Wellness Alert"
+      content: "{{ upstream.analyze_trends.response }}"
+      priority: high
+      channel: lark_im
+
+  - id: send_summary
+    type: lark_notify
+    name: Send weekly summary
+    depends_on: [check_anomalies]
+    params:
+      channel: im
+      content: |
+        📊 本周Wellness报告
+
+        {{ upstream.analyze_trends.response }}
+      content_type: markdown
