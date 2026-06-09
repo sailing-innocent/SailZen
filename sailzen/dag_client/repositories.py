@@ -182,6 +182,16 @@ class DAGNodeRepository(BaseRepository):
             obj = result.scalar_one_or_none()
             return orm_to_dict(obj) if obj else None
 
+    async def get_by_status(self, status: str) -> List[dict]:
+        async with self._session() as session:
+            stmt = (
+                select(DBDAGNode)
+                .where(DBDAGNode.status == status)
+                .order_by(DBDAGNode.priority.asc(), DBDAGNode.created_at.asc())
+            )
+            result = await session.execute(stmt)
+            return [orm_to_dict(r) for r in result.scalars().all()]
+
     async def update_status(
         self,
         node_db_id: str,
@@ -485,6 +495,9 @@ class DatabaseCompat:
 
     async def get_nodes(self, run_id: str, status: Optional[str] = None) -> List[dict]:
         return await self._repos.node.get_by_run(run_id, status)
+
+    async def get_nodes_by_status(self, status: str) -> List[dict]:
+        return await self._repos.node.get_by_status(status)
 
     async def get_node_by_template_id(self, run_id: str, node_id: str) -> Optional[dict]:
         return await self._repos.node.get_by_node_id(run_id, node_id)

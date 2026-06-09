@@ -409,10 +409,12 @@ class AgentDatabase:
     async def list_goals(self, status: Optional[str] = None) -> List[dict]:
         async with self.session() as session:
             query = "SELECT * FROM agent_goals"
+            params = {}
             if status:
-                query += f" WHERE status = '{status}'"
+                query += " WHERE status = :st"
+                params["st"] = status
             query += " ORDER BY priority ASC, created_at DESC"
-            result = await session.execute(text(query))
+            result = await session.execute(text(query), params)
             rows = result.mappings().all()
             return [dict(row) for row in rows]
 

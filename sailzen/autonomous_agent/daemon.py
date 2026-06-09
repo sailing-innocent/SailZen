@@ -22,6 +22,7 @@ import asyncio
 import logging
 import signal
 import sys
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sailzen.dag_client.config import load_config as load_dag_config
@@ -78,6 +79,21 @@ class AgentDaemon:
 
     def _register_agent_nodes(self) -> None:
         """Register agent-specific DAG node types."""
+        # Ensure built-in shell/skill nodes are registered (in case built-in registration failed)
+        try:
+            from sailzen.dag_client.nodes.shell_node import ShellNode
+            if "shell" not in self.node_registry.list_types():
+                self.node_registry.register("shell", ShellNode)
+        except Exception as exc:
+            logger.warning("Failed to register shell node: %s", exc)
+
+        try:
+            from sailzen.dag_client.nodes.skill_node import SkillNode
+            if "skill" not in self.node_registry.list_types():
+                self.node_registry.register("skill", SkillNode)
+        except Exception as exc:
+            logger.warning("Failed to register skill node: %s", exc)
+
         try:
             from sailzen.autonomous_agent.nodes.sailzen_cli_node import SailZenCliNode
             self.node_registry.register("sailzen_cli", SailZenCliNode)
@@ -204,8 +220,13 @@ class AgentDaemon:
             try:
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
             except NotImplementedError:
-                # Windows doesn't support add_signal_handler
-                pass
+                # Windows doesn't support add_signal_handler; use signal.signal as fallback
+                if sig == signal.SIGINT:
+                    import threading
+                    def _win_handler(signum, frame):
+                        if threading.current_thread() is threading.main_thread():
+                            asyncio.create_task(self.stop())
+                    signal.signal(signal.SIGINT, _win_handler)
 
     # ── Main loop ─────────────────────────────────────────────────────
 
@@ -286,21 +307,19 @@ class AgentDaemon:
                 raise ValueError(f"Pipeline definition not found: {pipeline_id}")
 
             # Create DAG run via dag_client scheduler
-            from sailzen.dag_client.models import make_dag_run
-            dag_run = make_dag_run(
+            # This creates the full DAG (run + nodes + edges) and queues ready nodes
+            dag_run = await self.dag_scheduler.create_run(
                 definition_id=pipeline_def["id"],
+                template=pipeline_def,
                 name=f"{pipeline_id}_{schedule_id}",
                 params={**pipeline_def.get("global_params", {}), **params},
             )
-            await self.dag_db.create_run(dag_run)
 
             # Update log with dag_run_id
             await self.db.update_run_log(log_entry["id"], {
                 "dag_run_id": dag_run["id"],
             })
 
-            # TODO: The DAG scheduler needs to be told to execute this run.
-            # For now, we rely on the DAGScheduler's own mechanism.
             logger.info("Pipeline %s scheduled as DAG run %s", pipeline_id, dag_run["id"])
 
             # Update schedule status

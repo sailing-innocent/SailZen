@@ -18,7 +18,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List
 
-from jinja2 import Template, UndefinedError
+from jinja2 import UndefinedError
+from jinja2.sandbox import SandboxedEnvironment
 
 from sailzen.dag_client.nodes.base import NodeContext, NodeExecutor, NodeResult
 
@@ -46,9 +47,11 @@ class ConditionNode(NodeExecutor):
             **ctx.global_params,
         }
 
-        # Evaluate condition
+        # Evaluate condition safely using sandboxed Jinja2
+        condition_met = False
         try:
-            template = Template("{{ " + condition_expr + " }}")
+            env = SandboxedEnvironment()
+            template = env.from_string("{{ " + condition_expr + " }}")
             result_str = template.render(**eval_ctx).strip().lower()
             condition_met = result_str in ("true", "1", "yes", "ok")
         except UndefinedError:
@@ -62,7 +65,8 @@ class ConditionNode(NodeExecutor):
 
         next_nodes = true_next if condition_met else false_next
 
-        return NodeResult.ok(
+        return NodeResult(
+            success=True,
             data={
                 "condition": condition_expr,
                 "result": condition_met,

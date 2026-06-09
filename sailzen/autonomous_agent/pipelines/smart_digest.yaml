@@ -44,7 +44,7 @@ nodes:
     depends_on: [is_actionable]
     params:
       skill: lark-calendar
-      command: +freebusy
+      prompt: "Check my calendar free/busy status using +freebusy"
       # Returns free/busy status
 
   - id: user_is_free

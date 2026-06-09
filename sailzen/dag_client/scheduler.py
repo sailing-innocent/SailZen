@@ -357,8 +357,7 @@ class DAGScheduler:
         if run_id:
             nodes = await self.db.get_nodes(run_id, status=NodeStatus.QUEUED.value)
         else:
-            # 需要全局查询，这里简化处理
-            nodes = []
+            nodes = await self.db.get_nodes_by_status(NodeStatus.QUEUED.value)
         return nodes[:limit]
 
     async def assign_node(self, node_db_id: str, agent_id: str) -> bool:

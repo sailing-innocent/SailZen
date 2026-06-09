@@ -22,7 +22,7 @@ nodes:
     depends_on: [health_check]
     params:
       skill: lark-workflow-standup-report
-      command: +agenda
+      prompt: "Generate today's standup report and agenda using +agenda"
       output_format: json
 
   - id: summarize

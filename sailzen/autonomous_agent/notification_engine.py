@@ -24,7 +24,7 @@ import asyncio
 import json
 import logging
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from sailzen.autonomous_agent.db import AgentDatabase
@@ -40,6 +40,40 @@ class NotificationEngine:
         self.db = db
         self._recent_alerts: Dict[str, datetime] = {}  # content_hash -> last_sent
         self._dedup_window_hours = 4
+
+    async def _load_recent_alerts(self) -> None:
+        """Load recent alert dedup state from DB."""
+        if not self.db:
+            return
+        try:
+            row = await self.db.get_memory("short_term", "notification_recent_alerts")
+            if row:
+                data = json.loads(row["value"])
+                now = datetime.now()
+                cutoff = (now - timedelta(hours=self._dedup_window_hours)).timestamp()
+                self._recent_alerts = {
+                    k: datetime.fromtimestamp(v)
+                    for k, v in data.items()
+                    if v > cutoff
+                }
+        except Exception as exc:
+            logger.warning("Failed to load recent alerts: %s", exc)
+
+    async def _save_recent_alerts(self) -> None:
+        """Persist recent alert dedup state to DB."""
+        if not self.db:
+            return
+        try:
+            data = {k: v.timestamp() for k, v in self._recent_alerts.items()}
+            await self.db.create_memory({
+                "memory_type": "short_term",
+                "key": "notification_recent_alerts",
+                "value": json.dumps(data),
+                "ttl_seconds": self._dedup_window_hours * 3600 + 60,
+                "expires_at": (datetime.now() + timedelta(hours=self._dedup_window_hours + 1)).isoformat(),
+            })
+        except Exception as exc:
+            logger.warning("Failed to save recent alerts: %s", exc)
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -70,9 +104,10 @@ class NotificationEngine:
             logger.info("Duplicate notification suppressed: %s", title)
             return False
 
-        # Queue in DB if available
+        # Queue in DB if available and track the reminder ID
+        reminder_id = None
         if self.db:
-            await self.db.create_reminder({
+            reminder = await self.db.create_reminder({
                 "title": title,
                 "content": content,
                 "channel": channel,
@@ -80,6 +115,7 @@ class NotificationEngine:
                 "status": "pending",
                 "context": json.dumps(context or {}),
             })
+            reminder_id = reminder.get("id")
 
         # Deliver
         success = False
@@ -95,8 +131,19 @@ class NotificationEngine:
         if success:
             self._recent_alerts[content_hash] = datetime.now()
             if self.db:
-                # Update reminder status (would need reminder_id tracking)
-                pass
+                # Update reminder status to sent
+                if reminder_id:
+                    await self.db.update_reminder(reminder_id, {
+                        "status": "sent",
+                        "sent_at": datetime.now().isoformat(),
+                    })
+                # Persist dedup state
+                await self._save_recent_alerts()
+        elif reminder_id and self.db:
+            # Mark as failed if delivery failed
+            await self.db.update_reminder(reminder_id, {
+                "status": "failed",
+            })
 
         return success
 

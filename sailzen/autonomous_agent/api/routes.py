@@ -25,6 +25,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from litestar import Litestar, Router, get, post, delete
@@ -73,7 +74,7 @@ def create_app(daemon: AgentDaemon) -> Litestar:
             return {"error": "Schedule not found"}, HTTP_404_NOT_FOUND
         await daemon.scheduler.trigger_now(
             pipeline_id=schedule["pipeline_id"],
-            params=eval(schedule.get("params", "{}")),
+            params=json.loads(schedule.get("params", "{}")),
             schedule_id=schedule_id,
         )
         return {"status": "triggered", "schedule_id": schedule_id}

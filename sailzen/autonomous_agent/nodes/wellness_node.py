@@ -64,14 +64,25 @@ class WellnessNode(NodeExecutor):
             except Exception as exc:
                 logger.warning("OpenCode wellness skill failed, falling back: %s", exc)
 
-        # Fallback: run underlying script directly
+        # Fallback: run underlying data collection script directly
         try:
+            import os
+            script_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..",
+                ".opencode", "skills", "sailzen-wellness", "scripts", "run_analysis.py"
+            )
+            script_path = os.path.abspath(script_path)
+
+            if not os.path.exists(script_path):
+                return NodeResult.fail(
+                    error="OpenCode client unavailable and wellness script not found"
+                )
+
             cmd = [
-                "uv", "run", "python", "-m", "sailzen.wellness",
+                "uv", "run", "python", script_path,
                 "--start", start_date,
                 "--end", end_date,
                 "--label", label,
-                "--format", output_format,
             ]
             proc = await asyncio.create_subprocess_exec(
                 *cmd,

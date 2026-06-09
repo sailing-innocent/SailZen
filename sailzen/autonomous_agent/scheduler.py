@@ -13,6 +13,7 @@ Schedules survive daemon restarts.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -119,7 +120,7 @@ class CronScheduler:
             "schedule_type": "cron",
             "schedule_expr": cron_expr,
             "enabled": 1 if enabled else 0,
-            "params": str(params or {}),
+            "params": json.dumps(params or {}),
             "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
         }
         await self.db.create_schedule(schedule_data)
@@ -156,7 +157,7 @@ class CronScheduler:
             "schedule_type": "interval",
             "schedule_expr": str(seconds),
             "enabled": 1 if enabled else 0,
-            "params": str(params or {}),
+            "params": json.dumps(params or {}),
             "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
         }
         await self.db.create_schedule(schedule_data)
@@ -236,24 +237,51 @@ class CronScheduler:
         for s in schedules:
             if not s.get("enabled"):
                 continue
+            schedule_id = s["id"]
+            # Skip if already registered in APScheduler
+            if self._scheduler.get_job(schedule_id):
+                logger.debug("Schedule %s already registered, skipping restore", schedule_id)
+                continue
             try:
                 if s["schedule_type"] == "cron":
-                    await self.add_cron(
-                        schedule_id=s["id"],
-                        name=s["name"],
-                        pipeline_id=s["pipeline_id"],
-                        cron_expr=s["schedule_expr"],
-                        params=eval(s.get("params", "{}")),
-                        enabled=True,
+                    parts = s["schedule_expr"].split()
+                    if len(parts) != 5:
+                        raise ValueError(f"Invalid cron expression: {s['schedule_expr']}")
+                    trigger = CronTrigger(
+                        minute=parts[0],
+                        hour=parts[1],
+                        day=parts[2],
+                        month=parts[3],
+                        day_of_week=parts[4],
+                        timezone=self.timezone,
                     )
+                    self._scheduler.add_job(
+                        func=self._on_trigger,
+                        trigger=trigger,
+                        id=schedule_id,
+                        name=s["name"],
+                        replace_existing=True,
+                        kwargs={
+                            "schedule_id": schedule_id,
+                            "pipeline_id": s["pipeline_id"],
+                            "params": json.loads(s.get("params", "{}")),
+                        },
+                    )
+                    logger.info("Restored cron schedule %s", schedule_id)
                 elif s["schedule_type"] == "interval":
-                    await self.add_interval(
-                        schedule_id=s["id"],
+                    trigger = IntervalTrigger(seconds=int(s["schedule_expr"]), timezone=self.timezone)
+                    self._scheduler.add_job(
+                        func=self._on_trigger,
+                        trigger=trigger,
+                        id=schedule_id,
                         name=s["name"],
-                        pipeline_id=s["pipeline_id"],
-                        seconds=int(s["schedule_expr"]),
-                        params=eval(s.get("params", "{}")),
-                        enabled=True,
+                        replace_existing=True,
+                        kwargs={
+                            "schedule_id": schedule_id,
+                            "pipeline_id": s["pipeline_id"],
+                            "params": json.loads(s.get("params", "{}")),
+                        },
                     )
+                    logger.info("Restored interval schedule %s", schedule_id)
             except Exception as exc:
-                logger.error("Failed to restore schedule %s: %s", s["id"], exc)
+                logger.error("Failed to restore schedule %s: %s", schedule_id, exc)
