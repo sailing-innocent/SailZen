@@ -1,9 +1,7 @@
 import { ITelemetryClient } from "../common/ITelemetryClient";
 
 /**
- * TODO: Not sure we actually need this implementation.  The WebTelemetryClient,
- * which uses the HTTP API, works perfectly fine in Node as well. The only thing
- * we may want to swap is the WRITE_KEY.
+ * TODO: Not sure we actually need this implementation.
  */
 export class NodeTelemetryClient implements ITelemetryClient {
   track(

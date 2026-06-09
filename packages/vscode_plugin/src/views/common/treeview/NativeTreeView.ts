@@ -10,7 +10,7 @@ import { Disposable, TextEditor, TreeView, window } from "vscode";
 import { EngineNoteProvider } from "./EngineNoteProvider";
 import { TreeNote } from "./TreeNote";
 import * as vscode from "vscode";
-import { WSUtilsWeb } from "../../../web/utils/WSUtils";
+import { ExtensionProvider } from "../../../ExtensionProvider";
 /**
  * Class managing the vscode native version of the Dendron tree view - this is
  * the side panel UI that gives a tree view of the Dendron note hierarchy
@@ -28,8 +28,7 @@ export class NativeTreeView implements Disposable {
   private _getExpandableTreeItemsHandler: (() => TreeNote[]) | undefined;
 
   constructor(
-    @inject(EngineNoteProvider) private _provider: EngineNoteProvider,
-    @inject(WSUtilsWeb) private wsUtils: WSUtilsWeb
+    @inject(EngineNoteProvider) private _provider: EngineNoteProvider
   ) {}
 
   dispose() {
@@ -125,11 +124,11 @@ export class NativeTreeView implements Disposable {
       return;
     }
 
-    const note = await this.wsUtils.getNoteFromDocument(doc);
+    const note = await ExtensionProvider.getWSUtils().getNoteFromDocument(doc);
 
-    if (note && note.length > 0) {
-      await this._provider.prepNodeForReveal(note[0].id);
-      this.treeView.reveal(note[0].id, { focus: false, expand: 3 });
+    if (note) {
+      await this._provider.prepNodeForReveal(note.id);
+      this.treeView.reveal(note.id, { focus: false, expand: 3 });
     }
   }
 }
