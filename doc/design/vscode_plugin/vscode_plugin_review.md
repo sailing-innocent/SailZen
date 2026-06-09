@@ -1,2032 +1,500 @@
-# 总体判断
-
-当前 VSCode 插件的主链路大致是：
-
-```text
-extension.ts
-  -> _extension.ts
-    -> DendronExtension singleton
-    -> WorkspaceActivator.init()
-       -> WorkspaceService / migrations / engine server
-    -> WorkspaceActivator.activate()
-       -> reloadWorkspace()
-       -> watchers / tree view / webviews / providers
-```
-
-优点：
-
-- 已经把笔记解析、索引、持久化等重活放在 `@saili/api-server` / `@saili/engine-server` 子进程中，而不是全部塞进 VSCode Extension Host。
-- `WorkspaceActivator.init()` / `activate()` 两阶段设计是合理的，便于区分“工作区准备”和“引擎已可用后的 UI/Watcher 初始化”。
-- 命令层基本遵循 `BaseCommand` 模式，维护成本可控。
-- 已经建立本地启动性能日志 `StartupProfiler`，这是后续性能治理的基础。
-- 从文档看，`NoteParserV2` 已经把原来的串行解析改成并发解析，这是很关键的一步。
-
-主要风险：
-
-- `_extension.ts` 和 `workspace.ts` 仍然是 God Object / God Module 倾向，启动逻辑、命令注册、欢迎页、状态、视图、语言服务等职责混在一起。
-- `DendronExtension` singleton + `ExtensionProvider` + 旧的全局函数并存，长期会让测试、热重载、工作区切换、依赖注入变复杂。
-- 启动时默认全量初始化倾向仍然比较明显，`reloadWorkspace()` 仍是最重路径。
-- 性能监控目前只覆盖 `reloadWorkspace` 粗粒度耗时，无法定位“Engine 启动 / cache parse / tree view / watchers / providers / webview”各自消耗。
-- Dendron 遗留命名、telemetry stub、web extension 残留、废弃服务等会增加认知负担。
-
----
-
-# 1. 架构设计建议
-
-## 1.1 拆分 `_extension.ts` 的激活编排职责
-
-当前 `_extension.ts` 约 700+ 行，包含：
-
-- 插件入口初始化
-- Zotero 激活
-- workspace trust 处理
-- command 注册
-- language feature 注册
-- workspace 判断
-- welcome / what's new
-- recent workspace
-- activator init / activate
-- 特殊命令注册
-
-建议把它改造成一个更薄的 orchestration 层：
-
-```text
-src/bootstrap/
-  activateExtension.ts
-  registerCoreCommands.ts
-  registerWorkspaceCommands.ts
-  registerLanguageFeatures.ts
-  registerWelcomeFlows.ts
-  registerExternalFeatures.ts
-```
-
-目标不是一次性大重构，而是逐步把明显独立的部分抽出去：
-
-| 当前位置 | 建议迁移到 |
-|---|---|
-| `_setupCommands()` | `services/CommandRegistryService.ts` |
-| `_setupLanguageFeatures()` | `features/registerLanguageFeatures.ts` |
-| welcome / what's new | `startup/WelcomeFlow.ts` |
-| Zotero 激活 | `integrations/zotero/registerZotero.ts` |
-| recent workspace view | `views/recentWorkspaces/registerRecentWorkspaces.ts` |
-
-这样做的收益：
-
-- 降低启动主流程复杂度。
-- 单元测试更容易。
-- 未来区分 “无工作区激活” 和 “笔记工作区激活” 更清楚。
-- 更容易做懒加载。
-
----
-
-## 1.2 明确三类生命周期：Global / Workspace / Note
-
-现在很多逻辑都集中在 activation 阶段，但实际上可以分为三类：
-
-### Global lifecycle
-
-不依赖 Dendron/SailZen workspace：
-
-- recent workspace view
-- welcome page
-- setup workspace command
-- open logs
-- basic help
-- Zotero 命令如果不依赖 workspace，也属于此类
-
-### Workspace lifecycle
-
-依赖 `dendron.yml` / vault / engine：
-
-- engine process
-- workspace migration
-- tree view
-- backlinks
-- file watchers
-- note lookup
-- schema sync
-
-### Note lifecycle
-
-只在用户打开或编辑笔记时才需要：
-
-- decorations
-- hover / definition / reference
-- frontmatter folding
-- preview auto show
-- duplicate note 检查
-
-建议建立显式生命周期接口：
-
-```ts
-interface GlobalContribution {
-  activate(context: vscode.ExtensionContext): Promise<void> | void;
-}
-
-interface WorkspaceContribution {
-  activateWorkspace(ctx: WorkspaceActivationContext): Promise<void> | void;
-  deactivateWorkspace?(): Promise<void> | void;
-}
-
-interface NoteContribution {
-  onOpenNote?(ctx: NoteContext): Promise<void> | void;
-  onSaveNote?(ctx: NoteContext): Promise<void> | void;
-}
-```
-
-不一定马上实现接口，但建议文档和代码组织先按这个思路迁移。
-
----
-
-## 1.3 收敛 `DendronExtension` singleton 和全局访问模式
-
-`workspace.ts` 中同时存在：
-
-- `DendronExtension.instanceV2()`
-- `ExtensionProvider.getExtension()`
-- `getExtension()`
-- `getEngine()`
-- `getDWorkspace()`
-- 构造器里直接设置 `_DendronWorkspace = this`
-
-这些全局入口会让依赖关系变隐式。比如 `FileWatcher` 里通过 `ExtensionProvider.getDWorkspace()` 取 workspace，`WindowWatcher` 里也有类似用法。
-
-建议路线：
-
-### 短期
-
-保留 singleton，但禁止新增直接全局访问。
-
-新增代码尽量通过构造函数传入：
-
-```ts
-new SomeService({
-  extension,
-  engine,
-  workspaceService,
-})
-```
-
-并在 `AGENTS.md` 或插件架构文档中明确：
-
-> 新代码不要使用 `getExtension()` / `getEngine()` / `getDWorkspace()`，除非是兼容旧代码。
-
-### 中期
-
-引入 `WorkspaceActivationContext`：
-
-```ts
-type WorkspaceActivationContext = {
-  extension: IDendronExtension;
-  engine: IEngineAPIService;
-  workspace: DWorkspaceV2;
-  workspaceService: WorkspaceService;
-  context: vscode.ExtensionContext;
-};
-```
-
-大部分服务只接收这个 context，不直接访问 singleton。
-
-### 长期
-
-将 `DendronExtension` 降级为 VSCode adapter，而不是业务服务容器。
-
----
-
-## 1.4 把命令注册从“实例化所有命令”改成“声明式 + 懒实例化”
-
-当前 `ALL_COMMANDS` 是静态数组，`_setupCommands()` 启动时会遍历并实例化匹配的 command：
-
-```ts
-const cmd = new Cmd(ext);
-vscode.commands.registerCommand(cmd.key, async (args) => {
-  await cmd.run(args);
-});
-```
-
-这比直接执行重逻辑要好，但仍有几个问题：
-
-- 命令元信息散落在 command class / `package.json` / 特殊注册逻辑中。
-- `requireActiveWorkspace` 依赖 class 静态字段，缺少集中可视化。
-- 特殊命令在 `_setupCommands()` 里手写注册，长期会越来越乱。
-- 部分命令启动时就构造，无法完全懒加载。
-
-建议改为命令 manifest：
-
-```ts
-type CommandContribution = {
-  id: string;
-  requireActiveWorkspace: boolean;
-  factory: (ctx: CommandContext) => IBaseCommand<any, any, any, any>;
-};
-```
-
-注册时只注册 handler，真正执行时才动态 import 或创建命令：
-
-```ts
-vscode.commands.registerCommand(id, async (args) => {
-  const command = await contribution.factory(ctx);
-  return command.run(args);
-});
-```
-
-收益：
-
-- command palette 贡献、命令实现、注册逻辑可以统一生成或校验。
-- 可减少启动时加载和实例化成本。
-- 更容易拆出 SailZen 专属命令和 Dendron 遗留命令。
-
----
-
-## 1.5 Engine API 边界需要更“产品化”
-
-`EngineAPIService` 现在基本是 `DendronEngineClient` 的薄代理。这个设计简单，但插件层仍然知道很多 engine 细节。
-
-建议逐步区分三类 API：
-
-```text
-EngineRawClient
-  低级 HTTP API，尽量薄。
-
-NoteRepository
-  findNote / writeNote / renameNote / getBacklinks 等笔记语义 API。
-
-WorkspaceIndexService
-  reload / refresh / getStats / watchIndexEvents 等索引生命周期 API。
-```
-
-特别是以下逻辑建议不要留在插件层：
-
-- `onWillSaveNote()` 中自己 `findNotes()` 再判断 frontmatter。
-- `FileWatcher.onDidCreate()` 中读取文件、刷新 links/anchors、`writeNote(metaOnly)`。
-- rename 流程里插件层拼 rename opts。
-
-插件层最好表达用户意图：
-
-```ts
-noteService.updateNoteOnSave(uri)
-noteService.handleFileCreated(uri)
-noteService.handleFileRenamed(oldUri, newUri)
-```
-
-具体如何更新索引、如何处理 frontmatter、是否 metaOnly，应由 engine 或 domain service 决定。
-
----
-
-## 1.6 将 Dendron 遗留模块标记为 Legacy Boundary
-
-项目已经从 Dendron fork 演化而来，保留 `dendron.*` 命名是现实选择。但建议架构上显式划边界：
-
-```text
-src/legacy-dendron/
-  commands/
-  workspace/
-  lookup/
-  preview/
-
-src/sailzen/
-  commands/
-  views/
-  integrations/
-```
-
-不要求马上移动所有文件，但建议：
-
-1. 新增 SailZen 功能不要继续放进 Dendron 命名空间。
-2. 文档中标注哪些是 legacy，不再主动扩展。
-3. 新功能命令 ID 使用 `sailzen.*`，旧命令继续兼容 `dendron.*`。
-4. `package.json` 中用户可见标题逐步从 Dendron 改成 SailZen。
-
----
-
-## 1.7 Webview 与插件通信建议统一消息协议
-
-文档中提到 webviews 位于 `packages/dendron_plugin_views/`，通过 `postMessage` 通信。建议建立统一协议：
-
-```ts
-type WebviewRequest<T = unknown> = {
-  id: string;
-  type: string;
-  payload: T;
-};
-
-type WebviewResponse<T = unknown> = {
-  id: string;
-  ok: boolean;
-  payload?: T;
-  error?: {
-    message: string;
-    code?: string;
-  };
-};
-```
-
-并提供：
-
-```ts
-WebviewRpcHost
-WebviewRpcClient
-```
-
-收益：
-
-- Finance / Project / Text / Necessity 等面板可以复用。
-- 错误处理统一。
-- 方便加 tracing。
-- 后续可以把部分面板从 VSCode webview 迁移到 site 复用同一协议。
-
----
-
-# 2. 性能优化建议
-
-## 2.1 扩展 `StartupProfiler`，从单指标改成阶段化 profiling
-
-当前 `StartupProfiler` 只记录：
-
-```ts
-durationMs: {
-  reloadWorkspace: number;
-}
-```
-
-这不足以定位瓶颈。建议扩展为：
-
-```ts
-durationMs: {
-  totalActivate: number;
-  extensionBootstrap: number;
-  commandRegistration: number;
-  languageFeatureRegistration: number;
-  workspaceDetection: number;
-  workspaceInit: number;
-  migrations: number;
-  wsServiceInitialize: number;
-  engineProcessStart: number;
-  engineClientCreate: number;
-  reloadWorkspace: number;
-  treeViewInit: number;
-  watcherInit: number;
-  postReloadWorkspace: number;
-}
-```
-
-以及：
-
-```ts
-engineStats: {
-  noteCount: number;
-  vaultCount: number;
-  cacheHit: boolean;
-  cacheSizeBytes?: number;
-  cacheParseMs?: number;
-  parsedFiles?: number;
-  skippedFiles?: number;
-}
-```
-
-最重要的是把 `WorkspaceActivator.init()` 和 `activate()` 内部分段打点，而不是只知道 `reloadWorkspace` 慢。
-
----
-
-## 2.2 `StartupProfiler.write()` 避免同步读写阻塞 Extension Host
-
-当前实现使用：
-
-```ts
-fs.appendFileSync()
-fs.readFileSync()
-fs.writeFileSync()
-```
-
-虽然日志文件很小，但这段运行在 Extension Host，建议改成异步非阻塞，并且 trim 可以降低频率：
-
-- append 用 `fs.promises.appendFile`
-- trim 不必每次写都执行
-- 或者每 10 次 / 文件超过阈值再 trim
-- profiling 写失败仍然吞掉即可
-
-这是小优化，但符合 VSCode 插件最佳实践：Extension Host 尽量避免 sync IO。
-
----
-
-## 2.3 `reloadWorkspace()` 从全量重载走向增量索引
-
-文档已经指出 `reloadWorkspace()` 是最慢步骤。当前启动时仍然依赖全量 engine init / note parsing。
-
-建议分三阶段优化：
-
-### 阶段一：更可靠的 cache
-
-针对 `.dendron.cache.json`：
-
-- 记录每个 note 的 `mtimeMs` / `size` / hash。
-- 启动时只解析变化文件。
-- 未变化文件直接复用缓存 metadata。
-- 缓存 parse 本身可以考虑拆分为多文件或 SQLite，而不是一个大 JSON。
-
-文档提到 “Cache cold start 7.8MB JSON parse 未优化”，这是很值得优先做的点。
-
-### 阶段二：metadata first，body lazy
-
-启动阶段只需要：
-
-- id
-- fname
-- vault
-- title
-- parent / children
-- links metadata
-- frontmatter basic fields
-
-正文、blocks、anchors、render 信息可以打开笔记或 preview 时再补充。
-
-### 阶段三：background hydration
-
-启动后先让插件进入可用状态，再后台补齐：
-
-```text
-1. load cached metadata
-2. plugin active
-3. tree/backlinks basic available
-4. background parse changed notes
-5. emit index updated event
-```
-
-用户体验会明显好于“等全量 reload 完成后才 active”。
-
----
-
-## 2.4 Engine server 启动可以做复用和健康检查
-
-`verifyOrStartServerProcess()` 目前逻辑是如果 `ext.port` 存在就复用，否则启动 server。建议增强为：
-
-- 读取 `.dendron.port`
-- 对端口做 health check
-- 如果进程存在且 workspace hash 匹配，则复用
-- 如果不匹配或无响应，再重启
-- 记录：
-  - server spawn time
-  - health check time
-  - first API latency
-  - reload index time
-
-这样可以减少窗口 reload 或插件重激活时的成本。
-
----
-
-## 2.5 Watcher 事件应做队列化、合并和背压
-
-`FileWatcher.onDidCreate()` / `onDidDelete()` 现在直接调用 engine API。对于批量文件操作，例如 git checkout、复制大量 md 文件、批量 rename，可能造成大量并发请求。
-
-建议增加事件队列：
-
-```ts
-FileEventQueue
-  enqueue(create/delete/rename/change)
-  debounce 200-500ms
-  merge same file events
-  bulk sync to engine
-```
-
-例如：
-
-```text
-create A
-delete A
-=> noop
-
-delete A
-create A
-=> change / rename candidate
-
-create 100 files
-=> engine.bulkWriteNotes(metaOnly)
-```
-
-这对大 vault 和 git 操作很有价值。
-
----
-
-## 2.6 `WorkspaceWatcher.onWillSaveNote()` 避免保存路径上的远程/HTTP 查询
-
-当前保存时：
-
-```ts
-await engine.findNotes({ fname, vault })
-```
-
-然后判断是否更新 `updated` frontmatter。
-
-问题：
-
-- `onWillSaveTextDocument` 是保存关键路径。
-- 即使 `event.waitUntil()` 支持异步，也会影响保存体验。
-- 每次保存都通过 engine 查 note，成本不低。
-
-建议：
-
-1. 在插件侧维护 `path -> noteMeta` 的轻量缓存。
-2. 或让 engine 提供 `getNoteMetaByPath()` 快速 API。
-3. 或把 frontmatter updated 的更新逻辑改成本地纯文本判断，不依赖 engine hydration。
-4. 如果需要判断内容是否变化，可以使用 document dirty/version 或缓存上次保存 hash。
-
----
-
-## 2.7 `WindowWatcher` 的 decorations 和 visible range 事件需要更细粒度降噪
-
-`WindowWatcher.onDidChangeTextEditorVisibleRanges` 会在滚动时触发，并调用：
-
-```ts
-getNoteFromDocument()
-triggerUpdateDecorations()
-```
-
-虽然 decorations 已经 debounced，但仍建议：
-
-- 对非 markdown 文件更早 return。
-- 对超大文件禁用或降级 decorations。
-- 对同一 editor 的 visible range 变化做 throttle，而不只是 decoration 层 debounce。
-- 为 `enablePerfMode` 增加更细配置：
-  - disableDecorations
-  - disableBacklinksAutoRefresh
-  - disablePreviewAutoSync
-  - disableDuplicateNoteCheck
-
----
-
-## 2.8 减少启动时无条件注册/加载的功能
-
-当前 activation event 是 `onStartupFinished`，已经比 `*` 好。但进入 `_activate()` 后仍会做不少事。
-
-建议：
-
-### 可懒加载的功能
-
-| 功能 | 建议 |
-|---|---|
-| Zotero | 用户第一次执行 Zotero 命令时再初始化 |
-| graph view factories | 打开 graph 时再创建 |
-| preview proxy/panel | 打开 preview 时再初始化 |
-| welcome/what's new | 放到低优先级 background |
-| duplicate note doctor | 打开/保存 note 时再执行，且可配置关闭 |
-| language providers | 可以先注册轻 handler，重逻辑动态 import |
-
-### 命令懒加载
-
-配合前面的 command manifest，可以做到：
-
-```ts
-registerCommand("dendron.someCommand", async () => {
-  const { SomeCommand } = await import("./commands/SomeCommand");
-  return new SomeCommand(ctx).run();
-});
-```
-
----
-
-## 2.9 打包体积和 source map 策略
-
-`package.json` 中 `compile` 使用：
-
-```bash
-esbuild ... --bundle ... --sourcemap=inline --sources-content=true
-```
-
-开发时没问题，但发布 VSIX 时建议：
-
-- 生产包不要使用 inline sourcemap。
-- 可以生成 external sourcemap，或者发布时关闭 sourcemap。
-- 检查 `dist/extension.js` 体积。
-- 检查 `media/`、`dist/`、复制过来的 webview bundle 是否有重复。
-- `.vscodeignore` 应明确排除测试、源码 map、大型临时文件、旧 `.vsix`。
-
-尤其当前目录里已有多个：
-
-```text
-sail-zen-vscode-0.3.6.vsix
-sail-zen-vscode-0.3.7.vsix
-sail-zen-vscode-0.3.8.vsix
-sail-zen-vscode-0.3.9.vsix
-```
-
-建议确保 `.vscodeignore` 排除 `*.vsix`，避免误打入包中。
-
----
-
-# 3. 开发体验建议
-
-## 3.1 建立“插件开发模式”的一键脚本
-
-现在 build 相关脚本有：
-
-```json
-"precompile": "pnpm --filter=@saili/engine-server run buildCI && pnpm --filter=@saili/dendron-plugin-views run build && pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
-"compile": "esbuild ...",
-"watch": "esbuild ..."
-```
-
-建议新增根目录或插件目录脚本：
-
-```bash
-pnpm run dev:plugin
-pnpm run dev:plugin:views
-pnpm run dev:plugin:engine
-pnpm run package-plugin:clean
-pnpm run test:plugin
-pnpm run perf:plugin-startup
-```
-
-理想效果：
-
-- 修改插件 TS 自动 rebuild。
-- 修改 webview 自动 build + copy。
-- engine-server 支持 watch build。
-- VSCode launch config 直接启动 Extension Development Host。
-- 日志路径固定输出提示。
-
----
-
-## 3.2 增加命令和 package.json 贡献项一致性检查
-
-当前命令有三处来源：
-
-1. `package.json contributes.commands`
-2. `ALL_COMMANDS`
-3. `_setupCommands()` 手写特殊命令
-4. Zotero 自己注册命令
-
-建议写一个校验脚本：
-
-```bash
-pnpm run check:plugin-commands
-```
-
-检查：
-
-- `ALL_COMMANDS` 中每个 command key 是否在 `package.json` 中声明。
-- `package.json` 中声明的 command 是否有注册实现。
-- 是否存在重复 command id。
-- `dendron.*` / `sailzen.*` 命名是否符合规则。
-- command title 是否仍然错误显示为 Dendron。
-
-这会极大降低长期维护成本。
-
----
-
-## 3.3 为启动性能建立自动回归测试
-
-既然已经有 `startup-perf.jsonl`，建议继续做一个本地 benchmark：
-
-```bash
-pnpm run perf:startup -- --vault fixtures/large-vault
-```
-
-准备几个 fixture：
-
-```text
-fixtures/vault-small      100 notes
-fixtures/vault-medium     1000 notes
-fixtures/vault-large      10000 notes
-fixtures/vault-large-note includes >200KB notes
-```
-
-每次优化后记录：
-
-- total activation
-- engine start
-- cache load
-- reloadWorkspace
-- tree init
-- memory RSS
-- dist bundle size
-
-可以设置简单预算：
-
-```json
-{
-  "largeVault": {
-    "reloadWorkspaceMs": 5000,
-    "activationTotalMs": 8000
-  }
-}
-```
-
-不一定 CI 强制失败，但至少输出趋势。
-
----
-
-## 3.4 增强日志：分离用户日志和开发调试日志
-
-当前 `Logger` 已经存在，`StartupProfiler` 也存在。建议分几类：
-
-```text
-logs/plugin.log
-logs/plugin-debug.log
-logs/startup-perf.jsonl
-logs/engine-api.jsonl
-logs/watcher-events.jsonl
-```
-
-尤其建议加一个 Engine API tracing，可配置开启：
-
-```json
-"sailzen.debug.traceEngineApi": true
-```
-
-记录：
-
-- method
-- duration
-- payload size
-- error
-- request id
-
-这对排查 “lookup 慢 / preview 慢 / save 卡顿” 很有帮助。
-
----
-
-## 3.5 清理或归档废弃模块
-
-文档已指出 telemetry 基本是 no-op。源码中还有：
-
-- `telemetry/*`
-- `stateService.ts` 多处 deprecated
-- `ProxyMetricUtils.ts`
-- `web/` extension 残留
-- 一些 Dendron showcase / sign in / sign up / sync / publish dev 命令
-
-建议建立 `LEGACY.md` 或 `deprecated-modules.md`：
-
-```text
-Deprecated but retained:
-- telemetry/common/*
-- telemetry/node/*
-- telemetry/web/*
-- services/stateService.ts
-- utils/ProxyMetricUtils.ts
-
-Removal candidates:
-- SignInCommand
-- SignUpCommand
-- PublishDevCommand
-- SyncCommand
-...
-```
-
-然后分三类：
-
-1. 立即删除：完全不可达且无 package contribution。
-2. 标记 legacy：仍被引用但不再扩展。
-3. 重写替代：例如 telemetry -> local perf/logging。
-
----
-
-## 3.6 改善测试分层
-
-当前有 Jest 配置和部分测试，但插件这种项目更需要三层测试：
-
-### Unit tests
-
-针对纯函数和服务：
-
-- command input enrich
-- path/vault utils
-- frontmatter utils
-- startup profiler
-- command manifest validation
-
-### Integration tests
-
-mock VSCode / mock engine：
-
-- WorkspaceActivator init flow
-- command registration
-- watcher event queue
-- EngineAPIService wrapper
-
-### Smoke tests
-
-真实 Extension Development Host：
-
-- 打开小 vault
-- 执行 goto note
-- 执行 lookup
-- 打开 preview
-- 保存 note
-- rename note
-
-建议先补最关键的：
-
-```text
-WorkspaceActivator
-Command registration consistency
-StartupProfiler
-FileWatcher event merge
-```
-
----
-
-## 3.7 文档建议：从“架构索引”升级为“开发手册”
-
-现有架构文档已经很好，但可以再补 4 个章节：
-
-### 新增 Command 指南
-
-说明：
-
-- command class 怎么写
-- 如何注册
-- 是否需要 active workspace
-- package.json 如何声明
-- 测试怎么写
-
-### 新增 View/Webview 指南
-
-说明：
-
-- React view 在哪里
-- build/copy 流程
-- postMessage 协议
-- CSP / asset URI / state restore
-
-### 新增 Performance Playbook
-
-说明：
-
-- 如何读取 `startup-perf.jsonl`
-- 如何开启 debug trace
-- 常见瓶颈
-- 大 vault 优化策略
-
-### 新增 Legacy Boundary
-
-说明：
-
-- Dendron 命名为什么还存在
-- 新功能用 `sailzen.*`
-- 哪些模块不要继续扩展
-
----
-
-# 建议优先级路线图
-
-## P0：低风险、立刻值得做
-
-1. 扩展 `StartupProfiler`，增加阶段化耗时。
-2. 将 `StartupProfiler.write()` 改成异步或降低同步 IO。
-3. 检查 `.vscodeignore`，排除 `*.vsix`、测试、无用 sourcemap。
-4. 新增 command/package.json 一致性检查脚本。
-5. 在架构文档中明确 legacy boundary 和新代码约束。
-6. 把 `_setupLanguageFeatures()`、`_setupCommands()` 从 `_extension.ts` 抽出。
-
-## P1：中等收益，需要小规模重构
-
-1. 引入 `WorkspaceActivationContext`，减少 `getExtension()` / `ExtensionProvider` 直接调用。
-2. 命令注册改成 manifest + 懒实例化。
-3. Watcher 事件队列化、合并、批量提交 engine。
-4. `onWillSaveNote()` 避免保存路径上的 engine 查询。
-5. Engine API 增加 tracing。
-6. Webview postMessage 统一 RPC 协议。
-
-## P2：高收益，但涉及 engine/server 配合
-
-1. `reloadWorkspace()` 改为 cache-first、metadata-first。
-2. `.dendron.cache.json` 改进为增量缓存，或迁移到 SQLite / 分片 JSON。
-3. Engine server 支持健康检查和复用。
-4. Tree/backlinks/lookup 支持 background hydration 后增量刷新。
-5. 大 vault benchmark 纳入常规开发流程。
-
----
-
-# 我最推荐的下一步
-
-如果你希望这个插件继续向 SailZen 3.0 的“常驻影子助手”方向发展，我建议下一步先做：
-
-> **插件启动链路 profiling + `_extension.ts` 瘦身 + command 注册一致性检查。**
-
-这三项成本不高，但会给后续所有重构提供基础：
-
-1. 先知道到底慢在哪里。
-2. 先把启动入口拆清楚。
-3. 先防止命令系统继续膨胀失控。
-
-完成后，再进入更重的 `reloadWorkspace()` / cache / engine server 复用优化。
-
-在你选择的方向下，我建议长期把 `vscode_plugin` 定位为：
-
-> **本地知识工作台 + AI 心智驾驶舱 + 人类确认界面**  
-> 核心智能、后台调度、跨域推理、长期记忆运行在 `sail_server` / 云端；VSCode 插件不再承担“永不休眠的大脑”，而是承担“连接笔记网络、人类编辑行为和 AI 后台心智”的前端操作层。
-
-换句话说：
-
-```text
-VSCode Plugin 不是 AI Agent 本体
-VSCode Plugin 是 Human-in-the-loop Console + Local Knowledge Adapter
-sail_server / cloud daemon 才是 24h Shadow Assistant Runtime
-```
-
-这也契合项目原则：
-
-> **Notes are notes. Databases are databases. The Agent is the bridge, not the replacement.**
-
----
-
-# 1. 长远系统角色划分
-
-未来可以把 SailZen 拆成四层：
-
-```text
-┌──────────────────────────────────────────────┐
-│ Human Interface Layer                         │
-│ - VSCode Plugin                               │
-│ - Web Site / Mobile / CLI                     │
-│ - Review / Approve / Edit / Inspect           │
-└──────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│ Local Knowledge Workspace                     │
-│ - Markdown Notes                              │
-│ - Backlinks / wikilinks / hierarchy           │
-│ - Local engine index                          │
-│ - Local edit events                           │
-└──────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│ Sail Server / Agent Runtime                   │
-│ - 24h scheduler                               │
-│ - task queue                                  │
-│ - semantic graph                              │
-│ - AI extraction / completion / linking        │
-│ - domain databases                            │
-└──────────────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│ Long-term Mind                                │
-│ - personal ontology                           │
-│ - project memory                              │
-│ - finance / health / necessity / text / etc. │
-│ - historical traces                           │
-└──────────────────────────────────────────────┘
-```
-
-在这个结构中，`vscode_plugin` 最重要的不是“做更多后台活”，而是：
-
-1. **捕捉人类正在做什么**
-2. **把笔记网络暴露给 AI**
-3. **让 AI 结果以低干扰方式回到人类编辑界面**
-4. **提供可审计、可回滚、可批准的修改流程**
-5. **在本地和云端心智之间做同步、差异展示和安全边界控制**
-
----
-
-# 2. `vscode_plugin` 的长期定位
-
-## 2.1 从“笔记插件”升级为“AI 心智驾驶舱”
-
-现在插件主要是：
-
-```text
-打开笔记
-跳转笔记
-查找笔记
-预览
-反链
-树视图
-笔记增删改
-```
-
-未来插件应该成为：
-
-```text
-AI 正在看什么
-AI 为什么这样建议
-AI 准备修改哪些笔记
-AI 发现了哪些缺失链接
-AI 想补全哪些知识空洞
-AI 认为哪些项目/健康/财务/文本状态需要关注
-人类是否批准
-人类如何反馈
-```
-
-也就是从：
-
-> **Editor Extension**
-
-演化为：
-
-> **Mind Console inside VSCode**
-
----
-
-## 2.2 VSCode 插件不应成为 24 小时后台心智本体
-
-VSCode 插件有天然限制：
-
-- VSCode 不一定一直开着。
-- Extension Host 不适合长期 heavy background tasks。
-- VSCode 插件被用户编辑行为、窗口生命周期、工作区状态强约束。
-- 长时间 LLM 调用、调度、爬取、分析不适合放在 extension host。
-- 云端心智需要跨设备、跨工作区、跨时间运行。
-
-所以长期应该避免：
-
-```text
-VSCode Plugin 内部跑复杂 Agent loop
-VSCode Plugin 内部维护长期任务队列
-VSCode Plugin 内部直接做大量 LLM 推理
-VSCode Plugin 内部持有最终心智状态
-```
-
-更适合：
-
-```text
-VSCode Plugin 提供上下文、交互、审查、局部索引、编辑落地
-sail_server 提供智能、调度、长期记忆、异步任务、跨域推理
-```
-
----
-
-# 3. 未来架构建议
-
-## 3.1 新增 `Agent Bridge` 层
-
-建议在插件中增加一个明确模块：
-
-```text
-packages/vscode_plugin/src/agent/
-  AgentBridgeService.ts
-  AgentClient.ts
-  AgentSessionManager.ts
-  AgentTaskProvider.ts
-  AgentSuggestionProvider.ts
-  AgentReviewPanel.ts
-  AgentStatusBar.ts
-  AgentContextCollector.ts
-```
-
-它的职责是：
-
-```text
-插件侧事件 → Agent 事件
-Agent 任务 → VSCode 展示
-Agent 建议 → 人类审批
-Agent 修改 → 本地 workspace patch
-人类反馈 → Agent memory
-```
-
-不要让普通 command、watcher、webview 直接调用 `sail_server`。统一经过 `AgentBridgeService`。
-
-推荐逻辑：
-
-```text
-WorkspaceWatcher
-FileWatcher
-Command System
-Backlink Provider
-Editor Context
-        │
-        ▼
-AgentBridgeService
-        │
-        ▼
-sail_server / cloud agent API
-```
-
----
-
-## 3.2 建立稳定的 Agent API 协议
-
-未来 `vscode_plugin` 和 `sail_server` 之间不应该只是普通 REST 调用，而应该有更明确的协议。
-
-建议至少有四类 API：
-
-### 1. Context API
-
-插件向后端提交当前上下文：
-
-```ts
-type EditorContext = {
-  workspaceId: string;
-  activeNote?: {
-    id: string;
-    fname: string;
-    title: string;
-    vault: string;
-    contentHash: string;
-    selectedText?: string;
-    cursor?: {
-      line: number;
-      character: number;
-    };
-  };
-  visibleNotes: string[];
-  recentNotes: string[];
-  backlinks?: string[];
-  outgoingLinks?: string[];
-};
-```
-
-用途：
-
-- AI 知道你当前在关注什么。
-- AI 可以把后台心智和当前编辑任务关联起来。
-- AI 可以在合适时机提出建议，而不是随机打扰。
-
----
-
-### 2. Graph API
-
-插件提供本地笔记网络结构，或者从 engine/server 拉取：
-
-```ts
-type NoteGraphSnapshot = {
-  workspaceId: string;
-  nodes: Array<{
-    id: string;
-    fname: string;
-    title: string;
-    vault: string;
-    tags?: string[];
-    updated: number;
-    created: number;
-  }>;
-  edges: Array<{
-    from: string;
-    to: string;
-    type: "wikilink" | "backlink" | "hierarchy" | "tag" | "embed" | "manual";
-    confidence?: number;
-  }>;
-};
-```
-
-用途：
-
-- AI 可以沿反向链接网络扩展上下文。
-- AI 可以发现 orphan notes。
-- AI 可以发现缺失链接。
-- AI 可以进行主题聚类。
-- AI 可以对项目、人物、概念形成局部地图。
-
----
-
-### 3. Task API
-
-后端 Agent 把长期任务暴露给插件：
-
-```ts
-type AgentTask = {
-  id: string;
-  type:
-    | "link_completion"
-    | "note_summarization"
-    | "project_review"
-    | "daily_digest"
-    | "knowledge_gap_detection"
-    | "entity_extraction"
-    | "timeline_update"
-    | "reading_analysis";
-  status: "queued" | "running" | "blocked" | "needs_review" | "done" | "failed";
-  title: string;
-  description: string;
-  relatedNotes: string[];
-  createdAt: string;
-  updatedAt: string;
-};
-```
-
-插件侧展示：
-
-- Agent Tasks Tree View
-- status bar
-- review panel
-- command palette
-
----
-
-### 4. Patch / Suggestion API
-
-AI 不应直接改用户笔记，除非是明确允许的自动化范围。
-
-建议所有 AI 修改先以 patch 形式出现：
-
-```ts
-type AgentSuggestion = {
-  id: string;
-  taskId: string;
-  noteId: string;
-  kind:
-    | "insert_link"
-    | "add_backlink"
-    | "append_summary"
-    | "update_frontmatter"
-    | "create_note"
-    | "merge_notes"
-    | "extract_entity"
-    | "add_project_status";
-  confidence: number;
-  rationale: string;
-  diff: string;
-  affectedFiles: string[];
-  requiresApproval: boolean;
-};
-```
-
-插件负责：
-
-```text
-展示 diff
-显示 rationale
-接受 / 拒绝 / 修改后接受
-批量接受
-回滚
-把反馈回传给 sail_server
-```
-
-这点非常关键。未来 AI 会补全很多人类难以补全的内容，但人类必须能看见：
-
-- 它为什么这样补？
-- 它引用了哪些笔记？
-- 它会改哪些文件？
-- 它的置信度是多少？
-- 接受后能否撤销？
-
----
-
-# 4. 反向链接网络如何适配 AI 调度
-
-你提到的核心愿景是：
-
-> AI 可以更快速地借用反向链接形成的网络，在后台快速补全很多人类难以补全的内容。
-
-这需要把现有 backlink 从“UI 功能”升级为“知识图谱基础设施”。
-
----
-
-## 4.1 Backlink 不应只是 Tree View
-
-现在 Backlinks 主要面向用户浏览：
-
-```text
-当前 note ← 哪些 note 链接了它
-```
-
-未来应该扩展成：
-
-```text
-当前 note 的局部语义邻域
-当前 note 的知识依赖
-当前 note 的未闭合问题
-当前 note 的潜在上位概念
-当前 note 的相关项目/人物/事件/资产/健康记录
-```
-
-也就是：
-
-```text
-Backlink Panel
-  -> Knowledge Neighborhood Panel
-```
-
-可以显示：
-
-```text
-直接反链
-二跳反链
-共同引用
-同标签
-同项目
-同人物
-同时间段
-语义相似但未链接
-AI 建议新增链接
-```
-
----
-
-## 4.2 插件需要支持“AI 图遍历上下文包”
-
-AI 不能每次都读全库。它需要快速获得一个 context packet：
-
-```ts
-type GraphContextPacket = {
-  centerNote: NoteMeta;
-  depth: 2 | 3;
-  nodes: NoteMeta[];
-  edges: GraphEdge[];
-  excerpts: Array<{
-    noteId: string;
-    heading?: string;
-    text: string;
-    reason: "backlink" | "outgoing" | "semantic" | "recent" | "project";
-  }>;
-  unresolvedLinks: string[];
-  suggestedLinks: SuggestedLink[];
-};
-```
-
-插件可以请求：
-
-```text
-为当前笔记构造 AI 上下文包
-为当前选中文本构造 AI 上下文包
-为当前项目构造 AI 上下文包
-为今日工作构造 AI 上下文包
-```
-
-这个包可以由 engine/server 生成，但插件需要提供入口和展示能力。
-
----
-
-## 4.3 AI 应该能发现“隐形反链”
-
-人类手动写 `[[link]]` 有成本，因此很多真实关联不会被写出来。AI 长期价值之一就是发现这些缺失链接。
-
-建议后端 Agent 生成：
-
-```ts
-type SuggestedLink = {
-  fromNote: string;
-  toNote: string;
-  anchorText?: string;
-  reason: string;
-  evidence: string[];
-  confidence: number;
-};
-```
-
-插件展示为：
-
-```text
-AI Suggested Links
-- 在 A.md 中建议链接到 B.md
-- 原因：两者都讨论 xxx，且 B.md 是 A.md 中 yyy 概念的展开
-- 证据片段：...
-- 操作：接受 / 忽略 / 永久忽略此模式
-```
-
-这会把 backlink 从“已有链接的结果”变成“未来链接的生长机制”。
-
----
-
-# 5. VSCode 插件应该新增哪些长期功能
-
-## 5.1 Agent Status Center
-
-一个侧边栏视图：
-
-```text
-SailZen Mind
-├── Cloud Mind: Online
-├── Local Workspace: Synced
-├── Running Tasks: 7
-├── Suggestions: 23
-├── Blocked: 2 need review
-├── Last Digest: 09:00
-└── Current Focus: sailzen-vscode-plugin
-```
-
-它让用户知道：
-
-- 云端心智是否在线
-- 最近做了什么
-- 当前在哪些任务上运行
-- 有哪些需要人类确认
-- 当前 workspace 是否同步
-
----
-
-## 5.2 Agent Task Tree
-
-类似：
-
-```text
-AI Tasks
-├── Needs Review
-│   ├── 补全《xxx》人物关系链接
-│   ├── 为 project.sailzen.3 添加状态摘要
-│   └── 合并重复笔记 health.weight.*
-├── Running
-│   ├── 扫描最近 7 天新笔记
-│   └── 提取文本分析实体
-├── Scheduled
-│   ├── 每日晨间摘要
-│   ├── 每周项目回顾
-│   └── 每月财务回顾
-└── Done
-```
-
-这个视图比传统日志更适合长期 AI 调度。
-
----
-
-## 5.3 Suggestion Review Panel
-
-AI 的输出不能只放在聊天框里，应该变成结构化 review。
-
-建议 panel 支持：
-
-- diff preview
-- evidence snippets
-- confidence
-- rationale
-- impacted notes
-- dependency notes
-- accept one
-- accept all similar
-- reject
-- reject and teach
-- edit before apply
-
-这个功能是未来“AI 帮你补全知识网络”的核心人机界面。
-
----
-
-## 5.4 Current Note AI Sidebar
-
-打开某个笔记时，插件侧边显示：
-
-```text
-AI Context
-├── Summary
-├── Missing Links
-├── Related Notes
-├── Possible Duplicates
-├── Open Questions
-├── Related Projects
-├── Related People
-├── Related Events
-└── Suggested Actions
-```
-
-它不是聊天，而是“当前笔记的智能状态面板”。
-
-示例：
-
-```text
-当前笔记：project.sailzen.vscode-plugin.future
-
-AI 发现：
-- 这篇笔记与 doc/sailzen-3.0-roadmap.md 高度相关，但没有链接。
-- 你提到了“反向链接网络”，可能应该连接到 design/agent-system。
-- 这篇笔记中包含 3 个可拆分任务。
-- 上次相关讨论发生在 2026-04-20。
-```
-
----
-
-## 5.5 AI-generated Backlink Overlay
-
-在编辑器中提供轻量装饰：
-
-```text
-[[已有链接]]
-⟦AI建议链接：Agent Bridge⟧
-```
-
-或者 CodeLens：
-
-```text
-+ Add link to agent.bridge.design
-+ Create note for "Graph Context Packet"
-+ Extract task to project.sailzen.3
-```
-
-但要注意默认不打扰，可以配置：
-
-```json
-"sailzen.ai.inlineSuggestions": "off" | "subtle" | "active"
-```
-
----
-
-## 5.6 Daily / Weekly Mind Digest
-
-VSCode 插件可以显示由云端生成的 digest：
-
-```text
-今日心智摘要
-- 昨晚 AI 整理了 17 篇新笔记
-- 发现 12 个缺失反链
-- 3 个项目状态可能过期
-- finance 中有 2 条交易缺少分类
-- health.weight 已 5 天未更新
-- text analysis 中 xxx 人物关系图有新发现
-```
-
-插件不是生成 digest 的地方，但它是最适合呈现 digest 的地方之一。
-
----
-
-## 5.7 Human Feedback Capture
-
-AI 心智长期变聪明，需要高质量反馈。
-
-插件应支持：
-
-```text
-接受
-拒绝
-稍后
-不要再建议这类
-这条很重要
-这个关联是错的
-这个概念应该合并到另一个
-这个人物不是同一个人
-```
-
-这些反馈应回传 `sail_server`，成为 Agent preference / correction memory。
-
----
-
-# 6. 数据同步与一致性策略
-
-未来云端 24h 运行，VSCode 本地也会编辑笔记，因此要特别注意一致性。
-
-## 6.1 建议采用 Event Log，而不是直接状态覆盖
-
-插件向后端发送事件：
-
-```ts
-type WorkspaceEvent =
-  | NoteOpened
-  | NoteSaved
-  | NoteCreated
-  | NoteDeleted
-  | NoteRenamed
-  | NoteSelectionChanged
-  | SuggestionAccepted
-  | SuggestionRejected
-  | CommandExecuted;
-```
-
-后端根据事件更新心智，而不是依赖插件直接推完整状态。
-
-优点：
-
-- 可审计。
-- 可重放。
-- 可调试。
-- 可以形成用户行为长期记忆。
-- 便于云端和本地最终一致。
-
----
-
-## 6.2 AI 修改必须带 provenance
-
-任何 AI 生成内容都应该带来源：
-
-```yaml
-ai:
-  generatedBy: sailzen-agent
-  taskId: xxx
-  createdAt: 2026-04-28T...
-  sources:
-    - note: project.sailzen.3
-    - note: doc/design/agent-system
-  confidence: 0.82
-```
-
-不一定直接写入 frontmatter，也可以写入 sidecar DB。但必须可追溯。
-
-未来用户看到一段摘要时，可以问：
-
-```text
-这是谁生成的？
-什么时候生成的？
-根据哪些笔记生成的？
-我是否批准过？
-```
-
----
-
-## 6.3 本地笔记和数据库不要混为一体
-
-未来很多 AI 结果会进入数据库，而不是全部写进 Markdown。
-
-建议区分：
-
-```text
-Markdown Notes:
-- 人类可读、长期保留、重要表达
-- 经过确认的知识
-- 可编辑的思想内容
-
-Database:
-- task state
-- embedding
-- graph edge confidence
-- suggestion queue
-- AI provenance
-- event log
-- background analysis result
-```
-
-VSCode 插件需要展示二者的组合视图，但不要强迫所有 AI 中间产物写入笔记。
-
----
-
-# 7. 安全与权限模型
-
-这个远景下，安全会变得非常重要。
-
-## 7.1 AI 权限分级
-
-建议建立四级权限：
-
-```text
-Level 0: Read only
-- AI 只能读笔记和生成建议
-
-Level 1: Suggest
-- AI 可以生成 patch，但需要人类批准
-
-Level 2: Auto-apply safe changes
-- AI 可以自动补标签、添加低风险反链、更新摘要缓存
-
-Level 3: Autonomous editing
-- AI 可以直接创建/修改笔记，但必须有审计和回滚
-```
-
-默认推荐：
-
-```text
-Level 1
-```
-
-对于个人项目中非常确定的任务，可以局部开启 Level 2。
-
----
-
-## 7.2 按 workspace / vault / note pattern 授权
-
-例如：
-
-```yaml
-aiPermissions:
-  vaults:
-    notes:
-      read: true
-      suggest: true
-      autoApply: false
-    private:
-      read: false
-    finance:
-      read: true
-      suggest: true
-      autoApply: false
-  patterns:
-    - glob: "daily.private.*"
-      read: false
-    - glob: "project.*"
-      autoApplyLinks: true
-```
-
-插件需要提供 UI 管理这些权限。
-
----
-
-## 7.3 所有 AI 修改可回滚
-
-可以考虑：
-
-- patch log
-- git commit
-- local snapshot
-- `sailzen.undoAgentPatch`
-- 每次批量接受建议前创建 checkpoint
+# SailZen VSCode Plugin — 代码地图与技术债务审查报告
 
-插件可以提供：
-
-```text
-Agent Changes History
-├── 2026-04-28 02:30 自动补全 12 条反链
-│   ├── 查看 diff
-│   └── 回滚
-```
-
----
-
-# 8. 对当前 `vscode_plugin` 的演化路线
-
-## 阶段一：插件变成 Agent-aware
-
-目标：让当前插件知道云端 Agent 的存在。
-
-新增：
-
-```text
-src/agent/AgentClient.ts
-src/agent/AgentBridgeService.ts
-src/agent/AgentStatusBar.ts
-src/agent/AgentTaskTreeProvider.ts
-```
-
-实现：
-
-- 配置 `sailzen.agent.endpoint`
-- 显示云端连接状态
-- 拉取任务列表
-- 拉取 suggestions
-- 当前 note context 上报
-- command：
-  - `sailzen.agent.showStatus`
-  - `sailzen.agent.syncContext`
-  - `sailzen.agent.reviewSuggestions`
-
-此阶段不需要复杂自动修改。
-
----
-
-## 阶段二：插件支持 AI suggestion review
-
-目标：AI 可以给出结构化建议，人类在 VSCode 中审查。
-
-新增：
-
-```text
-AgentReviewPanel
-AgentSuggestionTreeProvider
-PatchPreviewService
-AgentPatchApplyService
-```
-
-能力：
-
-- 展示 AI 建议链接
-- 展示 AI 生成摘要
-- 展示 create note / update note diff
-- accept / reject
-- feedback 回传
-
-这是核心人机闭环。
-
----
-
-## 阶段三：插件支持 Graph Context Packet
-
-目标：让 AI 能高效借用反链网络。
-
-新增：
-
-```text
-GraphContextService
-NoteNeighborhoodProvider
-RelatedNotesProvider
-```
-
-能力：
-
-- 获取当前 note 的一跳/二跳上下文
-- 获取 backlinks/outgoing links/hierarchy/tag/semantic candidates
-- 构造上下文包发送给 sail_server
-- 展示 AI 图遍历依据
-
----
-
-## 阶段四：插件支持局部自动化
-
-目标：对低风险内容允许自动应用。
-
-例如：
-
-- 添加反链
-- 更新 generated summary block
-- 修复 frontmatter 字段
-- 为新 note 创建 index entry
-- 补全项目状态缓存
-
-但必须：
-
-- 有权限配置
-- 有 patch log
-- 有回滚
-- 有每日 digest
-
----
-
-## 阶段五：插件成为完整 Mind Console
-
-最终体验：
-
-```text
-打开 VSCode
-SailZen Mind 显示：
-- 云端心智已运行 18 小时
-- 昨晚处理 246 个笔记节点
-- 生成 31 个建议
-- 4 个建议需要你确认
-- 2 个项目存在阻塞
-- 当前笔记可连接到 7 个相关概念
-```
-
-用户不再需要问 AI：
-
-```text
-你能帮我整理一下吗？
-```
-
-而是 AI 已经在后台整理好了，等待人类审查、确认、修正。
-
----
-
-# 9. 对现有模块的具体发展方向
-
-## `WorkspaceWatcher`
-
-从“监听保存/重命名”升级为：
-
-```text
-WorkspaceEventEmitter
-```
-
-负责产生事件：
-
-```text
-note.opened
-note.saved
-note.renamed
-note.deleted
-selection.changed
-activeNote.changed
-```
-
-这些事件进入本地队列，再同步给 `sail_server`。
-
----
-
-## `FileWatcher`
-
-从直接调用 engine 更新，演化为：
-
-```text
-FileChangeEventQueue
-```
-
-同时通知：
-
-```text
-Engine index
-Agent event log
-Cloud sync
-```
-
----
-
-## `BacklinksTreeDataProvider`
-
-保留传统 backlinks，但新增：
-
-```text
-KnowledgeNeighborhoodProvider
-AISuggestedLinksProvider
-```
-
-让 backlinks 不只是“已有链接”，还包括“AI 推断链接”。
-
----
-
-## `EngineAPIService`
-
-从纯 engine proxy 演化为：
-
-```text
-LocalKnowledgeIndexClient
-```
-
-并和 `AgentClient` 分离：
-
-```text
-EngineAPIService   -> 本地笔记索引
-AgentClient        -> sail_server / cloud mind
-```
-
-不要混在一个 client 里。
-
----
-
-## `StartupProfiler`
-
-扩展成：
-
-```text
-PluginRuntimeProfiler
-```
-
-记录：
-
-- activation
-- engine startup
-- graph context generation
-- agent API latency
-- suggestion apply latency
-- watcher queue lag
-
----
-
-## `commands`
-
-新增 SailZen AI 命令命名空间：
-
-```text
-sailzen.agent.openConsole
-sailzen.agent.reviewSuggestions
-sailzen.agent.explainCurrentNote
-sailzen.agent.findMissingLinks
-sailzen.agent.generateGraphContext
-sailzen.agent.acceptSuggestion
-sailzen.agent.rejectSuggestion
-sailzen.agent.pause
-sailzen.agent.resume
-```
-
-旧的 `dendron.*` 命令继续保留，但新 AI 功能使用 `sailzen.agent.*`。
-
----
-
-# 10. 最重要的设计原则
-
-## 原则一：AI 先建议，再修改
-
-默认不要让 AI 直接写笔记。
-
-```text
-Read → Think → Suggest → Review → Apply → Log
-```
-
----
-
-## 原则二：所有 AI 结论必须可追溯
-
-每个建议都要有：
-
-```text
-原因
-证据
-来源笔记
-置信度
-影响范围
-生成时间
-任务 ID
-```
-
----
-
-## 原则三：插件不做长期思考，只做局部上下文和人机交互
-
-```text
-sail_server/cloud = long-running mind
-vscode_plugin = active human workspace adapter
-```
-
----
-
-## 原则四：反链网络是 AI 的路径，不只是 UI 的列表
-
-Backlink 未来是：
-
-```text
-context retrieval graph
-reasoning graph
-suggestion graph
-knowledge maintenance graph
-```
-
+> **生成日期**: 2025年  
+> **审查范围**: `packages/vscode_plugin/src/`  
+> **代码总量**: ~260 个 TypeScript 文件（含测试）  
+> **项目背景**: 从开源项目 Dendron 分叉演变而来的个人维护 VSCode 插件，目前只服务于单一用户，但仍保留了大量 Dendron 的历史代码。
+
 ---
 
-## 原则五：笔记仍然是人类主权空间
+## 目录
 
-AI 可以补全、建议、整理，但最终 Markdown 知识库仍应保持：
+1. [代码地图](#1-代码地图)
+2. [债务清单](#2-债务清单)
+3. [后续重构计划](#3-后续重构计划)
+4. [顺手修复记录](#4-顺手修复记录)
 
-- 可读
-- 可编辑
-- 可 git 管理
-- 可迁移
-- 不依赖特定模型
-- 不被 AI 中间状态污染
-
 ---
-
-# 结论
-
-在这个远景下，`vscode_plugin` 不应该继续只作为 Dendron 风格的笔记工具演进，也不应该膨胀成完整 Agent runtime。它最理想的发展方向是：
-
-> **成为 SailZen 24 小时云端心智的本地驾驶舱、上下文采集器、知识图谱浏览器、AI 建议审查器和安全落地层。**
 
-一句话总结：
-
-```text
-sail_server 负责“想”和“持续运行”；
-engine-server 负责“索引和理解本地笔记结构”；
-vscode_plugin 负责“让人类看见、确认、修正和落地 AI 心智的工作”。
-```
-
-如果按这个方向推进，我建议下一步最值得设计的是：
-
-```text
-AgentBridgeService + AgentTaskTree + SuggestionReviewPanel + GraphContextPacket
-```
+## 1. 代码地图
 
-这四个模块会成为未来 AI 心智系统和 VSCode 笔记插件之间的核心接口。
+### 1.1 顶层架构概览
+
+```
+src/
+├── extension.ts / _extension.ts          # 扩展入口（Node 版）
+├── web/extension.ts                       # 扩展入口（Web 版）
+├── workspace.ts / workspacev2.ts          # 工作区核心（新旧双版本）
+├── dendronExtensionInterface.ts           # 扩展接口定义
+├── ExtensionProvider.ts                   # 静态访问替代方案
+├── constants.ts                           # 命令/视图/配置常量（大量 dendron. 前缀）
+├── types.ts / logger.ts / settings.ts     # 基础类型、日志、设置
+├── server.ts / clientUtils.ts             # 本地引擎服务器通信
+├── fileWatcher.ts / windowWatcher.ts      # 文件系统与窗口监听
+│
+├── commands/                              # ~80 个命令实现
+├── components/                            # UI 组件（Lookup、Views、Doctor）
+├── docEngine/                             # SailZen 新增：文档编译引擎
+├── features/                              # VSCode 语言功能 Provider
+├── services/                              # 核心服务（引擎、Trait、Schema、Telemetry）
+├── views/                                 # 树视图与面板视图（Node 版）
+├── web/                                   # Web 版完整平行实现 (~32 文件)
+├── workspace/                             # 工作区初始化器集合
+├── utils/                                 # 通用工具函数
+├── traits/                                # Note Trait 系统
+├── telemetry/                             # 遥测系统（Node/Web/Dummy）
+├── showcase/                              # 功能展示提示系统
+└── external/                              # 外部库封装（memo、fileutils）
+```
+
+### 1.2 核心目录详解
+
+#### `commands/` — 命令层（~80 文件）
+
+所有 VSCode 命令的实现，遵循 `BasicCommand` / `BasicCommand<T>` 基类模式。文件按功能松散分组：
+
+| 子集 | 关键文件 | 说明 |
+|------|---------|------|
+| 笔记 CRUD | `CreateNoteCommand.ts`, `DeleteCommand.ts`, `RenameNoteCommand.ts`, `MoveNoteCommand.ts` | 基础笔记生命周期管理 |
+| 层级导航 | `GoUpCommand.ts`, `GoDownCommand.ts`, `GoToSiblingCommand.ts` | 在 Dendron 层级中上下导航 |
+| Lookup | `NoteLookupCommand.ts`, `SchemaLookupCommand.ts`, `NoteLookupAutoCompleteCommand.ts` | 笔记/Schema 查找命令 |
+| 模板与 Trait | `ApplyTemplateCommand.ts`, `CreateNoteWithTraitCommand.ts`, `CreateNoteWithUserDefinedTrait.ts` | 模板应用与 Trait 创建 |
+| 发布/导出 | `CompileDocumentCommand.ts`, `ExportNoteCommand.ts` | **SailZen 新增**：文档编译与导出 |
+| 已废弃/冗余 | `Refactor.ts`, `ShowLegacyPreview.ts`, `SignIn.ts`, `SignUp.ts`, `PublishDevCommand.ts`, `SeedAddCommand.ts`, `CopyCodespaceURL.ts`, `MigrateSelfContainedVault.ts`, `RunMigrationCommand.ts` | Dendron 遗留，不再适用于个人场景 |
+| 开发工具 | `DevTriggerCommand.ts`, `Doctor.ts`, `DiagnosticsReport.ts` | 诊断与调试命令 |
+| Zotero | `Zotero.ts` | 文献管理集成 |
+
+**命令注册方式**: `_extension.ts` 中通过 `ALL_COMMANDS` 数组批量注册构造函数无参的命令；有参命令（如 `TogglePreviewCommand`）在 `_setupCommands()` 中手动注册。
+
+#### `components/lookup/` — 查找系统（~18 文件）
+
+Dendron 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
+
+| 文件 | 职责 |
+|------|------|
+| `LookupControllerV3.ts` / `V3Factory` / `V3Interface` | V3 版 Lookup 控制器（第三代实现） |
+| `LookupProviderV3Factory.ts` / `V3Interface` | V3 版数据提供者工厂 |
+| `NoteLookupProvider.ts` / `SchemaLookupProvider.ts` | 笔记/Schema 查找具体实现 |
+| `NotePickerUtils.ts` / `SchemaPickerUtils.ts` | 候选列表生成工具 |
+| `HierarchySelector.ts` | 层级选择器 |
+| `QuickPickTemplateSelector.ts` | 模板选择器 |
+| `TabUtils.ts` | Tab 键自动补全逻辑 |
+| `buttons.ts` / `ButtonTypes.ts` | QuickPick 按钮定义 |
+
+**债务要点**: `V3` 后缀暴露了三代迭代的痕迹。`LookupControllerV3` 与 Web 版的 `web/commands/lookup/` 存在平行实现。
+
+#### `components/views/` — 视图组件（~10 文件）
+
+| 文件 | 职责 |
+|------|------|
+| `PreviewPanel.ts` / `PreviewViewFactory.ts` / `PreviewProxy.ts` | 笔记预览面板（Node 版） |
+| `NoteGraphViewFactory.ts` / `SchemaGraphViewFactory.ts` | 图谱视图工厂 |
+| `ConfigureUIPanelFactory.ts` | 配置 UI 面板 |
+| `LookupV3QuickPickView.ts` | Lookup V3 的 QuickPick 视图包装 |
+
+#### `docEngine/` — SailZen 文档编译引擎（~14 文件 + 7 测试）
+
+**SailZen 新增的核心功能**，负责将 Markdown 笔记编译为 LaTeX / Typst / Markdown 等格式的文档。
+
+| 文件 | 职责 |
+|------|------|
+| `compileService.ts` | 编译服务入口 |
+| `documentAssembler.ts` / `astDocumentAssembler.ts` | 文档组装器（基于文本 / 基于 AST） |
+| `latexBackend.ts` / `typstBackend.ts` / `markdownBackend.ts` | 各格式后端生成器 |
+| `astLatexTransformer.ts` | AST → LaTeX 转换器 |
+| `profileResolver.ts` / `astProfileResolver.ts` | 文档配置文件解析 |
+| `templateEngine.ts` / `templateLoader.ts` | 模板引擎与加载器 |
+
+**集成问题**: `docEngine` 与 Dendron 遗留代码混在一起，没有清晰的物理或逻辑边界。编译命令 `CompileDocumentCommand` 和 `ExportNoteCommand` 放在 `commands/` 根目录，而非 `commands/docEngine/` 子目录。
+
+#### `features/` — VSCode 语言功能（~12 文件）
+
+实现 VSCode 的各种 `*Provider` 接口：
+
+| 文件 | 注册类型 |
+|------|---------|
+| `completionProvider.ts` | `CompletionItemProvider` |
+| `DefinitionProvider.ts` | `DefinitionProvider` |
+| `ReferenceProvider.ts` / `ReferenceHoverProvider.ts` | `ReferenceProvider` / `HoverProvider` |
+| `RenameProvider.ts` | `RenameProvider`（内部调用 `RenameNoteV2a`） |
+| `codeActionProvider.ts` | `CodeActionProvider` |
+| `FrontmatterFoldingRangeProvider.ts` | `FoldingRangeProvider` |
+| `BacklinksTreeDataProvider.ts` / `Backlink.ts` | 反向链接树视图数据提供 |
+| `RecentWorkspacesTreeview.ts` | 最近工作区树视图 |
+| `DocStatusBar.ts` | 状态栏显示 |
+| `windowDecorations.ts` / `NoteRefComment.ts` | 窗口装饰与行内注释 |
+
+#### `services/` — 核心服务层（~12 文件）
+
+| 文件 | 职责 | 债务状态 |
+|------|------|---------|
+| `EngineAPIService.ts` / `Interface.ts` | 与 engine-server 通信的服务 | 活跃 |
+| `TextDocumentServiceFactory.ts` | 文本服务工厂 | 活跃 |
+| `node/TextDocumentService.ts` / `web/TextDocumentService.ts` | Node/Web 双平台实现 | 平台分裂债务 |
+| `NoteTraitManager.ts` / `NoteTraitService.ts` | Trait 系统管理 | **可移除** |
+| `SchemaSyncService.ts` / `Interface.ts` | Schema 同步服务 | 活跃 |
+| `stateService.ts` | VSCode 状态存取 | **@deprecated** |
+| `ZoteroService.ts` | Zotero 文献服务 | 活跃 |
+| `CommandRegistrar.ts` | 命令注册辅助 | 活跃 |
+
+#### `web/` — Web 版平行实现（~32 文件）
+
+构成完整的 Web VSCode 扩展实现，包含独立的：
+
+- `web/extension.ts` — Web 版激活入口
+- `web/commands/` — Web 版命令（`NoteLookupCmd`, `TogglePreviewCmd`, `CopyNoteURLCmd` 等）
+- `web/engine/` — **独立 Web 引擎**：`DendronEngineV3Web.ts`, `NoteParserV2.ts`, `PluginNoteRenderer.ts`, `VSCodeFileStore.ts`
+- `web/injection-providers/` — `tsyringe` DI 容器设置（`setupWebExtContainer.ts`）及配置注入
+- `web/utils/` — Web 版工具函数（`note2File.ts`, `openNote.ts`, `SiteUtilsWeb.ts`, `WSUtils.ts`）
+- `web/views/preview/` — Web 版预览面板（`PreviewPanel.ts`, `PreviewLinkHandler.ts`, `WebViewUtils.ts`）
+
+**关键发现**: Web 版使用 `tsyringe` 依赖注入容器；Node 版使用手动构造函数。两套代码并行维护，但个人用户几乎不可能使用 Web 版 VSCode。
+
+#### `workspace/` — 工作区初始化器（~8 文件）
+
+| 文件 | 职责 |
+|------|------|
+| `workspaceActivator.ts` | 工作区激活主逻辑 |
+| `baseWorkspace.ts` | 基础工作区抽象 |
+| `codeWorkspace.ts` / `nativeWorkspace.ts` | Code 工作区 / Native 工作区 |
+| `blankInitializer.ts` / `templateInitializer.ts` / `tutorialInitializer.ts` / `seedBrowserInitializer.ts` | 各类初始化器 |
+| `WorkspaceInitFactory.ts` | 初始化器工厂 |
+
+#### `views/` — 树视图实现（~10 文件）
+
+| 文件 | 职责 |
+|------|------|
+| `CalendarView.ts` | 日历视图 |
+| `LookupPanelView.ts` | Lookup 面板视图 |
+| `SampleView.ts` / `ShowMeHowView.ts` / `UpgradeView.ts` | 示例/引导/升级视图 |
+| `common/treeview/` | 通用树视图组件（`EngineNoteProvider`, `NativeTreeView`, `TreeNote`） |
+| `node/treeview/MetadataSvcTreeViewConfig.ts` | Node 版树视图配置 |
+| `utils.ts` | 视图工具函数（含 @deprecated 方法） |
+
+#### `telemetry/` — 遥测系统（~5 文件）
+
+完整的遥测客户端抽象：
+- `common/ITelemetryClient.ts`
+- `common/DummyTelemetryClient.ts`
+- `node/NodeTelemetryClient.ts`
+- `web/WebTelemetryClient.ts`
+- `web/getAnonymousId.ts`
+
+**债务要点**: 个人维护的单一用户插件完全不需要遥测系统。
+
+#### `showcase/` — 功能展示提示（~8 文件）
+
+- `FeatureShowcaseToaster.ts` — 提示管理器
+- `AllFeatureShowcases.ts` — 所有提示的汇总
+- 各种 `Tip` 类：`BacklinksPanelHoverTip.ts`, `CreateScratchNoteKeybindingTip.ts`, `GraphThemeTip.ts`, `MeetingNotesTip.ts`, `ObsidianImportTip.ts`, `SettingsUITip.ts`
+- `TipFactory.ts`, `IFeatureShowcaseMessage.ts`
+
+**债务要点**: 面向新用户的功能引导系统，对个人使用过度设计。
+
+#### `traits/` — Note Trait 系统（~5 文件）
+
+- `journal.ts`, `MeetingNote.ts` — 内置 Trait 实现
+- `TraitUtils.ts` — Trait 工具
+- `UserDefinedTraitV1.ts` — 用户自定义 Trait
+- `webpack-require-hack.ts` — Webpack 兼容 hack
+
+**债务要点**: Dendron 的 Trait 系统允许用户定义笔记模板行为，对个人使用可能过度设计。
+
+#### `utils/` — 通用工具（~15 文件）
+
+| 文件 | 职责 | 债务 |
+|------|------|------|
+| `ExtensionUtils.ts` | 扩展激活/服务器启动工具 | **第 145 行 dev 模式扩展名错误** |
+| `StartupUtils.ts` / `StartupPrompts.ts` | 启动逻辑与提示 | 含 Dendron 引导逻辑 |
+| `EditorUtils.ts` / `md.ts` / `frontmatter.ts` / `files.ts` | 编辑器/Markdown/Frontmatter/文件工具 | 活跃 |
+| `quickPick.ts` / `strings.ts` / `autoCompleter.ts` | UI 与字符串工具 | 活跃 |
+| `getEnablePrettlyLinks.ts` | 获取 pretty links 配置 | **文件名与函数名拼写错误** |
+| `ProxyMetricUtils.ts` / `MeetingTelemHelper.ts` | 遥测辅助 | **可移除** |
+| `TwoWayBinding.ts` | 双向绑定工具 | 活跃 |
+| `registers/AutoCompletableRegistrar.ts` | 自动完成注册器 | 活跃 |
+
+---
+
+## 2. 债务清单
+
+### 2.1 债务总览表
+
+| 编号 | 债务描述 | 位置 / 文件 | 影响范围 | 建议优先级 |
+|------|---------|------------|---------|-----------|
+| D01 | **Package 命令前缀全部为 `dendron.`**，仅 `sailzen.compileDocument` 和 `sailzen.exportNote` 例外 | `package.json` > `contributes.commands` (~95 条命令) | 用户-facing 命令 ID、keybindings、菜单绑定 | **P0** |
+| D02 | **View IDs 全部使用 `dendron.` 前缀**：`dendron.backlinks`, `dendron.treeView`, `dendron.calendar-view`, `dendron.lookup-view` 等 | `package.json` > `contributes.views`, `constants.ts` > `DENDRON_VIEWS` | 视图容器、Activity Bar、菜单 when 条件 | **P0** |
+| D03 | **Context keys 全部使用 `dendron:` 前缀**：`dendron:pluginActive`, `dendron:devMode`, `dendron:noteLookupActive` 等 | `constants.ts` > `DendronContext` enum | 所有命令的 `when` / `enablement` 条件 | **P0** |
+| D04 | **`extensionQualifiedId = "dendron.dendron"`** | `constants.ts` 第 11 行 | VSCode 扩展标识、API 调用、版本检测 | **P0** |
+| D05 | **文件名 `dendronExtensionInterface.ts`、类名 `DendronExtension`** | `dendronExtensionInterface.ts`, `workspace.ts` | 扩展核心接口与实现，被大量文件 import | **P0** |
+| D06 | **上游包 `common-all` 中大量 dendron 命名**：`DENDRON_CONFIG_FILE = "dendron.yml"`, `DENDRON_WS_NAME = "dendron.code-workspace"`, `DENDRON_DELIMETER = "dendron://"` | `packages/common-all/src/`（外部依赖） | 配置系统、工作区文件、WikiLink 协议 | **P0** |
+| D07 | **日志文件名 `dendron.log`, `dendron.server.log`** | `ExtensionUtils.ts`, `logger.ts` | 日志文件路径 | **P1** |
+| D08 | **`workspace.ts` (DendronExtension + DWorkspaceV2) 与 `workspacev2.ts` (旧版 DWorkspace) 并存** | `workspace.ts`, `workspacev2.ts` | 工作区核心，所有命令依赖 | **P0** |
+| D09 | **`WSUtilsV2.ts` / `WSUtilsV2Interface.ts` — "V2" 后缀表明第二次重写** | `WSUtilsV2.ts`, `WSUtilsV2Interface.ts` | 工作区工具，广泛依赖 | **P1** |
+| D10 | **`LookupControllerV3.ts`, `V3Factory`, `V3Interface` — "V3" 后缀** | `components/lookup/LookupControllerV3*.ts` | Lookup 系统核心 | **P1** |
+| D11 | **`LookupProviderV3Factory.ts`, `V3Interface` — "V3" 后缀** | `components/lookup/LookupProviderV3*.ts` | Lookup 数据提供 | **P1** |
+| D12 | **`RenameNoteV2a.ts` — 内部 V2a 重命名命令**（不在 ALL_COMMANDS 中注册，但被 RenameProvider 和 RefactorHierarchyV2 使用） | `commands/RenameNoteV2a.ts` | 重命名功能内部实现 | **P1** |
+| D13 | **`Refactor.ts` — LegacyRefactorCommand**（key 为 `dendron.LegacyRefactorCommand`，已被 `RefactorHierarchyV2` 替代） | `commands/Refactor.ts` | 遗留重构命令 | **P1** |
+| D14 | **`web/engine/DendronEngineV3Web.ts` / `NoteParserV2.ts` — Web 引擎带版本号** | `web/engine/` | Web 版引擎 | **P2** |
+| D15 | **`common-all/src/VaultUtilsV2.ts` — 上游 V2 后缀** | `packages/common-all/`（外部依赖） | Vault 工具 | **P2** |
+| D16 | **`src/web/` 目录下有 32 个 .ts 文件，构成完整 Web VSCode 扩展实现** | `src/web/` 全部 | 完整的 Web 版平行代码栈 | **P1** |
+| D17 | **Node/Web 平台服务分裂**：`services/node/TextDocumentService.ts` vs `services/web/TextDocumentService.ts` | `services/node/`, `services/web/` | 文本服务 | **P1** |
+| D18 | **预览面板双实现**：`components/views/PreviewPanel.ts` vs `web/views/preview/PreviewPanel.ts` | `components/views/`, `web/views/preview/` | 预览功能 | **P1** |
+| D19 | **Web 扩展使用 `tsyringe` DI 容器，Node 扩展使用手动构造函数** | `web/injection-providers/setupWebExtContainer.ts`, `injection-providers/setupLocalExtContainer.ts` | 架构一致性 | **P1** |
+| D20 | **`workspace.ts` 中大量 `@deprecated` 静态方法**：`getDWorkspace()`, `getExtension()`, `getEngine()` | `workspace.ts` 第 84–104 行 | 全局静态访问模式 | **P1** |
+| D21 | **`ExtensionProvider` 被设计为替代方案，但过渡未完成** | `ExtensionProvider.ts`, 各处调用 | 架构迁移半途 | **P1** |
+| D22 | **`StateService` 整个类被标记为 `@deprecated`**，建议合并到 `MetadataService` | `services/stateService.ts` | 状态管理 | **P2** |
+| D23 | **`versionProvider.ts` 被标记为 `@deprecated`** | `versionProvider.ts` | 版本获取 | **P2** |
+| D24 | **`views/utils.ts` 和 `web/views/preview/WebViewUtils.ts` 中有 `@deprecated` 方法** | `views/utils.ts`, `web/views/preview/WebViewUtils.ts` | 视图工具 | **P2** |
+| D25 | **`telemetry/` 目录：完整的遥测系统**（Dummy/Node/Web 三客户端） | `telemetry/` (~5 文件) | 遥测数据收集 | **P2** |
+| D26 | **`showcase/` 目录：功能展示提示系统** | `showcase/` (~8 文件) | 用户引导 | **P2** |
+| D27 | **`commands/SignIn.ts`, `commands/SignUp.ts` — Dendron 云端账户认证** | `commands/SignIn.ts`, `commands/SignUp.ts` | 账户系统 | **P2** |
+| D28 | **`commands/PublishDevCommand.ts` — Dendron 发布系统** | `commands/PublishDevCommand.ts` | 发布功能 | **P2** |
+| D29 | **`commands/SeedAddCommand.ts`, `SeedBrowseCommand.ts`, `SeedRemoveCommand.ts` — Dendron Seed 注册表** | `commands/SeedAddCommand.ts` 等 | Seed 生态 | **P2** |
+| D30 | **`commands/ShowWelcomePageCommand.ts`, `LaunchTutorialWorkspaceCommand.ts` — 教程引导** | `commands/ShowWelcomePageCommand.ts` 等 | 新用户引导 | **P2** |
+| D31 | **`commands/CopyCodespaceURL.ts` — GitHub Codespaces 专用** | `commands/CopyCodespaceURL.ts` | Codespaces 支持 | **P2** |
+| D32 | **`commands/MigrateSelfContainedVault.ts`, `RunMigrationCommand.ts` — 迁移命令** | `commands/MigrateSelfContainedVault.ts` 等 | 数据迁移 | **P2** |
+| D33 | **`commands/ShowLegacyPreview.ts` / `ShowPreviewInterface.ts` — Legacy preview** | `commands/ShowLegacyPreview.ts` 等 | 旧预览系统 | **P2** |
+| D34 | **`commands/InstrumentedWrapperCommand.ts` — 遥测包装命令** | `commands/InstrumentedWrapperCommand.ts` | 遥测 | **P2** |
+| D35 | **Traits 系统过度设计**：`services/NoteTraitManager.ts`, `NoteTraitService.ts`, `traits/` 目录 | `services/NoteTrait*.ts`, `traits/` (~5 文件) | 笔记模板系统 | **P3** |
+| D36 | **docEngine 与 Dendron 遗留代码混合，无清晰边界** | `docEngine/` (~14 文件), `commands/CompileDocumentCommand.ts`, `commands/ExportNoteCommand.ts` | 文档编译功能 | **P1** |
+| D37 | **配置系统混乱**：`dendronExtensionInterface.ts` 中 `DendronWorkspaceSettings` 含大量 `dendron.` 前缀配置键；存在 `dendron.yml`, `dendronrc.yml`, `dendron.code-workspace` 多个配置文件 | `dendronExtensionInterface.ts`, `constants.ts` > `CONFIG`, 外部 `common-all` | 配置管理 | **P1** |
+| D38 | **`ExtensionUtils.ts` 第 145 行：dev 模式下扩展名是 `dendron.sail-dendron`（明显错误）** | `utils/ExtensionUtils.ts` | 开发模式扩展检测 | **P0** |
+| D39 | **`getEnablePrettlyLinks.ts`：文件名和函数名拼写错误（Prettly → Pretty）** | `web/injection-providers/getEnablePrettlyLinks.ts` | Web 版配置注入 | **P2** |
+| D40 | **`Refactor.ts` 中 `process.exit(0)` 在 VSCode 扩展环境中极其危险** | `commands/Refactor.ts` | 扩展稳定性 | **P0** |
+| D41 | **`_extension.ts` 第 499 行：升级提示指向 `https://dendron.so/...`（外部死链风险）** | `_extension.ts` 第 499 行 | 升级提示 | **P1** |
+| D42 | **`DENDRON_COMMANDS` 常量对象中 CMD 前缀为 `"Dendron:"`** | `constants.ts` 第 151 行 | 命令标题显示 | **P1** |
+| D43 | **`DENDRON_CHANNEL_NAME = "Dendron"`** | `constants.ts` 第 976 行 | 输出频道名称 | **P1** |
+| D44 | **`DENDRON_WORKSPACE_FILE = "dendron.code-workspace"`** | `workspace.ts` 第 120 行 | 工作区文件名 | **P0** |
+| D45 | **Views Container title 仍为 "Dendron"** | `package.json` / `constants.ts` > `DENDRON_VIEWS_CONTAINERS` | Activity Bar 标题 | **P0** |
+
+### 2.2 债务分类统计
+
+| 债务级别 | 数量 | 主要类别 |
+|---------|------|---------|
+| **P0 — 阻塞/高影响** | 8 | 命名遗留（命令/视图/上下文/扩展ID）、workspace 双版本、危险操作、dev 模式错误 |
+| **P1 — 高优先** | 16 | 多重版本实现、Web/Node 分裂、废弃模式过渡未完成、配置混乱、docEngine 边界、死链 |
+| **P2 — 中等优先** | 18 | 遥测/展示/认证/Seed/教程等冗余模块、deprecated 类、拼写错误、日志命名 |
+| **P3 — 低优先/可选** | 3 | Trait 系统简化、其他装饰性清理 |
+
+---
+
+## 3. 后续重构计划
+
+### 3.1 第一轮：命名统一与身份重塑（P0）
+
+**目标**: 消除所有用户可见的 `dendron` 命名，建立 SailZen 品牌一致性。
+
+**任务清单**:
+
+1. **package.json 命令前缀迁移**
+   - 将所有 `dendron.` 前缀命令重命名为 `sailzen.` 前缀
+   - 保留 `sailzen.compileDocument` 和 `sailzen.exportNote`
+   - 同步更新 `constants.ts` 中 `DENDRON_COMMANDS` 对象的所有 key
+   - 同步更新所有 `when` / `enablement` 条件中的命令引用
+
+2. **View IDs 与 Context Keys 迁移**
+   - `dendron.backlinks` → `sailzen.backlinks`
+   - `dendron.treeView` → `sailzen.treeView`
+   - `dendron.calendar-view` → `sailzen.calendarView`
+   - `dendron.lookup-view` → `sailzen.lookupView`
+   - `dendron:pluginActive` → `sailzen:pluginActive`
+   - `dendron:devMode` → `sailzen:devMode`
+   - 以此类推…
+   - 同步更新 `constants.ts` 中 `DendronContext` enum
+
+3. **扩展标识符修正**
+   - `extensionQualifiedId = "dendron.dendron"` → `"sailinginnocent.sail-zen-vscode"`（与 `package.json` 的 `publisher.name` 一致）
+   - `DENDRON_CHANNEL_NAME = "Dendron"` → `"SailZen"`
+   - `CMD_PREFIX = "Dendron:"` → `"SailZen:"`
+   - Views Container title `"Dendron"` → `"SailZen"`
+
+4. **核心类重命名**
+   - `DendronExtension` → `SailZenExtension`
+   - `IDendronExtension` → `ISailZenExtension`
+   - `dendronExtensionInterface.ts` → `extensionInterface.ts`
+   - `DendronWorkspaceSettings` → `SailZenWorkspaceSettings`
+   - `DendronContext` → `SailZenContext`
+   - `DENDRON_COMMANDS` → `SAILZEN_COMMANDS`
+   - `DENDRON_VIEWS` → `SAILZEN_VIEWS`
+
+5. **工作区文件名**
+   - `DENDRON_WORKSPACE_FILE = "dendron.code-workspace"` → `"sailzen.code-workspace"`
+   - 需要同步处理 `common-all` 中的 `DENDRON_WS_NAME`
+
+6. **紧急修复**
+   - 修复 `ExtensionUtils.ts` 第 145 行的 `dendron.sail-dendron` 错误
+   - 移除/修复 `Refactor.ts` 中的 `process.exit(0)`
+
+**预计影响**: 全局性改动，需要全量回归测试。建议在一个独立分支上进行，配合批量替换脚本。
+
+---
+
+### 3.2 第二轮：架构清理与版本合并（P1）
+
+**目标**: 消除多重版本实现，合并 workspace，明确 docEngine 边界。
+
+**任务清单**:
+
+1. **Workspace 统一**
+   - 分析 `workspace.ts` (DendronExtension + DWorkspaceV2) 与 `workspacev2.ts` (旧 DWorkspace) 的差异
+   - 将所有引用从 `workspacev2.ts` 的 `DWorkspace` 迁移到 `workspace.ts` 的 `DWorkspaceV2`
+   - 删除 `workspacev2.ts`
+   - 移除 `workspace.ts` 中的 `@deprecated` 静态方法 `getDWorkspace()`, `getExtension()`, `getEngine()`
+   - 全面推广 `ExtensionProvider` 静态访问模式（或推进构造函数注入）
+
+2. **Lookup 系统去版本号**
+   - 将 `LookupControllerV3` → `LookupController`
+   - 将 `LookupProviderV3Factory` → `LookupProviderFactory`
+   - 同步重命名文件和接口
+
+3. **WSUtils 去版本号**
+   - `WSUtilsV2` → `WSUtils`
+   - `IWSUtilsV2` → `IWSUtils`
+
+4. **docEngine 边界清晰化**
+   - 将 `commands/CompileDocumentCommand.ts` 和 `commands/ExportNoteCommand.ts` 移动到 `commands/docEngine/` 子目录
+   - 考虑将 `docEngine/` 提升为 monorepo 的独立包（如 `@saili/doc-engine`），减少与插件核心代码的耦合
+
+5. **配置系统简化**
+   - 统一配置文件：优先使用 VSCode 的 `settings.json`，逐步废弃 `dendron.yml`/`dendronrc.yml`
+   - 将 `dendronExtensionInterface.ts` 中的配置键前缀从 `dendron.` 改为 `sailzen.`
+   - 与 `common-all` 同步更新 `DENDRON_CONFIG_FILE` 等常量
+
+6. **外部链接修复**
+   - 将 `_extension.ts` 第 499 行的 `https://dendron.so/...` 替换为 SailZen 自己的文档链接或移除升级提示
+
+---
+
+### 3.3 第三轮：Web/Node 平台决策与冗余模块移除（P1/P2）
+
+**目标**: 决定是否保留 Web 支持，清理不再需要的功能模块。
+
+**任务清单**:
+
+1. **Web 平台决策**
+   - **方案 A（推荐）**: 完全移除 `src/web/` 目录及其所有平行实现
+     - 删除 `web/commands/`, `web/engine/`, `web/injection-providers/`, `web/utils/`, `web/views/`
+     - 删除 `services/web/TextDocumentService.ts`
+     - 简化 `package.json` 中的 `browser` 入口
+     - 移除 `tsyringe` 及相关依赖
+   - **方案 B**: 保留 Web 支持，但抽象公共层减少重复
+     - 将 Node/Web 公共逻辑提取到共享模块
+     - 统一 DI 方式（全部使用手动构造函数或全部使用 tsyringe）
+
+2. **遥测系统移除**
+   - 删除 `telemetry/` 目录（5 文件）
+   - 删除 `commands/InstrumentedWrapperCommand.ts`
+   - 删除 `utils/ProxyMetricUtils.ts` / `utils/MeetingTelemHelper.ts`
+   - 清理 `_extension.ts` 中的遥测初始化逻辑
+
+3. **Showcase 系统移除**
+   - 删除 `showcase/` 目录（8 文件）
+   - 清理 `_extension.ts` 中的 `FeatureShowcaseToaster` 引用
+
+4. **Dendron 专属功能移除**
+   - 删除 `commands/SignIn.ts`, `commands/SignUp.ts`
+   - 删除 `commands/PublishDevCommand.ts`
+   - 删除 `commands/SeedAddCommand.ts`, `SeedBrowseCommand.ts`, `SeedRemoveCommand.ts`
+   - 删除 `commands/ShowWelcomePageCommand.ts`, `LaunchTutorialWorkspaceCommand.ts`
+   - 删除 `commands/CopyCodespaceURL.ts`
+   - 删除 `commands/MigrateSelfContainedVault.ts`, `RunMigrationCommand.ts`
+   - 删除 `commands/ShowLegacyPreview.ts` / `ShowPreviewInterface.ts`
+   - 删除 `commands/Refactor.ts`（LegacyRefactorCommand）
+   - 从 `ALL_COMMANDS` 中移除上述命令的注册
+   - 从 `package.json` 的 `contributes.commands` 和 `menus` 中移除对应的声明
+
+5. **Trait 系统评估**
+   - 评估个人使用是否真正需要 Trait 系统
+   - 如不需要，删除 `services/NoteTraitManager.ts`, `NoteTraitService.ts` 和 `traits/` 目录
+   - 如保留，简化 `traits/webpack-require-hack.ts`
+
+---
+
+### 3.4 第四轮：Deprecated 代码清理与细节修复（P2/P3）
+
+**目标**: 清理标记为 deprecated 的代码，修复细节问题。
+
+**任务清单**:
+
+1. **StateService 迁移**
+   - 将 `StateService` 逻辑合并到 `MetadataService`
+   - 删除 `services/stateService.ts`
+   - 迁移所有 `StateService` 的引用
+
+2. **VersionProvider 移除**
+   - 删除 `versionProvider.ts`
+   - 改用 `vscode.ExtensionContext.extension.packageJSON.version`
+
+3. **Deprecated 方法清理**
+   - 清理 `views/utils.ts` 中的 `@deprecated` 方法
+   - 清理 `web/views/preview/WebViewUtils.ts` 中的 `@deprecated` 方法
+   - 清理 `workspace.ts` 中剩余的 `@deprecated` 方法
+
+4. **细节修复**
+   - 重命名 `getEnablePrettlyLinks.ts` → `getEnablePrettyLinks.ts`
+   - 重命名函数 `getEnablePrettlyLinks` → `getEnablePrettyLinks`
+   - 同步更新所有引用
+   - 日志文件名：`dendron.log` → `sailzen.log`, `dendron.server.log` → `sailzen.server.log`
+   - 检查并清理 `Refactor.ts` 中剩余的 `process.exit(0)` 等危险操作
+
+5. **RenameNoteV2a 整合**
+   - 分析 `RenameNoteV2a.ts` 与 `RenameNoteCommand.ts` 的差异
+   - 将 V2a 逻辑合并到主重命名命令中
+   - 删除 `RenameNoteV2a.ts`
+
+---
+
+### 3.5 第五轮：上游 common-all 清理（P0/P1，需跨包协调）
+
+**目标**: 清理上游包中的 dendron 命名。
+
+**任务清单**:
+
+1. **`common-all` 包常量重命名**
+   - `DENDRON_CONFIG_FILE = "dendron.yml"` → `SAILZEN_CONFIG_FILE = "sailzen.yml"`
+   - `DENDRON_WS_NAME = "dendron.code-workspace"` → `SAILZEN_WS_NAME = "sailzen.code-workspace"`
+   - `DENDRON_DELIMETER = "dendron://"` → `SAILZEN_DELIMETER = "sailzen://"`
+   - `DENDRON_VSCODE_CONFIG_KEYS` → `SAILZEN_VSCODE_CONFIG_KEYS`
+
+2. **VaultUtilsV2 去版本号**
+   - `VaultUtilsV2` → `VaultUtils`
+   - 同步更新所有引用
+
+3. **统一 WikiLink 协议**
+   - 将 `dendron://` 协议改为 `sailzen://`
+   - 更新所有文档和内部链接解析逻辑
+
+---
+
+## 4. 顺手修复记录
+
+本轮审查过程中已识别并建议立即修复的小问题：
+
+| # | 问题 | 位置 | 修复建议 | 状态 |
+|---|------|------|---------|------|
+| F01 | Dev 模式扩展名错误：`dendron.sail-dendron` | `utils/ExtensionUtils.ts` ~L145 | 改为正确的扩展标识符 | 🔧 待修复 |
+| F02 | `process.exit(0)` 在 VSCode 扩展中危险 | `commands/Refactor.ts` | 替换为安全的错误处理方式 | 🔧 待修复 |
+| F03 | 升级提示指向外部死链 `dendron.so` | `_extension.ts` ~L499 | 替换为 SailZen 文档链接或移除 | 🔧 待修复 |
+| F04 | 文件名/函数名拼写：`Prettly` → `Pretty` | `web/injection-providers/getEnablePrettlyLinks.ts` | 重命名文件和函数 | 🔧 待修复 |
+| F05 | `DENDRON_COMMANDS.EXPORT_NOTE` / `COMPILE_DOCUMENT` 的 title 仍使用 `Dendron:` 前缀 | `constants.ts` ~L848–857 | 改为 `SailZen:` 前缀 | 🔧 待修复 |
+
+---
+
+## 附录：关键文件速查表
+
+| 类别 | 文件 | 说明 |
+|------|------|------|
+| 扩展入口 | `src/extension.ts`, `src/_extension.ts`, `src/web/extension.ts` | Node/Web 双入口 |
+| 扩展核心 | `src/workspace.ts`, `src/dendronExtensionInterface.ts` | DendronExtension 类与接口 |
+| 命令注册 | `src/commands/index.ts`, `src/commands/base.ts` | ALL_COMMANDS 数组与基类 |
+| 常量定义 | `src/constants.ts` | 命令、视图、上下文键、菜单常量 |
+| 配置接口 | `src/dendronExtensionInterface.ts` | DendronWorkspaceSettings |
+| 静态访问 | `src/ExtensionProvider.ts` | 替代全局静态方法的方案 |
+| Web DI | `src/web/injection-providers/setupWebExtContainer.ts` | tsyringe 容器设置 |
+| Node DI | `src/injection-providers/setupLocalExtContainer.ts` | 本地容器设置 |
+| 编译引擎 | `src/docEngine/index.ts` | SailZen 文档编译导出 |
+| 日志 | `src/logger.ts`, `src/utils/ExtensionUtils.ts` | 日志与服务器启动 |
+
+---
+
+*报告结束。建议将此报告与 `doc/refact_todo.md` 和 `doc/sailzen-3.0-roadmap.md` 交叉参考，制定具体的重构排期。*
