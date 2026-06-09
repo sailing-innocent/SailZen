@@ -101,9 +101,9 @@ export async function getCitationKeys(
 
 export async function getBibTeXEntry(citeKey: string): Promise<BibTeXEntry | undefined> {
   try {
-    const bibtex = await bbtRpc("item.bibliography", [
+    const bibtex = await bbtRpc("item.export", [
       [citeKey],
-      { quickCopy: true },
+      { translator: "bibtex" },
     ]);
     if (!bibtex) return undefined;
     return parseBibTeXEntry(bibtex);
@@ -115,9 +115,9 @@ export async function getBibTeXEntry(citeKey: string): Promise<BibTeXEntry | und
 
 export async function getBibTeXForKeys(citeKeys: string[]): Promise<string> {
   try {
-    const bibtex = await bbtRpc("item.bibliography", [
+    const bibtex = await bbtRpc("item.export", [
       citeKeys,
-      { quickCopy: true },
+      { translator: "bibtex" },
     ]);
     return bibtex || "";
   } catch (err) {
@@ -127,17 +127,49 @@ export async function getBibTeXForKeys(citeKeys: string[]): Promise<string> {
 }
 
 function parseBibTeXEntry(bibtexStr: string): BibTeXEntry | undefined {
-  // Simple parser for single BibTeX entry
-  const match = bibtexStr.match(/@(\w+)\s*\{\s*([^,\s]+)\s*,/);
-  if (!match) return undefined;
-  const type = match[1];
-  const key = match[2];
+  // Parse the entry header: @type{key,
+  const headerMatch = bibtexStr.match(/@(\w+)\s*\{\s*([^,\s]+)\s*,/);
+  if (!headerMatch) return undefined;
+  const type = headerMatch[1];
+  const key = headerMatch[2];
   const fields: Record<string, string> = {};
 
-  const fieldRegex = /(\w+)\s*=\s*\{([^}]*)\}/g;
-  let fm;
-  while ((fm = fieldRegex.exec(bibtexStr)) !== null) {
-    fields[fm[1]] = fm[2];
+  // Brace-depth parser for fields — handles nested braces e.g. title = {{Title}}
+  const bodyStart = bibtexStr.indexOf(",", headerMatch.index! + headerMatch[0].length);
+  if (bodyStart === -1) return { type, key, fields };
+
+  const body = bibtexStr.slice(bodyStart + 1);
+  const fieldRegex = /(\w+)\s*=\s*/g;
+  let fm: RegExpExecArray | null;
+
+  while ((fm = fieldRegex.exec(body)) !== null) {
+    const fieldName = fm[1];
+    let pos = fm.index + fm[0].length;
+    if (pos >= body.length) break;
+
+    // Field value must start with '{'
+    if (body[pos] !== "{") continue;
+
+    let depth = 1;
+    let valueStart = pos + 1;
+    pos++;
+
+    while (pos < body.length && depth > 0) {
+      const ch = body[pos];
+      if (ch === "{") {
+        depth++;
+      } else if (ch === "}") {
+        depth--;
+      }
+      pos++;
+    }
+
+    // pos is now one past the closing brace
+    const value = body.slice(valueStart, pos - 1);
+    fields[fieldName] = value;
+
+    // Move regex lastIndex past this field so we don't re-match inside the value
+    fieldRegex.lastIndex = pos;
   }
 
   return { type, key, fields };

@@ -289,8 +289,8 @@ export function renderSkeleton(
     }
   }
 
-  // {{varName}} plain substitution
-  result = result.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, name) => {
+  // {{varName}} plain substitution (supports letters, digits, underscores, dots, hyphens)
+  result = result.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, name) => {
     const val = vars[name];
     if (val === undefined || val === null) {
       return "";

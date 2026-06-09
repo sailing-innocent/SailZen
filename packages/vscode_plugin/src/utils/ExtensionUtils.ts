@@ -140,10 +140,8 @@ export class ExtensionUtils {
   };
 
   static getExtension() {
-    const extName =
-      getStage() === "dev"
-        ? "dendron.sail-dendron"
-        : "dendron.dendron";
+    // FIX: 历史遗留错误，dev 和 prod 使用统一的正确扩展 ID
+    const extName = "SailingInnocent.sail-zen-vscode";
     const ext = vscode.extensions.getExtension(extName);
     return ext as vscode.Extension<any>;
   }

@@ -59,8 +59,8 @@ function matchBlockDirective(node: Node): DirectiveMatch | null {
   const m = first.value.match(BLOCK_DIRECTIVE_REGEX);
   if (!m) return null;
 
-  // If paragraph has more children after the directive, ignore for now
-  // (edge case: user put text on same line as directive)
+  // Allow trailing whitespace-only children after the directive.
+  // If there is non-whitespace text on the same line, treat it as a normal paragraph.
   if (para.children.length > 1) {
     const rest = para.children.slice(1);
     const restText = rest
@@ -69,7 +69,7 @@ function matchBlockDirective(node: Node): DirectiveMatch | null {
       .trim();
     if (restText) return null;
   }
-  // Also check if there's trailing text in the first text node after the match
+  // Also check if there's trailing non-whitespace text in the first text node after the match
   const remaining = first.value.slice(m[0].length).trim();
   if (remaining) return null;
 

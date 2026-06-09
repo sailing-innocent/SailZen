@@ -36,5 +36,6 @@ export {
   renderSkeleton,
   renderExternalTemplate,
 } from "./templateLoader";
+export { compileDocument } from "./compileService";
 export type { ExternalTemplate } from "./templateLoader";
 export type { ResolvedAsset } from "@saili/common-all";

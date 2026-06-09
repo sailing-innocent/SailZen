@@ -8,6 +8,7 @@ import {
   ResolvedAsset,
 } from "@saili/common-all";
 import _ from "lodash";
+import { findNoteByFname } from "./noteResolver";
 
 // Simple inline logger to avoid dependency issues in test environment
 const logger = {
@@ -225,20 +226,7 @@ function resolveAssets(
   return resolved;
 }
 
-/**
- * Find a note by its fname in the note dictionary.
- */
-function findNoteByFname(
-  fname: string,
-  notesById: NotePropsByIdDict
-): NoteProps | undefined {
-  for (const note of Object.values(notesById)) {
-    if (note.fname === fname) {
-      return note;
-    }
-  }
-  return undefined;
-}
+
 
 /**
  * Extract ::cite[keys] citations from markdown text

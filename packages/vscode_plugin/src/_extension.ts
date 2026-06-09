@@ -488,7 +488,7 @@ async function showWelcomeOrWhatsNew({
 
       vscode.window
         .showInformationMessage(
-          `Dendron has been upgraded to ${version}`,
+          `SailZen has been upgraded to ${version}`,
           buttonAction
         )
         .then((resp) => {
@@ -496,7 +496,7 @@ async function showWelcomeOrWhatsNew({
             vscode.commands.executeCommand(
               "vscode.open",
               vscode.Uri.parse(
-                "https://dendron.so/notes/9bc92432-a24c-492b-b831-4d5378c1692b.html"
+                "https://github.com/sailzen/sailzen/releases"
               )
             );
           }

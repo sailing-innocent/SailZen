@@ -15,6 +15,7 @@ import {
   NotePropsByIdDict,
   ResolvedAsset,
 } from "@saili/common-all";
+import { findNoteByFname } from "./noteResolver";
 import type { Node, Parent, Root } from "mdast";
 import _ from "lodash";
 
@@ -240,12 +241,4 @@ function resolveAssets(
   return resolved;
 }
 
-function findNoteByFname(
-  fname: string,
-  notesById: NotePropsByIdDict
-): NoteProps | undefined {
-  for (const note of Object.values(notesById)) {
-    if (note.fname === fname) return note;
-  }
-  return undefined;
-}
+

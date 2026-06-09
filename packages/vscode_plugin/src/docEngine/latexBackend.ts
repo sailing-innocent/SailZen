@@ -20,6 +20,7 @@ import path from "path";
 import type { Root } from "mdast";
 import { renderTemplate, resolveTemplateVars } from "./templateEngine";
 import { mdastToLatex } from "./astLatexTransformer";
+import { escapeLatex, escapeLatexInlineCode } from "./latexUtils";
 
 // ============================================================================
 // Public API
@@ -755,40 +756,4 @@ $pdf_previewer = "start";
 `;
 }
 
-// ============================================================================
-// LaTeX Escaping
-// ============================================================================
 
-function escapeLatex(text: string): string {
-  return (
-    text
-      // Intentionally NOT escaping backslash here – all legitimate
-      // LaTeX commands are protected before this function runs.
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-      .replace(/"/g, "''")
-  );
-}
-
-function escapeLatexInlineCode(text: string): string {
-  return (
-    text
-      .replace(/\\/g, "\\textbackslash{}")
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-  );
-}

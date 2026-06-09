@@ -11,6 +11,7 @@ import {
   NotePropsByIdDict,
   ResolvedAsset,
 } from "@saili/common-all";
+import { escapeLatex, escapeLatexInlineCode } from "./latexUtils";
 // Local constants to avoid importing @saili/unified (which transitively pulls in ESM-only deps)
 const SAILZEN_CITE = "sailzenCite";
 const SAILZEN_FIGURE = "sailzenFigure";
@@ -354,39 +355,4 @@ function transformIfFormat(node: any, ctx: TransformContext): string {
   return transformChildren(node as Parent, ctx);
 }
 
-// ============================================================================
-// LaTeX Escaping
-// ============================================================================
 
-function escapeLatex(text: string): string {
-  return (
-    text
-      .replace(/\\/g, "\\textbackslash{}") // Only for plain text, not commands
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-      .replace(/"/g, "''")
-  );
-}
-
-function escapeLatexInlineCode(text: string): string {
-  return (
-    text
-      .replace(/\\/g, "\\textbackslash{}")
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-  );
-}

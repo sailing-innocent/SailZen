@@ -13,6 +13,7 @@ import {
   NoteProps,
   NotePropsByIdDict,
 } from "@saili/common-all";
+import { findNoteByFname, extractSection } from "./noteResolver";
 import type { Node, Parent, Root, Heading } from "mdast";
 
 const REF_LINK_V2 = "refLinkV2";
@@ -254,90 +255,4 @@ function visitParents(
   walk(tree, []);
 }
 
-// ============================================================================
-// Note resolution (mirrored from documentAssembler)
-// ============================================================================
 
-function findNoteByFname(
-  fname: string,
-  notesById: NotePropsByIdDict,
-  contextFname?: string
-): NoteProps | undefined {
-  // 1. Exact match
-  for (const note of Object.values(notesById)) {
-    if (note.fname === fname) return note;
-  }
-
-  // 2. Suffix match
-  const suffix = "." + fname;
-  const candidates: NoteProps[] = [];
-  for (const note of Object.values(notesById)) {
-    if (note.fname.endsWith(suffix)) candidates.push(note);
-  }
-
-  if (candidates.length === 0) return undefined;
-  if (candidates.length === 1) return candidates[0];
-
-  // Multiple candidates – prefer longest common prefix with context
-  if (contextFname) {
-    const contextParts = contextFname.split(".");
-    let bestNote: NoteProps = candidates[0];
-    let bestScore = -1;
-    for (const c of candidates) {
-      const parts = c.fname.split(".");
-      let shared = 0;
-      for (
-        let i = 0;
-        i < Math.min(contextParts.length, parts.length - 1);
-        i++
-      ) {
-        if (contextParts[i] === parts[i]) shared++;
-        else break;
-      }
-      if (
-        shared > bestScore ||
-        (shared === bestScore && c.fname.length < bestNote.fname.length)
-      ) {
-        bestScore = shared;
-        bestNote = c;
-      }
-    }
-    return bestNote;
-  }
-
-  candidates.sort((a, b) => a.fname.length - b.fname.length);
-  return candidates[0];
-}
-
-function extractSection(body: string, anchor: string): string {
-  const lines = body.split("\n");
-  const anchorLower = anchor.toLowerCase().replace(/\s+/g, "-");
-
-  let startIdx = -1;
-  let startLevel = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s+(.+)$/);
-    if (match) {
-      const headingText = match[2].trim().toLowerCase().replace(/\s+/g, "-");
-      if (headingText === anchorLower) {
-        startIdx = i;
-        startLevel = match[1].length;
-        break;
-      }
-    }
-  }
-
-  if (startIdx === -1) return body;
-
-  let endIdx = lines.length;
-  for (let i = startIdx + 1; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s+/);
-    if (match && match[1].length <= startLevel) {
-      endIdx = i;
-      break;
-    }
-  }
-
-  return lines.slice(startIdx, endIdx).join("\n");
-}

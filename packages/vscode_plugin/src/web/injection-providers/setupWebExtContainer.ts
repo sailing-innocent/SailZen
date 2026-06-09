@@ -38,7 +38,7 @@ import {
 import { PreviewLinkHandler } from "../views/preview/PreviewLinkHandler";
 import { PreviewPanel } from "../views/preview/PreviewPanel";
 import { getAssetsPrefix } from "./getAssetsPrefix";
-import { getEnablePrettlyLinks } from "./getEnablePrettlyLinks";
+import { getEnablePrettyLinks } from "./getEnablePrettyLinks";
 import { getSiteIndex } from "./getSiteIndex";
 import { getSiteUrl } from "./getSiteUrl";
 import { getVaults } from "./getVaults";
@@ -59,7 +59,7 @@ export async function setupWebExtContainer(context: vscode.ExtensionContext) {
   }
   const vaults = await getVaults(wsRoot);
   const assetsPrefix = await getAssetsPrefix(wsRoot);
-  const enablePrettyLinks = await getEnablePrettlyLinks(wsRoot);
+  const enablePrettyLinks = await getEnablePrettyLinks(wsRoot);
   const siteUrl = await getSiteUrl(wsRoot);
   const siteIndex = await getSiteIndex(wsRoot);
 

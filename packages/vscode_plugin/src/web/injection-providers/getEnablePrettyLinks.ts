@@ -3,11 +3,13 @@ import { Uri } from "vscode";
 import { getWorkspaceConfig } from "./getWorkspaceConfig";
 
 /**
- * Get the enablePrettlyLinks from publishing config
+ * Get the enablePrettyLinks from publishing config
  * @param wsRoot
- * @returns value of enablePrettlyLinks from publishing config
+ * @returns value of enablePrettyLinks from publishing config
+ *
+ * NOTE: 上游 ConfigUtils.getEnablePrettlyLinks 仍有拼写错误，留待后续修复
  */
-export async function getEnablePrettlyLinks(
+export async function getEnablePrettyLinks(
   wsRoot: Uri
 ): Promise<boolean | undefined> {
   const config = await getWorkspaceConfig(wsRoot);

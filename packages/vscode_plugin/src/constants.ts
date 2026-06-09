@@ -847,12 +847,12 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
   // --- SailZen Doc Export
   EXPORT_NOTE: {
     key: "sailzen.exportNote",
-    title: `${CMD_PREFIX} Export Note`,
+    title: `SailZen: Export Note`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
   COMPILE_DOCUMENT: {
     key: "sailzen.compileDocument",
-    title: `${CMD_PREFIX} Compile Document`,
+    title: `SailZen: Compile Document`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
   PASTE_FILE: {

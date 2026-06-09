@@ -226,7 +226,7 @@ export class RefactorCommand extends BasicCommand<RefactorCommandOpts> {
 
       if (stats.numChanged > limit) {
         L.info(`reached limit of ${limit} changes`);
-        process.exit(0);
+        return; // FIX: process.exit(0) 会杀死整个 VSCode 进程，极其危险
       }
 
       const txt = fs.readFileSync(path.join(root, fname), "utf8");

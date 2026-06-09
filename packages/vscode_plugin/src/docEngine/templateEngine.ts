@@ -19,26 +19,7 @@ import {
   renderExternalTemplate,
   resolveTemplateDir,
 } from "./templateLoader";
-
-// ============================================================================
-// Escape helpers (mirrored from latexBackend to avoid circular deps)
-// ============================================================================
-
-function escapeLatex(text: string): string {
-  return (
-    text
-      .replace(/\\/g, "\\textbackslash{}")
-      .replace(/\{/g, "\\{")
-      .replace(/\}/g, "\\}")
-      .replace(/\$/g, "\\$")
-      .replace(/&/g, "\\&")
-      .replace(/#/g, "\\#")
-      .replace(/\^/g, "\\^{}")
-      .replace(/_/g, "\\_")
-      .replace(/%/g, "\\%")
-      .replace(/~/g, "\\textasciitilde{}")
-  );
-}
+import { escapeLatex } from "./latexUtils";
 
 function formatAuthors(authors: any[]): string {
   if (!authors || authors.length === 0) return "";
