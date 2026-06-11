@@ -1056,6 +1056,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 ---
 
 *Plan generated based on analysis of packages/vscode_plugin/src/ and common-all/ as of current HEAD.*
+<<<<<<< HEAD
 # Plan: 清理 VSCode Plugin 版本兼容残留 API 并更新审查文档
 
 ## 背景与目标
@@ -1419,3 +1420,5 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 ---
 
 *Plan generated based on analysis of packages/vscode_plugin/src/ and common-all/ as of current HEAD.*
+=======
+>>>>>>> c08cb4d (cleanup(vscode-plugin): remove versioned APIs and legacy commands for personal edition)
