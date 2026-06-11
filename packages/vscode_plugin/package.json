@@ -49,7 +49,7 @@
       },
       {
         "view": "dendron.recent-workspaces",
-        "contents": "No recent workspaces detected. If this is your first time using Dendron, [try out our tutorial workspace](command:dendron.launchTutorialWorkspace?%7B%22invocationPoint%22%3A%22RecentWorkspacesPanel%22%7D)."
+        "contents": "No recent workspaces detected."
       },
       {
         "view": "dendron.treeView",
@@ -211,10 +211,6 @@
       {
         "command": "dendron.copyToClipboard",
         "title": "Dendron: Copy To Clipboard"
-      },
-      {
-        "command": "dendron.copyCodespaceURL",
-        "title": "Dendron: Copy Codespace URL"
       },
       {
         "command": "sailzen.exportNote",
@@ -421,18 +417,6 @@
         "title": "Dendron: Create Note with Custom Traits"
       },
       {
-        "command": "dendron.publishDev",
-        "title": "Dendron: Publish Dev"
-      },
-      {
-        "command": "dendron.signUp",
-        "title": "Dendron: Sign Up"
-      },
-      {
-        "command": "dendron.signIn",
-        "title": "Dendron: Sign In"
-      },
-      {
         "command": "dendron.enableTelemetry",
         "title": "Dendron: Enable Telemetry"
       },
@@ -459,10 +443,6 @@
       {
         "command": "dendron.showSchemaGraphView",
         "title": "Dendron: Show Schema Graph"
-      },
-      {
-        "command": "dendron.showLegacyPreview",
-        "title": "Dendron: Show Preview (legacy)"
       },
       {
         "command": "dendron.togglePreview",
@@ -495,18 +475,6 @@
         "title": "Dendron: Configure Local Override"
       },
       {
-        "command": "dendron.seedAdd",
-        "title": "Dendron: Add Seed to Workspace"
-      },
-      {
-        "command": "dendron.seedRemove",
-        "title": "Dendron: Remove Seed from Workspace"
-      },
-      {
-        "command": "dendron.seedBrowse",
-        "title": "Dendron: Browse the Seed Registry"
-      },
-      {
         "command": "dendron.dev.doctor",
         "title": "Dendron: Doctor"
       },
@@ -523,14 +491,6 @@
         "title": "Dendron:Dev: Reset Config"
       },
       {
-        "command": "dendron.dev.runMigration",
-        "title": "Dendron:Dev: Run Migration"
-      },
-      {
-        "command": "dendron.dev.migrateSelfContained",
-        "title": "Dendron: Migrate to Self Contained Vault"
-      },
-      {
         "command": "dendron.dev.openLogs",
         "title": "Dendron:Dev: Open Logs"
       },
@@ -539,20 +499,8 @@
         "title": "Dendron:Dev: Diagnostics Report"
       },
       {
-        "command": "dendron.showWelcomePage",
-        "title": "Dendron: Launch Tutorial"
-      },
-      {
-        "command": "dendron.launchTutorialWorkspace",
-        "title": "Dendron: Launch Tutorial Workspace"
-      },
-      {
         "command": "dendron.openBackup",
         "title": "Dendron: Open Backup"
-      },
-      {
-        "command": "dendron.instrumentedWrapperCommand",
-        "title": "Dendron: Instrumented Wrapper Command"
       },
       {
         "command": "dendron.dev.validateEngine",
@@ -612,10 +560,6 @@
         {
           "command": "dendron.copyToClipboard",
           "when": "false"
-        },
-        {
-          "command": "dendron.copyCodespaceURL",
-          "when": "dendron:pluginActive && shellExecutionSupported"
         },
         {
           "command": "dendron.copyAs",
@@ -818,18 +762,6 @@
           "when": "dendron:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.publishDev",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.signUp",
-          "when": "shellExecutionSupported"
-        },
-        {
-          "command": "dendron.signIn",
-          "when": "shellExecutionSupported"
-        },
-        {
           "command": "dendron.enableTelemetry",
           "when": "shellExecutionSupported"
         },
@@ -856,10 +788,6 @@
         {
           "command": "dendron.showSchemaGraphView",
           "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.showLegacyPreview",
-          "when": "dendron:pluginActive && dendron:hasLegacyPreview"
         },
         {
           "command": "dendron.togglePreview",
@@ -890,18 +818,6 @@
           "when": "dendron:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.seedAdd",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.seedRemove",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.seedBrowse",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
           "command": "dendron.dev.doctor",
           "when": "dendron:pluginActive && shellExecutionSupported"
         },
@@ -918,14 +834,6 @@
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.runMigration",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.dev.migrateSelfContained",
-          "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
           "command": "dendron.dev.openLogs",
           "when": "shellExecutionSupported"
         },
@@ -934,20 +842,8 @@
           "when": "dendron:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.showWelcomePage",
-          "when": "shellExecutionSupported"
-        },
-        {
-          "command": "dendron.launchTutorialWorkspace",
-          "when": "false"
-        },
-        {
           "command": "dendron.openBackup",
           "when": "dendron:pluginActive && shellExecutionSupported"
-        },
-        {
-          "command": "dendron.instrumentedWrapperCommand",
-          "when": "false"
         },
         {
           "command": "dendron.dev.validateEngine",
@@ -1333,12 +1229,6 @@
         "mac": "cmd+shift+u",
         "windows": "ctrl+shift+u",
         "when": "editorFocus && dendron:pluginActive"
-      },
-      {
-        "command": "dendron.showLegacyPreview",
-        "windows": "windows+ctrl+p",
-        "mac": "cmd+ctrl+p",
-        "when": "dendron:pluginActive && dendron:hasLegacyPreview"
       },
       {
         "command": "dendron.togglePreview",

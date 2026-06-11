@@ -8,10 +8,6 @@ import {
   TreeItemCollapsibleState,
   Uri,
 } from "vscode";
-import {
-  InstrumentedWrapperCommand,
-  InstrumentedWrapperCommandArgs,
-} from "../commands/InstrumentedWrapperCommand";
 
 type DendronWorkspaceMenuItem = {
   fsPath: string;
@@ -24,19 +20,15 @@ class RecentWorkspacesTreeDataProvider
   implements TreeDataProvider<DendronWorkspaceMenuItem>
 {
   getTreeItem(element: DendronWorkspaceMenuItem): TreeItem {
-    const commandArgs: InstrumentedWrapperCommandArgs = {
+    return {
+      label: element.fsPath,
+      collapsibleState: TreeItemCollapsibleState.None,
+      tooltip: "Click to open the workspace",
       command: {
         title: "Open Workspace",
         command: "vscode.openFolder",
         arguments: [Uri.file(element.fsPath)],
       },
-    };
-
-    return {
-      label: element.fsPath,
-      collapsibleState: TreeItemCollapsibleState.None,
-      tooltip: "Click to open the workspace",
-      command: InstrumentedWrapperCommand.createVSCodeCommand(commandArgs),
     };
   }
 

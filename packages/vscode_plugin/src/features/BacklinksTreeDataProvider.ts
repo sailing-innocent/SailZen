@@ -33,7 +33,7 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { findReferencesById, FoundRefT, sortPaths } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { Backlink, BacklinkTreeItemType } from "./Backlink";
 
 /**
@@ -144,7 +144,7 @@ export default class BacklinksTreeDataProvider
   public async getChildren(element?: Backlink): Promise<Backlink[]> {
     try {
       // TODO: Make the backlinks panel also work when preview is the active editor.
-      const activeNote = await WSUtilsV2.instance().getActiveNote();
+      const activeNote = await WSUtils.instance().getActiveNote();
 
       if (!activeNote) {
         return [];
@@ -575,3 +575,4 @@ _updated: ${DateFormatUtil.formatDate(noteProps.updated)}_`
     return (await proc.process(fileContent)).toString();
   }
 }
+

@@ -1,7 +1,7 @@
 import {
   DEngineClient,
   DNodeProps,
-  DNodePropsQuickInputV2,
+  DNodePropsQuickInput,
   DNodeUtils,
   LabelUtils,
   NoteLookupUtils,
@@ -22,14 +22,14 @@ import {
   CREATE_NEW_WITH_TEMPLATE_LABEL,
   CREATE_NEW_NOTE_WITH_TEMPLATE_DETAIL,
 } from "./constants";
-import { DendronQuickPickerV2 } from "./types";
-import { filterPickerResults, PickerUtilsV2 } from "./utils";
+import { DendronQuickPicker } from "./types";
+import { filterPickerResults, PickerUtils } from "./utils";
 
 export const PAGINATE_LIMIT = 50;
 
 export class NotePickerUtils {
   static async createItemsFromSelectedWikilinks(): Promise<
-    DNodePropsQuickInputV2[] | undefined
+    DNodePropsQuickInput[] | undefined
   > {
     const engine = ExtensionProvider.getEngine();
     const { vaults, wsRoot } = engine;
@@ -78,7 +78,7 @@ export class NotePickerUtils {
   }: {
     fname: string;
     detail: string;
-  }): DNodePropsQuickInputV2 {
+  }): DNodePropsQuickInput {
     const props = DNodeUtils.create({
       id: CREATE_NEW_LABEL,
       fname,
@@ -98,7 +98,7 @@ export class NotePickerUtils {
     fname,
   }: {
     fname: string;
-  }): DNodePropsQuickInputV2 {
+  }): DNodePropsQuickInput {
     const props = DNodeUtils.create({
       id: CREATE_NEW_WITH_TEMPLATE_LABEL,
       fname,
@@ -132,7 +132,7 @@ export class NotePickerUtils {
     return initialValue;
   }
 
-  static getSelection(picker: DendronQuickPickerV2): NoteQuickInput[] {
+  static getSelection(picker: DendronQuickPicker): NoteQuickInput[] {
     return [...picker.selectedItems];
   }
 
@@ -163,7 +163,7 @@ export class NotePickerUtils {
   static async fetchPickerResultsNoInput({
     picker,
   }: {
-    picker: DendronQuickPickerV2;
+    picker: DendronQuickPicker;
   }) {
     const engine = ExtensionProvider.getDWorkspace().engine;
     const resp = await NoteLookupUtils.lookup({
@@ -203,7 +203,7 @@ export class NotePickerUtils {
   }
 
   static async fetchPickerResults(opts: {
-    picker: DendronQuickPickerV2;
+    picker: DendronQuickPicker;
     transformedQuery: TransformedQueryString;
     originalQS: string;
   }) {
@@ -212,7 +212,7 @@ export class NotePickerUtils {
     const { picker, transformedQuery, originalQS } = opts;
     const { engine, wsRoot, vaults } = ExtensionProvider.getDWorkspace();
     // if we are doing a query, reset pagination options
-    PickerUtilsV2.resetPaginationOpts(picker);
+    PickerUtils.resetPaginationOpts(picker);
 
     let nodes = await engine.queryNotes({
       qs: transformedQuery.queryString,
@@ -235,7 +235,7 @@ export class NotePickerUtils {
       picker.moreResults = true;
       nodes = nodes.slice(0, PAGINATE_LIMIT);
     } else {
-      PickerUtilsV2.resetPaginationOpts(picker);
+      PickerUtils.resetPaginationOpts(picker);
     }
     const updatedItems = await Promise.all(
       nodes.map(async (ent) =>
@@ -258,7 +258,7 @@ export class NotePickerUtils {
     return updatedItems;
   }
 
-  static getPickerValue(picker: DendronQuickPickerV2) {
+  static getPickerValue(picker: DendronQuickPicker) {
     return [
       picker.prefix,
       picker.noteModifierValue,
@@ -268,3 +268,6 @@ export class NotePickerUtils {
       .join(".");
   }
 }
+
+
+

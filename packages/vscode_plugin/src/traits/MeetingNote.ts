@@ -5,7 +5,7 @@ import {
   onWillCreateProps,
   SetNameModifierResp,
 } from "@saili/common-all";
-import { DendronClientUtilsV2 } from "../clientUtils";
+import { DendronClientUtils } from "../clientUtils";
 import { IDendronExtension } from "../dendronExtensionInterface";
 
 export class MeetingNote implements NoteTrait {
@@ -30,10 +30,11 @@ export class MeetingNote implements NoteTrait {
     const promptUserForModification = !this._noConfirm;
     return {
       setNameModifier(this, _opts: OnCreateContext): SetNameModifierResp {
-        const name = DendronClientUtilsV2.getMeetingNoteName();
+        const name = DendronClientUtils.getMeetingNoteName();
 
         return { name, promptUserForModification };
       },
     };
   }
 }
+

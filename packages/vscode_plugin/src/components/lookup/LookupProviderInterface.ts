@@ -1,20 +1,20 @@
-import { DendronQuickPickerV2 } from "./types";
+import { DendronQuickPicker } from "./types";
 import { CancellationToken, CancellationTokenSource } from "vscode";
 import {
-  DNodePropsQuickInputV2,
+  DNodePropsQuickInput,
   InvalidFilenameReason,
   NoteQuickInput,
   RespV2,
   SchemaQuickInput,
 } from "@saili/common-all";
 
-export type ILookupProviderV3 = {
+export type ILookupProvider = {
   id: string;
   provide: (opts: ProvideOpts) => Promise<void>;
   onUpdatePickerItems: (opts: OnUpdatePickerItemsOpts) => Promise<void>;
   registerOnAcceptHook: (hook: OnAcceptHook) => void;
   onDidAccept(opts: {
-    quickpick: DendronQuickPickerV2;
+    quickpick: DendronQuickPicker;
     cancellationToken: CancellationTokenSource;
   }): any;
   shouldRejectItem?: (opts: { item: NoteQuickInput }) =>
@@ -29,21 +29,21 @@ export type ILookupProviderV3 = {
 };
 
 export interface INoteLookupProviderFactory {
-  create(id: string, opts: ILookupProviderOptsV3): ILookupProviderV3;
+  create(id: string, opts: ILookupProviderOpts): ILookupProvider;
 }
 
 export interface ISchemaLookupProviderFactory {
-  create(id: string, opts: ILookupProviderOptsV3): ILookupProviderV3;
+  create(id: string, opts: ILookupProviderOpts): ILookupProvider;
 }
 
 export type ProvideOpts = {
-  quickpick: DendronQuickPickerV2;
+  quickpick: DendronQuickPicker;
   token: CancellationTokenSource;
   fuzzThreshold: number;
 };
 
 export type OnUpdatePickerItemsOpts = {
-  picker: DendronQuickPickerV2;
+  picker: DendronQuickPicker;
   token?: CancellationToken;
   fuzzThreshold?: number;
   /**
@@ -52,7 +52,7 @@ export type OnUpdatePickerItemsOpts = {
   forceUpdate?: boolean;
 };
 
-export type ILookupProviderOptsV3 = {
+export type ILookupProviderOpts = {
   /**
    * should provide `Create New`
    */
@@ -71,7 +71,7 @@ export type ILookupProviderOptsV3 = {
    * This will always be shown at the top
    * when (and only when) nothing is queried.
    */
-  extraItems?: DNodePropsQuickInputV2[];
+  extraItems?: DNodePropsQuickInput[];
   preAcceptValidators?: ((selectedItems: NoteQuickInput[]) => boolean)[];
 };
 
@@ -91,6 +91,9 @@ export type SchemaLookupProviderSuccessResp<T = never> = {
 };
 
 export type OnAcceptHook = (opts: {
-  quickpick: DendronQuickPickerV2;
+  quickpick: DendronQuickPicker;
   selectedItems: NoteQuickInput[];
 }) => Promise<RespV2<any>>;
+
+
+

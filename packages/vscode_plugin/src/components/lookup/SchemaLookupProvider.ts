@@ -18,24 +18,24 @@ import { NotePickerUtils } from "../lookup/NotePickerUtils";
 import { SchemaPickerUtils } from "../lookup/SchemaPickerUtils";
 import { CREATE_NEW_SCHEMA_DETAIL } from "./constants";
 import {
-  ILookupProviderOptsV3,
-  ILookupProviderV3,
+  ILookupProviderOpts,
+  ILookupProvider,
   OnAcceptHook,
   OnUpdatePickerItemsOpts,
   ProvideOpts,
   SchemaLookupProviderSuccessResp,
-} from "./LookupProviderV3Interface";
-import { DendronQuickPickerV2, DendronQuickPickState } from "./types";
-import { OldNewLocation, PickerUtilsV2 } from "./utils";
+} from "./LookupProviderInterface";
+import { DendronQuickPicker, DendronQuickPickState } from "./types";
+import { OldNewLocation, PickerUtils } from "./utils";
 
-export class SchemaLookupProvider implements ILookupProviderV3 {
+export class SchemaLookupProvider implements ILookupProvider {
   private _extension: IDendronExtension;
   private _onAcceptHooks: OnAcceptHook[];
-  public opts: ILookupProviderOptsV3;
+  public opts: ILookupProviderOpts;
 
   constructor(
     public id: string,
-    opts: ILookupProviderOptsV3,
+    opts: ILookupProviderOpts,
     extension: IDendronExtension
   ) {
     this._extension = extension;
@@ -84,7 +84,7 @@ export class SchemaLookupProvider implements ILookupProviderV3 {
    * @returns
    */
   onDidAccept(opts: {
-    quickpick: DendronQuickPickerV2;
+    quickpick: DendronQuickPicker;
     cancellationToken: CancellationTokenSource;
   }) {
     return async () => {
@@ -102,7 +102,7 @@ export class SchemaLookupProvider implements ILookupProviderV3 {
           });
       }
       if (
-        PickerUtilsV2.hasNextPicker(picker, {
+        PickerUtils.hasNextPicker(picker, {
           selectedItems,
           providerId: this.id,
         })
@@ -219,7 +219,7 @@ export class SchemaLookupProvider implements ILookupProviderV3 {
 
       // initialize with current picker items without default items present
       const items: NoteQuickInput[] = [...picker.items];
-      let updatedItems = PickerUtilsV2.filterDefaultItems(items);
+      let updatedItems = PickerUtils.filterDefaultItems(items);
       if (token?.isCancellationRequested) {
         return;
       }
@@ -280,3 +280,6 @@ export class SchemaLookupProvider implements ILookupProviderV3 {
     this._onAcceptHooks.push(hook);
   }
 }
+
+
+

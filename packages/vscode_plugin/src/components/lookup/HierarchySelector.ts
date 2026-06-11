@@ -2,7 +2,7 @@ import { DendronError, DVault } from "@saili/common-all";
 import { HistoryEvent } from "@saili/engine-server";
 import path from "path";
 import * as vscode from "vscode";
-import { LookupControllerV3CreateOpts } from "./LookupControllerV3Interface";
+import { LookupControllerCreateOpts } from "./LookupControllerInterface";
 import { Logger } from "../../logger";
 import { VSCodeUtils } from "../../vsCodeUtils";
 import { ExtensionProvider } from "../../ExtensionProvider";
@@ -33,7 +33,7 @@ export class QuickPickHierarchySelector implements HierarchySelector {
   getHierarchy(): Promise<{ hierarchy: string; vault: DVault } | undefined> {
     return new Promise<{ hierarchy: string; vault: DVault } | undefined>(
       (resolve) => {
-        const lookupCreateOpts: LookupControllerV3CreateOpts = {
+        const lookupCreateOpts: LookupControllerCreateOpts = {
           nodeType: "note",
           disableVaultSelection: true,
         };
@@ -120,3 +120,4 @@ export class QuickPickHierarchySelector implements HierarchySelector {
     );
   }
 }
+

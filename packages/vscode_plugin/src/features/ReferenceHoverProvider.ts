@@ -13,7 +13,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import vscode, { MarkdownString, Uri } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import {
@@ -35,7 +35,7 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
   }): Promise<string | MarkdownString> {
     const { wsRoot, config } = ExtensionProvider.getDWorkspace();
     const vpath = vault2Path({
-      vault: PickerUtilsV2.getVaultForOpenEditor(),
+      vault: PickerUtils.getVaultForOpenEditor(),
       wsRoot,
     });
     const fullPath = path.join(vpath, refAtPos.ref);
@@ -180,7 +180,7 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
         );
       } else if (maybeNotes.length > 1) {
         // If there are multiple notes with this fname, default to one that's in the same vault first.
-        const currentVault = PickerUtilsV2.getVaultForOpenEditor();
+        const currentVault = PickerUtils.getVaultForOpenEditor();
         const sameVaultNote = _.filter(maybeNotes, (note) =>
           VaultUtils.isEqual(note.vault, currentVault, engine.wsRoot)
         )[0];
@@ -256,3 +256,4 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
     }
   }
 }
+

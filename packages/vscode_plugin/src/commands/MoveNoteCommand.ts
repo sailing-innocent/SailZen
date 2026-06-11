@@ -16,7 +16,7 @@ import _md from "markdown-it";
 import path from "path";
 import { Disposable, ProgressLocation, Uri, ViewColumn, window } from "vscode";
 import { MultiSelectBtn } from "../components/lookup/buttons";
-import { LookupControllerV3CreateOpts } from "../components/lookup/LookupControllerV3Interface";
+import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
 import {
   OldNewLocation,
   ProviderAcceptHooks,
@@ -29,7 +29,7 @@ import { VSCodeUtils } from "../vsCodeUtils";
 import { ProceedCancel, QuickPickUtil } from "../utils/quickPick";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderV3Interface";
+import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { AutoCompleter } from "../utils/autoCompleter";
@@ -114,7 +114,7 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
         })
       : undefined;
 
-    const lookupCreateOpts: LookupControllerV3CreateOpts = {
+    const lookupCreateOpts: LookupControllerCreateOpts = {
       nodeType: "note",
       disableVaultSelection: opts?.useSameVault,
       // If vault selection is enabled we alwaysPrompt selection mode,
@@ -429,15 +429,7 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-    ProxyMetricUtils.trackRefactoringProxyMetric({
-      props,
-      extra: {
-        ...extra,
-        ...noteChangeEntryCounts,
-        isMultiMove: isMultiMove(opts.moves),
-      },
-    });
-  }
+      }
 
   addAnalyticsPayload(opts: CommandOpts, out: CommandOutput) {
     const noteChangeEntryCounts =
@@ -473,3 +465,5 @@ async function closeCurrentFileOpenMovedFile(
   await VSCodeUtils.closeCurrentFileEditor();
   await VSCodeUtils.openFileInEditor(new FileItem(newUri));
 }
+
+

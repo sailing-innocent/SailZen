@@ -1,7 +1,8 @@
 import _ from "lodash";
 import { window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { StateService } from "../services/stateService";
+import { ExtensionProvider } from "../ExtensionProvider";
+import { GLOBAL_STATE, WORKSPACE_STATE } from "../constants";
 import { BasicCommand } from "./base";
 
 type ConfigScope = "local" | "global" | "all";
@@ -42,16 +43,16 @@ export class ResetConfigCommand extends BasicCommand<
 
   async execute(opts: CommandOpts) {
     const scope = opts.scope;
-    const stateService = StateService.instance();
-    if (scope === "all") {
-      stateService.resetGlobalState();
-      stateService.resetWorkspaceState();
-    } else if (scope === "global") {
-      stateService.resetGlobalState();
-    } else if (scope === "local") {
-      stateService.resetWorkspaceState();
-    } else {
-      throw Error(`wrong scope: ${opts}`);
+    const { globalState, workspaceState } = ExtensionProvider.getExtension().context;
+    if (scope === "all" || scope === "global") {
+      _.values(GLOBAL_STATE).forEach((k) => {
+        globalState.update(k, undefined);
+      });
+    }
+    if (scope === "all" || scope === "local") {
+      _.values(WORKSPACE_STATE).forEach((k) => {
+        workspaceState.update(k, undefined);
+      });
     }
     window.showInformationMessage(`reset config`);
     return;

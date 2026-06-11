@@ -12,17 +12,17 @@ import { getDurationMilliseconds, vault2Path } from "@saili/common-server";
 import { HistoryService } from "@saili/engine-server";
 import _ from "lodash";
 import { Uri } from "vscode";
-import { DendronQuickPickerV2 } from "../components/lookup/types";
-import { OldNewLocation, PickerUtilsV2 } from "../components/lookup/utils";
+import { DendronQuickPicker } from "../components/lookup/types";
+import { OldNewLocation, PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { Logger } from "../logger";
 import { BaseCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { ILookupControllerV3 } from "../components/lookup/LookupControllerV3Interface";
+import { ILookupController } from "../components/lookup/LookupControllerInterface";
 import {
-  ILookupProviderV3,
+  ILookupProvider,
   SchemaLookupProviderSuccessResp,
-} from "../components/lookup/LookupProviderV3Interface";
+} from "../components/lookup/LookupProviderInterface";
 
 type CommandRunOpts = {
   initialValue?: string;
@@ -30,9 +30,9 @@ type CommandRunOpts = {
 };
 
 type CommandGatherOutput = {
-  quickpick: DendronQuickPickerV2;
-  controller: ILookupControllerV3;
-  provider: ILookupProviderV3;
+  quickpick: DendronQuickPicker;
+  controller: ILookupController;
+  provider: ILookupProvider;
   noConfirm?: boolean;
   fuzzThreshold?: number;
 };
@@ -42,9 +42,9 @@ type CommandOpts = {
 } & CommandGatherOutput;
 
 export type CommandOutput = {
-  quickpick: DendronQuickPickerV2;
-  controller: ILookupControllerV3;
-  provider: ILookupProviderV3;
+  quickpick: DendronQuickPicker;
+  controller: ILookupController;
+  provider: ILookupProvider;
 };
 
 type OnDidAcceptReturn = {
@@ -60,14 +60,14 @@ export class SchemaLookupCommand extends BaseCommand<
   CommandRunOpts
 > {
   key = DENDRON_COMMANDS.LOOKUP_SCHEMA.key;
-  protected _controller: ILookupControllerV3 | undefined;
-  protected _provider: ILookupProviderV3 | undefined;
+  protected _controller: ILookupController | undefined;
+  protected _provider: ILookupProvider | undefined;
 
   constructor() {
     super("SchemaLookupCommand");
   }
 
-  protected get controller(): ILookupControllerV3 {
+  protected get controller(): ILookupController {
     if (_.isUndefined(this._controller)) {
       throw DendronError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
@@ -77,7 +77,7 @@ export class SchemaLookupCommand extends BaseCommand<
     return this._controller;
   }
 
-  protected get provider(): ILookupProviderV3 {
+  protected get provider(): ILookupProvider {
     if (_.isUndefined(this._provider)) {
       throw DendronError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
@@ -180,7 +180,7 @@ export class SchemaLookupCommand extends BaseCommand<
   ): Promise<OnDidAcceptReturn | undefined> {
     let result: Promise<OnDidAcceptReturn | undefined>;
     const start = process.hrtime();
-    const isNew = PickerUtilsV2.isCreateNewNotePicked(item);
+    const isNew = PickerUtils.isCreateNewNotePicked(item);
     if (isNew) {
       result = this.acceptNewSchemaItem();
     } else {
@@ -219,7 +219,7 @@ export class SchemaLookupCommand extends BaseCommand<
     const { engine } = ws;
     const vault: DVault = picker.vault
       ? picker.vault
-      : PickerUtilsV2.getVaultForOpenEditor();
+      : PickerUtils.getVaultForOpenEditor();
     const nodeSchemaModuleNew: SchemaModuleProps =
       SchemaUtils.createModuleProps({
         fname,
@@ -267,3 +267,6 @@ export class SchemaLookupCommand extends BaseCommand<
     }
   }
 }
+
+
+

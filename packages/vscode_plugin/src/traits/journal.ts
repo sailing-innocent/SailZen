@@ -8,7 +8,7 @@ import {
   onCreateProps,
   SetNameModifierResp,
 } from "@saili/common-all";
-import { DendronClientUtilsV2 } from "../clientUtils";
+import { DendronClientUtils } from "../clientUtils";
 
 export class JournalNote implements NoteTrait {
   id: string = "journalNote";
@@ -28,7 +28,7 @@ export class JournalNote implements NoteTrait {
         const journalConfig = ConfigUtils.getJournal(config);
         // const dailyJournalDomain = journalConfig.dailyDomain;
 
-        const { noteName: fname } = DendronClientUtilsV2.genNoteName(
+        const { noteName: fname } = DendronClientUtils.genNoteName(
           LookupNoteTypeEnum.journal,
           {
             overrides: { domain: journalConfig.name },
@@ -59,3 +59,4 @@ export class JournalNote implements NoteTrait {
     };
   }
 }
+

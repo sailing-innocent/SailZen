@@ -16,8 +16,8 @@ import _ from "lodash";
 import _md from "markdown-it";
 import path from "path";
 import { TextEditor, ViewColumn, window } from "vscode";
-import { DendronClientUtilsV2 } from "../clientUtils";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { DendronClientUtils } from "../clientUtils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -209,12 +209,12 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
       const trimEnd = mode === "note" ? ".md" : ".schema.yml";
       const fname = path.basename(fsPath, trimEnd);
       if (mode === "note") {
-        const vault = PickerUtilsV2.getVaultForOpenEditor(fsPath);
+        const vault = PickerUtils.getVaultForOpenEditor(fsPath);
         const note = (await engine.findNotesMeta({ fname, vault }))[0];
         const out = await this.deleteNote({ note, opts, engine, ctx });
         return out;
       } else {
-        const smod = await DendronClientUtilsV2.getSchemaModByFname({
+        const smod = await DendronClientUtils.getSchemaModByFname({
           fname,
           client: engine,
         });
@@ -228,3 +228,5 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
     }
   }
 }
+
+

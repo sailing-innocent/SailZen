@@ -10,7 +10,7 @@ import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 import * as vscode from "vscode";
 
@@ -47,7 +47,7 @@ export class ApplyTemplateCommand extends BasicCommand<
   }
 
   async gatherInputs(): Promise<CommandInput | undefined> {
-    const targetNote = await WSUtilsV2.instance().getActiveNote();
+    const targetNote = await WSUtils.instance().getActiveNote();
     if (_.isUndefined(targetNote)) {
       throw new DendronError({ message: "No Dendron note open" });
     }
@@ -89,3 +89,4 @@ export class ApplyTemplateCommand extends BasicCommand<
     return { updatedTargetNote };
   }
 }
+

@@ -27,7 +27,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import { commands, ProgressLocation, QuickPickItem, window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS, DENDRON_REMOTE_VAULTS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -90,7 +90,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
           const value = qp.value;
           const selected = qp.selectedItems[0];
           if (selected.label === "custom") {
-            if (PickerUtilsV2.isInputEmpty(value)) {
+            if (PickerUtils.isInputEmpty(value)) {
               return window.showInformationMessage("please enter an endpoint");
             }
             selected.src = qp.value;
@@ -107,7 +107,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
             placeHolder: localVaultPathPlaceholder,
             value: path2Vault,
           });
-          if (PickerUtilsV2.isInputEmpty(out)) {
+          if (PickerUtils.isInputEmpty(out)) {
             resolve(undefined);
           }
           sourcePath = out!;
@@ -132,7 +132,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
         prompt: "Path to your new vault (relative to your workspace root)",
         placeHolder: localVaultPathPlaceholder,
       });
-      if (PickerUtilsV2.isInputEmpty(out)) return;
+      if (PickerUtils.isInputEmpty(out)) return;
       sourcePath = out!;
     }
     sourceName = await VSCodeUtils.showInputBox({
@@ -161,7 +161,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
         placeHolder: "my-vault",
       });
       // If empty, then user cancelled the prompt
-      if (PickerUtilsV2.isInputEmpty(vaultName)) return;
+      if (PickerUtils.isInputEmpty(vaultName)) return;
 
       return {
         type: sourceType,
@@ -182,7 +182,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
         ignoreFocusOut: true,
       });
       // Cancelled
-      if (PickerUtilsV2.isInputEmpty(remote)) return;
+      if (PickerUtils.isInputEmpty(remote)) return;
 
       // Calculate the vault name from the remote. If that fails, ask the user for a unique name to use.
       const vaultName: string | undefined = GitUtils.getRepoNameFromURL(remote);
@@ -500,3 +500,4 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
     return { vaults };
   }
 }
+

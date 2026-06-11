@@ -1,11 +1,11 @@
 import { DendronError } from "@saili/common-all";
 import { DLogger } from "@saili/common-server";
 import { HistoryService } from "@saili/engine-server";
-import { ILookupControllerV3 } from "./LookupControllerV3Interface";
-import { NoteLookupProviderChangeStateResp } from "./LookupProviderV3Interface";
+import { ILookupController } from "./LookupControllerInterface";
+import { NoteLookupProviderChangeStateResp } from "./LookupProviderInterface";
 
 export class NoteLookupProviderUtils {
-  static cleanup(opts: { id: string; controller: ILookupControllerV3 }) {
+  static cleanup(opts: { id: string; controller: ILookupController }) {
     const { id, controller } = opts;
     controller.onHide();
     HistoryService.instance().remove(id, "lookupProvider");
@@ -13,7 +13,7 @@ export class NoteLookupProviderUtils {
 
   static subscribe(opts: {
     id: string;
-    controller: ILookupControllerV3;
+    controller: ILookupController;
     logger: DLogger;
     onDone?: Function;
     onError?: Function;
@@ -82,3 +82,4 @@ export class NoteLookupProviderUtils {
     });
   }
 }
+

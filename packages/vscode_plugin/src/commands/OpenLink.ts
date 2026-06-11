@@ -5,7 +5,7 @@ import _ from "lodash";
 import open from "open";
 import path from "path";
 import { env, Uri, window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { getURLAt } from "../utils/md";
@@ -55,7 +55,7 @@ export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
       const { wsRoot } = ExtensionProvider.getDWorkspace();
 
       if (text.startsWith("asset")) {
-        const vault = PickerUtilsV2.getOrPromptVaultForOpenEditor();
+        const vault = PickerUtils.getOrPromptVaultForOpenEditor();
         assetPath = path.join(vault2Path({ vault, wsRoot }), text);
       } else {
         assetPath = resolvePath(text, getExtension().rootWorkspace.uri.fsPath);
@@ -80,3 +80,4 @@ export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
     return { filepath: assetPath };
   }
 }
+

@@ -70,7 +70,7 @@ export class Logger {
     fs.ensureDirSync(context.logUri.fsPath);
     console.log(
       `Logger:configure: logPath=${context.logUri.fsPath}, level=${level}`)
-    const logPath = path.join(context.logUri.fsPath, "dendron.log");
+    const logPath = path.join(context.logUri.fsPath, "sailzen.log");
     if (fs.existsSync(logPath)) {
       try {
         fs.moveSync(logPath, `${logPath}.old`, { overwrite: true });

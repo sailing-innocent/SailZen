@@ -87,9 +87,9 @@ describe("CopyNoteLinkCommand", () => {
         end: new Position(0, 0),
       });
 
-      // Mock PickerUtilsV2
-      const { PickerUtilsV2 } = await import("../components/lookup/utils");
-      (PickerUtilsV2.getVaultForOpenEditor as jest.Mock).mockReturnValue(
+      // Mock PickerUtils
+      const { PickerUtils } = await import("../components/lookup/utils");
+      (PickerUtils.getVaultForOpenEditor as jest.Mock).mockReturnValue(
         mockVault
       );
 
@@ -146,9 +146,9 @@ describe("CopyNoteLinkCommand", () => {
         end: new Position(0, 0),
       });
 
-      // Mock PickerUtilsV2
-      const { PickerUtilsV2 } = await import("../components/lookup/utils");
-      (PickerUtilsV2.getVaultForOpenEditor as jest.Mock).mockReturnValue(
+      // Mock PickerUtils
+      const { PickerUtils } = await import("../components/lookup/utils");
+      (PickerUtils.getVaultForOpenEditor as jest.Mock).mockReturnValue(
         mockVault
       );
 
@@ -202,9 +202,9 @@ describe("CopyNoteLinkCommand", () => {
         end: new Position(0, 0),
       });
 
-      // Mock PickerUtilsV2
-      const { PickerUtilsV2 } = await import("../components/lookup/utils");
-      (PickerUtilsV2.getVaultForOpenEditor as jest.Mock).mockReturnValue(
+      // Mock PickerUtils
+      const { PickerUtils } = await import("../components/lookup/utils");
+      (PickerUtils.getVaultForOpenEditor as jest.Mock).mockReturnValue(
         mockVault
       );
 
@@ -252,9 +252,9 @@ describe("CopyNoteLinkCommand", () => {
         end: new Position(0, 0),
       });
 
-      // Mock PickerUtilsV2
-      const { PickerUtilsV2 } = await import("../components/lookup/utils");
-      (PickerUtilsV2.getVaultForOpenEditor as jest.Mock).mockReturnValue(
+      // Mock PickerUtils
+      const { PickerUtils } = await import("../components/lookup/utils");
+      (PickerUtils.getVaultForOpenEditor as jest.Mock).mockReturnValue(
         mockVault
       );
 
@@ -312,9 +312,9 @@ describe("CopyNoteLinkCommand", () => {
         end: new Position(0, 0),
       });
 
-      // Mock PickerUtilsV2
-      const { PickerUtilsV2 } = await import("../components/lookup/utils");
-      (PickerUtilsV2.getVaultForOpenEditor as jest.Mock).mockReturnValue(
+      // Mock PickerUtils
+      const { PickerUtils } = await import("../components/lookup/utils");
+      (PickerUtils.getVaultForOpenEditor as jest.Mock).mockReturnValue(
         mockVault
       );
 
@@ -334,10 +334,10 @@ describe("CopyNoteLinkCommand", () => {
       const { ConfigUtils } = await import("@saili/common-all");
       (ConfigUtils.getAliasMode as jest.Mock).mockReturnValue("title");
 
-      // Mock DendronClientUtilsV2
-      const { DendronClientUtilsV2 } = await import("../clientUtils");
+      // Mock DendronClientUtils
+      const { DendronClientUtils } = await import("../clientUtils");
       (
-        DendronClientUtilsV2.shouldUseVaultPrefix as jest.Mock
+        DendronClientUtils.shouldUseVaultPrefix as jest.Mock
       ).mockReturnValue(false);
 
       // Mock clipboard
@@ -365,6 +365,8 @@ describe("CopyNoteLinkCommand", () => {
     });
   });
 });
+
+
 
 
 

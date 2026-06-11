@@ -92,7 +92,7 @@ export type SchemaOpts = Omit<DNodeOpts<SchemaData>, "type" | "id"> & {
 };
 export type NoteOpts = Omit<DNodeOpts, "type">;
 
-export type DNodePropsQuickInputV2<T = any> = DNodeProps<T> & {
+export type DNodePropsQuickInput<T = any> = DNodeProps<T> & {
   label: string;
   detail?: string;
   alwaysShow?: boolean;
@@ -107,7 +107,7 @@ export type NoteQuickInput = NoteProps & {
  * A reduced version of NoteQuickInput that only keeps the props necessary for
  * lookup quick pick items
  */
-export type NoteQuickInputV2 = Pick<NoteProps, "fname" | "vault" | "schema"> & {
+export type ReducedNoteQuickInput = Pick<NoteProps, "fname" | "vault" | "schema"> & {
   label: string;
   detail?: string;
   alwaysShow?: boolean;
@@ -803,3 +803,5 @@ export type LookupViewMessage = DMessage<LookupViewMessageEnum, any>;
 // from https://stackoverflow.com/questions/48011353/how-to-unwrap-the-type-of-a-promise
 // use to unwrap promise of return type. can be removed once we upgrade to typescript 4.5 (will be included in typescript library)
 export type Awaited<T> = T extends PromiseLike<infer U> ? U : T;
+
+

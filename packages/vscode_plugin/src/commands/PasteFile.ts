@@ -5,7 +5,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import { Selection, window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -42,7 +42,7 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
       prompt: "Path of file",
       placeHolder: "",
     });
-    if (PickerUtilsV2.isInputEmpty(out)) return;
+    if (PickerUtils.isInputEmpty(out)) return;
     return { filePath: out };
   }
 
@@ -114,3 +114,4 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
     };
   }
 }
+

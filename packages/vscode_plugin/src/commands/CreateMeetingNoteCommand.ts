@@ -9,7 +9,7 @@ import { vault2Path } from "@saili/common-server";
 import * as fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -73,7 +73,7 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
    */
   private async makeSchemaFileIfNotExisting(): Promise<boolean> {
     const vaultPath = vault2Path({
-      vault: PickerUtilsV2.getVaultForOpenEditor(),
+      vault: PickerUtils.getVaultForOpenEditor(),
       wsRoot: ExtensionProvider.getDWorkspace().wsRoot,
     });
 
@@ -143,7 +143,7 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
         fname: CreateMeetingNoteCommand.MEETING_TEMPLATE_FNAME,
       });
 
-    const vault = PickerUtilsV2.getVaultForOpenEditor();
+    const vault = PickerUtils.getVaultForOpenEditor();
     const vaultPath = vault2Path({
       vault,
       wsRoot: ExtensionProvider.getDWorkspace().wsRoot,
@@ -189,3 +189,4 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
     return true;
   }
 }
+

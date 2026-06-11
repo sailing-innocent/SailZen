@@ -2,7 +2,6 @@ import { extractNoteChangeEntryCounts } from "@saili/common-all";
 import _ from "lodash";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
-import { ProxyMetricUtils } from "../utils/ProxyMetricUtils";
 import { BasicCommand } from "./base";
 import {
   MoveNoteCommand,
@@ -68,16 +67,7 @@ export class RenameNoteCommand extends BasicCommand<
 
     const { extra, ...props } = this._moveNoteCommand._proxyMetricPayload;
 
-    ProxyMetricUtils.trackRefactoringProxyMetric({
-      props: {
-        command: this.key,
-        ..._.omit(props, "command"),
-      },
-      extra: {
-        ...noteChangeEntryCounts,
-      },
-    });
-  }
+      }
 
   addAnalyticsPayload(_opts: CommandOpts, out: CommandOutput) {
     const noteChangeEntryCounts =
@@ -100,3 +90,4 @@ export class RenameNoteCommand extends BasicCommand<
     return this._moveNoteCommand.execute(this.populateCommandOpts(opts));
   }
 }
+

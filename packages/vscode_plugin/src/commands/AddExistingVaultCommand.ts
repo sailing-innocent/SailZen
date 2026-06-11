@@ -34,7 +34,7 @@ import {
   Uri,
   window,
 } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS, DENDRON_REMOTE_VAULTS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { Logger } from "../logger";
@@ -103,7 +103,7 @@ export class AddExistingVaultCommand extends BasicCommand<
           const value = qp.value;
           const selected = qp.selectedItems[0];
           if (selected.label === "custom") {
-            if (PickerUtilsV2.isInputEmpty(value)) {
+            if (PickerUtils.isInputEmpty(value)) {
               return window.showInformationMessage("please enter an endpoint");
             }
             selected.src = qp.value;
@@ -121,7 +121,7 @@ export class AddExistingVaultCommand extends BasicCommand<
             value: placeHolder,
           });
 
-          if (PickerUtilsV2.isInputEmpty(out)) {
+          if (PickerUtils.isInputEmpty(out)) {
             return resolve(undefined);
           }
           vaultDestination = path.join(this._ext.getDWorkspace().wsRoot, out);
@@ -210,7 +210,7 @@ export class AddExistingVaultCommand extends BasicCommand<
         ignoreFocusOut: true,
       });
       // Cancelled
-      if (PickerUtilsV2.isInputEmpty(remote)) return;
+      if (PickerUtils.isInputEmpty(remote)) return;
 
       // Calculate the vault name from the remote.
       const vaultName: string | undefined = GitUtils.getRepoNameFromURL(remote);
@@ -540,3 +540,4 @@ export class AddExistingVaultCommand extends BasicCommand<
     return { vaults };
   }
 }
+

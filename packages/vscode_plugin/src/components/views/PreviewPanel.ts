@@ -30,7 +30,7 @@ import { Logger } from "../../logger";
 import { ITextDocumentService } from "../../services/ITextDocumentService";
 import { WebViewUtils } from "../../views/utils";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { WSUtilsV2 } from "../../WSUtilsV2";
+import { WSUtils } from "../../WSUtils";
 import { IPreviewLinkHandler } from "./IPreviewLinkHandler";
 import { PreviewProxy } from "./PreviewProxy";
 
@@ -195,7 +195,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
   }
 
   private setupCallbacks(): void {
-    const wsUtils = new WSUtilsV2(this._ext);
+    const wsUtils = new WSUtils(this._ext);
 
     // Callback on getting a message back from the webview
     this._panel!.webview.onDidReceiveMessage(async (msg: NoteViewMessage) => {
@@ -464,3 +464,4 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     };
   }
 }
+

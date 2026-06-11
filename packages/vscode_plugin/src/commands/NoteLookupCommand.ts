@@ -41,23 +41,23 @@ import {
   LookupSplitTypeEnum,
 } from "../components/lookup/ButtonTypes";
 import { CREATE_NEW_LABEL } from "../components/lookup/constants";
-import { ILookupControllerV3 } from "../components/lookup/LookupControllerV3Interface";
+import { ILookupController } from "../components/lookup/LookupControllerInterface";
 import {
-  ILookupProviderV3,
+  ILookupProvider,
   NoteLookupProviderChangeStateResp,
   NoteLookupProviderSuccessResp,
-} from "../components/lookup/LookupProviderV3Interface";
+} from "../components/lookup/LookupProviderInterface";
 import { NotePickerUtils } from "../components/lookup/NotePickerUtils";
 import { QuickPickTemplateSelector } from "../components/lookup/QuickPickTemplateSelector";
 import {
-  DendronQuickPickerV2,
+  DendronQuickPicker,
   DendronQuickPickState,
   VaultSelectionMode,
 } from "../components/lookup/types";
 import {
   node2Uri,
   OldNewLocation,
-  PickerUtilsV2,
+  PickerUtils,
 } from "../components/lookup/utils";
 import { VaultSelectionModeConfigUtils } from "../components/lookup/vaultSelectionModeConfigUtils";
 import { DendronContext, DENDRON_COMMANDS } from "../constants";
@@ -68,7 +68,7 @@ import { JournalNote } from "../traits/journal";
 import { AutoCompleter } from "../utils/autoCompleter";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BaseCommand } from "./base";
 
 export type CommandRunOpts = {
@@ -91,9 +91,9 @@ export type CommandRunOpts = {
  * Everything that's necessary to initialize the quickpick
  */
 type CommandGatherOutput = {
-  quickpick: DendronQuickPickerV2;
-  controller: ILookupControllerV3;
-  provider: ILookupProviderV3;
+  quickpick: DendronQuickPicker;
+  controller: ILookupController;
+  provider: ILookupProvider;
   noConfirm?: boolean;
   fuzzThreshold?: number;
 };
@@ -108,9 +108,9 @@ export type CommandOpts = {
 } & CommandGatherOutput;
 
 export type CommandOutput = {
-  quickpick: DendronQuickPickerV2;
-  controller: ILookupControllerV3;
-  provider: ILookupProviderV3;
+  quickpick: DendronQuickPicker;
+  controller: ILookupController;
+  provider: ILookupProvider;
 };
 
 type OnDidAcceptReturn = {
@@ -132,9 +132,9 @@ export class NoteLookupCommand extends BaseCommand<
   CommandRunOpts
 > {
   key = DENDRON_COMMANDS.LOOKUP_NOTE.key;
-  protected _controller: ILookupControllerV3 | undefined;
-  protected _provider: ILookupProviderV3 | undefined;
-  protected _quickPick: DendronQuickPickerV2 | undefined;
+  protected _controller: ILookupController | undefined;
+  protected _provider: ILookupProvider | undefined;
+  protected _quickPick: DendronQuickPicker | undefined;
 
   constructor() {
     super("LookupCommandV3");
@@ -153,7 +153,7 @@ export class NoteLookupCommand extends BaseCommand<
     });
   }
 
-  public get controller(): ILookupControllerV3 {
+  public get controller(): ILookupController {
     if (_.isUndefined(this._controller)) {
       throw DendronError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
@@ -163,11 +163,11 @@ export class NoteLookupCommand extends BaseCommand<
     return this._controller;
   }
 
-  public set controller(controller: ILookupControllerV3 | undefined) {
+  public set controller(controller: ILookupController | undefined) {
     this._controller = controller;
   }
 
-  public get provider(): ILookupProviderV3 {
+  public get provider(): ILookupProvider {
     if (_.isUndefined(this._provider)) {
       throw DendronError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
@@ -187,7 +187,7 @@ export class NoteLookupCommand extends BaseCommand<
    * In the meantime, if you absolutely _have_ to provide a custom provider to an instance of
    * a lookup command, make sure the provider's id is `lookup`.
    */
-  public set provider(provider: ILookupProviderV3 | undefined) {
+  public set provider(provider: ILookupProvider | undefined) {
     this._provider = provider;
   }
 
@@ -481,10 +481,10 @@ export class NoteLookupCommand extends BaseCommand<
   ): Promise<OnDidAcceptReturn | undefined> {
     let result: Promise<OnDidAcceptReturn | undefined>;
     const start = process.hrtime();
-    const isNew = PickerUtilsV2.isCreateNewNotePicked(item);
+    const isNew = PickerUtils.isCreateNewNotePicked(item);
 
     const isNewWithTemplate =
-      PickerUtilsV2.isCreateNewNoteWithTemplatePicked(item);
+      PickerUtils.isCreateNewNoteWithTemplatePicked(item);
     if (isNew) {
       if (isNewWithTemplate) {
         result = this.acceptNewWithTemplateItem(item);
@@ -508,7 +508,7 @@ export class NoteLookupCommand extends BaseCommand<
   ): Promise<OnDidAcceptReturn | undefined> {
     const picker = this.controller.quickPick;
     const uri = node2Uri(item);
-    const originalNoteFromItem = PickerUtilsV2.noteQuickInputToNote(item);
+    const originalNoteFromItem = PickerUtils.noteQuickInputToNote(item);
     const originalNoteDeepCopy = _.cloneDeep(originalNoteFromItem);
 
     if (picker.selectionProcessFunc !== undefined) {
@@ -538,7 +538,7 @@ export class NoteLookupCommand extends BaseCommand<
   }): Promise<NoteProps> {
     const { item, engine } = opts;
 
-    const noteFromItem = PickerUtilsV2.noteQuickInputToNote(item);
+    const noteFromItem = PickerUtils.noteQuickInputToNote(item);
     const preparedNote = await NoteUtils.updateStubWithSchema({
       stubNote: noteFromItem,
       engine,
@@ -586,7 +586,7 @@ export class NoteLookupCommand extends BaseCommand<
       note: nodeNew,
       engine,
       pickNote: async (choices: NoteProps[]) => {
-        return WSUtilsV2.instance().promptForNoteAsync({
+        return WSUtils.instance().promptForNoteAsync({
           notes: choices,
           quickpickTitle:
             "Select which template to apply or press [ESC] to not apply a template",
@@ -679,7 +679,7 @@ export class NoteLookupCommand extends BaseCommand<
    */
   private getFNameForNewItem(item: NoteQuickInput) {
     if (this.isJournalButtonPressed()) {
-      return PickerUtilsV2.getValue(this.controller.quickPick);
+      return PickerUtils.getValue(this.controller.quickPick);
     } else {
       return item.fname;
     }
@@ -691,7 +691,7 @@ export class NoteLookupCommand extends BaseCommand<
     picker,
   }: {
     fname: string;
-    picker: DendronQuickPickerV2;
+    picker: DendronQuickPicker;
   }) {
     const engine = ExtensionProvider.getEngine();
 
@@ -702,7 +702,7 @@ export class NoteLookupCommand extends BaseCommand<
     // Try to get the default vault value.
     let vault: DVault | undefined = picker.vault
       ? picker.vault
-      : PickerUtilsV2.getVaultForOpenEditor();
+      : PickerUtils.getVaultForOpenEditor();
 
     // If our current context does not have vault or if our current context vault
     // already has a matching file name we want to ask the user for a different vault.
@@ -713,7 +713,7 @@ export class NoteLookupCommand extends BaseCommand<
       );
 
       if (availVaults.length > 1) {
-        const promptedVault = await PickerUtilsV2.promptVault(availVaults);
+        const promptedVault = await PickerUtils.promptVault(availVaults);
         if (promptedVault === undefined) {
           // User must have cancelled vault selection.
           vault = undefined;
@@ -761,3 +761,7 @@ export class NoteLookupCommand extends BaseCommand<
   }
 
 }
+
+
+
+

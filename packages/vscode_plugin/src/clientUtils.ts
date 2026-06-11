@@ -25,7 +25,7 @@ type CreateFnameOpts = {
   overrides?: CreateFnameOverrides;
 };
 
-export class DendronClientUtilsV2 {
+export class DendronClientUtils {
   static genNotePrefix(fname: string, addBehavior: NoteAddBehavior) {
     let out: string;
     switch (addBehavior) {
@@ -137,7 +137,7 @@ export class DendronClientUtilsV2 {
       throw Error("Must be run from within a note");
     }
 
-    const prefix = DendronClientUtilsV2.genNotePrefix(
+    const prefix = DendronClientUtils.genNotePrefix(
       currentNoteFname,
       addBehavior
     );
@@ -174,3 +174,4 @@ export class DendronClientUtilsV2 {
     return useVaultPrefix;
   }
 }
+

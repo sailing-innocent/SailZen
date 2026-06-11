@@ -30,7 +30,7 @@ export class DiagnosticsReportCommand extends BasicCommand<
 
     const serverLogPath = path.join(
       path.dirname(logPath),
-      "dendron.server.log"
+      "sailzen.server.log"
     );
 
     let serverLastLines: string = "";

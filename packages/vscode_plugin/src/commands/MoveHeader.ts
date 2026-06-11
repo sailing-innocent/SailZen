@@ -37,14 +37,14 @@ import path from "path";
 import { visit } from "unist-util-visit";
 import { Disposable, Location } from "vscode";
 import {
-  ILookupControllerV3,
-  LookupControllerV3CreateOpts,
-} from "../components/lookup/LookupControllerV3Interface";
-import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderV3Interface";
+  ILookupController,
+  LookupControllerCreateOpts,
+} from "../components/lookup/LookupControllerInterface";
+import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { NotePickerUtils } from "../components/lookup/NotePickerUtils";
-import { DendronQuickPickerV2 } from "../components/lookup/types";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { DendronQuickPicker } from "../components/lookup/types";
+import { PickerUtils } from "../components/lookup/utils";
 import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
@@ -178,7 +178,7 @@ export class MoveHeaderCommand extends BasicCommand<
    * @returns
    */
   private promptForDestination(
-    lookupController: ILookupControllerV3,
+    lookupController: ILookupController,
     opts: CommandInput
   ) {
     const extension = ExtensionProvider.getExtension();
@@ -207,18 +207,18 @@ export class MoveHeaderCommand extends BasicCommand<
    */
   async prepareDestination(opts: {
     engine: IEngineAPIService;
-    quickpick: DendronQuickPickerV2;
+    quickpick: DendronQuickPicker;
     selectedItems: readonly NoteQuickInput[];
   }) {
     const { engine, quickpick, selectedItems } = opts;
     const vault =
-      (quickpick.vault as DVault) || PickerUtilsV2.getVaultForOpenEditor();
+      (quickpick.vault as DVault) || PickerUtils.getVaultForOpenEditor();
     let dest: NoteProps | undefined;
     if (_.isUndefined(selectedItems)) {
       dest = undefined;
     } else {
       const selected = selectedItems[0];
-      const isCreateNew = PickerUtilsV2.isCreateNewNotePicked(selected);
+      const isCreateNew = PickerUtils.isCreateNewNotePicked(selected);
       if (isCreateNew) {
         // check if we really want to create a new note.
         // if a user selects a vault in the picker that
@@ -255,7 +255,7 @@ export class MoveHeaderCommand extends BasicCommand<
       throw this.noNodesToMoveError;
     }
 
-    const lcOpts: LookupControllerV3CreateOpts = {
+    const lcOpts: LookupControllerCreateOpts = {
       nodeType: "note",
       disableVaultSelection: opts?.useSameVault,
       vaultSelectCanToggle: false,
@@ -270,7 +270,7 @@ export class MoveHeaderCommand extends BasicCommand<
         logger: this.L,
         onDone: async (event: HistoryEvent) => {
           const data = event.data as NoteLookupProviderSuccessResp;
-          const quickpick: DendronQuickPickerV2 = lc.quickPick;
+          const quickpick: DendronQuickPicker = lc.quickPick;
           const dest = await this.prepareDestination({
             engine,
             quickpick,
@@ -618,3 +618,6 @@ export class MoveHeaderCommand extends BasicCommand<
   }
 
 }
+
+
+

@@ -6,7 +6,7 @@ import path from "path";
 import { Disposable, TextEditor, Uri, window } from "vscode";
 import {
   OldNewLocation,
-  PickerUtilsV2,
+  PickerUtils,
   ProviderAcceptHooks,
 } from "../components/lookup/utils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
@@ -33,7 +33,7 @@ type CommandOutput = {
   changed: NoteChangeEntry[];
 };
 
-export { CommandOutput as RenameNoteOutputV2a };
+export { CommandOutput as RenameNoteOutput };
 
 /**
  * This is not `Dendron: Rename Note`. For that, See [[../packages/plugin-core/src/commands/RenameNoteCommand.ts]]
@@ -42,12 +42,12 @@ export { CommandOutput as RenameNoteOutputV2a };
  * TODO: refactor this class to avoid confusion.
  * Possibly consolidate renaming logic in one place.
  */
-export class RenameNoteV2aCommand extends BaseCommand<
+export class RenameNoteInternalCommand extends BaseCommand<
   CommandOpts,
   CommandOutput,
   CommandInput
 > {
-  key = DENDRON_COMMANDS.RENAME_NOTE_V2A.key;
+  key = DENDRON_COMMANDS.RENAME_NOTE_INTERNAL.key;
   public silent?: boolean;
 
   async gatherInputs(): Promise<CommandInput> {
@@ -103,7 +103,7 @@ export class RenameNoteV2aCommand extends BaseCommand<
   async enrichInputs(inputs: CommandInput): Promise<CommandOpts> {
     const editor = VSCodeUtils.getActiveTextEditor() as TextEditor;
     const oldUri: Uri = editor.document.uri;
-    const vault = PickerUtilsV2.getOrPromptVaultForOpenEditor();
+    const vault = PickerUtils.getOrPromptVaultForOpenEditor();
     const move = inputs.move[0];
     const fname = move.newLoc.fname;
     const { wsRoot } = ExtensionProvider.getDWorkspace();
@@ -132,7 +132,7 @@ export class RenameNoteV2aCommand extends BaseCommand<
   }
 
   async execute(opts: CommandOpts) {
-    const ctx = "RenameNoteV2a";
+    const ctx = "RenameNoteInternal";
     this.L.info({ ctx, msg: "enter", opts });
     const ext = ExtensionProvider.getExtension();
     try {
@@ -188,3 +188,4 @@ export class RenameNoteV2aCommand extends BaseCommand<
     }
   }
 }
+

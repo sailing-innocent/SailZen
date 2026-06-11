@@ -9,20 +9,19 @@ import {
 import { HistoryEvent } from "@saili/engine-server";
 import {
   CreateQuickPickOpts,
-  ILookupControllerV3,
-  LookupControllerV3CreateOpts,
-} from "../components/lookup/LookupControllerV3Interface";
+  ILookupController,
+  LookupControllerCreateOpts,
+} from "../components/lookup/LookupControllerInterface";
 import {
-  ILookupProviderV3,
+  ILookupProvider,
   NoteLookupProviderSuccessResp,
-} from "../components/lookup/LookupProviderV3Interface";
+} from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { BasicCommand, SanityCheckResults } from "./base";
 import * as vscode from "vscode";
 import _ from "lodash";
-import { ProxyMetricUtils } from "../utils/ProxyMetricUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { LinkUtils } from "@saili/unified";
 import { AutoCompleter } from "../utils/autoCompleter";
@@ -59,8 +58,8 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     this.extension = ext;
   }
 
-  private createLookupController(): ILookupControllerV3 {
-    const opts: LookupControllerV3CreateOpts = {
+  private createLookupController(): ILookupController {
+    const opts: LookupControllerCreateOpts = {
       nodeType: "note",
       disableVaultSelection: true,
     };
@@ -127,7 +126,7 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
       const showOpts: CreateQuickPickOpts & {
         nonInteractive?: boolean | undefined;
         initialValue?: string | undefined;
-        provider: ILookupProviderV3;
+        provider: ILookupProvider;
       } = {
         title: "Select merge destination note",
         placeholder: "note",
@@ -433,12 +432,7 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-    ProxyMetricUtils.trackRefactoringProxyMetric({
-      props,
-      extra: {
-        ...extra,
-        ...noteChangeEntryCounts,
-      },
-    });
-  }
+      }
 }
+
+

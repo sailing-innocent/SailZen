@@ -3,7 +3,7 @@ import {
   DendronError,
   DEngineClient,
   DNodeProps,
-  DNodePropsQuickInputV2,
+  DNodePropsQuickInput,
   DNodeUtils,
   DNoteLoc,
   DVault,
@@ -33,11 +33,11 @@ import {
   CREATE_NEW_NOTE_WITH_TEMPLATE_DETAIL,
   MORE_RESULTS_LABEL,
 } from "./constants";
-import type { CreateQuickPickOpts } from "./LookupControllerV3Interface";
-import { OnAcceptHook } from "./LookupProviderV3Interface";
+import type { CreateQuickPickOpts } from "./LookupControllerInterface";
+import { OnAcceptHook } from "./LookupProviderInterface";
 import { TabUtils } from "./TabUtils";
 import {
-  DendronQuickPickerV2,
+  DendronQuickPicker,
   DendronQuickPickState,
   VaultSelectionMode,
 } from "./types";
@@ -64,7 +64,7 @@ function isDVaultArray(
   );
 }
 
-export function createNoActiveItem(vault: DVault): DNodePropsQuickInputV2 {
+export function createNoActiveItem(vault: DVault): DNodePropsQuickInput {
   const props = DNodeUtils.create({
     fname: CREATE_NEW_LABEL,
     type: "note",
@@ -78,7 +78,7 @@ export function createNoActiveItem(vault: DVault): DNodePropsQuickInputV2 {
   };
 }
 
-export function createMoreResults(): DNodePropsQuickInputV2 {
+export function createMoreResults(): DNodePropsQuickInput {
   // @ts-ignore
   return {
     label: MORE_RESULTS_LABEL,
@@ -98,7 +98,7 @@ export function node2Uri(node: DNodeProps): Uri {
 
 export async function showDocAndHidePicker(
   uris: Uri[],
-  picker: DendronQuickPickerV2
+  picker: DendronQuickPicker
 ) {
   const ctx = "showDocAndHidePicker";
   const maybeSplitSelection = _.find(picker.buttons, (ent: DendronBtn) => {
@@ -153,7 +153,7 @@ export class ProviderAcceptHooks {
     selectedItems,
   }): Promise<RespV2<OldNewLocation>> => {
     // setup vars
-    const oldVault = PickerUtilsV2.getVaultForOpenEditor();
+    const oldVault = PickerUtils.getVaultForOpenEditor();
     const newVault = quickpick.vault ? quickpick.vault : oldVault;
     const engine = ExtensionProvider.getEngine();
 
@@ -163,7 +163,7 @@ export class ProviderAcceptHooks {
     const oldFname = DNodeUtils.fname(oldUri.fsPath);
 
     const selectedItem = selectedItems[0];
-    const fname = PickerUtilsV2.isCreateNewNotePickedForSingle(selectedItem)
+    const fname = PickerUtils.isCreateNewNotePickedForSingle(selectedItem)
       ? quickpick.value
       : selectedItem.fname;
 
@@ -194,7 +194,7 @@ export class ProviderAcceptHooks {
   static NewLocationHook: OnAcceptHook = async ({
     quickpick,
   }): Promise<RespV2<NewLocation>> => {
-    const activeEditorVault = PickerUtilsV2.getVaultForOpenEditor();
+    const activeEditorVault = PickerUtils.getVaultForOpenEditor();
     const newVault = quickpick.vault ? quickpick.vault : activeEditorVault;
 
     const data = {
@@ -208,10 +208,10 @@ export class ProviderAcceptHooks {
   };
 }
 
-export class PickerUtilsV2 {
+export class PickerUtils {
   static createDendronQuickPick(
     opts: CreateQuickPickOpts
-  ): DendronQuickPickerV2 {
+  ): DendronQuickPicker {
     const { title, placeholder, ignoreFocusOut, initialValue } = _.defaults(
       opts,
       {
@@ -219,7 +219,7 @@ export class PickerUtilsV2 {
       }
     );
     const quickPick =
-      window.createQuickPick<DNodePropsQuickInputV2>() as DendronQuickPickerV2;
+      window.createQuickPick<DNodePropsQuickInput>() as DendronQuickPicker;
     quickPick.title = title;
     quickPick.state = DendronQuickPickState.IDLE;
     quickPick.nonInteractive = opts.nonInteractive;
@@ -261,8 +261,8 @@ export class PickerUtilsV2 {
   }
 
   static createDendronQuickPickItem(
-    opts: DNodePropsQuickInputV2
-  ): DNodePropsQuickInputV2 {
+    opts: DNodePropsQuickInput
+  ): DNodePropsQuickInput {
     return {
       ...opts,
     };
@@ -270,30 +270,30 @@ export class PickerUtilsV2 {
 
   static createDendronQuickPickItemFromNote(
     opts: NoteProps
-  ): DNodePropsQuickInputV2 {
+  ): DNodePropsQuickInput {
     return {
       ...opts,
       label: opts.fname,
     };
   }
 
-  static getValue(picker: DendronQuickPickerV2) {
+  static getValue(picker: DendronQuickPicker) {
     return picker.value;
   }
 
-  static getSelection(picker: DendronQuickPickerV2): DNodePropsQuickInputV2[] {
+  static getSelection(picker: DendronQuickPicker): DNodePropsQuickInput[] {
     return [...picker.selectedItems];
   }
 
   static filterCreateNewItem = (
-    items: DNodePropsQuickInputV2[]
-  ): DNodePropsQuickInputV2[] => {
+    items: DNodePropsQuickInput[]
+  ): DNodePropsQuickInput[] => {
     return _.reject(items, { label: CREATE_NEW_LABEL });
   };
 
   static filterDefaultItems = (
-    items: DNodePropsQuickInputV2[]
-  ): DNodePropsQuickInputV2[] => {
+    items: DNodePropsQuickInput[]
+  ): DNodePropsQuickInput[] => {
     return _.reject(
       items,
       (ent) =>
@@ -307,9 +307,9 @@ export class PickerUtilsV2 {
    * @param lvl
    */
   static filterByDepth = (
-    items: DNodePropsQuickInputV2[],
+    items: DNodePropsQuickInput[],
     depth: number
-  ): DNodePropsQuickInputV2[] => {
+  ): DNodePropsQuickInput[] => {
     return _.reject(items, (ent) => {
       return DNodeUtils.getDepth(ent) > depth;
     });
@@ -317,8 +317,8 @@ export class PickerUtilsV2 {
 
   /** Reject all items that are stubs */
   static filterNonStubs(
-    items: DNodePropsQuickInputV2[]
-  ): DNodePropsQuickInputV2[] {
+    items: DNodePropsQuickInput[]
+  ): DNodePropsQuickInput[] {
     return _.filter(items, (ent) => {
       return !ent.stub;
     });
@@ -368,7 +368,7 @@ export class PickerUtilsV2 {
 
   /** @deprecated use `getVaultForOpenEditor` instead, this function no longer prompts anything. */
   static getOrPromptVaultForOpenEditor(): DVault {
-    return PickerUtilsV2.getVaultForOpenEditor();
+    return PickerUtils.getVaultForOpenEditor();
   }
 
   static getQueryUpToLastDot = (query: string) => {
@@ -378,8 +378,8 @@ export class PickerUtilsV2 {
   };
 
   static getCreateNewItem = (
-    items: readonly DNodePropsQuickInputV2[]
-  ): DNodePropsQuickInputV2 | undefined => {
+    items: readonly DNodePropsQuickInput[]
+  ): DNodePropsQuickInput | undefined => {
     return _.find(items, { label: CREATE_NEW_LABEL });
   };
 
@@ -387,15 +387,15 @@ export class PickerUtilsV2 {
    * Check if this picker still has further pickers
    */
   static hasNextPicker = (
-    quickpick: DendronQuickPickerV2,
+    quickpick: DendronQuickPicker,
     opts: {
-      selectedItems: readonly DNodePropsQuickInputV2[];
+      selectedItems: readonly DNodePropsQuickInput[];
       providerId: string;
     }
-  ): quickpick is Required<DendronQuickPickerV2> => {
+  ): quickpick is Required<DendronQuickPicker> => {
     const { selectedItems, providerId } = opts;
     const nextPicker = quickpick.nextPicker;
-    const isNewPick = PickerUtilsV2.isCreateNewNotePicked(selectedItems[0]);
+    const isNewPick = PickerUtils.isCreateNewNotePicked(selectedItems[0]);
     const isNewPickAllowed = ["lookup", "dendron.moveHeader"];
     return (
       !_.isUndefined(nextPicker) &&
@@ -403,7 +403,7 @@ export class PickerUtilsV2 {
     );
   };
 
-  static isCreateNewNotePickedForSingle(node: DNodePropsQuickInputV2): boolean {
+  static isCreateNewNotePickedForSingle(node: DNodePropsQuickInput): boolean {
     if (!node) {
       return true;
     }
@@ -418,7 +418,7 @@ export class PickerUtilsV2 {
     }
   }
 
-  static isCreateNewNotePicked(node: DNodePropsQuickInputV2): boolean {
+  static isCreateNewNotePicked(node: DNodePropsQuickInput): boolean {
     if (!node) {
       return true;
     }
@@ -434,7 +434,7 @@ export class PickerUtilsV2 {
   }
 
   static isCreateNewNoteWithTemplatePicked(
-    node: DNodePropsQuickInputV2
+    node: DNodePropsQuickInput
   ): boolean {
     return (
       this.isCreateNewNotePicked(node) &&
@@ -462,7 +462,7 @@ export class PickerUtilsV2 {
     vaultSelectionMode?: VaultSelectionMode;
   }): Promise<DVault | undefined> {
     const engine = ExtensionProvider.getEngine();
-    const vaultSuggestions = await PickerUtilsV2.getVaultRecommendations({
+    const vaultSuggestions = await PickerUtils.getVaultRecommendations({
       vault,
       vaults: engine.vaults,
       engine,
@@ -487,7 +487,7 @@ export class PickerUtilsV2 {
       }
     }
 
-    return PickerUtilsV2.promptVault(vaultSuggestions);
+    return PickerUtils.promptVault(vaultSuggestions);
   }
 
   public static promptVault(overrides?: DVault[]): Promise<DVault | undefined>;
@@ -655,7 +655,7 @@ export class PickerUtilsV2 {
     return vaultSuggestions;
   }
 
-  static resetPaginationOpts(picker: DendronQuickPickerV2) {
+  static resetPaginationOpts(picker: DendronQuickPicker) {
     delete picker.moreResults;
     delete picker.offset;
     delete picker.allResults;
@@ -828,3 +828,7 @@ export function sortBySimilarity(candidates: NoteProps[], query: string) {
       .map((v) => v.cand)
   );
 }
+
+
+
+

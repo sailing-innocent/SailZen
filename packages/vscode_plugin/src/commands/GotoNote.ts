@@ -20,14 +20,14 @@ import _ from "lodash";
 import path from "path";
 import { Position, Selection, Uri, window } from "vscode";
 import { VaultSelectionMode } from "../components/lookup/types";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { EditorUtils } from "../utils/EditorUtils";
 import { PluginFileUtils } from "../utils/files";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
-import { IWSUtilsV2 } from "../WSUtilsV2Interface";
+import { WSUtils } from "../WSUtils";
+import { IWSUtils } from "../WSUtilsInterface";
 import { BasicCommand } from "./base";
 import {
   GotoFileType,
@@ -74,7 +74,7 @@ export class GotoNoteCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.GOTO_NOTE.key;
   private extension: IDendronExtension;
-  private wsUtils: IWSUtilsV2;
+  private wsUtils: IWSUtils;
 
   constructor(extension: IDendronExtension) {
     super();
@@ -124,7 +124,7 @@ export class GotoNoteCommand extends BasicCommand<
     } else if (notes.length > 1) {
       // It's ambiguous which note the user wants to go to, so we have to
       // guess or prompt.
-      const resp = await PickerUtilsV2.promptVault(
+      const resp = await PickerUtils.promptVault(
         notes.map((ent) => ent.vault)
       );
       if (_.isUndefined(resp)) return null;
@@ -160,8 +160,8 @@ export class GotoNoteCommand extends BasicCommand<
         ? VaultSelectionMode.smart
         : VaultSelectionMode.alwaysPrompt;
 
-    const currentVault = PickerUtilsV2.getVaultForOpenEditor();
-    const selectedVault = await PickerUtilsV2.getOrPromptVaultForNewNote({
+    const currentVault = PickerUtils.getVaultForOpenEditor();
+    const selectedVault = await PickerUtils.getOrPromptVaultForNewNote({
       vault: currentVault,
       fname: opts.qs!,
       vaultSelectionMode: selectionMode,
@@ -183,7 +183,7 @@ export class GotoNoteCommand extends BasicCommand<
 
     if (opts.qs && !opts.vault) {
       // Special case: some code expects GotoNote to default to current vault if qs is provided but vault isn't
-      opts.vault = PickerUtilsV2.getVaultForOpenEditor();
+      opts.vault = PickerUtils.getVaultForOpenEditor();
       return opts;
     }
 
@@ -306,7 +306,7 @@ export class GotoNoteCommand extends BasicCommand<
               note: newNote,
               engine: client,
               pickNote: async (choices: NoteProps[]) => {
-                return WSUtilsV2.instance().promptForNoteAsync({
+                return WSUtils.instance().promptForNoteAsync({
                   notes: choices,
                   quickpickTitle:
                     "Select which template to apply or press [ESC] to not apply a template",
@@ -403,3 +403,5 @@ export class GotoNoteCommand extends BasicCommand<
     }
   }
 }
+
+

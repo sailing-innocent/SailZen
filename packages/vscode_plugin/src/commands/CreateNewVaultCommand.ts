@@ -3,7 +3,7 @@ import { WorkspaceService, WorkspaceUtils } from "@saili/engine-server";
 import _ from "lodash";
 import path from "path";
 import { commands, OpenDialogOptions, Uri, window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { Logger } from "../logger";
@@ -69,7 +69,7 @@ export class CreateNewVaultCommand extends BasicCommand<
       placeHolder: "my-vault",
     });
     // If empty, then user cancelled the prompt
-    if (PickerUtilsV2.isInputEmpty(vaultName)) return;
+    if (PickerUtils.isInputEmpty(vaultName)) return;
 
     return {
       name: vaultName,
@@ -144,3 +144,4 @@ export class CreateNewVaultCommand extends BasicCommand<
     return { vaults };
   }
 }
+

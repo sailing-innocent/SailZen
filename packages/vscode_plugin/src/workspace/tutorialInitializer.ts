@@ -18,8 +18,6 @@ import { TogglePreviewCommand } from "../commands/TogglePreview";
 import { PreviewPanelFactory } from "../components/views/PreviewViewFactory";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
-import { FeatureShowcaseToaster } from "../showcase/FeatureShowcaseToaster";
-import { ObsidianImportTip } from "../showcase/ObsidianImportTip";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
 import { BlankInitializer } from "./blankInitializer";
@@ -157,18 +155,6 @@ export class TutorialInitializer
 
     const metaData = MetadataService.instance().getMeta();
     // Survey functionality removed
-  }
-
-  private triedToShowImportToast: boolean = false;
-
-  private tryShowImportNotesFeatureToaster() {
-    if (!this.triedToShowImportToast) {
-      const toaster = new FeatureShowcaseToaster();
-
-      // This will only show if the user indicated they've used Obsidian in 'Prior Tools'
-      toaster.showSpecificToast(new ObsidianImportTip());
-      this.triedToShowImportToast = true;
-    }
   }
 
   async onWorkspaceActivate(opts: {

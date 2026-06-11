@@ -12,21 +12,21 @@ import {
   IDendronQuickInputButton,
 } from "../lookup/ButtonTypes";
 import { ILookupViewModel } from "../lookup/LookupViewModel";
-import { DendronQuickPickerV2, VaultSelectionMode } from "../lookup/types";
+import { DendronQuickPicker, VaultSelectionMode } from "../lookup/types";
 
 /**
  * A 'view' that represents the UI state of the Lookup Quick Pick. This
  * essentially controls the button state of the quick pick and reacts upon user
  * mouse clicks to the buttons.
  */
-export class LookupV3QuickPickView implements Disposable {
-  private _quickPick: DendronQuickPickerV2;
+export class LookupQuickPickView implements Disposable {
+  private _quickPick: DendronQuickPicker;
   private _viewState: ILookupViewModel;
   private _disposables: Disposable[];
   private _providerId?: string;
 
   constructor(
-    quickPick: DendronQuickPickerV2,
+    quickPick: DendronQuickPicker,
     viewModel: ILookupViewModel,
     providerId?: string // For telemetry purposes only
   ) {
@@ -325,3 +325,5 @@ export class LookupV3QuickPickView implements Disposable {
 
   };
 }
+
+

@@ -34,9 +34,6 @@ import { GotoNoteCommand } from "./GotoNote";
 import { GoUpCommand } from "./GoUpCommand";
 import { InsertNoteIndexCommand } from "./InsertNoteIndexCommand";
 import { InsertNoteLinkCommand } from "./InsertNoteLink";
-import { InstrumentedWrapperCommand } from "./InstrumentedWrapperCommand";
-import { LaunchTutorialWorkspaceCommand } from "./LaunchTutorialWorkspaceCommand";
-import { MigrateSelfContainedVaultCommand } from "./MigrateSelfContainedVault";
 import { MoveHeaderCommand } from "./MoveHeader";
 import { MoveNoteCommand } from "./MoveNoteCommand";
 import { NoteLookupAutoCompleteCommand } from "./node/NoteLookupAutoCompleteCommand";
@@ -46,20 +43,14 @@ import { OpenLinkCommand } from "./OpenLink";
 import { OpenLogsCommand } from "./OpenLogs";
 import { PasteFileCommand } from "./PasteFile";
 import { PasteLinkCommand } from "./PasteLink";
-import { PublishDevCommand } from "./PublishDevCommand";
 import { RandomNoteCommand } from "./RandomNote";
-import { RefactorHierarchyCommandV2 } from "./RefactorHierarchyV2";
+import { RefactorHierarchyCommand } from "./RefactorHierarchy";
 import { RegisterNoteTraitCommand } from "./RegisterNoteTraitCommand";
 import { RenameHeaderCommand } from "./RenameHeader";
 import { ResetConfigCommand } from "./ResetConfig";
-import { RunMigrationCommand } from "./RunMigrationCommand";
 import { SchemaLookupCommand } from "./SchemaLookupCommand";
 import { SetupWorkspaceCommand } from "./SetupWorkspace";
 import { ShowHelpCommand } from "./ShowHelp";
-import { ShowLegacyPreviewCommand } from "./ShowLegacyPreview";
-import { ShowWelcomePageCommand } from "./ShowWelcomePageCommand";
-import { SignInCommand } from "./SignIn";
-import { SignUpCommand } from "./SignUp";
 import { SyncCommand } from "./Sync";
 import { TaskCompleteCommand } from "./TaskComplete";
 import { TaskStatusCommand } from "./TaskStatus";
@@ -71,7 +62,6 @@ import { BatchRenameNoteCommand } from "./BatchRenameNoteCommand";
 import { RenameNoteCommand } from "./RenameNoteCommand";
 import { CreateNoteCommand } from "./CreateNoteCommand";
 import { MergeNoteCommand } from "./MergeNoteCommand";
-import { CopyCodespaceURL } from "./CopyCodespaceURL";
 import { MoveSelectionToCommand } from "./MoveSelectionToCommand";
 import { RemoveVaultCommand } from "./RemoveVaultCommand";
 import { CreateNewVaultCommand } from "./CreateNewVaultCommand";
@@ -97,7 +87,6 @@ const ALL_COMMANDS = [
   CopyToClipboardCommand,
   CreateDailyJournalCommand,
   CreateHookCommand,
-  MigrateSelfContainedVaultCommand,
   CreateSchemaFromHierarchyCommand,
   DeleteHookCommand,
   DeleteCommand,
@@ -126,15 +115,11 @@ const ALL_COMMANDS = [
   BatchRenameNoteCommand,
   RenameHeaderCommand,
   MoveHeaderCommand,
-  RefactorHierarchyCommandV2,
+  RefactorHierarchyCommand,
   RandomNoteCommand,
   ResetConfigCommand,
   SetupWorkspaceCommand,
   ShowHelpCommand,
-  ShowLegacyPreviewCommand,
-  SignInCommand,
-  SignUpCommand,
-  PublishDevCommand,
   SyncCommand,
   ApplyTemplateCommand,
   UpgradeSettingsCommand,
@@ -143,11 +128,8 @@ const ALL_COMMANDS = [
   AddExistingVaultCommand,
   RemoveVaultCommand,
   ConvertVaultCommand,
-  ShowWelcomePageCommand,
-  LaunchTutorialWorkspaceCommand,
   ConvertLinkCommand,
   ConvertCandidateLinkCommand,
-  RunMigrationCommand,
   CreateTaskCommand,
   TaskStatusCommand,
   TaskCompleteCommand,
@@ -155,13 +137,12 @@ const ALL_COMMANDS = [
   ConfigureNoteTraitsCommand,
   CreateNoteWithUserDefinedTrait,
   OpenBackupCommand,
-  InstrumentedWrapperCommand,
   ValidateEngineCommand,
   MergeNoteCommand,
   CreateNoteCommand,
-  CopyCodespaceURL,
   ExportNoteCommand,
   CompileDocumentCommand,
 ] as CodeCommandConstructor[];
 
 export { ALL_COMMANDS };
+

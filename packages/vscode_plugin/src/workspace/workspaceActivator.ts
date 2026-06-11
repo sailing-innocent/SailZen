@@ -29,13 +29,12 @@ import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { Logger } from "../logger";
 import { EngineAPIService } from "../services/EngineAPIService";
-import { StateService } from "../services/stateService";
 import { TextDocumentServiceFactory } from "../services/TextDocumentServiceFactory";
 import { ExtensionUtils } from "../utils/ExtensionUtils";
 import { StartupUtils } from "../utils/StartupUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DendronExtension } from "../workspace";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { DendronCodeWorkspace } from "./codeWorkspace";
 import { DendronNativeWorkspace } from "./nativeWorkspace";
 import { WorkspaceInitFactory } from "./WorkspaceInitFactory";
@@ -179,10 +178,10 @@ async function getOrPromptWSRoot(workspaceFolders: string[]) {
  */
 async function getAndCleanPreviousWSVersion({
   wsService,
-  stateService,
+  workspaceState,
   ext,
 }: {
-  stateService: StateService;
+  workspaceState: vscode.Memento;
   wsService: WorkspaceService;
   ext: IDendronExtension;
 }) {
@@ -199,7 +198,8 @@ async function getAndCleanPreviousWSVersion({
 
   // Code workspace specific code
   // Migration code: we used to store verion history in state vs metadata
-  const previousWorkspaceVersionFromState = stateService.getWorkspaceVersion();
+  const previousWorkspaceVersionFromState =
+    workspaceState.get<string>(WORKSPACE_STATE.VERSION) || "0.0.0";
   if (
     !semver.valid(previousWorkspaceVersionFromWSService) ||
     semver.gt(
@@ -328,7 +328,7 @@ async function reloadWorkspace({
 }) {
   const ctx = "reloadWorkspace";
   const ws = ext.getDWorkspace();
-  const maybeEngine = await WSUtilsV2.instance().reloadWorkspace();
+  const maybeEngine = await WSUtils.instance().reloadWorkspace();
   if (!maybeEngine) {
     return maybeEngine;
   }
@@ -460,16 +460,12 @@ export class WorkspaceActivator {
     const currentVersion = DendronExtension.version();
     const wsService = new WorkspaceService({ wsRoot });
     const dendronConfig = workspace.config;
-    const stateService = new StateService({
-      globalState: context.globalState,
-      workspaceState: context.workspaceState,
-    });
     ext.workspaceService = wsService;
 
     // get previous workspace version and fixup
     const previousWorkspaceVersion = await getAndCleanPreviousWSVersion({
       wsService,
-      stateService,
+      workspaceState: context.workspaceState,
       ext,
     });
 
@@ -568,7 +564,7 @@ export class WorkspaceActivator {
     context.subscriptions.push(TextDocumentServiceFactory.create(ext));
 
     // Reload
-    WSUtilsV2.instance().showActivateProgress();
+    WSUtils.instance().showActivateProgress();
     const start = process.hrtime();
     const reloadSuccess = await reloadWorkspace({ ext, wsService });
     const durationReloadWorkspace = getDurationMilliseconds(start);
@@ -713,3 +709,4 @@ export class WorkspaceActivator {
     return ext.port;
   }
 }
+

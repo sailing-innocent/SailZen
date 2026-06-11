@@ -11,8 +11,8 @@ import { HistoryEvent } from "@saili/engine-server";
 import { LinkUtils, ParseLinkV2Resp } from "@saili/unified";
 import _ from "lodash";
 import { Disposable, QuickPickItem, Range, TextEditor } from "vscode";
-import { LookupControllerV3CreateOpts } from "../components/lookup/LookupControllerV3Interface";
-import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderV3Interface";
+import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
+import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -23,7 +23,7 @@ import {
 } from "../utils/md";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 
 
@@ -129,7 +129,7 @@ export class ConvertLinkCommand extends BasicCommand<
   async lookupNewDestination(): Promise<
     NoteLookupProviderSuccessResp | undefined
   > {
-    const lcOpts: LookupControllerV3CreateOpts = {
+    const lcOpts: LookupControllerCreateOpts = {
       nodeType: "note",
       disableVaultSelection: true,
       vaultSelectCanToggle: false,
@@ -354,7 +354,7 @@ export class ConvertLinkCommand extends BasicCommand<
     }
     const targetVault = vaultName
       ? VaultUtils.getVaultByName({ vaults, vname: vaultName })
-      : WSUtilsV2.instance().getVaultFromDocument(document);
+      : WSUtils.instance().getVaultFromDocument(document);
 
     if (targetVault === undefined) {
       throw ConvertLinkCommand.noVaultError();
@@ -394,3 +394,5 @@ export class ConvertLinkCommand extends BasicCommand<
     return;
   }
 }
+
+

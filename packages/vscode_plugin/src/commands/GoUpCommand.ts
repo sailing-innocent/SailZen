@@ -2,7 +2,7 @@ import { DNodeUtils, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import path from "path";
 import { Uri, window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -33,7 +33,7 @@ export class GoUpCommand extends BasicCommand<CommandOpts, CommandOutput> {
       engine,
       {
         excludeStub: true,
-        vault: PickerUtilsV2.getVaultForOpenEditor(),
+        vault: PickerUtils.getVaultForOpenEditor(),
       }
     );
     const nppath = NoteUtils.getFullPath({
@@ -44,3 +44,4 @@ export class GoUpCommand extends BasicCommand<CommandOpts, CommandOutput> {
     return;
   }
 }
+

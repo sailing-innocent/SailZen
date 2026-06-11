@@ -14,8 +14,8 @@ import { HistoryEvent } from "@saili/engine-server";
 import path from "path";
 import * as vscode from "vscode";
 import { IDendronExtension } from "../dendronExtensionInterface";
-import { LookupControllerV3CreateOpts } from "../components/lookup/LookupControllerV3";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { LookupControllerCreateOpts } from "../components/lookup/LookupController";
+import { PickerUtils } from "../components/lookup/utils";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
 import { BaseCommand } from "./base";
 import { GotoNoteCommand } from "./GotoNote";
@@ -182,8 +182,8 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
         const selectionMode =
           VaultSelectionModeConfigUtils.getVaultSelectionMode();
 
-        const currentVault = PickerUtilsV2.getVaultForOpenEditor();
-        const selectedVault = await PickerUtilsV2.getOrPromptVaultForNewNote({
+        const currentVault = PickerUtils.getVaultForOpenEditor();
+        const selectedVault = await PickerUtils.getOrPromptVaultForNewNote({
           vault: currentVault,
           fname,
           vaultSelectionMode: selectionMode,
@@ -286,7 +286,7 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
     initialValue?: string
   ): Promise<string | undefined> {
     return new Promise<string | undefined>((resolve) => {
-      const lookupCreateOpts: LookupControllerV3CreateOpts = {
+      const lookupCreateOpts: LookupControllerCreateOpts = {
         nodeType: "note",
         disableVaultSelection: true,
       };
@@ -390,3 +390,5 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
     };
   }
 }
+
+

@@ -1,8 +1,8 @@
 import { DNodeType } from "@saili/common-all";
 import { CancellationTokenSource } from "vscode";
 import { DendronBtn } from "./ButtonTypes";
-import { ILookupProviderV3 } from "./LookupProviderV3Interface";
-import { DendronQuickPickerV2 } from "./types";
+import { ILookupProvider } from "./LookupProviderInterface";
+import { DendronQuickPicker } from "./types";
 
 export type CreateQuickPickOpts = {
   title?: string;
@@ -17,7 +17,7 @@ export type CreateQuickPickOpts = {
   initialValue?: string;
   nonInteractive?: boolean;
   /**
-   * See {@link DendronQuickPickerV2["alwaysShow"]}
+   * See {@link DendronQuickPicker["alwaysShow"]}
    */
   alwaysShow?: boolean;
   /**
@@ -27,19 +27,19 @@ export type CreateQuickPickOpts = {
 };
 
 export type PrepareQuickPickOpts = CreateQuickPickOpts & {
-  provider: ILookupProviderV3;
+  provider: ILookupProvider;
   onDidHide?: () => void;
 };
 
 export type ShowQuickPickOpts = {
-  quickpick: DendronQuickPickerV2;
-  provider: ILookupProviderV3;
+  quickpick: DendronQuickPicker;
+  provider: ILookupProvider;
   nonInteractive?: boolean;
   fuzzThreshold?: number;
 };
 
-export interface ILookupControllerV3 {
-  readonly quickPick: DendronQuickPickerV2;
+export interface ILookupController {
+  readonly quickPick: DendronQuickPicker;
 
   fuzzThreshold: number;
 
@@ -47,16 +47,16 @@ export interface ILookupControllerV3 {
 
   nodeType: DNodeType;
 
-  readonly provider: ILookupProviderV3;
+  readonly provider: ILookupProvider;
 
   /**
    * Wire up quickpick and initialize buttons
    */
   prepareQuickPick(
     opts: PrepareQuickPickOpts
-  ): Promise<{ quickpick: DendronQuickPickerV2 }>;
+  ): Promise<{ quickpick: DendronQuickPicker }>;
 
-  showQuickPick(opts: ShowQuickPickOpts): Promise<DendronQuickPickerV2>;
+  showQuickPick(opts: ShowQuickPickOpts): Promise<DendronQuickPicker>;
 
   onHide(): void;
 
@@ -70,9 +70,9 @@ export interface ILookupControllerV3 {
        * Initial value for quickpick
        */
       initialValue?: string;
-      provider: ILookupProviderV3;
+      provider: ILookupProvider;
     }
-  ): Promise<DendronQuickPickerV2>;
+  ): Promise<DendronQuickPicker>;
 
   createCancelSource(): CancellationTokenSource;
 
@@ -85,11 +85,11 @@ export interface ILookupControllerV3 {
   isJournalButtonPressed(): boolean;
 }
 
-export interface ILookupControllerV3Factory {
-  create(opts?: LookupControllerV3CreateOpts): ILookupControllerV3;
+export interface ILookupControllerFactory {
+  create(opts?: LookupControllerCreateOpts): ILookupController;
 }
 
-export type LookupControllerV3CreateOpts = {
+export type LookupControllerCreateOpts = {
   /**
    * Node type
    */
@@ -128,3 +128,5 @@ export type LookupControllerV3CreateOpts = {
    */
   title?: string;
 };
+
+

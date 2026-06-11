@@ -9,9 +9,9 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import {
-  RefactorHierarchyCommandV2,
-  CommandOutput as RefactorHierarchyV2CommandOutput,
-} from "./RefactorHierarchyV2";
+  RefactorHierarchyCommand,
+  CommandOutput as RefactorHierarchyCommandOutput,
+} from "./RefactorHierarchy";
 
 type CommandOpts = {
   match: string;
@@ -21,14 +21,14 @@ type CommandInput = {
   match: string;
 };
 
-type CommandOutput = RefactorHierarchyV2CommandOutput;
+type CommandOutput = RefactorHierarchyCommandOutput;
 
 export class ArchiveHierarchyCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
   key = DENDRON_COMMANDS.ARCHIVE_HIERARCHY.key;
-  private refactorCmd: RefactorHierarchyCommandV2;
+  private refactorCmd: RefactorHierarchyCommand;
   private trackProxyMetrics;
   private prepareProxyMetricPayload;
   _proxyMetricPayload:
@@ -41,7 +41,7 @@ export class ArchiveHierarchyCommand extends BasicCommand<
 
   constructor(name?: string) {
     super(name);
-    this.refactorCmd = new RefactorHierarchyCommandV2();
+    this.refactorCmd = new RefactorHierarchyCommand();
     this.trackProxyMetrics = this.refactorCmd.trackProxyMetrics.bind(this);
     this.prepareProxyMetricPayload =
       this.refactorCmd.prepareProxyMetricPayload.bind(this);
@@ -98,3 +98,4 @@ export class ArchiveHierarchyCommand extends BasicCommand<
     return noteChangeEntryCounts;
   }
 }
+

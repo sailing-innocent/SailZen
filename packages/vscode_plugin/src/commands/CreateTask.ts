@@ -11,7 +11,6 @@ import {
   NoteLookupCommand,
 } from "./NoteLookupCommand";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { maybeSendMeetingNoteTelemetry } from "../utils/MeetingTelemHelper";
 
 type CommandOpts = {};
 
@@ -41,8 +40,7 @@ export class CreateTaskCommand extends BasicCommand<
     const { createTaskSelectionType, addBehavior } =
       ConfigUtils.getTask(config);
 
-    maybeSendMeetingNoteTelemetry("task");
-
+    
     return {
       lookup: new NoteLookupCommand().run({
         noteType: LookupNoteTypeEnum.task,
@@ -58,3 +56,4 @@ export class CreateTaskCommand extends BasicCommand<
     };
   }
 }
+

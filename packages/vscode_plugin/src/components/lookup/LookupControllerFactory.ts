@@ -7,22 +7,22 @@ import _ from "lodash";
 import { IDendronExtension } from "../../dendronExtensionInterface";
 import { TwoWayBinding } from "../../utils/TwoWayBinding";
 import { VaultSelectButton } from "./buttons";
-import { LookupControllerV3 } from "./LookupControllerV3";
+import { LookupController } from "./LookupController";
 import {
-  ILookupControllerV3,
-  ILookupControllerV3Factory,
-  LookupControllerV3CreateOpts,
-} from "./LookupControllerV3Interface";
+  ILookupController,
+  ILookupControllerFactory,
+  LookupControllerCreateOpts,
+} from "./LookupControllerInterface";
 import { VaultSelectionMode } from "./types";
 
-export class LookupControllerV3Factory implements ILookupControllerV3Factory {
+export class LookupControllerFactory implements ILookupControllerFactory {
   private extension: IDendronExtension;
 
   constructor(extension: IDendronExtension) {
     this.extension = extension;
   }
 
-  create(opts?: LookupControllerV3CreateOpts): ILookupControllerV3 {
+  create(opts?: LookupControllerCreateOpts): ILookupController {
     const { vaults } = this.extension.getDWorkspace();
 
     // disable vault selection if explicitly requested or we are looking at schemas
@@ -69,7 +69,7 @@ export class LookupControllerV3Factory implements ILookupControllerV3Factory {
       isSplitHorizontally: new TwoWayBinding<boolean>(false),
     };
 
-    return new LookupControllerV3({
+    return new LookupController({
       nodeType: opts?.nodeType as DNodeType,
       fuzzThreshold: opts?.fuzzThreshold,
       buttons: buttons.concat(extraButtons),
@@ -79,3 +79,4 @@ export class LookupControllerV3Factory implements ILookupControllerV3Factory {
     });
   }
 }
+

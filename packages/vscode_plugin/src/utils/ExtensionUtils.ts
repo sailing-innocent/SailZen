@@ -28,7 +28,7 @@ import { IBaseCommand } from "../types";
 import { MarkdownUtils } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { URI, Utils } from "vscode-uri";
-import { VersionProvider } from "../versionProvider";
+import { DendronExtension } from "../workspace";
 import { Duration } from "luxon";
 
 /** Before sending saved telemetry events, wait this long (in ms) to make sure
@@ -55,7 +55,7 @@ async function startServerProcess(): Promise<{
   // if in dev mode, simplify debugging without going multi process
   if (getStage() !== "prod") {
     const out = await launchv2({
-      logPath: path.join(__dirname, "..", "..", "dendron.server.log"),
+      logPath: path.join(__dirname, "..", "..", "sailzen.server.log"),
     });
     return { port: out.port };
   }
@@ -75,7 +75,7 @@ async function startServerProcess(): Promise<{
     // TODO: change to error, wait for https://github.com/dendronhq/dendron/issues/3227 to be resolved first
     Logger.info({ msg: "failed to spawn a subshell" });
     const out = await launchv2({
-      logPath: path.join(__dirname, "..", "..", "dendron.server.log"),
+      logPath: path.join(__dirname, "..", "..", "sailzen.server.log"),
     });
     return { port: out.port };
   }
@@ -248,7 +248,7 @@ export class ExtensionUtils {
       const metadata = MetadataService.instance().getMeta();
       if (metadata.firstInstall === undefined && !UUIDPathExists) {
         MetadataService.instance().setInitialInstall();
-        const version = VersionProvider.version();
+        const version = DendronExtension.version();
         MetadataService.instance().setInitialInstallVersion(version);
       } else {
         // we still want to proceed with InstallStatus.INITIAL_INSTALL because we want everything
@@ -474,7 +474,7 @@ export class ExtensionUtils {
 
     StartupProfiler.write(wsRoot, {
       timestamp: new Date().toISOString(),
-      version: VersionProvider.version(),
+      version: DendronExtension.version(),
       activationSucceeded: activatedSuccess,
       noteCount: numNotes,
       vaultCount: vaults.length,

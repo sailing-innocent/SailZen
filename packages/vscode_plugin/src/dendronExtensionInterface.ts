@@ -8,16 +8,16 @@ import { IWorkspaceService } from "@saili/engine-server";
 import { Subprocess } from "execa";
 import * as vscode from "vscode";
 import { CommentController } from "vscode";
-import { ILookupControllerV3Factory } from "./components/lookup/LookupControllerV3Interface";
+import { ILookupControllerFactory } from "./components/lookup/LookupControllerInterface";
 import {
   INoteLookupProviderFactory,
   ISchemaLookupProviderFactory,
-} from "./components/lookup/LookupProviderV3Interface";
+} from "./components/lookup/LookupProviderInterface";
 import { FileWatcher } from "./fileWatcher";
 import { IEngineAPIService } from "./services/EngineAPIServiceInterface";
 import { NoteTraitService } from "./services/NoteTraitService";
 import { ISchemaSyncService } from "./services/SchemaSyncServiceInterface";
-import { IWSUtilsV2 } from "./WSUtilsV2Interface";
+import { IWSUtils } from "./WSUtilsInterface";
 
 export type DendronWorkspaceSettings = Partial<{
   "dendron.dailyJournalDomain": string;
@@ -66,11 +66,11 @@ export interface IDendronExtension {
   serverWatcher?: vscode.FileSystemWatcher;
   fileWatcher?: FileWatcher;
   type: WorkspaceType;
-  wsUtils: IWSUtilsV2;
+  wsUtils: IWSUtils;
   schemaSyncService: ISchemaSyncService;
   workspaceService?: IWorkspaceService;
 
-  lookupControllerFactory: ILookupControllerV3Factory;
+  lookupControllerFactory: ILookupControllerFactory;
   noteLookupProviderFactory: INoteLookupProviderFactory;
   schemaLookupProviderFactory: ISchemaLookupProviderFactory;
   workspaceImpl?: DWorkspaceV2;
@@ -141,3 +141,5 @@ export interface IDendronExtension {
    */
   get traitRegistrar(): NoteTraitService;
 }
+
+

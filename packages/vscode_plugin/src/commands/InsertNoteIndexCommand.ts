@@ -1,11 +1,11 @@
 import { ConfigUtils, NotePropsMeta, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import { window } from "vscode";
-import { DendronClientUtilsV2 } from "../clientUtils";
+import { DendronClientUtils } from "../clientUtils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {
@@ -38,7 +38,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
     const listItems = notes.map((note) => {
       const link = NoteUtils.createWikiLink({
         note,
-        useVaultPrefix: DendronClientUtilsV2.shouldUseVaultPrefix(
+        useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(
           this._ext.getEngine()
         ),
         alias: { mode: "title" },
@@ -66,7 +66,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
       );
       return opts;
     }
-    const activeNote = await WSUtilsV2.instance().getNoteFromDocument(maybeEditor.document)!;
+    const activeNote = await WSUtils.instance().getNoteFromDocument(maybeEditor.document)!;
     if (_.isUndefined(activeNote)) {
       window.showErrorMessage("Active file is not a Dendron note.");
       return opts;
@@ -94,3 +94,5 @@ export class InsertNoteIndexCommand extends BasicCommand<
     return opts;
   }
 }
+
+

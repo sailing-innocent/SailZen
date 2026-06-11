@@ -14,8 +14,8 @@ import { AnchorUtils } from "@saili/unified";
 import _ from "lodash";
 import path from "path";
 import { Disposable, TextEditor, window } from "vscode";
-import { DendronClientUtilsV2 } from "../clientUtils";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { DendronClientUtils } from "../clientUtils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { clipboard } from "../utils";
@@ -180,7 +180,7 @@ export class CopyNoteLinkCommand
             value: anchor,
             type: isBlockAnchor(anchor) ? "blockAnchor" : "header",
           },
-        useVaultPrefix: DendronClientUtilsV2.shouldUseVaultPrefix(engine),
+        useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(engine),
         alias: { mode: aliasMode },
       }),
       anchor,
@@ -206,7 +206,7 @@ export class CopyNoteLinkCommand
     // If we couldn't get note from path, fall back to fname lookup
     if (!note) {
       const fname = NoteUtils.uri2Fname(editor.document.uri);
-      const vault = PickerUtilsV2.getVaultForOpenEditor();
+      const vault = PickerUtils.getVaultForOpenEditor();
       const notes = await engine.findNotesMeta({ fname, vault });
       note = notes?.[0];
     }
@@ -288,3 +288,5 @@ export class CopyNoteLinkCommand
     return { link, type, anchorType: this.anchorType(anchor) };
   }
 }
+
+

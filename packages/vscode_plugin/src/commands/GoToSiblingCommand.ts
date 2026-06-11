@@ -12,11 +12,11 @@ import { DConfig } from "@saili/common-server";
 import _ from "lodash";
 import path from "path";
 import { window } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { UNKNOWN_ERROR_MSG } from "../logger";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 
 type Direction = "next" | "prev";
@@ -83,7 +83,7 @@ export class GoToSiblingCommand extends BasicCommand<
       siblingNote = resp.data.sibling;
     }
 
-    await new WSUtilsV2(ext).openNote(siblingNote);
+    await new WSUtils(ext).openNote(siblingNote);
     return { msg: "ok" as const };
   }
 
@@ -91,7 +91,7 @@ export class GoToSiblingCommand extends BasicCommand<
     engine: DEngineClient,
     fname: string
   ): Promise<NotePropsMeta | null> {
-    const vault = PickerUtilsV2.getVaultForOpenEditor();
+    const vault = PickerUtils.getVaultForOpenEditor();
     const hitNotes = await engine.findNotesMeta({ fname, vault });
     return hitNotes.length !== 0 ? hitNotes[0] : null;
   }
@@ -295,3 +295,5 @@ export class GoToSiblingCommand extends BasicCommand<
     return new Date(year, month - 1, date);
   }
 }
+
+

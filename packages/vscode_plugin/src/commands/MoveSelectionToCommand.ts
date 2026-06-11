@@ -11,12 +11,11 @@ import { BasicCommand } from "./base";
 import * as vscode from "vscode";
 import { EditorUtils } from "../utils/EditorUtils";
 import {
-  ILookupControllerV3,
-  LookupControllerV3CreateOpts,
-} from "../components/lookup/LookupControllerV3Interface";
+  ILookupController,
+  LookupControllerCreateOpts,
+} from "../components/lookup/LookupControllerInterface";
 import { SelectionExtractBtn } from "../components/lookup/buttons";
 import { RemarkUtils } from "@saili/unified";
-import { ProxyMetricUtils } from "../utils/ProxyMetricUtils";
 import { NoteLookupCommand } from "./NoteLookupCommand";
 
 type CommandInput = {
@@ -97,8 +96,8 @@ export class MoveSelectionToCommand extends BasicCommand<
     return;
   }
 
-  private createLookupController(): ILookupControllerV3 {
-    const opts: LookupControllerV3CreateOpts = {
+  private createLookupController(): ILookupController {
+    const opts: LookupControllerCreateOpts = {
       nodeType: "note",
       disableVaultSelection: true,
       extraButtons: [
@@ -208,11 +207,7 @@ export class MoveSelectionToCommand extends BasicCommand<
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-    ProxyMetricUtils.trackRefactoringProxyMetric({
-      props,
-      extra: {
-        ...extra,
-      },
-    });
-  }
+      }
 }
+
+

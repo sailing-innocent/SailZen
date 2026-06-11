@@ -6,7 +6,7 @@ export type HistoryEvent = {
   source: HistoryEventSource;
   /**
    * Used to further narrow down the source.
-   * This is used in {@link LookupProviderV3} as this can be embedded in multiple commands (eg. NoteLookup vs RenameNote)
+   * This is used in {@link LookupProvider} as this can be embedded in multiple commands (eg. NoteLookup vs RenameNote)
    * For example, for [RenameNote](https://github.com/dendronhq/dendron/blob/6c98d466536632530399bd45f1220ae725ff3e2f/packages/plugin-core/src/commands/RenameNoteV2a.ts#L52-L52),
    * the id is "rename" whereas for NoteLookup, the id is "lookup"
    */

@@ -5,7 +5,7 @@ import vscode from "vscode";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { EditorUtils } from "../utils/EditorUtils";
 import { findReferences, getReferenceAtPosition } from "../utils/md";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 
 export default class ReferenceProvider implements vscode.ReferenceProvider {
   public async provideReferences(
@@ -24,7 +24,7 @@ export default class ReferenceProvider implements vscode.ReferenceProvider {
       // provide reference to header if selection is header.
       const header = EditorUtils.getHeaderAt({ document, position });
       if (!_.isUndefined(header)) {
-        const note = await new WSUtilsV2(
+        const note = await new WSUtils(
           ExtensionProvider.getExtension()
         ).getNoteFromDocument(document);
         const references = await findReferences(note!.fname);
@@ -60,3 +60,4 @@ export default class ReferenceProvider implements vscode.ReferenceProvider {
     }
   }
 }
+

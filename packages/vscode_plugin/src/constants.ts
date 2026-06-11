@@ -438,11 +438,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Copy To Clipboard`,
     when: "false",
   },
-  COPY_CODESPACE_URL: {
-    key: "dendron.copyCodespaceURL",
-    title: `${CMD_PREFIX} Copy Codespace URL`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
   COPY_AS: {
     key: "dendron.copyAs",
     title: `${CMD_PREFIX} Copy As`,
@@ -493,7 +488,7 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Random Note`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
-  RENAME_NOTE_V2A: {
+  RENAME_NOTE_INTERNAL: {
     key: "dendron.renameNoteV2a",
     title: `${CMD_PREFIX} Rename Note V2a`,
     when: "false", // this is internal only.
@@ -774,23 +769,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Create Note with Custom Traits`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
-  // --- Publishing
-  PUBLISH_DEV: {
-    key: "dendron.publishDev",
-    title: `${CMD_PREFIX} Publish Dev`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  // --- Accounts
-  SIGNUP: {
-    key: "dendron.signUp",
-    title: `${CMD_PREFIX} Sign Up`,
-    when: "shellExecutionSupported",
-  },
-  SIGNIN: {
-    key: "dendron.signIn",
-    title: `${CMD_PREFIX} Sign In`,
-    when: "shellExecutionSupported",
-  },
   // --- Misc
   OPEN_LINK: {
     key: "dendron.openLink",
@@ -816,16 +794,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     key: "dendron.showSchemaGraphView",
     title: `${CMD_PREFIX} Show Schema Graph`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  SHOW_LEGACY_PREVIEW: {
-    key: "dendron.showLegacyPreview",
-    title: `${CMD_PREFIX} Show Preview (legacy)`,
-    keybindings: {
-      windows: "windows+ctrl+p",
-      mac: "cmd+ctrl+p",
-      when: "dendron:pluginActive && dendron:hasLegacyPreview",
-    },
-    when: "dendron:pluginActive && dendron:hasLegacyPreview",
   },
   TOGGLE_PREVIEW: {
     key: "dendron.togglePreview",
@@ -882,22 +850,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX} Configure Local Override`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
-  //-- Seeds
-  SEED_ADD: {
-    key: "dendron.seedAdd",
-    title: `${CMD_PREFIX} Add Seed to Workspace`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  SEED_REMOVE: {
-    key: "dendron.seedRemove",
-    title: `${CMD_PREFIX} Remove Seed from Workspace`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  SEED_BROWSE: {
-    key: "dendron.seedBrowse",
-    title: `${CMD_PREFIX} Browse the Seed Registry`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
   // --- Dev
   DOCTOR: {
     key: "dendron.dev.doctor",
@@ -919,16 +871,6 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX}Dev: Reset Config`,
     when: "shellExecutionSupported",
   },
-  RUN_MIGRATION: {
-    key: "dendron.dev.runMigration",
-    title: `${CMD_PREFIX}Dev: Run Migration`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  MIGRATE_SELF_CONTAINED: {
-    key: "dendron.dev.migrateSelfContained",
-    title: `${CMD_PREFIX} Migrate to Self Contained Vault`,
-    when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
   OPEN_LOGS: {
     key: "dendron.dev.openLogs",
     title: `${CMD_PREFIX}Dev: Open Logs`,
@@ -939,32 +881,10 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
     title: `${CMD_PREFIX}Dev: Diagnostics Report`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
   },
-  /**
-   * This launches the welcome screen, which has a button that will launch the
-   * tutorial when clicked.
-   */
-  SHOW_WELCOME_PAGE: {
-    key: "dendron.showWelcomePage",
-    title: `${CMD_PREFIX} Launch Tutorial`,
-    when: "shellExecutionSupported",
-  },
-  /**
-   * This command actually launches the tutorial workspace
-   */
-  LAUNCH_TUTORIAL_WORKSPACE: {
-    key: "dendron.launchTutorialWorkspace",
-    title: `${CMD_PREFIX} Launch Tutorial Workspace`,
-    when: "false",
-  },
   OPEN_BACKUP: {
     key: "dendron.openBackup",
     title: `${CMD_PREFIX} Open Backup`,
     when: `${DendronContext.PLUGIN_ACTIVE} && shellExecutionSupported`,
-  },
-  INSTRUMENTED_WRAPPER_COMMAND: {
-    key: "dendron.instrumentedWrapperCommand",
-    title: `${CMD_PREFIX} Instrumented Wrapper Command`,
-    when: "false",
   },
   VALIDATE_ENGINE: {
     key: "dendron.dev.validateEngine",
@@ -1234,3 +1154,4 @@ export const KNOWN_KEYBINDING_CONFLICTS: KeybindingConflict[] = [
   //   conflictsWith: "dendron.lookupNoteAutoComplete",
   // },
 ];
+

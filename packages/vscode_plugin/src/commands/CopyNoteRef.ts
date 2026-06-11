@@ -11,8 +11,8 @@ import {
 import { refLink2Stringv2 } from "@saili/engine-server";
 import _ from "lodash";
 import { Position, Range, Selection, TextEditor, window } from "vscode";
-import { DendronClientUtilsV2 } from "../clientUtils";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { DendronClientUtils } from "../clientUtils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -108,11 +108,11 @@ export class CopyNoteRefCommand extends BasicCommand<
   async execute(_opts: CommandOpts) {
     const editor = VSCodeUtils.getActiveTextEditor() as TextEditor;
     const fname = NoteUtils.uri2Fname(editor.document.uri);
-    const vault = PickerUtilsV2.getVaultForOpenEditor();
+    const vault = PickerUtils.getVaultForOpenEditor();
     const { engine } = ExtensionProvider.getDWorkspace();
     const note = (await engine.findNotesMeta({ fname, vault }))[0];
     if (note) {
-      const useVaultPrefix = DendronClientUtilsV2.shouldUseVaultPrefix(engine);
+      const useVaultPrefix = DendronClientUtils.shouldUseVaultPrefix(engine);
       const link = await this.buildLink({
         note,
         useVaultPrefix,
@@ -131,3 +131,5 @@ export class CopyNoteRefCommand extends BasicCommand<
     }
   }
 }
+
+

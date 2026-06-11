@@ -11,7 +11,7 @@ import _ from "lodash";
 import open from "open";
 import path from "path";
 import { env, Uri } from "vscode";
-import { PickerUtilsV2 } from "../components/lookup/utils";
+import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -122,7 +122,7 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
       const { wsRoot } = this._ext.getDWorkspace();
 
       if (externalLink.startsWith("asset")) {
-        const vault = PickerUtilsV2.getOrPromptVaultForOpenEditor();
+        const vault = PickerUtils.getOrPromptVaultForOpenEditor();
         assetPath = path.join(vault2Path({ vault, wsRoot }), externalLink);
       } else {
         assetPath = resolvePath(
@@ -156,3 +156,4 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
     return new OpenLinkCommand().execute({ uri });
   }
 }
+

@@ -14,9 +14,9 @@ import { ProgressLocation, Uri, ViewColumn, window, workspace } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
-import { RenameNoteOutputV2a } from "./RenameNoteV2a";
+import { RenameNoteOutput } from "./RenameNoteInternal";
 import { IDendronExtension } from "../dendronExtensionInterface";
 
 const md = _md();
@@ -33,7 +33,7 @@ type CommandOpts = {
   noConfirm?: boolean;
 };
 
-type CommandOutput = RenameNoteOutputV2a & {
+type CommandOutput = RenameNoteOutput & {
   operations: RenameOperation[];
 };
 
@@ -72,7 +72,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
     }
 
     // Get current note's fname
-    const note = await WSUtilsV2.instance().getNoteFromDocument(
+    const note = await WSUtils.instance().getNoteFromDocument(
       editor.document
     );
     if (!note) {
@@ -262,7 +262,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
    */
   private async runOperations(
     operations: RenameOperation[]
-  ): Promise<RenameNoteOutputV2a> {
+  ): Promise<RenameNoteOutput> {
     const ctx = "BatchRenameNote:runOperations";
 
     await _.reduce<RenameOperation, Promise<void>>(
@@ -280,7 +280,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
     );
 
     this.L.info({ ctx, msg: "reload index after file-system batch rename" });
-    await WSUtilsV2.instance().reloadWorkspace();
+    await WSUtils.instance().reloadWorkspace();
 
     return {
       changed: operations.map((op) =>
@@ -346,7 +346,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
       ext.fileWatcher.pause = true;
     }
 
-    let out: RenameNoteOutputV2a;
+    let out: RenameNoteOutput;
     try {
       // 7. Execute all rename operations with progress
       out = await window.withProgress(
@@ -398,3 +398,5 @@ export class BatchRenameNoteCommand extends BasicCommand<
     return noteChangeEntryCounts;
   }
 }
+
+

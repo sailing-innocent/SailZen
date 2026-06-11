@@ -16,14 +16,14 @@ import { DLogger, vault2Path } from "@saili/common-server";
 import { Logger } from "../logger";
 import _ from "lodash";
 import vscode from "vscode";
-import { RenameNoteV2aCommand } from "../commands/RenameNoteV2a";
+import { RenameNoteInternalCommand } from "../commands/RenameNoteInternal";
 import { ExtensionProvider } from "../ExtensionProvider";
 import {
   getReferenceAtPosition,
   getReferenceAtPositionResp,
 } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { WSUtilsV2 } from "../WSUtilsV2";
+import { WSUtils } from "../WSUtils";
 
 export default class RenameProvider implements vscode.RenameProvider {
   private _targetNote: NoteProps | undefined;
@@ -44,7 +44,7 @@ export default class RenameProvider implements vscode.RenameProvider {
     const { label, vaultName, range, ref, refType, refText } = reference;
     const targetVault = vaultName
       ? VaultUtils.getVaultByName({ vaults, vname: vaultName })
-      : WSUtilsV2.instance().getVaultFromDocument(document);
+      : WSUtils.instance().getVaultFromDocument(document);
     if (targetVault === undefined) {
       throw new DendronError({
         message: `Cannot rename note with specified vault (${vaultName}). Vault does not exist.`,
@@ -60,7 +60,7 @@ export default class RenameProvider implements vscode.RenameProvider {
         });
       }
       this._targetNote = targetNote;
-      const currentNote = await WSUtilsV2.instance().getNoteFromDocument(document);
+      const currentNote = await WSUtils.instance().getNoteFromDocument(document);
       if (_.isEqual(currentNote, targetNote)) {
         throw new DendronError({
           message: `Cannot rename symbol that references current note.`,
@@ -146,7 +146,7 @@ export default class RenameProvider implements vscode.RenameProvider {
     if (this._targetNote !== undefined) {
       const engine = ExtensionProvider.getEngine();
       const { wsRoot } = engine;
-      const renameCmd = new RenameNoteV2aCommand();
+      const renameCmd = new RenameNoteInternalCommand();
       const targetVault = this._targetNote.vault;
       const vpath = vault2Path({ wsRoot, vault: targetVault });
       const rootUri = vscode.Uri.file(vpath);
@@ -243,3 +243,5 @@ export default class RenameProvider implements vscode.RenameProvider {
     return new vscode.WorkspaceEdit();
   }
 }
+
+

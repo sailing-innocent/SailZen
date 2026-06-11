@@ -23,16 +23,16 @@ import _ from "lodash";
 import path from "path";
 import * as vscode from "vscode";
 import { Uri } from "vscode";
-import { LookupControllerV3Factory } from "./components/lookup/LookupControllerV3Factory";
-import { ILookupControllerV3Factory } from "./components/lookup/LookupControllerV3Interface";
+import { LookupControllerFactory } from "./components/lookup/LookupControllerFactory";
+import { ILookupControllerFactory } from "./components/lookup/LookupControllerInterface";
 import {
   NoteLookupProviderFactory,
   SchemaLookupProviderFactory,
-} from "./components/lookup/LookupProviderV3Factory";
+} from "./components/lookup/LookupProviderFactory";
 import {
   INoteLookupProviderFactory,
   ISchemaLookupProviderFactory,
-} from "./components/lookup/LookupProviderV3Interface";
+} from "./components/lookup/LookupProviderInterface";
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { DENDRON_COMMANDS, GLOBAL_STATE } from "./constants";
 import {
@@ -51,14 +51,14 @@ import { NoteTraitService } from "./services/NoteTraitService";
 import { SchemaSyncService } from "./services/SchemaSyncService";
 import { ISchemaSyncService } from "./services/SchemaSyncServiceInterface";
 import { DisposableStore } from "./utils";
-import { VersionProvider } from "./versionProvider";
+import { NodeJSUtils } from "@saili/common-server";
 import { CalendarView } from "./views/CalendarView";
 import { SampleView } from "./views/SampleView";
 import { VSCodeUtils } from "./vsCodeUtils";
 import { WindowWatcher } from "./windowWatcher";
 import { WorkspaceWatcher } from "./WorkspaceWatcher";
-import { WSUtilsV2 } from "./WSUtilsV2";
-import { IWSUtilsV2 } from "./WSUtilsV2Interface";
+import { WSUtils } from "./WSUtils";
+import { IWSUtils } from "./WSUtilsInterface";
 
 let _DendronWorkspace: DendronExtension | null;
 
@@ -110,7 +110,7 @@ export function resolveRelToWSRoot(fpath: string): string {
 
 /** Given file uri that is within a vault within the current workspace returns the vault. */
 export function getVaultFromUri(fileUri: Uri) {
-  return WSUtilsV2.instance().getVaultFromUri(fileUri);
+  return WSUtils.instance().getVaultFromUri(fileUri);
 }
 
 export const NO_WORKSPACE_IMPLEMENTATION = "no workspace implementation";
@@ -130,7 +130,7 @@ export class DendronExtension implements IDendronExtension {
   public port?: number;
   public workspaceService?: WorkspaceService;
   public schemaSyncService: ISchemaSyncService;
-  public lookupControllerFactory: ILookupControllerV3Factory;
+  public lookupControllerFactory: ILookupControllerFactory;
   public noteLookupProviderFactory: INoteLookupProviderFactory;
   public schemaLookupProviderFactory: ISchemaLookupProviderFactory;
 
@@ -139,7 +139,7 @@ export class DendronExtension implements IDendronExtension {
   public serverWatcher?: vscode.FileSystemWatcher;
   public type: WorkspaceType;
   public workspaceImpl?: DWorkspaceV2;
-  public wsUtils: IWSUtilsV2;
+  public wsUtils: IWSUtils;
   public noteRefCommentController: vscode.CommentController;
   private _inlineNoteRefs: DefaultMap<
     string,
@@ -330,7 +330,7 @@ export class DendronExtension implements IDendronExtension {
    * Otherwise, get from published extension `package.json`
    */
   static version(): string {
-    return VersionProvider.version();
+    return NodeJSUtils.getVersionFromPkg() || "0.0.0";
   }
 
   static async resetConfig(globalState: vscode.Memento) {
@@ -372,9 +372,9 @@ export class DendronExtension implements IDendronExtension {
     this._disposableStore = new DisposableStore();
     this.setupViews(context);
 
-    this.wsUtils = new WSUtilsV2(this);
+    this.wsUtils = new WSUtils(this);
     this.schemaSyncService = new SchemaSyncService(this);
-    this.lookupControllerFactory = new LookupControllerV3Factory(this);
+    this.lookupControllerFactory = new LookupControllerFactory(this);
     this.noteLookupProviderFactory = new NoteLookupProviderFactory(this);
     this.schemaLookupProviderFactory = new SchemaLookupProviderFactory(this);
     this.noteRefCommentController = vscode.comments.createCommentController(
@@ -683,3 +683,5 @@ export class DendronExtension implements IDendronExtension {
     this._disposableStore.dispose();
   }
 }
+
+

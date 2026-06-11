@@ -517,7 +517,7 @@ it("should reject with error", async () => {
 - [ ] `src/DLinkUtils.ts` - 链接工具
 - [ ] `src/LabelUtils.ts` - 标签工具
 - [ ] `src/StatisticsUtils.ts` - 统计工具
-- [ ] `src/VaultUtilsV2.ts` - Vault 工具
+- [ ] `src/VaultUtilsURI.ts` - Vault 工具
 
 ### 引擎模块
 

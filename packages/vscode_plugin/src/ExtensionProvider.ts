@@ -2,7 +2,7 @@ import { DendronError } from "@saili/common-all";
 import { ensureDirSync } from "fs-extra";
 import _ from "lodash";
 import { IDendronExtension } from "./dendronExtensionInterface";
-import { IWSUtilsV2 } from "./WSUtilsV2Interface";
+import { IWSUtils } from "./WSUtilsInterface";
 
 /**
  * Use this to statically get implementation of IDendronExtension without having to
@@ -37,7 +37,7 @@ export class ExtensionProvider {
     return ExtensionProvider.getExtension().getEngine();
   }
 
-  static getWSUtils(): IWSUtilsV2 {
+  static getWSUtils(): IWSUtils {
     return ExtensionProvider.getExtension().wsUtils;
   }
 
@@ -57,3 +57,4 @@ export class ExtensionProvider {
     ExtensionProvider.extension = extension;
   }
 }
+

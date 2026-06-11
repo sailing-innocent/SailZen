@@ -33,12 +33,6 @@ import { ConfigureWithUICommand } from "./commands/ConfigureWithUICommand";
 import { GotoNoteCommand } from "./commands/GotoNote";
 import { GoToSiblingCommand } from "./commands/GoToSiblingCommand";
 import { ReloadIndexCommand } from "./commands/ReloadIndex";
-import { SeedAddCommand } from "./commands/SeedAddCommand";
-import {
-  SeedBrowseCommand,
-  WebViewPanelFactory,
-} from "./commands/SeedBrowseCommand";
-import { SeedRemoveCommand } from "./commands/SeedRemoveCommand";
 import { ShowNoteGraphCommand } from "./commands/ShowNoteGraph";
 import { ShowSchemaGraphCommand } from "./commands/ShowSchemaGraph";
 import { TogglePreviewCommand } from "./commands/TogglePreview";
@@ -60,20 +54,15 @@ import RenameProvider from "./features/RenameProvider";
 import { setupLocalExtContainer } from "./injection-providers/setupLocalExtContainer";
 import { KeybindingUtils } from "./KeybindingUtils";
 import { Logger } from "./logger";
-import { StateService } from "./services/stateService";
 import { Extensions } from "./settings";
-import { CreateScratchNoteKeybindingTip } from "./showcase/CreateScratchNoteKeybindingTip";
-import { FeatureShowcaseToaster } from "./showcase/FeatureShowcaseToaster";
 import { DocStatusBarProvider } from "./features/DocStatusBar";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
-import { StartupPrompts } from "./utils/StartupPrompts";
 import { StartupUtils } from "./utils/StartupUtils";
 import { VSCodeUtils } from "./vsCodeUtils";
-import { showWelcome } from "./WelcomeUtils";
 import { DendronExtension, getDWorkspace, getExtension } from "./workspace";
 import { TutorialInitializer } from "./workspace/tutorialInitializer";
 import { WorkspaceActivator } from "./workspace/workspaceActivator";
-import { WSUtilsV2 } from "./WSUtilsV2";
+import { WSUtils } from "./WSUtils";
 
 const MARKDOWN_WORD_PATTERN = new RegExp("([\\w\\.]+)");
 // === Main
@@ -137,10 +126,6 @@ export async function _activate(
   const { workspaceFile, workspaceFolders } = vscode.workspace;
   const logLevel = process.env["LOG_LEVEL"];
   const { extensionPath, extensionUri, logUri } = context;
-  const stateService = new StateService({
-    globalState: context.globalState,
-    workspaceState: context.workspaceState,
-  });
   Logger.info({
     ctx,
     stage,
@@ -178,7 +163,7 @@ export async function _activate(
     // Setup the commands
     await _setupCommands({ ext: ws, context, requireActiveWorkspace: false });
     // Order matters. Need to register `Reload Index` command before activating workspace
-    // Workspace activation calls `RELOAD_INDEX` via {@link WSUtilsV2.reloadWorkspace}
+    // Workspace activation calls `RELOAD_INDEX` via {@link WSUtils.reloadWorkspace}
     if (!existingCommands.includes(DENDRON_COMMANDS.RELOAD_INDEX.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
@@ -212,7 +197,7 @@ export async function _activate(
 
     const currentVersion = DendronExtension.version();
     const previousWorkspaceVersionFromState =
-      stateService.getWorkspaceVersion();
+      context.workspaceState.get<string>(WORKSPACE_STATE.VERSION) || "0.0.0";
 
     const previousGlobalVersion = MetadataService.instance().getGlobalVersion();
 
@@ -325,29 +310,7 @@ export async function _activate(
         if (extensionInstallStatus === InstallStatus.INITIAL_INSTALL) {
           StartupUtils.warnIncompatibleExtensions({ ext: ws });
         }
-        // Show the feature showcase toast one minute after initialization.
-        const ONE_MINUTE_IN_MS = 60_000;
-        setTimeout(() => {
-          const showcase = new FeatureShowcaseToaster();
-          // Temporarily show the new toast instead of the rest.
-          // for subsequent sessions this will not be shown as it already has been shown.
-          // TODO: remove this special treatment after 1~2 weeks.
-          let hasShown = false;
-          // only show for users installed prior to v113
-          const firstInstallVersion =
-            MetadataService.instance().firstInstallVersion;
-          if (
-            firstInstallVersion === undefined ||
-            semver.lt(firstInstallVersion, "0.113.0")
-          ) {
-            hasShown = showcase.showSpecificToast(
-              new CreateScratchNoteKeybindingTip()
-            );
-          }
-          if (!hasShown) {
-            showcase.showToast();
-          }
-        }, ONE_MINUTE_IN_MS);
+
       }
     } else {
       // ws not active
@@ -378,7 +341,7 @@ export async function _activate(
         action: "activate",
       });
       // If automaticallyShowPreview = true, display preview panel on start up
-      const note = await WSUtilsV2.instance().getActiveNote();
+      const note = await WSUtils.instance().getActiveNote();
       if (
         note &&
         ws.workspaceService?.config.preview?.automaticallyShowPreview
@@ -472,8 +435,8 @@ async function showWelcomeOrWhatsNew({
       }
       metadataService.setGlobalVersion(version);
 
-      // show the welcome page ^ygtm7ofzezwd
-      return showWelcome(assetUri);
+      // welcome page removed for personal edition
+      return;
     }
     case InstallStatus.UPGRADED: {
       Logger.info({
@@ -508,9 +471,6 @@ async function showWelcomeOrWhatsNew({
       break;
   }
 
-  // Show lapsed users (users who have installed Dendron but haven't initialied
-  // a workspace) a reminder prompt to re-engage them.
-  StartupPrompts.showLapsedUserMessageIfNecessary({ assetUri });
 }
 
 async function _setupCommands({
@@ -675,36 +635,6 @@ async function _setupCommands({
     }
   }
 
-  // NOTE: seed commands currently DO NOT take extension as a first argument
-  ExtensionUtils.addCommand({
-    context,
-    key: DENDRON_COMMANDS.SEED_ADD.key,
-    cmd: new SeedAddCommand(),
-    existingCommands,
-  });
-
-  ExtensionUtils.addCommand({
-    context,
-    key: DENDRON_COMMANDS.SEED_REMOVE.key,
-    cmd: new SeedRemoveCommand(),
-    existingCommands,
-  });
-
-  if (!existingCommands.includes(DENDRON_COMMANDS.SEED_BROWSE.key)) {
-    context.subscriptions.push(
-      vscode.commands.registerCommand(
-        DENDRON_COMMANDS.SEED_BROWSE.key,
-        async () => {
-          const panel = WebViewPanelFactory.create(
-            ext.workspaceService!.seedService
-          );
-          const cmd = new SeedBrowseCommand(panel);
-
-          return cmd.run();
-        }
-      )
-    );
-  }
 }
 
 function _setupLanguageFeatures(context: vscode.ExtensionContext) {
@@ -748,3 +678,4 @@ function _setupLanguageFeatures(context: vscode.ExtensionContext) {
   completionProvider.activate(context);
   codeActionProvider.activate(context);
 }
+

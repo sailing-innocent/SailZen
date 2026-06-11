@@ -1,5 +1,5 @@
 import {
-  DNodePropsQuickInputV2,
+  DNodePropsQuickInput,
   DNodeProps,
   NoteProps,
   DVault,
@@ -32,8 +32,8 @@ export enum DendronQuickPickState {
   PENDING_NEXT_PICK = "PENDING_NEXT_PICK",
 }
 
-export type DendronQuickPickItemV2 = QuickPick<DNodePropsQuickInputV2>;
-export type DendronQuickPickerV2 = DendronQuickPickItemV2 & {
+export type DendronQuickPickItem = QuickPick<DNodePropsQuickInput>;
+export type DendronQuickPicker = DendronQuickPickItem & {
   // --- Private State
   _justActivated?: boolean;
 
@@ -99,7 +99,7 @@ export type DendronQuickPickerV2 = DendronQuickPickItemV2 & {
   /**
    *
    */
-  itemsFromSelection?: DNodePropsQuickInputV2[];
+  itemsFromSelection?: DNodePropsQuickInput[];
   /**
    * select all when quickpick is created and canSelectMany
    * NOTE: this is only used with multiSelect + selection2Items
@@ -136,3 +136,5 @@ export enum VaultSelectionMode {
    */
   alwaysPrompt,
 }
+
+

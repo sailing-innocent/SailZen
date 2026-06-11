@@ -24,7 +24,7 @@ import _ from "lodash";
 import * as vscode from "vscode";
 import { CancellationTokenSource } from "vscode";
 import { Utils } from "vscode-uri";
-import { DendronClientUtilsV2 } from "../../clientUtils";
+import { DendronClientUtils } from "../../clientUtils";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
 import { clipboard } from "../../utils";
@@ -33,38 +33,38 @@ import {
   getOneIndexedFrontmatterEndingLineNumber,
   hasAnchorsToUpdate,
 } from "../../utils/md";
-import { VersionProvider } from "../../versionProvider";
+import { DendronExtension } from "../../workspace";
 import { LookupPanelView } from "../../views/LookupPanelView";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { LookupV3QuickPickView } from "../views/LookupV3QuickPickView";
+import { LookupQuickPickView } from "../views/LookupQuickPickView";
 import { ButtonType, DendronBtn } from "./ButtonTypes";
 import type {
   CreateQuickPickOpts,
-  ILookupControllerV3,
-  LookupControllerV3CreateOpts,
+  ILookupController,
+  LookupControllerCreateOpts,
   PrepareQuickPickOpts,
   ShowQuickPickOpts,
-} from "./LookupControllerV3Interface";
-import { ILookupProviderV3 } from "./LookupProviderV3Interface";
+} from "./LookupControllerInterface";
+import { ILookupProvider } from "./LookupProviderInterface";
 import { ILookupViewModel } from "./LookupViewModel";
 import { NotePickerUtils } from "./NotePickerUtils";
-import { DendronQuickPickerV2, VaultSelectionMode } from "./types";
-import { PickerUtilsV2 } from "./utils";
+import { DendronQuickPicker, VaultSelectionMode } from "./types";
+import { PickerUtils } from "./utils";
 
-export { LookupControllerV3CreateOpts };
+export { LookupControllerCreateOpts };
 
 /**
  * For initialization lifecycle,
  * see [[dendron://dendron.docs/pkg.plugin-core.t.lookup.arch]]
  */
-export class LookupControllerV3 implements ILookupControllerV3 {
+export class LookupController implements ILookupController {
   public nodeType: DNodeType;
   private _cancelTokenSource?: CancellationTokenSource;
 
-  private _quickPick?: DendronQuickPickerV2;
+  private _quickPick?: DendronQuickPicker;
 
   public fuzzThreshold: number;
-  private _provider?: ILookupProviderV3;
+  private _provider?: ILookupProvider;
 
   private _title?: string;
   private _viewModel: ILookupViewModel;
@@ -81,7 +81,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     title?: string;
     viewModel: ILookupViewModel;
   }) {
-    const ctx = "LookupControllerV3:new";
+    const ctx = "LookupController:new";
     Logger.info({ ctx, msg: "enter" });
     const { buttons, nodeType } = opts;
     this.nodeType = nodeType;
@@ -113,14 +113,14 @@ export class LookupControllerV3 implements ILookupControllerV3 {
        * Initial value for quickpick
        */
       initialValue?: string;
-      provider: ILookupProviderV3;
+      provider: ILookupProvider;
     }
-  ): Promise<DendronQuickPickerV2> {
+  ): Promise<DendronQuickPicker> {
     const { quickpick } = await this.prepareQuickPick(opts);
     return this.showQuickPick({ ...opts, quickpick });
   }
 
-  public get quickPick(): DendronQuickPickerV2 {
+  public get quickPick(): DendronQuickPicker {
     if (_.isUndefined(this._quickPick)) {
       throw DendronError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
@@ -159,7 +159,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
    */
   public async prepareQuickPick(
     opts: PrepareQuickPickOpts
-  ): Promise<{ quickpick: DendronQuickPickerV2 }> {
+  ): Promise<{ quickpick: DendronQuickPicker }> {
     const ctx = "prepareQuickPick";
     Logger.info({ ctx, msg: "enter" });
     const { provider, title, selectAll } = _.defaults(opts, {
@@ -168,12 +168,12 @@ export class LookupControllerV3 implements ILookupControllerV3 {
         this._title ||
         [
           `Lookup (${this.nodeType})`,
-          `- version: ${VersionProvider.version()}`,
+          `- version: ${DendronExtension.version()}`,
         ].join(" "),
       selectAll: false,
     });
     this._provider = provider;
-    const quickpick = PickerUtilsV2.createDendronQuickPick(opts);
+    const quickpick = PickerUtils.createDendronQuickPick(opts);
     this._quickPick = quickpick;
     // invoke button behaviors
     this._quickPick.buttons = this._initButtons;
@@ -182,7 +182,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     // Now Create the Views:
     this._disposables.push(
       // TODO: Maybe cache the view to prevent flicker / improve load time.
-      new LookupV3QuickPickView(quickpick, this._viewModel, this._provider.id)
+      new LookupQuickPickView(quickpick, this._viewModel, this._provider.id)
     );
 
     // Set the initial View Model State from the initial Button state:
@@ -260,7 +260,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
   }
 
   public onHide() {
-    const ctx = "LookupControllerV3:onHide";
+    const ctx = "LookupController:onHide";
     this._quickPick?.dispose();
     this._quickPick = undefined;
     this._cancelTokenSource?.dispose();
@@ -504,13 +504,13 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     quickPick,
     mode,
   }: {
-    quickPick: DendronQuickPickerV2;
+    quickPick: DendronQuickPicker;
     mode: VaultSelectionMode;
   }) {
     quickPick.nextPicker = async (opts: { note: NoteProps }) => {
       const { note } = opts;
-      const currentVault = PickerUtilsV2.getVaultForOpenEditor();
-      const vaultSelection = await PickerUtilsV2.getOrPromptVaultForNewNote({
+      const currentVault = PickerUtils.getVaultForOpenEditor();
+      const vaultSelection = await PickerUtils.getOrPromptVaultForNewNote({
         vault: currentVault,
         fname: note.fname,
         vaultSelectionMode: mode,
@@ -530,7 +530,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtilsV2.genNoteName(LookupNoteTypeEnum.journal);
+          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.journal);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -560,7 +560,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtilsV2.genNoteName(LookupNoteTypeEnum.scratch);
+          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.scratch);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -587,7 +587,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtilsV2.genNoteName(LookupNoteTypeEnum.task);
+          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.task);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -717,7 +717,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
   }
 
   /**
-   * Helper for {@link LookupControllerV3.selectionToNoteProps}
+   * Helper for {@link LookupController.selectionToNoteProps}
    * given a selection, find backlinks that point to
    * any anchors in the selection and update them to point to the
    * given destination note instead
@@ -853,7 +853,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
             const editor = VSCodeUtils.getActiveTextEditor();
             const link = NoteUtils.createWikiLink({
               note,
-              useVaultPrefix: DendronClientUtilsV2.shouldUseVaultPrefix(
+              useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(
                 ExtensionProvider.getEngine()
               ),
               alias: { mode: "title" },
@@ -922,3 +922,7 @@ export class LookupControllerV3 implements ILookupControllerV3 {
     };
   }
 }
+
+
+
+

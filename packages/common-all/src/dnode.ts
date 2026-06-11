@@ -24,7 +24,7 @@ import {
   DNodeImplicitPropsEnum,
   DNodeOpts,
   DNodeProps,
-  DNodePropsQuickInputV2,
+  DNodePropsQuickInput,
   DNoteLoc,
   NoteChangeEntry,
   NoteDicts,
@@ -33,7 +33,7 @@ import {
   NoteProps,
   NotePropsByIdDict,
   NotePropsMeta,
-  NoteQuickInputV2,
+  ReducedNoteQuickInput,
   ReducedDEngine,
   RespV3,
   SchemaData,
@@ -146,7 +146,7 @@ export class DNodeUtils {
     schema?: SchemaModuleProps;
     vaults: DVault[];
     wsRoot: string;
-  }): DNodePropsQuickInputV2 {
+  }): DNodePropsQuickInput {
     const vault = VaultUtils.matchVault({ vaults, wsRoot, vault: props.vault });
 
     if (!vault) {
@@ -176,7 +176,7 @@ export class DNodeUtils {
     wsRoot: string;
     schema?: SchemaModuleProps;
     alwaysShow?: boolean;
-  }): DNodePropsQuickInputV2 {
+  }): DNodePropsQuickInput {
     const { alwaysShow } = _.defaults(opts, { alwaysShow: false });
     return { ...this.enhancePropForQuickInput(opts), alwaysShow };
   }
@@ -191,7 +191,7 @@ export class DNodeUtils {
     props: NoteProps;
     schema?: SchemaModuleProps;
     alwaysShow?: boolean;
-  }): NoteQuickInputV2 {
+  }): ReducedNoteQuickInput {
     const { props, schema } = opts;
     const vname = VaultUtils.getName(opts.props.vault);
     const vaultSuffix = `(${vname})`;
@@ -1360,7 +1360,7 @@ export class SchemaUtils {
   }: {
     props: SchemaModuleProps;
     vaults: DVault[];
-  }): DNodePropsQuickInputV2 {
+  }): DNodePropsQuickInput {
     const vaultSuffix =
       vaults.length > 1
         ? ` (${path.basename(props.vault?.fsPath as string)})`
@@ -1798,3 +1798,5 @@ export class SchemaUtils {
   //   return match;
   // }
 }
+
+

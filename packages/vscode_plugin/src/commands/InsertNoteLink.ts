@@ -14,7 +14,7 @@ import { DendronContext, DENDRON_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
-import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderV3Interface";
+import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { Disposable } from "vscode";
 import { AutoCompleter } from "../utils/autoCompleter";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
@@ -192,3 +192,4 @@ export class InsertNoteLinkCommand extends BasicCommand<
     return opts;
   }
 }
+

@@ -24,28 +24,28 @@ import {
   CREATE_NEW_WITH_TEMPLATE_LABEL,
 } from "./constants";
 import {
-  ILookupProviderOptsV3,
-  ILookupProviderV3,
+  ILookupProviderOpts,
+  ILookupProvider,
   NoteLookupProviderSuccessResp,
   OnAcceptHook,
   OnUpdatePickerItemsOpts,
-} from "./LookupProviderV3Interface";
-import { DendronQuickPickerV2, DendronQuickPickState } from "./types";
+} from "./LookupProviderInterface";
+import { DendronQuickPicker, DendronQuickPickState } from "./types";
 import {
   OldNewLocation,
-  PickerUtilsV2,
+  PickerUtils,
   shouldBubbleUpCreateNew,
   sortBySimilarity,
 } from "./utils";
 
-export class NoteLookupProvider implements ILookupProviderV3 {
+export class NoteLookupProvider implements ILookupProvider {
   private _onAcceptHooks: OnAcceptHook[];
-  public opts: ILookupProviderOptsV3;
+  public opts: ILookupProviderOpts;
   private extension: IDendronExtension;
 
   constructor(
     public id: string,
-    opts: ILookupProviderOptsV3,
+    opts: ILookupProviderOpts,
     extension: IDendronExtension
   ) {
     this.extension = extension;
@@ -54,7 +54,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
   }
 
   async provide(opts: {
-    quickpick: DendronQuickPickerV2;
+    quickpick: DendronQuickPicker;
     token: CancellationTokenSource;
     fuzzThreshold: number;
   }) {
@@ -130,7 +130,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
     const { item } = opts;
     const result = NoteUtils.validateFname(item.fname);
     const shouldReject =
-      !result.isValid && PickerUtilsV2.isCreateNewNotePicked(item);
+      !result.isValid && PickerUtils.isCreateNewNotePicked(item);
     if (shouldReject) {
       return {
         shouldReject,
@@ -149,7 +149,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
    * @returns
    */
   onDidAccept(opts: {
-    quickpick: DendronQuickPickerV2;
+    quickpick: DendronQuickPicker;
     cancellationToken: CancellationTokenSource;
   }) {
     return async () => {
@@ -201,7 +201,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
 
       // when doing lookup, opening existing notes don't require vault picker
       if (
-        PickerUtilsV2.hasNextPicker(picker, {
+        PickerUtils.hasNextPicker(picker, {
           selectedItems,
           providerId: this.id,
         })
@@ -329,7 +329,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
 
       // initialize with current picker items without default items present
       const items: NoteQuickInput[] = [...picker.items];
-      let updatedItems = PickerUtilsV2.filterDefaultItems(items);
+      let updatedItems = PickerUtils.filterDefaultItems(items);
       if (token?.isCancellationRequested) {
         return;
       }
@@ -385,7 +385,7 @@ export class NoteLookupProvider implements ILookupProviderV3 {
                   schemaModule,
                   schemaId: ent,
                   fname,
-                  vault: PickerUtilsV2.getVaultForOpenEditor(),
+                  vault: PickerUtils.getVaultForOpenEditor(),
                 });
               }
               return;
@@ -523,3 +523,6 @@ export class NoteLookupProvider implements ILookupProviderV3 {
     this._onAcceptHooks.push(hook);
   }
 }
+
+
+
