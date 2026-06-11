@@ -16,34 +16,41 @@ nodes:
       expected_status: 200
       timeout: 10
 
-  - id: standup_skill
-    type: skill
-    name: Fetch standup report
+  - id: standup_data
+    type: sailzen_cli
+    name: Fetch finance summary for context
     depends_on: [health_check]
     params:
-      skill: lark-workflow-standup-report
-      prompt: "Generate today's standup report and agenda using +agenda"
-      output_format: json
+      module: finance
+      command: pull
+      args: ["--days", "7", "--output", "weekly.csv"]
+      timeout: 120
 
   - id: summarize
     type: llm_reasoning
     name: Summarize and prioritize
-    depends_on: [standup_skill]
+    depends_on: [standup_data]
     params:
       prompt_template: |
-        Based on the following agenda data, summarize today's focus
-        and prioritize the top 3 items:
+        Based on the following recent finance activity and today's date,
+        generate a brief daily standup focus summary in Chinese.
 
-        {{ upstream.standup_skill }}
+        Recent transactions (last 7 days):
+        {{ upstream.standup_data.stdout }}
 
-        Output a brief digest in Chinese.
+        Today's date: {{ today | default('') }}
+
+        Output a brief digest with:
+        1. Top 3 priorities for today
+        2. Any financial alerts or reminders
+        3. A motivational one-liner
       provider: kimi
       temperature: 0.3
       max_tokens: 1500
 
   - id: check_priority
     type: condition
-    name: Check if high-priority items exist
+    name: Check if summary exists
     depends_on: [summarize]
     params:
       condition: "upstream.summarize is not none"

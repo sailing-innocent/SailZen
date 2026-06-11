@@ -1,0 +1,121 @@
+id: budget_monitor
+name: Budget Execution Monitor
+description: >
+  Monitors budget execution on a daily basis.
+  Checks for budget overruns, near-overruns, and untagged spending.
+  Sends alerts via Lark IM when thresholds are exceeded.
+  Schedule: 0 20 * * * (8:00 PM daily)
+
+autonomy_level: semi_autonomous
+
+nodes:
+  - id: analyze_budget
+    type: python
+    name: Run budget analysis
+    params:
+      code: |
+        import sys
+        from pathlib import Path
+        from datetime import datetime
+        
+        scripts_dir = Path("D:/ws/repos/SailZen/.opencode/skills/sailzen-wellness/scripts")
+        sys.path.insert(0, str(scripts_dir))
+        
+        from budget_analyzer import BudgetAnalyzer
+        from common import AnalysisConfig
+        
+        # 计算本月时间范围
+        now = datetime.now()
+        start = now.replace(day=1, hour=0, minute=0, second=0)
+        end = now
+        
+        analyzer = BudgetAnalyzer(AnalysisConfig())
+        budget_ev = analyzer.analyze(int(start.timestamp()), int(end.timestamp()), "monthly_budget")
+        
+        # 构建精简结果供后续节点使用
+        result = {
+            "period": f"{start.strftime('%Y-%m-%d')} ~ {end.strftime('%Y-%m-%d')}",
+            "total_budget_count": budget_ev.total_budget_count,
+            "total_budget_amount": budget_ev.total_budget_amount,
+            "total_used_amount": budget_ev.total_used_amount,
+            "total_remaining_amount": budget_ev.total_remaining_amount,
+            "overall_usage_percentage": budget_ev.overall_usage_percentage,
+            "warning_count": len(budget_ev.warnings),
+            "warnings": budget_ev.warnings,
+            "budgets": [
+                {
+                    "budget_id": b.budget_id,
+                    "budget_name": b.budget_name,
+                    "tags": b.tags,
+                    "usage_percentage": b.usage_percentage,
+                    "used_amount": b.used_amount,
+                    "total_amount": b.total_amount,
+                    "remaining_amount": b.remaining_amount,
+                    "direction": b.direction,
+                    "by_tag": b.by_tag,
+                }
+                for b in budget_ev.budgets
+            ],
+            "untagged_spending": budget_ev.untagged_budget_spending,
+        }
+      timeout: 120
+      inject_ctx: false
+
+  - id: check_budget_status
+    type: condition
+    name: Check budget alert conditions
+    depends_on: [analyze_budget]
+    params:
+      condition: "(upstream.analyze_budget.result.warning_count | default(0)) > 0 or (upstream.analyze_budget.result.overall_usage_percentage | default(0)) > 85"
+      true_next: [generate_report, emit_budget_alert]
+      false_next: [log_budget_ok]
+
+  - id: generate_report
+    type: llm_reasoning
+    name: Generate budget status report
+    depends_on: [check_budget_status]
+    params:
+      prompt_template: |
+        你是一位私人财务顾问。基于以下预算执行数据，生成一份简洁的预算监控报告（中文，300字以内）：
+        
+        {{ upstream.analyze_budget.result }}
+        
+        报告要求：
+        1. 用一句话总结整体预算健康度
+        2. 列出所有超预算（>100%）和接近上限（>90%）的项目
+        3. 如有未关联 budget 的大额支出，提示关注
+        4. 给出1-2条具体、可执行的预算调整建议
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1500
+
+  - id: emit_budget_alert
+    type: reminder_emit
+    name: Queue budget alert
+    depends_on: [check_budget_status]
+    params:
+      title: "预算监控预警"
+      content: "{{ upstream.generate_report.response }}"
+      priority: high
+      channel: lark_im
+
+  - id: send_budget_alert
+    type: lark_notify
+    name: Send budget alert via Lark
+    depends_on: [generate_report]
+    params:
+      channel: im
+      content: |
+        📋 预算监控报告
+        
+        {{ upstream.generate_report.response }}
+      content_type: markdown
+
+  - id: log_budget_ok
+    type: python
+    name: Log normal budget status
+    depends_on: [check_budget_status]
+    params:
+      code: |
+        result = {"status": "ok", "message": "Budget monitor: all budgets within limits."}
+      timeout: 10

@@ -44,7 +44,8 @@ python .opencode/skills/sailzen-finance-wellness/scripts/run_analysis.py \
 ```
 
 输出：
-- `data/temp/wellness/finance_evidence_2025.json` —— 财务指标与统计异常点
+- `data/temp/wellness/finance_evidence_2025.json` —— 财务指标与统计异常点（含增强抗风险指标）
+- `data/temp/wellness/budget_evidence_2025.json` —— 预算执行率与预警（新增）
 - `data/temp/wellness/health_evidence_2025.json` —— 体重/运动原始指标
 - `data/temp/wellness/journal_raw_2025.json` —— 日记原文集合
 
@@ -189,6 +190,59 @@ sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31
 }
 ```
 
+### budget_evidence.json
+
+```json
+{
+ "period": "2025-01-01 ~ 2025-12-31",
+ "total_budget_count": 5,
+ "total_budget_amount": 120000.00,
+ "total_used_amount": 85000.00,
+ "total_remaining_amount": 35000.00,
+ "overall_usage_percentage": 70.8,
+ "budgets": [
+ {
+ "budget_id": 1,
+ "budget_name": "月度生活费",
+ "tags": "日用",
+ "total_amount": 5000.00,
+ "used_amount": 4800.00,
+ "remaining_amount": 200.00,
+ "usage_percentage": 96.0,
+ "transaction_count": 45,
+ "direction": 0,
+ "items": [
+ "by_tag": {
+ "日用消耗": {"amount": 2300.00, "count": 20},
+ "零食": {"amount": 1200.00, "count": 15},
+ "交通": {"amount": 800.00, "count": 8}
+ },
+ "top_transactions": [
+ }
+ ],
+ "warnings": [
+ {
+ "level": "warning",
+ "type": "near_overrun",
+ "budget_name": "月度生活费",
+ "message": "预算 '月度生活费' 已使用 96.0%,接近上限",
+ "used": 4800.00,
+ "total": 5000.00
+ }
+ ],
+ "untagged_budget_spending": [
+ {"id": 1024, "date": "2025-06-15", "description": "某笔支出", "value": 800.00, "tags": "日用消耗"}
+ ]
+}
+```
+
+关键字段说明：
+- `overall_usage_percentage`: 全局预算执行率
+- `budgets[].usage_percentage`: 单预算执行率
+- `budgets[].by_tag`: 预算内支出按标签的分布
+- `warnings`: 系统生成的预警列表（level: critical/warning/info）
+- `untagged_budget_spending`: 未关联任何 budget 的大额支出（≥500）
+
 ## 你的工作流程
 
 ### Phase 1: 收集证据
@@ -229,6 +283,33 @@ sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31
 - 工资/房租/房贷等固定大额支出的高 Z-score 是正常的，忽略
 - 标签样本数 < 10 的异常点不可靠，忽略
 - 金额 < ¥100 的异常不具实际意义，忽略
+
+### Phase 2.5: 解读预算证据（新增）
+
+阅读 `budget_evidence.json`，关注：
+
+**全局执行率**：
+- `overall_usage_percentage` 是否 > 90%？这意味着整体预算吃紧
+- 总预算金额 vs 总支出（可与 finance evidence 中的 total_expense 交叉验证）
+
+**单预算执行分析**（逐个查看 budgets 列表）：
+- 哪些预算已超支（usage_percentage > 100%）？
+- 哪些预算接近上限（90%-100%）？
+- 哪些预算利用率极低（< 30%）？可能是预算设定不合理
+
+**预算与标签匹配度**：
+- 查看 `by_tag` 分布，判断预算内支出结构是否合理
+- 对比 finance evidence 中的标签总支出，看有多少支出没有关联 budget
+- `untagged_budget_spending` 中的大额支出是否应归入某个 budget？
+
+**预警响应**：
+- `warnings` 列表中的每条预警都需要在报告中回应
+- 不要忽略 `info` 级别的预警——它们是趋势信号
+
+**预算健康度判断（你来判断，不是系统判断）**：
+- 预算体系是否覆盖主要支出？（对比 finance 的 top_tags）
+- 预算粒度是否合适？（太粗=无约束力，太细=难维护）
+- 收入预算（direction=1）的实现率如何？
 
 ### Phase 3: 解读健康证据
 
@@ -282,9 +363,24 @@ sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31
    - 金额、趋势、TOP项
    - 如果占比过高，给出具体、可执行的控制建议
 
+4. **预算执行情况**
+   - 全局执行率，是否健康
+   - 超预算/接近上限的预算列表
+   - 未关联 budget 的大额支出提示
+   - 预算与支出结构的匹配度评价
+   - 具体的预算调整建议（如"建议将月度生活费从5000上调至5500"）
+
 5. **异常提醒**
    - 只列出你判断为真正需要关注的异常
    - 说明为什么关注它（结合日记上下文）
+
+5. **财务抗风险能力评估（新增）**
+   - 财务压力指数及趋势解读
+   - 3个月无收入情景的储备充足度
+   - 收入减半情景的年度赤字预估
+   - 支出趋势判断（rising/stable/falling）
+   - 流动性评分（基于账户余额/月均支出）
+   - 刚性支出占比，可削减空间
 
 6. **身体健康**
    - 体重变化趋势
@@ -339,8 +435,20 @@ sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31
 你的工作：
 1. 调用 `run_analysis.py --week-start 本周一日期 --label this_week`
 2. 快速扫读三个证据包
-3. 用简洁语言给出摘要（3-5句话）
-4. 如果有异常立即指出，无异常则给予肯定
+4. 用简洁语言给出摘要（3-5句话）
+5. 如果有异常立即指出，无异常则给予肯定
+
+### 场景5: 预算执行月度检查
+
+用户说："我这个月预算执行情况怎么样"
+
+你的工作：
+1. 调用 `run_analysis.py --start 本月1日 --end 今天 --label this_month`
+2. 重点阅读 `budget_evidence.json`
+3. 查看 `warnings` 列表，识别超预算或接近上限的项目
+4. 查看 `untagged_budget_spending`，判断是否有应归入预算的漏网支出
+5. 对比 `finance_evidence.json` 中的月度支出，验证预算覆盖率
+6. 给出具体建议：如"零食预算已用90%，建议本周控制"或"交通预算剩余充足，可考虑挪至日用"
 
 ## 关键约束
 
@@ -364,6 +472,11 @@ sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31
 5. **日记是你的证据库，不是数据源**
    - 不要试图从日记中"挖掘"消费记录来补充财务数据
    - 日记的价值在于理解行为动机，不是替代记账
+
+6. **Budget 数据是决策支撑的核心输入**
+   - 不要忽略 `budget_evidence.json` 中的预警
+   - 未关联 budget 的大额支出是预算体系的重要缺口
+   - 预算建议要具体（金额、时间、调整方向）
 
 ## 故障处理
 

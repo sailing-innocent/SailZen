@@ -1,0 +1,100 @@
+id: finance_health_report
+name: Weekly Finance Health Report
+description: >
+  Generates an actionable financial health report by running
+  wellness analysis (finance + budget + health + journal evidence),
+  then synthesizing actionable recommendations via LLM.
+  Sends the report via Lark IM.
+  Schedule: 0 21 * * 0 (9:00 PM every Sunday)
+
+autonomy_level: assisted
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: collect_evidence
+    type: wellness
+    name: Collect finance and wellness evidence
+    depends_on: [health_check]
+    params:
+      start_date: "{{ report_start_date | default('') }}"
+      end_date: "{{ report_end_date | default('') }}"
+      label: "weekly_health_report"
+      output_format: json
+
+  - id: synthesize_report
+    type: llm_reasoning
+    name: Synthesize actionable financial report
+    depends_on: [collect_evidence]
+    params:
+      system_prompt: |
+        你是一位专业的个人财务顾问。你的任务是基于提供的结构化财务证据，
+        生成一份简洁、可执行的财务健康报告。
+        报告必须使用中文，包含具体的行动建议（actionable items）。
+      prompt_template: |
+        请基于以下财务证据生成一份可执行的财务健康报告。
+
+        === 财务证据 ===
+        {{ upstream.collect_evidence.data | default({}) | tojson }}
+
+        报告要求：
+        1. 【现金流速览】本月/本周收支概况、储蓄率
+        2. 【预算执行】各预算执行率、超预算预警、未关联 budget 的大额支出
+        3. 【抗风险扫描】应急资金月数、流动性评分、财务压力指数、情景分析结果
+        4. 【异常发现】统计异常点、零食追踪、支出趋势
+        5. 【行动建议】3-5条具体、可执行的改进建议，按优先级排序
+        6. 【下周关注】需要特别留意的财务事项
+
+        输出格式为 Markdown，标题层级清晰， emoji 点缀。
+      provider: kimi
+      temperature: 0.4
+      max_tokens: 4000
+
+  - id: check_report_quality
+    type: condition
+    name: Check report generation success
+    depends_on: [synthesize_report]
+    params:
+      condition: "upstream.synthesize_report is not none and '行动建议' in upstream.synthesize_report.response"
+      true_next: [send_report, archive_report]
+      false_next: [notify_failure]
+
+  - id: send_report
+    type: lark_notify
+    name: Send report via Lark IM
+    depends_on: [check_report_quality]
+    params:
+      channel: im
+      content: |
+        📊 财务健康周报
+
+        {{ upstream.synthesize_report.response }}
+      content_type: markdown
+
+  - id: archive_report
+    type: reminder_emit
+    name: Archive report reminder
+    depends_on: [check_report_quality]
+    params:
+      title: "财务健康周报已生成"
+      content: "本周财务健康报告已生成并发送。报告 ID: weekly_health_report"
+      priority: normal
+      channel: lark_im
+
+  - id: notify_failure
+    type: lark_notify
+    name: Notify report generation failure
+    depends_on: [check_report_quality]
+    params:
+      channel: im
+      content: |
+        ⚠️ 财务健康周报生成失败
+
+        证据收集或报告合成节点出现问题，请检查 sail_server 和 Agent 日志。
+      content_type: markdown

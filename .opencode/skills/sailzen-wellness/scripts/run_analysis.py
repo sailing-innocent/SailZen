@@ -20,6 +20,7 @@
 
 输出文件：
 - finance_evidence_{label}.json  —— 财务指标与异常点
+- budget_evidence_{label}.json   —— 预算执行率与预警
 - health_evidence_{label}.json   —— 体重/运动原始指标
 - journal_raw_{label}.json       —— 日记原文集合
 
@@ -30,14 +31,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from common import AnalysisConfig, resolve_server_url
+from budget_analyzer import BudgetAnalyzer
+from common import AnalysisConfig, resolve_server_url, SailZenClient, FINANCE_API_BASE
 from finance_analyzer import FinanceEngine
 from health_analyzer import HealthEngine
 from journal_fetcher import JournalFetcher
@@ -48,6 +52,27 @@ WORK_DIR = Path("data/temp/wellness")
 
 def ensure_workdir():
     WORK_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def ser(o):
+    if isinstance(o, list):
+        return [ser(i) for i in o]
+    if hasattr(o, "__dataclass_fields__"):
+        return {k: ser(v) for k, v in asdict(o).items()}
+    return o
+
+
+def fetch_accounts() -> list[dict]:
+    """通过 API 获取账户余额列表"""
+    try:
+        client = SailZenClient()
+        data = client.get(f"{FINANCE_API_BASE}/account")
+        if isinstance(data, list):
+            return data
+        return []
+    except Exception as e:
+        print(f"[Account] 获取账户列表失败: {e}")
+        return []
 
 
 def export_finance(output: Path) -> bool:
@@ -101,6 +126,7 @@ def run_collection(
     weight_csv = WORK_DIR / f"health_weight_{label}.csv"
     exercise_csv = WORK_DIR / f"health_exercise_{label}.csv"
     finance_json = WORK_DIR / f"finance_evidence_{label}.json"
+    budget_json = WORK_DIR / f"budget_evidence_{label}.json"
     health_json = WORK_DIR / f"health_evidence_{label}.json"
     journal_json = WORK_DIR / f"journal_raw_{label}.json"
 
@@ -122,13 +148,12 @@ def run_collection(
         config = AnalysisConfig(exclude_mortgage=exclude_mortgage)
         fe = FinanceEngine(config)
         fe.load_csv(str(finance_csv))
+        # 获取账户余额并加载
+        accounts = fetch_accounts()
+        if accounts:
+            fe.load_accounts(accounts)
+            print(f"  已加载 {len(accounts)} 个账户余额")
         ev = fe.analyze(start, end, label)
-        import json
-        from dataclasses import asdict
-        def ser(o):
-            if isinstance(o, list): return [ser(i) for i in o]
-            if hasattr(o, "__dataclass_fields__"): return {k: ser(v) for k, v in asdict(o).items()}
-            return o
         with open(finance_json, "w", encoding="utf-8") as f:
             json.dump(ser(ev), f, ensure_ascii=False, indent=2)
         print(f"输出: {finance_json}")
@@ -163,10 +188,29 @@ def run_collection(
     print(f"  覆盖: {collection.days_with_journal}/{collection.total_days_in_period} 天 ({collection.coverage_rate:.1f}%)")
     print()
 
+    # 5. 预算证据
+    print("=" * 60)
+    print("📋 预算执行分析")
+    print("=" * 60)
+    try:
+        analyzer = BudgetAnalyzer(config)
+        start_ts = int(start.timestamp())
+        end_ts = int(end.timestamp())
+        budget_ev = analyzer.analyze(start_ts, end_ts, f"{start_str} ~ {end_str}")
+        with open(budget_json, "w", encoding="utf-8") as f:
+            json.dump(ser(budget_ev), f, ensure_ascii=False, indent=2)
+        print(f"输出: {budget_json}")
+        print(f"  预算数: {budget_ev.total_budget_count}")
+        print(f"  预警: {len(budget_ev.warnings)} 条")
+    except Exception as e:
+        print(f"预算分析失败: {e}")
+    print()
+
     return {
         "finance": finance_json,
         "health": health_json,
         "journal": journal_json,
+        "budget": budget_json,
     }
 
 

@@ -136,6 +136,13 @@ class AgentDaemon:
         except Exception as exc:
             logger.warning("Failed to register condition node: %s", exc)
 
+        try:
+            from sailzen.dag_client.nodes.python_node import PythonNode
+            if "python" not in self.node_registry.list_types():
+                self.node_registry.register("python", PythonNode)
+        except Exception as exc:
+            logger.warning("Failed to register python node: %s", exc)
+
     # ── Lifecycle ─────────────────────────────────────────────────────
 
     async def start(self) -> None:

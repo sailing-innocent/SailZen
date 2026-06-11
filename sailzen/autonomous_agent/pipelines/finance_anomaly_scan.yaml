@@ -64,8 +64,10 @@ nodes:
       content_type: markdown
 
   - id: log_result
-    type: shell
+    type: state_check
     name: Log normal result
     depends_on: [check_risk]
     params:
-      command: echo "Finance anomaly scan completed — no anomalies detected."
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
