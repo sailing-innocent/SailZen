@@ -37,8 +37,8 @@ import { isNotUndefined } from "../utils";
 import { VaultUtils } from "../vault";
 
 /**
- * Abstract base class that contains common logic between SailEngineV3 and
- * SailEngineV3Web
+ * Abstract base class that contains common logic between SailEngine and
+ * SailEngineWeb
  */
 export abstract class EngineV3Base implements ReducedDEngine {
   protected noteStore;

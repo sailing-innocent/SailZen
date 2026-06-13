@@ -43,7 +43,7 @@ import { sailHoverPreview } from "./remark/sailPreview";
 import { sailPub, SailPubOpts } from "./remark/sailPub";
 import { extendedImage } from "./remark/extendedImage";
 import { hashtags } from "./remark/hashtag";
-import { noteRefsV2 } from "./remark/noteRefsV2";
+import { noteRefs } from "./remark/noteRefs";
 import { zdocTags } from "./remark/zdocTags";
 import { wikiLinks, WikiLinksOpts } from "./remark/wikiLinks";
 import { sailzenCite } from "./remark/sailzenCite";
@@ -276,7 +276,7 @@ export class MDUtilsV5 {
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
       .use({ settings: { listItemIndent: "one", fences: true, bullet: "-" } } as any)
-      .use(noteRefsV2)
+      .use(noteRefs)
       .use(blockAnchors)
       .use(hashtags)
       .use(zdocTags)

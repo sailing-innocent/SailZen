@@ -334,7 +334,7 @@ pnpm test:coverage
 | 模块 | 建议测试内容 |
 |------|-------------|
 | `remark/sailPub.ts` | 标题插入、`transformNoPublish`、图片 URL 转换、wiki link opts 前缀 |
-| `remark/noteRefsV2.ts` | 笔记引用解析、嵌套引用、锚点范围、`convertNoteRefToHAST` |
+| `remark/noteRefs.ts` | 笔记引用解析、嵌套引用、锚点范围、`convertNoteRefToHAST` |
 | `remark/backlinks.ts` | 反向链接生成、链接去重 |
 | `remark/backlinksHover.ts` | Hover 预览内容生成 |
 | `remark/hierarchies.ts` | 层级列表生成、children 链接渲染 |

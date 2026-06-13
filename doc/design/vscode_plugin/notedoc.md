@@ -77,12 +77,12 @@ doc/
 当前插件基于 **Sail Engine V3** + **Unified/Remark** 渲染管线：
 
 ```
-Markdown File → NoteParserV2 → SailEngineV3
+Markdown File → NoteParser → SailEngine
                                       ↓
                               Unified Processor
                               (remark plugins)
                               - wikiLinks
-                              - noteRefsV2
+                              - noteRefs
                               - sailPub / sailPreview
                               - publishSite
                               - blockAnchors
@@ -446,7 +446,7 @@ layout: center
    - `remark-sailzen-cite`：将 `::cite[]` 转为 `CiteNode`
    - `remark-sailzen-figure`：将 `::figure` 转为 `FigureNode`
    - `remark-sailzen-math-env`：将 `::theorem` 等转为 `MathEnvNode`
-   - `remark-sailzen-note-refs`：复用现有 `noteRefsV2`，增强 doc 模式行为
+   - `remark-sailzen-note-refs`：复用现有 `noteRefs`，增强 doc 模式行为
 2. 运行 `rehype` 或自定义 transformer，将特殊节点转为目标格式节点
 3. 收集所有 `CiteNode`，生成参考文献数据库（`.bib`）
 
@@ -709,7 +709,7 @@ doc:
 
 | 现有组件 | 在 NoteDoc 中的复用 |
 |---------|-------------------|
-| `SailEngineV3` | Note 查询、链接解析、graph 构建 |
+| `SailEngine` | Note 查询、链接解析、graph 构建 |
 | `unified` + `remark` | AST 处理管线，插入 SailZen Doc 插件 |
 | `NoteProps.custom` | 承载 `doc` frontmatter 扩展 |
 | `ProcFlavor` / `ProcMode` | 新增 `DOC_EXPORT` / `DOC_PREVIEW` 模式 |

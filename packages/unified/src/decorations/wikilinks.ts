@@ -14,7 +14,7 @@ import {
 } from "@saili/common-all";
 import _ from "lodash";
 import { AnchorUtils } from "../remark";
-import { isBeginBlockAnchorId, isEndBlockAnchorId } from "../remark/noteRefsV2";
+import { isBeginBlockAnchorId, isEndBlockAnchorId } from "../remark/noteRefs";
 import { WikiLinkNoteV4 } from "../types";
 import { decorateTaskNote, DecorationTaskNote } from "./taskNotes";
 import { Decoration, DECORATION_TYPES, Decorator } from "./utils";

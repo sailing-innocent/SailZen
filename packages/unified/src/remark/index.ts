@@ -1,7 +1,7 @@
 export * from "./sailPub";
 export * from "./hierarchies";
 export * from "./transformLinks";
-export { convertNoteRefToHAST, NoteRefUtils } from "./noteRefsV2";
+export { convertNoteRefToHAST, NoteRefUtils } from "./noteRefs";
 export { sailzenCite } from "./sailzenCite";
 export { sailzenFigure } from "./sailzenFigure";
 export { sailzenBlocks } from "./sailzenBlocks";

@@ -31,7 +31,7 @@ Raw Markdown
 **Key processor factories:**
 - `MDUtilsV5.procRehypeFull()` — Server-side full pipeline (HTML output)
 - `MDUtilsV5Web.procRehypeWeb()` — Browser-compatible pipeline
-- `MDUtilsV5.procRemarkFull()` — Internal remark-only pipeline (used by noteRefsV2)
+- `MDUtilsV5.procRemarkFull()` — Internal remark-only pipeline (used by noteRefs)
 
 ## Custom AST Node Types
 
@@ -62,7 +62,7 @@ Defined in `src/types.ts` as `SailASTTypes`:
 | `hashtag` | `#tag` | ✅ Active | ✅ | Config-gated (`enableHashTags`) |
 | `zdocTags` | `\cite{key}` | ✅ Active | ✅ | Config-gated (`enableZDocTags`) |
 | `blockAnchors` | `^anchor` | ✅ Active | ✅ | **Bug in `matchBlockAnchor`**: checks `match.length == 1` but regex always produces `length >= 2`, so function always returns `undefined` |
-| `noteRefsV2` | `![[ref]]` | ✅ Active | ❌ | Most complex plugin: transclusion, anchor ranges, wildcards, pretty refs, `MAX_REF_LVL = 3` nesting limit |
+| `noteRefs` | `![[ref]]` | ✅ Active | ❌ | Most complex plugin: transclusion, anchor ranges, wildcards, pretty refs, `MAX_REF_LVL = 3` nesting limit |
 | `extendedImage` | `![alt](url){props}` | ✅ Active | ❌ | Parses YAML props via `js-yaml`; falls back to regular image on parse failure |
 | `sailzenCite` | `::cite[keys]` | ✅ Active | ❌ | Splits keys on comma; renders `<sup>[keys]</sup>` for HTML |
 | `sailzenFigure` | `::figure[cap](src){opts}` | ✅ Active | ❌ | Parses `key="value"` / `key=value` options |
@@ -134,7 +134,7 @@ All custom plugins switch on `SailASTDest`:
 - `wrap` (rehype) — selector wrapping
 
 ### Untested Plugins (Priority Order)
-1. **High**: `noteRefsV2` — complex transclusion logic, anchor slicing, wildcard resolution
+1. **High**: `noteRefs` — complex transclusion logic, anchor slicing, wildcard resolution
 2. **Medium**: `extendedImage`, `sailzenCite`, `sailzenFigure` — standard tokenizer/compiler pattern
 3. **Medium**: `backlinks`, `hierarchies` — metadata injection
 4. **Low**: `sailPub`, `sailPreview`, `transformLinks`, `abbr`, `publishSite`
@@ -520,7 +520,7 @@ rehype-stringify → HTML Output
 | `hashtags` | `remark/hashtag.ts` | ✅ Active | ✅ `hashtag.test.ts` | `#tag` tags, shorthand for `[[tags.tag]]`. Regex-based tokenizer. |
 | `zdocTags` | `remark/zdocTags.ts` | ✅ Active | ✅ `zdocTags.test.ts` + `tag.test.ts` | `\cite{key}` ZDoc citations. Requires `enableZDocTags` config. |
 | `blockAnchors` | `remark/blockAnchors.ts` | ✅ Active | ❌ None | `^anchor-id` block references. Used by noteRefs for range selection. |
-| `noteRefsV2` | `remark/noteRefsV2.ts` | ✅ Active | ❌ None | `![[note-ref]]` transclusion. Complex: wildcard refs, anchor ranges, pretty refs, nesting limit. |
+| `noteRefs` | `remark/noteRefs.ts` | ✅ Active | ❌ None | `![[note-ref]]` transclusion. Complex: wildcard refs, anchor ranges, pretty refs, nesting limit. |
 | `extendedImage` | `remark/extendedImage.ts` | ✅ Active | ❌ None | `![alt](url){props}` images with YAML props. Falls back to regular image on bad props. |
 | `sailzenCite` | `remark/sailzenCite.ts` | ✅ Active | ❌ None | `::cite[foo, bar]` inline citations. Multi-dest rendering (MD/HTML/DOC). |
 | `sailzenFigure` | `remark/sailzenFigure.ts` | ✅ Active | ❌ None | `::figure[caption](src){opts}` figure directives. Option parser for key=value pairs. |
@@ -608,7 +608,7 @@ Decorations analyze parsed AST to produce IDE highlighting (ranges + types). The
 | `sailzenFigure` | **High** | Custom syntax, option parser | Regex + option parsing + HTML/MD round-trip |
 | `blockAnchors` | **High** | Core feature, noteRefs dependency | Regex + block anchor node + MD_SAIL round-trip |
 | `extendedImage` | **Medium** | Custom syntax, YAML props | Regex + props parsing + HTML rendering |
-| `noteRefsV2` | **Medium** | Complex but critical | Mock `noteCacheForRenderDict`, test basic transclusion |
+| `noteRefs` | **Medium** | Complex but critical | Mock `noteCacheForRenderDict`, test basic transclusion |
 | `decorations/*` | **Medium** | All 8 decorators untested | AST → decoration range assertions |
 | `sailPub` | **Low** | Publishing logic | Integration with mock engine |
 | `backlinks` | **Low** | Backlink injection | Mock engine + assert backlinks in output |
@@ -728,7 +728,7 @@ describe("sailzenCite compiler", () => {
 | `#tag` | `hashtag` | `hashtags` | `#important` | MD_SAIL, MD_REGULAR |
 | `\cite{key}` | `zdoctag` | `zdocTags` | `\cite{foo}` | MD_SAIL |
 | `^anchor` | `blockAnchor` | `blockAnchors` | `^my-anchor` | MD_SAIL, MD_REGULAR, MD_ENHANCED_PREVIEW |
-| `![[note]]` | `refLinkV2` | `noteRefsV2` | `![[daily.journal]]` | MD_SAIL, HTML |
+| `![[note]]` | `refLinkV2` | `noteRefs` | `![[daily.journal]]` | MD_SAIL, HTML |
 | `![alt](url){props}` | `extendedImage` | `extendedImage` | `![](img.png){width: 100}` | MD_SAIL, MD_REGULAR, MD_ENHANCED_PREVIEW |
 | `::cite[keys]` | `sailzenCite` | `sailzenCite` | `::cite[foo, bar]` | MD_SAIL, HTML, DOC_EXPORT, DOC_PREVIEW |
 | `::figure[cap](src){opts}` | `sailzenFigure` | `sailzenFigure` | `::figure[Teaser](fig1){width="80%"}` | MD_SAIL, HTML, DOC_EXPORT, DOC_PREVIEW |

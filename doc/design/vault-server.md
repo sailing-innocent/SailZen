@@ -30,7 +30,7 @@ Vault API Server 是对 `@saili/engine-server`（Sail 引擎）的独立 HTTP �
 │                       │                          │
 │   ┌──────────────────▼──────────────────────┐   │
 │   │  WorkspaceController (自动初始化)         │   │
-│   │  SailEngineV3 (引擎核心)              │   │
+│   │  SailEngine (引擎核心)              │   │
 │   └──────────────────┬──────────────────────┘   │
 └──────────────────────┼──────────────────────────┘
                        │ 读写文件系统
@@ -314,7 +314,7 @@ vault_client.py (Python)
 
 standalone.ts (TypeScript)
     ├── @saili/api-server    (Express 路由层)
-    │   ├── @saili/engine-server  (SailEngineV3)
+    │   ├── @saili/engine-server  (SailEngine)
     │   │   ├── @saili/common-all
     │   │   ├── @saili/common-server
     │   │   └── @saili/unified

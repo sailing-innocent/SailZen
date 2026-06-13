@@ -44,7 +44,7 @@ import {
 } from "../utilsv5";
 import { blockAnchor2html } from "./blockAnchors";
 import { extendedImage2html } from "./extendedImage";
-import { convertNoteRefToHAST, NoteRefsOptsV2 } from "./noteRefsV2";
+import { convertNoteRefToHAST, NoteRefsOptsV2 } from "./noteRefs";
 import {
   addError,
   hashTag2WikiLinkNoteV4,

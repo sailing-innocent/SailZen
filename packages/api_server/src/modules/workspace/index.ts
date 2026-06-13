@@ -6,7 +6,7 @@ import {
   WorkspaceInitRequest,
   WorkspaceSyncRequest,
 } from "@saili/common-all";
-import { SailEngineV3 } from "@saili/engine-server";
+import { SailEngine } from "@saili/engine-server";
 import { getLogger } from "../../core";
 import { getWSEngine, putWS } from "../../utils";
 import { DConfig, getDurationMilliseconds } from "@saili/common-server";
@@ -26,7 +26,7 @@ export class WorkspaceController {
     const ctx = "WorkspaceController:init";
     const logger = getLogger();
     logger.info({ ctx, msg: "enter", uri });
-    const engine = SailEngineV3.create({
+    const engine = SailEngine.create({
       wsRoot: uri,
       logger,
     });

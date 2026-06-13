@@ -28,7 +28,7 @@ type Eat = any;
 import type { Plugin, Processor } from "unified";
 import { Data, Node, Parent } from "unist";
 import { MdastUtils } from "..";
-import { RemarkUtils } from "../remark";
+import { RemarkUtils } from ".";
 import { SiteUtils } from "../SiteUtils";
 import {
   SailASTDest,
@@ -1056,5 +1056,5 @@ ${linkLine}
   return paragraph([html(top)].concat([content as any]).concat([html(bottom)]));
 }
 
-export { plugin as noteRefsV2 };
+export { plugin as noteRefs };
 export { PluginOpts as NoteRefsOptsV2 };

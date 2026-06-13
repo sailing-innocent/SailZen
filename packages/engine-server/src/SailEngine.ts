@@ -93,7 +93,7 @@ import {
 import _ from "lodash";
 import path from "path";
 import { NotesFileSystemCache } from "./cache/notesFileSystemCache";
-import { NoteParserV2 } from "./drivers/file/NoteParserV2";
+import { NoteParser } from "./drivers/file/NoteParser";
 import { SchemaParser } from "./drivers/file/schemaParser";
 import { NodeJSFileStore } from "./store";
 import { HookUtils, RequireHookResp } from "./topics/hooks";
@@ -116,7 +116,7 @@ type CachedPreview = {
   contentHash?: string;
 };
 
-export class SailEngineV3 extends EngineV3Base implements DEngine {
+export class SailEngine extends EngineV3Base implements DEngine {
   public wsRoot: string;
   public hooks: DHookDict;
   private _fileStore: IFileStore;
@@ -148,7 +148,7 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
     const queryStore = new FuseQueryStore();
     const fileStore = new NodeJSFileStore();
 
-    return new SailEngineV3({
+    return new SailEngine({
       wsRoot,
       vaults: ConfigUtils.getVaults(config),
       queryStore,
@@ -975,7 +975,7 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
       );
 
       // DEBUG: Log config read from DConfig
-      // console.log("[SailEngineV3.getDecorations] Config loaded", {
+      // console.log("[SailEngine.getDecorations] Config loaded", {
       //   wsRoot: this.wsRoot,
       //   hasConfig: !!config,
       //   hasWorkspace: !!config?.workspace,
@@ -1115,7 +1115,7 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
           logger: this.logger,
         });
 
-        const { noteDicts, errors: parseErrors } = await new NoteParserV2({
+        const { noteDicts, errors: parseErrors } = await new NoteParser({
           cache: notesCache,
           engine: this,
           logger: this.logger,
@@ -1588,6 +1588,6 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
 }
 
 export const createEngineV3 = ({ wsRoot }: WorkspaceOpts) => {
-  const engine = SailEngineV3.create({ wsRoot });
+  const engine = SailEngine.create({ wsRoot });
   return engine as DEngineClient;
 };

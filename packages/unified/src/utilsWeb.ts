@@ -31,7 +31,7 @@ import { sailHoverPreview } from "./remark/sailPreview";
 import { sailPub } from "./remark/sailPub";
 import { extendedImage } from "./remark/extendedImage";
 import { hashtags } from "./remark/hashtag";
-// import { noteRefsV2 } from "./remark/noteRefsV2";
+// import { noteRefs } from "./remark/noteRefs";
 import { zdocTags } from "./remark/zdocTags";
 import { wikiLinks } from "./remark/wikiLinks";
 import { SailASTDest } from "./types";
@@ -69,7 +69,7 @@ export class MDUtilsV5Web {
       .use(frontmatterPlugin, ["yaml"])
       .use(abbrPlugin)
       .use({ settings: { listItemIndent: "one", fences: true, bullet: "-" } } as any)
-      // .use(noteRefsV2) TODO: Add in note ref functionalit
+      // .use(noteRefs) TODO: Add in note ref functionalit
       .use(blockAnchors)
       .use(hashtags)
       .use(zdocTags)

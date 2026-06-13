@@ -104,7 +104,7 @@ Commit message 规范（本项目约定）：
 示例：
 
 ```powershell
-pwsh -Command "git commit -m 'perf: concurrentize NoteParserV2 note loading'"
+pwsh -Command "git commit -m 'perf: concurrentize NoteParser note loading'"
 pwsh -Command "git commit -m 'docs: add VSCode plugin architecture guide'"
 pwsh -Command "git commit -m 'feat: add StartupProfiler local perf logging'"
 ```
