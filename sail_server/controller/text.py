@@ -70,10 +70,11 @@ class ChapterListItem(BaseModel):
     """章节列表项"""
 
     id: int = Field(description="节点ID")
-    sort_order: int = Field(description="排序顺序")
+    sort_index: int = Field(description="排序索引")
     label: str = Field(description="章节标签")
     title: str = Field(description="章节标题")
-    level: int = Field(description="层级")
+    char_count: Optional[int] = Field(default=None, description="字符数")
+    path: str = Field(description="节点路径")
 
 
 class AppendResponse(BaseModel):

@@ -109,20 +109,27 @@ data/dag/runs/{run_id}/
 
 ## 动态分支机制
 
-`batch_split` 节点执行后，根据章节数量动态生成 `batch_fetch_text_N` 节点：
+`batch_split` 节点执行后，根据章节数量动态生成：
+- `batch_fetch_text_N` 节点：批量获取第 N 组章节内容
+- `analyze_{dimension}_N` 节点：对每个分析维度（character/plot/setting/emotion）进行批次分析
 
 ```python
 # batch_split 节点的返回
 return NodeResult.ok(
     data={"batch_count": 5},
     next_nodes=[
-        {"id": f"batch_fetch_{i}", "type": "text_fetch", "params": {...}}
-        for i in range(5)
+        {"id": f"batch_fetch_{i}", "type": "text_fetch", "params": {...}},
+        {"id": f"analyze_character_{i}", "type": "skill", "depends_on": [f"batch_fetch_{i}"], "join_to": ["merge_character"], "params": {...}},
+        ...
     ]
 )
 ```
 
-这些动态节点通过 `trigger` 边连接到 `batch_split`，DAG 调度器会自动解锁它们。
+动态节点支持以下边声明：
+- `depends_on`: 该节点依赖的节点列表（创建 dependency 边）
+- `join_to`: 静态汇合节点列表；动态节点完成后，这些节点才能执行
+
+`analyze_{dimension}_N` 通过 `join_to: ["merge_{dimension}"]` 确保 `merge_{dimension}` 在**所有**对应分析节点完成后才执行，修复了 merge 节点因静态依赖 batch_split 而过早解锁的时序 bug。
 
 ## API 接口
 

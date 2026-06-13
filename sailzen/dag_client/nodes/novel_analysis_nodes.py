@@ -126,10 +126,12 @@ class BatchSplitNode(NodeExecutor):
         next_nodes = []
         edition_id = ctx.global_params.get("edition_id") or ctx.params.get("edition_id")
         sail_url = ctx.global_params.get("sail_server_url", "http://localhost:8000")
+        analysis_types = ctx.global_params.get("analysis_types", ["character", "plot", "setting", "emotion"])
 
         for i, batch in enumerate(batches):
+            batch_fetch_id = f"batch_fetch_{i}"
             next_nodes.append({
-                "id": f"batch_fetch_{i}",
+                "id": batch_fetch_id,
                 "type": "text_fetch",
                 "name": f"批量获取批次 {i}",
                 "params": {
@@ -139,6 +141,24 @@ class BatchSplitNode(NodeExecutor):
                     "batch_info": batch,
                 },
             })
+
+            # 为每个分析维度生成对应的分析节点，并通过 join_to 阻塞对应的 merge 节点
+            for dimension in analysis_types:
+                analyze_id = f"analyze_{dimension}_{i}"
+                next_nodes.append({
+                    "id": analyze_id,
+                    "type": "skill",
+                    "name": f"分析 {dimension} 批次 {i}",
+                    "depends_on": [batch_fetch_id],
+                    "join_to": [f"merge_{dimension}"],
+                    "params": {
+                        "skill": f"novel_analyze_{dimension}",
+                        "dimension": dimension,
+                        "batch_index": i,
+                        "batch_info": batch,
+                        "edition_id": edition_id,
+                    },
+                })
 
         # 保存产物
         output_data = {

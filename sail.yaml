@@ -155,8 +155,9 @@ dag_client:
             overlap: 0
             strategy: "by_count"
 
-        # 注意: batch_fetch_N 和 analyze_*_N 节点由 batch_split 动态生成
-        # 以下占位节点用于展示模板结构，实际运行时动态创建
+        # 注意: batch_fetch_N 和 analyze_*_N 节点由 batch_split 动态生成。
+        # analyze_*_N 通过 join_to 声明依赖 merge_* 节点，确保 merge 等待所有分析完成。
+        # merge_* 保留对 batch_split 的静态依赖作为辅助约束，实际由动态 join 边控制时序。
 
         - id: "merge_character"
           type: "batch_merge"

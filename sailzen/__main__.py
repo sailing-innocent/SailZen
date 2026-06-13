@@ -25,6 +25,7 @@ def main():
         print("Modules:")
         print("  finance   财务交易管理（拉取/修改/上传 transaction）")
         print("  health    健康数据管理（体重/运动/减重计划导出分析）")
+        print("  notes     本地 Markdown 笔记库管理（git 托管）")
         print()
         print("Examples:")
         print("  sailzen finance list-accounts --server http://localhost:8000")
@@ -32,6 +33,8 @@ def main():
         print("  sailzen finance push transactions_1.csv --server http://localhost:8000")
         print("  sailzen health pull-weight --start 2025-01-01 --server http://localhost:8000")
         print("  sailzen health weight-analysis --start 2025-01-01 --end 2025-12-31")
+        print("  sailzen notes list --vault ./notes")
+        print("  sailzen notes get daily.2026-07-13 --vault ./notes")
         sys.exit(1)
 
     module = sys.argv[1]
@@ -47,9 +50,14 @@ def main():
         from sailzen.cli.health_client import main as health_main
 
         health_main()
+    elif module == "notes":
+        sys.argv.pop(1)
+        from sailzen.cli.notes_client import main as notes_main
+
+        notes_main()
     else:
         print(f"Unknown module: {module}", file=sys.stderr)
-        print("Available modules: finance, health", file=sys.stderr)
+        print("Available modules: finance, health, notes", file=sys.stderr)
         sys.exit(1)
 
 

@@ -34,7 +34,7 @@ os.environ["PGCLIENTENCODING"] = "UTF8"
 # 导入 ORM Base 和所有模型
 from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm import (
-    health, finance, life, project, history, text, necessity, analysis
+    health, finance, life, project, history, text, necessity
 )
 
 

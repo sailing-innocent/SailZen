@@ -204,7 +204,12 @@ class DAGExecutor:
         return results
 
     async def _handle_dynamic_nodes(self, parent_node: dict, next_node_configs: List[dict]) -> None:
-        """处理动态添加的节点。"""
+        """处理动态添加的节点。
+
+        支持在动态节点配置中声明:
+          - depends_on: 该动态节点依赖的节点列表（创建 dependency 边）
+          - join_to: 静态汇合节点列表；动态节点完成后，这些节点才能执行
+        """
         run_id = parent_node["run_id"]
         from sailzen.dag_client.models import make_dag_node, make_dag_edge
         for cfg in next_node_configs:
@@ -217,14 +222,41 @@ class DAGExecutor:
                 params=cfg.get("params", {}),
             )
             await self.db.create_node(node)
-            edge = make_dag_edge(
-                run_id=run_id,
-                from_node=parent_node["node_id"],
-                to_node=cfg["id"],
-                edge_type="trigger",
-            )
-            await self.db.create_edge(edge)
-            logger.info("Dynamic node added: %s -> %s", parent_node["node_id"], cfg["id"])
+
+            # 显式依赖: 动态节点依赖指定节点
+            deps = cfg.get("depends_on", [])
+            if deps:
+                for dep_id in deps:
+                    edge = make_dag_edge(
+                        run_id=run_id,
+                        from_node=dep_id,
+                        to_node=cfg["id"],
+                        edge_type="dependency",
+                    )
+                    await self.db.create_edge(edge)
+                    logger.info("Dynamic dependency edge added: %s -> %s", dep_id, cfg["id"])
+            else:
+                # 默认使用 trigger 边从父节点触发
+                edge = make_dag_edge(
+                    run_id=run_id,
+                    from_node=parent_node["node_id"],
+                    to_node=cfg["id"],
+                    edge_type="trigger",
+                )
+                await self.db.create_edge(edge)
+                logger.info("Dynamic trigger edge added: %s -> %s", parent_node["node_id"], cfg["id"])
+
+            # 汇合依赖: 让静态汇合节点等待此动态节点完成
+            join_targets = cfg.get("join_to", [])
+            for target_id in join_targets:
+                edge = make_dag_edge(
+                    run_id=run_id,
+                    from_node=cfg["id"],
+                    to_node=target_id,
+                    edge_type="dependency",
+                )
+                await self.db.create_edge(edge)
+                logger.info("Dynamic join edge added: %s -> %s", cfg["id"], target_id)
 
     async def execute_node_sync(self, node_db_id: str) -> NodeResult:
         """同步执行单个节点（用于手动触发）。"""

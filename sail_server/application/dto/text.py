@@ -146,6 +146,8 @@ class DocumentNodeBase(BaseModel):
     node_type: str = Field(default="chapter", description="节点类型")
     title: str = Field(description="节点标题")
     raw_text: Optional[str] = Field(default=None, description="节点内容")
+    path: Optional[str] = Field(default=None, description="节点路径")
+    sort_index: int = Field(default=0, description="排序索引")
     level: int = Field(default=1, description="层级")
 
 
@@ -172,7 +174,7 @@ class DocumentNodeResponse(DocumentNodeBase):
 
     id: int = Field(description="节点ID")
     parent_id: Optional[int] = Field(default=None, description="父节点ID")
-    sort_order: int = Field(default=0, description="排序顺序")
+    sort_index: int = Field(default=0, description="排序索引")
     word_count: Optional[int] = Field(default=None, description="字数")
     char_count: Optional[int] = Field(default=None, description="字符数")
     meta_data: Dict[str, Any] = Field(default_factory=dict, description="元数据")
