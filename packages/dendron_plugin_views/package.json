@@ -1,6 +1,6 @@
 {
   "name": "@saili/dendron-plugin-views",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "scripts": {
     "start": "vite",
     "dev": "vite --open dev.html",
@@ -9,30 +9,30 @@
     "copy-to-plugin": "node scripts/copyToPlugin.js"
   },
   "dependencies": {
-    "@aws-amplify/core": "^6.15.0",
-    "@reduxjs/toolkit": "^2.11.2",
+    "@aws-amplify/core": "^6.16.4",
+    "@reduxjs/toolkit": "^2.12.0",
     "@saili/common-all": "workspace:^",
-    "antd": "^6.1.1",
-    "dayjs": "^1.11.19",
+    "antd": "^6.4.4",
+    "dayjs": "^1.11.21",
     "lodash": "catalog:",
-    "mermaid": "^11.12.2",
+    "mermaid": "^11.15.0",
     "process": "^0.11.10",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "react-redux": "^9.2.0",
+    "react-redux": "^9.3.0",
     "redux-logger": "^3.0.6",
-    "web-vitals": "^5.1.0"
+    "web-vitals": "^5.3.0"
   },
   "devDependencies": {
-    "@types/lodash": "^4.17.21",
-    "@types/node": "^25.0.3",
+    "@types/lodash": "^4.17.24",
+    "@types/node": "^25.9.3",
     "@types/react": "catalog:",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "catalog:",
     "@types/redux-logger": "^3.0.13",
-    "@vitejs/plugin-react": "^5.1.2",
-    "sass": "^1.97.0",
+    "@vitejs/plugin-react": "^6.0.2",
+    "sass": "^1.101.0",
     "typescript": "catalog:",
-    "vite": "^7.3.0",
-    "vite-plugin-node-polyfills": "^0.24.0"
+    "vite": "^8.0.16",
+    "vite-plugin-node-polyfills": "^0.28.0"
   }
 }

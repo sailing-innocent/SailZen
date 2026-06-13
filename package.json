@@ -40,7 +40,7 @@
         "unrs-resolver": true
     },
     "devDependencies": {
-        "typescript": "^5.9.3"
+        "typescript": "^6.0.3"
     },
     "dependencies": {
         "@radix-ui/react-dropdown-menu": "^2.1.17"

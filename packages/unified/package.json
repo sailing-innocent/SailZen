@@ -1,6 +1,6 @@
 {
   "name": "@saili/unified",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "type": "module",
   "description": "Unified parser utilities for Dendron",
   "license": "MIT",
@@ -36,7 +36,7 @@
     "@mapbox/rehype-prism": "^0.9.0",
     "@saili/common-all": "workspace:^",
     "hast-util-select": "^6.0.4",
-    "js-yaml": "^4.1.1",
+    "js-yaml": "^4.2.0",
     "lodash": "catalog:",
     "mdast-builder": "^1.1.1",
     "mdast-util-to-string": "^4.0.0",
@@ -57,11 +57,11 @@
     "unified-engine": "^11.2.2",
     "unist-builder": "^4.0.0",
     "unist-util-select": "^5.1.0",
-    "unist-util-visit": "^5.0.0",
+    "unist-util-visit": "^5.1.0",
     "unist-util-visit-parents": "^6.0.2",
     "vfile": "^6.0.3",
     "vscode-uri": "^3.1.0",
-    "yaml-unist-parser": "^3.1.0"
+    "yaml-unist-parser": "^3.2.0"
   },
   "devDependencies": {
     "@types/hast": "^3.0.4",
@@ -75,10 +75,10 @@
     "exit": "^0.1.2",
     "jest": "catalog:",
     "jest-config": "catalog:",
-    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-to-markdown": "^2.1.2",
     "micromark-util-types": "^2.0.2",
-    "rimraf": "^6.1.2",
+    "rimraf": "^6.1.3",
     "ts-jest": "catalog:"
   },
   "engines": {
