@@ -7,6 +7,8 @@
         "install-plugin": "pnpm install --filter=sail-zen-vscode",
         "build-engine-server": "node scripts/build-with-deps.js @saili/engine-server",
         "build-plugin": "node scripts/build-with-deps.js sail-zen-vscode build",
+        "update-all": "node scripts/update-all.js",
+        "update-all:dry-run": "node scripts/update-all.js --dry-run",
         "package-plugin": "pnpm -r --filter=sail-zen-vscode run package",
         "build:common-all": "node scripts/build-with-deps.js @saili/common-all",
         "build:common-server": "node scripts/build-with-deps.js @saili/common-server",
@@ -41,6 +43,6 @@
         "typescript": "^5.9.3"
     },
     "dependencies": {
-        "@radix-ui/react-dropdown-menu": "^2.1.16"
+        "@radix-ui/react-dropdown-menu": "^2.1.17"
     }
 }
