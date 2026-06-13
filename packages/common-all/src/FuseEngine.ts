@@ -81,18 +81,22 @@ export function createFuseNote(
   );
 }
 
+export type SerializedFuseIndex = {
+  keys: Array<Record<string, unknown>>;
+  records: Array<Record<string, unknown>>;
+};
+
 export function createSerializedFuseNoteIndex(
   publishedNotes: NotePropsByIdDict | NoteProps[],
   overrideOpts?: Partial<Parameters<typeof createFuse>[1]>
-) {
-  return createFuseNote(publishedNotes, overrideOpts).getIndex().toJSON();
+): SerializedFuseIndex {
+  return createFuseNote(publishedNotes, overrideOpts)
+    .getIndex()
+    .toJSON() as unknown as SerializedFuseIndex;
 }
 
 export type FuseNote = Fuse<NoteProps>;
 export type FuseNoteIndex = FuseIndex<NoteProps>;
-export type SerializedFuseIndex = ReturnType<
-  typeof createSerializedFuseNoteIndex
->;
 
 type FuseEngineOpts = {
   mode?: DEngineMode;
@@ -146,7 +150,7 @@ export class FuseEngine {
     this.threshold =
       opts.mode === "exact" ? 0.0 : getCleanThresholdValue(opts.fuzzThreshold);
 
-    this.notesIndex = createFuse<NoteProps>([], {
+    this.notesIndex = createFuse<NoteIndexProps>([], {
       preset: "note",
       threshold: this.threshold,
     });
@@ -203,7 +207,7 @@ export class FuseEngine {
       /// seearch eveyrthing
     } else if (qs === "*") {
       // @ts-ignore
-      items = this.notesIndex._docs as NoteProps[];
+      items = this.notesIndex._docs as NoteIndexProps[];
     } else {
       const formattedQS = FuseEngine.formatQueryForFuse({ qs });
 

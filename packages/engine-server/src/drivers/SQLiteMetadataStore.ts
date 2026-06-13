@@ -8,6 +8,7 @@ import {
   NotePropsByIdDict,
   NotePropsMeta,
 } from "@saili/common-all";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import _ from "lodash";
 import { URI } from "vscode-uri";
 // @ts-ignore
@@ -56,16 +57,12 @@ export class SQLiteMetadataStore implements IDataStore<string, NotePropsMeta> {
 
     this.status = "loading";
     // example uri: "DATABASE_URL="file://Users/kevinlin/code/dendron/local/notes.db""
-    const dbUrl = URI.file(`${wsRoot}/metadata.db`);
+    const dbPath = URI.file(`${wsRoot}/metadata.db`).fsPath;
     loadPrisma()
       .then(({ PrismaClient }: { PrismaClient: any }) => {
         try {
           _prisma = new PrismaClient({
-            datasources: {
-              db: {
-                url: dbUrl.toString(),
-              },
-            },
+            adapter: new PrismaBetterSqlite3({ url: `file:${dbPath}` }),
           });
           this.status = "ready";
         } catch (err) {

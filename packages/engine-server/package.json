@@ -36,6 +36,7 @@
     "@babel/types": "7.29.7",
     "@jcoreio/async-throttle": "^1.7.0",
     "@mapbox/rehype-prism": "^0.9.0",
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "7.8.0",
     "@saili/common-all": "workspace:^",
     "@saili/common-server": "workspace:^",
