@@ -27,17 +27,15 @@
         "version:minor": "node scripts/bump-version.js minor",
         "version:major": "node scripts/bump-version.js major"
     },
-    "pnpm": {
-        "onlyBuiltDependencies": [
-            "@parcel/watcher",
-            "@prisma/client",
-            "@prisma/engines",
-            "@vscode/vsce-sign",
-            "esbuild",
-            "keytar",
-            "prisma",
-            "unrs-resolver"
-        ]
+    "allowBuilds": {
+        "@parcel/watcher": true,
+        "@prisma/client": true,
+        "@prisma/engines": true,
+        "@vscode/vsce-sign": true,
+        "esbuild": true,
+        "keytar": true,
+        "prisma": true,
+        "unrs-resolver": true
     },
     "devDependencies": {
         "typescript": "^5.9.3"

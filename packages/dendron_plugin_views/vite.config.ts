@@ -55,9 +55,18 @@ export default defineConfig({
   build: {
     outDir: 'build',
     sourcemap: true,
+    // Suppress chunk size warning for the single bundled entry point
+    chunkSizeWarningLimit: 1000,
     // Ensure CSS is extracted to a single file
     cssCodeSplit: false,
     rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress eval warning from gray-matter's engine.js
+        if (warning.code === 'EVAL' && warning.id?.includes('gray-matter')) {
+          return;
+        }
+        warn(warning);
+      },
       output: {
         // Fixed output names for vscode_plugin integration
         entryFileNames: 'static/js/index.bundle.js',

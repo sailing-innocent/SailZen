@@ -5,7 +5,6 @@ import _ from "lodash";
 import { minimatch } from "minimatch";
 import path from "path";
 import normalizePath from "normalize-path";
-import querystring from "querystring";
 import semver from "semver";
 import type { Result } from "neverthrow";
 import { DateTime, LruCache, NotePropsMeta, VaultUtils } from "..";
@@ -72,7 +71,6 @@ export * from "./vscode-utils";
 export class DUtils {
   static minimatch = minimatch;
   static semver = semver;
-  static querystring = querystring;
 }
 
 export const getSlugger = () => {

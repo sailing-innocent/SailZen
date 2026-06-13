@@ -61,7 +61,7 @@ export function createNoOpLogger() {
  * Handles arrays by appending multiple values with the same key.
  * Replaces the deprecated querystring/qs library.
  */
-function stringifyQueryParams(params: Record<string, any>): string {
+export function stringifyQueryParams(params: Record<string, any>): string {
   const searchParams = new URLSearchParams();
   
   for (const [key, value] of Object.entries(params)) {

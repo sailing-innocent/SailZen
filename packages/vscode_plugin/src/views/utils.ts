@@ -4,9 +4,9 @@ import {
   DendronEditorViewKey,
   DendronError,
   DendronTreeViewKey,
-  DUtils,
   getStage,
   getWebTreeViewEntry,
+  stringifyQueryParams,
 } from "@saili/common-all";
 import {
   findUpTo,
@@ -174,7 +174,7 @@ export class WebViewUtils {
     const { wsRoot, config } = ExtensionProvider.getDWorkspace();
     const ext = ExtensionProvider.getExtension();
     const port = ext.port;
-    const qs = DUtils.querystring.stringify({
+    const qs = stringifyQueryParams({
       ws: wsRoot,
       port,
     });

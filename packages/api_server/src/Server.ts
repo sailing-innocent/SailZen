@@ -2,6 +2,7 @@ import {
   error2PlainObject,
   getStage,
   StatusCodes,
+  stringifyQueryParams,
 } from "@saili/common-all";
 import {
   findInParent,
@@ -12,7 +13,6 @@ import asyncHandler from "express-async-handler";
 import fs from "fs-extra";
 import morgan from "morgan";
 import path from "path";
-import querystring from "querystring";
 import { getLogger } from "./core";
 import { baseRouter } from "./routes";
 
@@ -72,7 +72,7 @@ export function appModule({
         "/vscode" +
         req.path.replace(/.html/, "") +
         "?" +
-        querystring.stringify(req.query as any);
+        stringifyQueryParams(req.query as any);
       logger.info({ ctx, msg: "redirecting", redirectUrl });
       return res.redirect(redirectUrl);
     });
