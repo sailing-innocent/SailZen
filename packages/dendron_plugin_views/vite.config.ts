@@ -33,7 +33,6 @@ export default defineConfig({
       'react-redux',
       '@reduxjs/toolkit',
       'redux-logger',
-      'antd',
       'lodash',
       'dayjs',
       'mermaid',
@@ -43,8 +42,9 @@ export default defineConfig({
     exclude: ['@saili/common-server'],
     // Force re-optimization when workspace dependencies change
     force: true,
-    esbuildOptions: {
-      keepNames: true,
+    rolldownOptions: {
+      // keepNames is esbuild-specific; Vite 8 uses Rolldown for dep optimization.
+      // Retain original intent only if the option is supported; otherwise leave empty.
     },
   },
   server: {
@@ -55,7 +55,8 @@ export default defineConfig({
   build: {
     outDir: 'build',
     sourcemap: true,
-    // Suppress chunk size warning for the single bundled entry point
+    // Keep the default chunk size warning threshold; manualChunks below keeps all
+    // emitted chunks under this limit.
     chunkSizeWarningLimit: 1000,
     // Ensure CSS is extracted to a single file
     cssCodeSplit: false,
@@ -71,6 +72,18 @@ export default defineConfig({
         // Fixed output names for vscode_plugin integration
         entryFileNames: 'static/js/index.bundle.js',
         chunkFileNames: 'static/js/[name]-[hash].js',
+        // Split heavy dependencies into separate chunks so the entry bundle stays
+        // below the 1000 kB warning threshold. The VSCode webview entry still only
+        // needs to load index.bundle.js; the runtime will dynamically fetch the
+        // split chunks relative to the entry script URL.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@aws-amplify')) {
+              return 'vendor-amplify';
+            }
+            return 'vendor';
+          }
+        },
         // Use fixed CSS name: index.styles.css (required by vscode_plugin)
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {

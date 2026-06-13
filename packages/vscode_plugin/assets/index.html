@@ -26,6 +26,9 @@
         }
       </style>
       <script type="module" crossorigin src="./static/js/index.bundle.js"></script>
+      <link rel="modulepreload" crossorigin href="./static/js/rolldown-runtime-Cyuzqnbw.js">
+      <link rel="modulepreload" crossorigin href="./static/js/vendor-D5VezZLD.js">
+      <link rel="modulepreload" crossorigin href="./static/js/vendor-amplify-BDgcHlop.js">
       <link rel="stylesheet" crossorigin href="./static/css/index.styles.css">
     </head>
 
@@ -45,7 +48,7 @@
       }
 
       function addThemeCSS(theme, styleId, keepBuiltin) {
-        const themeMap = {"light":"/static\\antd\\light.css","dark":"/static\\antd\\dark.css"};
+        const themeMap = {"light":"static/css/themes/light.css","dark":"static/css/themes/dark.css"};
 
         console.log('Applying theme', theme);
 
@@ -231,6 +234,6 @@
         </div>
       </div>
 
-      <!-- Source code for javascript bundle. Vite will inject the script tag here -->
+      <!-- Source code for javascript bundle. Vite will inject the script tag here -->
     </body>
   </html>

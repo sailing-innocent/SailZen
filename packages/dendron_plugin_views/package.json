@@ -12,7 +12,6 @@
     "@aws-amplify/core": "^6.16.4",
     "@reduxjs/toolkit": "^2.12.0",
     "@saili/common-all": "workspace:^",
-    "antd": "^6.4.4",
     "dayjs": "^1.11.21",
     "lodash": "catalog:",
     "mermaid": "^11.15.0",

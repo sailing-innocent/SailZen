@@ -21,8 +21,6 @@ import { ideHooks } from "../features/ide";
 import { ideSlice } from "../features/ide";
 import { useWorkspaceProps } from "../hooks";
 import _ from "lodash";
-// import { Layout } from "antd";
-// const { Content } = Layout;
 
 const { useEngineAppSelector } = engineHooks;
 import { postVSCodeMessage, useVSCodeMessage } from "../utils/vscode";
