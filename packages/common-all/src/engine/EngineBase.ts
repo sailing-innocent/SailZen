@@ -40,7 +40,7 @@ import { VaultUtils } from "../vault";
  * Abstract base class that contains common logic between SailEngine and
  * SailEngineWeb
  */
-export abstract class EngineV3Base implements ReducedDEngine {
+export abstract class EngineBase implements ReducedDEngine {
   protected noteStore;
   protected queryStore;
   protected logger;

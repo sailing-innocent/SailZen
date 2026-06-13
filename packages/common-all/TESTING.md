@@ -521,7 +521,7 @@ it("should reject with error", async () => {
 
 ### 引擎模块
 
-- [ ] `src/engine/EngineV3Base.ts` - 引擎基类
+
 - [ ] `src/engine/EngineEventEmitter.ts` - 引擎事件发射器
 - [ ] `src/FuseEngine.ts` - Fuse 搜索引擎
 

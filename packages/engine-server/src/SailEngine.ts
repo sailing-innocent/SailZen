@@ -21,7 +21,7 @@ import {
   EngineDeleteOpts,
   EngineInfoResp,
   EngineSchemaWriteOpts,
-  EngineV3Base,
+  EngineBase,
   EngineWriteOptsV2,
   error2PlainObject,
   ERROR_SEVERITY,
@@ -116,7 +116,7 @@ type CachedPreview = {
   contentHash?: string;
 };
 
-export class SailEngine extends EngineV3Base implements DEngine {
+export class SailEngine extends EngineBase implements DEngine {
   public wsRoot: string;
   public hooks: DHookDict;
   private _fileStore: IFileStore;
