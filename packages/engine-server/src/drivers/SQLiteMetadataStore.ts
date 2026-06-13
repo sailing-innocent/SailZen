@@ -8,7 +8,6 @@ import {
   NotePropsByIdDict,
   NotePropsMeta,
 } from "@saili/common-all";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import _ from "lodash";
 import { URI } from "vscode-uri";
 // @ts-ignore
@@ -17,6 +16,21 @@ import { loadPrisma } from "./prisma-shim";
 type PrismaClient = any;
 
 let _prisma: PrismaClient | undefined;
+
+// Lazy-load the Better SQLite3 Prisma adapter to avoid loading the native
+// `better-sqlite3` module during extension activation. This allows the VSCode
+// extension to start even when better-sqlite3 is not installed/built for the
+// extension host, since SQLite metadata store is only used when explicitly
+// configured.
+let _PrismaBetterSqlite3: any | undefined;
+
+async function getPrismaBetterSqlite3Adapter(): Promise<any> {
+  if (_PrismaBetterSqlite3 === undefined) {
+    const mod = await import("@prisma/adapter-better-sqlite3");
+    _PrismaBetterSqlite3 = mod.PrismaBetterSqlite3;
+  }
+  return _PrismaBetterSqlite3;
+}
 
 function getPrismaClient(): PrismaClient {
   if (_prisma === undefined) {
@@ -59,8 +73,9 @@ export class SQLiteMetadataStore implements IDataStore<string, NotePropsMeta> {
     // example uri: "DATABASE_URL="file://Users/kevinlin/code/dendron/local/notes.db""
     const dbPath = URI.file(`${wsRoot}/metadata.db`).fsPath;
     loadPrisma()
-      .then(({ PrismaClient }: { PrismaClient: any }) => {
+      .then(async ({ PrismaClient }: { PrismaClient: any }) => {
         try {
+          const PrismaBetterSqlite3 = await getPrismaBetterSqlite3Adapter();
           _prisma = new PrismaClient({
             adapter: new PrismaBetterSqlite3({ url: `file:${dbPath}` }),
           });

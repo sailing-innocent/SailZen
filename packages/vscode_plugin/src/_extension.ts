@@ -42,7 +42,7 @@ import { ConfigureUIPanelFactory } from "./components/views/ConfigureUIPanelFact
 import { NoteGraphPanelFactory } from "./components/views/NoteGraphViewFactory";
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { SchemaGraphViewFactory } from "./components/views/SchemaGraphViewFactory";
-import { DENDRON_COMMANDS, DendronContext } from "./constants";
+import { DENDRON_COMMANDS, DendronContext, WORKSPACE_STATE } from "./constants";
 import { codeActionProvider } from "./features/codeActionProvider";
 import { completionProvider } from "./features/completionProvider";
 import DefinitionProvider from "./features/DefinitionProvider";

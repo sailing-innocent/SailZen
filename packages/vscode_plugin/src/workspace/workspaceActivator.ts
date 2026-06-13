@@ -25,7 +25,7 @@ import _ from "lodash";
 import path from "path";
 import semver from "semver";
 import * as vscode from "vscode";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { DendronContext, DENDRON_COMMANDS, WORKSPACE_STATE } from "../constants";
 import { IDendronExtension } from "../dendronExtensionInterface";
 import { Logger } from "../logger";
 import { EngineAPIService } from "../services/EngineAPIService";
