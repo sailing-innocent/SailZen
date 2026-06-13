@@ -14,7 +14,7 @@ import _ from "lodash";
 import { Uri } from "vscode";
 import { SailQuickPicker } from "../components/lookup/types";
 import { OldNewLocation, PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { Logger } from "../logger";
 import { BaseCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -59,7 +59,7 @@ export class SchemaLookupCommand extends BaseCommand<
   CommandGatherOutput,
   CommandRunOpts
 > {
-  key = DENDRON_COMMANDS.LOOKUP_SCHEMA.key;
+  key = SAIL_COMMANDS.LOOKUP_SCHEMA.key;
   protected _controller: ILookupController | undefined;
   protected _provider: ILookupProvider | undefined;
 

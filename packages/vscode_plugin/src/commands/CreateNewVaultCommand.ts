@@ -4,7 +4,7 @@ import _ from "lodash";
 import path from "path";
 import { commands, OpenDialogOptions, Uri, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -25,7 +25,7 @@ export class CreateNewVaultCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CREATE_NEW_VAULT.key;
+  key = SAIL_COMMANDS.CREATE_NEW_VAULT.key;
 
   constructor(private _ext: ISailExtension) {
     super();

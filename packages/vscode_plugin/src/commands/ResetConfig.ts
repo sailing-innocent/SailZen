@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { GLOBAL_STATE, WORKSPACE_STATE } from "../constants";
 import { BasicCommand } from "./base";
@@ -22,7 +22,7 @@ export class ResetConfigCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.RESET_CONFIG.key;
+  key = SAIL_COMMANDS.RESET_CONFIG.key;
   async gatherInputs(): Promise<CommandInput | undefined> {
     const scope = await window.showInputBox({
       prompt: "Select scope",

@@ -3,7 +3,7 @@ import * as fs from "fs-extra";
 import * as _ from "lodash";
 import * as path from "path";
 import { PreviewProxy } from "../components/views/PreviewProxy";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { InputArgCommand } from "./base";
@@ -21,7 +21,7 @@ export class TogglePreviewCommand extends InputArgCommand<
   TogglePreviewCommandOpts,
   TogglePreviewCommandOutput
 > {
-  key = DENDRON_COMMANDS.TOGGLE_PREVIEW.key;
+  key = SAIL_COMMANDS.TOGGLE_PREVIEW.key;
   _panel: PreviewProxy;
 
   // This class is used for both ShowPreview and TogglePreview commands.

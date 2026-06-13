@@ -98,7 +98,7 @@ export class WorkspaceConfig {
   }
 
   static workspaceFile(wsRoot: string) {
-    return path.join(wsRoot, CONSTANTS.DENDRON_WS_NAME);
+    return path.join(wsRoot, CONSTANTS.SAIL_WS_NAME);
   }
 
   /**
@@ -119,9 +119,9 @@ export class WorkspaceConfig {
       {
         folders: cleanOpts.vaults
           ? cleanOpts.vaults.map((ent) => ({
-              path: ent.fsPath,
-              name: ent.name,
-            }))
+            path: ent.fsPath,
+            name: ent.name,
+          }))
           : [],
       },
       cleanOpts.overrides

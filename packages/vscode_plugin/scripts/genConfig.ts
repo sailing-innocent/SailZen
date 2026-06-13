@@ -4,11 +4,11 @@ import _ from "lodash";
 import {
   CONFIG,
   SailContext,
-  DENDRON_COMMANDS,
-  DENDRON_MENUS,
-  DENDRON_VIEWS,
-  DENDRON_VIEWS_CONTAINERS,
-  DENDRON_VIEWS_WELCOME,
+  SAIL_COMMANDS,
+  SAIL_MENUS,
+  SAIL_VIEWS,
+  SAIL_VIEWS_CONTAINERS,
+  SAIL_VIEWS_WELCOME,
 } from "../src/constants";
 
 function genEntry(entryDict: any) {
@@ -33,14 +33,14 @@ function updateConfig() {
 
 function updateMenus() {
   console.log("update menus...");
-  DENDRON_MENUS["commandPalette"] = updateCommandPalettes();
-  return DENDRON_MENUS;
+  SAIL_MENUS["commandPalette"] = updateCommandPalettes();
+  return SAIL_MENUS;
 }
 
 function updateCommandPalettes() {
   console.log("updating command palettes...");
   const commandPalette = _.map(
-    _.filter(DENDRON_COMMANDS, (ent) => {
+    _.filter(SAIL_COMMANDS, (ent) => {
       return !_.isUndefined(ent.when);
     }),
     (ent) => {
@@ -57,7 +57,7 @@ function updateCommandPalettes() {
 
 function updateCommands() {
   console.log("update commands...");
-  const commands = _.map(_.filter(DENDRON_COMMANDS), (ent) => {
+  const commands = _.map(_.filter(SAIL_COMMANDS), (ent) => {
     const configProps = _.omit(ent, ["key", "keybindings", "when"]);
     const key = ent["key"];
     return {
@@ -71,7 +71,7 @@ function updateCommands() {
 function updateKeybindings() {
   console.log("update keybindings...");
   const bindings = _.filter(
-    DENDRON_COMMANDS,
+    SAIL_COMMANDS,
     (ent) => !_.isEmpty(ent.keybindings)
   ).map((keyEnt) => {
     let configProps = keyEnt.keybindings;
@@ -97,7 +97,7 @@ function updateKeybindings() {
 
 function updateViews() {
   console.log("update views");
-  const out = _.groupBy(DENDRON_VIEWS, "where");
+  const out = _.groupBy(SAIL_VIEWS, "where");
   const viewJson = {} as any;
   _.map(out, (views, k) => {
     viewJson[k] = _.map(views, (ent) => _.omit(ent, "where"));
@@ -112,8 +112,8 @@ function main() {
   const commands = updateCommands();
   const menus = updateMenus();
   const keybindings = updateKeybindings();
-  const viewsWelcome = DENDRON_VIEWS_WELCOME;
-  const viewsContainers = DENDRON_VIEWS_CONTAINERS;
+  const viewsWelcome = SAIL_VIEWS_WELCOME;
+  const viewsContainers = SAIL_VIEWS_CONTAINERS;
   const views = updateViews();
   const languages = [
     {

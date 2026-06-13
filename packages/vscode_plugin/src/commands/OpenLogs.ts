@@ -1,5 +1,5 @@
 import { Uri, window, workspace } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { Logger } from "../logger";
 import { BasicCommand } from "./base";
 
@@ -8,7 +8,7 @@ const L = Logger;
 type OpenLogsCommandOpts = {};
 
 export class OpenLogsCommand extends BasicCommand<OpenLogsCommandOpts, void> {
-  key = DENDRON_COMMANDS.OPEN_LOGS.key;
+  key = SAIL_COMMANDS.OPEN_LOGS.key;
   async execute(opts?: OpenLogsCommandOpts) {
     const ctx = "execute";
     L.info({ ctx, opts });

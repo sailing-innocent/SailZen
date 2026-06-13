@@ -7,7 +7,7 @@ import { PREVIEW } from "./preview";
 import { PUBLISHING } from "./publishing";
 import { DEV } from "./dev";
 
-export const DENDRON_CONFIG: SailConfigEntryCollection<SailConfig> = {
+export const SAIL_CONFIG: SailConfigEntryCollection<SailConfig> = {
   version: {
     label: "Version",
     desc: "Version number for configuration. Automatically set up by plugin during migration.",

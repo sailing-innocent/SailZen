@@ -45,7 +45,7 @@ import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProvider
 import { NotePickerUtils } from "../components/lookup/NotePickerUtils";
 import { SailQuickPicker } from "../components/lookup/types";
 import { PickerUtils } from "../components/lookup/utils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -75,7 +75,7 @@ export class MoveHeaderCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.MOVE_HEADER.key;
+  key = SAIL_COMMANDS.MOVE_HEADER.key;
 
   private headerNotSelectedError = new SailError({
     message: "You must first select the header you want to move.",
@@ -103,7 +103,7 @@ export class MoveHeaderCommand extends BasicCommand<
       noteToRender: note,
       fname: note.fname,
       vault: note.vault,
-      dest: SailASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_SAIL,
       config: DConfig.readConfigSync(engine.wsRoot),
     });
   };

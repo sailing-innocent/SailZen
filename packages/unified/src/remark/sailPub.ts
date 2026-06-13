@@ -271,7 +271,7 @@ function plugin(this: Processor, opts?: PluginOpts): Transformer {
         );
 
         // If the target is Sail, no processing of links is needed
-        if (dest === SailASTDest.MD_DENDRON) return;
+        if (dest === SailASTDest.MD_SAIL) return;
         const _node = node as WikiLinkNoteV4;
         // @ts-ignore
         let value = node.value as string;
@@ -455,7 +455,7 @@ function plugin(this: Processor, opts?: PluginOpts): Transformer {
       }
       if (node.type === SailASTTypes.REF_LINK_V2) {
         // If the target is Sail, no processing of refs is needed
-        if (dest === SailASTDest.MD_DENDRON) return;
+        if (dest === SailASTDest.MD_SAIL) return;
         // we have custom compiler for markdown to handle note ref
         const ndata = node.data as NoteRefDataV4;
         const copts: NoteRefsOptsV2 = {

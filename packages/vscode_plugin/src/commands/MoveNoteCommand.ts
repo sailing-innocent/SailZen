@@ -22,7 +22,7 @@ import {
   ProviderAcceptHooks,
 } from "../components/lookup/utils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { FileItem } from "../external/fileutils/FileItem";
 import { UNKNOWN_ERROR_MSG } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -82,7 +82,7 @@ function isMoveNecessary(move: RenameNoteOpts) {
 }
 
 export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.MOVE_NOTE.key;
+  key = SAIL_COMMANDS.MOVE_NOTE.key;
   private extension: ISailExtension;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {

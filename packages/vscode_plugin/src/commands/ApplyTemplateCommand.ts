@@ -6,7 +6,7 @@ import {
 import { TemplateUtils } from "@saili/common-server";
 import _ from "lodash";
 import { QuickPickTemplateSelector } from "../components/lookup/QuickPickTemplateSelector";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -31,7 +31,7 @@ export class ApplyTemplateCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.APPLY_TEMPLATE.key;
+  key = SAIL_COMMANDS.APPLY_TEMPLATE.key;
 
   async sanityCheck() {
     const activeDoc = VSCodeUtils.getActiveTextEditor();

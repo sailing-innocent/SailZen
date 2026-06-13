@@ -4,7 +4,7 @@ import {
   CONSTANTS,
   SailConfig,
   SailError,
-  DENDRON_VSCODE_CONFIG_KEYS,
+  SAIL_VSCODE_CONFIG_KEYS,
   DEngineClient,
   Disposable,
   DuplicateNoteAction,
@@ -74,7 +74,7 @@ import {
   SyncActionStatus,
 } from "./workspaceServiceInterface";
 
-const DENDRON_WS_NAME = CONSTANTS.DENDRON_WS_NAME;
+const SAIL_WS_NAME = CONSTANTS.SAIL_WS_NAME;
 
 export type PathExistBehavior = "delete" | "abort" | "continue";
 
@@ -163,7 +163,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
   static async isWorkspaceVault(fpath: string) {
     return (
       // Config file exists
-      (await fs.pathExists(path.join(fpath, CONSTANTS.DENDRON_CONFIG_FILE))) &&
+      (await fs.pathExists(path.join(fpath, CONSTANTS.SAIL_CONFIG_FILE))) &&
       // And is not a self contained vault
       !(await fs.pathExists(path.join(fpath, FOLDERS.NOTES)))
     );
@@ -185,7 +185,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
   }
 
   get user(): DUser {
-    const fpath = path.join(this.wsRoot, CONSTANTS.DENDRON_USER_FILE);
+    const fpath = path.join(this.wsRoot, CONSTANTS.SAIL_USER_FILE);
     if (fs.existsSync(fpath)) {
       return new DUser(_.trim(fs.readFileSync(fpath, { encoding: "utf8" })));
     } else {
@@ -225,7 +225,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
 
   setCodeWorkspaceSettingsSync(config: WorkspaceSettings) {
     writeJSONWithCommentsSync(
-      path.join(this.wsRoot, CONSTANTS.DENDRON_WS_NAME),
+      path.join(this.wsRoot, CONSTANTS.SAIL_WS_NAME),
       config
     );
   }
@@ -332,7 +332,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       await this.setConfig(config);
     }
     if (updateWorkspace) {
-      const wsPath = path.join(this.wsRoot, DENDRON_WS_NAME);
+      const wsPath = path.join(this.wsRoot, SAIL_WS_NAME);
       let out = (await readJSONWithComments(
         wsPath
       )) as unknown as WorkspaceSettings;
@@ -490,7 +490,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
           ],
           settings: {
             // Also enable the self contained vault workspaces when inside the self contained vault
-            [DENDRON_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE]:
+            [SAIL_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE]:
               true,
           },
         },
@@ -585,7 +585,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     // Create or update the config file (sail.yml) inside the wsRoot/vault
     if (
       !(await fs.pathExists(
-        path.join(oldFolder, CONSTANTS.DENDRON_CONFIG_FILE)
+        path.join(oldFolder, CONSTANTS.SAIL_CONFIG_FILE)
       ))
     ) {
       // No existing config, so create new one
@@ -605,7 +605,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
 
     // Create or update the workspace file (sail.code-workspace) inside the wsRoot/vault
     if (
-      !(await fs.pathExists(path.join(oldFolder, CONSTANTS.DENDRON_WS_NAME)))
+      !(await fs.pathExists(path.join(oldFolder, CONSTANTS.SAIL_WS_NAME)))
     ) {
       // No existing config, create a new one
       await workspaceService.createSelfContainedVault({
@@ -1039,7 +1039,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       await this.setConfig(config);
     }
 
-    const wsPath = path.join(this.wsRoot, DENDRON_WS_NAME);
+    const wsPath = path.join(this.wsRoot, SAIL_WS_NAME);
     if (updateWorkspace && (await fs.pathExists(wsPath))) {
       let settings = (await readJSONWithComments(
         wsPath

@@ -83,7 +83,7 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest } = MDUtilsV5.getProcData(proc);
       const fullId = node.id;
       switch (dest) {
-        case SailASTDest.MD_DENDRON:
+        case SailASTDest.MD_SAIL:
           return `^${fullId}`;
         case SailASTDest.MD_REGULAR:
           // Regular markdown has no concept of anchors, so best to strip it out

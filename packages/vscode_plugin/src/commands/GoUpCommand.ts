@@ -3,7 +3,7 @@ import _ from "lodash";
 import path from "path";
 import { Uri, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -17,7 +17,7 @@ export class GoUpCommand extends BasicCommand<CommandOpts, CommandOutput> {
     super();
   }
 
-  key = DENDRON_COMMANDS.GO_UP_HIERARCHY.key;
+  key = SAIL_COMMANDS.GO_UP_HIERARCHY.key;
   async gatherInputs(): Promise<any> {
     return {};
   }

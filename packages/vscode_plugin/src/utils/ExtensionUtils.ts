@@ -366,7 +366,7 @@ export class ExtensionUtils {
 
     const numSchemas = _.size(await (await engine.querySchema("*")).data);
     const codeWorkspacePresent = await fs.pathExists(
-      path.join(wsRoot, CONSTANTS.DENDRON_WS_NAME)
+      path.join(wsRoot, CONSTANTS.SAIL_WS_NAME)
     );
     const publishigConfig = ConfigUtils.getPublishing(sailConfig);
     const siteUrl = publishigConfig.siteUrl;

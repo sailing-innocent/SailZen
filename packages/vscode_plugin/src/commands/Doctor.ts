@@ -33,7 +33,7 @@ import {
 import { DoctorScopeType } from "../components/doctor/types";
 import {
   INCOMPATIBLE_EXTENSIONS,
-  DENDRON_COMMANDS,
+  SAIL_COMMANDS,
   KNOWN_KEYBINDING_CONFLICTS,
 } from "../constants";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
@@ -123,7 +123,7 @@ function shouldDoctorReloadWorkspaceAfterDoctorAction(
 }
 
 export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.DOCTOR.key;
+  key = SAIL_COMMANDS.DOCTOR.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

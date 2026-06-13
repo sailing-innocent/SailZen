@@ -1,6 +1,6 @@
 import { SailError, NoteTrait } from "@saili/common-all";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { TraitUtils } from "../traits/TraitUtils";
 import { BaseCommand } from "./base";
@@ -25,7 +25,7 @@ export class CreateNoteWithUserDefinedTrait extends BaseCommand<
   CommandOpts,
   CommandInput
 > {
-  key = DENDRON_COMMANDS.CREATE_USER_DEFINED_NOTE.key;
+  key = SAIL_COMMANDS.CREATE_USER_DEFINED_NOTE.key;
 
   async gatherInputs(): Promise<CommandInput | undefined> {
     if (!TraitUtils.checkWorkspaceTrustAndWarn()) {

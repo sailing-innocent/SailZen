@@ -11,7 +11,7 @@ import _ from "lodash";
 import _md from "markdown-it";
 import path from "path";
 import { ProgressLocation, Uri, ViewColumn, window, workspace } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
@@ -50,7 +50,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.BATCH_RENAME_NOTE.key;
+  key = SAIL_COMMANDS.BATCH_RENAME_NOTE.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

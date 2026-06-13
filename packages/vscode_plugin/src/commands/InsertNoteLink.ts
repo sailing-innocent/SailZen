@@ -10,7 +10,7 @@ import _ from "lodash";
 import * as vscode from "vscode";
 import { MultiSelectBtn } from "../components/lookup/buttons";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -34,7 +34,7 @@ export class InsertNoteLinkCommand extends BasicCommand<
   CommandOutput,
   CommandInput
 > {
-  key = DENDRON_COMMANDS.INSERT_NOTE_LINK.key;
+  key = SAIL_COMMANDS.INSERT_NOTE_LINK.key;
 
   async gatherInputs(opts: CommandInput): Promise<CommandOpts | undefined> {
     const extension = ExtensionProvider.getExtension();

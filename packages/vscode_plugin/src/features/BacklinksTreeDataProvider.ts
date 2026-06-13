@@ -28,7 +28,7 @@ import {
   Uri,
   window,
 } from "vscode";
-import { SailContext, DENDRON_COMMANDS, ICONS } from "../constants";
+import { SailContext, SAIL_COMMANDS, ICONS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { findReferencesById, FoundRefT, sortPaths } from "../utils/md";
@@ -292,7 +292,7 @@ export default class BacklinksTreeDataProvider
       backlink.description = `on line ${lineNum + 1}`;
 
       backlink.command = {
-        command: DENDRON_COMMANDS.GOTO_BACKLINK.key,
+        command: SAIL_COMMANDS.GOTO_BACKLINK.key,
         arguments: [
           ref.location.uri,
           { selection: ref.location.range },
@@ -414,7 +414,7 @@ export default class BacklinksTreeDataProvider
       backlink.description = description;
 
       backlink.command = {
-        command: DENDRON_COMMANDS.GOTO_BACKLINK.key,
+        command: SAIL_COMMANDS.GOTO_BACKLINK.key,
         arguments: [
           Uri.file(pathParam),
           { selection: references[0].location.range },

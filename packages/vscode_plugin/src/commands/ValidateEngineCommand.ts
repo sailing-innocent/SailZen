@@ -1,6 +1,6 @@
 import { StateValidator } from "@saili/common-server";
 import { window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { BasicCommand } from "./base";
@@ -13,7 +13,7 @@ export class ValidateEngineCommand extends BasicCommand<
   ValidateEngineCommandOpts,
   void
 > {
-  key = DENDRON_COMMANDS.VALIDATE_ENGINE.key;
+  key = SAIL_COMMANDS.VALIDATE_ENGINE.key;
   async execute(opts?: ValidateEngineCommandOpts) {
     const ctx = "execute";
     L.info({ ctx, opts });

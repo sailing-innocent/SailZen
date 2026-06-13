@@ -18,7 +18,7 @@ import path from "path";
 import { Disposable, ProgressLocation, Uri, ViewColumn, window } from "vscode";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
@@ -56,7 +56,7 @@ export class RefactorHierarchyCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.REFACTOR_HIERARCHY.key;
+  key = SAIL_COMMANDS.REFACTOR_HIERARCHY.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
       extra: {

@@ -14,7 +14,7 @@ import {
 } from "@saili/engine-server";
 import _ from "lodash";
 import { ProgressLocation, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
@@ -85,7 +85,7 @@ type CommandReturns =
   | undefined;
 
 export class SyncCommand extends BasicCommand<CommandOpts, CommandReturns> {
-  key = DENDRON_COMMANDS.SYNC.key;
+  key = SAIL_COMMANDS.SYNC.key;
 
   private static generateReportMessage({
     committed,

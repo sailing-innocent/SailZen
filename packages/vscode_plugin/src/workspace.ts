@@ -34,7 +34,7 @@ import {
   ISchemaLookupProviderFactory,
 } from "./components/lookup/LookupProviderInterface";
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
-import { DENDRON_COMMANDS, GLOBAL_STATE } from "./constants";
+import { SAIL_COMMANDS, GLOBAL_STATE } from "./constants";
 import {
   SailWorkspaceSettings,
   ISailExtension,
@@ -117,7 +117,7 @@ export const NO_WORKSPACE_IMPLEMENTATION = "no workspace implementation";
 
 // --- Main
 export class SailExtension implements ISailExtension {
-  static DENDRON_WORKSPACE_FILE: string = "sail.code-workspace";
+  static SAIL_WORKSPACE_FILE: string = "sail.code-workspace";
   static _SERVER_CONFIGURATION: Partial<ServerConfiguration>;
 
   private _engine?: EngineAPIService;
@@ -268,7 +268,7 @@ export class SailExtension implements ISailExtension {
       if (
         vscode.workspace.workspaceFile &&
         path.basename(SailExtension.workspaceFile().fsPath) ===
-        this.DENDRON_WORKSPACE_FILE
+        this.SAIL_WORKSPACE_FILE
       )
         return true;
 
@@ -296,7 +296,7 @@ export class SailExtension implements ISailExtension {
     try {
       //
       const { wsRoot } = getDWorkspace();
-      if (fs.existsSync(path.join(wsRoot, CONSTANTS.DENDRON_CONFIG_FILE))) {
+      if (fs.existsSync(path.join(wsRoot, CONSTANTS.SAIL_CONFIG_FILE))) {
         return true;
       }
     } catch (err: any) {
@@ -564,7 +564,7 @@ export class SailExtension implements ISailExtension {
     this.context.subscriptions.push(backlinksTreeDataProvider);
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.BACKLINK_SORT_BY_LAST_UPDATED.key,
+      SAIL_COMMANDS.BACKLINK_SORT_BY_LAST_UPDATED.key,
       () => {
 
         backlinksTreeDataProvider.sortOrder =
@@ -573,14 +573,14 @@ export class SailExtension implements ISailExtension {
     );
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.BACKLINK_SORT_BY_PATH_NAMES.key,
+      SAIL_COMMANDS.BACKLINK_SORT_BY_PATH_NAMES.key,
       () => {
         backlinksTreeDataProvider.sortOrder = BacklinkPanelSortOrder.PathNames;
       }
     );
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.BACKLINK_SORT_BY_LAST_UPDATED_CHECKED.key,
+      SAIL_COMMANDS.BACKLINK_SORT_BY_LAST_UPDATED_CHECKED.key,
       () => {
         backlinksTreeDataProvider.sortOrder =
           BacklinkPanelSortOrder.LastUpdated;
@@ -588,14 +588,14 @@ export class SailExtension implements ISailExtension {
     );
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.BACKLINK_SORT_BY_PATH_NAMES_CHECKED.key,
+      SAIL_COMMANDS.BACKLINK_SORT_BY_PATH_NAMES_CHECKED.key,
       () => {
         backlinksTreeDataProvider.sortOrder = BacklinkPanelSortOrder.PathNames;
       }
     );
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.BACKLINK_EXPAND_ALL.key,
+      SAIL_COMMANDS.BACKLINK_EXPAND_ALL.key,
       async () => {
         function expand(backlink: Backlink) {
           backlinkTreeView.reveal(backlink, {
@@ -613,7 +613,7 @@ export class SailExtension implements ISailExtension {
     );
 
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.GOTO_BACKLINK.key,
+      SAIL_COMMANDS.GOTO_BACKLINK.key,
       (uri, options, isCandidate) => {
         vscode.commands.executeCommand("vscode.open", uri, options);
       }

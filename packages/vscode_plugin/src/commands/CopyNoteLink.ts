@@ -16,7 +16,7 @@ import path from "path";
 import { Disposable, TextEditor, window } from "vscode";
 import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
@@ -36,7 +36,7 @@ export class CopyNoteLinkCommand
   extends BasicCommand<CommandOpts, CommandOutput>
   implements Disposable {
   static requireActiveWorkspace: boolean = true;
-  key = DENDRON_COMMANDS.COPY_NOTE_LINK.key;
+  key = SAIL_COMMANDS.COPY_NOTE_LINK.key;
   private extension: ISailExtension;
   private _onEngineNoteStateChangedDisposable: Disposable | undefined;
 

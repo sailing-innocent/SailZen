@@ -1,5 +1,5 @@
 import { env, Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {};
@@ -9,7 +9,7 @@ type CommandInput = {};
 type CommandOutput = void;
 
 export class ShowHelpCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.SHOW_HELP.key;
+  key = SAIL_COMMANDS.SHOW_HELP.key;
   async gatherInputs(): Promise<CommandInput | undefined> {
     return {};
   }

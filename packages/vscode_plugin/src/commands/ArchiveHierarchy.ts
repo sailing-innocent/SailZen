@@ -4,7 +4,7 @@ import {
   RefactoringCommandUsedPayload,
 } from "@saili/common-all";
 import _ from "lodash";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -27,16 +27,16 @@ export class ArchiveHierarchyCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.ARCHIVE_HIERARCHY.key;
+  key = SAIL_COMMANDS.ARCHIVE_HIERARCHY.key;
   private refactorCmd: RefactorHierarchyCommand;
   private trackProxyMetrics;
   private prepareProxyMetricPayload;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
-        extra: {
-          [key: string]: any;
-        };
-      })
+      extra: {
+        [key: string]: any;
+      };
+    })
     | undefined;
 
   constructor(name?: string) {
@@ -84,10 +84,10 @@ export class ArchiveHierarchyCommand extends BasicCommand<
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({
         noteChangeEntryCounts,

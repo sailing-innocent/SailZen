@@ -1,4 +1,4 @@
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 
 type CommandOpts = {};
@@ -17,7 +17,7 @@ export class DevTriggerCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.DEV_TRIGGER.key;
+  key = SAIL_COMMANDS.DEV_TRIGGER.key;
 
   async gatherInputs(): Promise<CommandInput | undefined> {
     return {};

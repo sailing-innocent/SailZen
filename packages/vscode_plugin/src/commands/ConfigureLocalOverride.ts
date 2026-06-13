@@ -1,7 +1,7 @@
 import { DConfig, LocalConfigScope } from "@saili/common-server";
 import fs from "fs-extra";
 import { Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -16,7 +16,7 @@ export class ConfigureLocalOverride extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CONFIGURE_LOCAL_OVERRIDE.key;
+  key = SAIL_COMMANDS.CONFIGURE_LOCAL_OVERRIDE.key;
   public static requireActiveWorkspace: boolean = true;
   _ext: ISailExtension;
 

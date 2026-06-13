@@ -18,7 +18,7 @@ import path from "path";
 import { TextEditor, ViewColumn, window } from "vscode";
 import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -41,7 +41,7 @@ function formatDeletedMsg({
 }
 
 export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.DELETE.key;
+  key = SAIL_COMMANDS.DELETE.key;
 
   private getBacklinkFrontmatterLineOffset(opts: {
     link: DLink;

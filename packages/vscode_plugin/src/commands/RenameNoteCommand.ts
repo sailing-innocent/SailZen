@@ -1,6 +1,6 @@
 import { extractNoteChangeEntryCounts } from "@saili/common-all";
 import _ from "lodash";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand } from "./base";
 import {
@@ -25,7 +25,7 @@ export class RenameNoteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.RENAME_NOTE.key;
+  key = SAIL_COMMANDS.RENAME_NOTE.key;
   private extension: ISailExtension;
   private _moveNoteCommand;
 

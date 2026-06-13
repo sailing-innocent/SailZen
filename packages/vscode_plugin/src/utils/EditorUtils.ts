@@ -80,7 +80,7 @@ export class EditorUtils {
     if (headerLine.startsWith("#")) {
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: SailASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_SAIL }
       );
       const parsed = proc.parse(headerLine);
       const header = select(SailASTTypes.HEADING, parsed) as Heading | null;
@@ -110,7 +110,7 @@ export class EditorUtils {
     const line = editor.document.lineAt(position.line);
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: SailASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_SAIL }
     );
     const parsed = proc.parse(_.trim(line.text));
     const blockAnchor = select(
@@ -244,7 +244,7 @@ export class EditorUtils {
       { mode: ProcMode.FULL },
       {
         noteToRender: note,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
         vault: note.vault,
         fname: note.fname,
         config: DConfig.readConfigSync(engine.wsRoot),
@@ -320,7 +320,7 @@ export class EditorUtils {
     return new Promise((resolve) => {
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: SailASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_SAIL }
       );
       const parsed = proc.parse(document.getText());
       visit(parsed, ["yaml"], (node) => {

@@ -16,7 +16,7 @@ import _ from "lodash";
 import path from "path";
 import * as vscode from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { JournalNote } from "../traits/journal";
@@ -34,7 +34,7 @@ export type CreateDailyJournalData = {
 
 export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
   static requireActiveWorkspace: boolean = true;
-  public static DENDRON_TEMPLATES_FNAME: string = "templates";
+  public static SAIL_TEMPLATES_FNAME: string = "templates";
 
   constructor(ext: ISailExtension) {
     const initTrait = () => {
@@ -43,7 +43,7 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
     };
     super(ext, "sail.journal", initTrait);
     // override the key to maintain compatibility
-    this.key = DENDRON_COMMANDS.CREATE_DAILY_JOURNAL_NOTE.key;
+    this.key = SAIL_COMMANDS.CREATE_DAILY_JOURNAL_NOTE.key;
   }
 
   override async execute(opts: CommandOpts): Promise<CreateDailyJournalData> {
@@ -152,7 +152,7 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
           desc: "This pattern matches the DD (day) child hierarchy",
           template: {
             id:
-              CreateDailyJournalCommand.DENDRON_TEMPLATES_FNAME +
+              CreateDailyJournalCommand.SAIL_TEMPLATES_FNAME +
               `.${dailyDomain}`,
             type: "note",
           },
@@ -185,7 +185,7 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
     journalConfig: JournalConfig
   ): Promise<boolean> {
     const fname =
-      CreateDailyJournalCommand.DENDRON_TEMPLATES_FNAME +
+      CreateDailyJournalCommand.SAIL_TEMPLATES_FNAME +
       `.${journalConfig.dailyDomain}`;
     const fileName = fname + `.md`;
 

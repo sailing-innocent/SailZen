@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import path from "path";
 import os from "os";
 
-const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
+const SAIL_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
 
 interface BuildOptions {
   /** Source directory for generated Prisma client */
@@ -85,7 +85,7 @@ class PrismaBuilder {
   private async copyPrismaClient(): Promise<void> {
     const { srcPath, runtimePath } = this.options;
     console.log(`Copying Prisma client from ${srcPath} to ${runtimePath}`);
-    this.ensureDir(DENDRON_SYSTEM_ROOT);
+    this.ensureDir(SAIL_SYSTEM_ROOT);
     await this.copyItem(srcPath, runtimePath);
     console.log("✓ Prisma client copied successfully");
   }
@@ -117,7 +117,7 @@ class PrismaBuilder {
    */
   async build(): Promise<void> {
     console.log("Starting Prisma build process...");
-    
+
     try {
       this.validateSources();
       await this.copyPrismaClient();
@@ -160,7 +160,7 @@ async function main() {
 
   const builder = new PrismaBuilder({
     srcPath: path.join(srcDir, "generated-prisma-client"),
-    runtimePath: path.join(DENDRON_SYSTEM_ROOT, "generated-prisma-client"),
+    runtimePath: path.join(SAIL_SYSTEM_ROOT, "generated-prisma-client"),
     shimSrcPath: path.join(srcDir, "prisma-shim.js"),
     shimLibPath: path.join(libDir, "prisma-shim.js"),
     additionalFiles: ["adm-zip.js"],
@@ -171,8 +171,8 @@ async function main() {
 
 // Run main if this file is executed directly (ESM compatible)
 // Check if this is the main module by comparing import.meta.url with the script path
-const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1])}` || 
-                     process.argv[1]?.includes("build-prisma");
+const isMainModule = import.meta.url === `file://${path.resolve(process.argv[1])}` ||
+  process.argv[1]?.includes("build-prisma");
 
 if (isMainModule) {
   main().catch((error) => {

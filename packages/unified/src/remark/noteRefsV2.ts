@@ -71,7 +71,7 @@ export class NoteRefUtils {
     let suffix = "";
 
     const vaultPrefix = link.data.vaultName
-      ? `${CONSTANTS.DENDRON_DELIMETER}${link.data.vaultName}/`
+      ? `${CONSTANTS.SAIL_DELIMETER}${link.data.vaultName}/`
       : "";
 
     if (anchorStart) {
@@ -134,7 +134,7 @@ function shouldRenderPretty({ proc }: { proc: Processor }): boolean {
 
   // pretty refs not valid for regular markdown
   if (
-    _.includes([SailASTDest.MD_DENDRON, SailASTDest.MD_REGULAR], dest)
+    _.includes([SailASTDest.MD_SAIL, SailASTDest.MD_REGULAR], dest)
   ) {
     return false;
   }
@@ -230,7 +230,7 @@ function attachCompiler(proc: Processor, _opts?: CompilerOpts) {
       const ndata = node.data;
 
       // converting to itself (used for doctor commands. preserve existing format)
-      if (dest === SailASTDest.MD_DENDRON) {
+      if (dest === SailASTDest.MD_SAIL) {
         return NoteRefUtils.dnodeRefLink2String(ndata.link);
       }
       return;

@@ -1,7 +1,7 @@
 import {
   BacklinkPanelSortOrder,
   SailTreeViewKey,
-  DENDRON_VSCODE_CONFIG_KEYS,
+  SAIL_VSCODE_CONFIG_KEYS,
   isWebViewEntry,
   TreeViewItemLabelTypeEnum,
   TREE_VIEWS,
@@ -53,7 +53,7 @@ const args = {
 const encodedArgs = encodeURIComponent(JSON.stringify(args));
 const commandUri = `command:sail.launchTutorialWorkspace?${encodedArgs}`;
 
-export const DENDRON_VIEWS_WELCOME = [
+export const SAIL_VIEWS_WELCOME = [
   {
     view: SailTreeViewKey.BACKLINKS,
     contents: "There are no backlinks to this note.",
@@ -68,7 +68,7 @@ export const DENDRON_VIEWS_WELCOME = [
   },
 ];
 
-export const DENDRON_VIEWS_CONTAINERS = {
+export const SAIL_VIEWS_CONTAINERS = {
   activitybar: [
     {
       id: "sail-view",
@@ -78,7 +78,7 @@ export const DENDRON_VIEWS_CONTAINERS = {
   ],
 };
 
-export const DENDRON_VIEWS = [
+export const SAIL_VIEWS = [
   {
     ...treeViewConfig2VSCodeEntry(SailTreeViewKey.SAMPLE_VIEW),
     when: SailContext.DEV_MODE,
@@ -154,9 +154,9 @@ export const ICONS = {
   WIKILINK: "link",
   SCHEMA: "repo",
 };
-export const DENDRON_WORKSPACE_FILE = "sail.code-workspace";
+export const SAIL_WORKSPACE_FILE = "sail.code-workspace";
 
-export const DENDRON_REMOTE_VAULTS: Entry[] = [
+export const SAIL_REMOTE_VAULTS: Entry[] = [
   {
     name: "sail",
     description: "sail.so notes",
@@ -185,7 +185,7 @@ type CommandPaletteEntry = {
 };
 
 // TODO: fomarlize
-export const DENDRON_MENUS = {
+export const SAIL_MENUS = {
   commandPalette: [] as CommandPaletteEntry[],
   "view/title": [
     /**
@@ -305,7 +305,7 @@ export const DENDRON_MENUS = {
   ],
 };
 
-export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
+export const SAIL_COMMANDS: { [key: string]: CommandEntry } = {
   // --- zotero 
   ZOTERO_CITATION_PICK: {
     key: "sail.zotero.citationPick",
@@ -893,7 +893,7 @@ export const DENDRON_COMMANDS: { [key: string]: CommandEntry } = {
   },
 };
 
-export const DENDRON_CHANNEL_NAME = "Sail";
+export const SAIL_CHANNEL_NAME = "Sail";
 
 export const WORKSPACE_STATE = {
   VERSION: "sail.wsVersion",
@@ -1052,7 +1052,7 @@ export const CONFIG: { [key: string]: ConfigEntry } = {
     default: "",
     description: "location of sail workspace",
   },
-  DENDRON_DIR: {
+  SAIL_DIR: {
     key: "sail.sailDir",
     type: "string",
     default: "",
@@ -1080,7 +1080,7 @@ export const CONFIG: { [key: string]: ConfigEntry } = {
       "port for server. If not set, will be randomly generated at startup.",
   },
   ENABLE_SELF_CONTAINED_VAULT_WORKSPACE: {
-    key: DENDRON_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE,
+    key: SAIL_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE,
     type: "boolean",
     default: true,
     description:

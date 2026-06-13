@@ -3,7 +3,7 @@ import {
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { WebViewUtils } from "../views/utils";
 import { BasicCommand } from "./base";
@@ -18,7 +18,7 @@ export class ConfigureWithUICommand extends BasicCommand<
 > {
   public static requireActiveWorkspace: boolean = true;
   private _panel;
-  key = DENDRON_COMMANDS.CONFIGURE_UI.key;
+  key = SAIL_COMMANDS.CONFIGURE_UI.key;
   constructor(panel: vscode.WebviewPanel) {
     super();
     this._panel = panel;

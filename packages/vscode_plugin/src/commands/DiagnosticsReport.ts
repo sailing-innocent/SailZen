@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import { window, workspace } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { clipboard } from "../utils";
@@ -16,7 +16,7 @@ export class DiagnosticsReportCommand extends BasicCommand<
   DiagnosticsReportCommandOpts,
   void
 > {
-  key = DENDRON_COMMANDS.DEV_DIAGNOSTICS_REPORT.key;
+  key = SAIL_COMMANDS.DEV_DIAGNOSTICS_REPORT.key;
   async execute(opts?: DiagnosticsReportCommandOpts) {
     const ctx = "execute";
     L.info({ ctx, opts });

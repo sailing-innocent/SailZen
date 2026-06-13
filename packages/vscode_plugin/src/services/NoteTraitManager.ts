@@ -132,7 +132,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
     const { wsRoot } = ExtensionProvider.getDWorkspace();
 
     const userTraitsPath = wsRoot
-      ? path.join(wsRoot, CONSTANTS.DENDRON_USER_NOTE_TRAITS_BASE)
+      ? path.join(wsRoot, CONSTANTS.SAIL_USER_NOTE_TRAITS_BASE)
       : undefined;
 
     if (userTraitsPath && fs.pathExistsSync(userTraitsPath)) {
@@ -211,7 +211,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
 
   private async setupFileWatcherForTraitFileChanges() {
     const userTraitsPath = this._wsRoot
-      ? path.join(this._wsRoot, CONSTANTS.DENDRON_USER_NOTE_TRAITS_BASE)
+      ? path.join(this._wsRoot, CONSTANTS.SAIL_USER_NOTE_TRAITS_BASE)
       : undefined;
 
     if (!userTraitsPath) {

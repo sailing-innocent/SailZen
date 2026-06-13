@@ -122,7 +122,7 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest, config } = MDUtilsV5.getProcData(proc);
       const prefix = SiteUtils.getSitePrefixForNote(config);
       switch (dest) {
-        case SailASTDest.MD_DENDRON:
+        case SailASTDest.MD_SAIL:
           return node.value;
         case SailASTDest.MD_REGULAR:
         default:

@@ -1,5 +1,5 @@
 import { Logger } from "../logger";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupController";
 import { ILookupController } from "../components/lookup/LookupControllerInterface";
@@ -26,7 +26,7 @@ export class CreateScratchNoteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CREATE_SCRATCH.key;
+  key = SAIL_COMMANDS.CREATE_SCRATCH.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

@@ -12,7 +12,7 @@ import open from "open";
 import path from "path";
 import { env, Uri } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { EditorUtils } from "../utils/EditorUtils";
@@ -35,7 +35,7 @@ const GOTO_KEY = "uri";
  * See [[sail.ref.commands.goto]] for more details
  */
 export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.GOTO.key;
+  key = SAIL_COMMANDS.GOTO.key;
 
   constructor(private _ext: ISailExtension) {
     super();

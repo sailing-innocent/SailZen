@@ -13,7 +13,7 @@ import _md from "markdown-it";
 import fs from "fs-extra";
 import _ from "lodash";
 import {
-  DENDRON_COMMANDS,
+  SAIL_COMMANDS,
   isOSType,
   KeybindingConflict,
   KNOWN_KEYBINDING_CONFLICTS,
@@ -329,7 +329,7 @@ export class KeybindingUtils {
     const result = keybindings.filter(
       (item) =>
         item.command &&
-        item.command === DENDRON_COMMANDS.EXPORT_POD_V2.key &&
+        item.command === SAIL_COMMANDS.EXPORT_POD_V2.key &&
         item.args === podId
     );
 
@@ -359,7 +359,7 @@ export class KeybindingUtils {
     const result = keybindings.filter((item) => {
       return (
         item.command &&
-        item.command === DENDRON_COMMANDS.COPY_AS.key &&
+        item.command === SAIL_COMMANDS.COPY_AS.key &&
         item.args === format
       );
     });

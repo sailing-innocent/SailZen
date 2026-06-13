@@ -1107,7 +1107,7 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
         }
 
         // Load cache from vault
-        const cachePath = path.join(vpath, CONSTANTS.DENDRON_CACHE_FILE);
+        const cachePath = path.join(vpath, CONSTANTS.SAIL_CACHE_FILE);
         const notesCache = new NotesFileSystemCache({
           cachePath,
           // TODO: clean up
@@ -1565,7 +1565,7 @@ export class SailEngineV3 extends EngineV3Base implements DEngine {
       try {
         if (
           noteFrom.body.length <
-          (maxNoteLength || CONSTANTS.DENDRON_DEFAULT_MAX_NOTE_LENGTH)
+          (maxNoteLength || CONSTANTS.SAIL_DEFAULT_MAX_NOTE_LENGTH)
         ) {
           const linkCandidates = LinkUtils.findLinkCandidatesSync({
             note: noteFrom,

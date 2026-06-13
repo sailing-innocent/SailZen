@@ -8,13 +8,13 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { admZip: AdmZip } = require("./adm-zip.js");
 
-const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
+const SAIL_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
 
 async function downloadPrisma() {
 
   return new Promise((resolve, reject) => {
     const url = "https://d2q204iup008xl.cloudfront.net/publish/generated-prisma-client.zip";
-    const tmpPath = path.join(DENDRON_SYSTEM_ROOT, "tmp_client");
+    const tmpPath = path.join(SAIL_SYSTEM_ROOT, "tmp_client");
     if (fs.existsSync(tmpPath)) {
       fs.unlinkSync(tmpPath);
     }
@@ -36,10 +36,10 @@ async function downloadPrisma() {
 }
 
 async function loadPrisma() {
-  const prismaPath = path.join(DENDRON_SYSTEM_ROOT, "generated-prisma-client");
+  const prismaPath = path.join(SAIL_SYSTEM_ROOT, "generated-prisma-client");
   // Convert path to file:// URL for dynamic import (works cross-platform)
   const prismaModulePath = path.join(prismaPath, "index.js");
-  
+
   if (fs.existsSync(prismaPath)) {
     // Dynamic import for ESM - use file:// URL for cross-platform compatibility
     const prismaUrl = `file://${prismaModulePath}`;

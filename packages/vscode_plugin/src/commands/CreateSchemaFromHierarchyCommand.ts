@@ -14,7 +14,7 @@ import * as _ from "lodash";
 import path from "path";
 import * as vscode from "vscode";
 import { Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { PluginSchemaUtils } from "../pluginSchemaUtils";
 import { PluginVaultUtils } from "../pluginVaultUtils";
@@ -427,7 +427,7 @@ export class CreateSchemaFromHierarchyCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CREATE_SCHEMA_FROM_HIERARCHY.key;
+  key = SAIL_COMMANDS.CREATE_SCHEMA_FROM_HIERARCHY.key;
 
   async sanityCheck() {
     const activeTextEditor = VSCodeUtils.getActiveTextEditor();

@@ -2,13 +2,13 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import { OpenDialogOptions, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { CONSTANTS, WorkspaceType } from "@saili/common-all";
 import { WorkspaceUtils } from "@saili/engine-server";
 
-const DENDRON_WS_NAME = CONSTANTS.DENDRON_WS_NAME;
+const SAIL_WS_NAME = CONSTANTS.SAIL_WS_NAME;
 
 type ChangeWorkspaceCommandOpts = {
   rootDirRaw: string;
@@ -23,7 +23,7 @@ export class ChangeWorkspaceCommand extends BasicCommand<
   ChangeWorkspaceCommandOpts,
   any
 > {
-  key = DENDRON_COMMANDS.CHANGE_WS.key;
+  key = SAIL_COMMANDS.CHANGE_WS.key;
   async gatherInputs(): Promise<CommandInput | undefined> {
     // Show a file picker dialog to select existing workspace directory
     const options: OpenDialogOptions = {
@@ -48,13 +48,13 @@ export class ChangeWorkspaceCommand extends BasicCommand<
     const wsType = await WorkspaceUtils.getWorkspaceTypeFromDir(rootDirRaw);
     if (wsType === WorkspaceType.NONE) {
       window.showErrorMessage(
-        `No Sail workspace found. Please run ${DENDRON_COMMANDS.INIT_WS.title} to create a workspace at ${rootDirRaw}`
+        `No Sail workspace found. Please run ${SAIL_COMMANDS.INIT_WS.title} to create a workspace at ${rootDirRaw}`
       );
       return;
     }
     if (!skipOpenWS) {
       if (wsType === WorkspaceType.CODE)
-        VSCodeUtils.openWS(path.join(rootDirRaw, DENDRON_WS_NAME));
+        VSCodeUtils.openWS(path.join(rootDirRaw, SAIL_WS_NAME));
       else if (wsType === WorkspaceType.NATIVE) VSCodeUtils.openWS(rootDirRaw);
     }
   }

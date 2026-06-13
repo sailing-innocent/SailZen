@@ -4,7 +4,7 @@ import { HookUtils } from "@saili/engine-server";
 import fs from "fs-extra";
 import path from "path";
 import { Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -32,7 +32,7 @@ export class CreateHookCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CREATE_HOOK.key;
+  key = SAIL_COMMANDS.CREATE_HOOK.key;
 
   async gatherInputs() {
     const hookName = await VSCodeUtils.showInputBox({

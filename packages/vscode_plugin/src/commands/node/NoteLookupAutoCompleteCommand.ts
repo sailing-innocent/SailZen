@@ -1,4 +1,4 @@
-import { DENDRON_COMMANDS } from "../../constants";
+import { SAIL_COMMANDS } from "../../constants";
 import { AutoCompletableRegistrar } from "../../utils/registers/AutoCompletableRegistrar";
 import { BasicCommand } from "../base";
 
@@ -12,7 +12,7 @@ export class NoteLookupAutoCompleteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.LOOKUP_NOTE_AUTO_COMPLETE.key;
+  key = SAIL_COMMANDS.LOOKUP_NOTE_AUTO_COMPLETE.key;
 
   async gatherInputs(): Promise<CommandInput | undefined> {
     return {};

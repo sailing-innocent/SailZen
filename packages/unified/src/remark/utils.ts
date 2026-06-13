@@ -541,7 +541,7 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
         config,
       }
     );
@@ -753,7 +753,7 @@ export class LinkUtils {
     dest: SailASTDest;
   }): string {
     switch (dest) {
-      case SailASTDest.MD_DENDRON: {
+      case SailASTDest.MD_SAIL: {
         if (this.isHashtagLink(link.from)) {
           return link.from.alias;
         }
@@ -763,7 +763,7 @@ export class LinkUtils {
         const ref = link.type === "ref" ? "!" : "";
         const vaultPrefix =
           link.from.vaultName && link.data.xvault
-            ? `${CONSTANTS.DENDRON_DELIMETER}${link.from.vaultName}/`
+            ? `${CONSTANTS.SAIL_DELIMETER}${link.from.vaultName}/`
             : "";
         let value = link.from.fname;
         const alias =
@@ -830,7 +830,7 @@ export class LinkUtils {
         body.slice(0, startOffset),
         LinkUtils.renderNoteLink({
           link: newLink,
-          dest: SailASTDest.MD_DENDRON,
+          dest: SailASTDest.MD_SAIL,
         }),
         body.slice(endOffset),
       ].join("");
@@ -872,7 +872,7 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
         config,
       }
     );
@@ -909,7 +909,7 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
         config,
       }
     );
@@ -1218,7 +1218,7 @@ export class RemarkUtils {
   static getNodePositionPastFrontmatter(fileText: string) {
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: SailASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_SAIL }
     );
     const parsed = proc.parse(fileText);
     let out: Position | undefined;
@@ -1614,7 +1614,7 @@ export class RemarkUtils {
       noteToRender: note,
       vault: note.vault,
       fname: note.fname,
-      dest: SailASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_SAIL,
       config,
     });
     const slugger = getSlugger();
@@ -1726,7 +1726,7 @@ export class RemarkUtils {
     let parsed: ReturnType<typeof parseFrontmatter> | undefined;
     const noteAST = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: SailASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_SAIL }
     ).parse(body);
     visit(noteAST as any, [SailASTTypes.FRONTMATTER], (frontmatter: YAML) => {
       parsed = parseFrontmatter(frontmatter);

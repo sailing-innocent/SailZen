@@ -253,7 +253,7 @@ function getDest(proc: Processor): SailASTDest {
   if (procData.dest) return procData.dest;
   const directDest = (proc.data() as any).dest;
   if (directDest) return directDest;
-  return SailASTDest.MD_DENDRON;
+  return SailASTDest.MD_SAIL;
 }
 
 /**
@@ -271,7 +271,7 @@ function createToMarkdownExtension(proc: Processor): ToMarkdownExtension {
     const dest = getDest(proc);
     const { caption, src, options } = figNode;
     switch (dest) {
-      case SailASTDest.MD_DENDRON:
+      case SailASTDest.MD_SAIL:
       case SailASTDest.MD_REGULAR: {
         const optsStr =
           options && Object.keys(options).length

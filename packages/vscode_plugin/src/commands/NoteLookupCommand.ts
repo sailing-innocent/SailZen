@@ -60,7 +60,7 @@ import {
   PickerUtils,
 } from "../components/lookup/utils";
 import { VaultSelectionModeConfigUtils } from "../components/lookup/vaultSelectionModeConfigUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -131,7 +131,7 @@ export class NoteLookupCommand extends BaseCommand<
   CommandGatherOutput,
   CommandRunOpts
 > {
-  key = DENDRON_COMMANDS.LOOKUP_NOTE.key;
+  key = SAIL_COMMANDS.LOOKUP_NOTE.key;
   protected _controller: ILookupController | undefined;
   protected _provider: ILookupProvider | undefined;
   protected _quickPick: SailQuickPicker | undefined;

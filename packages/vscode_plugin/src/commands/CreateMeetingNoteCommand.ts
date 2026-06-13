@@ -10,7 +10,7 @@ import * as fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { MeetingNote } from "../traits/MeetingNote";
@@ -43,7 +43,7 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
     };
 
     super(ext, "sail.meeting", initTrait);
-    this.key = DENDRON_COMMANDS.CREATE_MEETING_NOTE.key;
+    this.key = SAIL_COMMANDS.CREATE_MEETING_NOTE.key;
     this._ext = ext;
   }
 

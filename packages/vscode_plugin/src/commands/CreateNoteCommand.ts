@@ -1,4 +1,4 @@
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { Logger } from "../logger";
 import { InputArgCommand } from "./base";
 import {
@@ -19,7 +19,7 @@ export class CreateNoteCommand extends InputArgCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CREATE_NOTE.key;
+  key = SAIL_COMMANDS.CREATE_NOTE.key;
 
   async execute(opts: CommandOpts) {
     const ctx = "CreateNoteCommand";

@@ -6,7 +6,7 @@ import _ from "lodash";
 import path from "path";
 import { Selection, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { clipboard } from "../utils";
@@ -30,7 +30,7 @@ const cleanFname = (basename: string) => {
 };
 
 export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.PASTE_FILE.key;
+  key = SAIL_COMMANDS.PASTE_FILE.key;
   async gatherInputs(): Promise<CommandInput | undefined> {
     const maybeFilePath = await clipboard.readText();
     if (!_.isUndefined(maybeFilePath) && fs.existsSync(maybeFilePath)) {

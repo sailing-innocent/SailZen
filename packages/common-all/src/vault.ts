@@ -236,7 +236,7 @@ export class VaultUtils {
   };
 
   static toURIPrefix(vault: DVault) {
-    return CONSTANTS.DENDRON_DELIMETER + VaultUtils.getName(vault);
+    return CONSTANTS.SAIL_DELIMETER + VaultUtils.getName(vault);
   }
 
   static toWorkspaceFolder(vault: DVault): WorkspaceFolderRaw {

@@ -84,7 +84,7 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest } = MDUtilsV5.getProcData(proc);
       const alt = node.alt ? node.alt : "";
       switch (dest) {
-        case SailASTDest.MD_DENDRON:
+        case SailASTDest.MD_SAIL:
           return `![${alt}](${node.url})${_.trim(
             YAML.dump(node.props, {
               /* Inline-only so we get JSON style {foo: bar} */

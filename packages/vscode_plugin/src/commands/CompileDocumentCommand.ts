@@ -6,7 +6,7 @@
  */
 
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -30,7 +30,7 @@ type CommandOutput = CompileResult;
 
 export class CompileDocumentCommand extends BasicCommand<CommandOpts, CommandOutput> {
   static requireActiveWorkspace = true;
-  key = DENDRON_COMMANDS.COMPILE_DOCUMENT.key;
+  key = SAIL_COMMANDS.COMPILE_DOCUMENT.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

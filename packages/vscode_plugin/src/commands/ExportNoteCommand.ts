@@ -8,7 +8,7 @@ import { resolvePath } from "@saili/common-server";
 import fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -65,7 +65,7 @@ const FORMAT_ICONS: Record<DocExportFormat, string> = {
 
 export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
   static requireActiveWorkspace = true;
-  key = DENDRON_COMMANDS.EXPORT_NOTE.key;
+  key = SAIL_COMMANDS.EXPORT_NOTE.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

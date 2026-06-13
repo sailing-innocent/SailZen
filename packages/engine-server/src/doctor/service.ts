@@ -317,7 +317,7 @@ export class DoctorService implements Disposable {
               flavor: ProcFlavor.REGULAR,
             },
             {
-              dest: SailASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_SAIL,
               noteToRender: note,
               fname: note.fname,
               vault: note.vault,
@@ -348,7 +348,7 @@ export class DoctorService implements Disposable {
               flavor: ProcFlavor.REGULAR,
             },
             {
-              dest: SailASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_SAIL,
               noteToRender: note,
               fname: note.fname,
               vault: note.vault,

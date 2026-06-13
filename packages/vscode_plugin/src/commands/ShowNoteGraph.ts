@@ -3,7 +3,7 @@ import {
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { WebViewUtils } from "../views/utils";
 import { BasicCommand } from "./base";
@@ -17,7 +17,7 @@ export class ShowNoteGraphCommand extends BasicCommand<
 > {
   static requireActiveWorkspace: boolean = true;
 
-  key = DENDRON_COMMANDS.SHOW_NOTE_GRAPH.key;
+  key = SAIL_COMMANDS.SHOW_NOTE_GRAPH.key;
 
   private _panel;
 

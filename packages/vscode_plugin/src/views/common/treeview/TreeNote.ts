@@ -8,7 +8,7 @@ import {
 import _ from "lodash";
 import vscode, { Uri } from "vscode";
 import { URI, Utils } from "vscode-uri";
-import { DENDRON_COMMANDS } from "../../../constants";
+import { SAIL_COMMANDS } from "../../../constants";
 
 /**
  * Contains {@link NoteProps} representing a single Tree Item inside the
@@ -70,7 +70,7 @@ export class TreeNote extends vscode.TreeItem {
     // will show an error page
     if (note.stub) {
       this.command = {
-        command: DENDRON_COMMANDS.TREEVIEW_EXPAND_STUB.key,
+        command: SAIL_COMMANDS.TREEVIEW_EXPAND_STUB.key,
         title: "",
         arguments: [this.note.id],
       };

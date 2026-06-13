@@ -251,7 +251,7 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
       const calias = data.alias !== value ? `${data.alias}|` : "";
       const anchor = anchorHeader ? `#${anchorHeader}` : "";
       const vaultPrefix = data.vaultName
-        ? `${CONSTANTS.DENDRON_DELIMETER}${data.vaultName}/`
+        ? `${CONSTANTS.SAIL_DELIMETER}${data.vaultName}/`
         : "";
       return `[[${calias}${vaultPrefix}${link}${anchor}]]`;
     }
@@ -269,7 +269,7 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
     );
 
     if (
-      dest !== SailASTDest.MD_DENDRON &&
+      dest !== SailASTDest.MD_SAIL &&
       enableNoteTitleForLink &&
       !data.alias
     ) {
@@ -291,7 +291,7 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
     }
 
     // if converting back to sail md, no further processing
-    if (dest === SailASTDest.MD_DENDRON) {
+    if (dest === SailASTDest.MD_SAIL) {
       return LinkUtils.renderNoteLink({
         link: {
           from: {

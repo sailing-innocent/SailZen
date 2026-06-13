@@ -1,5 +1,5 @@
 import { commands, Location, Position, Selection } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -14,7 +14,7 @@ export class ConvertCandidateLinkCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CONVERT_CANDIDATE_LINK.key;
+  key = SAIL_COMMANDS.CONVERT_CANDIDATE_LINK.key;
 
   async gatherInputs(_opts: CommandOpts): Promise<CommandOpts> {
     return _opts;

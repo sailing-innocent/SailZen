@@ -10,7 +10,7 @@ import {
   ProviderAcceptHooks,
 } from "../components/lookup/utils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { FileItem } from "../external/fileutils/FileItem";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -47,7 +47,7 @@ export class RenameNoteInternalCommand extends BaseCommand<
   CommandOutput,
   CommandInput
 > {
-  key = DENDRON_COMMANDS.RENAME_NOTE_INTERNAL.key;
+  key = SAIL_COMMANDS.RENAME_NOTE_INTERNAL.key;
   public silent?: boolean;
 
   async gatherInputs(): Promise<CommandInput> {

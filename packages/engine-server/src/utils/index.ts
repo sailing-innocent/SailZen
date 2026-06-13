@@ -48,7 +48,7 @@ export function refLink2Stringv2(opts: {
 
   const linkParts = [`![[`];
   if (useVaultPrefix) {
-    linkParts.push(CONSTANTS.DENDRON_DELIMETER + link.from.vaultName! + "/");
+    linkParts.push(CONSTANTS.SAIL_DELIMETER + link.from.vaultName! + "/");
   }
   linkParts.push(name);
   if (anchorStart) {
@@ -73,7 +73,7 @@ export function refLink2Stringv2(opts: {
 }
 
 export function getWSMetaFilePath({ wsRoot }: { wsRoot: string }) {
-  const fsPath = path.join(wsRoot, CONSTANTS.DENDRON_WS_META);
+  const fsPath = path.join(wsRoot, CONSTANTS.SAIL_WS_META);
   return fsPath;
 }
 
@@ -187,7 +187,7 @@ export function createCacheEntry(opts: {
 }
 
 export const getCachePath = (vpath: string): string => {
-  return path.join(vpath, CONSTANTS.DENDRON_CACHE_FILE);
+  return path.join(vpath, CONSTANTS.SAIL_CACHE_FILE);
 };
 
 export const removeCache = (vpath: string) => {

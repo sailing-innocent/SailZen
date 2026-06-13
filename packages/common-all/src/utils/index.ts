@@ -16,7 +16,7 @@ import {
   CONFIG_TO_MINIMUM_COMPAT_MAPPING,
   ERROR_SEVERITY,
 } from "../constants";
-import { DENDRON_CONFIG } from "../constants/configs/sailConfig";
+import { SAIL_CONFIG } from "../constants/configs/sailConfig";
 import { SailError, ErrorMessages, ISailError } from "../error";
 import { DHookDict, NoteChangeEntry, NoteProps } from "../types";
 import { GithubConfig } from "../types/configs/publishing/github";
@@ -1055,7 +1055,7 @@ export class ConfigUtils {
   }
 
   static getConfigDescription = (conf: string) => {
-    return _.get(DENDRON_CONFIG, conf)?.desc;
+    return _.get(SAIL_CONFIG, conf)?.desc;
   };
 
   /**

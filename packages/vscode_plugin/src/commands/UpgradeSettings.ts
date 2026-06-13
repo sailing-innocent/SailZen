@@ -2,7 +2,7 @@ import { createLogger } from "@saili/common-server";
 import { CodeConfigChanges } from "@saili/engine-server";
 import _ from "lodash";
 import { Extension, extensions, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { WorkspaceConfig } from "../settings";
 import { SailExtension } from "../workspace";
 import { BasicCommand } from "./base";
@@ -18,7 +18,7 @@ export class UpgradeSettingsCommand extends BasicCommand<
   UpgradeSettingsCommandOpts,
   UpgradeSettingsCommandResp
 > {
-  key = DENDRON_COMMANDS.UPGRADE_SETTINGS.key;
+  key = SAIL_COMMANDS.UPGRADE_SETTINGS.key;
   async execute(_opts: UpgradeSettingsCommandOpts) {
     const ctx = "Upgrade:execute";
     L.info({ ctx });

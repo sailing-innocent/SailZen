@@ -100,13 +100,13 @@ export class GitUtils {
     if (
       // Has a config file
       (await fs.pathExists(
-        path.join(repoPath, CONSTANTS.DENDRON_CONFIG_FILE)
+        path.join(repoPath, CONSTANTS.SAIL_CONFIG_FILE)
       )) &&
       // But is not a self-contained vault
       !(await fs.pathExists(path.join(repoPath, FOLDERS.NOTES)))
     ) {
       const config = (await readYAMLAsync(
-        path.join(repoPath, CONSTANTS.DENDRON_CONFIG_FILE)
+        path.join(repoPath, CONSTANTS.SAIL_CONFIG_FILE)
       )) as SailConfig;
       const workspace = path.basename(repoPath);
       const vaultsConfig = ConfigUtils.getVaults(config);

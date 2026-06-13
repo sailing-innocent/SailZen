@@ -4,7 +4,7 @@ import {
   StatisticsUtils,
 } from "@saili/common-all";
 import _ from "lodash";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -31,7 +31,7 @@ export class MoveSelectionToCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.MOVE_SELECTION_TO.key;
+  key = SAIL_COMMANDS.MOVE_SELECTION_TO.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
       extra: {

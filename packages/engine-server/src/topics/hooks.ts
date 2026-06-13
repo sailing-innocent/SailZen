@@ -44,7 +44,7 @@ export class HookUtils {
   }
 
   static getHookDir(wsRoot: string) {
-    return path.join(wsRoot, CONSTANTS.DENDRON_HOOKS_BASE);
+    return path.join(wsRoot, CONSTANTS.SAIL_HOOKS_BASE);
   }
 
   static getHookScriptPath({
@@ -54,7 +54,7 @@ export class HookUtils {
     basename: string;
     wsRoot: string;
   }) {
-    return path.join(wsRoot, CONSTANTS.DENDRON_HOOKS_BASE, basename);
+    return path.join(wsRoot, CONSTANTS.SAIL_HOOKS_BASE, basename);
   }
 
   static removeFromConfig({

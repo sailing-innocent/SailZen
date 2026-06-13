@@ -46,13 +46,13 @@ export class DConfig {
   }
 
   static configPath(configRoot: string): string {
-    return path.join(configRoot, CONSTANTS.DENDRON_CONFIG_FILE);
+    return path.join(configRoot, CONSTANTS.SAIL_CONFIG_FILE);
   }
 
   static configOverridePath(wsRoot: string, scope: LocalConfigScope): string {
     const configPath =
       scope === LocalConfigScope.GLOBAL ? os.homedir() : wsRoot;
-    return path.join(configPath, CONSTANTS.DENDRON_LOCAL_CONFIG_FILE);
+    return path.join(configPath, CONSTANTS.SAIL_LOCAL_CONFIG_FILE);
   }
 
   /**
@@ -161,10 +161,10 @@ export class DConfig {
    * See if a local config file is present
    */
   static searchLocalConfigSync(wsRoot: string): RespV3<SailConfig> {
-    const wsPath = path.join(wsRoot, CONSTANTS.DENDRON_LOCAL_CONFIG_FILE);
+    const wsPath = path.join(wsRoot, CONSTANTS.SAIL_LOCAL_CONFIG_FILE);
     const globalPath = path.join(
       os.homedir(),
-      CONSTANTS.DENDRON_LOCAL_CONFIG_FILE
+      CONSTANTS.SAIL_LOCAL_CONFIG_FILE
     );
     let foundPath: string | undefined;
 
@@ -181,7 +181,7 @@ export class DConfig {
     }
     return {
       error: ErrorFactory.create404Error({
-        url: CONSTANTS.DENDRON_LOCAL_CONFIG_FILE,
+        url: CONSTANTS.SAIL_LOCAL_CONFIG_FILE,
       }),
     };
   }

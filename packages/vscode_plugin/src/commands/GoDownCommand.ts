@@ -1,5 +1,5 @@
 import path from "path";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import {
@@ -14,7 +14,7 @@ type CommandOpts = {
 type CommandOutput = NoteLookupCommandOut;
 
 export class GoDownCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.GO_DOWN_HIERARCHY.key;
+  key = SAIL_COMMANDS.GO_DOWN_HIERARCHY.key;
 
   async gatherInputs(): Promise<any> {
     return {};

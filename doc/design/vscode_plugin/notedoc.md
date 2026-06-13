@@ -93,7 +93,7 @@ Markdown File → NoteParserV2 → SailEngineV3
 
 **关键扩展点**：
 - `ProcFlavor` / `ProcMode` 可区分 preview / publish / export 场景
-- `SailASTDest` 支持 HTML / MD_DENDRON / MD_REGULAR 等目标
+- `SailASTDest` 支持 HTML / MD_SAIL / MD_REGULAR 等目标
 - `remark` / `rehype` 插件体系可插入自定义转换
 - `NoteProps.custom` 可承载任意 frontmatter 扩展字段
 

@@ -24,7 +24,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import { ProgressLocation, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -57,7 +57,7 @@ export class ReloadIndexCommand extends BasicCommand<
   ReloadIndexCommandOpts,
   DEngineClient | undefined
 > {
-  key = DENDRON_COMMANDS.RELOAD_INDEX.key;
+  key = SAIL_COMMANDS.RELOAD_INDEX.key;
   silent = true;
 
   /** Create the root schema if it is missing. */

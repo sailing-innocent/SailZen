@@ -12,7 +12,7 @@ import path from "path";
 
 export class DConfig {
   static configPath(configRoot: string): string {
-    return path.join(configRoot, CONSTANTS.DENDRON_CONFIG_FILE);
+    return path.join(configRoot, CONSTANTS.SAIL_CONFIG_FILE);
   }
 
   /**

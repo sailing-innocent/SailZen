@@ -2,7 +2,7 @@ import { CONSTANTS, SailError } from "@saili/common-all";
 import fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { UserDefinedTraitV1 } from "../traits/UserDefinedTraitV1";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -98,7 +98,7 @@ export class RegisterNoteTraitCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.REGISTER_NOTE_TRAIT.key;
+  key = SAIL_COMMANDS.REGISTER_NOTE_TRAIT.key;
 
   async gatherInputs() {
     let traitId = await VSCodeUtils.showInputBox({
@@ -129,7 +129,7 @@ export class RegisterNoteTraitCommand extends BasicCommand<
     const { wsRoot } = engine;
     const scriptPath = path.join(
       wsRoot,
-      CONSTANTS.DENDRON_USER_NOTE_TRAITS_BASE,
+      CONSTANTS.SAIL_USER_NOTE_TRAITS_BASE,
       opts.traitId + ".js"
     );
 

@@ -584,7 +584,7 @@ class FileUtils {
 export async function isSelfContainedVaultFolder(dir: string) {
   return _.every(
     await Promise.all([
-      fs.pathExists(path.join(dir, CONSTANTS.DENDRON_CONFIG_FILE)),
+      fs.pathExists(path.join(dir, CONSTANTS.SAIL_CONFIG_FILE)),
       fs.pathExists(path.join(dir, FOLDERS.NOTES)),
     ])
   );

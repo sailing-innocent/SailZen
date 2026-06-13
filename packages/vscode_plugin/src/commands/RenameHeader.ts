@@ -16,7 +16,7 @@ import {
 } from "@saili/unified";
 import _ from "lodash";
 import { Range, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -46,7 +46,7 @@ export class RenameHeaderCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.RENAME_HEADER.key;
+  key = SAIL_COMMANDS.RENAME_HEADER.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {
@@ -75,7 +75,7 @@ export class RenameHeaderCommand extends BasicCommand<
       const line = editor.document.lineAt(selection.start.line).text;
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: SailASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_SAIL }
       );
       const parsedLine = proc.parse(line);
       let header: Heading | undefined;
@@ -142,7 +142,7 @@ export class RenameHeaderCommand extends BasicCommand<
     let newAnchorHeader = newHeader;
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: SailASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_SAIL }
     );
     const parsed = proc.parse(`## ${newHeader}`);
     visit(parsed, [SailASTTypes.HEADING], (node: Heading) => {

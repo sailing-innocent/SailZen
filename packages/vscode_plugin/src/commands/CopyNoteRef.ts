@@ -13,7 +13,7 @@ import _ from "lodash";
 import { Position, Range, Selection, TextEditor, window } from "vscode";
 import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { clipboard } from "../utils";
@@ -28,7 +28,7 @@ export class CopyNoteRefCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.COPY_NOTE_REF.key;
+  key = SAIL_COMMANDS.COPY_NOTE_REF.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

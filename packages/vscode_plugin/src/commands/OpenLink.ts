@@ -6,7 +6,7 @@ import open from "open";
 import path from "path";
 import { env, Uri, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { getURLAt } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -20,12 +20,12 @@ type CommandInput = {};
 type CommandOutput = { error?: SailError; fsPath?: string };
 
 export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.OPEN_LINK.key;
+  key = SAIL_COMMANDS.OPEN_LINK.key;
   async gatherInputs(): Promise<CommandInput | undefined> {
     return {};
   }
   async execute(opts?: { uri?: string }) {
-    const ctx = DENDRON_COMMANDS.OPEN_LINK;
+    const ctx = SAIL_COMMANDS.OPEN_LINK;
     this.L.info({ ctx });
 
     let text = "";

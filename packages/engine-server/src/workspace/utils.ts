@@ -48,7 +48,7 @@ export class WorkspaceUtils {
   static async getCodeWorkspaceSettings(
     wsRoot: string
   ): Promise<RespV3<WorkspaceSettings>> {
-    const wsConfigPath = path.join(wsRoot, CONSTANTS.DENDRON_WS_NAME);
+    const wsConfigPath = path.join(wsRoot, CONSTANTS.SAIL_WS_NAME);
     let wsConfig: CommentJSONValue;
     try {
       wsConfig = await readJSONWithComments(wsConfigPath);
@@ -79,7 +79,7 @@ export class WorkspaceUtils {
   static getCodeWorkspaceSettingsSync(
     wsRoot: string
   ): RespV3<WorkspaceSettings> {
-    const wsConfigPath = path.join(wsRoot, CONSTANTS.DENDRON_WS_NAME);
+    const wsConfigPath = path.join(wsRoot, CONSTANTS.SAIL_WS_NAME);
     try {
       const wsConfig = readJSONWithCommentsSync(wsConfigPath);
       if (!this.isWorkspaceConfig(wsConfig)) {
@@ -114,7 +114,7 @@ export class WorkspaceUtils {
   }): Promise<WorkspaceType> {
     if (
       !_.isUndefined(workspaceFile) &&
-      path.basename(workspaceFile.fsPath) === CONSTANTS.DENDRON_WS_NAME
+      path.basename(workspaceFile.fsPath) === CONSTANTS.SAIL_WS_NAME
     ) {
       return WorkspaceType.CODE;
     }
@@ -131,16 +131,16 @@ export class WorkspaceUtils {
    * @returns WorkspaceType
    */
   static async getWorkspaceTypeFromDir(dir: string) {
-    if (fs.pathExistsSync(path.join(dir, CONSTANTS.DENDRON_WS_NAME))) {
+    if (fs.pathExistsSync(path.join(dir, CONSTANTS.SAIL_WS_NAME))) {
       return WorkspaceType.CODE;
     }
     const wsRoot = await findDownTo({
       base: dir,
-      fname: CONSTANTS.DENDRON_CONFIG_FILE,
+      fname: CONSTANTS.SAIL_CONFIG_FILE,
       returnDirPath: true,
     });
     if (!wsRoot) return WorkspaceType.NONE;
-    if (fs.pathExistsSync(path.join(wsRoot, CONSTANTS.DENDRON_CONFIG_FILE))) {
+    if (fs.pathExistsSync(path.join(wsRoot, CONSTANTS.SAIL_CONFIG_FILE))) {
       return WorkspaceType.NATIVE;
     }
     return WorkspaceType.NONE;
@@ -203,7 +203,7 @@ export class WorkspaceUtils {
       folders.map((folder) =>
         findDownTo({
           base: folder,
-          fname: CONSTANTS.DENDRON_CONFIG_FILE,
+          fname: CONSTANTS.SAIL_CONFIG_FILE,
           returnDirPath: true,
         })
       )

@@ -23,28 +23,28 @@ export enum ThemeTarget {
 export const CONSTANTS = {
   ROOT_PATH,
   ALL_QUERY: "**/*",
-  DENDRON_WS_NAME: "sail.code-workspace",
-  DENDRON_SERVER_PORT: ".sail.port",
-  DENDRON_WS_META: ".sail.ws",
-  DENDRON_CONFIG_FILE: "sail.yml",
-  DENDRON_LOCAL_CONFIG_FILE: "sailrc.yml",
-  DENDRON_SEED_CONFIG: "seed.yml",
+  SAIL_WS_NAME: "sail.code-workspace",
+  SAIL_SERVER_PORT: ".sail.port",
+  SAIL_WS_META: ".sail.ws",
+  SAIL_CONFIG_FILE: "sail.yml",
+  SAIL_LOCAL_CONFIG_FILE: "sailrc.yml",
+  SAIL_SEED_CONFIG: "seed.yml",
   SRC_DELIMITER: "src://",
-  DENDRON_DELIMETER: "sail://",
-  DENDRON_USER_FILE: ".sail.user",
-  DENDRON_CACHE_FILE: ".sail.cache.json",
-  DENDRON_ID: ".sail.uuid",
-  DENDRON_NO_TELEMETRY: ".sail.no-telemetry",
-  DENDRON_TELEMETRY: ".sail.telemetry",
-  DENDRON_HOOKS_BASE: "hooks",
-  DENDRON_USER_NOTE_TRAITS_BASE: "noteTraits",
-  DENDRON_LOCAL_SITE_PORT: 8080,
+  SAIL_DELIMETER: "sail://",
+  SAIL_USER_FILE: ".sail.user",
+  SAIL_CACHE_FILE: ".sail.cache.json",
+  SAIL_ID: ".sail.uuid",
+  SAIL_NO_TELEMETRY: ".sail.no-telemetry",
+  SAIL_TELEMETRY: ".sail.telemetry",
+  SAIL_HOOKS_BASE: "hooks",
+  SAIL_USER_NOTE_TRAITS_BASE: "noteTraits",
+  SAIL_LOCAL_SITE_PORT: 8080,
   /**
    * Initial version for first installaion
    */
-  DENDRON_INIT_VERSION: "0.0.0",
+  SAIL_INIT_VERSION: "0.0.0",
   /** Default for the `maxNoteLength` config. */
-  DENDRON_DEFAULT_MAX_NOTE_LENGTH: 204800,
+  SAIL_DEFAULT_MAX_NOTE_LENGTH: 204800,
   /** The file containing the custom theme CSS. Located at the workspace root. */
   CUSTOM_THEME_CSS: "custom.css",
 };
@@ -59,8 +59,8 @@ export const FOLDERS = {
   /** The folder where the assets are stored, this will be under {@link FOLDERS.NOTES}. */
   ASSETS: "assets",
   /** The system-wide folder where Sail stores metadata and other system-wide files. */
-  DENDRON_SYSTEM_ROOT: ".sail",
-  /** The folder where telemetry payloads that will be sent during next run are temporarily saved. Under {@link FOLDERS.DENDRON_SYSTEM_ROOT}. */
+  SAIL_SYSTEM_ROOT: ".sail",
+  /** The folder where telemetry payloads that will be sent during next run are temporarily saved. Under {@link FOLDERS.SAIL_SYSTEM_ROOT}. */
   SAVED_TELEMETRY: "saved-telemetry",
 };
 
@@ -134,13 +134,13 @@ export const SPECIAL_TAGS = [
 
 export type VaultRemoteSource = "local" | "remote";
 
-export enum DENDRON_EMOJIS {
+export enum SAIL_EMOJIS {
   SEEDLING = "🌱",
   OKAY = "✅",
   NOT_OKAY = "❎",
 }
 
-export enum DENDRON_VSCODE_CONFIG_KEYS {
+export enum SAIL_VSCODE_CONFIG_KEYS {
   ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE = "sail.enableSelfContainedVaultWorkspace",
 }
 

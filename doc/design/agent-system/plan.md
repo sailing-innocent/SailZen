@@ -887,7 +887,7 @@ from datetime import datetime
 - [ ] **P3.1-3** 删除 `versionProvider.ts`，将其引用改为 `vscode.ExtensionContext.extension.packageJSON.version`
 
 #### 3.2 移除 Sail 专属 / 个人版不需要的命令
-以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `DENDRON_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
+以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `SAIL_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
 
 | 命令文件 | 命令常量 key |
 |---------|-------------|
@@ -1251,7 +1251,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 - [ ] **P3.1-3** 删除 `versionProvider.ts`，将其引用改为 `vscode.ExtensionContext.extension.packageJSON.version`
 
 #### 3.2 移除 Sail 专属 / 个人版不需要的命令
-以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `DENDRON_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
+以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `SAIL_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
 
 | 命令文件 | 命令常量 key |
 |---------|-------------|

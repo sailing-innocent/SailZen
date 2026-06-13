@@ -35,7 +35,7 @@ import {
   window,
 } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS, DENDRON_REMOTE_VAULTS } from "../constants";
+import { SAIL_COMMANDS, SAIL_REMOTE_VAULTS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { PluginFileUtils } from "../utils/files";
@@ -65,14 +65,14 @@ export class AddExistingVaultCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.ADD_EXISTING_VAULT.key;
+  key = SAIL_COMMANDS.ADD_EXISTING_VAULT.key;
 
   constructor(private _ext: ISailExtension) {
     super();
   }
 
   generateRemoteEntries = (): SourceQuickPickEntry[] => {
-    return DENDRON_REMOTE_VAULTS.map(
+    return SAIL_REMOTE_VAULTS.map(
       ({ name: label, description, data: src }): SourceQuickPickEntry => {
         return { label, description, src };
       }
@@ -418,7 +418,7 @@ export class AddExistingVaultCommand extends BasicCommand<
     try {
       if (
         await fs.pathExists(
-          path.join(vaultRootPath, CONSTANTS.DENDRON_CONFIG_FILE)
+          path.join(vaultRootPath, CONSTANTS.SAIL_CONFIG_FILE)
         )
       ) {
         const vaultConfig = DConfig.getRaw(vaultRootPath) as SailConfig;

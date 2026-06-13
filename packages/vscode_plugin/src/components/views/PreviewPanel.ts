@@ -327,7 +327,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     fn: (note: NoteProps, panel: vscode.WebviewPanel) => {
       const parser = MDUtilsV5.procRemarkFull({
         noteToRender: note,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
         fname: note.fname,
         vault: note.vault,
         config: DConfig.readConfigSync(this._ext.getDWorkspace().wsRoot, true),

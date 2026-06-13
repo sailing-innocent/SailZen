@@ -1,5 +1,5 @@
 import { window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { clipboard } from "../utils";
 import { InputArgCommand } from "./base";
 
@@ -36,7 +36,7 @@ export class CopyToClipboardCommand extends InputArgCommand<
   CopyToClipboardCommandOpts,
   void
 > {
-  key = DENDRON_COMMANDS.COPY_TO_CLIPBOARD.key;
+  key = SAIL_COMMANDS.COPY_TO_CLIPBOARD.key;
 
   addAnalyticsPayload(opts: CopyToClipboardCommandOpts) {
     return { source: opts.source };

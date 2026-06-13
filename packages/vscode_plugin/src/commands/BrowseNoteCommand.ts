@@ -1,7 +1,7 @@
 import { GitUtils } from "@saili/common-server";
 import _ from "lodash";
 import * as vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -12,7 +12,7 @@ export class BrowseNoteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.BROWSE_NOTE.key;
+  key = SAIL_COMMANDS.BROWSE_NOTE.key;
   async sanityCheck() {
     if (_.isUndefined(VSCodeUtils.getActiveTextEditor())) {
       return "No document open";

@@ -14,7 +14,7 @@ import { Disposable, QuickPickItem, Range, TextEditor } from "vscode";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
 import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { AutoCompleter } from "../utils/autoCompleter";
 import {
@@ -38,7 +38,7 @@ export class ConvertLinkCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CONVERT_LINK.key;
+  key = SAIL_COMMANDS.CONVERT_LINK.key;
 
   static noAvailableOperationError() {
     return new SailError({

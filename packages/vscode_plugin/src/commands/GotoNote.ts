@@ -21,7 +21,7 @@ import path from "path";
 import { Position, Selection, Uri, window } from "vscode";
 import { VaultSelectionMode } from "../components/lookup/types";
 import { PickerUtils } from "../components/lookup/utils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { EditorUtils } from "../utils/EditorUtils";
 import { PluginFileUtils } from "../utils/files";
@@ -72,7 +72,7 @@ export class GotoNoteCommand extends BasicCommand<
   GoToNoteCommandOpts,
   GoToNoteCommandOutput
 > {
-  key = DENDRON_COMMANDS.GOTO_NOTE.key;
+  key = SAIL_COMMANDS.GOTO_NOTE.key;
   private extension: ISailExtension;
   private wsUtils: IWSUtils;
 

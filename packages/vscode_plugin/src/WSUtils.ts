@@ -20,7 +20,7 @@ import { isInsidePath, vault2Path } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import { AnchorUtils } from "@saili/unified";
 import { HistoryEvent, HistoryService } from "@saili/engine-server";
-import { DENDRON_COMMANDS } from "./constants";
+import { SAIL_COMMANDS } from "./constants";
 
 let WS_UTILS: IWSUtils | undefined;
 
@@ -317,7 +317,7 @@ export class WSUtils implements IWSUtils {
   async reloadWorkspace(): Promise<unknown> {
     try {
       const out = await vscode.commands.executeCommand(
-        DENDRON_COMMANDS.RELOAD_INDEX.key,
+        SAIL_COMMANDS.RELOAD_INDEX.key,
         true
       );
       return out;

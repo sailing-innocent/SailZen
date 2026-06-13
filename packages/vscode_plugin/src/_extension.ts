@@ -42,7 +42,7 @@ import { ConfigureUIPanelFactory } from "./components/views/ConfigureUIPanelFact
 import { NoteGraphPanelFactory } from "./components/views/NoteGraphViewFactory";
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { SchemaGraphViewFactory } from "./components/views/SchemaGraphViewFactory";
-import { DENDRON_COMMANDS, SailContext, WORKSPACE_STATE } from "./constants";
+import { SAIL_COMMANDS, SailContext, WORKSPACE_STATE } from "./constants";
 import { codeActionProvider } from "./features/codeActionProvider";
 import { completionProvider } from "./features/completionProvider";
 import DefinitionProvider from "./features/DefinitionProvider";
@@ -141,7 +141,7 @@ export async function _activate(
   // At this point, the segment client has not been created yet.
   // We need to check here if the uuid has been set for future references
   // because the Segment client constructor will go ahead and create one if it doesn't exist.
-  const maybeUUIDPath = path.join(os.homedir(), CONSTANTS.DENDRON_ID);
+  const maybeUUIDPath = path.join(os.homedir(), CONSTANTS.SAIL_ID);
   const UUIDPathExists = await fs.pathExists(maybeUUIDPath);
 
   try {
@@ -164,10 +164,10 @@ export async function _activate(
     await _setupCommands({ ext: ws, context, requireActiveWorkspace: false });
     // Order matters. Need to register `Reload Index` command before activating workspace
     // Workspace activation calls `RELOAD_INDEX` via {@link WSUtils.reloadWorkspace}
-    if (!existingCommands.includes(DENDRON_COMMANDS.RELOAD_INDEX.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.RELOAD_INDEX.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.RELOAD_INDEX.key,
+          SAIL_COMMANDS.RELOAD_INDEX.key,
           async (silent?: boolean) => {
             const out = await new ReloadIndexCommand().run({ silent });
             if (!silent) {
@@ -508,20 +508,20 @@ async function _setupCommands({
   });
   // --- some special commands
   if (requireActiveWorkspace === true) {
-    if (!existingCommands.includes(DENDRON_COMMANDS.GO_NEXT_HIERARCHY.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.GO_NEXT_HIERARCHY.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.GO_NEXT_HIERARCHY.key,
+          SAIL_COMMANDS.GO_NEXT_HIERARCHY.key,
           async () => {
             await new GoToSiblingCommand().execute({ direction: "next" });
           }
         )
       );
     }
-    if (!existingCommands.includes(DENDRON_COMMANDS.GO_PREV_HIERARCHY.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.GO_PREV_HIERARCHY.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.GO_PREV_HIERARCHY.key,
+          SAIL_COMMANDS.GO_PREV_HIERARCHY.key,
           async () => {
             await new GoToSiblingCommand().execute({ direction: "prev" });
           }
@@ -531,10 +531,10 @@ async function _setupCommands({
 
     const preview = PreviewPanelFactory.create(ext);
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.TOGGLE_PREVIEW.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.TOGGLE_PREVIEW.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.TOGGLE_PREVIEW.key,
+          SAIL_COMMANDS.TOGGLE_PREVIEW.key,
           async (args) => {
             if (args === undefined) {
               args = {};
@@ -545,10 +545,10 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.TOGGLE_PREVIEW_LOCK.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.TOGGLE_PREVIEW_LOCK.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.TOGGLE_PREVIEW_LOCK.key,
+          SAIL_COMMANDS.TOGGLE_PREVIEW_LOCK.key,
           async (args) => {
             if (args === undefined) {
               args = {};
@@ -559,10 +559,10 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.SHOW_SCHEMA_GRAPH.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.SHOW_SCHEMA_GRAPH.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.SHOW_SCHEMA_GRAPH.key,
+          SAIL_COMMANDS.SHOW_SCHEMA_GRAPH.key,
           async () => {
             await new ShowSchemaGraphCommand(
               SchemaGraphViewFactory.create(ext)
@@ -572,10 +572,10 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.SHOW_NOTE_GRAPH.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.SHOW_NOTE_GRAPH.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.SHOW_NOTE_GRAPH.key,
+          SAIL_COMMANDS.SHOW_NOTE_GRAPH.key,
           async () => {
             await new ShowNoteGraphCommand(
               NoteGraphPanelFactory.create(ext, ext.getEngine())
@@ -585,10 +585,10 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.CONFIGURE_UI.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.CONFIGURE_UI.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.CONFIGURE_UI.key,
+          SAIL_COMMANDS.CONFIGURE_UI.key,
           async () => {
             await new ConfigureWithUICommand(
               ConfigureUIPanelFactory.create(ext)
@@ -598,10 +598,10 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_GOTO_NOTE.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.TREEVIEW_GOTO_NOTE.key)) {
       context.subscriptions.push(
         vscode.commands.registerCommand(
-          DENDRON_COMMANDS.TREEVIEW_GOTO_NOTE.key,
+          SAIL_COMMANDS.TREEVIEW_GOTO_NOTE.key,
           async (id: string) => {
             const resp = await ext.getEngine().getNoteMeta(id);
             const { data } = resp;
@@ -614,9 +614,9 @@ async function _setupCommands({
       );
     }
 
-    if (!existingCommands.includes(DENDRON_COMMANDS.GOTO_TODAY_NOTE.key)) {
+    if (!existingCommands.includes(SAIL_COMMANDS.GOTO_TODAY_NOTE.key)) {
       vscode.commands.registerCommand(
-        DENDRON_COMMANDS.GOTO_TODAY_NOTE.key,
+        SAIL_COMMANDS.GOTO_TODAY_NOTE.key,
         async () => {
           // get today's date in yyyy.mm.dd.md
           const today = new Date();

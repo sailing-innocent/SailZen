@@ -1,6 +1,6 @@
 import { DConfig } from "@saili/common-server";
 import { Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -10,7 +10,7 @@ type CommandOpts = {};
 type CommandOutput = void;
 
 export class ConfigureCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.CONFIGURE_RAW.key;
+  key = SAIL_COMMANDS.CONFIGURE_RAW.key;
   public static requireActiveWorkspace: boolean = true;
   private _ext: ISailExtension;
 

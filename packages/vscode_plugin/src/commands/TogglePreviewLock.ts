@@ -1,6 +1,6 @@
 import { ExtensionProvider } from "../ExtensionProvider";
 import { PreviewProxy } from "../components/views/PreviewProxy";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 
 type CommandInput = {};
@@ -13,7 +13,7 @@ export class TogglePreviewLockCommand extends BasicCommand<
   CommandOutput,
   CommandInput
 > {
-  key = DENDRON_COMMANDS.TOGGLE_PREVIEW_LOCK.key;
+  key = SAIL_COMMANDS.TOGGLE_PREVIEW_LOCK.key;
   _panel: PreviewProxy | undefined;
 
   constructor(previewPanel: PreviewProxy) {

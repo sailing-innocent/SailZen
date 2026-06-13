@@ -14,9 +14,9 @@ export function parseSailURI(linkString: string) {
       link: linkString.replace(CONSTANTS.SRC_DELIMITER, "http://175.27.233.235:4399/content?content="),
     }
   }
-  if (linkString.startsWith(CONSTANTS.DENDRON_DELIMETER)) {
+  if (linkString.startsWith(CONSTANTS.SAIL_DELIMETER)) {
     const [vaultName, link] = linkString
-      .split(CONSTANTS.DENDRON_DELIMETER)[1]
+      .split(CONSTANTS.SAIL_DELIMETER)[1]
       .split("/");
     return {
       vaultName,

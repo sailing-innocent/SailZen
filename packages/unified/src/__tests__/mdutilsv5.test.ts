@@ -40,7 +40,7 @@ describe("MDUtilsV5", () => {
         fname: note.fname,
         vault: note.vault,
         config,
-        dest: SailASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_SAIL,
       });
       const tree = proc.parse(note.body);
       expect(() => proc.stringify(tree)).not.toThrow();

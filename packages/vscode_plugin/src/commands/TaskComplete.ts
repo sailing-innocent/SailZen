@@ -1,5 +1,5 @@
 import { ConfigUtils } from "@saili/common-all";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 import { VSCodeUtils, MessageSeverity } from "../vsCodeUtils";
 import { ISailExtension } from "../sailExtensionInterface";
@@ -14,7 +14,7 @@ export class TaskCompleteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.TASK_COMPLETE.key;
+  key = SAIL_COMMANDS.TASK_COMPLETE.key;
   public static requireActiveWorkspace: boolean = true;
   private _ext: ISailExtension;
 

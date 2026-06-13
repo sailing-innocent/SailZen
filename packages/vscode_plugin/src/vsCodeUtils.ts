@@ -152,7 +152,7 @@ export class VSCodeUtils {
   }): InstallStatus {
     if (
       _.isUndefined(previousWorkspaceVersion) ||
-      previousWorkspaceVersion === CONSTANTS.DENDRON_INIT_VERSION
+      previousWorkspaceVersion === CONSTANTS.SAIL_INIT_VERSION
     ) {
       return InstallStatus.INITIAL_INSTALL;
     }
@@ -176,7 +176,7 @@ export class VSCodeUtils {
     // if there is no global version set, then its a new install
     if (
       _.isUndefined(previousGlobalVersion) ||
-      previousGlobalVersion === CONSTANTS.DENDRON_INIT_VERSION
+      previousGlobalVersion === CONSTANTS.SAIL_INIT_VERSION
     ) {
       return InstallStatus.INITIAL_INSTALL;
     }

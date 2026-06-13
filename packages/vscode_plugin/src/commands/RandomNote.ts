@@ -1,7 +1,7 @@
 import { ConfigUtils, NotePropsMeta, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import { Uri, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -16,7 +16,7 @@ export class RandomNoteCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.RANDOM_NOTE.key;
+  key = SAIL_COMMANDS.RANDOM_NOTE.key;
   constructor(private _ext: ISailExtension) {
     super();
   }

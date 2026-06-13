@@ -2,7 +2,7 @@ import { DVault, VaultUtils } from "@saili/common-all";
 import { WorkspaceService } from "@saili/engine-server";
 import _ from "lodash";
 import { commands, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -24,7 +24,7 @@ export class RemoveVaultCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.REMOVE_VAULT.key;
+  key = SAIL_COMMANDS.REMOVE_VAULT.key;
   constructor(private _ext: ISailExtension) {
     super();
   }

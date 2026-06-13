@@ -85,7 +85,7 @@ export async function runAllDecorators(
       parseOnly: true,
     },
     {
-      dest: SailASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_SAIL,
       vault: note.vault,
       fname: note.fname,
       config,

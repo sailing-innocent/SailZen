@@ -560,7 +560,7 @@ export class NoteUtils {
       suffix = `#${idStr}`;
     }
     const vaultPrefix = useVaultPrefix
-      ? `${CONSTANTS.DENDRON_DELIMETER}${VaultUtils.getName(vault)}/`
+      ? `${CONSTANTS.SAIL_DELIMETER}${VaultUtils.getName(vault)}/`
       : "";
 
     let aliasPrefix = "";

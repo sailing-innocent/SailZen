@@ -220,7 +220,7 @@ async function getForwardLinkDependencies(
     fname: noteToRender.fname,
     vault: noteToRender.vault,
     config,
-    dest: SailASTDest.MD_DENDRON,
+    dest: SailASTDest.MD_SAIL,
   });
 
   const serialized = NoteUtils.serialize(noteToRender);
@@ -251,7 +251,7 @@ async function getForwardLinkDependencies(
               fname: note.fname,
               vault: note.vault,
               config,
-              dest: SailASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_SAIL,
             });
 
             const serialized = NoteUtils.serialize(note);

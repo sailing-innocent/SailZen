@@ -3,7 +3,7 @@ import {
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import vscode from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { WebViewUtils } from "../views/utils";
 import { BasicCommand } from "./base";
@@ -16,7 +16,7 @@ export class ShowSchemaGraphCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.SHOW_SCHEMA_GRAPH.key;
+  key = SAIL_COMMANDS.SHOW_SCHEMA_GRAPH.key;
 
   _panel: vscode.WebviewPanel;
 

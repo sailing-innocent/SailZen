@@ -2,7 +2,7 @@ import { ConfigUtils, NotePropsMeta, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import { window } from "vscode";
 import { SailClientUtils } from "../clientUtils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
@@ -21,7 +21,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.INSERT_NOTE_INDEX.key;
+  key = SAIL_COMMANDS.INSERT_NOTE_INDEX.key;
 
   constructor(private _ext: ISailExtension) {
     super();

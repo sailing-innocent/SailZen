@@ -8,7 +8,7 @@ export enum SailASTDest {
    */
   MD_ENHANCED_PREVIEW = "MD_ENHANCED_PREVIEW",
   MD_REGULAR = "MD_REGULAR",
-  MD_DENDRON = "MD_DENDRON",
+  MD_SAIL = "MD_SAIL",
   HTML = "HTML",
   /**
    * SailZen Doc export mode: AST is processed for document generation

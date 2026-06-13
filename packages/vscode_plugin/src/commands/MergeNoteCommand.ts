@@ -17,7 +17,7 @@ import {
   NoteLookupProviderSuccessResp,
 } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand, SanityCheckResults } from "./base";
 import * as vscode from "vscode";
@@ -43,7 +43,7 @@ type CommandOutput = {
 } & CommandOpts;
 
 export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.MERGE_NOTE.key;
+  key = SAIL_COMMANDS.MERGE_NOTE.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
       extra: {

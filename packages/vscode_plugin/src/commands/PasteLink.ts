@@ -1,7 +1,7 @@
 import _ from "lodash";
 import ogs from "open-graph-scraper";
 import { Selection, window } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { clipboard, getOpenGraphMetadata } from "../utils";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -14,7 +14,7 @@ type CommandOutput = string;
 
 // Command based on copying CopyNoteRef.ts
 export class PasteLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  key = DENDRON_COMMANDS.PASTE_LINK.key;
+  key = SAIL_COMMANDS.PASTE_LINK.key;
   async sanityCheck() {
     if (_.isUndefined(VSCodeUtils.getActiveTextEditor())) {
       return "No document open";

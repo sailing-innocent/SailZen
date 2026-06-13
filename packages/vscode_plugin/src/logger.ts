@@ -15,7 +15,7 @@ import {
   window,
   workspace,
 } from "vscode";
-import { CONFIG, DENDRON_CHANNEL_NAME } from "./constants";
+import { CONFIG, SAIL_CHANNEL_NAME } from "./constants";
 import { FileItem } from "./external/fileutils/FileItem";
 
 const levels = ["debug", "info", "warn", "error", "fatal"];
@@ -123,7 +123,7 @@ export class Logger {
   static set level(value: LogLvl) {
     this._level = value;
     this.output =
-      this.output || window.createOutputChannel(DENDRON_CHANNEL_NAME);
+      this.output || window.createOutputChannel(SAIL_CHANNEL_NAME);
   }
 
   /** Log an error.

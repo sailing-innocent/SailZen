@@ -1,6 +1,6 @@
 import {
   CONSTANTS,
-  DENDRON_VSCODE_CONFIG_KEYS,
+  SAIL_VSCODE_CONFIG_KEYS,
   DVault,
   ErrorFactory,
   WorkspaceType,
@@ -11,7 +11,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import vscode, { Uri } from "vscode";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -60,7 +60,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.INIT_WS.key;
+  key = SAIL_COMMANDS.INIT_WS.key;
 
   async gatherInputs(): Promise<CommandInput | undefined> {
     let workspaceType = WorkspaceType.CODE;
@@ -204,7 +204,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
     // This command can run before the extension is registered, especially during testing
     const defaultSelfContained =
       VSCodeUtils.getWorkspaceConfig().get<boolean>(
-        DENDRON_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE
+        SAIL_VSCODE_CONFIG_KEYS.ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE
       ) ?? false;
     const {
       rootDirRaw: rootDir,
@@ -263,7 +263,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
       vscode.window.showInformationMessage("opening sail workspace");
       if (workspaceType === WorkspaceType.CODE) {
         VSCodeUtils.openWS(
-          vscode.Uri.file(path.join(rootDir, CONSTANTS.DENDRON_WS_NAME)).fsPath
+          vscode.Uri.file(path.join(rootDir, CONSTANTS.SAIL_WS_NAME)).fsPath
         );
       } else if (workspaceType === WorkspaceType.NATIVE) {
         if (opts.EXPERIMENTAL_openNativeWorkspaceNoReload) {

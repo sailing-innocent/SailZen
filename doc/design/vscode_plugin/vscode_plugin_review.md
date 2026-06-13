@@ -181,11 +181,11 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 | 编号 | 债务描述 | 位置 / 文件 | 影响范围 | 建议优先级 | 状态 |
 |------|---------|------------|---------|-----------|------|
 | D01 | **Package 命令前缀全部为 `sail.`**，仅 `sailzen.compileDocument` 和 `sailzen.exportNote` 例外 | `package.json` > `contributes.commands` (~80 条命令) | 用户-facing 命令 ID、keybindings、菜单绑定 | **P0** | 待处理 |
-| D02 | **View IDs 全部使用 `sail.` 前缀**：`sail.backlinks`, `sail.treeView`, `sail.calendar-view`, `sail.lookup-view` 等 | `package.json` > `contributes.views`, `constants.ts` > `DENDRON_VIEWS` | 视图容器、Activity Bar、菜单 when 条件 | **P0** | 待处理 |
+| D02 | **View IDs 全部使用 `sail.` 前缀**：`sail.backlinks`, `sail.treeView`, `sail.calendar-view`, `sail.lookup-view` 等 | `package.json` > `contributes.views`, `constants.ts` > `SAIL_VIEWS` | 视图容器、Activity Bar、菜单 when 条件 | **P0** | 待处理 |
 | D03 | **Context keys 全部使用 `sail:` 前缀**：`sail:pluginActive`, `sail:devMode`, `sail:noteLookupActive` 等 | `constants.ts` > `SailContext` enum | 所有命令的 `when` / `enablement` 条件 | **P0** | 待处理 |
 | D04 | **`extensionQualifiedId = "sail.sail"`** | `constants.ts` 第 11 行 | VSCode 扩展标识、API 调用、版本检测 | **P0** | 待处理 |
 | D05 | **文件名 `sailExtensionInterface.ts`、类名 `SailExtension`** | `sailExtensionInterface.ts`, `workspace.ts` | 扩展核心接口与实现，被大量文件 import | **P0** | 待处理 |
-| D06 | **上游包 `common-all` 中大量 sail 命名**：`DENDRON_CONFIG_FILE = "sail.yml"`, `DENDRON_WS_NAME = "sail.code-workspace"`, `DENDRON_DELIMETER = "sail://"` | `packages/common-all/src/`（外部依赖） | 配置系统、工作区文件、WikiLink 协议 | **P0** | 待处理 |
+| D06 | **上游包 `common-all` 中大量 sail 命名**：`SAIL_CONFIG_FILE = "sail.yml"`, `SAIL_WS_NAME = "sail.code-workspace"`, `SAIL_DELIMETER = "sail://"` | `packages/common-all/src/`（外部依赖） | 配置系统、工作区文件、WikiLink 协议 | **P0** | 待处理 |
 | D07 | ~~**日志文件名 `sail.log`, `sail.server.log`**~~ | ~~`ExtensionUtils.ts`, `logger.ts`~~ | ~~日志文件路径~~ | ~~**P1**~~ | ✅ **已清理** |
 | D08 | ~~**`workspace.ts` (SailExtension + DWorkspaceV2) 与 `workspacev2.ts` (旧版 DWorkspace) 并存**~~ | ~~`workspace.ts`, `workspacev2.ts`~~ | ~~工作区核心，所有命令依赖~~ | ~~**P0**~~ | ✅ **已清理** |
 | D09 | ~~**`WSUtilsV2.ts` / `WSUtilsV2Interface.ts` — "V2" 后缀表明第二次重写**~~ | ~~`WSUtilsV2.ts`, `WSUtilsV2Interface.ts`~~ | ~~工作区工具，广泛依赖~~ | ~~**P1**~~ | ✅ **已清理** |
@@ -221,10 +221,10 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 | D39 | ~~**`getEnablePrettlyLinks.ts`：文件名和函数名拼写错误（Prettly → Pretty）**~~ | ~~`web/injection-providers/getEnablePrettlyLinks.ts`~~ | ~~Web 版配置注入~~ | ~~**P2**~~ | ✅ **已清理**（`web/` 目录已移除） |
 | D40 | ~~**`Refactor.ts` 中 `process.exit(0)` 在 VSCode 扩展环境中极其危险**~~ | ~~`commands/Refactor.ts`~~ | ~~扩展稳定性~~ | ~~**P0**~~ | ✅ **已清理**（文件已删除） |
 | D41 | **`_extension.ts` 第 499 行：升级提示指向 `https://sail.so/...`（外部死链风险）** | `_extension.ts` 第 499 行 | 升级提示 | **P1** | 待处理 |
-| D42 | **`DENDRON_COMMANDS` 常量对象中 CMD 前缀为 `"Sail:"`** | `constants.ts` 第 151 行 | 命令标题显示 | **P1** | 待处理 |
-| D43 | **`DENDRON_CHANNEL_NAME = "Sail"`** | `constants.ts` 第 976 行 | 输出频道名称 | **P1** | 待处理 |
-| D44 | **`DENDRON_WORKSPACE_FILE = "sail.code-workspace"`** | `workspace.ts` 第 120 行 | 工作区文件名 | **P0** | 待处理 |
-| D45 | **Views Container title 仍为 "Sail"** | `package.json` / `constants.ts` > `DENDRON_VIEWS_CONTAINERS` | Activity Bar 标题 | **P0** | 待处理 |
+| D42 | **`SAIL_COMMANDS` 常量对象中 CMD 前缀为 `"Sail:"`** | `constants.ts` 第 151 行 | 命令标题显示 | **P1** | 待处理 |
+| D43 | **`SAIL_CHANNEL_NAME = "Sail"`** | `constants.ts` 第 976 行 | 输出频道名称 | **P1** | 待处理 |
+| D44 | **`SAIL_WORKSPACE_FILE = "sail.code-workspace"`** | `workspace.ts` 第 120 行 | 工作区文件名 | **P0** | 待处理 |
+| D45 | **Views Container title 仍为 "Sail"** | `package.json` / `constants.ts` > `SAIL_VIEWS_CONTAINERS` | Activity Bar 标题 | **P0** | 待处理 |
 
 ### 2.2 债务分类统计
 
@@ -249,7 +249,7 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 1. **package.json 命令前缀迁移**
    - 将所有 `sail.` 前缀命令重命名为 `sailzen.` 前缀
    - 保留 `sailzen.compileDocument` 和 `sailzen.exportNote`
-   - 同步更新 `constants.ts` 中 `DENDRON_COMMANDS` 对象的所有 key
+   - 同步更新 `constants.ts` 中 `SAIL_COMMANDS` 对象的所有 key
    - 同步更新所有 `when` / `enablement` 条件中的命令引用
 
 2. **View IDs 与 Context Keys 迁移**
@@ -263,7 +263,7 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 
 3. **扩展标识符修正**
    - `extensionQualifiedId = "sail.sail"` → `"sailinginnocent.sail-zen-vscode"`
-   - `DENDRON_CHANNEL_NAME = "Sail"` → `"SailZen"`
+   - `SAIL_CHANNEL_NAME = "Sail"` → `"SailZen"`
    - `CMD_PREFIX = "Sail:"` → `"SailZen:"`
    - Views Container title `"Sail"` → `"SailZen"`
 
@@ -273,12 +273,12 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
    - `sailExtensionInterface.ts` → `extensionInterface.ts`
    - `SailWorkspaceSettings` → `SailZenWorkspaceSettings`
    - `SailContext` → `SailZenContext`
-   - `DENDRON_COMMANDS` → `SAILZEN_COMMANDS`
-   - `DENDRON_VIEWS` → `SAILZEN_VIEWS`
+   - `SAIL_COMMANDS` → `SAILZEN_COMMANDS`
+   - `SAIL_VIEWS` → `SAILZEN_VIEWS`
 
 5. **工作区文件名**
-   - `DENDRON_WORKSPACE_FILE = "sail.code-workspace"` → `"sailzen.code-workspace"`
-   - 需要同步处理 `common-all` 中的 `DENDRON_WS_NAME`
+   - `SAIL_WORKSPACE_FILE = "sail.code-workspace"` → `"sailzen.code-workspace"`
+   - 需要同步处理 `common-all` 中的 `SAIL_WS_NAME`
 
 **预计影响**: 全局性改动，需要全量回归测试。
 
@@ -306,7 +306,7 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 2. **配置系统简化**
    - 统一配置文件：优先使用 VSCode 的 `settings.json`，逐步废弃 `sail.yml`/`sailrc.yml`
    - 将 `sailExtensionInterface.ts` 中的配置键前缀从 `sail.` 改为 `sailzen.`
-   - 与 `common-all` 同步更新 `DENDRON_CONFIG_FILE` 等常量
+   - 与 `common-all` 同步更新 `SAIL_CONFIG_FILE` 等常量
 
 3. **外部链接修复**
    - 将 `_extension.ts` 中的 `https://sail.so/...` 替换为 SailZen 自己的文档链接或移除升级提示
@@ -368,10 +368,10 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 **任务清单**:
 
 1. **`common-all` 包常量重命名**
-   - `DENDRON_CONFIG_FILE = "sail.yml"` → `SAILZEN_CONFIG_FILE = "sailzen.yml"`
-   - `DENDRON_WS_NAME = "sail.code-workspace"` → `SAILZEN_WS_NAME = "sailzen.code-workspace"`
-   - `DENDRON_DELIMETER = "sail://"` → `SAILZEN_DELIMETER = "sailzen://"`
-   - `DENDRON_VSCODE_CONFIG_KEYS` → `SAILZEN_VSCODE_CONFIG_KEYS`
+   - `SAIL_CONFIG_FILE = "sail.yml"` → `SAILZEN_CONFIG_FILE = "sailzen.yml"`
+   - `SAIL_WS_NAME = "sail.code-workspace"` → `SAILZEN_WS_NAME = "sailzen.code-workspace"`
+   - `SAIL_DELIMETER = "sail://"` → `SAILZEN_DELIMETER = "sailzen://"`
+   - `SAIL_VSCODE_CONFIG_KEYS` → `SAILZEN_VSCODE_CONFIG_KEYS`
 
 2. **统一 WikiLink 协议**
    - 将 `sail://` 协议改为 `sailzen://`
@@ -389,7 +389,7 @@ Sail 的核心 UX 组件，负责 QuickPick 的完整交互逻辑。
 | F02 | ~~`process.exit(0)` 在 VSCode 扩展中危险~~ | ~~`commands/Refactor.ts`~~ | ~~替换为安全的错误处理方式~~ | ✅ **已修复**（文件已删除） |
 | F03 | 升级提示指向外部死链 `sail.so` | `_extension.ts` ~L499 | 替换为 SailZen 文档链接或移除 | 🔧 待修复 |
 | F04 | ~~文件名/函数名拼写：`Prettly` → `Pretty`~~ | ~~`web/injection-providers/getEnablePrettlyLinks.ts`~~ | ~~重命名文件和函数~~ | ✅ **已修复**（`web/` 已移除） |
-| F05 | `DENDRON_COMMANDS.EXPORT_NOTE` / `COMPILE_DOCUMENT` 的 title 仍使用 `Sail:` 前缀 | `constants.ts` ~L848–857 | 改为 `SailZen:` 前缀 | 🔧 待修复 |
+| F05 | `SAIL_COMMANDS.EXPORT_NOTE` / `COMPILE_DOCUMENT` 的 title 仍使用 `Sail:` 前缀 | `constants.ts` ~L848–857 | 改为 `SailZen:` 前缀 | 🔧 待修复 |
 
 ---
 

@@ -3,7 +3,7 @@ import {
   LookupNoteTypeEnum,
   NoteAddBehaviorEnum,
 } from "@saili/common-all";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { Logger } from "../logger";
 import { BasicCommand } from "./base";
 import {
@@ -25,7 +25,7 @@ export class CreateTaskCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.TASK_CREATE.key;
+  key = SAIL_COMMANDS.TASK_CREATE.key;
 
   /**
    * Returns all vaults added
@@ -40,7 +40,7 @@ export class CreateTaskCommand extends BasicCommand<
     const { createTaskSelectionType, addBehavior } =
       ConfigUtils.getTask(config);
 
-    
+
     return {
       lookup: new NoteLookupCommand().run({
         noteType: LookupNoteTypeEnum.task,

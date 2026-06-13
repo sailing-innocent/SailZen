@@ -25,7 +25,7 @@ import _ from "lodash";
 import path from "path";
 import semver from "semver";
 import * as vscode from "vscode";
-import { SailContext, DENDRON_COMMANDS, WORKSPACE_STATE } from "../constants";
+import { SailContext, SAIL_COMMANDS, WORKSPACE_STATE } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { EngineAPIService } from "../services/EngineAPIService";
@@ -49,10 +49,10 @@ function _setupTreeViewCommands(
   existingCommands: string[]
 ) {
   if (
-    !existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_LABEL_BY_TITLE.key)
+    !existingCommands.includes(SAIL_COMMANDS.TREEVIEW_LABEL_BY_TITLE.key)
   ) {
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.TREEVIEW_LABEL_BY_TITLE.key,
+      SAIL_COMMANDS.TREEVIEW_LABEL_BY_TITLE.key,
       () => {
         treeView.updateLabelType({
           labelType: TreeViewItemLabelTypeEnum.title,
@@ -62,10 +62,10 @@ function _setupTreeViewCommands(
   }
 
   if (
-    !existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_LABEL_BY_FILENAME.key)
+    !existingCommands.includes(SAIL_COMMANDS.TREEVIEW_LABEL_BY_FILENAME.key)
   ) {
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.TREEVIEW_LABEL_BY_FILENAME.key,
+      SAIL_COMMANDS.TREEVIEW_LABEL_BY_FILENAME.key,
       () => {
         treeView.updateLabelType({
           labelType: TreeViewItemLabelTypeEnum.filename,
@@ -74,9 +74,9 @@ function _setupTreeViewCommands(
     );
   }
 
-  if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_CREATE_NOTE.key)) {
+  if (!existingCommands.includes(SAIL_COMMANDS.TREEVIEW_CREATE_NOTE.key)) {
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.TREEVIEW_CREATE_NOTE.key,
+      SAIL_COMMANDS.TREEVIEW_CREATE_NOTE.key,
       async (opts) => {
         await new CreateNoteCommand().run(opts);
       }
@@ -90,18 +90,18 @@ function _setupTreeViewCommands(
    *
    * TODO: fix tree item register issue and flip the dev mode flag.
    */
-  if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_EXPAND_ALL.key)) {
+  if (!existingCommands.includes(SAIL_COMMANDS.TREEVIEW_EXPAND_ALL.key)) {
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.TREEVIEW_EXPAND_ALL.key,
+      SAIL_COMMANDS.TREEVIEW_EXPAND_ALL.key,
       async () => {
         await treeView.expandAll();
       }
     );
   }
 
-  if (!existingCommands.includes(DENDRON_COMMANDS.TREEVIEW_EXPAND_STUB.key)) {
+  if (!existingCommands.includes(SAIL_COMMANDS.TREEVIEW_EXPAND_STUB.key)) {
     vscode.commands.registerCommand(
-      DENDRON_COMMANDS.TREEVIEW_EXPAND_STUB.key,
+      SAIL_COMMANDS.TREEVIEW_EXPAND_STUB.key,
       async (id) => {
         await treeView.expandTreeItem(id);
       }
@@ -275,10 +275,10 @@ async function postReloadWorkspace({
   // NOTE: this is legacy to upgrade .code-workspace specific settings
   // we are moving everything to sail.yml
   // see [[2021 06 Deprecate Workspace Settings|proj.2021-06-deprecate-workspace-settings]]
-  if (previousWsVersion === CONSTANTS.DENDRON_INIT_VERSION) {
+  if (previousWsVersion === CONSTANTS.SAIL_INIT_VERSION) {
     Logger.info({ ctx, msg: "no previous global version" });
     vscode.commands
-      .executeCommand(DENDRON_COMMANDS.UPGRADE_SETTINGS.key)
+      .executeCommand(SAIL_COMMANDS.UPGRADE_SETTINGS.key)
       .then((changes) => {
         Logger.info({ ctx, msg: "postUpgrade: new wsVersion", changes });
       });
@@ -290,7 +290,7 @@ async function postReloadWorkspace({
       Logger.info({ ctx, msg: "preUpgrade: new wsVersion" });
       try {
         changes = await vscode.commands.executeCommand(
-          DENDRON_COMMANDS.UPGRADE_SETTINGS.key
+          SAIL_COMMANDS.UPGRADE_SETTINGS.key
         );
         Logger.info({
           ctx,

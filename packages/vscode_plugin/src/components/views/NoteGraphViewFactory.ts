@@ -20,7 +20,7 @@ import path from "path";
 import * as vscode from "vscode";
 import { Disposable, TextEditor, ViewColumn, window } from "vscode";
 import { GotoNoteCommand } from "../../commands/GotoNote";
-import { DENDRON_COMMANDS } from "../../constants";
+import { SAIL_COMMANDS } from "../../constants";
 import { Logger } from "../../logger";
 import { GraphStyleService } from "../../styles";
 import { WebViewUtils } from "../../views/utils";

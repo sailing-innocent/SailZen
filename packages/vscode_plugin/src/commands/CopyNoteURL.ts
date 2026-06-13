@@ -2,7 +2,7 @@ import { ConfigUtils } from "@saili/common-all";
 import { WorkspaceUtils } from "@saili/engine-server";
 import _ from "lodash";
 import { Selection, window } from "vscode";
-import { CONFIG, DENDRON_COMMANDS } from "../constants";
+import { CONFIG, SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
@@ -19,7 +19,7 @@ export class CopyNoteURLCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.COPY_NOTE_URL.key;
+  key = SAIL_COMMANDS.COPY_NOTE_URL.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {

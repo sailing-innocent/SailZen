@@ -168,7 +168,7 @@ export class SeedService {
 
   async init(opts: { seed: SeedConfig; wsRoot: string; mode: SeedInitMode }) {
     const { wsRoot, seed, mode } = opts;
-    const cpath = path.join(wsRoot, CONSTANTS.DENDRON_SEED_CONFIG);
+    const cpath = path.join(wsRoot, CONSTANTS.SAIL_SEED_CONFIG);
 
     switch (mode) {
       case SeedInitMode.CREATE_WORKSPACE: {

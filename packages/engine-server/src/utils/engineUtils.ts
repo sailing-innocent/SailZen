@@ -49,7 +49,7 @@ export class EngineUtils {
   }) {
     const suffix = target === "cli" ? ".cli" : "";
 
-    const portFile = path.join(wsRoot, CONSTANTS.DENDRON_SERVER_PORT) + suffix;
+    const portFile = path.join(wsRoot, CONSTANTS.SAIL_SERVER_PORT) + suffix;
     return portFile;
   }
 
@@ -106,7 +106,7 @@ export class EngineUtils {
   }): Promise<void> {
     const maxNoteLength = Math.min(
       ConfigUtils.getWorkspace(config).maxNoteLength,
-      CONSTANTS.DENDRON_DEFAULT_MAX_NOTE_LENGTH
+      CONSTANTS.SAIL_DEFAULT_MAX_NOTE_LENGTH
     );
     if (note.body.length > maxNoteLength) {
       if (silent) {

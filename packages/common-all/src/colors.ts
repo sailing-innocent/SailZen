@@ -1,4 +1,4 @@
-export const DENDRON_COLORS: { [index: string]: string } = {
+export const SAIL_COLORS: { [index: string]: string } = {
   "sail green": "#00A824",
 };
 

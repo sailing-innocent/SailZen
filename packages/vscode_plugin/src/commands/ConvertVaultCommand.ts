@@ -6,7 +6,7 @@ import {
   VaultUtils,
 } from "@saili/common-all";
 import _ from "lodash";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 import { ProgressLocation, QuickPickItem, window } from "vscode";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -30,7 +30,7 @@ export class ConvertVaultCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = DENDRON_COMMANDS.CONVERT_VAULT.key;
+  key = SAIL_COMMANDS.CONVERT_VAULT.key;
   constructor(private _ext: ISailExtension) {
     super();
   }

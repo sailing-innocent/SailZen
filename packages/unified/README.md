@@ -104,7 +104,7 @@ All custom plugins switch on `SailASTDest`:
 
 | Destination | Purpose |
 |-------------|---------|
-| `MD_DENDRON` | Round-trip markdown (preserve custom syntax) |
+| `MD_SAIL` | Round-trip markdown (preserve custom syntax) |
 | `MD_REGULAR` | Standard markdown (strip custom syntax) |
 | `MD_ENHANCED_PREVIEW` | Enhanced markdown preview |
 | `HTML` | Full HTML rendering |
@@ -553,7 +553,7 @@ const plugin: Plugin<[PluginOpts?]> = function (this: Processor, _opts?) {
 
 **Compiler attachment:**
 1. Register visitor in `Compiler.prototype.visitors[SailASTTypes.X]`
-2. Switch on `SailASTDest` (MD_DENDRON / MD_REGULAR / HTML / DOC_EXPORT / DOC_PREVIEW)
+2. Switch on `SailASTDest` (MD_SAIL / MD_REGULAR / HTML / DOC_EXPORT / DOC_PREVIEW)
 
 ---
 
@@ -606,7 +606,7 @@ Decorations analyze parsed AST to produce IDE highlighting (ranges + types). The
 |--------|----------|-----|------------------------|
 | `sailzenCite` | **High** | Custom syntax, multi-dest rendering | Regex + AST node creation + HTML output per dest |
 | `sailzenFigure` | **High** | Custom syntax, option parser | Regex + option parsing + HTML/MD round-trip |
-| `blockAnchors` | **High** | Core feature, noteRefs dependency | Regex + block anchor node + MD_DENDRON round-trip |
+| `blockAnchors` | **High** | Core feature, noteRefs dependency | Regex + block anchor node + MD_SAIL round-trip |
 | `extendedImage` | **Medium** | Custom syntax, YAML props | Regex + props parsing + HTML rendering |
 | `noteRefsV2` | **Medium** | Complex but critical | Mock `noteCacheForRenderDict`, test basic transclusion |
 | `decorations/*` | **Medium** | All 8 decorators untested | AST → decoration range assertions |
@@ -705,10 +705,10 @@ import { SailASTDest } from "../../types";
 import { MDUtilsV5 } from "../../utilsv5";
 
 describe("sailzenCite compiler", () => {
-  test("should round-trip in MD_DENDRON mode", async () => {
+  test("should round-trip in MD_SAIL mode", async () => {
     const note = createTestNoteWithBody("::cite[foo, bar]");
     const proc = MDUtilsV5.procRehypeFull(
-      { noteToRender: note, fname: note.fname, vault: note.vault, config: createTestConfig(), dest: SailASTDest.MD_DENDRON },
+      { noteToRender: note, fname: note.fname, vault: note.vault, config: createTestConfig(), dest: SailASTDest.MD_SAIL },
       { flavor: ProcFlavor.REGULAR }
     );
     const result = await proc.process(note.body);
@@ -723,15 +723,15 @@ describe("sailzenCite compiler", () => {
 
 | Syntax | AST Type | Plugin | Example | Destinations |
 |--------|----------|--------|---------|-------------|
-| `[[target]]` | `wikiLink` | `wikiLinks` | `[[hello]]` | MD_DENDRON, HTML |
-| `[[alias\|target]]` | `wikiLink` | `wikiLinks` | `[[hi\|hello]]` | MD_DENDRON, HTML |
-| `#tag` | `hashtag` | `hashtags` | `#important` | MD_DENDRON, MD_REGULAR |
-| `\cite{key}` | `zdoctag` | `zdocTags` | `\cite{foo}` | MD_DENDRON |
-| `^anchor` | `blockAnchor` | `blockAnchors` | `^my-anchor` | MD_DENDRON, MD_REGULAR, MD_ENHANCED_PREVIEW |
-| `![[note]]` | `refLinkV2` | `noteRefsV2` | `![[daily.journal]]` | MD_DENDRON, HTML |
-| `![alt](url){props}` | `extendedImage` | `extendedImage` | `![](img.png){width: 100}` | MD_DENDRON, MD_REGULAR, MD_ENHANCED_PREVIEW |
-| `::cite[keys]` | `sailzenCite` | `sailzenCite` | `::cite[foo, bar]` | MD_DENDRON, HTML, DOC_EXPORT, DOC_PREVIEW |
-| `::figure[cap](src){opts}` | `sailzenFigure` | `sailzenFigure` | `::figure[Teaser](fig1){width="80%"}` | MD_DENDRON, HTML, DOC_EXPORT, DOC_PREVIEW |
+| `[[target]]` | `wikiLink` | `wikiLinks` | `[[hello]]` | MD_SAIL, HTML |
+| `[[alias\|target]]` | `wikiLink` | `wikiLinks` | `[[hi\|hello]]` | MD_SAIL, HTML |
+| `#tag` | `hashtag` | `hashtags` | `#important` | MD_SAIL, MD_REGULAR |
+| `\cite{key}` | `zdoctag` | `zdocTags` | `\cite{foo}` | MD_SAIL |
+| `^anchor` | `blockAnchor` | `blockAnchors` | `^my-anchor` | MD_SAIL, MD_REGULAR, MD_ENHANCED_PREVIEW |
+| `![[note]]` | `refLinkV2` | `noteRefsV2` | `![[daily.journal]]` | MD_SAIL, HTML |
+| `![alt](url){props}` | `extendedImage` | `extendedImage` | `![](img.png){width: 100}` | MD_SAIL, MD_REGULAR, MD_ENHANCED_PREVIEW |
+| `::cite[keys]` | `sailzenCite` | `sailzenCite` | `::cite[foo, bar]` | MD_SAIL, HTML, DOC_EXPORT, DOC_PREVIEW |
+| `::figure[cap](src){opts}` | `sailzenFigure` | `sailzenFigure` | `::figure[Teaser](fig1){width="80%"}` | MD_SAIL, HTML, DOC_EXPORT, DOC_PREVIEW |
 
 ### Reserved / Planned Types (in `SailASTTypes` but not fully implemented)
 

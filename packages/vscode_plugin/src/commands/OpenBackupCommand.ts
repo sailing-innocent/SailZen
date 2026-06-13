@@ -1,7 +1,7 @@
 import { BackupService, IBackupService } from "@saili/common-server";
 import { QuickPickItem, Uri, window, workspace } from "vscode";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DENDRON_COMMANDS } from "../constants";
+import { SAIL_COMMANDS } from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand } from "./base";
 import path from "path";
@@ -12,7 +12,7 @@ export class OpenBackupCommand extends BasicCommand<
   OpenBackupCommandOpts,
   void
 > {
-  key = DENDRON_COMMANDS.OPEN_BACKUP.key;
+  key = SAIL_COMMANDS.OPEN_BACKUP.key;
   private extension: ISailExtension;
 
   constructor(ext: ISailExtension) {
