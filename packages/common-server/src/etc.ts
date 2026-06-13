@@ -59,16 +59,16 @@ export class WebViewCommonUtils {
     themeMap: WebViewThemeMap;
     initialTheme?: string;
   }) => {
-    const builtinStyle = "dendron-editor-follow-style";
-    const defaultStyle = "dendron-editor-default-style";
-    const overrideStyle = "dendron-editor-override-style";
+    const builtinStyle = "sail-editor-follow-style";
+    const defaultStyle = "sail-editor-default-style";
+    const overrideStyle = "sail-editor-override-style";
     return `<!DOCTYPE html>
   <html lang="en">
     <head>
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <link rel="stylesheet" href="${cssSrc}" />
-      <title>Dendron </title>
+      <title>Sail </title>
       <style id="${builtinStyle}">
         body, h1, h2, h3, h4 {
           color: var(--vscode-editor-foreground);
@@ -292,7 +292,7 @@ export class WebViewCommonUtils {
       </div>
 
       <!-- Source code for javascript bundle. Not used in browser mode-->
-      <script src="${jsSrc}"></script>
+      <script type="module" src="${jsSrc}"></script>
     </body>
   </html>`;
   };

@@ -16,7 +16,7 @@ import {
   WriteNoteResp,
 } from ".";
 import { ThemeTarget, ThemeType } from "./constants";
-import { DendronCompositeError, DendronError } from "./error";
+import { SailCompositeError, SailError } from "./error";
 import {
   BulkWriteNotesResp,
   DeleteNoteResp,
@@ -35,7 +35,7 @@ import {
   RespV3,
   VSRange,
   WriteSchemaResp,
-  DendronConfig,
+  SailConfig,
 } from "./types";
 import { DVault } from "./types/DVault";
 import { FindNoteOpts } from "./types/FindNoteOpts";
@@ -63,12 +63,12 @@ export function createNoOpLogger() {
  */
 export function stringifyQueryParams(params: Record<string, any>): string {
   const searchParams = new URLSearchParams();
-  
+
   for (const [key, value] of Object.entries(params)) {
     if (value === null || value === undefined) {
       continue;
     }
-    
+
     if (Array.isArray(value)) {
       // For arrays, append each value with the same key
       value.forEach((item) => {
@@ -84,7 +84,7 @@ export function stringifyQueryParams(params: Record<string, any>): string {
       searchParams.append(key, String(value));
     }
   }
-  
+
   return searchParams.toString();
 }
 
@@ -94,7 +94,7 @@ interface IRequestArgs {
 
 export interface IAPIPayload {
   data: undefined | any | any[];
-  error: undefined | DendronError | DendronCompositeError;
+  error: undefined | SailError | SailCompositeError;
 }
 
 interface IAPIOpts {
@@ -106,7 +106,7 @@ interface IAPIOpts {
   onAuth: (opts: IRequestArgs) => Promise<any>;
   onBuildHeaders: (opts: IRequestArgs) => Promise<any>;
   onError: (opts: {
-    err: DendronError;
+    err: SailError;
     body: any;
     resp: any;
     headers: any;
@@ -260,7 +260,7 @@ abstract class API {
     if (auth) {
       headers = await onAuth({ headers });
     }
-    
+
     headers = await onBuildHeaders({ headers });
     const requestParams = {
       url: [endpoint, apiPath, path].join("/"),
@@ -311,37 +311,37 @@ abstract class API {
     try {
       const resp = await this._doRequest(args);
       if (resp.data.error) {
-        return new DendronError({ ...resp.data.error });
+        return new SailError({ ...resp.data.error });
       }
       return resp.data;
     } catch (err: any) {
-      return new DendronError({ ...err.response.data.error });
+      return new SailError({ ...err.response.data.error });
     }
   }
 }
 
-// === DendronAPI
+// === SailAPI
 
 // eslint-disable-next-line camelcase
-let _DendronAPI_INSTANCE: DendronAPI | undefined;
+let _SailAPI_INSTANCE: SailAPI | undefined;
 
-export class DendronAPI extends API {
+export class SailAPI extends API {
   static getOrCreate(opts: IAPIConstructor) {
-    if (!_.isUndefined(_DendronAPI_INSTANCE)) {
+    if (!_.isUndefined(_SailAPI_INSTANCE)) {
       return this.instance();
     }
-    return new DendronAPI(opts);
+    return new SailAPI(opts);
   }
 
-  static instance(): DendronAPI {
-    if (_.isUndefined(_DendronAPI_INSTANCE)) {
-      throw Error("no dendron api");
+  static instance(): SailAPI {
+    if (_.isUndefined(_SailAPI_INSTANCE)) {
+      throw Error("no sail api");
     }
     // eslint-disable-next-line camelcase
-    return _DendronAPI_INSTANCE;
+    return _SailAPI_INSTANCE;
   }
 
-  assetGet(req: AssetGetRequest): Promise<DendronError | Buffer> {
+  assetGet(req: AssetGetRequest): Promise<SailError | Buffer> {
     return this._makeRequestRaw({
       path: "assets/",
       method: "get",
@@ -349,7 +349,7 @@ export class DendronAPI extends API {
     });
   }
 
-  assetGetTheme(req: AssetGetThemeRequest): Promise<DendronError | Buffer> {
+  assetGetTheme(req: AssetGetThemeRequest): Promise<SailError | Buffer> {
     return this._makeRequestRaw({
       path: "assets/theme",
       method: "get",
@@ -357,7 +357,7 @@ export class DendronAPI extends API {
     });
   }
 
-  configGet(req: WorkspaceRequest): Promise<RespV3<DendronConfig>> {
+  configGet(req: WorkspaceRequest): Promise<RespV3<SailConfig>> {
     return this._makeRequest({
       path: "config/get",
       method: "get",
@@ -537,4 +537,4 @@ export class DendronAPI extends API {
   }
 }
 
-export const DendronApiV2 = DendronAPI;
+export const SailApiV2 = SailAPI;

@@ -1,11 +1,11 @@
 import {
-  DendronConfigEntry,
+  SailConfigEntry,
   VaultSyncModeEnum,
 } from "../../types/configs/base";
 
 export const VAULT_SYNC_MODES: Record<
   VaultSyncModeEnum,
-  DendronConfigEntry<string>
+  SailConfigEntry<string>
 > = {
   [VaultSyncModeEnum.skip]: {
     value: VaultSyncModeEnum.skip,

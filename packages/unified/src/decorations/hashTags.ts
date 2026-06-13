@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronConfig,
+  SailConfig,
   NoteProps,
   NoteUtils,
   Position,
@@ -47,7 +47,7 @@ export async function decorateTag({
   engine: ReducedDEngine;
   position: Position;
   lineOffset?: number;
-  config: DendronConfig;
+  config: SailConfig;
   note?: NoteProps;
 }) {
   let color: string | undefined;

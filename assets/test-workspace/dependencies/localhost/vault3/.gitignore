@@ -1,9 +1,9 @@
 node_modules
-.dendron.*
+.sail.*
 build
 seeds
 .next
 pods/service-connections
 
 
-.dendron.cache.*
+.sail.cache.*

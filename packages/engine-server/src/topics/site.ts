@@ -1,8 +1,8 @@
 import {
   assert,
-  DendronConfig,
-  DendronError,
-  DendronSiteFM,
+  SailConfig,
+  SailError,
+  SailSiteFM,
   DNodeUtils,
   DuplicateNoteBehavior,
   DVault,
@@ -14,10 +14,10 @@ import {
   UseVaultBehavior,
   VaultUtils,
   ConfigUtils,
-  DendronPublishingConfig,
+  SailPublishingConfig,
   isBlockAnchor,
   getSlugger,
-  IDendronError,
+  ISailError,
   asyncLoopOneAtATime,
   NotePropsMeta,
 } from "@saili/common-all";
@@ -41,7 +41,7 @@ const LOGGER_NAME = "SiteUtils";
 export class SiteUtils {
   static canPublish(opts: {
     note: NotePropsMeta;
-    config: DendronConfig;
+    config: SailConfig;
     engine: DEngineClient;
   }) {
     const { note, config, engine } = opts;
@@ -88,7 +88,7 @@ export class SiteUtils {
 
   static isPublished(opts: {
     note: NoteProps;
-    config: DendronConfig;
+    config: SailConfig;
     engine: DEngineClient;
   }) {
     const { note, config } = opts;
@@ -142,7 +142,7 @@ export class SiteUtils {
       id: "403",
       title: "This page has not yet sprouted",
       body: [
-        "[Dendron](https://dendron.so/) (the tool used to generate this site) lets authors selective publish content. You will see this page whenever you click on a link to an unpublished page",
+        "[Sail](https://sail.so/) (the tool used to generate this site) lets authors selective publish content. You will see this page whenever you click on a link to an unpublished page",
         "",
         "![](https://foundation-prod-assetspublic53c57cce-8cpvgjldwysl.s3-us-west-2.amazonaws.com/assets/images/not-sprouted.png)",
       ].join("\n"),
@@ -157,7 +157,7 @@ export class SiteUtils {
 
   static async filterByConfig(opts: {
     engine: DEngineClient;
-    config: DendronConfig;
+    config: SailConfig;
     noExpandSingleDomain?: boolean;
   }): Promise<{ notes: NotePropsByIdDict; domains: NoteProps[] }> {
     const logger = createLogger(LOGGER_NAME);
@@ -236,7 +236,7 @@ export class SiteUtils {
    */
   static async filterByHierarchy(opts: {
     domain: string;
-    config: DendronConfig;
+    config: SailConfig;
     engine: DEngineClient;
     navOrder: number;
   }): Promise<{ notes: NotePropsByIdDict; domain: NoteProps } | undefined> {
@@ -297,7 +297,7 @@ export class SiteUtils {
       domainNote.custom = {};
     }
     // set domain note settings
-    // navOrder is the same order that is in dendron.yml
+    // navOrder is the same order that is in sail.yml
     domainNote.custom.nav_order = navOrder;
     domainNote.parent = null;
 
@@ -326,7 +326,7 @@ export class SiteUtils {
 
       // add custom metadata to note
       note = SiteUtils.cleanNote({ note, hConfig });
-      const siteFM = note.custom || ({} as DendronSiteFM);
+      const siteFM = note.custom || ({} as SailSiteFM);
 
       // TODO: legacy behavior around stubs, will need to remove
       if (publishingConfig.writeStubs && note.stub) {
@@ -407,7 +407,7 @@ export class SiteUtils {
   }
 
   static getConfigForHierarchy(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     noteOrName: NotePropsMeta | string;
   }) {
     const { config, noteOrName } = opts;
@@ -429,7 +429,7 @@ export class SiteUtils {
   }
 
   static getSiteOutputPath(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     wsRoot: string;
     stage: "dev" | "prod";
   }) {
@@ -449,7 +449,7 @@ export class SiteUtils {
     config,
   }: {
     vault: DVault;
-    config: DendronConfig;
+    config: SailConfig;
   }): { url?: string; index?: string } {
     if (vault.seed) {
       const seeds = ConfigUtils.getWorkspace(config).seeds;
@@ -467,7 +467,7 @@ export class SiteUtils {
     return { url: siteUrl, index: siteIndex };
   }
 
-  static getSitePrefixForNote(config: DendronConfig) {
+  static getSitePrefixForNote(config: SailConfig) {
     const assetsPrefix = ConfigUtils.getAssetsPrefix(config);
     return assetsPrefix ? assetsPrefix + "/notes/" : "/notes/";
   }
@@ -481,7 +481,7 @@ export class SiteUtils {
   }: {
     pathValue?: string;
     pathAnchor?: string;
-    config: DendronConfig;
+    config: SailConfig;
     addPrefix?: boolean;
     note?: NoteProps;
   }): string {
@@ -500,9 +500,9 @@ export class SiteUtils {
     const isIndex: boolean = _.isUndefined(note)
       ? false
       : SiteUtils.isIndexNote({
-          indexNote: config.publishing?.siteIndex,
-          note,
-        });
+        indexNote: config.publishing?.siteIndex,
+        note,
+      });
     if (isIndex) {
       return `/`;
     }
@@ -512,9 +512,8 @@ export class SiteUtils {
       _.isBoolean(usePrettyLinks) && usePrettyLinks ? "" : ".html";
 
     // put together the url path
-    return `${pathPrefix || ""}${pathValue}${pathExtension}${
-      pathAnchor ? "#" + pathAnchor : ""
-    }`;
+    return `${pathPrefix || ""}${pathValue}${pathExtension}${pathAnchor ? "#" + pathAnchor : ""
+      }`;
   }
 
   static async handleDup(opts: {
@@ -522,7 +521,7 @@ export class SiteUtils {
     allowStubs?: boolean;
     engine: DEngineClient;
     fname: string;
-    config: DendronConfig;
+    config: SailConfig;
     noteCandidates: NoteProps[];
   }) {
     const { engine, fname, noteCandidates, config, dupBehavior, allowStubs } =
@@ -568,7 +567,7 @@ export class SiteUtils {
         }
       });
       if (!domainNote) {
-        throw new DendronError({
+        throw new SailError({
           message: `no notes found for ${fname} in vaults ${vaultNames}`,
         });
       }
@@ -584,7 +583,7 @@ export class SiteUtils {
           msg: "dup-resolution: no note found",
           vault,
         });
-        throw new DendronError({
+        throw new SailError({
           message: `no notes found for ${fname} in vault ${vault.fsPath}`,
         });
       }
@@ -632,14 +631,14 @@ export class SiteUtils {
     return indexNote ? note.fname === indexNote : DNodeUtils.isRoot(note);
   }
 
-  static validateConfig(sconfig: DendronPublishingConfig): {
-    error?: IDendronError;
+  static validateConfig(sconfig: SailPublishingConfig): {
+    error?: ISailError;
   } {
     // asset prefix needs one slash
     if (!_.isUndefined(sconfig.assetsPrefix)) {
       if (!sconfig.assetsPrefix.startsWith("/")) {
         return {
-          error: new DendronError({
+          error: new SailError({
             message: "assetsPrefix requires a '/' in front of the path",
           }),
         };

@@ -8,7 +8,7 @@ import _ from "lodash";
 import { Duration } from "luxon";
 import { TextEditor, TextEditorVisibleRangesChangeEvent, window } from "vscode";
 import { PreviewProxy } from "./components/views/PreviewProxy";
-import { IDendronExtension } from "./dendronExtensionInterface";
+import { ISailExtension } from "./sailExtensionInterface";
 import { ExtensionProvider } from "./ExtensionProvider";
 import { debouncedUpdateDecorations } from "./features/windowDecorations";
 import { Logger } from "./logger";
@@ -18,17 +18,17 @@ const trackScrolled = _.debounce(() => {
 }, 2500);
 
 /**
- * See [[Window Watcher|dendron://dendron.docs/pkg.plugin-core.ref.window-watcher]] for docs
+ * See [[Window Watcher|sail://sail.docs/pkg.plugin-core.ref.window-watcher]] for docs
  */
 export class WindowWatcher {
-  private _extension: IDendronExtension;
+  private _extension: ISailExtension;
   private _preview: PreviewProxy;
 
   constructor({
     extension,
     previewProxy,
   }: {
-    extension: IDendronExtension;
+    extension: ISailExtension;
     previewProxy: PreviewProxy;
   }) {
     this._extension = extension;

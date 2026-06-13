@@ -17,8 +17,8 @@ import {
   NoteLookupProviderSuccessResp,
 } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
+import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand, SanityCheckResults } from "./base";
 import * as vscode from "vscode";
 import _ from "lodash";
@@ -46,14 +46,14 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.MERGE_NOTE.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
-        extra: {
-          [key: string]: any;
-        };
-      })
+      extra: {
+        [key: string]: any;
+      };
+    })
     | undefined;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -120,7 +120,7 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
             destNote: data.selectedItems[0],
           });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       const showOpts: CreateQuickPickOpts & {
@@ -140,7 +140,7 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
       }
       lc.show(showOpts);
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -404,10 +404,10 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({ noteChangeEntryCounts });
     } catch (error) {
@@ -432,7 +432,7 @@ export class MergeNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-      }
+  }
 }
 
 

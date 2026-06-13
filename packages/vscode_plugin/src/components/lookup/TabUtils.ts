@@ -135,10 +135,10 @@ export class TabUtils {
   }
 
   static isPreviewTab(tab: Tab) {
-    // label will look like this: mainThreadWebview-DendronNotePreview
+    // label will look like this: mainThreadWebview-SailNotePreview
     return (
       _.isString(tab.input?.viewType) &&
-      tab.input.viewType.endsWith("DendronNotePreview")
+      tab.input.viewType.endsWith("SailNotePreview")
     );
   }
 

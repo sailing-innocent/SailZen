@@ -6,7 +6,7 @@ import {
   NoteQuickInput,
 } from "@saili/common-all";
 import { QuickPick, TextEditor, Uri } from "vscode";
-import { DendronBtn } from "./ButtonTypes";
+import { SailBtn } from "./ButtonTypes";
 
 export type FilterQuickPickFunction = (
   items: NoteQuickInput[]
@@ -17,7 +17,7 @@ type ModifyPickerValueFunc = (value?: string) => {
 };
 type SelectionProcessFunc = (note: NoteProps) => Promise<NoteProps | undefined>;
 type CopyNoteLinkFunc = (items: NoteProps[]) => Promise<void> | undefined;
-export enum DendronQuickPickState {
+export enum SailQuickPickState {
   /**
    * Default state
    */
@@ -32,8 +32,8 @@ export enum DendronQuickPickState {
   PENDING_NEXT_PICK = "PENDING_NEXT_PICK",
 }
 
-export type DendronQuickPickItem = QuickPick<DNodePropsQuickInput>;
-export type DendronQuickPicker = DendronQuickPickItem & {
+export type SailQuickPickItem = QuickPick<DNodePropsQuickInput>;
+export type SailQuickPicker = SailQuickPickItem & {
   // --- Private State
   _justActivated?: boolean;
 
@@ -43,15 +43,15 @@ export type DendronQuickPicker = DendronQuickPickItem & {
    * Setting this true will always show ALL results that lookup returns
    */
   alwaysShowAll?: boolean;
-  state: DendronQuickPickState;
+  state: SailQuickPickState;
   /**
    * Buttons control modifiers for lookup
    */
-  buttons: DendronBtn[];
+  buttons: SailBtn[];
   nonInteractive?: boolean;
   prev?: { activeItems: any; items: any };
   /**
-   * Used by {@link DendronBtn} to store tmp state
+   * Used by {@link SailBtn} to store tmp state
    */
   prevValue?: string;
   /**

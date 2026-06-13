@@ -1,5 +1,5 @@
 import {
-  DendronEditorViewKey,
+  SailEditorViewKey,
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import * as vscode from "vscode";
@@ -31,7 +31,7 @@ export class ShowNoteGraphCommand extends BasicCommand<
 
   async execute() {
     const { bundleName: name } = getWebEditorViewEntry(
-      DendronEditorViewKey.NOTE_GRAPH
+      SailEditorViewKey.NOTE_GRAPH
     );
     const ext = ExtensionProvider.getExtension();
     const port = ext.port!;

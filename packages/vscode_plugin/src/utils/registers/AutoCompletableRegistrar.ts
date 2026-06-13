@@ -9,7 +9,7 @@ export class AutoCompletableRegistrar {
 
   /**
    * Event that fires when 'Tab' is pressed when the
-   * DendronContext.NOTE_LOOK_UP_ACTIVE context is set to true.
+   * SailContext.NOTE_LOOK_UP_ACTIVE context is set to true.
    */
   public static get OnAutoComplete(): Event<void> {
     if (!this._eventEmitter) {

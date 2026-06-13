@@ -1,7 +1,7 @@
 import { URI } from "vscode-uri";
 import { DEngineClient } from "./typesv2";
 import { DVault } from "./DVault";
-import { DendronConfig } from "./configs";
+import { SailConfig } from "./configs";
 
 export enum WorkspaceType {
   NATIVE = "NATIVE",
@@ -15,7 +15,7 @@ export type DWorkspaceV2 = {
    */
   wsRoot: string;
   type: WorkspaceType;
-  config: DendronConfig;
+  config: SailConfig;
   vaults: DVault[];
   engine: DEngineClient;
   /**

@@ -8,11 +8,11 @@ import _ from "lodash";
 import { Disposable, QuickInputButton } from "vscode";
 import {
   ButtonType,
-  DendronBtn,
-  IDendronQuickInputButton,
+  SailBtn,
+  ISailQuickInputButton,
 } from "../lookup/ButtonTypes";
 import { ILookupViewModel } from "../lookup/LookupViewModel";
-import { DendronQuickPicker, VaultSelectionMode } from "../lookup/types";
+import { SailQuickPicker, VaultSelectionMode } from "../lookup/types";
 
 /**
  * A 'view' that represents the UI state of the Lookup Quick Pick. This
@@ -20,13 +20,13 @@ import { DendronQuickPicker, VaultSelectionMode } from "../lookup/types";
  * mouse clicks to the buttons.
  */
 export class LookupQuickPickView implements Disposable {
-  private _quickPick: DendronQuickPicker;
+  private _quickPick: SailQuickPicker;
   private _viewState: ILookupViewModel;
   private _disposables: Disposable[];
   private _providerId?: string;
 
   constructor(
-    quickPick: DendronQuickPicker,
+    quickPick: SailQuickPicker,
     viewModel: ILookupViewModel,
     providerId?: string // For telemetry purposes only
   ) {
@@ -83,7 +83,7 @@ export class LookupQuickPickView implements Disposable {
             assertUnreachable(newValue);
         }
 
-        const buttons: DendronBtn[] = [];
+        const buttons: SailBtn[] = [];
 
         if (ToLinkBtn) buttons.push(ToLinkBtn);
         if (ExtractBtn) buttons.push(ExtractBtn);
@@ -169,7 +169,7 @@ export class LookupQuickPickView implements Disposable {
             assertUnreachable(newValue);
         }
 
-        const validButtons: DendronBtn[] = [];
+        const validButtons: SailBtn[] = [];
 
         if (journalBtn) validButtons.push(journalBtn);
         if (scratchBtn) validButtons.push(scratchBtn);
@@ -191,19 +191,19 @@ export class LookupQuickPickView implements Disposable {
     }
   }
 
-  private getButtonFromArray(type: ButtonType, buttons: DendronBtn[]) {
+  private getButtonFromArray(type: ButtonType, buttons: SailBtn[]) {
     return _.find(buttons, (value) => value.type === type);
   }
 
-  private getButton(type: ButtonType): DendronBtn | undefined {
+  private getButton(type: ButtonType): SailBtn | undefined {
     if (this._quickPick) {
       return this.getButtonFromArray(type, this._quickPick?.buttons);
     }
     return;
   }
 
-  private updateButtonsOnQuickPick(...btns: DendronBtn[]): void {
-    const newButtons = this._quickPick!.buttons.map((b: DendronBtn) => {
+  private updateButtonsOnQuickPick(...btns: SailBtn[]): void {
+    const newButtons = this._quickPick!.buttons.map((b: SailBtn) => {
       const toUpdate = _.find(btns, (value) => value.type === b.type);
 
       if (toUpdate) {
@@ -216,7 +216,7 @@ export class LookupQuickPickView implements Disposable {
   }
 
   private onTriggerButton = (btn: QuickInputButton) => {
-    const btnType = (btn as IDendronQuickInputButton).type;
+    const btnType = (btn as ISailQuickInputButton).type;
 
     switch (btnType) {
       case LookupSelectionTypeEnum.selection2Items:
@@ -225,7 +225,7 @@ export class LookupQuickPickView implements Disposable {
         ) {
           this._viewState.selectionState.value =
             this._viewState.selectionState.value ===
-            LookupSelectionTypeEnum.selection2Items
+              LookupSelectionTypeEnum.selection2Items
               ? LookupSelectionTypeEnum.none
               : LookupSelectionTypeEnum.selection2Items;
         }
@@ -235,7 +235,7 @@ export class LookupQuickPickView implements Disposable {
         if (this.getButton(LookupSelectionTypeEnum.selection2link)?.canToggle) {
           this._viewState.selectionState.value =
             this._viewState.selectionState.value ===
-            LookupSelectionTypeEnum.selection2link
+              LookupSelectionTypeEnum.selection2link
               ? LookupSelectionTypeEnum.none
               : LookupSelectionTypeEnum.selection2link;
         }
@@ -247,7 +247,7 @@ export class LookupQuickPickView implements Disposable {
         ) {
           this._viewState.selectionState.value =
             this._viewState.selectionState.value ===
-            LookupSelectionTypeEnum.selectionExtract
+              LookupSelectionTypeEnum.selectionExtract
               ? LookupSelectionTypeEnum.none
               : LookupSelectionTypeEnum.selectionExtract;
         }
@@ -256,7 +256,7 @@ export class LookupQuickPickView implements Disposable {
         if (this.getButton("selectVault")?.canToggle) {
           this._viewState.vaultSelectionMode.value =
             this._viewState.vaultSelectionMode.value ===
-            VaultSelectionMode.alwaysPrompt
+              VaultSelectionMode.alwaysPrompt
               ? VaultSelectionMode.smart
               : VaultSelectionMode.alwaysPrompt;
         }
@@ -287,7 +287,7 @@ export class LookupQuickPickView implements Disposable {
         if (this.getButton(LookupNoteTypeEnum.journal)?.canToggle) {
           this._viewState.nameModifierMode.value =
             this._viewState.nameModifierMode.value ===
-            LookupNoteTypeEnum.journal
+              LookupNoteTypeEnum.journal
               ? LookupNoteTypeEnum.none
               : LookupNoteTypeEnum.journal;
         }
@@ -297,7 +297,7 @@ export class LookupQuickPickView implements Disposable {
         if (this.getButton(LookupNoteTypeEnum.scratch)?.canToggle) {
           this._viewState.nameModifierMode.value =
             this._viewState.nameModifierMode.value ===
-            LookupNoteTypeEnum.scratch
+              LookupNoteTypeEnum.scratch
               ? LookupNoteTypeEnum.none
               : LookupNoteTypeEnum.scratch;
         }

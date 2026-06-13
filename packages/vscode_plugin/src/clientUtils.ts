@@ -1,7 +1,7 @@
 import {
   assertUnreachable,
   ConfigUtils,
-  DendronError,
+  SailError,
   DEngineClient,
   DNodeUtils,
   LookupNoteTypeEnum,
@@ -25,7 +25,7 @@ type CreateFnameOpts = {
   overrides?: CreateFnameOverrides;
 };
 
-export class DendronClientUtils {
+export class SailClientUtils {
   static genNotePrefix(fname: string, addBehavior: NoteAddBehavior) {
     let out: string;
     switch (addBehavior) {
@@ -91,17 +91,17 @@ export class DendronClientUtils {
       case LookupNoteTypeEnum.scratch: {
         dateFormat =
           ExtensionProvider.getExtension().getWorkspaceSettingOrDefault({
-            wsConfigKey: "dendron.defaultScratchDateFormat",
-            dendronConfigKey: "workspace.scratch.dateFormat",
+            wsConfigKey: "sail.defaultScratchDateFormat",
+            sailConfigKey: "workspace.scratch.dateFormat",
           });
         addBehavior =
           ExtensionProvider.getExtension().getWorkspaceSettingOrDefault({
-            wsConfigKey: "dendron.defaultScratchAddBehavior",
-            dendronConfigKey: "workspace.scratch.addBehavior",
+            wsConfigKey: "sail.defaultScratchAddBehavior",
+            sailConfigKey: "workspace.scratch.addBehavior",
           });
         name = ExtensionProvider.getExtension().getWorkspaceSettingOrDefault({
-          wsConfigKey: "dendron.defaultScratchName",
-          dendronConfigKey: "workspace.scratch.name",
+          wsConfigKey: "sail.defaultScratchName",
+          sailConfigKey: "workspace.scratch.name",
         });
         break;
       }
@@ -137,7 +137,7 @@ export class DendronClientUtils {
       throw Error("Must be run from within a note");
     }
 
-    const prefix = DendronClientUtils.genNotePrefix(
+    const prefix = SailClientUtils.genNotePrefix(
       currentNoteFname,
       addBehavior
     );
@@ -158,7 +158,7 @@ export class DendronClientUtils {
   }): Promise<SchemaModuleProps> => {
     const smod = (await client.getSchema(fname)).data;
     if (!smod) {
-      throw new DendronError({ message: "no note found" });
+      throw new SailError({ message: "no note found" });
     }
     return smod;
   };

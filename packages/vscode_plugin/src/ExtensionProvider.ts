@@ -1,23 +1,23 @@
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 import { ensureDirSync } from "fs-extra";
 import _ from "lodash";
-import { IDendronExtension } from "./dendronExtensionInterface";
+import { ISailExtension } from "./sailExtensionInterface";
 import { IWSUtils } from "./WSUtilsInterface";
 
 /**
- * Use this to statically get implementation of IDendronExtension without having to
- * depend on concrete DendronExtension.
+ * Use this to statically get implementation of ISailExtension without having to
+ * depend on concrete SailExtension.
  *
- * Note: Prefer to get IDendronExtension injected into your classes upon their
+ * Note: Prefer to get ISailExtension injected into your classes upon their
  * construction rather than statically getting it from here. But if that's not
  * a fitting option then use this class.
  * */
 export class ExtensionProvider {
-  private static extension: IDendronExtension;
+  private static extension: ISailExtension;
 
-  static getExtension(): IDendronExtension {
+  static getExtension(): ISailExtension {
     if (_.isUndefined(ExtensionProvider.extension)) {
-      throw new DendronError({
+      throw new SailError({
         message: `Extension is not yet registered. Make sure initialization registers extension prior to usage.`,
       });
     }
@@ -45,15 +45,15 @@ export class ExtensionProvider {
     return ExtensionProvider.getExtension().isActive();
   }
 
-  static isActiveAndIsDendronNote(fpath: string) {
-    return ExtensionProvider.getExtension().isActiveAndIsDendronNote(fpath);
+  static isActiveAndIsSailNote(fpath: string) {
+    return ExtensionProvider.getExtension().isActiveAndIsSailNote(fpath);
   }
 
   static getWorkspaceConfig() {
     return ExtensionProvider.getExtension().getWorkspaceConfig();
   }
 
-  static register(extension: IDendronExtension) {
+  static register(extension: ISailExtension) {
     ExtensionProvider.extension = extension;
   }
 }

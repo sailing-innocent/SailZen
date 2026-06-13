@@ -1,8 +1,8 @@
 import {
-  DendronError,
+  SailError,
   Diagnostic,
   DiagnosticSeverity,
-  IDendronError,
+  ISailError,
   newRange,
   NoteProps,
   position2VSCodeRange,
@@ -17,21 +17,21 @@ export const NOT_A_STUB = "not a stub";
 
 // These are error messages to display which tell the user how to fix the issue.
 const RESOLVE_MESSAGE_AUTO_ONLY =
-  "Please use the lightbulb, or run the Dendron: Doctor command.";
+  "Please use the lightbulb, or run the Sail: Doctor command.";
 const RESOLVE_MESSAGE =
-  "Please use the lightbulb, run the Dendron: Doctor command, or manually correct it.";
+  "Please use the lightbulb, run the Sail: Doctor command, or manually correct it.";
 
 function badFrontmatter(props: Omit<Diagnostic, "source">) {
   return {
     /** Displayed to the user next to the warning message. */
-    source: "Dendron",
+    source: "Sail",
     ...props,
   };
 }
 
 export function warnMissingFrontmatter() {
   const diagnostic: Diagnostic = badFrontmatter({
-    message: `The frontmatter is missing. All notes in Dendron must have a frontmatter. ${RESOLVE_MESSAGE_AUTO_ONLY}`,
+    message: `The frontmatter is missing. All notes in Sail must have a frontmatter. ${RESOLVE_MESSAGE_AUTO_ONLY}`,
     range: newRange(0, 0, 8, 15),
     severity: DiagnosticSeverity.Error,
     code: BAD_FRONTMATTER_CODE,
@@ -44,7 +44,7 @@ export function checkAndWarnBadFrontmatter(
   frontmatter: FrontmatterContent
 ) {
   const diagnostics: Diagnostic[] = [];
-  const errors: IDendronError[] = [];
+  const errors: ISailError[] = [];
   const range = position2VSCodeRange(frontmatter.position!);
   try {
     const frontmatterData = YAML.load(frontmatter.value) as any;
@@ -80,7 +80,7 @@ export function checkAndWarnBadFrontmatter(
     }
   } catch (err) {
     errors.push(
-      new DendronError({
+      new SailError({
         message: "failed to parse frontmatter",
         payload: err,
       })

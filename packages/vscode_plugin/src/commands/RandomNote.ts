@@ -2,7 +2,7 @@ import { ConfigUtils, NotePropsMeta, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import { Uri, window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -17,7 +17,7 @@ export class RandomNoteCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.RANDOM_NOTE.key;
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 
@@ -67,7 +67,7 @@ export class RandomNoteCommand extends BasicCommand<
     const noteCount = noteSet.length;
     if (noteCount === 0) {
       window.showInformationMessage(
-        "No notes match the search pattern. Adjust the patterns with the Dendron:Configure (yaml) command"
+        "No notes match the search pattern. Adjust the patterns with the Sail:Configure (yaml) command"
       );
       return;
     }

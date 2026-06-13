@@ -8,7 +8,7 @@ created: 1622139298689
 
 This is the bar file
 
-[[dendron://vault/foo]]
+[[sail://vault/foo]]
 
 [[src://hello]]
 

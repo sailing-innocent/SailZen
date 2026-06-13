@@ -1,62 +1,62 @@
 import { ErrorFactory } from "..";
 
-export type DendronWebViewEntry = {
+export type SailWebViewEntry = {
   label: string;
   desc: string;
   bundleName: string;
   type: "webview";
 };
-export type DendronNativeViewEntry = {
+export type SailNativeViewEntry = {
   label: string;
   desc: string;
   type: "nativeview";
 };
 
-export type DendronViewEntry = DendronWebViewEntry | DendronNativeViewEntry;
+export type SailViewEntry = SailWebViewEntry | SailNativeViewEntry;
 
-export enum DendronEditorViewKey {
-  CONFIGURE = "dendron.configure",
-  NOTE_GRAPH = "dendron.graph-note",
-  SCHEMA_GRAPH = "dendron.graph-schema",
-  NOTE_PREVIEW = "dendron.note-preview",
-  SEED_BROWSER = "dendron.seed-browser",
+export enum SailEditorViewKey {
+  CONFIGURE = "sail.configure",
+  NOTE_GRAPH = "sail.graph-note",
+  SCHEMA_GRAPH = "sail.graph-schema",
+  NOTE_PREVIEW = "sail.note-preview",
+  SEED_BROWSER = "sail.seed-browser",
 }
 
-export enum DendronTreeViewKey {
-  SAMPLE_VIEW = "dendron.sample",
-  TREE_VIEW = "dendron.treeView",
-  BACKLINKS = "dendron.backlinks",
-  CALENDAR_VIEW = "dendron.calendar-view",
-  LOOKUP_VIEW = "dendron.lookup-view",
-  RECENT_WORKSPACES = "dendron.recent-workspaces",
+export enum SailTreeViewKey {
+  SAMPLE_VIEW = "sail.sample",
+  TREE_VIEW = "sail.treeView",
+  BACKLINKS = "sail.backlinks",
+  CALENDAR_VIEW = "sail.calendar-view",
+  LOOKUP_VIEW = "sail.lookup-view",
+  RECENT_WORKSPACES = "sail.recent-workspaces",
 }
 
-export const EDITOR_VIEWS: Record<DendronEditorViewKey, DendronViewEntry> = {
-  [DendronEditorViewKey.NOTE_PREVIEW]: {
+export const EDITOR_VIEWS: Record<SailEditorViewKey, SailViewEntry> = {
+  [SailEditorViewKey.NOTE_PREVIEW]: {
     desc: "Note Preview",
     label: "Note Preview",
-    bundleName: "DendronNotePreview",
+    bundleName: "SailNotePreview",
     type: "webview",
   },
-  [DendronEditorViewKey.CONFIGURE]: {
-    desc: "Dendron Configuration",
-    label: "Dendron Configuration",
-    bundleName: "DendronConfigure",
+  [SailEditorViewKey.CONFIGURE]: {
+    desc: "Sail Configuration",
+    label: "Sail Configuration",
+    bundleName: "SailConfigure",
     type: "webview",
   },
-  [DendronEditorViewKey.NOTE_GRAPH]: {
+  [SailEditorViewKey.NOTE_GRAPH]: {
     desc: "Note Graph",
     label: "Note Graph",
-    bundleName: "DendronGraphPanel",
+    bundleName: "SailGraphPanel",
     type: "webview",
   },
-  [DendronEditorViewKey.SCHEMA_GRAPH]: {
+  [SailEditorViewKey.SCHEMA_GRAPH]: {
     desc: "Schema Graph",
     label: "Schema Graph",
-    bundleName: "DendronSchemaGraphPanel",
+    bundleName: "SailSchemaGraphPanel",
     type: "webview",
   },
-  [DendronEditorViewKey.SEED_BROWSER]: {
+  [SailEditorViewKey.SEED_BROWSER]: {
     desc: "Seed Registry",
     label: "Seed Registry",
     bundleName: "SeedBrowser",
@@ -67,51 +67,51 @@ export const EDITOR_VIEWS: Record<DendronEditorViewKey, DendronViewEntry> = {
 /**
  * Value is the name of webpack bundle for webview based tree views
  */
-export const TREE_VIEWS: Record<DendronTreeViewKey, DendronViewEntry> = {
-  [DendronTreeViewKey.SAMPLE_VIEW]: {
+export const TREE_VIEWS: Record<SailTreeViewKey, SailViewEntry> = {
+  [SailTreeViewKey.SAMPLE_VIEW]: {
     desc: "A view used for prototyping",
     label: "Sample View",
     bundleName: "SampleComponent",
     type: "webview",
   },
-  [DendronTreeViewKey.TREE_VIEW]: {
+  [SailTreeViewKey.TREE_VIEW]: {
     desc: "Tree View",
     label: "Tree View",
     type: "nativeview",
   },
-  [DendronTreeViewKey.BACKLINKS]: {
+  [SailTreeViewKey.BACKLINKS]: {
     desc: "Shows all backlinks to the currentnote",
     label: "Backlinks",
     type: "nativeview",
   },
-  [DendronTreeViewKey.CALENDAR_VIEW]: {
+  [SailTreeViewKey.CALENDAR_VIEW]: {
     desc: "Calendar View",
     label: "Calendar View",
     type: "webview",
-    bundleName: "DendronCalendarPanel",
+    bundleName: "SailCalendarPanel",
   },
-  [DendronTreeViewKey.LOOKUP_VIEW]: {
+  [SailTreeViewKey.LOOKUP_VIEW]: {
     desc: "Lookup View",
     label: "Lookup View",
     type: "webview",
-    bundleName: "DendronLookupPanel",
+    bundleName: "SailLookupPanel",
   },
-  [DendronTreeViewKey.RECENT_WORKSPACES]: {
-    desc: "Recent Dendron Workspaces",
-    label: "Recent Dendron Workspaces",
+  [SailTreeViewKey.RECENT_WORKSPACES]: {
+    desc: "Recent Sail Workspaces",
+    label: "Recent Sail Workspaces",
     type: "nativeview",
   },
 };
 
 export const isWebViewEntry = (
-  entry: DendronViewEntry
-): entry is DendronWebViewEntry => {
+  entry: SailViewEntry
+): entry is SailWebViewEntry => {
   return entry.type === "webview";
 };
 
 export const getWebTreeViewEntry = (
-  key: DendronTreeViewKey
-): DendronWebViewEntry => {
+  key: SailTreeViewKey
+): SailWebViewEntry => {
   const out = TREE_VIEWS[key];
   if (isWebViewEntry(out)) {
     return out;
@@ -122,8 +122,8 @@ export const getWebTreeViewEntry = (
 };
 
 export const getWebEditorViewEntry = (
-  key: DendronEditorViewKey
-): DendronWebViewEntry => {
+  key: SailEditorViewKey
+): SailWebViewEntry => {
   const out = EDITOR_VIEWS[key];
   if (isWebViewEntry(out)) {
     return out;

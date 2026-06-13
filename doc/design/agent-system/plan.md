@@ -707,7 +707,7 @@ from datetime import datetime
 | 文件/类 | 版本后缀 | 说明 |
 |---------|---------|------|
 | `src/workspacev2.ts` | v2 | 旧版 `DWorkspace` 类，仅存一处被 `extension.ts` import |
-| `src/workspace.ts` | V2 | 新版 `DWorkspaceV2` + `DendronExtension`，但含大量 `@deprecated` 静态方法 |
+| `src/workspace.ts` | V2 | 新版 `DWorkspaceV2` + `SailExtension`，但含大量 `@deprecated` 静态方法 |
 
 **结论**: `workspacev2.ts` 是真正的旧版本，可直接删除并将 `extension.ts` 的引用迁移到 `workspace.ts` 的导出。`workspace.ts` 本身是当前主实现，保留但清理其 `@deprecated` 静态方法。
 
@@ -715,7 +715,7 @@ from datetime import datetime
 | 文件 | 版本后缀 | 引用次数 |
 |------|---------|---------|
 | `src/WSUtilsV2.ts` | V2 | ~30 处直接实例化/调用 |
-| `src/WSUtilsV2Interface.ts` | V2 | 被 `dendronExtensionInterface.ts`、`ExtensionProvider.ts`、`GotoNote.ts` 等 import |
+| `src/WSUtilsV2Interface.ts` | V2 | 被 `sailExtensionInterface.ts`、`ExtensionProvider.ts`、`GotoNote.ts` 等 import |
 
 **结论**: 不存在非 V2 版本，`WSUtilsV2` 就是当前唯一实现。应重命名为 `WSUtils` / `IWSUtils`，删除 V2 后缀。
 
@@ -751,9 +751,9 @@ from datetime import datetime
 ### 1.6 ClientUtils V2（P1）
 | 文件 | 版本后缀 | 引用次数 |
 |------|---------|---------|
-| `src/clientUtils.ts` 中的 `DendronClientUtilsV2` | V2 | ~10 处 |
+| `src/clientUtils.ts` 中的 `SailClientUtilsV2` | V2 | ~10 处 |
 
-**结论**: 唯一实现，重命名为 `ClientUtils` 或 `DendronClientUtils`。
+**结论**: 唯一实现，重命名为 `ClientUtils` 或 `SailClientUtils`。
 
 ### 1.7 common-all 中的版本化类型（P1，跨包）
 | 符号 | 位置 | 影响范围 |
@@ -761,7 +761,7 @@ from datetime import datetime
 | `VaultUtilsV2` | `packages/common-all/src/VaultUtilsV2.ts` | 被 `vault.ts` 和 vscode_plugin 引用 |
 | `DNodePropsQuickInputV2` | `packages/common-all/src/types/typesv2.ts` | 被 lookup/utils.ts、RefactorHierarchyV2.ts 等大量引用 |
 | `NoteQuickInputV2` | `packages/common-all/src/types/typesv2.ts` | 被 lookup/utils.ts 引用 |
-| `DendronQuickPickItemV2` / `DendronQuickPickerV2` | `packages/vscode_plugin/src/components/lookup/types.ts` | 本地类型 |
+| `SailQuickPickItemV2` / `SailQuickPickerV2` | `packages/vscode_plugin/src/components/lookup/types.ts` | 本地类型 |
 | `RespV2` / `RespV3` | `packages/common-all/src/types/typesv2.ts` | 引擎响应类型，改动影响面大 |
 
 **结论**: `VaultUtilsV2` 应合并到 `VaultUtils` 或重命名。`DNodePropsQuickInputV2` 和 `NoteQuickInputV2` 是当前唯一输入类型，应去版本号。`RespV2` 已标记 `TODO: remove`，可安全删除；`RespV3` 是当前主力响应类型，但由于涉及整个引擎 API，本次计划先保留 `RespV3` 名称（否则改动面过大），或至少不在本次范围内重命名。
@@ -773,8 +773,8 @@ from datetime import datetime
 | `src/versionProvider.ts` | `@deprecated` |
 | `src/commands/Refactor.ts` | `LegacyRefactorCommand`，含危险 `process.exit(0)` |
 | `src/commands/ShowLegacyPreview.ts` | Legacy 预览 |
-| `src/commands/SignIn.ts`, `SignUp.ts` | Dendron 云端账户 |
-| `src/commands/PublishDevCommand.ts` | Dendron 发布 |
+| `src/commands/SignIn.ts`, `SignUp.ts` | Sail 云端账户 |
+| `src/commands/PublishDevCommand.ts` | Sail 发布 |
 | `src/commands/SeedAddCommand.ts` 等 | Seed 注册表 |
 | `src/commands/ShowWelcomePageCommand.ts` 等 | 新用户引导 |
 | `src/commands/CopyCodespaceURL.ts` | Codespaces 专用 |
@@ -813,7 +813,7 @@ from datetime import datetime
 - [ ] **P2.1-3** 在 `WSUtilsInterface.ts` 中：`IWSUtilsV2` → `IWSUtils`
 - [ ] **P2.1-4** 在 `WSUtils.ts` 中：`WSUtilsV2` → `WSUtils`，更新内部 `IWSUtilsV2` import
 - [ ] **P2.1-5** 全局替换所有 import 和引用（`IWSUtilsV2` → `IWSUtils`, `WSUtilsV2` → `WSUtils`）
-- [ ] **P2.1-6** 更新 `dendronExtensionInterface.ts` 中的 `wsUtils: IWSUtilsV2` → `wsUtils: IWSUtils`
+- [ ] **P2.1-6** 更新 `sailExtensionInterface.ts` 中的 `wsUtils: IWSUtilsV2` → `wsUtils: IWSUtils`
 - [ ] **P2.1-7** 更新 `workspace.ts` 中的 `new WSUtilsV2(this)` → `new WSUtils(this)`
 
 #### 2.2 Lookup 系统去 V3
@@ -834,15 +834,15 @@ from datetime import datetime
   - `LookupProviderV3Factory` → `LookupProviderFactory`
   - `LookupV3QuickPickView` → `LookupQuickPickView`
 - [ ] **P2.2-3** 全局替换所有 import 和引用（可使用 IDE 重构或批量文本替换）
-- [ ] **P2.2-4** 更新 `dendronExtensionInterface.ts`、`workspace.ts`、所有 commands 和 components 中的 import
+- [ ] **P2.2-4** 更新 `sailExtensionInterface.ts`、`workspace.ts`、所有 commands 和 components 中的 import
 
 #### 2.3 PickerUtils 去 V2
 - [ ] **P2.3-1** 在 `src/components/lookup/utils.ts` 中：`PickerUtilsV2` → `PickerUtils`
 - [ ] **P2.3-2** 全局替换所有 `PickerUtilsV2` 引用
 
-#### 2.4 DendronClientUtils 去 V2
-- [ ] **P2.4-1** 在 `src/clientUtils.ts` 中：`DendronClientUtilsV2` → `DendronClientUtils`
-- [ ] **P2.4-2** 全局替换所有 `DendronClientUtilsV2` 引用
+#### 2.4 SailClientUtils 去 V2
+- [ ] **P2.4-1** 在 `src/clientUtils.ts` 中：`SailClientUtilsV2` → `SailClientUtils`
+- [ ] **P2.4-2** 全局替换所有 `SailClientUtilsV2` 引用
 
 #### 2.5 common-all 类型去 V2（跨包协调）
 - [ ] **P2.5-1** `packages/common-all/src/types/typesv2.ts`：
@@ -855,8 +855,8 @@ from datetime import datetime
   - 或重命名 `VaultUtilsV2` → `VaultUtilsURI`（因为其设计目标是 URI 兼容）
   - 更新所有引用
 - [ ] **P2.5-5** `packages/vscode_plugin/src/components/lookup/types.ts`：
-  - `DendronQuickPickItemV2` → `DendronQuickPickItem`
-  - `DendronQuickPickerV2` → `DendronQuickPicker`
+  - `SailQuickPickItemV2` → `SailQuickPickItem`
+  - `SailQuickPickerV2` → `SailQuickPicker`
 
 #### 2.6 Rename / Refactor 去版本号
 - [ ] **P2.6-1** `src/commands/RenameNoteV2a.ts`：
@@ -886,7 +886,7 @@ from datetime import datetime
 - [ ] **P3.1-2** 删除 `services/stateService.ts`
 - [ ] **P3.1-3** 删除 `versionProvider.ts`，将其引用改为 `vscode.ExtensionContext.extension.packageJSON.version`
 
-#### 3.2 移除 Dendron 专属 / 个人版不需要的命令
+#### 3.2 移除 Sail 专属 / 个人版不需要的命令
 以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `DENDRON_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
 
 | 命令文件 | 命令常量 key |
@@ -933,10 +933,10 @@ from datetime import datetime
 ### Phase 4: 细节清理与危险代码修复
 - [ ] **P4-1** 清理 `src/workspace.ts` 中的 `@deprecated` 静态方法（`getDWorkspace()`、`getExtension()`、`getEngine()` 等），确认所有引用已迁移到 `ExtensionProvider`
 - [ ] **P4-2** 修复 `src/commands/Refactor.ts` 中的 `process.exit(0)`（虽然文件会被删除，但如果决定保留则需修复；按 3.2 计划应已删除）
-- [ ] **P4-3** 修复 `src/utils/ExtensionUtils.ts` 第 145 行 `dendron.sail-dendron` 错误
+- [ ] **P4-3** 修复 `src/utils/ExtensionUtils.ts` 第 145 行 `sail.sail-sail` 错误
 - [ ] **P4-4** 重命名 `web/injection-providers/getEnablePrettlyLinks.ts` → `getEnablePrettyLinks.ts`（如 Web 目录未删除）；如果 Web 已删除则跳过
 - [ ] **P4-5** 清理 `views/utils.ts` 中的 `@deprecated` 方法
-- [ ] **P4-6** 更新日志文件名：`dendron.log` → `sailzen.log`，`dendron.server.log` → `sailzen.server.log`
+- [ ] **P4-6** 更新日志文件名：`sail.log` → `sailzen.log`，`sail.server.log` → `sailzen.server.log`
 - [ ] **P4-7** 构建验证并提交
 
 ### Phase 5: 更新审查文档
@@ -950,7 +950,7 @@ from datetime import datetime
     - common-all 中的改动（DNodePropsQuickInputV2→DNodePropsQuickInput 等）
   - 更新 **3. 后续重构计划**，将已完成项标记为完成，调整剩余项优先级
   - 更新 **附录：关键文件速查表**，删除已不存在的文件路径，更新重命名后的路径
-- [ ] **P5-2** 检查文档中是否还有对 `dendron.` 前缀命令/视图的引用，同步更新为 `sailzen.`（如 3.1 轮计划中的命名统一已部分完成，需在文档中反映）
+- [ ] **P5-2** 检查文档中是否还有对 `sail.` 前缀命令/视图的引用，同步更新为 `sailzen.`（如 3.1 轮计划中的命名统一已部分完成，需在文档中反映）
 - [ ] **P5-3** 将文档末尾的“建议将此报告与 `doc/refact_todo.md` 和 `doc/sailzen-3.0-roadmap.md` 交叉参考”更新为包含本轮清理的对应条目
 
 ### Phase 6: 最终验证与收尾
@@ -1039,7 +1039,7 @@ commands/RefactorHierarchyV2.ts→ commands/RefactorHierarchy.ts
 packages/vscode_plugin/src/extension.ts
 packages/vscode_plugin/src/_extension.ts
 packages/vscode_plugin/src/workspace.ts
-packages/vscode_plugin/src/dendronExtensionInterface.ts
+packages/vscode_plugin/src/sailExtensionInterface.ts
 packages/vscode_plugin/src/ExtensionProvider.ts
 packages/vscode_plugin/src/constants.ts
 packages/vscode_plugin/src/commands/index.ts
@@ -1071,7 +1071,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 | 文件/类 | 版本后缀 | 说明 |
 |---------|---------|------|
 | `src/workspacev2.ts` | v2 | 旧版 `DWorkspace` 类，仅存一处被 `extension.ts` import |
-| `src/workspace.ts` | V2 | 新版 `DWorkspaceV2` + `DendronExtension`，但含大量 `@deprecated` 静态方法 |
+| `src/workspace.ts` | V2 | 新版 `DWorkspaceV2` + `SailExtension`，但含大量 `@deprecated` 静态方法 |
 
 **结论**: `workspacev2.ts` 是真正的旧版本，可直接删除并将 `extension.ts` 的引用迁移到 `workspace.ts` 的导出。`workspace.ts` 本身是当前主实现，保留但清理其 `@deprecated` 静态方法。
 
@@ -1079,7 +1079,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 | 文件 | 版本后缀 | 引用次数 |
 |------|---------|---------|
 | `src/WSUtilsV2.ts` | V2 | ~30 处直接实例化/调用 |
-| `src/WSUtilsV2Interface.ts` | V2 | 被 `dendronExtensionInterface.ts`、`ExtensionProvider.ts`、`GotoNote.ts` 等 import |
+| `src/WSUtilsV2Interface.ts` | V2 | 被 `sailExtensionInterface.ts`、`ExtensionProvider.ts`、`GotoNote.ts` 等 import |
 
 **结论**: 不存在非 V2 版本，`WSUtilsV2` 就是当前唯一实现。应重命名为 `WSUtils` / `IWSUtils`，删除 V2 后缀。
 
@@ -1115,9 +1115,9 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 ### 1.6 ClientUtils V2（P1）
 | 文件 | 版本后缀 | 引用次数 |
 |------|---------|---------|
-| `src/clientUtils.ts` 中的 `DendronClientUtilsV2` | V2 | ~10 处 |
+| `src/clientUtils.ts` 中的 `SailClientUtilsV2` | V2 | ~10 处 |
 
-**结论**: 唯一实现，重命名为 `ClientUtils` 或 `DendronClientUtils`。
+**结论**: 唯一实现，重命名为 `ClientUtils` 或 `SailClientUtils`。
 
 ### 1.7 common-all 中的版本化类型（P1，跨包）
 | 符号 | 位置 | 影响范围 |
@@ -1125,7 +1125,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 | `VaultUtilsV2` | `packages/common-all/src/VaultUtilsV2.ts` | 被 `vault.ts` 和 vscode_plugin 引用 |
 | `DNodePropsQuickInputV2` | `packages/common-all/src/types/typesv2.ts` | 被 lookup/utils.ts、RefactorHierarchyV2.ts 等大量引用 |
 | `NoteQuickInputV2` | `packages/common-all/src/types/typesv2.ts` | 被 lookup/utils.ts 引用 |
-| `DendronQuickPickItemV2` / `DendronQuickPickerV2` | `packages/vscode_plugin/src/components/lookup/types.ts` | 本地类型 |
+| `SailQuickPickItemV2` / `SailQuickPickerV2` | `packages/vscode_plugin/src/components/lookup/types.ts` | 本地类型 |
 | `RespV2` / `RespV3` | `packages/common-all/src/types/typesv2.ts` | 引擎响应类型，改动影响面大 |
 
 **结论**: `VaultUtilsV2` 应合并到 `VaultUtils` 或重命名。`DNodePropsQuickInputV2` 和 `NoteQuickInputV2` 是当前唯一输入类型，应去版本号。`RespV2` 已标记 `TODO: remove`，可安全删除；`RespV3` 是当前主力响应类型，但由于涉及整个引擎 API，本次计划先保留 `RespV3` 名称（否则改动面过大），或至少不在本次范围内重命名。
@@ -1137,8 +1137,8 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 | `src/versionProvider.ts` | `@deprecated` |
 | `src/commands/Refactor.ts` | `LegacyRefactorCommand`，含危险 `process.exit(0)` |
 | `src/commands/ShowLegacyPreview.ts` | Legacy 预览 |
-| `src/commands/SignIn.ts`, `SignUp.ts` | Dendron 云端账户 |
-| `src/commands/PublishDevCommand.ts` | Dendron 发布 |
+| `src/commands/SignIn.ts`, `SignUp.ts` | Sail 云端账户 |
+| `src/commands/PublishDevCommand.ts` | Sail 发布 |
 | `src/commands/SeedAddCommand.ts` 等 | Seed 注册表 |
 | `src/commands/ShowWelcomePageCommand.ts` 等 | 新用户引导 |
 | `src/commands/CopyCodespaceURL.ts` | Codespaces 专用 |
@@ -1177,7 +1177,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 - [ ] **P2.1-3** 在 `WSUtilsInterface.ts` 中：`IWSUtilsV2` → `IWSUtils`
 - [ ] **P2.1-4** 在 `WSUtils.ts` 中：`WSUtilsV2` → `WSUtils`，更新内部 `IWSUtilsV2` import
 - [ ] **P2.1-5** 全局替换所有 import 和引用（`IWSUtilsV2` → `IWSUtils`, `WSUtilsV2` → `WSUtils`）
-- [ ] **P2.1-6** 更新 `dendronExtensionInterface.ts` 中的 `wsUtils: IWSUtilsV2` → `wsUtils: IWSUtils`
+- [ ] **P2.1-6** 更新 `sailExtensionInterface.ts` 中的 `wsUtils: IWSUtilsV2` → `wsUtils: IWSUtils`
 - [ ] **P2.1-7** 更新 `workspace.ts` 中的 `new WSUtilsV2(this)` → `new WSUtils(this)`
 
 #### 2.2 Lookup 系统去 V3
@@ -1198,15 +1198,15 @@ packages/vscode_plugin/src/components/lookup/utils.ts
   - `LookupProviderV3Factory` → `LookupProviderFactory`
   - `LookupV3QuickPickView` → `LookupQuickPickView`
 - [ ] **P2.2-3** 全局替换所有 import 和引用（可使用 IDE 重构或批量文本替换）
-- [ ] **P2.2-4** 更新 `dendronExtensionInterface.ts`、`workspace.ts`、所有 commands 和 components 中的 import
+- [ ] **P2.2-4** 更新 `sailExtensionInterface.ts`、`workspace.ts`、所有 commands 和 components 中的 import
 
 #### 2.3 PickerUtils 去 V2
 - [ ] **P2.3-1** 在 `src/components/lookup/utils.ts` 中：`PickerUtilsV2` → `PickerUtils`
 - [ ] **P2.3-2** 全局替换所有 `PickerUtilsV2` 引用
 
-#### 2.4 DendronClientUtils 去 V2
-- [ ] **P2.4-1** 在 `src/clientUtils.ts` 中：`DendronClientUtilsV2` → `DendronClientUtils`
-- [ ] **P2.4-2** 全局替换所有 `DendronClientUtilsV2` 引用
+#### 2.4 SailClientUtils 去 V2
+- [ ] **P2.4-1** 在 `src/clientUtils.ts` 中：`SailClientUtilsV2` → `SailClientUtils`
+- [ ] **P2.4-2** 全局替换所有 `SailClientUtilsV2` 引用
 
 #### 2.5 common-all 类型去 V2（跨包协调）
 - [ ] **P2.5-1** `packages/common-all/src/types/typesv2.ts`：
@@ -1219,8 +1219,8 @@ packages/vscode_plugin/src/components/lookup/utils.ts
   - 或重命名 `VaultUtilsV2` → `VaultUtilsURI`（因为其设计目标是 URI 兼容）
   - 更新所有引用
 - [ ] **P2.5-5** `packages/vscode_plugin/src/components/lookup/types.ts`：
-  - `DendronQuickPickItemV2` → `DendronQuickPickItem`
-  - `DendronQuickPickerV2` → `DendronQuickPicker`
+  - `SailQuickPickItemV2` → `SailQuickPickItem`
+  - `SailQuickPickerV2` → `SailQuickPicker`
 
 #### 2.6 Rename / Refactor 去版本号
 - [ ] **P2.6-1** `src/commands/RenameNoteV2a.ts`：
@@ -1250,7 +1250,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 - [ ] **P3.1-2** 删除 `services/stateService.ts`
 - [ ] **P3.1-3** 删除 `versionProvider.ts`，将其引用改为 `vscode.ExtensionContext.extension.packageJSON.version`
 
-#### 3.2 移除 Dendron 专属 / 个人版不需要的命令
+#### 3.2 移除 Sail 专属 / 个人版不需要的命令
 以下命令从 `src/commands/`、`commands/index.ts` 的 `ALL_COMMANDS`、`constants.ts` 的 `DENDRON_COMMANDS`、`package.json` 的 `contributes.commands` 和 `contributes.menus` 中一并移除：
 
 | 命令文件 | 命令常量 key |
@@ -1297,10 +1297,10 @@ packages/vscode_plugin/src/components/lookup/utils.ts
 ### Phase 4: 细节清理与危险代码修复
 - [ ] **P4-1** 清理 `src/workspace.ts` 中的 `@deprecated` 静态方法（`getDWorkspace()`、`getExtension()`、`getEngine()` 等），确认所有引用已迁移到 `ExtensionProvider`
 - [ ] **P4-2** 修复 `src/commands/Refactor.ts` 中的 `process.exit(0)`（虽然文件会被删除，但如果决定保留则需修复；按 3.2 计划应已删除）
-- [ ] **P4-3** 修复 `src/utils/ExtensionUtils.ts` 第 145 行 `dendron.sail-dendron` 错误
+- [ ] **P4-3** 修复 `src/utils/ExtensionUtils.ts` 第 145 行 `sail.sail-sail` 错误
 - [ ] **P4-4** 重命名 `web/injection-providers/getEnablePrettlyLinks.ts` → `getEnablePrettyLinks.ts`（如 Web 目录未删除）；如果 Web 已删除则跳过
 - [ ] **P4-5** 清理 `views/utils.ts` 中的 `@deprecated` 方法
-- [ ] **P4-6** 更新日志文件名：`dendron.log` → `sailzen.log`，`dendron.server.log` → `sailzen.server.log`
+- [ ] **P4-6** 更新日志文件名：`sail.log` → `sailzen.log`，`sail.server.log` → `sailzen.server.log`
 - [ ] **P4-7** 构建验证并提交
 
 ### Phase 5: 更新审查文档
@@ -1314,7 +1314,7 @@ packages/vscode_plugin/src/components/lookup/utils.ts
     - common-all 中的改动（DNodePropsQuickInputV2→DNodePropsQuickInput 等）
   - 更新 **3. 后续重构计划**，将已完成项标记为完成，调整剩余项优先级
   - 更新 **附录：关键文件速查表**，删除已不存在的文件路径，更新重命名后的路径
-- [ ] **P5-2** 检查文档中是否还有对 `dendron.` 前缀命令/视图的引用，同步更新为 `sailzen.`（如 3.1 轮计划中的命名统一已部分完成，需在文档中反映）
+- [ ] **P5-2** 检查文档中是否还有对 `sail.` 前缀命令/视图的引用，同步更新为 `sailzen.`（如 3.1 轮计划中的命名统一已部分完成，需在文档中反映）
 - [ ] **P5-3** 将文档末尾的“建议将此报告与 `doc/refact_todo.md` 和 `doc/sailzen-3.0-roadmap.md` 交叉参考”更新为包含本轮清理的对应条目
 
 ### Phase 6: 最终验证与收尾
@@ -1403,7 +1403,7 @@ commands/RefactorHierarchyV2.ts→ commands/RefactorHierarchy.ts
 packages/vscode_plugin/src/extension.ts
 packages/vscode_plugin/src/_extension.ts
 packages/vscode_plugin/src/workspace.ts
-packages/vscode_plugin/src/dendronExtensionInterface.ts
+packages/vscode_plugin/src/sailExtensionInterface.ts
 packages/vscode_plugin/src/ExtensionProvider.ts
 packages/vscode_plugin/src/constants.ts
 packages/vscode_plugin/src/commands/index.ts

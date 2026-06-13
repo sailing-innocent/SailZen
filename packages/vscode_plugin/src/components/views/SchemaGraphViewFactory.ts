@@ -1,5 +1,5 @@
 import {
-  DendronEditorViewKey,
+  SailEditorViewKey,
   DMessageEnum,
   getWebEditorViewEntry,
   GraphViewMessage,
@@ -14,19 +14,19 @@ import { Uri, ViewColumn, window } from "vscode";
 import { Logger } from "../../logger";
 import { WebViewUtils } from "../../views/utils";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { DendronExtension } from "../../workspace";
+import { SailExtension } from "../../workspace";
 
 export class SchemaGraphViewFactory {
   private static _panel: vscode.WebviewPanel | undefined = undefined;
   private static _vsCodeCallback: vscode.Disposable | undefined = undefined;
 
-  //TODO: Limit scope of parameter from DendronExtension to only what's needed
-  static create(ext: DendronExtension): vscode.WebviewPanel {
+  //TODO: Limit scope of parameter from SailExtension to only what's needed
+  static create(ext: SailExtension): vscode.WebviewPanel {
     if (this._panel) {
       return this._panel;
     }
     const { bundleName: name, label } = getWebEditorViewEntry(
-      DendronEditorViewKey.SCHEMA_GRAPH
+      SailEditorViewKey.SCHEMA_GRAPH
     );
     this._panel = window.createWebviewPanel(
       name, // Identifies the type of the webview. Used internally

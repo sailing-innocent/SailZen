@@ -1,4 +1,4 @@
-import { CONSTANTS, DendronError } from "@saili/common-all";
+import { CONSTANTS, SailError } from "@saili/common-all";
 import fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
@@ -16,7 +16,7 @@ const noteTraitTemplate = `
 /**
  * Define your custom trait behavior in this file by modifying the functions in
  * 'module.exports' below. See
- * https://wiki.dendron.so/notes/EQoaBI8A0ZcswKQC3UMpO/ for examples and
+ * https://wiki.sail.so/notes/EQoaBI8A0ZcswKQC3UMpO/ for examples and
  * documentation.
  *
  * NOTE: This is an alpha feature, so this API may have breaking changes in
@@ -26,7 +26,7 @@ const noteTraitTemplate = `
 /**
  * @typedef OnCreateContext Properties that can be utilized during note creation
  * @type {object}
- * @property {string} currentNoteName The name of the currently opened Dendron
+ * @property {string} currentNoteName The name of the currently opened Sail
  * note, or the specified name of the note about to be created
  * @property {string} selectedText Any currently selected text in the editor
  * @property {number} clipboard The current contents of the clipboard
@@ -135,7 +135,7 @@ export class RegisterNoteTraitCommand extends BasicCommand<
 
     fs.ensureDirSync(path.dirname(scriptPath));
     if (fs.existsSync(scriptPath)) {
-      const error = DendronError.createPlainError({
+      const error = SailError.createPlainError({
         message: `${scriptPath} exists`,
       });
       this.L.error({ error });

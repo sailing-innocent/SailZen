@@ -5,7 +5,7 @@ import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { clipboard } from "../utils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { BasicCommand } from "./base";
 
 const L = Logger;
@@ -47,7 +47,7 @@ export class DiagnosticsReportCommand extends BasicCommand<
 
     let wsFile: string;
     try {
-      const workspaceFile = DendronExtension.workspaceFile().fsPath;
+      const workspaceFile = SailExtension.workspaceFile().fsPath;
       wsFile = await fs.readFile(workspaceFile, { encoding: "utf8" });
     } catch {
       // Workspace file is missing, may be a native workspace
@@ -62,7 +62,7 @@ export class DiagnosticsReportCommand extends BasicCommand<
       "---",
       "# Server Logs",
       serverLastLines,
-      "# Dendron Config",
+      "# Sail Config",
       config,
       "# Port",
       port,

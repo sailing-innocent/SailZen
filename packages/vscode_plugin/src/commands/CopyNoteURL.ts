@@ -3,11 +3,11 @@ import { WorkspaceUtils } from "@saili/engine-server";
 import _ from "lodash";
 import { Selection, window } from "vscode";
 import { CONFIG, DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 
@@ -20,9 +20,9 @@ export class CopyNoteURLCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.COPY_NOTE_URL.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -44,7 +44,7 @@ export class CopyNoteURLCommand extends BasicCommand<
     const publishingConfig = ConfigUtils.getPublishing(config);
     const urlRoot =
       publishingConfig.siteUrl ||
-      DendronExtension.configuration().get<string>(
+      SailExtension.configuration().get<string>(
         CONFIG.COPY_NOTE_URL_ROOT.key
       );
     const maybeTextEditor = VSCodeUtils.getActiveTextEditor();

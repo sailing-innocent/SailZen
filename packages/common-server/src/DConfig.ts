@@ -1,19 +1,19 @@
 import {
-  CleanDendronPublishingConfig,
+  CleanSailPublishingConfig,
   ConfigUtils,
   CONSTANTS,
   DeepPartial,
-  DendronError,
-  DendronPublishingConfig,
+  SailError,
+  SailPublishingConfig,
   ErrorFactory,
   ErrorUtils,
   ERROR_STATUS,
   getStage,
   GithubEditViewModeEnum,
-  IDendronError,
+  ISailError,
   RespV3,
   RespWithOptError,
-  DendronConfig,
+  SailConfig,
   YamlUtils,
 } from "@saili/common-all";
 import fs from "fs-extra";
@@ -29,7 +29,7 @@ export enum LocalConfigScope {
   GLOBAL = "GLOBAL",
 }
 
-let _dendronConfig: DendronConfig | undefined;
+let _sailConfig: SailConfig | undefined;
 
 export class DConfig {
   static createSync({
@@ -37,10 +37,10 @@ export class DConfig {
     defaults,
   }: {
     wsRoot: string;
-    defaults?: DeepPartial<DendronConfig>;
+    defaults?: DeepPartial<SailConfig>;
   }) {
     const configPath = DConfig.configPath(wsRoot);
-    const config: DendronConfig = ConfigUtils.genLatestConfig(defaults);
+    const config: SailConfig = ConfigUtils.genLatestConfig(defaults);
     writeYAML(configPath, config);
     return config;
   }
@@ -64,17 +64,17 @@ export class DConfig {
     const config = readYAML(
       configPath,
       overwriteDuplcate ?? false
-    ) as Partial<DendronConfig>;
+    ) as Partial<SailConfig>;
     return config;
   }
 
   static getOrCreate(
-    dendronRoot: string,
-    defaults?: DeepPartial<DendronConfig>
-  ): DendronConfig {
-    const configPath = DConfig.configPath(dendronRoot);
+    sailRoot: string,
+    defaults?: DeepPartial<SailConfig>
+  ): SailConfig {
+    const configPath = DConfig.configPath(sailRoot);
     // Need merge here to recursively merge nested configs
-    let config: DendronConfig = _.merge(
+    let config: SailConfig = _.merge(
       ConfigUtils.genDefaultConfig(),
       defaults
     );
@@ -84,12 +84,12 @@ export class DConfig {
       config = {
         ...config,
         ...readYAML(configPath),
-      } as DendronConfig;
+      } as SailConfig;
     }
     return config;
   }
 
-  static getSiteIndex(sconfig: DendronPublishingConfig): string {
+  static getSiteIndex(sconfig: SailPublishingConfig): string {
     const { siteIndex, siteHierarchies } = sconfig;
     return siteIndex || siteHierarchies[0];
   }
@@ -99,8 +99,8 @@ export class DConfig {
    */
 
   static cleanPublishingConfig(
-    config: DendronPublishingConfig
-  ): CleanDendronPublishingConfig {
+    config: SailPublishingConfig
+  ): CleanSailPublishingConfig {
     const out = _.defaultsDeep(config, {
       copyAssets: true,
       enablePrettyRefs: true,
@@ -122,21 +122,21 @@ export class DConfig {
       siteUrl = process.env["SITE_URL"];
     }
     if (!siteRootDir) {
-      throw new DendronError({ message: "siteRootDir is undefined" });
+      throw new SailError({ message: "siteRootDir is undefined" });
     }
     if (!siteUrl && getStage() === "dev") {
       // this gets overridden in dev so doesn't matter
       siteUrl = "https://foo";
     }
     if (!siteUrl) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_CONFIG,
         message:
-          "siteUrl is undefined. See https://dendron.so/notes/f2ed8639-a604-4a9d-b76c-41e205fb8713.html#siteurl for more details",
+          "siteUrl is undefined. See https://sail.so/notes/f2ed8639-a604-4a9d-b76c-41e205fb8713.html#siteurl for more details",
       });
     }
     if (_.size(siteHierarchies) < 1) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_CONFIG,
         message: `siteHiearchies must have at least one hierarchy`,
       });
@@ -150,8 +150,8 @@ export class DConfig {
   }
 
   static setCleanPublishingConfig(opts: {
-    config: DendronConfig;
-    cleanConfig: DendronPublishingConfig;
+    config: SailConfig;
+    cleanConfig: SailPublishingConfig;
   }) {
     const { config, cleanConfig } = opts;
     ConfigUtils.setProp(config, "publishing", cleanConfig);
@@ -160,7 +160,7 @@ export class DConfig {
   /**
    * See if a local config file is present
    */
-  static searchLocalConfigSync(wsRoot: string): RespV3<DendronConfig> {
+  static searchLocalConfigSync(wsRoot: string): RespV3<SailConfig> {
     const wsPath = path.join(wsRoot, CONSTANTS.DENDRON_LOCAL_CONFIG_FILE);
     const globalPath = path.join(
       os.homedir(),
@@ -176,7 +176,7 @@ export class DConfig {
     }
     if (foundPath) {
       // TODO: do validation in the future
-      const data = readYAML(foundPath) as DendronConfig;
+      const data = readYAML(foundPath) as SailConfig;
       return { data };
     }
     return {
@@ -193,11 +193,11 @@ export class DConfig {
    * @returns
    */
   static readConfigSync(wsRoot: string, useCache?: boolean) {
-    if (_dendronConfig && useCache) {
-      return _dendronConfig;
+    if (_sailConfig && useCache) {
+      return _sailConfig;
     }
     const configPath = DConfig.configPath(wsRoot);
-    const dendronConfigResult = readString(configPath)
+    const sailConfigResult = readString(configPath)
       .andThen((input) => YamlUtils.fromStr(input, true))
       .andThen((unknownconfig) => {
         const cleanConfig = DConfigLegacy.configIsV4(unknownconfig)
@@ -206,15 +206,15 @@ export class DConfig {
 
         return ConfigUtils.parse(cleanConfig);
       })
-      .map((dendronConfig) => {
-        _dendronConfig = dendronConfig;
-        return dendronConfig;
+      .map((sailConfig) => {
+        _sailConfig = sailConfig;
+        return sailConfig;
       });
 
-    if (dendronConfigResult.isErr()) {
-      throw dendronConfigResult.error;
+    if (sailConfigResult.isErr()) {
+      throw sailConfigResult.error;
     }
-    return dendronConfigResult.value;
+    return sailConfigResult.value;
   }
 
   /**
@@ -226,11 +226,11 @@ export class DConfig {
   static readConfigAndApplyLocalOverrideSync(
     wsRoot: string,
     useCache?: boolean
-  ): RespWithOptError<DendronConfig> {
+  ): RespWithOptError<SailConfig> {
     const config = this.readConfigSync(wsRoot, useCache);
     const maybeLocalConfig = this.searchLocalConfigSync(wsRoot);
 
-    let localConfigValidOrError: boolean | IDendronError = true;
+    let localConfigValidOrError: boolean | ISailError = true;
 
     if (maybeLocalConfig.data) {
       const respValidate = this.validateLocalConfig({
@@ -256,7 +256,7 @@ export class DConfig {
     }
     return {
       data: config,
-      error: ErrorUtils.isDendronError(localConfigValidOrError)
+      error: ErrorUtils.isSailError(localConfigValidOrError)
         ? localConfigValidOrError
         : undefined,
     };
@@ -267,9 +267,9 @@ export class DConfig {
     config,
   }: {
     wsRoot: string;
-    config: DendronConfig;
+    config: SailConfig;
   }): Promise<void> {
-    _dendronConfig = config;
+    _sailConfig = config;
     const configPath = DConfig.configPath(wsRoot);
     return writeYAMLAsync(configPath, config);
   }
@@ -280,7 +280,7 @@ export class DConfig {
     configScope,
   }: {
     wsRoot: string;
-    config: DeepPartial<DendronConfig>;
+    config: DeepPartial<SailConfig>;
     configScope: LocalConfigScope;
   }): Promise<void> {
     const configPath = DConfig.configOverridePath(wsRoot, configScope);
@@ -293,7 +293,7 @@ export class DConfig {
   static validateLocalConfig({
     config,
   }: {
-    config: DeepPartial<DendronConfig>;
+    config: DeepPartial<SailConfig>;
   }): RespV3<boolean> {
     if (config.workspace) {
       if (
@@ -301,7 +301,7 @@ export class DConfig {
         (config.workspace.vaults && !_.isArray(config.workspace.vaults))
       ) {
         return {
-          error: new DendronError({
+          error: new SailError({
             message:
               "workspace must not be empty and vaults must be an array if workspace is set",
           }),
@@ -312,9 +312,9 @@ export class DConfig {
   }
 
   /**
-   * Create a backup of dendron.yml with an optional custom infix string.
+   * Create a backup of sail.yml with an optional custom infix string.
    * e.g.) createBackup(wsRoot, "foo") will result in a backup file name
-   * `dendron.yyyy.MM.dd.HHmmssS.foo.yml`
+   * `sail.yyyy.MM.dd.HHmmssS.foo.yml`
    * @param wsRoot workspace root
    * @param infix custom string used in the backup name
    * ^fd66z8uiuczz
@@ -330,7 +330,7 @@ export class DConfig {
         infix,
       });
       if (backupResp.error) {
-        throw new DendronError({ ...backupResp.error });
+        throw new SailError({ ...backupResp.error });
       }
       return backupResp.data;
     } finally {

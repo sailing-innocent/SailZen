@@ -9,7 +9,7 @@ import fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -66,9 +66,9 @@ const FORMAT_ICONS: Record<DocExportFormat, string> = {
 export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
   static requireActiveWorkspace = true;
   key = DENDRON_COMMANDS.EXPORT_NOTE.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -407,8 +407,8 @@ export class ExportNoteCommand extends BasicCommand<CommandOpts, CommandOutput> 
             if (assembled.unresolvedRefs.length > 0) {
               vscode.window.showWarningMessage(
                 `Export complete with ${assembled.unresolvedRefs.length} unresolved reference(s): ` +
-                  `${assembled.unresolvedRefs.slice(0, 3).join(", ")}` +
-                  `${assembled.unresolvedRefs.length > 3 ? "…" : ""}`
+                `${assembled.unresolvedRefs.slice(0, 3).join(", ")}` +
+                `${assembled.unresolvedRefs.length > 3 ? "…" : ""}`
               );
             }
             break;

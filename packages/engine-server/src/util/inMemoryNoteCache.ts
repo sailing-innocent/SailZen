@@ -1,4 +1,4 @@
-import { DendronError, NoteProps } from "@saili/common-all";
+import { SailError, NoteProps } from "@saili/common-all";
 
 export class InMemoryNoteCache {
   /** Note map which maps lowercase file name to a list {@link NoteProps}
@@ -32,7 +32,7 @@ export class InMemoryNoteCache {
    *  the file name case). Will return empty list if no notes match.  */
   getNotesByFileNameIgnoreCase(fileName: string): NoteProps[] {
     if (fileName === undefined || fileName === null || fileName.length === 0) {
-      throw new DendronError({
+      throw new SailError({
         message: `File name cannot be undefined/null/empty.`,
       });
     }

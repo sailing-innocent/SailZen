@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DNodePointer,
   DNodeUtils,
   DStore,
@@ -45,7 +45,7 @@ function getLogger() {
 }
 
 export class ParserBaseV2 {
-  constructor(public opts: { store: DStore; logger: any }) {}
+  constructor(public opts: { store: DStore; logger: any }) { }
 
   get logger() {
     return this.opts.logger;
@@ -342,7 +342,7 @@ export class SchemaParserV2 extends ParserBaseV2 {
             addConnections(childClone);
           }
         } else {
-          throw new DendronError({
+          throw new SailError({
             status: ERROR_STATUS.MISSING_SCHEMA,
             message: JSON.stringify({ parent, missingChild: childId }),
           });

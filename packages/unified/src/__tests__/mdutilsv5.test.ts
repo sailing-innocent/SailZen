@@ -6,7 +6,7 @@ import {
   ProcFlavor
 } from "../utilsv5";
 
-import { NoteProps, DVault, DendronConfig, genDefaultDendronConfig, NoteUtils, DendronASTDest } from "@saili/common-all";
+import { NoteProps, DVault, SailConfig, genDefaultSailConfig, NoteUtils, SailASTDest } from "@saili/common-all";
 
 describe("MDUtilsV5", () => {
   describe("procRehypeFull", () => {
@@ -34,13 +34,13 @@ describe("MDUtilsV5", () => {
         data: {},
         body: "- [ ] todo\n  - [x] done"
       };
-      const config: DendronConfig = genDefaultDendronConfig();
+      const config: SailConfig = genDefaultSailConfig();
       const proc = MDUtilsV5.procRemarkFull({
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
         config,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
       });
       const tree = proc.parse(note.body);
       expect(() => proc.stringify(tree)).not.toThrow();
@@ -73,7 +73,7 @@ describe("MDUtilsV5", () => {
         body: md
       };
       const flavor = ProcFlavor.REGULAR;
-      const config: DendronConfig = genDefaultDendronConfig();
+      const config: SailConfig = genDefaultSailConfig();
       const proc = MDUtilsV5.procRehypeFull(
         {
           noteToRender: note,
@@ -112,7 +112,7 @@ describe("MDUtilsV5", () => {
         data: {},
         body: ""
       };
-      const config: DendronConfig = genDefaultDendronConfig();
+      const config: SailConfig = genDefaultSailConfig();
       const proc = MDUtilsV5.procRehypeFull(
         {
           noteToRender: note,
@@ -150,7 +150,7 @@ describe("MDUtilsV5", () => {
         data: {},
         body: "# Main Header\n\n## Sub Header\n\n### Third Level"
       };
-      const config: DendronConfig = genDefaultDendronConfig();
+      const config: SailConfig = genDefaultSailConfig();
       const proc = MDUtilsV5.procRehypeFull(
         {
           noteToRender: note,

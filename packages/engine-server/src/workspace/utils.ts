@@ -1,11 +1,11 @@
 import {
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   DWorkspaceV2,
   ERROR_STATUS,
   genHash,
-  DendronConfig,
+  SailConfig,
   isNotUndefined,
   NoteProps,
   RespV3,
@@ -54,7 +54,7 @@ export class WorkspaceUtils {
       wsConfig = await readJSONWithComments(wsConfigPath);
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.DOES_NOT_EXIST,
           message: `Missing code-workspace file ${wsConfigPath}`,
           payload: err,
@@ -64,7 +64,7 @@ export class WorkspaceUtils {
 
     if (!this.isWorkspaceConfig(wsConfig)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_CONFIG,
           message: `Bad code-workspace file ${wsConfigPath}`,
         }),
@@ -84,7 +84,7 @@ export class WorkspaceUtils {
       const wsConfig = readJSONWithCommentsSync(wsConfigPath);
       if (!this.isWorkspaceConfig(wsConfig)) {
         return {
-          error: DendronError.createFromStatus({
+          error: SailError.createFromStatus({
             status: ERROR_STATUS.INVALID_CONFIG,
             message: `Bad code-workspace file ${wsConfigPath}`,
           }),
@@ -96,7 +96,7 @@ export class WorkspaceUtils {
       }
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_CONFIG,
           message: `Missing code-workspace file ${wsConfigPath}`,
         }),
@@ -155,7 +155,7 @@ export class WorkspaceUtils {
   }) {
     const maybeSettings = WorkspaceUtils.getCodeWorkspaceSettingsSync(wsRoot);
     if (maybeSettings.error) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "no workspace file found",
       });
@@ -173,7 +173,7 @@ export class WorkspaceUtils {
     wsRoot: string;
   }) {
     return writeJSONWithComments(
-      path.join(wsRoot, "dendron.code-workspace"),
+      path.join(wsRoot, "sail.code-workspace"),
       settings
     );
   }
@@ -186,7 +186,7 @@ export class WorkspaceUtils {
     const cwd = process.cwd();
     const configPath = findUpTo({
       base: cwd,
-      fname: "dendron.yml",
+      fname: "sail.yml",
       maxLvl: 3,
       returnDirPath: true,
     });
@@ -199,7 +199,7 @@ export class WorkspaceUtils {
     const folders = uniqueOutermostFolders(
       workspaceFolders.map((folder) => folder.uri.fsPath)
     );
-    const dendronWorkspaceFolders = await Promise.all(
+    const sailWorkspaceFolders = await Promise.all(
       folders.map((folder) =>
         findDownTo({
           base: folder,
@@ -208,13 +208,13 @@ export class WorkspaceUtils {
         })
       )
     );
-    return dendronWorkspaceFolders.filter(isNotUndefined);
+    return sailWorkspaceFolders.filter(isNotUndefined);
   }
 
   /**
-   * Check if a file is a dendron note (vs a regular file or something else entirely)
+   * Check if a file is a sail note (vs a regular file or something else entirely)
    */
-  static async isDendronNote({
+  static async isSailNote({
     wsRoot,
     vaults,
     fpath,
@@ -223,7 +223,7 @@ export class WorkspaceUtils {
     if (!fpath.endsWith(".md")) {
       return false;
     }
-    // if markdown file, check if it is in a dendron vault
+    // if markdown file, check if it is in a sail vault
     if (!WorkspaceUtils.isPathInWorkspace({ wsRoot, vaults, fpath })) {
       return false;
     }
@@ -284,7 +284,7 @@ export class WorkspaceUtils {
    *
    */
   static getNoteUrl(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     note: NoteProps;
     vault: DVault;
     urlRoot?: string;
@@ -299,15 +299,15 @@ export class WorkspaceUtils {
       config,
     });
     if (!root) {
-      throw new DendronError({ message: "no urlRoot set" });
+      throw new SailError({ message: "no urlRoot set" });
     }
     // if we have a note, see if we are at index
     const isIndex: boolean = _.isUndefined(note)
       ? false
       : SiteUtils.isIndexNote({
-          indexNote: index,
-          note,
-        });
+        indexNote: index,
+        note,
+      });
     const pathValue = note.id;
     const siteUrlPath = SiteUtils.getSiteUrlPathForNote({
       addPrefix: true,
@@ -396,7 +396,7 @@ export class WorkspaceUtils {
     const vaultDir = path.join(wsRoot, vault.fsPath);
     fs.ensureDir(vaultDir);
     await GitUtils.addToGitignore({
-      addPath: ".dendron.cache.*",
+      addPath: ".sail.cache.*",
       root: vaultDir,
     });
     return;

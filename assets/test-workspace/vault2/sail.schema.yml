@@ -1,0 +1,11 @@
+version: 1
+imports: []
+schemas:
+  - id: sail
+    children:
+      - pattern: ref
+        children:
+          - pattern: template-all-vars
+            template: template.all-vars
+    title: sail
+    parent: root

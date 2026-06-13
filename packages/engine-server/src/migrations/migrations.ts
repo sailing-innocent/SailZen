@@ -1,4 +1,4 @@
-import { DendronError, ConfigUtils } from "@saili/common-all";
+import { SailError, ConfigUtils } from "@saili/common-all";
 import _ from "lodash";
 import { Migrations } from "./types";
 import { MigrationUtils, PATH_MAP } from "./utils";
@@ -13,16 +13,16 @@ export const CONFIG_MIGRATIONS: Migrations = {
        * This is the migration that was done to clean up all legacy config namespaces.
        */
       name: "migrate config",
-      func: async ({ dendronConfig, wsConfig, wsService }) => {
+      func: async ({ sailConfig, wsConfig, wsService }) => {
         try {
           await DConfig.createBackup(wsService.wsRoot, "migrate-configs");
         } catch (error) {
           return {
             data: {
-              dendronConfig,
+              sailConfig,
               wsConfig,
             },
-            error: new DendronError({
+            error: new SailError({
               message:
                 "Backup failed during config migration. Exiting without migration.",
             }),
@@ -30,28 +30,28 @@ export const CONFIG_MIGRATIONS: Migrations = {
         }
 
         const defaultV5Config = ConfigUtils.genDefaultConfig();
-        const rawDendronConfig = DConfig.getRaw(wsService.wsRoot);
+        const rawSailConfig = DConfig.getRaw(wsService.wsRoot);
 
         // remove all null properties
-        const cleanDendronConfig = MigrationUtils.deepCleanObjBy(
-          rawDendronConfig,
+        const cleanSailConfig = MigrationUtils.deepCleanObjBy(
+          rawSailConfig,
           _.isNull
         );
 
-        if (_.isUndefined(cleanDendronConfig.commands)) {
-          cleanDendronConfig.commands = {};
+        if (_.isUndefined(cleanSailConfig.commands)) {
+          cleanSailConfig.commands = {};
         }
 
-        if (_.isUndefined(cleanDendronConfig.workspace)) {
-          cleanDendronConfig.workspace = {};
+        if (_.isUndefined(cleanSailConfig.workspace)) {
+          cleanSailConfig.workspace = {};
         }
 
-        if (_.isUndefined(cleanDendronConfig.preview)) {
-          cleanDendronConfig.preview = {};
+        if (_.isUndefined(cleanSailConfig.preview)) {
+          cleanSailConfig.preview = {};
         }
 
-        if (_.isUndefined(cleanDendronConfig.publishing)) {
-          cleanDendronConfig.publishing = {};
+        if (_.isUndefined(cleanSailConfig.publishing)) {
+          cleanSailConfig.publishing = {};
         }
 
         // legacy paths to remove from config;
@@ -64,8 +64,8 @@ export const CONFIG_MIGRATIONS: Migrations = {
           let alreadyFilled;
 
           if (iteratee !== "skip") {
-            alreadyFilled = _.has(cleanDendronConfig, key);
-            const maybeLegacyConfig = _.get(cleanDendronConfig, legacyPath);
+            alreadyFilled = _.has(cleanSailConfig, key);
+            const maybeLegacyConfig = _.get(cleanSailConfig, legacyPath);
             if (_.isUndefined(maybeLegacyConfig)) {
               // legacy property doesn't have a value.
               valueToFill = _.get(defaultV5Config, key);
@@ -82,7 +82,7 @@ export const CONFIG_MIGRATIONS: Migrations = {
 
           if (!alreadyFilled && !_.isUndefined(valueToFill)) {
             // if the property isn't already filled, fill it with determined value.
-            _.set(cleanDendronConfig, key, valueToFill);
+            _.set(cleanSailConfig, key, valueToFill);
           }
 
           // these will later be used to delete.
@@ -93,7 +93,7 @@ export const CONFIG_MIGRATIONS: Migrations = {
         });
 
         // set config version.
-        _.set(cleanDendronConfig, "version", 5);
+        _.set(cleanSailConfig, "version", 5);
 
         // add deprecated paths to legacyPaths
         // so they could be unset if they exist
@@ -101,16 +101,16 @@ export const CONFIG_MIGRATIONS: Migrations = {
 
         // remove legacy property from config after migration.
         legacyPaths.forEach((legacyPath) => {
-          _.unset(cleanDendronConfig, legacyPath);
+          _.unset(cleanSailConfig, legacyPath);
         });
 
         // recursively populate missing defaults
         const migratedConfig = _.defaultsDeep(
-          cleanDendronConfig,
+          cleanSailConfig,
           defaultV5Config
         );
 
-        return { data: { dendronConfig: migratedConfig, wsConfig } };
+        return { data: { sailConfig: migratedConfig, wsConfig } };
       },
     },
   ],

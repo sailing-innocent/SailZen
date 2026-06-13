@@ -11,7 +11,7 @@ import path from "path";
 import * as vscode from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { MeetingNote } from "../traits/MeetingNote";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -27,7 +27,7 @@ type ExecuteData = {
 };
 
 export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
-  private _ext: IDendronExtension;
+  private _ext: ISailExtension;
   public static requireActiveWorkspace: boolean = true;
   public static MEETING_TEMPLATE_FNAME: string = "templates.meet";
 
@@ -36,13 +36,13 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
    * @param ext
    * @param noConfirm - for testing purposes only; don't set in production code
    */
-  constructor(ext: IDendronExtension, noConfirm?: boolean) {
+  constructor(ext: ISailExtension, noConfirm?: boolean) {
     const initTrait = () => {
       const config = ExtensionProvider.getDWorkspace().config;
       return new MeetingNote(config, ext, noConfirm ?? false);
     };
 
-    super(ext, "dendron.meeting", initTrait);
+    super(ext, "sail.meeting", initTrait);
     this.key = DENDRON_COMMANDS.CREATE_MEETING_NOTE.key;
     this._ext = ext;
   }
@@ -78,7 +78,7 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
     });
 
     const uri = vscode.Uri.file(
-      SchemaUtils.getPath({ root: vaultPath, fname: "dendron.meet" })
+      SchemaUtils.getPath({ root: vaultPath, fname: "sail.meet" })
     );
 
     if (await fs.pathExists(uri.fsPath)) {
@@ -163,9 +163,9 @@ export class CreateMeetingNoteCommand extends CreateNoteWithTraitCommand {
     }
 
     const assetUri = VSCodeUtils.getAssetUri(this._ext.context);
-    const dendronWSTemplate = VSCodeUtils.joinPath(assetUri, "dendron-ws");
+    const sailWSTemplate = VSCodeUtils.joinPath(assetUri, "sail-ws");
 
-    const src = path.join(dendronWSTemplate.fsPath, "templates", fname);
+    const src = path.join(sailWSTemplate.fsPath, "templates", fname);
     const body = (await fs.readFile(src)).toString();
 
     // Ensure that engine state is aware of the template before returning so

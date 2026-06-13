@@ -1,9 +1,9 @@
 /* eslint-disable camelcase */
 import {
   ConfigUtils,
-  DendronConfig,
-  DendronDevConfig,
-  DendronError,
+  SailConfig,
+  SailDevConfig,
+  SailError,
   DHookDict,
   DVault,
   DVaultSync,
@@ -14,12 +14,12 @@ import {
 import _ from "lodash";
 
 export type MigrationChangeSetStatus = {
-  error?: DendronError;
+  error?: SailError;
   data: {
     version: string;
     changeName: string;
     status: "ok" | "error";
-    dendronConfig: DendronConfig;
+    sailConfig: SailConfig;
     wsConfig?: WorkspaceSettings;
   };
 };
@@ -159,7 +159,7 @@ export const PATH_MAP = new Map<string, mappedConfigPath>([
   ["commands.randomNote.exclude", { target: "randomNote.exclude" }],
 
   // workspace namespace
-  ["workspace.dendronVersion", { target: "dendronVersion" }],
+  ["workspace.sailVersion", { target: "sailVersion" }],
   ["workspace.workspaces", { target: "workspaces" }],
   ["workspace.seeds", { target: "seeds" }],
   ["workspace.vaults", { target: "vaults" }],
@@ -283,14 +283,14 @@ export const PATH_MAP = new Map<string, mappedConfigPath>([
   ["publishing.enablePrettyLinks", { target: "site.usePrettyLinks" }],
 ]);
 
-type DendronConfigV4 = {
+type SailConfigV4 = {
   /**
    * Disable caching behavior
    */
   noCaching?: boolean;
 
-  /** Maximum number of rendered previews to cache in Dendron Engine.
-   *  Note: this value is ignored when {@link DendronConfig.noCaching} is set to true.
+  /** Maximum number of rendered previews to cache in Sail Engine.
+   *  Note: this value is ignored when {@link SailConfig.noCaching} is set to true.
    *  When set this value must be greater than 0. */
   maxPreviewsCached?: number;
 
@@ -299,18 +299,18 @@ type DendronConfigV4 = {
    */
   noTelemetry?: boolean;
   /**
-   * Dendron version. Setup by plugin
+   * Sail version. Setup by plugin
    @deprecated
    */
   version: number;
   /**
-   * Dendron version
+   * Sail version
    */
-  dendronVersion?: string;
+  sailVersion?: string;
   /**
    * Configuration related to publishing notes
    */
-  site: DendronSiteConfig;
+  site: SailSiteConfig;
 
   /**
    * Configuration related to lookup v3.
@@ -329,7 +329,7 @@ type DendronConfigV4 = {
   workspaces?: { [key: string]: any | undefined };
   seeds?: { [key: string]: any | undefined };
   /**
-   * Dendron vaults in workspace.
+   * Sail vaults in workspace.
    * Setup by plugin.
    */
   vaults: DVault[];
@@ -344,7 +344,7 @@ type DendronConfigV4 = {
 
   /**
    * Pick vault when creating new note.
-   * [Docs](https://dendron.so/notes/24b176f1-685d-44e1-a1b0-1704b1a92ca0.html#specify-vault-location-when-creating-a-note)
+   * [Docs](https://sail.so/notes/24b176f1-685d-44e1-a1b0-1704b1a92ca0.html#specify-vault-location-when-creating-a-note)
    */
   lookupConfirmVaultOnCreate?: boolean;
   /**
@@ -392,7 +392,7 @@ type DendronConfigV4 = {
   /**
    * Configuration for note and schema graphs
    */
-  graph?: LegacyDendronGraphConfig;
+  graph?: LegacySailGraphConfig;
 
   /**
    * Don't automatically create note when looking up definition
@@ -433,7 +433,7 @@ type DendronConfigV4 = {
   /**
    * Development related options
    */
-  dev?: DendronDevConfig;
+  dev?: SailDevConfig;
 
   /**
    * How workspace vaults should be handled when using workspace "add and commit" and "sync" commands.
@@ -461,7 +461,7 @@ type DendronConfigV4 = {
    */
   insertNoteIndex?: LegacyInsertNoteIndexConfig;
 
-  /** Notes that are too large can cause serious slowdowns for Dendron. For
+  /** Notes that are too large can cause serious slowdowns for Sail. For
    * notes longer than this many characters, some features like backlinks will
    * be disabled to avoid slowdowns. Other functionality like note lookups will
    * continue to function.
@@ -550,7 +550,7 @@ type LegacyInsertNoteIndexConfig = {
   marker?: boolean;
 };
 
-type DendronSiteConfig = {
+type SailSiteConfig = {
   /**
    * If set, add prefix to all asset links
    */
@@ -605,7 +605,7 @@ type DendronSiteConfig = {
 
   /**
    * Where your site will be published.
-   * Relative to Dendron workspace
+   * Relative to Sail workspace
    */
   siteRootDir: string;
 
@@ -623,7 +623,7 @@ type DendronSiteConfig = {
 
   /**
    * Url of site without trailing slash
-   * eg. dendron.so
+   * eg. sail.so
    */
   siteUrl?: string;
 
@@ -728,7 +728,7 @@ type DendronSiteConfig = {
   useHashesForFMTags?: boolean;
 };
 
-type LegacyDendronGraphConfig = {
+type LegacySailGraphConfig = {
   zoomSpeed: number;
 };
 
@@ -757,11 +757,11 @@ type LegacyUseVaultBehavior = {
 type LegacyDuplicateNoteBehavior = LegacyUseVaultBehavior;
 
 type IntermediateNewConfig = Partial<
-  Pick<DendronConfig, "commands" | "workspace" | "preview" | "publishing">
+  Pick<SailConfig, "commands" | "workspace" | "preview" | "publishing">
 >;
 
-type IntermediateOldConfig = Partial<DendronConfigV4> &
-  Required<Pick<DendronConfigV4, "version">>;
+type IntermediateOldConfig = Partial<SailConfigV4> &
+  Required<Pick<SailConfigV4, "version">>;
 
 type StrictConfigV4 = IntermediateOldConfig &
   IntermediateNewConfig &
@@ -777,35 +777,35 @@ export class DConfigLegacy {
     return config.version === 4;
   }
 
-  static v4ToV5(config: StrictConfigV4): DendronConfig {
+  static v4ToV5(config: StrictConfigV4): SailConfig {
     return v4ToV5({ legacyConfig: config });
   }
 }
 
 const v4ToV5 = ({ legacyConfig }: { legacyConfig: any }) => {
   const defaultV5Config = ConfigUtils.genDefaultConfig();
-  const rawDendronConfig = legacyConfig;
+  const rawSailConfig = legacyConfig;
 
   // remove all null properties
-  const cleanDendronConfig = MigrationUtils.deepCleanObjBy(
-    rawDendronConfig,
+  const cleanSailConfig = MigrationUtils.deepCleanObjBy(
+    rawSailConfig,
     _.isNull
   );
 
-  if (_.isUndefined(cleanDendronConfig.commands)) {
-    cleanDendronConfig.commands = {};
+  if (_.isUndefined(cleanSailConfig.commands)) {
+    cleanSailConfig.commands = {};
   }
 
-  if (_.isUndefined(cleanDendronConfig.workspace)) {
-    cleanDendronConfig.workspace = {};
+  if (_.isUndefined(cleanSailConfig.workspace)) {
+    cleanSailConfig.workspace = {};
   }
 
-  if (_.isUndefined(cleanDendronConfig.preview)) {
-    cleanDendronConfig.preview = {};
+  if (_.isUndefined(cleanSailConfig.preview)) {
+    cleanSailConfig.preview = {};
   }
 
-  if (_.isUndefined(cleanDendronConfig.publishing)) {
-    cleanDendronConfig.publishing = {};
+  if (_.isUndefined(cleanSailConfig.publishing)) {
+    cleanSailConfig.publishing = {};
   }
 
   // legacy paths to remove from config;
@@ -818,8 +818,8 @@ const v4ToV5 = ({ legacyConfig }: { legacyConfig: any }) => {
     let alreadyFilled;
 
     if (iteratee !== "skip") {
-      alreadyFilled = _.has(cleanDendronConfig, key);
-      const maybeLegacyConfig = _.get(cleanDendronConfig, legacyPath);
+      alreadyFilled = _.has(cleanSailConfig, key);
+      const maybeLegacyConfig = _.get(cleanSailConfig, legacyPath);
       if (_.isUndefined(maybeLegacyConfig)) {
         // legacy property doesn't have a value.
         valueToFill = _.get(defaultV5Config, key);
@@ -836,7 +836,7 @@ const v4ToV5 = ({ legacyConfig }: { legacyConfig: any }) => {
 
     if (!alreadyFilled && !_.isUndefined(valueToFill)) {
       // if the property isn't already filled, fill it with determined value.
-      _.set(cleanDendronConfig, key, valueToFill);
+      _.set(cleanSailConfig, key, valueToFill);
     }
 
     // these will later be used to delete.
@@ -847,7 +847,7 @@ const v4ToV5 = ({ legacyConfig }: { legacyConfig: any }) => {
   });
 
   // set config version.
-  _.set(cleanDendronConfig, "version", 5);
+  _.set(cleanSailConfig, "version", 5);
 
   // add deprecated paths to legacyPaths
   // so they could be unset if they exist
@@ -855,11 +855,11 @@ const v4ToV5 = ({ legacyConfig }: { legacyConfig: any }) => {
 
   // remove legacy property from config after migration.
   legacyPaths.forEach((legacyPath) => {
-    _.unset(cleanDendronConfig, legacyPath);
+    _.unset(cleanSailConfig, legacyPath);
   });
 
   // recursively populate missing defaults
-  const migratedConfig = _.defaultsDeep(cleanDendronConfig, defaultV5Config);
+  const migratedConfig = _.defaultsDeep(cleanSailConfig, defaultV5Config);
 
   return migratedConfig;
 };

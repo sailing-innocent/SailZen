@@ -1,2 +1,2 @@
 export * from "./notesFileSystemCache";
-export * from "./dendronFileSystemCache";
+export * from "./sailFileSystemCache";

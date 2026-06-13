@@ -1,6 +1,6 @@
 import {
   assertUnreachable,
-  DendronError,
+  SailError,
   DVault,
   VaultRemoteSource,
   VaultUtils,
@@ -14,7 +14,7 @@ import { getExtension } from "../workspace";
 import { Logger } from "../logger";
 import { ReloadIndexCommand } from "./ReloadIndex";
 import { GitUtils } from "@saili/common-server";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 
 type CommandOpts = {
   type: VaultRemoteSource;
@@ -31,7 +31,7 @@ export class ConvertVaultCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.CONVERT_VAULT.key;
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 
@@ -84,7 +84,7 @@ export class ConvertVaultCommand extends BasicCommand<
     return VSCodeUtils.showInputBox({
       title: "Remote URL",
       prompt: "Enter the remote URL",
-      placeHolder: "git@github.com:dendronhq/dendron-site.git",
+      placeHolder: "git@github.com:sailhq/sail-site.git",
     });
   }
 
@@ -179,14 +179,14 @@ export class ConvertVaultCommand extends BasicCommand<
     const { vault, type, remoteUrl } = opts;
     const { wsRoot } = this._ext.getDWorkspace();
     if (!vault || !type)
-      throw new DendronError({
+      throw new SailError({
         message:
           "Vault or type has not been specified when converting a vault.",
         payload: { vault, type, remoteUrl },
       });
     const workspaceService = getExtension().workspaceService;
     if (!workspaceService)
-      throw new DendronError({
+      throw new SailError({
         message: "Workspace service is not available when converting a vault.",
         payload: { vault, type, remoteUrl },
       });
@@ -219,7 +219,7 @@ export class ConvertVaultCommand extends BasicCommand<
       return { updatedVault: vault };
     } else if (type === "remote") {
       if (!remoteUrl)
-        throw new DendronError({
+        throw new SailError({
           message: "Remote URL for remote vault has not been specified.",
           payload: { vault, type, remoteUrl },
         });
@@ -250,8 +250,7 @@ export class ConvertVaultCommand extends BasicCommand<
           window.showInformationMessage(
             `Converted vault '${VaultUtils.getName(
               vault
-            )}' to a ${type} vault. Remote set to ${results.remote} on branch ${
-              results.branch
+            )}' to a ${type} vault. Remote set to ${results.remote} on branch ${results.branch
             }`
           );
           Logger.info({

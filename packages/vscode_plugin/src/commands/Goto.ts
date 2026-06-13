@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DVault,
   ERROR_STATUS,
   RespV3,
@@ -13,7 +13,7 @@ import path from "path";
 import { env, Uri } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { EditorUtils } from "../utils/EditorUtils";
 import { getURLAt } from "../utils/md";
@@ -32,12 +32,12 @@ const GOTO_KEY = "uri";
 
 /**
  * Go to the current link under cursor. This command will exhibit different behavior depending on the type of the link.
- * See [[dendron.ref.commands.goto]] for more details
+ * See [[sail.ref.commands.goto]] for more details
  */
 export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.GOTO.key;
 
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 
@@ -47,7 +47,7 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
 
     /* If the link read is not a valid link, exit from the command with a message */
     if (!externalLink && !noteLink) {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: `no valid path or URL selected`,
       });
@@ -80,7 +80,7 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
     const notes = await engine.findNotesMeta({ fname, vault });
     if (notes.length === 0) {
       return {
-        error: new DendronError({ message: "selection is not a note" }),
+        error: new SailError({ message: "selection is not a note" }),
       };
     }
 
@@ -131,7 +131,7 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
         );
       }
       if (!fs.existsSync(assetPath)) {
-        const error = DendronError.createFromStatus({
+        const error = SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_STATE,
           message: `no valid path or URL selected`,
         });
@@ -139,7 +139,7 @@ export class GotoCommand extends BasicCommand<CommandOpts, CommandOutput> {
         return { error };
       }
       await open(assetPath).catch((err) => {
-        const error = DendronError.createFromStatus({
+        const error = SailError.createFromStatus({
           status: ERROR_STATUS.UNKNOWN,
           innerError: err,
         });

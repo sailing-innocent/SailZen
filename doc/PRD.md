@@ -374,7 +374,7 @@ PENDING → QUEUED → RUNNING → COMPLETED
 ### 3.7 笔记知识管理 (Knowledge Management)
 
 #### 3.7.1 功能概述
-基于Dendron的层级化笔记系统，支持多Vault工作区。
+基于Sail的层级化笔记系统，支持多Vault工作区。
 
 #### 3.7.2 核心功能
 

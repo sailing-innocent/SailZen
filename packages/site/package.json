@@ -1,7 +1,7 @@
 {
   "name": "sail-site",
   "private": true,
-  "version": "0.3.15",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite --mode=development",

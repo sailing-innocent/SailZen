@@ -1,4 +1,4 @@
-import { DendronError, ERROR_STATUS, VaultUtils } from "@saili/common-all";
+import { SailError, ERROR_STATUS, VaultUtils } from "@saili/common-all";
 import { vault2Path } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import fs from "fs-extra";
@@ -22,7 +22,7 @@ type CommandOpts = CommandInput;
 /**
  * fpath: full path to copied file
  */
-type CommandOutput = { error?: DendronError; fpath?: string };
+type CommandOutput = { error?: SailError; fpath?: string };
 
 const cleanFname = (basename: string) => {
   const { name, ext } = path.parse(basename);
@@ -51,7 +51,7 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
 
     const editor = VSCodeUtils.getActiveTextEditor();
     if (!editor) {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "no active editor",
       });
@@ -65,7 +65,7 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
     if (
       !WorkspaceUtils.isPathInWorkspace({ vaults, wsRoot, fpath: uri.fsPath })
     ) {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "not in a vault",
       });
@@ -82,7 +82,7 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
     const dstPath = path.join(vpath, suffix);
 
     if (!fs.existsSync(filePath)) {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: `${filePath} does not exist`,
       });
@@ -91,7 +91,7 @@ export class PasteFileCommand extends BasicCommand<CommandOpts, CommandOutput> {
     }
 
     if (fs.existsSync(dstPath)) {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: `${dstPath} already exists`,
       });

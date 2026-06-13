@@ -5,7 +5,7 @@ import {
 } from "@saili/common-all";
 import _ from "lodash";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import * as vscode from "vscode";
@@ -34,14 +34,14 @@ export class MoveSelectionToCommand extends BasicCommand<
   key = DENDRON_COMMANDS.MOVE_SELECTION_TO.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
-        extra: {
-          [key: string]: any;
-        };
-      })
+      extra: {
+        [key: string]: any;
+      };
+    })
     | undefined;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -207,7 +207,7 @@ export class MoveSelectionToCommand extends BasicCommand<
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-      }
+  }
 }
 
 

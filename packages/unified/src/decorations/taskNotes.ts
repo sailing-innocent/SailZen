@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronConfig,
+  SailConfig,
   ReducedDEngine,
   TaskNoteUtils,
   VaultUtils,
@@ -27,7 +27,7 @@ export async function decorateTaskNote({
   range: VSRange;
   fname: string;
   vaultName?: string;
-  config: DendronConfig;
+  config: SailConfig;
 }) {
   const taskConfig = ConfigUtils.getTask(config);
   const vault =

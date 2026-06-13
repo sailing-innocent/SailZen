@@ -4,7 +4,7 @@ import {
   asyncLoop,
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   DEngineClient,
   DLink,
   DNodeProps,
@@ -18,7 +18,7 @@ import {
   DNoteRefLinkRaw,
   DVault,
   getSlugger,
-  DendronConfig,
+  SailConfig,
   isBlockAnchor,
   isLineAnchor,
   isNotUndefined,
@@ -31,7 +31,7 @@ import {
   NoteProps,
   NotePropsMeta,
   NoteUtils,
-  parseDendronURI,
+  parseSailURI,
   Point,
   Position,
   ReducedDEngine,
@@ -73,10 +73,10 @@ import { SiteUtils } from "../SiteUtils";
 import {
   Anchor,
   BlockAnchor,
-  DendronASTDest,
-  DendronASTNode,
-  DendronASTRoot,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTNode,
+  SailASTRoot,
+  SailASTTypes,
   ExtendedImage,
   HashTag,
   NoteRefNoteV4,
@@ -93,8 +93,8 @@ export { mdastBuilder };
 export { visit };
 export { LINK_CONTENTS, LINK_NAME, ALIAS_NAME };
 
-export function addError(proc: Processor, err: DendronError) {
-  const errors = (proc.data("errors" as any) as DendronError[] | undefined) || [];
+export function addError(proc: Processor, err: SailError) {
+  const errors = (proc.data("errors" as any) as SailError[] | undefined) || [];
   errors.push(err);
   proc.data("errors" as any, errors);
 }
@@ -102,21 +102,21 @@ export function addError(proc: Processor, err: DendronError) {
 export function getNoteOrError(
   notes: NoteProps[],
   hint: any
-): { error: DendronError | undefined; note: undefined | NoteProps } {
-  let error: DendronError | undefined;
+): { error: SailError | undefined; note: undefined | NoteProps } {
+  let error: SailError | undefined;
   let note: NoteProps | undefined;
   if (_.isUndefined(notes)) {
-    error = new DendronError({ message: `no note found. ${hint}` });
+    error = new SailError({ message: `no note found. ${hint}` });
     return { error, note };
   }
   if (notes.length > 1) {
-    error = new DendronError({
+    error = new SailError({
       message: `multiple notes found for link: ${hint}`,
     });
     return { error, note };
   }
   if (notes.length < 1) {
-    error = new DendronError({
+    error = new SailError({
       message: `no notes found for link: ${JSON.stringify(hint)}`,
     });
     return { error, note };
@@ -131,24 +131,24 @@ export type LinkFilter = {
 
 export type ParseLinkV2Resp =
   | {
-      alias?: string;
-      value: string;
-      anchorHeader?: string;
-      vaultName?: string;
-      sameFile: false;
-    }
+    alias?: string;
+    value: string;
+    anchorHeader?: string;
+    vaultName?: string;
+    sameFile: false;
+  }
   | {
-      alias?: string;
-      value?: string;
-      anchorHeader: string;
-      vaultName?: string;
-      sameFile: true;
-    };
+    alias?: string;
+    value?: string;
+    anchorHeader: string;
+    vaultName?: string;
+    sameFile: true;
+  };
 
 export function hashTag2WikiLinkNoteV4(hashtag: HashTag): WikiLinkNoteV4 {
   return {
     ...hashtag,
-    type: DendronASTTypes.WIKI_LINK,
+    type: SailASTTypes.WIKI_LINK,
     value: hashtag.fname,
     data: {
       alias: hashtag.value,
@@ -159,7 +159,7 @@ export function hashTag2WikiLinkNoteV4(hashtag: HashTag): WikiLinkNoteV4 {
 export function zdocTag2WikiLinkNoteV4(zdocTag: ZDocTag): WikiLinkNoteV4 {
   return {
     ...zdocTag,
-    type: DendronASTTypes.WIKI_LINK,
+    type: SailASTTypes.WIKI_LINK,
     value: zdocTag.fname,
     data: {
       alias: zdocTag.value,
@@ -172,7 +172,7 @@ export function frontmatterTag2WikiLinkNoteV4(
   useHashSymbol?: boolean
 ): WikiLinkNoteV4 {
   return {
-    type: DendronASTTypes.WIKI_LINK,
+    type: SailASTTypes.WIKI_LINK,
     value: `${TAGS_HIERARCHY}${tag}`,
     data: {
       alias: useHashSymbol ? `#${tag}` : tag,
@@ -185,7 +185,7 @@ const getLinks = ({
   note,
   filter,
 }: {
-  ast: DendronASTNode;
+  ast: SailASTNode;
   note: NoteProps;
   filter: LinkFilter;
 }) => {
@@ -193,17 +193,17 @@ const getLinks = ({
   const noteRefs: NoteRefNoteV4[] = [];
   visit(ast, (node: Node) => {
     switch (node.type) {
-      case DendronASTTypes.WIKI_LINK:
+      case SailASTTypes.WIKI_LINK:
         wikiLinks.push(node as WikiLinkNoteV4);
         break;
-      case DendronASTTypes.REF_LINK_V2:
+      case SailASTTypes.REF_LINK_V2:
         noteRefs.push(node as NoteRefNoteV4);
         break;
-      case DendronASTTypes.HASHTAG: {
+      case SailASTTypes.HASHTAG: {
         wikiLinks.push(hashTag2WikiLinkNoteV4(node as HashTag));
         break;
       }
-      case DendronASTTypes.ZDOCTAG: {
+      case SailASTTypes.ZDOCTAG: {
         wikiLinks.push(zdocTag2WikiLinkNoteV4(node as ZDocTag));
         break;
       }
@@ -303,14 +303,14 @@ const getLinkCandidates = async ({
   note,
   engine,
 }: {
-  ast: DendronASTNode;
+  ast: SailASTNode;
   note: NoteProps;
   engine: ReducedDEngine;
 }) => {
   const textNodes: Text[] = [];
   (visit as any)(
     ast as any,
-    [DendronASTTypes.TEXT] as any,
+    [SailASTTypes.TEXT] as any,
     (node: Text, _index: number, parent: Parent | undefined) => {
       if (parent?.type === "paragraph" || parent?.type === "tableCell") {
         textNodes.push(node);
@@ -382,14 +382,14 @@ const getLinkCandidatesSync = ({
   note,
   noteDicts,
 }: {
-  ast: DendronASTNode;
+  ast: SailASTNode;
   note: NoteProps;
   noteDicts: NoteDicts;
 }) => {
   const textNodes: Text[] = [];
   (visit as any)(
     ast as any,
-    [DendronASTTypes.TEXT] as any,
+    [SailASTTypes.TEXT] as any,
     (node: Text, _index: number, parent: Parent | undefined) => {
       if (parent?.type === "paragraph" || parent?.type === "tableCell") {
         textNodes.push(node);
@@ -450,14 +450,14 @@ const getLinkCandidatesSync = ({
 };
 
 export class LinkUtils {
-  static astType2DLinkType(type: DendronASTTypes): DLink["type"] {
+  static astType2DLinkType(type: SailASTTypes): DLink["type"] {
     switch (type) {
-      case DendronASTTypes.WIKI_LINK:
+      case SailASTTypes.WIKI_LINK:
         return "wiki";
-      case DendronASTTypes.REF_LINK_V2:
+      case SailASTTypes.REF_LINK_V2:
         return "ref";
       default:
-        throw new DendronError({ message: `invalid type conversion: ${type}` });
+        throw new SailError({ message: `invalid type conversion: ${type}` });
     }
   }
   static dlink2DNoteLink(link: DLink): DNoteLink {
@@ -489,7 +489,7 @@ export class LinkUtils {
   }: {
     note: NoteProps;
     engine: ReducedDEngine;
-    config: DendronConfig;
+    config: SailConfig;
     filter?: LinkFilter;
     type: "regular" | "candidate";
   }): Promise<DLink[]> {
@@ -522,7 +522,7 @@ export class LinkUtils {
    *
    * @param opts.filter - {type, loc
    *
-   * - type: filter by {@link DendronASTTypes}
+   * - type: filter by {@link SailASTTypes}
    * - loc: filter by {@link DLoc}
    */
   static findLinksFromBody({
@@ -531,7 +531,7 @@ export class LinkUtils {
     filter,
   }: {
     note: NoteProps;
-    config: DendronConfig;
+    config: SailConfig;
     filter?: LinkFilter;
   }): DLink[] {
     const content = note.body;
@@ -541,11 +541,11 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
         config,
       }
     );
-    const out = remark.parse(content) as DendronASTNode;
+    const out = remark.parse(content) as SailASTNode;
     const links: DLink[] = getLinks({
       ast: out,
       filter: { loc: filter?.loc },
@@ -601,7 +601,7 @@ export class LinkUtils {
       if (value) {
         // remove spaces
         value = _.trim(value);
-        ({ vaultName, link: value } = parseDendronURI(value));
+        ({ vaultName, link: value } = parseSailURI(value));
         if (!alias && !explicitAlias) {
           alias = value;
         }
@@ -633,9 +633,9 @@ export class LinkUtils {
 
         const vault = wikiLink.vaultName
           ? (VaultUtils.getVaultByName({
-              vname: wikiLink.vaultName,
-              vaults,
-            }) as DVault)
+            vname: wikiLink.vaultName,
+            vaults,
+          }) as DVault)
           : undefined;
 
         return engine.findNotes({ fname, vault });
@@ -670,17 +670,16 @@ export class LinkUtils {
     const wikiFileName = /([^\]:#]+)/.source;
     const reLink = new RegExp(
       "" +
-        `(?<name>${optWikiFileName})` +
-        `(${
-          new RegExp(
-            // anchor start
-            "" +
-              /#?/.source +
-              `(?<anchorStart>${wikiFileName})` +
-              // anchor stop
-              `(:#(?<anchorEnd>${wikiFileName}))?`
-          ).source
-        })?`,
+      `(?<name>${optWikiFileName})` +
+      `(${new RegExp(
+        // anchor start
+        "" +
+        /#?/.source +
+        `(?<anchorStart>${wikiFileName})` +
+        // anchor stop
+        `(:#(?<anchorEnd>${wikiFileName}))?`
+      ).source
+      })?`,
       "i"
     );
 
@@ -695,7 +694,7 @@ export class LinkUtils {
 
     // pre-parse vault name if it exists
     let vaultName: string | undefined;
-    ({ vaultName, link: ref } = parseDendronURI(ref));
+    ({ vaultName, link: ref } = parseSailURI(ref));
 
     const groups = reLink.exec(ref)?.groups;
     const clean: DNoteRefData = {
@@ -720,7 +719,7 @@ export class LinkUtils {
       clean.anchorStartOffset = parseInt(offset, 10);
     }
     if (_.isUndefined(fname) && _.isUndefined(clean.anchorStart)) {
-      throw new DendronError({
+      throw new SailError({
         message: `both fname and anchorStart for ${ref} is undefined`,
       });
     }
@@ -738,7 +737,7 @@ export class LinkUtils {
       _.isUndefined(noteRef.from?.fname) &&
       _.isUndefined(noteRef.data.anchorStart)
     ) {
-      throw new DendronError({
+      throw new SailError({
         message: `both fname and anchorStart for ${ref} is undefined`,
       });
     }
@@ -751,10 +750,10 @@ export class LinkUtils {
     dest,
   }: {
     link: DNoteLink;
-    dest: DendronASTDest;
+    dest: SailASTDest;
   }): string {
     switch (dest) {
-      case DendronASTDest.MD_DENDRON: {
+      case SailASTDest.MD_DENDRON: {
         if (this.isHashtagLink(link.from)) {
           return link.from.alias;
         }
@@ -782,7 +781,7 @@ export class LinkUtils {
         return [ref, `[[`, alias, vaultPrefix, value, anchor, `]]`].join("");
       }
       default:
-        throw new DendronError({
+        throw new SailError({
           message: "Tried to render a link to an unexpected format",
           payload: {
             ctx: "renderNoteLink",
@@ -831,7 +830,7 @@ export class LinkUtils {
         body.slice(0, startOffset),
         LinkUtils.renderNoteLink({
           link: newLink,
-          dest: DendronASTDest.MD_DENDRON,
+          dest: SailASTDest.MD_DENDRON,
         }),
         body.slice(endOffset),
       ].join("");
@@ -863,7 +862,7 @@ export class LinkUtils {
   }: {
     note: NoteProps;
     engine: ReducedDEngine;
-    config: DendronConfig;
+    config: SailConfig;
   }) {
     const content = note.body;
 
@@ -873,11 +872,11 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
         config,
       }
     );
-    const tree = remark.parse(content) as DendronASTNode;
+    const tree = remark.parse(content) as SailASTNode;
     const linkCandidates: DLink[] = await getLinkCandidates({
       engine,
       ast: tree,
@@ -900,7 +899,7 @@ export class LinkUtils {
   }: {
     note: NoteProps;
     noteDicts: NoteDicts;
-    config: DendronConfig;
+    config: SailConfig;
   }) {
     const content = note.body;
 
@@ -910,11 +909,11 @@ export class LinkUtils {
         noteToRender: note,
         fname: note.fname,
         vault: note.vault,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
         config,
       }
     );
-    const tree = remark.parse(content) as DendronASTNode;
+    const tree = remark.parse(content) as SailASTNode;
     const linkCandidates: DLink[] = getLinkCandidatesSync({
       noteDicts,
       ast: tree,
@@ -1039,19 +1038,19 @@ export class AnchorUtils {
     const headerText: string[] = [];
     visit(header, (node: Node) => {
       switch (node.type) {
-        case DendronASTTypes.TEXT:
+        case SailASTTypes.TEXT:
           headerText.push((node as Text).value);
           break;
-        case DendronASTTypes.WIKI_LINK:
+        case SailASTTypes.WIKI_LINK:
           headerText.push((node as WikiLinkNoteV4).data.alias);
           break;
-        case DendronASTTypes.HASHTAG:
+        case SailASTTypes.HASHTAG:
           headerText.push((node as HashTag).value);
           break;
-        case DendronASTTypes.ZDOCTAG:
+        case SailASTTypes.ZDOCTAG:
           headerText.push((node as ZDocTag).value);
           break;
-        case DendronASTTypes.INLINE_CODE:
+        case SailASTTypes.INLINE_CODE:
           headerText.push((node as InlineCode).value);
           break;
         default:
@@ -1071,13 +1070,13 @@ export class AnchorUtils {
     visit(
       header,
       [
-        DendronASTTypes.TEXT,
-        DendronASTTypes.WIKI_LINK,
-        DendronASTTypes.HASHTAG,
-        DendronASTTypes.BLOCK_ANCHOR,
+        SailASTTypes.TEXT,
+        SailASTTypes.WIKI_LINK,
+        SailASTTypes.HASHTAG,
+        SailASTTypes.BLOCK_ANCHOR,
       ],
       (node: Node) => {
-        if (node.type === DendronASTTypes.BLOCK_ANCHOR && end) {
+        if (node.type === SailASTTypes.BLOCK_ANCHOR && end) {
           // Preserve whitespace after the header, for example `# foo ^bar`, where
           // `^bar` must be separated with a space since it's not part of the header
           end.column -= 1;
@@ -1088,7 +1087,7 @@ export class AnchorUtils {
       }
     );
     if (_.isUndefined(start) || _.isUndefined(end))
-      throw new DendronError({
+      throw new SailError({
         message: "Unable to find the region of text containing the header",
       });
 
@@ -1103,7 +1102,7 @@ export class AnchorUtils {
     if (_.isUndefined(node.position)) return undefined;
 
     const { line, column } = node.position.start;
-    if (node.type === DendronASTTypes.HEADING) {
+    if (node.type === SailASTTypes.HEADING) {
       const headerNode = node as Heading;
       const text = this.headerText(headerNode);
       const value = slugger.slug(this.headerText(headerNode));
@@ -1118,7 +1117,7 @@ export class AnchorUtils {
           depth: headerNode.depth,
         },
       ];
-    } else if (node.type === DendronASTTypes.BLOCK_ANCHOR) {
+    } else if (node.type === SailASTTypes.BLOCK_ANCHOR) {
       return [
         `^${node.id}`,
         {
@@ -1147,7 +1146,7 @@ export class AnchorUtils {
       return Object.fromEntries(anchors);
     } catch (err) {
       // TODO: re-enable logging
-      // const error = DendronError.createFromStatus({
+      // const error = SailError.createFromStatus({
       //   status: ERROR_STATUS.UNKNOWN,
       //   payload: { note: NoteUtils.toLogObj(opts.note) },
       //   innerError: err as Error,
@@ -1200,18 +1199,18 @@ function walk(node: Parent, fn: any) {
 const MAX_HEADING_DEPTH = 99999;
 
 const NODE_TYPES_TO_EXTRACT = [
-  DendronASTTypes.BLOCK_ANCHOR,
-  DendronASTTypes.HEADING,
-  DendronASTTypes.LIST,
-  DendronASTTypes.LIST_ITEM,
-  DendronASTTypes.TABLE,
-  DendronASTTypes.PARAGRAPH,
+  SailASTTypes.BLOCK_ANCHOR,
+  SailASTTypes.HEADING,
+  SailASTTypes.LIST,
+  SailASTTypes.LIST_ITEM,
+  SailASTTypes.TABLE,
+  SailASTTypes.PARAGRAPH,
 ];
 
 export class RemarkUtils {
   /**
-   * Use this to [[Get the line offset of the frontmatter|dendron://dendron.docs/pkg.plugin-core.dev.cook#get-the-line-offset-of-the-frontmatter]]
-   * Given a string representation of a Dendron note,
+   * Use this to [[Get the line offset of the frontmatter|sail://sail.docs/pkg.plugin-core.dev.cook#get-the-line-offset-of-the-frontmatter]]
+   * Given a string representation of a Sail note,
    * return the position of the line right after the frontmatter.
    * @param fileText file content string to traverse
    * @returns position in parsed file content right after the frontmatter
@@ -1219,7 +1218,7 @@ export class RemarkUtils {
   static getNodePositionPastFrontmatter(fileText: string) {
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: DendronASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_DENDRON }
     );
     const parsed = proc.parse(fileText);
     let out: Position | undefined;
@@ -1234,7 +1233,7 @@ export class RemarkUtils {
   static bumpHeadings(root: Parent, baseDepth: number) {
     const headings: Heading[] = [];
     walk(root, (node: Node) => {
-      if (node.type === DendronASTTypes.HEADING) {
+      if (node.type === SailASTTypes.HEADING) {
         headings.push(node as Heading);
       }
     });
@@ -1253,17 +1252,17 @@ export class RemarkUtils {
   static findAnchors(content: string): Anchor[] {
     const parser = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: DendronASTDest.HTML }
+      { dest: SailASTDest.HTML }
     );
     const parsed = parser.parse(content);
     return [
-      ...(selectAll(DendronASTTypes.HEADING, parsed) as Heading[]),
-      ...(selectAll(DendronASTTypes.BLOCK_ANCHOR, parsed) as BlockAnchor[]),
+      ...(selectAll(SailASTTypes.HEADING, parsed) as Heading[]),
+      ...(selectAll(SailASTTypes.BLOCK_ANCHOR, parsed) as BlockAnchor[]),
     ];
   }
 
   static isHeading(node: Node, text: string, depth?: number): node is Heading {
-    if (node.type !== DendronASTTypes.HEADING) {
+    if (node.type !== SailASTTypes.HEADING) {
       return false;
     }
 
@@ -1284,7 +1283,7 @@ export class RemarkUtils {
   }
 
   static isRoot(node: Node): node is Parent {
-    return node.type === DendronASTTypes.ROOT;
+    return node.type === SailASTTypes.ROOT;
   }
 
   static isParent(node: Node): node is Parent {
@@ -1292,75 +1291,75 @@ export class RemarkUtils {
   }
 
   static isParagraph(node: Node): node is Paragraph {
-    return node.type === DendronASTTypes.PARAGRAPH;
+    return node.type === SailASTTypes.PARAGRAPH;
   }
 
   static isTable(node: Node): node is Table {
-    return node.type === DendronASTTypes.TABLE;
+    return node.type === SailASTTypes.TABLE;
   }
 
   static isTableRow(node: Node): node is TableRow {
-    return node.type === DendronASTTypes.TABLE_ROW;
+    return node.type === SailASTTypes.TABLE_ROW;
   }
 
   static isTableCell(node: Node): node is TableCell {
-    return node.type === DendronASTTypes.TABLE_CELL;
+    return node.type === SailASTTypes.TABLE_CELL;
   }
 
   static isList(node: Node): node is List {
-    return node.type === DendronASTTypes.LIST;
+    return node.type === SailASTTypes.LIST;
   }
 
   static isNoteRefV2(node: Node): node is NoteRefNoteV4 {
-    return node.type === DendronASTTypes.REF_LINK_V2;
+    return node.type === SailASTTypes.REF_LINK_V2;
   }
 
   static isImage(node: Node): node is Image {
-    return node.type === DendronASTTypes.IMAGE;
+    return node.type === SailASTTypes.IMAGE;
   }
 
   static isExtendedImage(node: Node): node is ExtendedImage {
-    return node.type === DendronASTTypes.EXTENDED_IMAGE;
+    return node.type === SailASTTypes.EXTENDED_IMAGE;
   }
 
   static isText(node: Node): node is Text {
-    return node.type === DendronASTTypes.TEXT;
+    return node.type === SailASTTypes.TEXT;
   }
 
   static isLink(node: Node): node is Link {
-    return node.type === DendronASTTypes.LINK;
+    return node.type === SailASTTypes.LINK;
   }
 
   static isWikiLink(node: Node): node is WikiLinkNoteV4 {
-    return node.type === DendronASTTypes.WIKI_LINK;
+    return node.type === SailASTTypes.WIKI_LINK;
   }
 
   static isFootnoteDefinition(node: Node): node is FootnoteDefinition {
-    return node.type === DendronASTTypes.FOOTNOTE_DEFINITION;
+    return node.type === SailASTTypes.FOOTNOTE_DEFINITION;
   }
 
   static isFrontmatter(node: Node): node is FrontmatterContent {
-    return node.type === DendronASTTypes.FRONTMATTER;
+    return node.type === SailASTTypes.FRONTMATTER;
   }
 
   static isHTML(node: Node): node is HTML {
-    return node.type === DendronASTTypes.HTML;
+    return node.type === SailASTTypes.HTML;
   }
 
   static isCode(node: Node): node is Code {
-    return node.type === DendronASTTypes.CODE;
+    return node.type === SailASTTypes.CODE;
   }
 
   static isYAML(node: Node): node is YAML {
-    return node.type === DendronASTTypes.YAML;
+    return node.type === SailASTTypes.YAML;
   }
 
   static isHashTag(node: Node): node is HashTag {
-    return node.type === DendronASTTypes.HASHTAG;
+    return node.type === SailASTTypes.HASHTAG;
   }
 
   static isZDocTag(node: Node): node is ZDocTag {
-    return node.type === DendronASTTypes.ZDOCTAG;
+    return node.type === SailASTTypes.ZDOCTAG;
   }
 
   static isNodeWithPosition<N extends Node>(
@@ -1378,9 +1377,9 @@ export class RemarkUtils {
     const prevNote = { ...note };
     return function (this: Processor) {
       return (tree: Node, _vfile: VFile) => {
-        const root = tree as DendronASTRoot;
+        const root = tree as SailASTRoot;
         const wikiLinks: WikiLinkNoteV4[] = selectAll(
-          DendronASTTypes.WIKI_LINK,
+          SailASTTypes.WIKI_LINK,
           root
         ) as WikiLinkNoteV4[];
 
@@ -1424,15 +1423,15 @@ export class RemarkUtils {
     note: NoteProps,
     changes: NoteChangeEntry[],
     engine: DEngineClient,
-    dendronConfig: DendronConfig
+    sailConfig: SailConfig
   ) {
     const prevNote = { ...note };
     // eslint-disable-next-line func-names
     return function (this: Processor) {
       return async (tree: Node, _vfile: VFile) => {
-        const root = tree as DendronASTRoot;
+        const root = tree as SailASTRoot;
         const wikiLinks: WikiLinkNoteV4[] = selectAll(
-          DendronASTTypes.WIKI_LINK,
+          SailASTTypes.WIKI_LINK,
           root
         ) as WikiLinkNoteV4[];
         let dirty = false;
@@ -1448,11 +1447,11 @@ export class RemarkUtils {
             await engine.findNotesMeta({ fname: linkNode.value, vault })
           )[0];
           if (existingNote) {
-            const publishingConfig = ConfigUtils.getPublishing(dendronConfig);
+            const publishingConfig = ConfigUtils.getPublishing(sailConfig);
             const urlRoot = publishingConfig.siteUrl || "";
             const { vault } = existingNote;
             linkNode.value = RemarkUtils.getNoteUrl({
-              config: dendronConfig,
+              config: sailConfig,
               note: existingNote,
               vault,
               urlRoot,
@@ -1480,7 +1479,7 @@ export class RemarkUtils {
         const root = tree as Root;
         const idx = _.findIndex(
           root.children,
-          (ent) => ent.type === DendronASTTypes.HEADING && ent.depth === 1
+          (ent) => ent.type === SailASTTypes.HEADING && ent.depth === 1
         );
         if (idx >= 0) {
           const head = root.children.splice(idx, 1)[0] as Heading;
@@ -1504,7 +1503,7 @@ export class RemarkUtils {
         const root = tree as Root;
         const idx = _.findIndex(
           root.children,
-          (ent) => ent.type === DendronASTTypes.HEADING && ent.depth === 1
+          (ent) => ent.type === SailASTTypes.HEADING && ent.depth === 1
         );
         if (idx >= 0) {
           const head = root.children[idx] as Heading;
@@ -1579,7 +1578,7 @@ export class RemarkUtils {
       if (nextHeaderIndex) {
         return;
       }
-      if (node.type === DendronASTTypes.HEADING) {
+      if (node.type === SailASTTypes.HEADING) {
         const depth = (node as Heading).depth;
         if (depth <= startHeaderDepth) nextHeaderIndex = _index;
       }
@@ -1609,13 +1608,13 @@ export class RemarkUtils {
     config,
   }: {
     note: NoteProps;
-    config: DendronConfig;
+    config: SailConfig;
   }): Promise<NoteBlock[]> {
     const proc = MDUtilsV5.procRemarkFull({
       noteToRender: note,
       vault: note.vault,
       fname: note.fname,
-      dest: DendronASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_DENDRON,
       config,
     });
     const slugger = getSlugger();
@@ -1634,13 +1633,13 @@ export class RemarkUtils {
     const blocks: NoteBlock[] = [];
     for (const node of nodesToSearch) {
       // Block anchors at top level refer to the blocks before them
-      if (node.type === DendronASTTypes.PARAGRAPH) {
+      if (node.type === SailASTTypes.PARAGRAPH) {
         // These look like a paragraph...
         const parent = node as Paragraph;
         if (parent.children.length === 1) {
           // ... that has only a block anchor in it ...
           const child = parent.children[0] as Node;
-          if (child.type === DendronASTTypes.BLOCK_ANCHOR) {
+          if (child.type === SailASTTypes.BLOCK_ANCHOR) {
             // ... in which case this block anchor refers to the previous block, if any
             const previous = _.last(blocks);
             if (!_.isUndefined(previous))
@@ -1655,16 +1654,16 @@ export class RemarkUtils {
 
       // Extract list items out of lists. We also extract them from nested lists,
       // because block anchors can't refer to nested lists, only items inside of them
-      if (node.type === DendronASTTypes.LIST) {
-        visit(node as any, [DendronASTTypes.LIST_ITEM], (listItem: ListItem) => {
+      if (node.type === SailASTTypes.LIST) {
+        visit(node as any, [SailASTTypes.LIST_ITEM], (listItem: ListItem) => {
           // The list item might have a block anchor inside of it.
           let anchor: DNoteAnchorPositioned | undefined;
           visit(
             listItem,
-            [DendronASTTypes.BLOCK_ANCHOR, DendronASTTypes.LIST],
+            [SailASTTypes.BLOCK_ANCHOR, SailASTTypes.LIST],
             (inListItem: Node) => {
               // Except if we hit a nested list, because then the block anchor refers to the item in the nested list
-              if (inListItem.type === DendronASTTypes.LIST) return "skip";
+              if (inListItem.type === SailASTTypes.LIST) return "skip";
               [, anchor] =
                 AnchorUtils.anchorNode2anchor(
                   inListItem as BlockAnchor,
@@ -1686,14 +1685,14 @@ export class RemarkUtils {
 
       // extract the anchor for this block, if it exists
       let anchor: DNoteAnchorPositioned | undefined;
-      if (node.type === DendronASTTypes.HEADING) {
+      if (node.type === SailASTTypes.HEADING) {
         // Headings are anchors themselves
         [, anchor] =
           AnchorUtils.anchorNode2anchor(node as Heading, slugger) || [];
-      } else if (node.type !== DendronASTTypes.LIST) {
+      } else if (node.type !== SailASTTypes.LIST) {
         // Other nodes might have block anchors inside them
         // Except lists, because anchors inside lists only refer to specific list items
-        visit(node, [DendronASTTypes.BLOCK_ANCHOR], (child: Node) => {
+        visit(node, [SailASTTypes.BLOCK_ANCHOR], (child: Node) => {
           [, anchor] =
             AnchorUtils.anchorNode2anchor(child as BlockAnchor, slugger) || [];
         });
@@ -1713,7 +1712,7 @@ export class RemarkUtils {
   }
 
   static extractFootnoteDefs(root: Node): FootnoteDefinition[] {
-    return selectAll(DendronASTTypes.FOOTNOTE_DEFINITION, root).filter(
+    return selectAll(SailASTTypes.FOOTNOTE_DEFINITION, root).filter(
       RemarkUtils.isFootnoteDefinition
     );
   }
@@ -1727,9 +1726,9 @@ export class RemarkUtils {
     let parsed: ReturnType<typeof parseFrontmatter> | undefined;
     const noteAST = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: DendronASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_DENDRON }
     ).parse(body);
-    visit(noteAST as any, [DendronASTTypes.FRONTMATTER], (frontmatter: YAML) => {
+    visit(noteAST as any, [SailASTTypes.FRONTMATTER], (frontmatter: YAML) => {
       parsed = parseFrontmatter(frontmatter);
       return false; // stop traversing, there is only one frontmatter
     });
@@ -1742,7 +1741,7 @@ export class RemarkUtils {
 
   // Copied from WorkspaceUtils:
   static getNoteUrl(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     note: NotePropsMeta;
     vault: DVault;
     urlRoot?: string;
@@ -1757,15 +1756,15 @@ export class RemarkUtils {
       config,
     });
     if (!root) {
-      throw new DendronError({ message: "no urlRoot set" });
+      throw new SailError({ message: "no urlRoot set" });
     }
     // if we have a note, see if we are at index
     const isIndex: boolean = _.isUndefined(note)
       ? false
       : SiteUtils.isIndexNote({
-          indexNote: index,
-          note,
-        });
+        indexNote: index,
+        note,
+      });
     const pathValue = note.id;
     const siteUrlPath = SiteUtils.getSiteUrlPathForNote({
       addPrefix: true,

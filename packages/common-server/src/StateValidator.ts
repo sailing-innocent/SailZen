@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   ErrorFactory,
   NoteDictsUtils,
@@ -56,17 +56,16 @@ export class StateValidator {
               );
               if (resp.error) {
                 return {
-                  error: new DendronError({
-                    message: `Vault "${VaultUtils.getName(vault)}" mismatch. ${
-                      resp.error.message
-                    }`,
+                  error: new SailError({
+                    message: `Vault "${VaultUtils.getName(vault)}" mismatch. ${resp.error.message
+                      }`,
                   }),
                 };
               }
               return { data: undefined };
             } else {
               return {
-                error: new DendronError({
+                error: new SailError({
                   message: `No files found from vault "${VaultUtils.getName(
                     vault
                   )}"`,
@@ -75,7 +74,7 @@ export class StateValidator {
             }
           } else {
             return {
-              error: new DendronError({
+              error: new SailError({
                 message: `Root file from vault "${VaultUtils.getName(
                   vault
                 )}" is missing.`,
@@ -83,9 +82,9 @@ export class StateValidator {
             };
           }
         } catch (error: any) {
-          const dendronError = ErrorFactory.wrapIfNeeded(error);
+          const sailError = ErrorFactory.wrapIfNeeded(error);
           return {
-            error: dendronError,
+            error: sailError,
           };
         }
       })

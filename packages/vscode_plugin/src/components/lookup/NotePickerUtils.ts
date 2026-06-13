@@ -22,7 +22,7 @@ import {
   CREATE_NEW_WITH_TEMPLATE_LABEL,
   CREATE_NEW_NOTE_WITH_TEMPLATE_DETAIL,
 } from "./constants";
-import { DendronQuickPicker } from "./types";
+import { SailQuickPicker } from "./types";
 import { filterPickerResults, PickerUtils } from "./utils";
 
 export const PAGINATE_LIMIT = 50;
@@ -61,8 +61,8 @@ export class NotePickerUtils {
           props: note,
           schema: note.schema
             ? (
-                await engine.getSchema(note.schema.moduleId)
-              ).data
+              await engine.getSchema(note.schema.moduleId)
+            ).data
             : undefined,
           vaults,
           wsRoot,
@@ -132,7 +132,7 @@ export class NotePickerUtils {
     return initialValue;
   }
 
-  static getSelection(picker: DendronQuickPicker): NoteQuickInput[] {
+  static getSelection(picker: SailQuickPicker): NoteQuickInput[] {
     return [...picker.selectedItems];
   }
 
@@ -163,7 +163,7 @@ export class NotePickerUtils {
   static async fetchPickerResultsNoInput({
     picker,
   }: {
-    picker: DendronQuickPicker;
+    picker: SailQuickPicker;
   }) {
     const engine = ExtensionProvider.getDWorkspace().engine;
     const resp = await NoteLookupUtils.lookup({
@@ -203,7 +203,7 @@ export class NotePickerUtils {
   }
 
   static async fetchPickerResults(opts: {
-    picker: DendronQuickPicker;
+    picker: SailQuickPicker;
     transformedQuery: TransformedQueryString;
     originalQS: string;
   }) {
@@ -244,8 +244,8 @@ export class NotePickerUtils {
           props: ent,
           schema: ent.schema
             ? (
-                await engine.getSchema(ent.schema.moduleId)
-              ).data
+              await engine.getSchema(ent.schema.moduleId)
+            ).data
             : undefined,
           vaults,
           alwaysShow: picker.alwaysShowAll,
@@ -258,7 +258,7 @@ export class NotePickerUtils {
     return updatedItems;
   }
 
-  static getPickerValue(picker: DendronQuickPicker) {
+  static getPickerValue(picker: SailQuickPicker) {
     return [
       picker.prefix,
       picker.noteModifierValue,

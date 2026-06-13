@@ -4,7 +4,7 @@ import {
   LookupSelectionTypeEnum,
 } from "@saili/common-all";
 import _ from "lodash";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { TwoWayBinding } from "../../utils/TwoWayBinding";
 import { VaultSelectButton } from "./buttons";
 import { LookupController } from "./LookupController";
@@ -16,9 +16,9 @@ import {
 import { VaultSelectionMode } from "./types";
 
 export class LookupControllerFactory implements ILookupControllerFactory {
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this.extension = extension;
   }
 
@@ -43,11 +43,11 @@ export class LookupControllerFactory implements ILookupControllerFactory {
     const maybeVaultSelectButton =
       opts?.nodeType === "note" && isMultiVault
         ? [
-            VaultSelectButton.create({
-              pressed: maybeVaultSelectButtonPressed,
-              canToggle: opts?.vaultSelectCanToggle,
-            }),
-          ]
+          VaultSelectButton.create({
+            pressed: maybeVaultSelectButtonPressed,
+            canToggle: opts?.vaultSelectCanToggle,
+          }),
+        ]
         : [];
     // --- end: multi vault selection check
     const buttons = opts?.buttons || maybeVaultSelectButton;

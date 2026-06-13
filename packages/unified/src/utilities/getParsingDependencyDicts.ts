@@ -1,10 +1,10 @@
 /* eslint-disable no-await-in-loop */
 import {
-  DendronASTDest,
+  SailASTDest,
   DNodeCompositeKey,
   DUtils,
   DVault,
-  DendronConfig,
+  SailConfig,
   NoteDicts,
   NoteDictsUtils,
   NoteProps,
@@ -16,7 +16,7 @@ import _ from "lodash";
 import { Data, Node } from "unist";
 import { visit } from "unist-util-visit";
 import {
-  DendronASTTypes,
+  SailASTTypes,
   HashTag,
   NoteRefNoteV4,
   ZDocTag,
@@ -39,7 +39,7 @@ import { MDUtilsV5 } from "../utilsv5";
 export async function getParsingDependencyDicts(
   noteToProcess: NoteProps,
   engine: ReducedDEngine,
-  config: DendronConfig,
+  config: SailConfig,
   vaults: DVault[]
 ): Promise<NoteDicts> {
   let allData: NoteProps[] = [];
@@ -112,7 +112,7 @@ function getNoteDependencies(ast: Node): DNodeCompositeKey[] {
 
   visit(
     ast as any,
-    [DendronASTTypes.WIKI_LINK],
+    [SailASTTypes.WIKI_LINK],
     (wikilink: WikiLinkNoteV4, _index) => {
       renderDependencies.push({
         fname: wikilink.value,
@@ -121,13 +121,13 @@ function getNoteDependencies(ast: Node): DNodeCompositeKey[] {
     }
   );
 
-  visit(ast as any, [DendronASTTypes.HASHTAG], (hashtag: HashTag, _index) => {
+  visit(ast as any, [SailASTTypes.HASHTAG], (hashtag: HashTag, _index) => {
     renderDependencies.push({
       fname: hashtag.fname,
     });
   });
 
-  visit(ast as any, [DendronASTTypes.ZDOCTAG], (noteRef: ZDocTag, _index) => {
+  visit(ast as any, [SailASTTypes.ZDOCTAG], (noteRef: ZDocTag, _index) => {
     renderDependencies.push({
       fname: noteRef.fname,
     });
@@ -152,7 +152,7 @@ async function getRecursiveNoteDependencies(
 
   visit(
     ast as any,
-    [DendronASTTypes.REF_LINK_V2],
+    [SailASTTypes.REF_LINK_V2],
     (noteRef: NoteRefNoteV4, _index) => {
       if (noteRef.data.link.from.fname.endsWith("*")) {
         wildCards.push({
@@ -205,7 +205,7 @@ async function getForwardLinkDependencies(
   noteToRender: NoteProps,
   vaults: DVault[],
   engine: ReducedDEngine,
-  config: DendronConfig
+  config: SailConfig
 ): Promise<NoteProps[]> {
   const MAX_DEPTH = 3;
 
@@ -220,7 +220,7 @@ async function getForwardLinkDependencies(
     fname: noteToRender.fname,
     vault: noteToRender.vault,
     config,
-    dest: DendronASTDest.MD_DENDRON,
+    dest: SailASTDest.MD_DENDRON,
   });
 
   const serialized = NoteUtils.serialize(noteToRender);
@@ -251,7 +251,7 @@ async function getForwardLinkDependencies(
               fname: note.fname,
               vault: note.vault,
               config,
-              dest: DendronASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_DENDRON,
             });
 
             const serialized = NoteUtils.serialize(note);

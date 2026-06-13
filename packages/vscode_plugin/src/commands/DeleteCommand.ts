@@ -1,6 +1,6 @@
 import {
   DeleteNoteResp,
-  DendronError,
+  SailError,
   DLink,
   DNodeUtils,
   DVault,
@@ -16,7 +16,7 @@ import _ from "lodash";
 import _md from "markdown-it";
 import path from "path";
 import { TextEditor, ViewColumn, window } from "vscode";
-import { DendronClientUtils } from "../clientUtils";
+import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -50,7 +50,7 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
   }) {
     const { link, vaults, wsRoot } = opts;
     if (!link.from.fname || !link.from.vaultName) {
-      throw new DendronError({
+      throw new SailError({
         message: `Link from location does not contain fname or vaultName: ${link.from}`,
         severity: ERROR_SEVERITY.MINOR,
       });
@@ -145,8 +145,7 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
       });
       const entry = [
         `- in **${backlink.from.vaultName}/${backlink.from.fname}**`,
-        `  - line *${backlink.position!.start.line + fmLineOffset}* column *${
-          backlink.position?.start.column
+        `  - line *${backlink.position!.start.line + fmLineOffset}* column *${backlink.position?.start.column
         }*`,
         `  - alias: \`${backlink.alias ? backlink.alias : "None"}\``,
       ].join("\n");
@@ -187,7 +186,7 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
     if (_.isString(opts)) {
       const response = await engine.getNoteMeta(opts);
       if (response.error) {
-        throw new DendronError({
+        throw new SailError({
           message: `Cannot find note with id: ${opts}`,
           payload: response.error,
           severity: ERROR_SEVERITY.MINOR,
@@ -214,7 +213,7 @@ export class DeleteCommand extends InputArgCommand<CommandOpts, CommandOutput> {
         const out = await this.deleteNote({ note, opts, engine, ctx });
         return out;
       } else {
-        const smod = await DendronClientUtils.getSchemaModByFname({
+        const smod = await SailClientUtils.getSchemaModByFname({
           fname,
           client: engine,
         });

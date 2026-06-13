@@ -8,7 +8,7 @@ export function levenshteinDistance(s1: string, s2: string): number {
   return levenshtein.get(s1, s2);
 }
 
-export function parseDendronURI(linkString: string) {
+export function parseSailURI(linkString: string) {
   if (linkString.startsWith(CONSTANTS.SRC_DELIMITER)) {
     return {
       link: linkString.replace(CONSTANTS.SRC_DELIMITER, "http://175.27.233.235:4399/content?content="),

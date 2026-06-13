@@ -1,9 +1,9 @@
 import { ConfigUtils, NotePropsMeta, NoteUtils } from "@saili/common-all";
 import _ from "lodash";
 import { window } from "vscode";
-import { DendronClientUtils } from "../clientUtils";
+import { SailClientUtils } from "../clientUtils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
@@ -23,7 +23,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.INSERT_NOTE_INDEX.key;
 
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 
@@ -38,7 +38,7 @@ export class InsertNoteIndexCommand extends BasicCommand<
     const listItems = notes.map((note) => {
       const link = NoteUtils.createWikiLink({
         note,
-        useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(
+        useVaultPrefix: SailClientUtils.shouldUseVaultPrefix(
           this._ext.getEngine()
         ),
         alias: { mode: "title" },
@@ -62,13 +62,13 @@ export class InsertNoteIndexCommand extends BasicCommand<
     const maybeEditor = VSCodeUtils.getActiveTextEditor()!;
     if (_.isUndefined(maybeEditor)) {
       window.showErrorMessage(
-        "No active text editor found. Try running this command in a Dendron note."
+        "No active text editor found. Try running this command in a Sail note."
       );
       return opts;
     }
     const activeNote = await WSUtils.instance().getNoteFromDocument(maybeEditor.document)!;
     if (_.isUndefined(activeNote)) {
-      window.showErrorMessage("Active file is not a Dendron note.");
+      window.showErrorMessage("Active file is not a Sail note.");
       return opts;
     }
     const engine = this._ext.getEngine();

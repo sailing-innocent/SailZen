@@ -1,15 +1,15 @@
 import path from "path";
 import { ConfigUtils } from ".";
-import { DendronConfig, DendronSiteFM, NoteProps, SEOProps } from "../types";
+import { SailConfig, SailSiteFM, NoteProps, SEOProps } from "../types";
 
 export class PublishUtils {
-  static getPublishFM(note: NoteProps): DendronSiteFM {
+  static getPublishFM(note: NoteProps): SailSiteFM {
     if (!note.custom) {
       return {};
     }
-    return note.custom as DendronSiteFM;
+    return note.custom as SailSiteFM;
   }
-  static getSEOPropsFromConfig(config: DendronConfig): Partial<SEOProps> {
+  static getSEOPropsFromConfig(config: SailConfig): Partial<SEOProps> {
     const { title, twitter, description, image } =
       ConfigUtils.getPublishing(config).seo;
     return { title, twitter, description, image };
@@ -47,7 +47,7 @@ export class PublishUtils {
   /**
    * Site banner uses a custom react component
    */
-  static hasCustomSiteBanner(config: DendronConfig): boolean {
+  static hasCustomSiteBanner(config: SailConfig): boolean {
     return ConfigUtils.getPublishing(config).siteBanner === "custom";
   }
 }

@@ -83,7 +83,7 @@ export class NoteLookupUtils {
     return roots.concat(childrenOfRootNotes);
   };
   /**
-   * The core of Dendron lookup logic
+   * The core of Sail lookup logic
    */
   static async lookup({
     qsRaw,
@@ -129,7 +129,7 @@ export class NoteLookupUtils {
   }
 
   /**
-   * Transform Dendron lookup syntax to fusejs syntax
+   * Transform Sail lookup syntax to fusejs syntax
    * - if wiki string, strip out wiki links
    */
   static transformQueryString({
@@ -166,9 +166,9 @@ function wikiTransform(trimmedQuery: string): TransformedQueryString {
     transformed = transformed.slice(0, transformed.indexOf("#"));
   }
 
-  if (transformed.includes("dendron://")) {
+  if (transformed.includes("sail://")) {
     // https://regex101.com/r/ICcyK6/1/
-    vaultName = transformed.match(/dendron:\/\/(.*?)\//)?.[1];
+    vaultName = transformed.match(/sail:\/\/(.*?)\//)?.[1];
 
     transformed = transformed.slice(transformed.lastIndexOf("/") + 1);
   }

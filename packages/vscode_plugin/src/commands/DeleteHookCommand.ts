@@ -1,4 +1,4 @@
-import { DHookType, IDendronError } from "@saili/common-all";
+import { DHookType, ISailError } from "@saili/common-all";
 import { DConfig } from "@saili/common-server";
 import { HookUtils } from "@saili/engine-server";
 import fs from "fs-extra";
@@ -11,7 +11,7 @@ import { ReloadIndexCommand } from "./ReloadIndex";
 
 type CommandOpts = { hookName: string; shouldDeleteScript: boolean };
 
-type CommandOutput = { error: IDendronError } | void;
+type CommandOutput = { error: ISailError } | void;
 
 export class DeleteHookCommand extends BasicCommand<
   CommandOpts,

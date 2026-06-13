@@ -12,7 +12,7 @@ import {
 import { FileExtensionUtils, findNonNoteFile } from "@saili/common-server";
 import path from "path";
 import * as vscode from "vscode";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { Logger } from "../../logger";
 import { QuickPickUtil } from "../../utils/quickPick";
 import { VSCodeUtils } from "../../vsCodeUtils";
@@ -27,8 +27,8 @@ import { IPreviewLinkHandler, LinkType } from "./IPreviewLinkHandler";
  * Default implementation for handling link clicks in preview
  */
 export class PreviewLinkHandler implements IPreviewLinkHandler {
-  private _ext: IDendronExtension;
-  constructor(ext: IDendronExtension) {
+  private _ext: ISailExtension;
+  constructor(ext: ISailExtension) {
     this._ext = ext;
   }
 
@@ -146,7 +146,7 @@ export class PreviewLinkHandler implements IPreviewLinkHandler {
     // And when the target of the link is a note in different vault without specifying
     // the vault explicitly the href is going to have the file name of the node in place of the id:
     // Example of href note inf different vault without vault specified:
-    // vscode-webview://25d7783e-df29-479c-9838-386c17dbf9b6/dendron.ref.links.target-different-vault
+    // vscode-webview://25d7783e-df29-479c-9838-386c17dbf9b6/sail.ref.links.target-different-vault
     //
     if (!data.href) {
       throw ErrorFactory.createInvalidStateError({

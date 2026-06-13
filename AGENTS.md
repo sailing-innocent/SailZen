@@ -18,7 +18,7 @@ SailZen 3.0 是当前主要开发目标，核心愿景是：**"开发一个真�
 
 SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。它由 TypeScript/JavaScript monorepo（前端/扩展）和 Python 后端（数据管理与 API 服务）组成。
 
-该项目基于 Dendron（分层笔记工具）扩展，增加了个人财务追踪、健康监测、项目管理、文本分析和必需品/库存管理等功能。
+该项目基于 Sail（分层笔记工具）扩展，增加了个人财务追踪、健康监测、项目管理、文本分析和必需品/库存管理等功能。
 
 ### 核心功能模块
 
@@ -67,10 +67,10 @@ SailZen/
 │   ├── common-all/             # 共享类型、工具函数、常量
 │   ├── common-server/          # 服务端工具函数
 │   ├── unified/                # Markdown/unified 解析工具
-│   ├── engine-server/          # Dendron 引擎 (含 Prisma)
+│   ├── engine-server/          # Sail 引擎 (含 Prisma)
 │   ├── api_server/             # Express API 服务器
 │   ├── vscode_plugin/          # VSCode 扩展 (主插件)
-│   ├── dendron_plugin_views/   # React webviews for plugin
+│   ├── sail_plugin_views/   # React webviews for plugin
 │   └── site/                   # React Web 前端 (Vite)
 ├── sail_server/                # Python 后端
 │   ├── router/                 # Litestar API 路由
@@ -115,7 +115,7 @@ SailZen/
 3. `@saili/unified` - 依赖 `common-all`
 4. `@saili/engine-server` - 依赖 `common-all`, `common-server`, `unified`
 5. `@saili/api-server` - 依赖 `common-all`, `common-server`, `engine-server`, `unified`
-6. `@saili/dendron-plugin-views` - 依赖 `common-all`
+6. `@saili/sail-plugin-views` - 依赖 `common-all`
 7. `sail-zen-vscode` - 依赖以上所有
 
 此外前后端项目比较独立
@@ -346,7 +346,7 @@ works = db.query(Work).all()
 
 - **命令模式**：所有命令在 `commands/` 目录
 - **工作区管理**：支持多种工作区类型
-- **引擎集成**：与 Dendron 引擎通信
+- **引擎集成**：与 Sail 引擎通信
 - **Webviews**：React-based views 在单独包中
 
 ## Domain Modules
@@ -599,7 +599,7 @@ DEFAULT_LLM_MODEL = "gpt-4o"     # 改为其他模型
 
 - 这是个人项目，注释中英文混杂
 - 许多注释和 docstrings 是中文
-- vscode-plugin 项目从 Dendron 演化而来 - 部分代码保留 "dendron" 命名
+- vscode-plugin 项目从 Sail 演化而来 - 部分代码保留 "sail" 命名
 - 数据库迁移手动处理 (检查 `sail_server/migration/`)
 - **Windows 开发注意**：
   - 使用 `uv run` 运行所有 Python 代码

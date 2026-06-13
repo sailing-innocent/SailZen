@@ -13,9 +13,9 @@ export default class ReferenceProvider implements vscode.ReferenceProvider {
     position: vscode.Position
   ) {
     try {
-      // No-op if dendron isn't active
+      // No-op if sail isn't active
       if (
-        !(await ExtensionProvider.isActiveAndIsDendronNote(document.uri.fsPath))
+        !(await ExtensionProvider.isActiveAndIsSailNote(document.uri.fsPath))
       ) {
         return null;
       }
@@ -36,7 +36,7 @@ export default class ReferenceProvider implements vscode.ReferenceProvider {
             return (
               match?.groups &&
               match.groups["linkContent"].split("#")[1] ===
-                getSlugger().slug(header)
+              getSlugger().slug(header)
             );
           })
           .map((reference) => {

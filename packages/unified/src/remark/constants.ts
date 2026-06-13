@@ -5,7 +5,7 @@
 
 /** All sorts of punctuation marks and quotation marks from different languages.
  *
- * Be warned that this excludes period (.) as it has a special meaning in Dendron.
+ * Be warned that this excludes period (.) as it has a special meaning in Sail.
  * Make sure to handle it appropriately depending on the context.
  *
  * Mind that this may have non regex-safe characters, run it through _.escapeRegExp if needed.

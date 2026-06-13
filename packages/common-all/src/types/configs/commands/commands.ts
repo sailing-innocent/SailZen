@@ -13,7 +13,7 @@ import { genDefaultRandomNoteConfig, RandomNoteConfig } from "./randomNote";
 /**
  * Namespace for all command related configurations
  */
-export type DendronCommandConfig = {
+export type SailCommandConfig = {
   lookup: LookupConfig;
   randomNote: RandomNoteConfig;
   insertNoteLink: InsertNoteLinkConfig;
@@ -26,11 +26,11 @@ export type DendronCommandConfig = {
 };
 
 /**
- * Generates default {@link DendronCommandConfig} using
+ * Generates default {@link SailCommandConfig} using
  * respective default config generators that each command config implements.
- * @returns DendronCommandConfig
+ * @returns SailCommandConfig
  */
-export function genDefaultCommandConfig(): DendronCommandConfig {
+export function genDefaultCommandConfig(): SailCommandConfig {
   return {
     lookup: genDefaultLookupConfig(),
     randomNote: genDefaultRandomNoteConfig(),

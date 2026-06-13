@@ -23,8 +23,8 @@ export type NoteTrait = {
 export type OnCreateContext = {
   /**
    * The value of this varies on the context.  During onWillCreate, this
-   * contains the name of the Dendron note that is currently in focus. The name
-   * includes the entire hierarchy. Undefined if a Dendron note is not currently
+   * contains the name of the Sail note that is currently in focus. The name
+   * includes the entire hierarchy. Undefined if a Sail note is not currently
    * in focus. During onCreate, this will contain the name of the note about to
    * be created.
    */

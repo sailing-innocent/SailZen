@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   ERROR_SEVERITY,
   ExtensionEvents,
   KeybindingConflictDetectedSource,
@@ -107,8 +107,8 @@ export class KeybindingUtils {
 
     userKeybindingConfig.forEach((keybinding) => {
       // we only recognize disabling of the conflicting keybinding as resolution
-      // remapping of either the conflicting / dendron command's keybinding
-      // or disabling the dendron command's keybinding is not considered a resolution.
+      // remapping of either the conflicting / sail command's keybinding
+      // or disabling the sail command's keybinding is not considered a resolution.
       if (keybinding.command.startsWith("-")) {
         const command = keybinding.command.substring(1);
         const resolvedConflict = conflicts.find(
@@ -158,7 +158,7 @@ export class KeybindingUtils {
         close: false,
       });
     if (defaultKeybindingJSON === undefined) {
-      throw new DendronError({
+      throw new SailError({
         message: "Failed reading default keybinding.",
         severity: ERROR_SEVERITY.MINOR,
       });
@@ -171,9 +171,9 @@ export class KeybindingUtils {
     const contents = [
       "# Known Keybinding Conflicts",
       "",
-      "The keybindings listed at the bottom are known to have conflicts with default keybindings for Dendron commands.",
+      "The keybindings listed at the bottom are known to have conflicts with default keybindings for Sail commands.",
       "",
-      "Neither Dendron nor the extension may function properly if the keybinding conflict is not resolved.",
+      "Neither Sail nor the extension may function properly if the keybinding conflict is not resolved.",
       "",
       "Consider resolving the keybinding conflicts throught the following method:",
       "",
@@ -199,7 +199,7 @@ export class KeybindingUtils {
               return keybinding.command === conflict.commandId;
             }
           );
-          const dendronKeybindingEntry = defaultKeybindingJSON.find(
+          const sailKeybindingEntry = defaultKeybindingJSON.find(
             (keybinding) => {
               return keybinding.command === conflict.conflictsWith;
             }
@@ -207,7 +207,7 @@ export class KeybindingUtils {
           if (conflictKeybindingEntry === undefined) {
             return undefined;
           }
-          if (dendronKeybindingEntry === undefined) {
+          if (sailKeybindingEntry === undefined) {
             return undefined;
           }
 
@@ -217,7 +217,7 @@ export class KeybindingUtils {
           });
 
           const copyCommandUri = (args: CopyToClipboardCommandOpts) =>
-            `command:dendron.copyToClipboard?${encodeURIComponent(
+            `command:sail.copyToClipboard?${encodeURIComponent(
               JSON.stringify(args)
             )}`;
 
@@ -257,7 +257,7 @@ export class KeybindingUtils {
     conflicts: KeybindingConflict[];
   }) {
     const message =
-      "We noticed some extensions that have known keybinding conflicts with Dendron. Would you like to view a list of keybinding conflicts?";
+      "We noticed some extensions that have known keybinding conflicts with Sail. Would you like to view a list of keybinding conflicts?";
     const action = "Show Conflicts";
     await vscode.window
       .showWarningMessage(message, action)
@@ -336,7 +336,7 @@ export class KeybindingUtils {
     if (result.length === 1 && result[0].key) {
       return result[0].key;
     } else if (result.length > 1) {
-      throw new DendronError({
+      throw new SailError({
         message: this.getMultipleKeybindingsMsgFormat("pod"),
       });
     }
@@ -367,7 +367,7 @@ export class KeybindingUtils {
     if (result.length === 1 && result[0].key) {
       return result[0].key;
     } else if (result.length > 1) {
-      throw new DendronError({
+      throw new SailError({
         message: this.getMultipleKeybindingsMsgFormat("copy as"),
       });
     }

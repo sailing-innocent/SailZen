@@ -10,7 +10,7 @@ import {
   ProviderAcceptHooks,
 } from "../components/lookup/utils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { FileItem } from "../external/fileutils/FileItem";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -36,7 +36,7 @@ type CommandOutput = {
 export { CommandOutput as RenameNoteOutput };
 
 /**
- * This is not `Dendron: Rename Note`. For that, See [[../packages/plugin-core/src/commands/RenameNoteCommand.ts]]
+ * This is not `Sail: Rename Note`. For that, See [[../packages/plugin-core/src/commands/RenameNoteCommand.ts]]
  * This is an plugin internal command that is used as part of refactor hierarchy and the rename provider implementation.
  *
  * TODO: refactor this class to avoid confusion.
@@ -74,7 +74,7 @@ export class RenameNoteInternalCommand extends BaseCommand<
         onDone: (event: HistoryEvent) => {
           resolve({ move: event.data.onAcceptHookResp });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -84,7 +84,7 @@ export class RenameNoteInternalCommand extends BaseCommand<
         initialValue,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -127,7 +127,7 @@ export class RenameNoteInternalCommand extends BaseCommand<
   async showResponse(res: CommandOutput) {
     const { changed } = res;
     if (changed.length > 0 && !this.silent) {
-      window.showInformationMessage(`Dendron updated ${changed.length} files`);
+      window.showInformationMessage(`Sail updated ${changed.length} files`);
     }
   }
 

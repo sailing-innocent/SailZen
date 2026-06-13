@@ -1,6 +1,6 @@
 import {
   assertUnreachable,
-  DendronError,
+  SailError,
   NoteProps,
   NoteUtils,
   VaultUtils,
@@ -14,7 +14,7 @@ import { Disposable, QuickPickItem, Range, TextEditor } from "vscode";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
 import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { AutoCompleter } from "../utils/autoCompleter";
 import {
@@ -41,25 +41,25 @@ export class ConvertLinkCommand extends BasicCommand<
   key = DENDRON_COMMANDS.CONVERT_LINK.key;
 
   static noAvailableOperationError() {
-    return new DendronError({
+    return new SailError({
       message: `No available convert operation for link at cursor position.`,
     });
   }
 
   static noVaultError() {
-    return new DendronError({
+    return new SailError({
       message: "this link points to a note in a vault that doesn't exist",
     });
   }
 
   static noLinkError() {
-    return new DendronError({
+    return new SailError({
       message: `No link at cursor position.`,
     });
   }
 
   static noTextError() {
-    return new DendronError({
+    return new SailError({
       message: "Failed to determine text to replace broken link.",
     });
   }
@@ -154,12 +154,12 @@ export class ConvertLinkCommand extends BasicCommand<
           }
           resolve(data);
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
         onHide: () => {
           resolve(undefined);
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -168,7 +168,7 @@ export class ConvertLinkCommand extends BasicCommand<
         provider,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
           lc.quickPick.value = AutoCompleter.getAutoCompletedValue(
@@ -243,7 +243,7 @@ export class ConvertLinkCommand extends BasicCommand<
         break;
       }
       default: {
-        throw new DendronError({
+        throw new SailError({
           message: "Unexpected option selected",
           payload: {
             ctx: "prepareBrokenLinkOperation",
@@ -324,7 +324,7 @@ export class ConvertLinkCommand extends BasicCommand<
         assertUnreachable(refType);
       }
     }
-    throw new DendronError({
+    throw new SailError({
       message: "cancelled.",
     });
   }

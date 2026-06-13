@@ -3,7 +3,7 @@ import { Theme } from "../publishing";
 /**
  * Namespace for all preview related configurations
  */
-export type DendronPreviewConfig = {
+export type SailPreviewConfig = {
   enableFMTitle: boolean; // TODO: split
   enableNoteTitleForLink: boolean; // TODO: split
   enableFrontmatterTags: boolean;
@@ -15,10 +15,10 @@ export type DendronPreviewConfig = {
 };
 
 /**
- * Generate defaults for {@link DendronPreviewConfig}
- * @returns DendronPreviewConfig
+ * Generate defaults for {@link SailPreviewConfig}
+ * @returns SailPreviewConfig
  */
-export function genDefaultPreviewConfig(): DendronPreviewConfig {
+export function genDefaultPreviewConfig(): SailPreviewConfig {
   return {
     enableFMTitle: true,
     enableNoteTitleForLink: true,

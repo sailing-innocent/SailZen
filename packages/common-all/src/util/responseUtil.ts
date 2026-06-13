@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { RespV2 } from "../types";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 
 /** Utility for {@link RespV2} */
 export class ResponseUtil {
@@ -16,7 +16,7 @@ export class ResponseUtil {
     };
   }
 
-  static createUnhappyResponse<T>(input: { error: DendronError }): RespV2<T> {
+  static createUnhappyResponse<T>(input: { error: SailError }): RespV2<T> {
     return {
       error: input.error,
       data: undefined,

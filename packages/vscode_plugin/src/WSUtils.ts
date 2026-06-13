@@ -1,8 +1,8 @@
-import { IDendronExtension } from "./dendronExtensionInterface";
+import { ISailExtension } from "./sailExtensionInterface";
 import vscode, { Position, Selection, TextEditor } from "vscode";
 import path from "path";
 import {
-  DendronError,
+  SailError,
   DNoteAnchorBasic,
   DVault,
   NoteProps,
@@ -29,9 +29,9 @@ let WS_UTILS: IWSUtils | undefined;
  *  Utilities to work with workspace related functions
  **/
 export class WSUtils implements IWSUtils {
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this.extension = extension;
   }
 
@@ -59,7 +59,7 @@ export class WSUtils implements IWSUtils {
 
   /**
    * Prefer NOT to use this method and instead get WSUtils passed in as
-   * dependency or use IDendronExtension.wsUtils.
+   * dependency or use ISailExtension.wsUtils.
    *
    * This method exists to satisfy static method of WSUtils while refactoring
    * is happening and we are moving method to this class.
@@ -144,7 +144,7 @@ export class WSUtils implements IWSUtils {
       }
     } else {
       return {
-        error: new DendronError({
+        error: new SailError({
           message: `No note found`,
         }),
       };
@@ -283,7 +283,7 @@ export class WSUtils implements IWSUtils {
     vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Starting Dendron...",
+        title: "Starting Sail...",
         cancellable: true,
       },
       (_progress, _token) => {
@@ -303,7 +303,7 @@ export class WSUtils implements IWSUtils {
             "extension",
             async (_event: HistoryEvent) => {
               if (_event.action === "not_initialized") {
-                Logger.error({ ctx, msg: "issue initializing Dendron" });
+                Logger.error({ ctx, msg: "issue initializing Sail" });
                 resolve(undefined);
               }
             }

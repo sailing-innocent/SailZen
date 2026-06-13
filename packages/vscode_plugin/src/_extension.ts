@@ -42,7 +42,7 @@ import { ConfigureUIPanelFactory } from "./components/views/ConfigureUIPanelFact
 import { NoteGraphPanelFactory } from "./components/views/NoteGraphViewFactory";
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { SchemaGraphViewFactory } from "./components/views/SchemaGraphViewFactory";
-import { DENDRON_COMMANDS, DendronContext, WORKSPACE_STATE } from "./constants";
+import { DENDRON_COMMANDS, SailContext, WORKSPACE_STATE } from "./constants";
 import { codeActionProvider } from "./features/codeActionProvider";
 import { completionProvider } from "./features/completionProvider";
 import DefinitionProvider from "./features/DefinitionProvider";
@@ -59,7 +59,7 @@ import { DocStatusBarProvider } from "./features/DocStatusBar";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
 import { StartupUtils } from "./utils/StartupUtils";
 import { VSCodeUtils } from "./vsCodeUtils";
-import { DendronExtension, getDWorkspace, getExtension } from "./workspace";
+import { SailExtension, getDWorkspace, getExtension } from "./workspace";
 import { TutorialInitializer } from "./workspace/tutorialInitializer";
 import { WorkspaceActivator } from "./workspace/workspaceActivator";
 import { WSUtils } from "./WSUtils";
@@ -155,7 +155,7 @@ export async function _activate(
     });
 
     //  needs to be initialized to setup commands
-    const ws = await DendronExtension.getOrCreate(context, {
+    const ws = await SailExtension.getOrCreate(context, {
       skipSetup: stage === "test",
     });
     const existingCommands = await vscode.commands.getCommands();
@@ -184,7 +184,7 @@ export async function _activate(
       _setupLanguageFeatures(context);
     }
 
-    // Need to recompute this for tests, because the instance of DendronExtension doesn't get re-created.
+    // Need to recompute this for tests, because the instance of SailExtension doesn't get re-created.
     // Probably also needed if the user switches from one workspace to the other.
     ws.type = await WorkspaceUtils.getWorkspaceType({
       workspaceFile: vscode.workspace.workspaceFile,
@@ -195,7 +195,7 @@ export async function _activate(
     // activating the workspace
     ws.workspaceImpl = undefined;
 
-    const currentVersion = DendronExtension.version();
+    const currentVersion = SailExtension.version();
     const previousWorkspaceVersionFromState =
       context.workspaceState.get<string>(WORKSPACE_STATE.VERSION) || "0.0.0";
 
@@ -227,10 +227,10 @@ export async function _activate(
     });
 
     // Setup the recent workspaces views here so that it still works even if
-    // we're not in a Dendron workspace.
+    // we're not in a Sail workspace.
     context.subscriptions.push(setupRecentWorkspacesTreeView());
 
-    if (await DendronExtension.isDendronWorkspace()) {
+    if (await SailExtension.isSailWorkspace()) {
       const activator = new WorkspaceActivator();
       const maybeWsRoot = await activator.getOrPromptWsRoot({
         ext: ws,
@@ -275,7 +275,7 @@ export async function _activate(
 
       // stats
       const platform = getOS();
-      const extensions = Extensions.getDendronExtensionRecommendations().map(
+      const extensions = Extensions.getSailExtensionRecommendations().map(
         ({ id, extension: ext }) => {
           return {
             id,
@@ -314,7 +314,7 @@ export async function _activate(
       }
     } else {
       // ws not active
-      Logger.info({ ctx, msg: "dendron not active" });
+      Logger.info({ ctx, msg: "sail not active" });
     }
 
     if (extensionInstallStatus === InstallStatus.INITIAL_INSTALL) {
@@ -327,7 +327,7 @@ export async function _activate(
       await showWelcomeOrWhatsNew({
         extensionInstallStatus,
         isSecondaryInstall,
-        version: DendronExtension.version(),
+        version: SailExtension.version(),
         previousExtensionVersion: previousWorkspaceVersionFromState,
         start: startActivate,
         assetUri,
@@ -335,7 +335,7 @@ export async function _activate(
       });
     }
 
-    if (DendronExtension.isActive(context)) {
+    if (SailExtension.isActive(context)) {
       HistoryService.instance().add({
         source: "extension",
         action: "activate",
@@ -366,8 +366,8 @@ export async function _activate(
 function togglePluginActiveContext(enabled: boolean) {
   const ctx = "togglePluginActiveContext";
   Logger.info({ ctx, state: `togglePluginActiveContext: ${enabled}` });
-  VSCodeUtils.setContext(DendronContext.PLUGIN_ACTIVE, enabled);
-  VSCodeUtils.setContext(DendronContext.HAS_CUSTOM_MARKDOWN_VIEW, enabled);
+  VSCodeUtils.setContext(SailContext.PLUGIN_ACTIVE, enabled);
+  VSCodeUtils.setContext(SailContext.HAS_CUSTOM_MARKDOWN_VIEW, enabled);
 }
 
 // this method is called when your extension is deactivated
@@ -479,7 +479,7 @@ async function _setupCommands({
   // If your command needs access to the engine at setup, requireActiveWorkspace should be set to true
   requireActiveWorkspace,
 }: {
-  ext: DendronExtension;
+  ext: SailExtension;
   context: vscode.ExtensionContext;
   requireActiveWorkspace: boolean;
 }) {

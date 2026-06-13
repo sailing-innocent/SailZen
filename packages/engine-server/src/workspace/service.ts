@@ -2,8 +2,8 @@ import {
   asyncLoopOneAtATime,
   ConfigUtils,
   CONSTANTS,
-  DendronConfig,
-  DendronError,
+  SailConfig,
+  SailError,
   DENDRON_VSCODE_CONFIG_KEYS,
   DEngineClient,
   Disposable,
@@ -91,7 +91,7 @@ export type WorkspaceServiceCreateOpts = {
    */
   additionalVaults?: DVault[];
   /**
-   * create dendron.code-workspace file
+   * create sail.code-workspace file
    */
   createCodeWorkspace?: boolean;
   /** Create a self contained vault as the workspace */
@@ -129,19 +129,19 @@ type AddRemoveCommonOpts = {
 };
 
 const ROOT_NOTE_TEMPLATE = [
-  "# Welcome to Dendron",
+  "# Welcome to Sail",
   "",
-  `This is the root of your dendron vault. If you decide to publish your entire vault, this will be your landing page. You are free to customize any part of this page except the frontmatter on top.`,
+  `This is the root of your sail vault. If you decide to publish your entire vault, this will be your landing page. You are free to customize any part of this page except the frontmatter on top.`,
   "",
   "## Lookup",
   "",
   "This section contains useful links to related resources.",
   "",
-  "- [Getting Started Guide](https://link.dendron.so/6b25)",
-  "- [Discord](https://link.dendron.so/6b23)",
-  "- [Home Page](https://wiki.dendron.so/)",
-  "- [Github](https://link.dendron.so/6b24)",
-  "- [Developer Docs](https://docs.dendron.so/)",
+  "- [Getting Started Guide](https://link.sail.so/6b25)",
+  "- [Discord](https://link.sail.so/6b23)",
+  "- [Home Page](https://wiki.sail.so/)",
+  "- [Github](https://link.sail.so/6b24)",
+  "- [Developer Docs](https://docs.sail.so/)",
 ].join("\n");
 
 /** You **must** dispose workspace services you create, otherwise you risk leaking file descriptors which may lead to crashes. */
@@ -200,7 +200,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     return DConfig.getOrCreate(wsRoot);
   }
 
-  get config(): DendronConfig {
+  get config(): SailConfig {
     // TODO: don't read all the time but cache
     const { error, data } = DConfig.readConfigAndApplyLocalOverrideSync(
       this.wsRoot
@@ -218,7 +218,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     return this.config.workspace.vaults;
   }
 
-  async setConfig(config: DendronConfig) {
+  async setConfig(config: SailConfig) {
     const wsRoot = this.wsRoot;
     return DConfig.writeConfig({ wsRoot, config });
   }
@@ -273,15 +273,15 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
    *
    *
    * @param opts.vault - {@link DVault} to add to workspace
-   * @param opts.config - if passed it, make modifications on passed in config instead of {wsRoot}/dendron.yml
-   * @param opts.updateConfig - default: true, add to dendron.yml
-   * @param opts.updateWorkspace - default: false, add to dendron.code-workspace. Make sure to keep false for Native workspaces.
+   * @param opts.config - if passed it, make modifications on passed in config instead of {wsRoot}/sail.yml
+   * @param opts.updateConfig - default: true, add to sail.yml
+   * @param opts.updateWorkspace - default: false, add to sail.code-workspace. Make sure to keep false for Native workspaces.
    * @returns
    */
   async addVault(
     opts: {
       vault: DVault;
-      config?: DendronConfig;
+      config?: SailConfig;
     } & AddRemoveCommonOpts
   ) {
     const { vault, updateConfig, updateWorkspace } = _.defaults(opts, {
@@ -366,12 +366,12 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
 
   /**
    * Create vault files if it does not exist
-   * @param opts.noAddToConfig: don't add to dendron.yml
-   * @param opts.addToCodeWorkspace: add to dendron.code-workspace
+   * @param opts.noAddToConfig: don't add to sail.yml
+   * @param opts.addToCodeWorkspace: add to sail.code-workspace
    * @returns void
    *
    * Effects:
-   *   - updates `dendron.yml` if `noAddToConfig` is not set
+   *   - updates `sail.yml` if `noAddToConfig` is not set
    *   - create directory
    *   - create root note and root schema
    */
@@ -465,7 +465,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       };
       if (vault.name) selfContainedVaultConfig.name = vault.name;
 
-      // create dendron.yml
+      // create sail.yml
       DConfig.createSync({
         wsRoot: vaultPath,
         defaults: {
@@ -477,7 +477,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
           },
         },
       });
-      // create dendron.code-workspace
+      // create sail.code-workspace
       WorkspaceConfig.write(vaultPath, [], {
         overrides: {
           folders: [
@@ -495,7 +495,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
           },
         },
       });
-      // Also add a gitignore, so files like `.dendron.port` are ignored if the
+      // Also add a gitignore, so files like `.sail.port` are ignored if the
       // self contained vault is opened on its own
       await WorkspaceService.createGitIgnore(vaultPath);
     }
@@ -515,7 +515,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     if (vault.seed) {
       // Unsupported vaults are filtered in the commands that use this function,
       // but also adding a sanity check here.
-      throw new DendronError({
+      throw new SailError({
         message: "Seed vaults are not yet supported for automated migration.",
       });
     }
@@ -548,7 +548,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       path.join(newFolder, FOLDERS.ASSETS)
     );
     // Update the config to mark this vault as self contained
-    const config = DConfig.getRaw(this.wsRoot) as DendronConfig;
+    const config = DConfig.getRaw(this.wsRoot) as SailConfig;
     const configVault = ConfigUtils.getVaults(config).find((confVault) =>
       VaultUtils.isEqualV2(confVault, vault)
     );
@@ -582,7 +582,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       ..._.omit(newVault, "remote"),
       fsPath: ".",
     };
-    // Create or update the config file (dendron.yml) inside the wsRoot/vault
+    // Create or update the config file (sail.yml) inside the wsRoot/vault
     if (
       !(await fs.pathExists(
         path.join(oldFolder, CONSTANTS.DENDRON_CONFIG_FILE)
@@ -603,7 +603,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       await DConfig.writeConfig({ wsRoot: oldFolder, config });
     }
 
-    // Create or update the workspace file (dendron.code-workspace) inside the wsRoot/vault
+    // Create or update the workspace file (sail.code-workspace) inside the wsRoot/vault
     if (
       !(await fs.pathExists(path.join(oldFolder, CONSTANTS.DENDRON_WS_NAME)))
     ) {
@@ -764,7 +764,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       recursive: true,
       force: true /* It's OK if dir doesn't exist */,
     });
-    // Update `dendron.yml`, removing the remote from the converted vault
+    // Update `sail.yml`, removing the remote from the converted vault
     const config = this.config;
 
     ConfigUtils.updateVault(config, targetVault, (vault) => {
@@ -805,7 +805,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
 
       const prevVaultName = prevVault.name || prevVault.fsPath;
       const vaultName = vault.name || vault.fsPath;
-      throw new DendronError({
+      throw new SailError({
         message: `Vaults ${prevVaultName} and ${vaultName} are in the same repository, but have conflicting configurations ${prevVault.sync} and ${vault.sync} set. Please remove conflicting configuration, or move vault to a different repository.`,
       });
     }
@@ -859,12 +859,12 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     const { version } = (await engine.info()).data || { version: "unknown" };
 
     return [
-      "Dendron workspace sync",
+      "Sail workspace sync",
       "",
       "## Synced vaults:",
       ...vaults.map((vault) => `- ${VaultUtils.getName(vault)}`),
       "",
-      `Dendron version: ${version}`,
+      `Sail version: ${version}`,
       `Hostname: ${os.hostname()}`,
     ].join("\n");
   }
@@ -936,7 +936,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
             return { repo, vaults, status: SyncActionStatus.DONE };
           } catch (err: any) {
             const stderr = err.stderr ? `: ${err.stderr}` : "";
-            throw new DendronError({
+            throw new SailError({
               message: `error adding and committing vault${stderr}`,
               payload: { err, repoPath: repo },
             });
@@ -954,8 +954,8 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
    */
   async initialize(opts?: { onSyncVaultsProgress: any; onSyncVaultsEnd: any }) {
     const { onSyncVaultsProgress, onSyncVaultsEnd } = _.defaults(opts, {
-      onSyncVaultsProgress: () => {},
-      onSyncVaultsEnd: () => {},
+      onSyncVaultsProgress: () => { },
+      onSyncVaultsEnd: () => { },
     });
     const initializeRemoteVaults = ConfigUtils.getWorkspace(
       this.config
@@ -1080,7 +1080,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       gitIgnore,
       [
         "node_modules",
-        ".dendron.*",
+        ".sail.*",
         "build",
         "seeds",
         ".next",
@@ -1095,12 +1095,12 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
    * Files and folders created:
    * wsRoot/
    * - .gitignore
-   * - dendron.yml
+   * - sail.yml
    * - {vaults}/
    *   - root.md
    *   - root.schema.yml
    *
-   * NOTE: dendron.yml only gets created if you are adding a workspace...
+   * NOTE: sail.yml only gets created if you are adding a workspace...
    * @param opts
    */
   static async createWorkspace(opts: WorkspaceServiceCreateOpts) {
@@ -1121,7 +1121,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     );
     const ws = new WorkspaceService({ wsRoot });
     fs.ensureDirSync(wsRoot);
-    // this creates `dendron.yml`
+    // this creates `sail.yml`
     DConfig.createSync({
       wsRoot,
     });
@@ -1277,7 +1277,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
   async cloneVaultWithAccessToken(opts: { vault: DVault }) {
     const { vault } = opts;
     if (!vault.remote || vault.remote.type !== "git") {
-      throw new DendronError({ message: "cloning non-git vault" });
+      throw new SailError({ message: "cloning non-git vault" });
     }
     let remotePath = vault.remote.url;
     const localPath = vault2Path({ vault, wsRoot: this.wsRoot });
@@ -1308,7 +1308,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     });
     const wsRoot = this.wsRoot;
     if (!vault.remote || vault.remote.type !== "git") {
-      throw new DendronError({
+      throw new SailError({
         message: "Internal error: cloning non-git vault",
       });
     }
@@ -1364,7 +1364,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     });
     const wsRoot = this.wsRoot;
     if (!vault.remote || vault.remote.type !== "git") {
-      throw new DendronError({ message: "pulling non-git vault" });
+      throw new SailError({ message: "pulling non-git vault" });
     }
     const repoPath = vault2Path({ wsRoot, vault });
     this.logger.info({ msg: "pulling ", repoPath });
@@ -1418,7 +1418,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
               this.logger.info({ ctx, vaults, repo, stashed });
               // this shouldn't fail, but for safety's sake
               if (!stashed || _.isEmpty(stashed) || !git.isValidStashCommit(stashed)) {
-                throw new DendronError({
+                throw new SailError({
                   message: "unable to stash changes",
                   payload: { stashed },
                 });
@@ -1470,7 +1470,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
               const vaultNames = vaults
                 .map((vault) => VaultUtils.getName(vault))
                 .join(",");
-              throw new DendronError({
+              throw new SailError({
                 message: `Failed to pull ${vaultNames}: ${stderr}`,
                 payload: {
                   err,
@@ -1536,7 +1536,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
             return makeResult(SyncActionStatus.DONE);
           } catch (err: any) {
             const stderr = err.stderr ? `: ${err.stderr}` : "";
-            throw new DendronError({
+            throw new SailError({
               message: `error pushing vault${stderr}`,
               payload: { err, repoPath: repo },
             });
@@ -1567,14 +1567,14 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
     workspaceInstallStatus,
     currentVersion,
     previousVersion,
-    dendronConfig,
+    sailConfig,
     wsConfig,
   }: {
     forceUpgrade?: boolean;
     workspaceInstallStatus: InstallStatus;
     currentVersion: string;
     previousVersion: string;
-    dendronConfig: DendronConfig;
+    sailConfig: SailConfig;
     wsConfig?: WorkspaceSettings;
   }) {
     let changes: MigrationChangeSetStatus[] = [];
@@ -1588,7 +1588,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       changes = await MigrationService.applyMigrationRules({
         currentVersion,
         previousVersion,
-        dendronConfig,
+        sailConfig,
         wsConfig,
         wsService: this,
         logger: this.logger,
@@ -1596,7 +1596,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
       // if changes were made, use updated changes in subsequent configuration
       if (!_.isEmpty(changes)) {
         const { data } = _.last(changes)!;
-        dendronConfig = data.dendronConfig;
+        sailConfig = data.sailConfig;
       }
     }
 
@@ -1609,7 +1609,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
    * @param skipPrivate skip cloning and pulling of private vaults. default: false
    */
   async syncVaults(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     progressIndicator?: () => void;
     urlTransformer?: UrlTransformerFunc;
     fetchAndPull?: boolean;
@@ -1657,7 +1657,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
             seedResults.push({
               id,
               status: SyncActionStatus.ERROR,
-              data: new DendronError({
+              data: new SailError({
                 status: SyncActionStatus.ERROR,
                 message: `seed ${id} does not exist in registry`,
               }),
@@ -1721,7 +1721,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
 
   writePort(port: number) {
     const wsRoot = this.wsRoot;
-    // dendron-cli can overwrite port file. anything that needs the port should connect to `portFilePathExtension`
+    // sail-cli can overwrite port file. anything that needs the port should connect to `portFilePathExtension`
     const portFilePath = EngineUtils.getPortFilePathForWorkspace({ wsRoot });
     fs.writeFileSync(portFilePath, _.toString(port), { encoding: "utf8" });
   }

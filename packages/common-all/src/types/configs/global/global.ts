@@ -1,7 +1,7 @@
 /**
  * Namespace for all global configurations.
  */
-export type DendronGlobalConfig = {
+export type SailGlobalConfig = {
   enableFMTitle: boolean; // TODO: split implementation to respect non-global config
   enableNoteTitleForLink: boolean; // TODO: split
   enablePrettyRefs: boolean; // TODO: split
@@ -11,10 +11,10 @@ export type DendronGlobalConfig = {
 };
 
 /**
- * Generates default for {@link DendronGlobalConfig}
- * @returns DendronGlobalConfig
+ * Generates default for {@link SailGlobalConfig}
+ * @returns SailGlobalConfig
  */
-export function genDefaultGlobalConfig(): DendronGlobalConfig {
+export function genDefaultGlobalConfig(): SailGlobalConfig {
   return {
     enableFMTitle: true, // TODO: split implementation to respect non-global config
     enableNoteTitleForLink: true, // TODO: split

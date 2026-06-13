@@ -2,10 +2,10 @@ import {
   APIUtils,
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   ErrorFactory,
   ERROR_SEVERITY,
-  DendronConfig,
+  SailConfig,
   NoteProps,
   ReducedDEngine,
   RespV3,
@@ -100,7 +100,7 @@ export class EngineUtils {
   }: {
     note: NoteProps;
     engine: ReducedDEngine;
-    config: DendronConfig;
+    config: SailConfig;
     fmChangeOnly?: boolean;
     silent?: boolean;
   }): Promise<void> {
@@ -113,12 +113,12 @@ export class EngineUtils {
         return;
       }
       // this should only show up if a user navigates
-      throw new DendronError({
+      throw new SailError({
         message:
           `Note "${note.fname}" in vault "${VaultUtils.getName(
             note.vault
           )}" is longer than ${maxNoteLength} characters, some features like backlinks may not work correctly for it. ` +
-          `You may increase "maxNoteLength" in "dendron.yml" to override this warning.`,
+          `You may increase "maxNoteLength" in "sail.yml" to override this warning.`,
         severity: ERROR_SEVERITY.MINOR,
       });
     }

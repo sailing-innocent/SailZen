@@ -3,7 +3,7 @@ import { fromZodError } from "zod-validation-error";
 import type { ZodType } from "zod";
 import { ok, err } from "./utils";
 import type { Result } from "neverthrow";
-import { DendronError } from "./error";
+import { SailError } from "./error";
 
 export { z };
 
@@ -14,9 +14,9 @@ export { z };
  */
 export const schemaForType =
   <T>() =>
-  <S extends ZodType<T, any, any>>(arg: S) => {
-    return arg;
-  };
+    <S extends ZodType<T, any, any>>(arg: S) => {
+      return arg;
+    };
 
 /**
  * Parse `zod` schema into `Result`
@@ -29,13 +29,13 @@ export const parse = <T extends z.ZodTypeAny>(
   schema: T,
   raw: unknown,
   msg?: string
-): Result<z.infer<T>, DendronError> => {
+): Result<z.infer<T>, SailError> => {
   const parsed = schema.safeParse(raw);
   if (parsed.success) {
     return ok(parsed.data);
   } else {
     return err(
-      new DendronError({
+      new SailError({
         message: [
           fromZodError(parsed.error, { prefix: msg }).message,
           ...(schema.description ? [`Schema:${schema.description}`] : []),

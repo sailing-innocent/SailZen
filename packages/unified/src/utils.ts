@@ -4,7 +4,7 @@ import {
   FIFOQueue,
   getSlugger,
   getStage,
-  DendronConfig,
+  SailConfig,
   NoteProps,
 } from "@saili/common-all";
 // @ts-ignore
@@ -20,7 +20,7 @@ import path from "path";
 import { Node, Parent } from "unist";
 // import { normalizev2 } from "../utils";
 import { RemarkUtils } from "./remark";
-import { DendronASTNode, DendronASTTypes } from "./types";
+import { SailASTNode, SailASTTypes } from "./types";
 import { toString } from "mdast-util-to-string";
 
 export const renderFromNote = (opts: { note: NoteProps }) => {
@@ -79,7 +79,7 @@ export class MdastUtils {
     match,
     slugger,
   }: {
-    nodes: DendronASTNode["children"];
+    nodes: SailASTNode["children"];
     match: string | Heading;
     slugger?: ReturnType<typeof getSlugger>;
   }): FindHeaderAnchor | null {
@@ -211,7 +211,7 @@ export class MdastUtils {
     opts: { depth?: number; slugger: ReturnType<typeof getSlugger> }
   ) {
     const { depth, slugger } = opts;
-    if (node.type !== DendronASTTypes.HEADING) {
+    if (node.type !== SailASTTypes.HEADING) {
       return false;
     }
 
@@ -236,7 +236,7 @@ export class MdastUtils {
 }
 
 export class PublishUtils {
-  static getAbsUrlForAsset(opts: { suffix?: string; config: DendronConfig }) {
+  static getAbsUrlForAsset(opts: { suffix?: string; config: SailConfig }) {
     const suffix = opts.suffix || "";
     const { config } = opts;
     const assetsPrefix = ConfigUtils.getAssetsPrefix(config);
@@ -252,7 +252,7 @@ export class PublishUtils {
     return out;
   }
 
-  static getSiteUrl = (config: DendronConfig) => {
+  static getSiteUrl = (config: SailConfig) => {
     const publishingConfig = ConfigUtils.getPublishing(config);
     if (getStage() !== "dev") {
       const siteUrl = process.env["SITE_URL"] || publishingConfig.siteUrl;

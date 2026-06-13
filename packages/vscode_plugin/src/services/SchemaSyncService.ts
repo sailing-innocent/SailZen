@@ -5,15 +5,15 @@ import { SchemaParser } from "@saili/engine-server";
 import path from "path";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { ISchemaSyncService } from "./SchemaSyncServiceInterface";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { WriteSchemaResp } from "@saili/common-all";
 
 /** Currently responsible for keeping the engine in sync with schema
  *  changes on disk. */
 export class SchemaSyncService implements ISchemaSyncService {
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this.extension = extension;
   }
 
@@ -53,9 +53,8 @@ export class SchemaSyncService implements ISchemaSyncService {
         })
       );
 
-      const msg = `${
-        isBrandNewFile ? "Created" : "Updated"
-      } schemas in '${path.basename(uri.fsPath)}'`;
+      const msg = `${isBrandNewFile ? "Created" : "Updated"
+        } schemas in '${path.basename(uri.fsPath)}'`;
       vscode.window.showInformationMessage(msg);
 
       // We are setting the status bar message when schemas are malformed to give user

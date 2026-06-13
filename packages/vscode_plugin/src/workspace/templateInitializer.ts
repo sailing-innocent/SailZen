@@ -15,7 +15,7 @@ export class TemplateInitializer
     await super.onWorkspaceCreation(opts);
 
     await opts.svc?.seedService.addSeed({
-      id: "dendron.templates",
+      id: "sail.templates",
     });
 
     return;

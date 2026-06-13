@@ -16,12 +16,12 @@ import {
   CONFIG_TO_MINIMUM_COMPAT_MAPPING,
   ERROR_SEVERITY,
 } from "../constants";
-import { DENDRON_CONFIG } from "../constants/configs/dendronConfig";
-import { DendronError, ErrorMessages, IDendronError } from "../error";
+import { DENDRON_CONFIG } from "../constants/configs/sailConfig";
+import { SailError, ErrorMessages, ISailError } from "../error";
 import { DHookDict, NoteChangeEntry, NoteProps } from "../types";
 import { GithubConfig } from "../types/configs/publishing/github";
 import {
-  DendronPublishingConfig,
+  SailPublishingConfig,
   DuplicateNoteBehavior,
   genDefaultPublishingConfig,
   publishingSchema,
@@ -32,10 +32,10 @@ import { TaskConfig } from "../types/configs/workspace/task";
 import { isWebUri } from "../util/regex";
 import { DVault } from "../types/DVault";
 import {
-  DendronConfig,
-  DendronCommandConfig,
-  DendronPreviewConfig,
-  DendronWorkspaceConfig,
+  SailConfig,
+  SailCommandConfig,
+  SailPreviewConfig,
+  SailWorkspaceConfig,
   genDefaultCommandConfig,
   genDefaultPreviewConfig,
   genDefaultWorkspaceConfig,
@@ -66,7 +66,7 @@ export * from "./publishUtils";
 export * from "./vscode-utils";
 
 /**
- * Dendron utilities
+ * Sail utilities
  */
 export class DUtils {
   static minimatch = minimatch;
@@ -479,7 +479,7 @@ export type ConfigVaildationResp = {
 };
 
 export class ConfigUtils {
-  static genDefaultConfig(): DendronConfig {
+  static genDefaultConfig(): SailConfig {
     const common = {
       dev: {
         enablePreviewV2: true,
@@ -501,7 +501,7 @@ export class ConfigUtils {
    * as it includes updated settings that we don't want to set as
    * defaults for backward compatibility reasons
    */
-  static genLatestConfig(defaults?: DeepPartial<DendronConfig>): DendronConfig {
+  static genLatestConfig(defaults?: DeepPartial<SailConfig>): SailConfig {
     const common = {
       dev: {
         enablePreviewV2: true,
@@ -518,68 +518,68 @@ export class ConfigUtils {
         workspace: { ...genDefaultWorkspaceConfig() },
         preview: genDefaultPreviewConfig(),
         publishing: mergedPublishingConfig,
-      } as DendronConfig,
+      } as SailConfig,
       defaults
     );
   }
 
   // get
-  static getProp<K extends keyof DendronConfig>(
-    config: DendronConfig,
+  static getProp<K extends keyof SailConfig>(
+    config: SailConfig,
     key: K
-  ): DendronConfig[K] {
+  ): SailConfig[K] {
     const defaultConfig = ConfigUtils.genDefaultConfig();
     const configWithDefaults = _.defaultsDeep(config, defaultConfig);
     return configWithDefaults[key];
   }
 
-  static getCommands(config: DendronConfig): DendronCommandConfig {
+  static getCommands(config: SailConfig): SailCommandConfig {
     return ConfigUtils.getProp(config, "commands");
   }
 
-  static getWorkspace(config: DendronConfig): DendronWorkspaceConfig {
+  static getWorkspace(config: SailConfig): SailWorkspaceConfig {
     return ConfigUtils.getProp(config, "workspace");
   }
 
-  static getPreview(config: DendronConfig): DendronPreviewConfig {
+  static getPreview(config: SailConfig): SailPreviewConfig {
     const out = ConfigUtils.getProp(config, "preview");
-    // FIXME: for some reason, this can return undefined when run in context of chrome in `dendron-plugin-views`
+    // FIXME: for some reason, this can return undefined when run in context of chrome in `sail-plugin-views`
     if (_.isUndefined(out)) {
       return ConfigUtils.genDefaultConfig().preview;
     }
     return out;
   }
 
-  static getPublishing(config: DendronConfig): DendronPublishingConfig {
+  static getPublishing(config: SailConfig): SailPublishingConfig {
     return ConfigUtils.getProp(config, "publishing");
   }
 
-  static getVaults(config: DendronConfig): DVault[] {
+  static getVaults(config: SailConfig): DVault[] {
     return ConfigUtils.getWorkspace(config).vaults;
   }
 
-  static getHooks(config: DendronConfig): DHookDict | undefined {
+  static getHooks(config: SailConfig): DHookDict | undefined {
     return ConfigUtils.getWorkspace(config).hooks;
   }
 
-  static getJournal(config: DendronConfig): JournalConfig {
+  static getJournal(config: SailConfig): JournalConfig {
     return ConfigUtils.getWorkspace(config).journal;
   }
 
-  static getScratch(config: DendronConfig): ScratchConfig {
+  static getScratch(config: SailConfig): ScratchConfig {
     return ConfigUtils.getWorkspace(config).scratch;
   }
 
-  static getTask(config: DendronConfig): TaskConfig {
+  static getTask(config: SailConfig): TaskConfig {
     return ConfigUtils.getWorkspace(config).task;
   }
 
-  static getLookup(config: DendronConfig): LookupConfig {
+  static getLookup(config: SailConfig): LookupConfig {
     return ConfigUtils.getCommands(config).lookup;
   }
 
   static getEnableFMTitle(
-    config: DendronConfig,
+    config: SailConfig,
     shouldApplyPublishRules?: boolean
   ): boolean | undefined {
     const publishRule = ConfigUtils.getPublishing(config).enableFMTitle;
@@ -590,7 +590,7 @@ export class ConfigUtils {
   }
 
   static getEnableNoteTitleForLink(
-    config: DendronConfig,
+    config: SailConfig,
     shouldApplyPublishRules?: boolean
   ): boolean | undefined {
     const publishRule =
@@ -602,7 +602,7 @@ export class ConfigUtils {
   }
 
   static getEnableKatex(
-    config: DendronConfig,
+    config: SailConfig,
     shouldApplyPublishRules?: boolean
   ): boolean | undefined {
     const publishRule = ConfigUtils.getPublishing(config).enableKatex;
@@ -613,35 +613,35 @@ export class ConfigUtils {
   }
 
   static getHierarchyConfig(
-    config: DendronConfig
+    config: SailConfig
   ): { [key: string]: HierarchyConfig } | undefined {
     return ConfigUtils.getPublishing(config).hierarchy;
   }
 
-  static getGithubConfig(config: DendronConfig): GithubConfig | undefined {
+  static getGithubConfig(config: SailConfig): GithubConfig | undefined {
     return ConfigUtils.getPublishing(config).github;
   }
 
-  static getGiscusConfig(config: DendronConfig): GiscusConfig | undefined {
+  static getGiscusConfig(config: SailConfig): GiscusConfig | undefined {
     return ConfigUtils.getPublishing(config).giscus;
   }
 
-  static getLogo(config: DendronConfig): string | undefined {
+  static getLogo(config: SailConfig): string | undefined {
     return ConfigUtils.getPublishing(config).logoPath;
   }
 
-  static getAssetsPrefix(config: DendronConfig): string | undefined {
+  static getAssetsPrefix(config: SailConfig): string | undefined {
     return ConfigUtils.getPublishing(config).assetsPrefix;
   }
 
   static getEnableRandomlyColoredTags(
-    config: DendronConfig
+    config: SailConfig
   ): boolean | undefined {
     return ConfigUtils.getPublishing(config).enableRandomlyColoredTags;
   }
 
   static getEnableFrontmatterTags(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     shouldApplyPublishRules: boolean;
   }): boolean | undefined {
     const { config, shouldApplyPublishRules } = opts;
@@ -654,7 +654,7 @@ export class ConfigUtils {
   }
 
   static getEnableHashesForFMTags(opts: {
-    config: DendronConfig;
+    config: SailConfig;
     shouldApplyPublishRules: boolean;
   }): boolean | undefined {
     const { config, shouldApplyPublishRules } = opts;
@@ -666,19 +666,19 @@ export class ConfigUtils {
       : ConfigUtils.getPreview(config).enableHashesForFMTags;
   }
 
-  static getEnablePrettlyLinks(config: DendronConfig): boolean | undefined {
+  static getEnablePrettlyLinks(config: SailConfig): boolean | undefined {
     return ConfigUtils.getPublishing(config).enablePrettyLinks;
   }
 
-  static getGATracking(config: DendronConfig): string | undefined {
+  static getGATracking(config: SailConfig): string | undefined {
     return ConfigUtils.getPublishing(config).ga?.tracking;
   }
 
-  static getSiteLastModified(config: DendronConfig): boolean | undefined {
+  static getSiteLastModified(config: SailConfig): boolean | undefined {
     return ConfigUtils.getPublishing(config).enableSiteLastModified;
   }
 
-  static getSiteLogoUrl(config: DendronConfig): string | undefined {
+  static getSiteLogoUrl(config: SailConfig): string | undefined {
     const assetsPrefix = ConfigUtils.getAssetsPrefix(config);
     const logo = ConfigUtils.getLogo(config);
 
@@ -697,7 +697,7 @@ export class ConfigUtils {
   }
 
   static getEnablePrettyRefs(
-    config: DendronConfig,
+    config: SailConfig,
     opts?: {
       note?: NotePropsMeta;
       shouldApplyPublishRules?: boolean;
@@ -718,7 +718,7 @@ export class ConfigUtils {
    * to make using the API easier when we do add it
    */
   static getEnableChildLinks(
-    _config: DendronConfig,
+    _config: SailConfig,
     opts?: { note?: NotePropsMeta }
   ): boolean {
     if (
@@ -733,7 +733,7 @@ export class ConfigUtils {
     return true;
   }
   static getEnableBackLinks(
-    _config: DendronConfig,
+    _config: SailConfig,
     opts?: { note?: NotePropsMeta; shouldApplyPublishingRules?: boolean }
   ): boolean {
     // check if note has override. takes precedence
@@ -749,7 +749,7 @@ export class ConfigUtils {
     // check config value, if enableBacklinks set, then use value set
     const publishConfig = ConfigUtils.getPublishing(_config);
     if (
-      ConfigUtils.isDendronPublishingConfig(publishConfig) &&
+      ConfigUtils.isSailPublishingConfig(publishConfig) &&
       opts?.shouldApplyPublishingRules
     ) {
       if (_.isBoolean(publishConfig.enableBackLinks)) {
@@ -759,7 +759,7 @@ export class ConfigUtils {
     return true;
   }
 
-  static getHierarchyDisplayConfigForPublishing(config: DendronConfig) {
+  static getHierarchyDisplayConfigForPublishing(config: SailConfig) {
     const hierarchyDisplay =
       ConfigUtils.getPublishing(config).enableHierarchyDisplay;
     const hierarchyDisplayTitle =
@@ -767,55 +767,55 @@ export class ConfigUtils {
     return { hierarchyDisplay, hierarchyDisplayTitle };
   }
 
-  static getNonNoteLinkAnchorType(config: DendronConfig) {
+  static getNonNoteLinkAnchorType(config: SailConfig) {
     return (
       this.getCommands(config).copyNoteLink.nonNoteFile?.anchorType || "block"
     );
   }
 
-  static getAliasMode(config: DendronConfig) {
+  static getAliasMode(config: SailConfig) {
     return this.getCommands(config).copyNoteLink.aliasMode;
   }
 
-  static getVersion(config: DendronConfig): number {
+  static getVersion(config: SailConfig): number {
     return config.version;
   }
 
-  static getSearchMode(config: DendronConfig): SearchMode {
+  static getSearchMode(config: SailConfig): SearchMode {
     const defaultMode = ConfigUtils.getPublishing(config).searchMode;
     return defaultMode || SearchMode.LOOKUP;
   }
   // set
-  static setProp<K extends keyof DendronConfig>(
-    config: DendronConfig,
+  static setProp<K extends keyof SailConfig>(
+    config: SailConfig,
     key: K,
-    value: DendronConfig[K]
+    value: SailConfig[K]
   ): void {
     _.set(config, key, value);
   }
 
-  static setCommandsProp<K extends keyof DendronCommandConfig>(
-    config: DendronConfig,
+  static setCommandsProp<K extends keyof SailCommandConfig>(
+    config: SailConfig,
     key: K,
-    value: DendronCommandConfig[K]
+    value: SailCommandConfig[K]
   ) {
     const path = `commands.${key}`;
     _.set(config, path, value);
   }
 
-  static setWorkspaceProp<K extends keyof DendronWorkspaceConfig>(
-    config: DendronConfig,
+  static setWorkspaceProp<K extends keyof SailWorkspaceConfig>(
+    config: SailConfig,
     key: K,
-    value: DendronWorkspaceConfig[K]
+    value: SailWorkspaceConfig[K]
   ) {
     const path = `workspace.${key}`;
     _.set(config, path, value);
   }
 
-  static setPublishProp<K extends keyof DendronPublishingConfig>(
-    config: DendronConfig,
+  static setPublishProp<K extends keyof SailPublishingConfig>(
+    config: SailConfig,
     key: K,
-    value: DendronPublishingConfig[K]
+    value: SailPublishingConfig[K]
   ) {
     const path = `publishing.${key}`;
     _.set(config, path, value);
@@ -825,7 +825,7 @@ export class ConfigUtils {
    * Set properties under the publishing.github namaspace (v5+ config)
    */
   static setGithubProp<K extends keyof GithubConfig>(
-    config: DendronConfig,
+    config: SailConfig,
     key: K,
     value: GithubConfig[K]
   ) {
@@ -833,15 +833,15 @@ export class ConfigUtils {
     _.set(config, path, value);
   }
 
-  static isDendronPublishingConfig(
+  static isSailPublishingConfig(
     config: unknown
-  ): config is DendronPublishingConfig {
+  ): config is SailPublishingConfig {
     return _.has(config, "enableBackLinks");
   }
 
   static overridePublishingConfig(
-    config: DendronConfig,
-    value: DendronPublishingConfig
+    config: SailConfig,
+    value: SailPublishingConfig
   ) {
     return {
       ...config,
@@ -849,15 +849,15 @@ export class ConfigUtils {
     };
   }
 
-  static unsetProp<K extends keyof DendronConfig>(
-    config: DendronConfig,
+  static unsetProp<K extends keyof SailConfig>(
+    config: SailConfig,
     key: K
   ) {
     _.unset(config, key);
   }
 
-  static unsetPublishProp<K extends keyof DendronPublishingConfig>(
-    config: DendronConfig,
+  static unsetPublishProp<K extends keyof SailPublishingConfig>(
+    config: SailConfig,
     key: K
   ) {
     const path = `publishing.${key}`;
@@ -865,7 +865,7 @@ export class ConfigUtils {
   }
 
   static setDuplicateNoteBehavior(
-    config: DendronConfig,
+    config: SailConfig,
     value: DuplicateNoteBehavior
   ): void {
     ConfigUtils.setPublishProp(
@@ -875,17 +875,17 @@ export class ConfigUtils {
     );
   }
 
-  static unsetDuplicateNoteBehavior(config: DendronConfig): void {
+  static unsetDuplicateNoteBehavior(config: SailConfig): void {
     ConfigUtils.unsetPublishProp(config, "duplicateNoteBehavior");
   }
 
-  static setVaults(config: DendronConfig, value: DVault[]): void {
+  static setVaults(config: SailConfig, value: DVault[]): void {
     ConfigUtils.setWorkspaceProp(config, "vaults", value);
   }
 
   /** Finds the matching vault in the config, and uses the callback to update it. */
   static updateVault(
-    config: DendronConfig,
+    config: SailConfig,
     vaultToUpdate: DVault,
     updateCb: (vault: DVault) => DVault
   ): void {
@@ -900,7 +900,7 @@ export class ConfigUtils {
   }
 
   static setNoteLookupProps<K extends keyof NoteLookupConfig>(
-    config: DendronConfig,
+    config: SailConfig,
     key: K,
     value: NoteLookupConfig[K]
   ) {
@@ -909,7 +909,7 @@ export class ConfigUtils {
   }
 
   static setJournalProps<K extends keyof JournalConfig>(
-    config: DendronConfig,
+    config: SailConfig,
     key: K,
     value: JournalConfig[K]
   ) {
@@ -918,7 +918,7 @@ export class ConfigUtils {
   }
 
   static setScratchProps<K extends keyof ScratchConfig>(
-    config: DendronConfig,
+    config: SailConfig,
     key: K,
     value: ScratchConfig[K]
   ) {
@@ -926,27 +926,27 @@ export class ConfigUtils {
     _.set(config, path, value);
   }
 
-  static setHooks(config: DendronConfig, value: DHookDict) {
+  static setHooks(config: SailConfig, value: DHookDict) {
     ConfigUtils.setWorkspaceProp(config, "hooks", value);
   }
 
-  static setPreviewProps<K extends keyof DendronPreviewConfig>(
-    config: DendronConfig,
+  static setPreviewProps<K extends keyof SailPreviewConfig>(
+    config: SailConfig,
     key: K,
-    value: DendronPreviewConfig[K]
+    value: SailPreviewConfig[K]
   ) {
     const path = `preview.${key}`;
     _.set(config, path, value);
   }
 
   static setNonNoteLinkAnchorType(
-    config: DendronConfig,
+    config: SailConfig,
     value: NonNoteFileLinkAnchorType
   ) {
     _.set(config, "commands.copyNoteLink.nonNoteFile.anchorType", value);
   }
 
-  static setAliasMode(config: DendronConfig, aliasMode: "title" | "none") {
+  static setAliasMode(config: SailConfig, aliasMode: "title" | "none") {
     _.set(config, "commands.copyNoteLink.aliasMode", aliasMode);
   }
 
@@ -957,7 +957,7 @@ export class ConfigUtils {
     const { clientVersion, configVersion } = opts;
 
     if (_.isUndefined(configVersion)) {
-      throw new DendronError({
+      throw new SailError({
         message:
           "Cannot determine config version. Please make sure the field 'version' is present and correct",
         severity: ERROR_SEVERITY.FATAL,
@@ -968,7 +968,7 @@ export class ConfigUtils {
       CONFIG_TO_MINIMUM_COMPAT_MAPPING[configVersion].clientVersion;
 
     if (_.isUndefined(minCompatClientVersion)) {
-      throw new DendronError({
+      throw new SailError({
         message: ErrorMessages.formatShouldNeverOccurMsg(
           "Cannot find minimum compatible client version."
         ),
@@ -984,7 +984,7 @@ export class ConfigUtils {
     );
 
     if (_.isUndefined(minCompatConfigVersion)) {
-      throw new DendronError({
+      throw new SailError({
         message: ErrorMessages.formatShouldNeverOccurMsg(
           "cannot find minimum compatible config version."
         ),
@@ -1020,11 +1020,11 @@ export class ConfigUtils {
   }
 
   static detectMissingDefaults(opts: {
-    config: Partial<DendronConfig>;
-    defaultConfig?: DendronConfig;
+    config: Partial<SailConfig>;
+    defaultConfig?: SailConfig;
   }): {
     needsBackfill: boolean;
-    backfilledConfig: DendronConfig;
+    backfilledConfig: SailConfig;
   } {
     const { config } = opts;
     const configDeepCopy = _.cloneDeep(config);
@@ -1040,7 +1040,7 @@ export class ConfigUtils {
   }
 
   static detectDeprecatedConfigs(opts: {
-    config: Partial<DendronConfig>;
+    config: Partial<SailConfig>;
     deprecatedPaths: string[];
   }): string[] {
     const { config, deprecatedPaths } = opts;
@@ -1115,7 +1115,7 @@ export class ConfigUtils {
    *
    * This is used to track changes from the default during activation.
    */
-  static findDifference(opts: { config: DendronConfig }) {
+  static findDifference(opts: { config: SailConfig }) {
     const { config } = opts;
 
     const defaultConfig = ConfigUtils.genDefaultConfig();
@@ -1143,37 +1143,37 @@ export class ConfigUtils {
   }
 
   /**
-   * Parses an unkown input into a DendronConfig
+   * Parses an unkown input into a SailConfig
    * @param input
    */
 
-  static parse(input: unknown): Result<DendronConfig, IDendronError> {
-    const schema = schemaForType<{ publishing: DendronPublishingConfig }>()(
+  static parse(input: unknown): Result<SailConfig, ISailError> {
+    const schema = schemaForType<{ publishing: SailPublishingConfig }>()(
       z
         .object({
           version: z.number(),
-          dev: z.object({}).passthrough().optional(), // TODO DendronDevConfig;
-          commands: z.object({}).passthrough(), // TODO DendronCommandConfig;
-          workspace: z.object({}).passthrough(), // TODO DendronWorkspaceConfig;
-          preview: z.object({}).passthrough(), // TODO DendronPreviewConfig;
+          dev: z.object({}).passthrough().optional(), // TODO SailDevConfig;
+          commands: z.object({}).passthrough(), // TODO SailCommandConfig;
+          workspace: z.object({}).passthrough(), // TODO SailWorkspaceConfig;
+          preview: z.object({}).passthrough(), // TODO SailPreviewConfig;
           publishing: publishingSchema,
-          global: z.object({}).passthrough().optional(), // TODO DendronGlobalConfig;
+          global: z.object({}).passthrough().optional(), // TODO SailGlobalConfig;
         })
         .passthrough()
     );
 
-    return parse(schema, input, "Invalid Dendron Config").map((value) => {
+    return parse(schema, input, "Invalid Sail Config").map((value) => {
       // TODO remove once all properties are defined in the schema, because that the parse will have set all default values for us already.
       return _.defaultsDeep(
         value,
         ConfigUtils.genDefaultConfig()
-      ) as DendronConfig;
+      ) as SailConfig;
     });
   }
 }
 
 /**
- * Make name safe for dendron
+ * Make name safe for sail
  * @param name
  * @param opts
  */
@@ -1191,7 +1191,7 @@ export function cleanName(name: string): string {
 export function normalizeUnixPath(fsPath: string): string {
   return path.posix
     ? path.posix.normalize(fsPath.replace(/\\/g, "/"))
-    : normalizePath(fsPath); // `path.posix` might be not available depending on your build system. For example at the time of writing `dendron-plugin-views` does not implement a `posix` property.
+    : normalizePath(fsPath); // `path.posix` might be not available depending on your build system. For example at the time of writing `sail-plugin-views` does not implement a `posix` property.
 }
 
 /** Wrapper(s) for easier testing, to wrap functions where we don't want to mock the global function. */

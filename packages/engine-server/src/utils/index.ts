@@ -1,6 +1,6 @@
 import {
   CONSTANTS,
-  DendronError,
+  SailError,
   DNoteRefData,
   DNoteRefLink,
   getSlugger,
@@ -104,7 +104,7 @@ export function writeWSMetaFile({
 
 type LinkDirection = "from" | "to";
 
-export function parseDendronRef(ref: string) {
+export function parseSailRef(ref: string) {
   const [idOrRef, ...rest] = _.trim(ref).split(":");
   const cleanArgs = _.trim(rest.join(":"));
   let link: DNoteRefLink | undefined;
@@ -122,19 +122,18 @@ export function parseFileLink(ref: string): DNoteRefLink {
   const wikiFileName = /([^\]:]+)/.source;
   const reLink = new RegExp(
     "" +
-      /\[\[/.source +
-      `(?<name>${wikiFileName})` +
-      /\]\]/.source +
-      `(${
-        new RegExp(
-          // anchor start
-          "" +
-            /#?/.source +
-            `(?<anchorStart>${wikiFileName})` +
-            // anchor stop
-            `(:#(?<anchorEnd>${wikiFileName}))?`
-        ).source
-      })?`,
+    /\[\[/.source +
+    `(?<name>${wikiFileName})` +
+    /\]\]/.source +
+    `(${new RegExp(
+      // anchor start
+      "" +
+      /#?/.source +
+      `(?<anchorStart>${wikiFileName})` +
+      // anchor stop
+      `(:#(?<anchorEnd>${wikiFileName}))?`
+    ).source
+    })?`,
     "i"
   );
   const groups = reLink.exec(ref)?.groups;
@@ -154,7 +153,7 @@ export function parseFileLink(ref: string): DNoteRefLink {
     }
   });
   if (_.isUndefined(fname)) {
-    throw new DendronError({ message: `fname for ${ref} is undefined` });
+    throw new SailError({ message: `fname for ${ref} is undefined` });
   }
   if (clean.anchorStart && clean.anchorStart.indexOf(",") >= 0) {
     const [anchorStart, offset] = clean.anchorStart.split(",");

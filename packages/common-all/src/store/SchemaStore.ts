@@ -1,7 +1,7 @@
 import { URI, Utils } from "vscode-uri";
 import { ERROR_SEVERITY, ERROR_STATUS } from "../constants";
 import { SchemaUtils } from "../dnode";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import { RespV3, SchemaModuleProps, WriteSchemaOpts } from "../types";
 import { VaultUtils } from "../vault";
 import { IDataStore } from "./IDataStore";
@@ -77,7 +77,7 @@ export class SchemaStore implements ISchemaStore<string> {
     // Ids don't match, return error
     if (key !== schema.root.id) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.WRITE_FAILED,
           message: `Ids don't match between key ${key} and schema ${schema}.`,
           severity: ERROR_SEVERITY.MINOR,
@@ -135,7 +135,7 @@ export class SchemaStore implements ISchemaStore<string> {
       return { error: metadata.error };
     } else if (metadata.data.fname === "root") {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CANT_DELETE_ROOT,
           message: `Cannot delete ${key}. Root schemas cannot be deleted.`,
           severity: ERROR_SEVERITY.MINOR,

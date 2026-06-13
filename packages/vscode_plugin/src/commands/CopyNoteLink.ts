@@ -14,10 +14,10 @@ import { AnchorUtils } from "@saili/unified";
 import _ from "lodash";
 import path from "path";
 import { Disposable, TextEditor, window } from "vscode";
-import { DendronClientUtils } from "../clientUtils";
+import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -37,10 +37,10 @@ export class CopyNoteLinkCommand
   implements Disposable {
   static requireActiveWorkspace: boolean = true;
   key = DENDRON_COMMANDS.COPY_NOTE_LINK.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
   private _onEngineNoteStateChangedDisposable: Disposable | undefined;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -79,7 +79,7 @@ export class CopyNoteLinkCommand
           canPickMany: false,
           ignoreFocusOut: true,
           title:
-            "What type of anchors should Dendron create for links in non-note files?",
+            "What type of anchors should Sail create for links in non-note files?",
         }
       );
       // User cancelled the prompt
@@ -180,7 +180,7 @@ export class CopyNoteLinkCommand
             value: anchor,
             type: isBlockAnchor(anchor) ? "blockAnchor" : "header",
           },
-        useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(engine),
+        useVaultPrefix: SailClientUtils.shouldUseVaultPrefix(engine),
         alias: { mode: aliasMode },
       }),
       anchor,

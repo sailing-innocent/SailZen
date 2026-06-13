@@ -1,4 +1,4 @@
-import { DendronError, ERROR_SEVERITY } from "@saili/common-all";
+import { SailError, ERROR_SEVERITY } from "@saili/common-all";
 import {
   SyncActionResult,
   SyncActionStatus,
@@ -17,9 +17,9 @@ const L = Logger;
 type CommandOpts = {};
 type CommandReturns =
   | {
-      finalMessage: string;
-      committed: SyncActionResult[];
-    }
+    finalMessage: string;
+    committed: SyncActionResult[];
+  }
   | undefined;
 
 export class AddAndCommit extends BasicCommand<CommandOpts, CommandReturns> {
@@ -80,7 +80,7 @@ export class AddAndCommit extends BasicCommand<CommandOpts, CommandReturns> {
     const engine = ExtensionProvider.getEngine();
     const workspaceService = ExtensionProvider.getExtension().workspaceService;
     if (_.isUndefined(workspaceService))
-      throw new DendronError({
+      throw new SailError({
         message: "Workspace is not initialized",
         severity: ERROR_SEVERITY.FATAL,
       });

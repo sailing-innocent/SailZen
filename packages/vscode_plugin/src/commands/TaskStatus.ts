@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   NoteProps,
   TaskNoteUtils,
   VaultUtils,
@@ -8,7 +8,7 @@ import {
 import { DENDRON_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 import { VSCodeUtils, MessageSeverity } from "../vsCodeUtils";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { QuickPickItem } from "vscode";
 import { EditorUtils } from "../utils/EditorUtils";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
@@ -29,9 +29,9 @@ export class TaskStatusCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.TASK_SET_STATUS.key;
   public static requireActiveWorkspace: boolean = true;
-  private _ext: IDendronExtension;
+  private _ext: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     super();
     this._ext = extension;
   }
@@ -56,9 +56,9 @@ export class TaskStatusCommand extends BasicCommand<
       const engine = this._ext.getDWorkspace().engine;
       const vault = selection.vaultName
         ? VaultUtils.getVaultByName({
-            vaults: this._ext.getDWorkspace().vaults,
-            vname: selection.vaultName,
-          })
+          vaults: this._ext.getDWorkspace().vaults,
+          vname: selection.vaultName,
+        })
         : undefined;
 
       if (!selectedNote) {
@@ -94,7 +94,7 @@ export class TaskStatusCommand extends BasicCommand<
             (note) => note.vault.fsPath === picked.detail
           );
           if (!pickedNote) {
-            throw new DendronError({
+            throw new SailError({
               message: "Can't find selected note",
               payload: {
                 notes,

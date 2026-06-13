@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   DLogger,
   NoteProps,
 } from "@saili/common-all";
@@ -11,7 +11,7 @@ import { Logger } from "../../logger";
 import * as vscode from "vscode";
 import { Disposable } from "vscode";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { DendronContext } from "../../constants";
+import { SailContext } from "../../constants";
 import { AutoCompletableRegistrar } from "../../utils/registers/AutoCompletableRegistrar";
 import { AutoCompleter } from "../../utils/autoCompleter";
 
@@ -62,10 +62,10 @@ export class QuickPickTemplateSelector {
             controller,
           });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
         onError: (event: HistoryEvent) => {
-          const error = event.data.error as DendronError;
+          const error = event.data.error as SailError;
           vscode.window.showErrorMessage(error.message);
           resolve(undefined);
           NoteLookupProviderUtils.cleanup({
@@ -73,7 +73,7 @@ export class QuickPickTemplateSelector {
             controller,
           });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       controller.show({
@@ -83,7 +83,7 @@ export class QuickPickTemplateSelector {
         initialValue,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (controller.quickPick) {

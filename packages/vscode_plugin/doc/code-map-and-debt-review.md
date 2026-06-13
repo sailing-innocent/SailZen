@@ -71,7 +71,7 @@ packages/unified/src/
 ├── remark/sailzenFigure.ts    ::figure[cap](src)  → sailzenFigure node
 ├── remark/sailzenBlocks.ts    ::theorem/::table/… → sailzenMathEnv / sailzenTable / sailzenAlgorithm / sailzenIfFormat
 ├── utilsv5.ts                 Pipeline builder; enables sailzenCite/Figure/Blocks ONLY when dest = DOC_EXPORT | DOC_PREVIEW
-└── types.ts                   DendronASTTypes constants
+└── types.ts                   SailASTTypes constants
 ```
 
 **Critical Gap**: `astDocumentAssembler.ts` uses a **bare** `remark().use(remarkParse)` without the SailZen extensions.  

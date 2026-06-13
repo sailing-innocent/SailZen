@@ -1,10 +1,10 @@
 import {
-  containsNonDendronUri,
-  DendronError,
+  containsNonSailUri,
+  SailError,
   DNoteRefLink,
   DVault,
   getTextRange,
-  IDendronError,
+  ISailError,
   isNotUndefined,
   NoteProps,
   NotePropsMeta,
@@ -159,7 +159,7 @@ export async function linkedNoteType({
 }): Promise<{
   type: DECORATION_TYPES.brokenWikilink | DECORATION_TYPES.wikiLink;
   noteMeta?: NotePropsMeta;
-  errors: IDendronError[];
+  errors: ISailError[];
 }> {
   const ctx = "linkedNoteType";
 
@@ -193,7 +193,7 @@ export async function linkedNoteType({
       return {
         type: DECORATION_TYPES.brokenWikilink,
         errors: [
-          new DendronError({
+          new SailError({
             message: "error when looking for note",
             payload: {
               ctx,
@@ -211,7 +211,7 @@ export async function linkedNoteType({
 
   // Checking web URLs is not feasible, and checking wildcard references would be hard.
   // Let's just highlight them as existing for now.
-  if (fname && (containsNonDendronUri(fname) || fname.endsWith("*")))
+  if (fname && (containsNonSailUri(fname) || fname.endsWith("*")))
     return { type: DECORATION_TYPES.wikiLink, errors: [] };
 
   // It's hard to check the anchors for non-note files because we don't parse

@@ -110,7 +110,7 @@ export const PATH_MAP = new Map<string, mappedConfigPath>([
   ["commands.randomNote.exclude", { target: "randomNote.exclude" }],
 
   // workspace namespace
-  ["workspace.dendronVersion", { target: "dendronVersion" }],
+  ["workspace.sailVersion", { target: "sailVersion" }],
   ["workspace.workspaces", { target: "workspaces" }],
   ["workspace.seeds", { target: "seeds" }],
   ["workspace.vaults", { target: "vaults" }],
@@ -237,7 +237,7 @@ export const PATH_MAP = new Map<string, mappedConfigPath>([
 /** ^2hgqigv11pvy
  * List of config paths that are deprecated
  * and should be checked for existence
- * and deleted from `dendron.yml`
+ * and deleted from `sail.yml`
  */
 export const DEPRECATED_PATHS = [
   "useNunjucks",

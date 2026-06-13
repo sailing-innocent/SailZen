@@ -20,7 +20,7 @@
             "@saili/engine-server": [
                 "./packages/engine-server/src"
             ],
-            "sail-dendron": [
+            "sail-sail": [
                 "./packages/plugin-core/src"
             ],
         }

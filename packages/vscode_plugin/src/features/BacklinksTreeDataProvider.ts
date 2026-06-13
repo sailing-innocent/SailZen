@@ -2,8 +2,8 @@ import {
   assertUnreachable,
   BacklinkPanelSortOrder,
   DateFormatUtil,
-  DendronASTDest,
-  DendronConfig,
+  SailASTDest,
+  SailConfig,
   EngineEventEmitter,
   NoteUtils,
   ProcFlavor,
@@ -28,7 +28,7 @@ import {
   Uri,
   window,
 } from "vscode";
-import { DendronContext, DENDRON_COMMANDS, ICONS } from "../constants";
+import { SailContext, DENDRON_COMMANDS, ICONS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { findReferencesById, FoundRefT, sortPaths } from "../utils/md";
@@ -40,8 +40,7 @@ import { Backlink, BacklinkTreeItemType } from "./Backlink";
  * Provides the data to support the backlinks tree view panel
  */
 export default class BacklinksTreeDataProvider
-  implements TreeDataProvider<Backlink>, Disposable
-{
+  implements TreeDataProvider<Backlink>, Disposable {
   private readonly MAX_LINES_OF_CONTEX̣T = 10;
   private readonly FRONTMATTER_TAG_CONTEXT_PLACEHOLDER =
     "_Link is a Frontmatter Tag_";
@@ -65,7 +64,7 @@ export default class BacklinksTreeDataProvider
    * @param engineEvents - specifies when note state has been changed on the
    * engine
    */
-  constructor(engineEvents: EngineEventEmitter, config: DendronConfig) {
+  constructor(engineEvents: EngineEventEmitter, config: SailConfig) {
     this._isLinkCandidateEnabled = config.dev?.enableLinkCandidates;
 
     // Set default sort order to use last updated
@@ -108,7 +107,7 @@ export default class BacklinksTreeDataProvider
       this._sortOrder = sortOrder;
 
       VSCodeUtils.setContextStringValue(
-        DendronContext.BACKLINKS_SORT_ORDER,
+        SailContext.BACKLINKS_SORT_ORDER,
         sortOrder
       );
 
@@ -303,7 +302,7 @@ export default class BacklinksTreeDataProvider
       };
       if (ref.isCandidate) {
         backlink.command = {
-          command: "dendron.convertCandidateLink",
+          command: "sail.convertCandidateLink",
           title: "Convert Candidate Link",
           arguments: [
             { location: ref.location, text: path.parse(fsPath).name },
@@ -539,7 +538,7 @@ _updated: ${DateFormatUtil.formatDate(noteProps.updated)}_`
         noteToRender: ref.note,
         fname: ref.note.fname,
         vault: ref.note.vault,
-        dest: DendronASTDest.MD_REGULAR,
+        dest: SailASTDest.MD_REGULAR,
         backlinkHoverOpts: {
           linesOfContext,
           location: {

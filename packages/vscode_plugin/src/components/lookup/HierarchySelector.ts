@@ -1,4 +1,4 @@
-import { DendronError, DVault } from "@saili/common-all";
+import { SailError, DVault } from "@saili/common-all";
 import { HistoryEvent } from "@saili/engine-server";
 import path from "path";
 import * as vscode from "vscode";
@@ -7,7 +7,7 @@ import { Logger } from "../../logger";
 import { VSCodeUtils } from "../../vsCodeUtils";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { NoteLookupProviderUtils } from "./NoteLookupProviderUtils";
-import { DendronContext } from "../../constants";
+import { SailContext } from "../../constants";
 import { AutoCompleter } from "../../utils/autoCompleter";
 import { AutoCompletableRegistrar } from "../../utils/registers/AutoCompletableRegistrar";
 import { Disposable } from "vscode";
@@ -82,10 +82,10 @@ export class QuickPickHierarchySelector implements HierarchySelector {
               controller: lc,
             });
             disposable?.dispose();
-            VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+            VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
           },
           onError: (event: HistoryEvent) => {
-            const error = event.data.error as DendronError;
+            const error = event.data.error as SailError;
             vscode.window.showErrorMessage(error.message);
             resolve(undefined);
             NoteLookupProviderUtils.cleanup({
@@ -93,7 +93,7 @@ export class QuickPickHierarchySelector implements HierarchySelector {
               controller: lc,
             });
             disposable?.dispose();
-            VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+            VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
           },
         });
         lc.show({
@@ -103,7 +103,7 @@ export class QuickPickHierarchySelector implements HierarchySelector {
           title: `Select Hierarchy for Export`,
         });
 
-        VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+        VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
         disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
           if (lc.quickPick) {

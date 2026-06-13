@@ -1,7 +1,7 @@
 import {
   AssetGetRequest,
   AssetGetThemeRequest,
-  DendronError,
+  SailError,
   ERROR_STATUS,
   getStage,
   RespV2,
@@ -31,7 +31,7 @@ export class AssetsController {
     const { wsRoot, vaults } = engine;
     if (!WorkspaceUtils.isPathInWorkspace({ wsRoot, vaults, fpath })) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_CONFIG,
           message: `fpath ${fpath} not inside a vault. wsRoot: ${wsRoot}, vaults: ${vaults
             .map((v) => v.fsPath)
@@ -41,7 +41,7 @@ export class AssetsController {
     }
     if (!fs.existsSync(fpath)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.DOES_NOT_EXIST,
           message: `fpath ${fpath} does not exist`,
         }),
@@ -78,7 +78,7 @@ export class AssetsController {
       if (themeTarget === ThemeTarget.PRISM) {
         return path.join(themeDir, "prism");
       }
-      return DendronError.createFromStatus({
+      return SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_CONFIG,
         message: `target ${themeTarget} not valid`,
       });
@@ -93,14 +93,14 @@ export class AssetsController {
       return path.join(targetRoot, `${themeType.toLowerCase()}.css`);
     };
     const targetRoot = getPathForTarget({ themeTarget });
-    if (targetRoot instanceof DendronError) {
+    if (targetRoot instanceof SailError) {
       return { error: targetRoot };
     }
     const pathForTarget = getFileForType({ themeType, targetRoot });
     logger.info({ ctx, pathForTarget });
     if (!fs.existsSync(pathForTarget)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.DOES_NOT_EXIST,
           message: `no file at ${pathForTarget}`,
         }),

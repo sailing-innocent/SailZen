@@ -23,19 +23,19 @@ export enum ThemeTarget {
 export const CONSTANTS = {
   ROOT_PATH,
   ALL_QUERY: "**/*",
-  DENDRON_WS_NAME: "dendron.code-workspace",
-  DENDRON_SERVER_PORT: ".dendron.port",
-  DENDRON_WS_META: ".dendron.ws",
-  DENDRON_CONFIG_FILE: "dendron.yml",
-  DENDRON_LOCAL_CONFIG_FILE: "dendronrc.yml",
+  DENDRON_WS_NAME: "sail.code-workspace",
+  DENDRON_SERVER_PORT: ".sail.port",
+  DENDRON_WS_META: ".sail.ws",
+  DENDRON_CONFIG_FILE: "sail.yml",
+  DENDRON_LOCAL_CONFIG_FILE: "sailrc.yml",
   DENDRON_SEED_CONFIG: "seed.yml",
   SRC_DELIMITER: "src://",
-  DENDRON_DELIMETER: "dendron://",
-  DENDRON_USER_FILE: ".dendron.user",
-  DENDRON_CACHE_FILE: ".dendron.cache.json",
-  DENDRON_ID: ".dendron.uuid",
-  DENDRON_NO_TELEMETRY: ".dendron.no-telemetry",
-  DENDRON_TELEMETRY: ".dendron.telemetry",
+  DENDRON_DELIMETER: "sail://",
+  DENDRON_USER_FILE: ".sail.user",
+  DENDRON_CACHE_FILE: ".sail.cache.json",
+  DENDRON_ID: ".sail.uuid",
+  DENDRON_NO_TELEMETRY: ".sail.no-telemetry",
+  DENDRON_TELEMETRY: ".sail.telemetry",
   DENDRON_HOOKS_BASE: "hooks",
   DENDRON_USER_NOTE_TRAITS_BASE: "noteTraits",
   DENDRON_LOCAL_SITE_PORT: 8080,
@@ -58,8 +58,8 @@ export const FOLDERS = {
   NOTES: "notes",
   /** The folder where the assets are stored, this will be under {@link FOLDERS.NOTES}. */
   ASSETS: "assets",
-  /** The system-wide folder where Dendron stores metadata and other system-wide files. */
-  DENDRON_SYSTEM_ROOT: ".dendron",
+  /** The system-wide folder where Sail stores metadata and other system-wide files. */
+  DENDRON_SYSTEM_ROOT: ".sail",
   /** The folder where telemetry payloads that will be sent during next run are temporarily saved. Under {@link FOLDERS.DENDRON_SYSTEM_ROOT}. */
   SAVED_TELEMETRY: "saved-telemetry",
 };
@@ -141,7 +141,7 @@ export enum DENDRON_EMOJIS {
 }
 
 export enum DENDRON_VSCODE_CONFIG_KEYS {
-  ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE = "dendron.enableSelfContainedVaultWorkspace",
+  ENABLE_SELF_CONTAINED_VAULTS_WORKSPACE = "sail.enableSelfContainedVaultWorkspace",
 }
 
 /**

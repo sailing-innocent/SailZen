@@ -1,0 +1,8 @@
+version: 1
+imports: []
+schemas:
+  - id: sail
+    children: [welcome]
+    title: sail
+    parent: root
+  - id: welcome

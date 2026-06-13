@@ -5,7 +5,7 @@
  */
 
 import { CopyNoteLinkCommand } from "./CopyNoteLink";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { NotePropsMeta, DVault } from "@saili/common-all";
 import { TextEditor, TextDocument, Uri, Selection, Position } from "vscode";
 import { DEngineClient } from "@saili/common-all";
@@ -19,7 +19,7 @@ jest.mock("../utils");
 jest.mock("vscode");
 
 describe("CopyNoteLinkCommand", () => {
-  let mockExtension: IDendronExtension;
+  let mockExtension: ISailExtension;
   let mockEngine: DEngineClient;
   let mockEditor: TextEditor;
   let mockDocument: TextDocument;
@@ -69,7 +69,7 @@ describe("CopyNoteLinkCommand", () => {
         vaults: [mockVault],
         config: {},
       })),
-    } as unknown as IDendronExtension;
+    } as unknown as ISailExtension;
 
     command = new CopyNoteLinkCommand(mockExtension);
   });
@@ -334,10 +334,10 @@ describe("CopyNoteLinkCommand", () => {
       const { ConfigUtils } = await import("@saili/common-all");
       (ConfigUtils.getAliasMode as jest.Mock).mockReturnValue("title");
 
-      // Mock DendronClientUtils
-      const { DendronClientUtils } = await import("../clientUtils");
+      // Mock SailClientUtils
+      const { SailClientUtils } = await import("../clientUtils");
       (
-        DendronClientUtils.shouldUseVaultPrefix as jest.Mock
+        SailClientUtils.shouldUseVaultPrefix as jest.Mock
       ).mockReturnValue(false);
 
       // Mock clipboard

@@ -2,7 +2,7 @@
 /**
  * Define your custom trait behavior in this file by modifying the functions in
  * 'module.exports' below. See
- * https://wiki.dendron.so/notes/EQoaBI8A0ZcswKQC3UMpO/ for examples and
+ * https://wiki.sail.so/notes/EQoaBI8A0ZcswKQC3UMpO/ for examples and
  * documentation.
  *
  * NOTE: This is an alpha feature, so this API may have breaking changes in
@@ -12,7 +12,7 @@
 /**
  * @typedef OnCreateContext Properties that can be utilized during note creation
  * @type {object}
- * @property {string} currentNoteName The name of the currently opened Dendron
+ * @property {string} currentNoteName The name of the currently opened Sail
  * note, or the specified name of the note about to be created
  * @property {string} selectedText Any currently selected text in the editor
  * @property {number} clipboard The current contents of the clipboard

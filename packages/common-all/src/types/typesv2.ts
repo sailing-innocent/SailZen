@@ -1,6 +1,6 @@
 import { URI } from "vscode-uri";
-import { Decoration, DendronConfig, Diagnostic } from ".";
-import { IDendronError } from "../error";
+import { Decoration, SailConfig, Diagnostic } from ".";
+import { ISailError } from "../error";
 import { VSRange } from "./compat";
 import { DVault } from "./DVault";
 import { FindNoteOpts } from "./FindNoteOpts";
@@ -16,7 +16,7 @@ import {
   SchemaProps,
 } from "./foundation";
 import { DHookDict } from "./hooks";
-import { DendronASTDest, ProcFlavor } from "./unified";
+import { SailASTDest, ProcFlavor } from "./unified";
 
 export type OptionalExceptFor<T, TRequired extends keyof T> = Partial<T> &
   Pick<T, TRequired>;
@@ -194,11 +194,11 @@ export type SchemaModuleProps = {
 
 export interface RespV2<T> {
   data?: T;
-  error: IDendronError | null;
+  error: ISailError | null;
 }
 
 export type RespV3ErrorResp = {
-  error: IDendronError;
+  error: ISailError;
   data?: never;
 };
 
@@ -217,7 +217,7 @@ export type RespV3<T> = RespV3ErrorResp | RespV3SuccessResp<T>;
 
 export type RespWithOptError<T> = {
   data: T;
-  error?: IDendronError;
+  error?: ISailError;
 };
 
 /**
@@ -266,7 +266,7 @@ export type DEngineInitPayload = {
   notes: NotePropsByIdDict;
   wsRoot: string;
   vaults: DVault[];
-  config: DendronConfig;
+  config: SailConfig;
 };
 
 export type RenameNoteOpts = {
@@ -286,7 +286,7 @@ export type RenderNoteOpts = {
   /** Optionally, an entire note can be provided to be rendered. If provided, the engine won't look up the note by id and will instead render this note. */
   note?: NoteProps;
   /** `HTML` by default. */
-  dest?: DendronASTDest;
+  dest?: SailASTDest;
   /** `Preview` by default. */
   flavor?: ProcFlavor;
 };
@@ -589,7 +589,7 @@ export type WorkspaceVault = {
 export type WorkspaceOpts = {
   wsRoot: string;
   vaults: DVault[];
-  dendronConfig?: DendronConfig;
+  sailConfig?: SailConfig;
 };
 
 // === Pods
@@ -710,7 +710,7 @@ export enum SeedBrowserMessageType {
 
 export enum ConfigureUIMessageEnum {
   "onUpdateConfig" = "onUpdateConfig",
-  "openDendronConfigYaml" = "openDendronConfigYaml",
+  "openSailConfigYaml" = "openSailConfigYaml",
 }
 
 export enum GraphThemeEnum {
@@ -779,7 +779,7 @@ export type GraphViewMessage = DMessage<
 export type ConfigureUIMessage = DMessage<
   ConfigureUIMessageType,
   {
-    config: DendronConfig;
+    config: SailConfig;
   }
 >;
 

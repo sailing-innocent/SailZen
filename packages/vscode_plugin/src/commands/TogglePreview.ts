@@ -51,7 +51,7 @@ export class TogglePreviewCommand extends InputArgCommand<
    *
    * @param opts if a Uri is defined through this parameter, then that Uri will
    * be shown in preview. If unspecified, then preview will follow default
-   * behavior of showing the contents of the currently in-focus Dendron note.
+   * behavior of showing the contents of the currently in-focus Sail note.
    */
   async execute(opts?: TogglePreviewCommandOpts) {
     let note: NoteProps | undefined;
@@ -76,7 +76,7 @@ export class TogglePreviewCommand extends InputArgCommand<
       return { note };
     } else if (opts?.fsPath) {
       const fsPath = opts.fsPath;
-      // We can't find the note, so this is not in the Dendron workspace.
+      // We can't find the note, so this is not in the Sail workspace.
       // Preview the file anyway if it's a markdown file.
       await this.openFileInPreview(fsPath);
       return { fsPath };

@@ -3,9 +3,9 @@
   "private": false,
   "license": "MIT",
   "displayName": "SailZen",
-  "description": "Sailing-Innocent's vscode extension based on Dendron",
+  "description": "Sailing-Innocent's vscode extension based on Sail",
   "publisher": "SailingInnocent",
-  "version": "0.3.15",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -44,23 +44,23 @@
     ],
     "viewsWelcome": [
       {
-        "view": "dendron.backlinks",
+        "view": "sail.backlinks",
         "contents": "There are no backlinks to this note."
       },
       {
-        "view": "dendron.recent-workspaces",
+        "view": "sail.recent-workspaces",
         "contents": "No recent workspaces detected."
       },
       {
-        "view": "dendron.treeView",
-        "contents": "First open a Dendron note to see the tree view."
+        "view": "sail.treeView",
+        "contents": "First open a Sail note to see the tree view."
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "dendron-view",
-          "title": "Dendron",
+          "id": "sail-view",
+          "title": "Sail",
           "icon": "media/icons/simple.svg"
         }
       ]
@@ -68,58 +68,58 @@
     "views": {
       "explorer": [
         {
-          "id": "dendron.sample",
+          "id": "sail.sample",
           "name": "Sample View",
           "type": "webview",
-          "when": "dendron:devMode"
+          "when": "sail:devMode"
         }
       ],
-      "dendron-view": [
+      "sail-view": [
         {
-          "id": "dendron.backlinks",
+          "id": "sail.backlinks",
           "name": "Backlinks",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "id": "dendron.treeView",
+          "id": "sail.treeView",
           "name": "Tree View",
-          "when": "dendron:pluginActive",
+          "when": "sail:pluginActive",
           "icon": "media/icons/tree.svg"
         },
         {
-          "id": "dendron.lookup-view",
+          "id": "sail.lookup-view",
           "name": "Lookup View",
           "type": "webview",
-          "when": "dendron:pluginActive && dendron:noteLookupActive && dendron:shouldShowLookupView"
+          "when": "sail:pluginActive && sail:noteLookupActive && sail:shouldShowLookupView"
         },
         {
-          "id": "dendron.calendar-view",
+          "id": "sail.calendar-view",
           "name": "Calendar View",
           "type": "webview",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "id": "dendron.recent-workspaces",
-          "name": "Recent Dendron Workspaces",
-          "when": "!dendron:pluginActive && shellExecutionSupported"
+          "id": "sail.recent-workspaces",
+          "name": "Recent Sail Workspaces",
+          "when": "!sail:pluginActive && shellExecutionSupported"
         }
       ]
     },
     "commands": [
       {
-        "command": "dendron.zotero.CitationPicker",
+        "command": "sail.zotero.CitationPicker",
         "title": "Zotero Citation Picker"
       },
       {
-        "command": "dendron.zotero.openInZotero",
+        "command": "sail.zotero.openInZotero",
         "title": "Open in Zotero"
       },
       {
-        "command": "dendron.zotero.openPDFZotero",
+        "command": "sail.zotero.openPDFZotero",
         "title": "Open PDF from Zotero"
       },
       {
-        "command": "dendron.zotero.importAsBibNote",
+        "command": "sail.zotero.importAsBibNote",
         "title": "Zotero: Import as Bib Note"
       },
       {
@@ -127,860 +127,860 @@
         "title": "SailZen: Compile Document"
       },
       {
-        "command": "dendron.backlinks.sortByLastUpdated",
+        "command": "sail.backlinks.sortByLastUpdated",
         "title": "Sort by Last Updated"
       },
       {
-        "command": "dendron.backlinks.sortByLastUpdatedChecked",
+        "command": "sail.backlinks.sortByLastUpdatedChecked",
         "title": "✓ Sort by Last Updated"
       },
       {
-        "command": "dendron.backlinks.sortByPathNames",
+        "command": "sail.backlinks.sortByPathNames",
         "title": "Sort by Path Names"
       },
       {
-        "command": "dendron.backlinks.sortByPathNamesChecked",
+        "command": "sail.backlinks.sortByPathNamesChecked",
         "title": "✓ Sort by Path Names"
       },
       {
-        "command": "dendron.backlinks.expandAll",
+        "command": "sail.backlinks.expandAll",
         "title": "Expand All",
         "icon": "$(expand-all)"
       },
       {
-        "command": "dendron.treeView.labelByTitle",
+        "command": "sail.treeView.labelByTitle",
         "title": "Label and sort notes by title",
         "icon": "$(list-ordered)"
       },
       {
-        "command": "dendron.treeView.labelByFilename",
+        "command": "sail.treeView.labelByFilename",
         "title": "Label and sort notes by filename",
         "icon": "$(list-ordered)"
       },
       {
-        "command": "dendron.treeView.expandAll",
+        "command": "sail.treeView.expandAll",
         "title": "Expand All",
         "icon": "$(expand-all)"
       },
       {
-        "command": "dendron.treeView.createNote",
+        "command": "sail.treeView.createNote",
         "title": "Create Note",
         "icon": "$(new-file)"
       },
       {
-        "command": "dendron.treeView.expandStub",
-        "title": "Dendron: Dev: Expand Stub"
+        "command": "sail.treeView.expandStub",
+        "title": "Sail: Dev: Expand Stub"
       },
       {
-        "command": "dendron.treeView.gotoNote",
+        "command": "sail.treeView.gotoNote",
         "title": "Create Note",
         "icon": "$(gist-new)"
       },
       {
-        "command": "dendron.browseNote",
-        "title": "Dendron: Browse Note"
+        "command": "sail.browseNote",
+        "title": "Sail: Browse Note"
       },
       {
-        "command": "dendron.goto",
-        "title": "Dendron: Go to"
+        "command": "sail.goto",
+        "title": "Sail: Go to"
       },
       {
-        "command": "dendron.gotoNote",
-        "title": "Dendron: Go to Note"
+        "command": "sail.gotoNote",
+        "title": "Sail: Go to Note"
       },
       {
-        "command": "dendron.gotoToday",
-        "title": "Dendron: Go to Today"
+        "command": "sail.gotoToday",
+        "title": "Sail: Go to Today"
       },
       {
-        "command": "dendron.createSchemaFromHierarchy",
-        "title": "Dendron: Create Schema From Note Hierarchy"
+        "command": "sail.createSchemaFromHierarchy",
+        "title": "Sail: Create Schema From Note Hierarchy"
       },
       {
-        "command": "dendron.createDailyJournalNote",
-        "title": "Dendron: Create Daily Journal Note"
+        "command": "sail.createDailyJournalNote",
+        "title": "Sail: Create Daily Journal Note"
       },
       {
-        "command": "dendron.copyNoteLink",
-        "title": "Dendron: Copy Note Link"
+        "command": "sail.copyNoteLink",
+        "title": "Sail: Copy Note Link"
       },
       {
-        "command": "dendron.copyNoteRef",
-        "title": "Dendron: Copy Note Ref"
+        "command": "sail.copyNoteRef",
+        "title": "Sail: Copy Note Ref"
       },
       {
-        "command": "dendron.copyToClipboard",
-        "title": "Dendron: Copy To Clipboard"
+        "command": "sail.copyToClipboard",
+        "title": "Sail: Copy To Clipboard"
       },
       {
         "command": "sailzen.exportNote",
         "title": "SailZen: Export Note"
       },
       {
-        "command": "dendron.copyAs",
-        "title": "Dendron: Copy As"
+        "command": "sail.copyAs",
+        "title": "Sail: Copy As"
       },
       {
-        "command": "dendron.delete",
-        "title": "Dendron: Delete"
+        "command": "sail.delete",
+        "title": "Sail: Delete"
       },
       {
-        "command": "dendron.insertNoteLink",
-        "title": "Dendron: Insert Note Link"
+        "command": "sail.insertNoteLink",
+        "title": "Sail: Insert Note Link"
       },
       {
-        "command": "dendron.insertNoteIndex",
-        "title": "Dendron: Insert Note Index"
+        "command": "sail.insertNoteIndex",
+        "title": "Sail: Insert Note Index"
       },
       {
-        "command": "dendron.moveNote",
-        "title": "Dendron: Move Note"
+        "command": "sail.moveNote",
+        "title": "Sail: Move Note"
       },
       {
-        "command": "dendron.moveSelectionTo",
-        "title": "Dendron: Move Selection To"
+        "command": "sail.moveSelectionTo",
+        "title": "Sail: Move Selection To"
       },
       {
-        "command": "dendron.mergeNote",
-        "title": "Dendron: Merge Note"
+        "command": "sail.mergeNote",
+        "title": "Sail: Merge Note"
       },
       {
-        "command": "dendron.randomNote",
-        "title": "Dendron: Random Note"
+        "command": "sail.randomNote",
+        "title": "Sail: Random Note"
       },
       {
-        "command": "dendron.renameNoteV2a",
-        "title": "Dendron: Rename Note V2a"
+        "command": "sail.renameNoteV2a",
+        "title": "Sail: Rename Note V2a"
       },
       {
-        "command": "dendron.renameNote",
-        "title": "Dendron: Rename Note"
+        "command": "sail.renameNote",
+        "title": "Sail: Rename Note"
       },
       {
-        "command": "dendron.batchRenameNote",
-        "title": "Dendron: Batch Rename Note"
+        "command": "sail.batchRenameNote",
+        "title": "Sail: Batch Rename Note"
       },
       {
-        "command": "dendron.renameHeader",
-        "title": "Dendron: Rename Header"
+        "command": "sail.renameHeader",
+        "title": "Sail: Rename Header"
       },
       {
-        "command": "dendron.moveHeader",
-        "title": "Dendron: Move Header"
+        "command": "sail.moveHeader",
+        "title": "Sail: Move Header"
       },
       {
-        "command": "dendron.convertCandidateLink",
-        "title": "Dendron: Convert Candidate Link"
+        "command": "sail.convertCandidateLink",
+        "title": "Sail: Convert Candidate Link"
       },
       {
-        "command": "dendron.convertLink",
-        "title": "Dendron: Convert Link"
+        "command": "sail.convertLink",
+        "title": "Sail: Convert Link"
       },
       {
-        "command": "dendron.lookupNote",
-        "title": "Dendron: Lookup Note"
+        "command": "sail.lookupNote",
+        "title": "Sail: Lookup Note"
       },
       {
-        "command": "dendron.lookupNoteAutoComplete",
-        "title": "Dendron: hidden"
+        "command": "sail.lookupNoteAutoComplete",
+        "title": "Sail: hidden"
       },
       {
-        "command": "dendron.createJournalNote",
-        "title": "Dendron: Create Journal Note"
+        "command": "sail.createJournalNote",
+        "title": "Sail: Create Journal Note"
       },
       {
-        "command": "dendron.createScratchNote",
-        "title": "Dendron: Create Scratch Note"
+        "command": "sail.createScratchNote",
+        "title": "Sail: Create Scratch Note"
       },
       {
-        "command": "dendron.createNote",
-        "title": "Dendron: Create Note"
+        "command": "sail.createNote",
+        "title": "Sail: Create Note"
       },
       {
-        "command": "dendron.createMeetingNote",
-        "title": "Dendron: Create Meeting Note"
+        "command": "sail.createMeetingNote",
+        "title": "Sail: Create Meeting Note"
       },
       {
-        "command": "dendron.lookupSchema",
-        "title": "Dendron: Lookup Schema"
+        "command": "sail.lookupSchema",
+        "title": "Sail: Lookup Schema"
       },
       {
-        "command": "dendron.reloadIndex",
-        "title": "Dendron: Reload Index"
+        "command": "sail.reloadIndex",
+        "title": "Sail: Reload Index"
       },
       {
-        "command": "dendron.createTask",
-        "title": "Dendron: Create Task Note"
+        "command": "sail.createTask",
+        "title": "Sail: Create Task Note"
       },
       {
-        "command": "dendron.setTaskStatus",
-        "title": "Dendron: Set Task Status"
+        "command": "sail.setTaskStatus",
+        "title": "Sail: Set Task Status"
       },
       {
-        "command": "dendron.completeTask",
-        "title": "Dendron: Complete Task"
+        "command": "sail.completeTask",
+        "title": "Sail: Complete Task"
       },
       {
-        "command": "dendron.applyTemplate",
-        "title": "Dendron: Apply Template"
+        "command": "sail.applyTemplate",
+        "title": "Sail: Apply Template"
       },
       {
-        "command": "dendron.archiveHierarchy",
-        "title": "Dendron: Archive Hierarchy"
+        "command": "sail.archiveHierarchy",
+        "title": "Sail: Archive Hierarchy"
       },
       {
-        "command": "dendron.refactorHierarchy",
-        "title": "Dendron: Refactor Hierarchy"
+        "command": "sail.refactorHierarchy",
+        "title": "Sail: Refactor Hierarchy"
       },
       {
-        "command": "dendron.goUpHierarchy",
-        "title": "Dendron: Go Up"
+        "command": "sail.goUpHierarchy",
+        "title": "Sail: Go Up"
       },
       {
-        "command": "dendron.goNextHierarchy",
-        "title": "Dendron: Go Next Sibling"
+        "command": "sail.goNextHierarchy",
+        "title": "Sail: Go Next Sibling"
       },
       {
-        "command": "dendron.goPrevHierarchy",
-        "title": "Dendron: Go Previous Sibling"
+        "command": "sail.goPrevHierarchy",
+        "title": "Sail: Go Previous Sibling"
       },
       {
-        "command": "dendron.goDownHierarchy",
-        "title": "Dendron: Go Down"
+        "command": "sail.goDownHierarchy",
+        "title": "Sail: Go Down"
       },
       {
-        "command": "dendron.gotoBacklink",
-        "title": "Dendron: Go To Backlink"
+        "command": "sail.gotoBacklink",
+        "title": "Sail: Go To Backlink"
       },
       {
-        "command": "dendron.addAndCommit",
-        "title": "Dendron: Workspace: Add and Commit"
+        "command": "sail.addAndCommit",
+        "title": "Sail: Workspace: Add and Commit"
       },
       {
-        "command": "dendron.sync",
-        "title": "Dendron: Workspace: Sync"
+        "command": "sail.sync",
+        "title": "Sail: Workspace: Sync"
       },
       {
-        "command": "dendron.vaultAdd",
-        "title": "Dendron: Vault Add"
+        "command": "sail.vaultAdd",
+        "title": "Sail: Vault Add"
       },
       {
-        "command": "dendron.removeVault",
-        "title": "Dendron: Remove Vault"
+        "command": "sail.removeVault",
+        "title": "Sail: Remove Vault"
       },
       {
-        "command": "dendron.convertVault",
-        "title": "Dendron: Convert Vault"
+        "command": "sail.convertVault",
+        "title": "Sail: Convert Vault"
       },
       {
-        "command": "dendron.createNewVault",
-        "title": "Dendron: Create New Vault"
+        "command": "sail.createNewVault",
+        "title": "Sail: Create New Vault"
       },
       {
-        "command": "dendron.addExistingVault",
-        "title": "Dendron: Add Existing Vault"
+        "command": "sail.addExistingVault",
+        "title": "Sail: Add Existing Vault"
       },
       {
-        "command": "dendron.initWS",
-        "title": "Dendron: Initialize Workspace"
+        "command": "sail.initWS",
+        "title": "Sail: Initialize Workspace"
       },
       {
-        "command": "dendron.changeWS",
-        "title": "Dendron: Change Workspace"
+        "command": "sail.changeWS",
+        "title": "Sail: Change Workspace"
       },
       {
-        "command": "dendron.upgradeSettings",
-        "title": "Dendron: Upgrade Settings"
+        "command": "sail.upgradeSettings",
+        "title": "Sail: Upgrade Settings"
       },
       {
-        "command": "dendron.copyNoteURL",
-        "title": "Dendron: Copy Note URL"
+        "command": "sail.copyNoteURL",
+        "title": "Sail: Copy Note URL"
       },
       {
-        "command": "dendron.createHook",
-        "title": "Dendron: Hook Create"
+        "command": "sail.createHook",
+        "title": "Sail: Hook Create"
       },
       {
-        "command": "dendron.deleteHook",
-        "title": "Dendron: Hook Delete"
+        "command": "sail.deleteHook",
+        "title": "Sail: Hook Delete"
       },
       {
-        "command": "dendron.registerNoteTrait",
-        "title": "Dendron: Register Note Trait"
+        "command": "sail.registerNoteTrait",
+        "title": "Sail: Register Note Trait"
       },
       {
-        "command": "dendron.configureNoteTraits",
-        "title": "Dendron: Configure Note Traits"
+        "command": "sail.configureNoteTraits",
+        "title": "Sail: Configure Note Traits"
       },
       {
-        "command": "dendron.createNoteWithTraits",
-        "title": "Dendron: Create Note with Custom Traits"
+        "command": "sail.createNoteWithTraits",
+        "title": "Sail: Create Note with Custom Traits"
       },
       {
-        "command": "dendron.enableTelemetry",
-        "title": "Dendron: Enable Telemetry"
+        "command": "sail.enableTelemetry",
+        "title": "Sail: Enable Telemetry"
       },
       {
-        "command": "dendron.disableTelemetry",
-        "title": "Dendron: Disable Telemetry"
+        "command": "sail.disableTelemetry",
+        "title": "Sail: Disable Telemetry"
       },
       {
-        "command": "dendron.openLink",
-        "title": "Dendron: Open Link"
+        "command": "sail.openLink",
+        "title": "Sail: Open Link"
       },
       {
-        "command": "dendron.pasteLink",
-        "title": "Dendron: Paste Link"
+        "command": "sail.pasteLink",
+        "title": "Sail: Paste Link"
       },
       {
-        "command": "dendron.showHelp",
-        "title": "Dendron: Show Help"
+        "command": "sail.showHelp",
+        "title": "Sail: Show Help"
       },
       {
-        "command": "dendron.showNoteGraphView",
-        "title": "Dendron: Show Note Graph"
+        "command": "sail.showNoteGraphView",
+        "title": "Sail: Show Note Graph"
       },
       {
-        "command": "dendron.showSchemaGraphView",
-        "title": "Dendron: Show Schema Graph"
+        "command": "sail.showSchemaGraphView",
+        "title": "Sail: Show Schema Graph"
       },
       {
-        "command": "dendron.togglePreview",
-        "title": "Dendron: Toggle Preview",
+        "command": "sail.togglePreview",
+        "title": "Sail: Toggle Preview",
         "icon": "$(open-preview)"
       },
       {
-        "command": "dendron.togglePreviewLock",
-        "title": "Dendron: Toggle Preview Lock",
+        "command": "sail.togglePreviewLock",
+        "title": "Sail: Toggle Preview Lock",
         "icon": "$(lock)"
       },
       {
-        "command": "dendron.pasteFile",
-        "title": "Dendron: Paste File"
+        "command": "sail.pasteFile",
+        "title": "Sail: Paste File"
       },
       {
-        "command": "dendron.configureRaw",
-        "title": "Dendron: Configure (yaml)"
+        "command": "sail.configureRaw",
+        "title": "Sail: Configure (yaml)"
       },
       {
-        "command": "dendron.configureUI",
-        "title": "Dendron: Configure (UI)"
+        "command": "sail.configureUI",
+        "title": "Sail: Configure (UI)"
       },
       {
-        "command": "dendron.configureGraphStyle",
-        "title": "Dendron: Configure Graph Style (css)"
+        "command": "sail.configureGraphStyle",
+        "title": "Sail: Configure Graph Style (css)"
       },
       {
-        "command": "dendron.configureLocalOverride",
-        "title": "Dendron: Configure Local Override"
+        "command": "sail.configureLocalOverride",
+        "title": "Sail: Configure Local Override"
       },
       {
-        "command": "dendron.dev.doctor",
-        "title": "Dendron: Doctor"
+        "command": "sail.dev.doctor",
+        "title": "Sail: Doctor"
       },
       {
-        "command": "dendron.dev.dumpState",
-        "title": "Dendron: Dump State"
+        "command": "sail.dev.dumpState",
+        "title": "Sail: Dump State"
       },
       {
-        "command": "dendron.dev.devTrigger",
-        "title": "Dendron:Dev: Dev Trigger"
+        "command": "sail.dev.devTrigger",
+        "title": "Sail:Dev: Dev Trigger"
       },
       {
-        "command": "dendron.dev.resetConfig",
-        "title": "Dendron:Dev: Reset Config"
+        "command": "sail.dev.resetConfig",
+        "title": "Sail:Dev: Reset Config"
       },
       {
-        "command": "dendron.dev.openLogs",
-        "title": "Dendron:Dev: Open Logs"
+        "command": "sail.dev.openLogs",
+        "title": "Sail:Dev: Open Logs"
       },
       {
-        "command": "dendron.diagnosticsReport",
-        "title": "Dendron:Dev: Diagnostics Report"
+        "command": "sail.diagnosticsReport",
+        "title": "Sail:Dev: Diagnostics Report"
       },
       {
-        "command": "dendron.openBackup",
-        "title": "Dendron: Open Backup"
+        "command": "sail.openBackup",
+        "title": "Sail: Open Backup"
       },
       {
-        "command": "dendron.dev.validateEngine",
-        "title": "Dendron:Dev: Validate Engine"
+        "command": "sail.dev.validateEngine",
+        "title": "Sail:Dev: Validate Engine"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "dendron.treeView.expandAll",
-          "when": "dendron:devMode"
+          "command": "sail.treeView.expandAll",
+          "when": "sail:devMode"
         },
         {
-          "command": "dendron.treeView.createNote",
+          "command": "sail.treeView.createNote",
           "when": "false"
         },
         {
-          "command": "dendron.treeView.expandStub",
+          "command": "sail.treeView.expandStub",
           "when": "false"
         },
         {
-          "command": "dendron.treeView.gotoNote",
+          "command": "sail.treeView.gotoNote",
           "when": "false"
         },
         {
-          "command": "dendron.browseNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.browseNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.goto",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.goto",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.gotoNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.gotoNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.gotoToday",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.gotoToday",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createSchemaFromHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createSchemaFromHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createDailyJournalNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createDailyJournalNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.copyNoteLink",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.copyNoteLink",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.copyNoteRef",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.copyNoteRef",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.copyToClipboard",
+          "command": "sail.copyToClipboard",
           "when": "false"
         },
         {
-          "command": "dendron.copyAs",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.copyAs",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.delete",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.delete",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.insertNoteLink",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.insertNoteLink",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.insertNoteIndex",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.insertNoteIndex",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.moveNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.moveNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.moveSelectionTo",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.moveSelectionTo",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.mergeNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.mergeNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.randomNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.randomNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.renameNoteV2a",
+          "command": "sail.renameNoteV2a",
           "when": "false"
         },
         {
-          "command": "dendron.renameNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.renameNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.batchRenameNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.batchRenameNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.renameHeader",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.renameHeader",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.moveHeader",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.moveHeader",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.convertCandidateLink",
+          "command": "sail.convertCandidateLink",
           "when": "false"
         },
         {
-          "command": "dendron.convertLink",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.convertLink",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.lookupNote",
-          "when": "dendron:pluginActive"
+          "command": "sail.lookupNote",
+          "when": "sail:pluginActive"
         },
         {
-          "command": "dendron.lookupNoteAutoComplete",
-          "when": "dendron:pluginActive && dendron:noteLookupActive && !editorFocus && !view"
+          "command": "sail.lookupNoteAutoComplete",
+          "when": "sail:pluginActive && sail:noteLookupActive && !editorFocus && !view"
         },
         {
-          "command": "dendron.createJournalNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createJournalNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createScratchNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createScratchNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createMeetingNote",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createMeetingNote",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.lookupSchema",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.lookupSchema",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.reloadIndex",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.reloadIndex",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createTask",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createTask",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.setTaskStatus",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.setTaskStatus",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.completeTask",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.completeTask",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.applyTemplate",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.applyTemplate",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.archiveHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.archiveHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.refactorHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.refactorHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.goUpHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.goUpHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.goNextHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.goNextHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.goPrevHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.goPrevHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.goDownHierarchy",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.goDownHierarchy",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.gotoBacklink",
+          "command": "sail.gotoBacklink",
           "when": "false"
         },
         {
-          "command": "dendron.addAndCommit",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.addAndCommit",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.sync",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.sync",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.vaultAdd",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.vaultAdd",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.removeVault",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.removeVault",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.convertVault",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.convertVault",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createNewVault",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createNewVault",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.addExistingVault",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.addExistingVault",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.initWS",
+          "command": "sail.initWS",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.changeWS",
+          "command": "sail.changeWS",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.upgradeSettings",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.upgradeSettings",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.copyNoteURL",
-          "when": "dendron:pluginActive"
+          "command": "sail.copyNoteURL",
+          "when": "sail:pluginActive"
         },
         {
-          "command": "dendron.createHook",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createHook",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.deleteHook",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.deleteHook",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.registerNoteTrait",
+          "command": "sail.registerNoteTrait",
           "when": "false"
         },
         {
-          "command": "dendron.configureNoteTraits",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.configureNoteTraits",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.createNoteWithTraits",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.createNoteWithTraits",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.enableTelemetry",
+          "command": "sail.enableTelemetry",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.disableTelemetry",
+          "command": "sail.disableTelemetry",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.openLink",
+          "command": "sail.openLink",
           "when": "false"
         },
         {
-          "command": "dendron.pasteLink",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.pasteLink",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.showHelp",
+          "command": "sail.showHelp",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.showNoteGraphView",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.showNoteGraphView",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.showSchemaGraphView",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.showSchemaGraphView",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.togglePreview",
-          "when": "dendron:pluginActive"
+          "command": "sail.togglePreview",
+          "when": "sail:pluginActive"
         },
         {
-          "command": "dendron.togglePreviewLock",
-          "when": "dendron:pluginActive"
+          "command": "sail.togglePreviewLock",
+          "when": "sail:pluginActive"
         },
         {
-          "command": "dendron.pasteFile",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.pasteFile",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.configureRaw",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.configureRaw",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.configureUI",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.configureUI",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.configureGraphStyle",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.configureGraphStyle",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.configureLocalOverride",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.configureLocalOverride",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.doctor",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.dev.doctor",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.dumpState",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.dev.dumpState",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.devTrigger",
-          "when": "dendron:devMode"
+          "command": "sail.dev.devTrigger",
+          "when": "sail:devMode"
         },
         {
-          "command": "dendron.dev.resetConfig",
+          "command": "sail.dev.resetConfig",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.openLogs",
+          "command": "sail.dev.openLogs",
           "when": "shellExecutionSupported"
         },
         {
-          "command": "dendron.diagnosticsReport",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.diagnosticsReport",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.openBackup",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.openBackup",
+          "when": "sail:pluginActive && shellExecutionSupported"
         },
         {
-          "command": "dendron.dev.validateEngine",
-          "when": "dendron:pluginActive && shellExecutionSupported"
+          "command": "sail.dev.validateEngine",
+          "when": "sail:pluginActive && shellExecutionSupported"
         }
       ],
       "view/title": [
         {
-          "command": "dendron.backlinks.sortByLastUpdated",
-          "when": "view == dendron.backlinks && dendron:backlinksSortOrder == PathNames",
+          "command": "sail.backlinks.sortByLastUpdated",
+          "when": "view == sail.backlinks && sail:backlinksSortOrder == PathNames",
           "group": "sort@1"
         },
         {
-          "command": "dendron.backlinks.sortByLastUpdatedChecked",
-          "when": "view == dendron.backlinks && dendron:backlinksSortOrder == LastUpdated",
+          "command": "sail.backlinks.sortByLastUpdatedChecked",
+          "when": "view == sail.backlinks && sail:backlinksSortOrder == LastUpdated",
           "group": "sort@1"
         },
         {
-          "command": "dendron.backlinks.sortByPathNames",
-          "when": "view == dendron.backlinks && dendron:backlinksSortOrder == LastUpdated",
+          "command": "sail.backlinks.sortByPathNames",
+          "when": "view == sail.backlinks && sail:backlinksSortOrder == LastUpdated",
           "group": "sort@2"
         },
         {
-          "command": "dendron.backlinks.sortByPathNamesChecked",
-          "when": "view == dendron.backlinks && dendron:backlinksSortOrder == PathNames",
+          "command": "sail.backlinks.sortByPathNamesChecked",
+          "when": "view == sail.backlinks && sail:backlinksSortOrder == PathNames",
           "group": "sort@2"
         },
         {
-          "command": "dendron.backlinks.expandAll",
-          "when": "view == dendron.backlinks",
+          "command": "sail.backlinks.expandAll",
+          "when": "view == sail.backlinks",
           "group": "navigation@2"
         },
         {
-          "command": "dendron.treeView.labelByTitle",
-          "when": "view == dendron.treeView && dendron:treeviewItemLabelType == filename"
+          "command": "sail.treeView.labelByTitle",
+          "when": "view == sail.treeView && sail:treeviewItemLabelType == filename"
         },
         {
-          "command": "dendron.treeView.labelByFilename",
-          "when": "view == dendron.treeView && dendron:treeviewItemLabelType == title"
+          "command": "sail.treeView.labelByFilename",
+          "when": "view == sail.treeView && sail:treeviewItemLabelType == title"
         },
         {
-          "command": "dendron.treeView.expandAll",
-          "when": "view == dendron.treeView && dendron:devMode",
+          "command": "sail.treeView.expandAll",
+          "when": "view == sail.treeView && sail:devMode",
           "group": "navigation@2"
         },
         {
-          "command": "dendron.treeView.createNote",
-          "when": "view == dendron.treeView",
+          "command": "sail.treeView.createNote",
+          "when": "view == sail.treeView",
           "group": "navigation@2"
         }
       ],
       "explorer/context": [
         {
-          "when": "explorerResourceIsFolder && dendron:pluginActive && workspaceFolderCount > 1 && shellExecutionSupported",
-          "command": "dendron.vaultAdd",
+          "when": "explorerResourceIsFolder && sail:pluginActive && workspaceFolderCount > 1 && shellExecutionSupported",
+          "command": "sail.vaultAdd",
           "group": "2_workspace"
         },
         {
-          "when": "explorerResourceIsFolder && dendron:pluginActive && shellExecutionSupported",
-          "command": "dendron.removeVault",
+          "when": "explorerResourceIsFolder && sail:pluginActive && shellExecutionSupported",
+          "command": "sail.removeVault",
           "group": "2_workspace"
         },
         {
-          "when": "resourceExtname == .md && dendron:pluginActive && shellExecutionSupported || resourceExtname == .yml && dendron:pluginActive && shellExecutionSupported",
-          "command": "dendron.delete",
+          "when": "resourceExtname == .md && sail:pluginActive && shellExecutionSupported || resourceExtname == .yml && sail:pluginActive && shellExecutionSupported",
+          "command": "sail.delete",
           "group": "2_workspace"
         },
         {
-          "when": "resourceExtname == .md && dendron:pluginActive && shellExecutionSupported",
-          "command": "dendron.moveNote",
+          "when": "resourceExtname == .md && sail:pluginActive && shellExecutionSupported",
+          "command": "sail.moveNote",
           "group": "2_workspace"
         },
         {
-          "command": "dendron.togglePreview",
-          "when": "resourceLangId == markdown && dendron:pluginActive",
+          "command": "sail.togglePreview",
+          "when": "resourceLangId == markdown && sail:pluginActive",
           "group": "navigation"
         }
       ],
       "editor/context": [
         {
-          "when": "resourceExtname == .md && dendron:pluginActive && shellExecutionSupported",
-          "command": "dendron.copyNoteLink",
+          "when": "resourceExtname == .md && sail:pluginActive && shellExecutionSupported",
+          "command": "sail.copyNoteLink",
           "group": "2_workspace"
         }
       ],
       "editor/title": [
         {
-          "command": "dendron.togglePreview",
-          "when": "editorLangId == markdown && !notebookEditorFocused && dendron:pluginActive",
+          "command": "sail.togglePreview",
+          "when": "editorLangId == markdown && !notebookEditorFocused && sail:pluginActive",
           "group": "navigation"
         }
       ],
       "editor/title/context": [
         {
-          "command": "dendron.togglePreview",
-          "when": "resourceLangId == markdown && dendron:pluginActive",
+          "command": "sail.togglePreview",
+          "when": "resourceLangId == markdown && sail:pluginActive",
           "group": "1_open"
         }
       ],
       "view/item/context": [
         {
-          "command": "dendron.delete",
-          "when": "view == dendron.treeView && viewItem == note && shellExecutionSupported"
+          "command": "sail.delete",
+          "when": "view == sail.treeView && viewItem == note && shellExecutionSupported"
         },
         {
-          "command": "dendron.createNote",
-          "when": "view == dendron.treeView && shellExecutionSupported"
+          "command": "sail.createNote",
+          "when": "view == sail.treeView && shellExecutionSupported"
         },
         {
-          "command": "dendron.treeView.gotoNote",
-          "when": "view == dendron.treeView && viewItem == stub && shellExecutionSupported",
+          "command": "sail.treeView.gotoNote",
+          "when": "view == sail.treeView && viewItem == stub && shellExecutionSupported",
           "group": "inline"
         }
       ]
     },
     "configuration": {
-      "title": "dendron",
+      "title": "sail",
       "properties": {
-        "dendron.dailyJournalDomain": {
+        "sail.dailyJournalDomain": {
           "type": "string",
           "default": "daily",
-          "description": "DEPRECATED. Use journal settings in dendron.yml"
+          "description": "DEPRECATED. Use journal settings in sail.yml"
         },
-        "dendron.defaultJournalName": {
+        "sail.defaultJournalName": {
           "type": "string",
           "default": "journal",
-          "description": "DEPRECATED. Use journal settings in dendron.yml"
+          "description": "DEPRECATED. Use journal settings in sail.yml"
         },
-        "dendron.defaultJournalDateFormat": {
+        "sail.defaultJournalDateFormat": {
           "type": "string",
           "default": "y.MM.dd",
-          "description": "DEPRECATED. Use journal settings in dendron.yml"
+          "description": "DEPRECATED. Use journal settings in sail.yml"
         },
-        "dendron.defaultJournalAddBehavior": {
+        "sail.defaultJournalAddBehavior": {
           "default": "childOfDomain",
           "type": "string",
-          "description": "DEPRECATED. Use journal settings in dendron.yml",
+          "description": "DEPRECATED. Use journal settings in sail.yml",
           "enum": [
             "childOfDomain",
             "childOfDomainNamespace",
@@ -988,20 +988,20 @@
             "asOwnDomain"
           ]
         },
-        "dendron.defaultScratchName": {
+        "sail.defaultScratchName": {
           "type": "string",
           "default": "scratch",
-          "description": "DEPRECATED. Use scratch settings in dendron.yml"
+          "description": "DEPRECATED. Use scratch settings in sail.yml"
         },
-        "dendron.defaultScratchDateFormat": {
+        "sail.defaultScratchDateFormat": {
           "type": "string",
           "default": "y.MM.dd.HHmmss",
-          "description": "DEPRECATED. Use scratch settings in dendron.yml"
+          "description": "DEPRECATED. Use scratch settings in sail.yml"
         },
-        "dendron.defaultScratchAddBehavior": {
+        "sail.defaultScratchAddBehavior": {
           "default": "asOwnDomain",
           "type": "string",
-          "description": "DEPRECATED. Use scratch settings in dendron.yml",
+          "description": "DEPRECATED. Use scratch settings in sail.yml",
           "enum": [
             "childOfDomain",
             "childOfDomainNamespace",
@@ -1009,11 +1009,11 @@
             "asOwnDomain"
           ]
         },
-        "dendron.copyNoteUrlRoot": {
+        "sail.copyNoteUrlRoot": {
           "type": "string",
           "description": "override root url when getting note url"
         },
-        "dendron.linkSelectAutoTitleBehavior": {
+        "sail.linkSelectAutoTitleBehavior": {
           "type": "string",
           "description": "Control title behavior when using selection2link with lookup",
           "enum": [
@@ -1022,7 +1022,7 @@
           ],
           "default": "slug"
         },
-        "dendron.defaultLookupCreateBehavior": {
+        "sail.defaultLookupCreateBehavior": {
           "default": "selectionExtract",
           "type": "string",
           "description": "when creating a new note with selected text, define behavior for selected text",
@@ -1031,7 +1031,7 @@
             "selectionExtract"
           ]
         },
-        "dendron.defaultTimestampDecorationFormat": {
+        "sail.defaultTimestampDecorationFormat": {
           "default": "DATETIME_MED",
           "type": "string",
           "description": "Decide how human readable timestamp decoration is displayed",
@@ -1059,27 +1059,27 @@
             "TIME_WITH_SHORT_OFFSET"
           ]
         },
-        "dendron.rootDir": {
+        "sail.rootDir": {
           "type": "string",
           "default": "",
-          "description": "location of dendron workspace"
+          "description": "location of sail workspace"
         },
-        "dendron.dendronDir": {
+        "sail.sailDir": {
           "type": "string",
           "default": "",
-          "description": "DEPRECATED. Use journal settings in dendron.yml"
+          "description": "DEPRECATED. Use journal settings in sail.yml"
         },
-        "dendron.logLevel": {
+        "sail.logLevel": {
           "type": "string",
           "default": "info",
-          "description": "control verbosity of dendron logs",
+          "description": "control verbosity of sail logs",
           "enum": [
             "debug",
             "info",
             "error"
           ]
         },
-        "dendron.trace.server": {
+        "sail.trace.server": {
           "enum": [
             "off",
             "messages",
@@ -1089,11 +1089,11 @@
           "default": "messages",
           "description": "LSP log level"
         },
-        "dendron.serverPort": {
+        "sail.serverPort": {
           "type": "number",
           "description": "port for server. If not set, will be randomly generated at startup."
         },
-        "dendron.enableSelfContainedVaultWorkspace": {
+        "sail.enableSelfContainedVaultWorkspace": {
           "type": "boolean",
           "default": true,
           "description": "When enabled, newly created workspaces will be created as self contained vaults."
@@ -1116,125 +1116,125 @@
     },
     "keybindings": [
       {
-        "command": "dendron.zotero.CitationPicker",
+        "command": "sail.zotero.CitationPicker",
         "key": "alt+shift+z"
       },
       {
-        "command": "dendron.zotero.openInZotero",
+        "command": "sail.zotero.openInZotero",
         "key": "ctrl+shift+z"
       },
       {
-        "command": "dendron.zotero.openPDFZotero",
+        "command": "sail.zotero.openPDFZotero",
         "key": "ctrl+alt+shift+z"
       },
       {
-        "command": "dendron.goto",
+        "command": "sail.goto",
         "when": "editorFocus"
       },
       {
-        "command": "dendron.gotoNote",
+        "command": "sail.gotoNote",
         "key": "ctrl+k g",
         "when": "editorFocus"
       },
       {
-        "command": "dendron.createSchemaFromHierarchy",
-        "when": "editorFocus && dendron:pluginActive"
+        "command": "sail.createSchemaFromHierarchy",
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.createDailyJournalNote",
+        "command": "sail.createDailyJournalNote",
         "key": "ctrl+shift+i",
         "mac": "cmd+shift+i",
-        "when": "dendron:pluginActive && shellExecutionSupported"
+        "when": "sail:pluginActive && shellExecutionSupported"
       },
       {
-        "command": "dendron.copyNoteLink",
+        "command": "sail.copyNoteLink",
         "key": "ctrl+shift+c",
         "mac": "cmd+shift+c",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.copyNoteRef",
+        "command": "sail.copyNoteRef",
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.copyAs",
+        "command": "sail.copyAs",
         "key": "ctrl+k ctrl+c",
         "mac": "cmd+k cmd+c",
-        "when": "dendron:pluginActive"
+        "when": "sail:pluginActive"
       },
       {
-        "command": "dendron.delete",
+        "command": "sail.delete",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
-        "when": "dendron:pluginActive && shellExecutionSupported"
+        "when": "sail:pluginActive && shellExecutionSupported"
       },
       {
-        "command": "dendron.lookupNote",
+        "command": "sail.lookupNote",
         "mac": "cmd+L",
         "key": "ctrl+l",
-        "when": "dendron:pluginActive"
+        "when": "sail:pluginActive"
       },
       {
-        "command": "dendron.lookupNoteAutoComplete",
+        "command": "sail.lookupNoteAutoComplete",
         "key": "Tab",
-        "when": "dendron:pluginActive && dendron:noteLookupActive && !editorFocus && !view"
+        "when": "sail:pluginActive && sail:noteLookupActive && !editorFocus && !view"
       },
       {
-        "command": "dendron.createJournalNote",
+        "command": "sail.createJournalNote",
         "key": "ctrl+shift+j",
         "mac": "cmd+shift+j",
         "args": {
           "noteType": "journal"
         },
-        "when": "dendron:pluginActive && shellExecutionSupported"
+        "when": "sail:pluginActive && shellExecutionSupported"
       },
       {
-        "command": "dendron.createScratchNote",
+        "command": "sail.createScratchNote",
         "key": "ctrl+k s",
         "mac": "cmd+k s",
-        "when": "dendron:pluginActive && shellExecutionSupported"
+        "when": "sail:pluginActive && shellExecutionSupported"
       },
       {
-        "command": "dendron.lookupSchema",
+        "command": "sail.lookupSchema",
         "mac": "cmd+shift+L",
         "key": "ctrl+shift+l",
-        "when": "dendron:pluginActive && shellExecutionSupported"
+        "when": "sail:pluginActive && shellExecutionSupported"
       },
       {
-        "command": "dendron.goUpHierarchy",
+        "command": "sail.goUpHierarchy",
         "mac": "cmd+shift+up",
         "key": "ctrl+shift+up",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.goNextHierarchy",
+        "command": "sail.goNextHierarchy",
         "key": "ctrl+shift+]",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.goPrevHierarchy",
+        "command": "sail.goPrevHierarchy",
         "key": "ctrl+shift+[",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.goDownHierarchy",
+        "command": "sail.goDownHierarchy",
         "mac": "cmd+shift+down",
         "key": "ctrl+shift+down",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.copyNoteURL",
+        "command": "sail.copyNoteURL",
         "mac": "cmd+shift+u",
         "windows": "ctrl+shift+u",
-        "when": "editorFocus && dendron:pluginActive"
+        "when": "editorFocus && sail:pluginActive"
       },
       {
-        "command": "dendron.togglePreview",
+        "command": "sail.togglePreview",
         "key": "ctrl+k v",
         "mac": "cmd+ctrl+p",
-        "when": "dendron:pluginActive"
+        "when": "sail:pluginActive"
       }
     ],
     "markdown.previewStyles": [
@@ -1244,7 +1244,7 @@
   },
   "scripts": {
     "build": "pnpm run compile",
-    "precompile": "pnpm --filter=@saili/engine-server run buildCI && pnpm --filter=@saili/dendron-plugin-views run build && pnpm --filter=@saili/dendron-plugin-views run copy-to-plugin",
+    "precompile": "pnpm --filter=@saili/engine-server run buildCI && pnpm --filter=@saili/sail-plugin-views run build && pnpm --filter=@saili/sail-plugin-views run copy-to-plugin",
     "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --tsconfig=tsconfig.json --log-override:empty-import-meta=silent --log-override:commonjs-variable-in-esm=silent && node scripts/fix-import-meta.js && node scripts/copy-prisma-assets.js",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --external:better-sqlite3 --external:unist --external:mdast --format=cjs --sourcemap=inline --sources-content=true --watch --tsconfig=tsconfig.json --log-override:empty-import-meta=silent --log-override:commonjs-variable-in-esm=silent",
     "package": "vsce package --no-dependencies",

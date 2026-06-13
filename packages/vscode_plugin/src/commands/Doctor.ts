@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   DNodeUtils,
   DVault,
@@ -40,7 +40,7 @@ import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { ReloadIndexCommand } from "./ReloadIndex";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { KeybindingUtils } from "../KeybindingUtils";
 import { QuickPickHierarchySelector } from "../components/lookup/HierarchySelector";
 import { RemarkUtils } from "@saili/unified";
@@ -124,9 +124,9 @@ function shouldDoctorReloadWorkspaceAfterDoctorAction(
 
 export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.DOCTOR.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -281,16 +281,16 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
   }) {
     const { installStatus } = opts;
     const contents = [
-      "# Extensions that are incompatible with Dendron.",
+      "# Extensions that are incompatible with Sail.",
       "",
-      "The extensions listed below are known to be incompatible with Dendron.",
+      "The extensions listed below are known to be incompatible with Sail.",
       "",
-      "Neither Dendron nor the extension may function properly when installed concurrently.",
+      "Neither Sail nor the extension may function properly when installed concurrently.",
       "",
-      "Consider disabling the incompatible extensions when in a Dendron Workspace.",
+      "Consider disabling the incompatible extensions when in a Sail Workspace.",
       "  - [How to disable extensions for a specific workspace without uninstalling](https://code.visualstudio.com/docs/editor/extension-marketplace#_disable-an-extension)",
       "",
-      "See [Incompatible Extensions](https://wiki.dendron.so/notes/9Id5LUZFfM1m9djl6KgpP) for more details.",
+      "See [Incompatible Extensions](https://wiki.sail.so/notes/9Id5LUZFfM1m9djl6KgpP) for more details.",
       "",
       "## Incompatible Extensions: ",
       "",
@@ -377,7 +377,7 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
       "",
       "The notes listed below are invalid.",
       "",
-      "Please see [Restrictions](https://wiki.dendron.so/notes/v21pacjod0eqgdhb7zo7fvw) to learn more about file name restrictions.",
+      "Please see [Restrictions](https://wiki.sail.so/notes/v21pacjod0eqgdhb7zo7fvw) to learn more about file name restrictions.",
       "",
       "***",
       canRenameContent,
@@ -399,7 +399,7 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
   private async reload() {
     const engine = await new ReloadIndexCommand().execute();
     if (_.isUndefined(engine)) {
-      throw new DendronError({ message: "no engine found." });
+      throw new SailError({ message: "no engine found." });
     }
     return engine;
   }
@@ -433,10 +433,10 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
     const findings: Finding[] = [];
     let extra: any;
     if (_.isUndefined(wsRoot)) {
-      throw new DendronError({ message: "rootDir undefined" });
+      throw new SailError({ message: "rootDir undefined" });
     }
     if (_.isUndefined(config)) {
-      throw new DendronError({ message: "no config found" });
+      throw new SailError({ message: "no config found" });
     }
 
     if (this.extension.fileWatcher) {
@@ -466,7 +466,7 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
       if (opts.scope === "file") {
         const document = VSCodeUtils.getActiveTextEditor()?.document;
         if (_.isUndefined(document)) {
-          throw new DendronError({ message: "No note open." });
+          throw new SailError({ message: "No note open." });
         }
         note = await this.extension.wsUtils.getNoteFromDocument(document);
       }
@@ -583,11 +583,11 @@ export class DoctorCommand extends BasicCommand<CommandOpts, CommandOutput> {
         }
 
         if (out.resp) {
-          const OPEN_CONFIG = "Open dendron.yml and Backup";
+          const OPEN_CONFIG = "Open sail.yml and Backup";
           const message =
             opts.action === DoctorActionsEnum.REMOVE_DEPRECATED_CONFIGS
-              ? `Deprecated configs removed. Backup of dendron.yml created in ${out.resp.backupPath}`
-              : `Missing defaults added. Backup of dendron.yml created in ${out.resp.backupPath}`;
+              ? `Deprecated configs removed. Backup of sail.yml created in ${out.resp.backupPath}`
+              : `Missing defaults added. Backup of sail.yml created in ${out.resp.backupPath}`;
           window
             .showInformationMessage(message, OPEN_CONFIG)
             .then(async (resp) => {

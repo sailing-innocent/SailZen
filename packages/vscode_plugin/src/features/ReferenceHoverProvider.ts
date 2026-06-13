@@ -1,14 +1,14 @@
 import {
   ConfigUtils,
-  containsNonDendronUri,
-  DendronError,
+  containsNonSailUri,
+  SailError,
   DVault,
   NotePropsMeta,
   NoteUtils,
   VaultUtils,
 } from "@saili/common-all";
 import { findNonNoteFile, vault2Path } from "@saili/common-server";
-import { AnchorUtils, DendronASTDest, ProcFlavor } from "@saili/unified";
+import { AnchorUtils, SailASTDest, ProcFlavor } from "@saili/unified";
 import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
@@ -42,8 +42,8 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
     const foundUri = Uri.file(fullPath);
 
     // Handle URI's like https://example.com or mailto:user@example.com
-    const nonDendronURIMessage = this.handleNonDendronUri(refAtPos.refText);
-    if (!_.isUndefined(nonDendronURIMessage)) return nonDendronURIMessage;
+    const nonSailURIMessage = this.handleNonSailUri(refAtPos.refText);
+    if (!_.isUndefined(nonSailURIMessage)) return nonSailURIMessage;
 
     if (isUncPath(foundUri.fsPath))
       return "UNC paths are not supported for images preview due to VSCode Content Security Policy. Use markdown preview or open image via cmd (ctrl) + click instead.";
@@ -73,13 +73,11 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
       const autoCreateOnDefinition =
         ConfigUtils.getWorkspace(config).enableAutoCreateOnDefinition;
       const ctrlClickToCreate = autoCreateOnDefinition ? "Ctrl+Click or " : "";
-      return `Note ${refAtPos.ref}${vaultName} is missing, ${ctrlClickToCreate}use "Dendron: Go to Note" command to create it.`;
+      return `Note ${refAtPos.ref}${vaultName} is missing, ${ctrlClickToCreate}use "Sail: Go to Note" command to create it.`;
     } else {
       return new MarkdownString(
-        `Note \`${
-          refAtPos.ref
-        }${vaultName}\` is missing, and the filename is invalid for the following reason:\n\n \`${
-          validationResp.reason
+        `Note \`${refAtPos.ref
+        }${vaultName}\` is missing, and the filename is invalid for the following reason:\n\n \`${validationResp.reason
         }\`.\n\n Maybe you meant \`${NoteUtils.cleanFname({
           fname: refAtPos.ref,
         })}\`?`
@@ -87,12 +85,12 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
     }
   }
 
-  /** Returns a message if this is a non-dendron URI. */
-  private handleNonDendronUri(refText: string): string | undefined {
+  /** Returns a message if this is a non-sail URI. */
+  private handleNonSailUri(refText: string): string | undefined {
     const [first, second] = refText.split("|");
     const maybeUri = second || first;
-    const maybe = containsNonDendronUri(maybeUri);
-    // Not a URI, or is dendron://, so it must be a note (or image) and the rest of the code can handle this.
+    const maybe = containsNonSailUri(maybeUri);
+    // Not a URI, or is sail://, so it must be a note (or image) and the rest of the code can handle this.
     if (_.isUndefined(maybe) || !maybe) return undefined;
     // Otherwise, this is a URI like http://example.com or mailto:user@example.com
     return `Preview is not supported for this link. [Click to open in the default app.](${maybeUri}).`;
@@ -120,9 +118,9 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
     try {
       const ctx = "provideHover";
 
-      // No-op if we're not in a Dendron Workspace
+      // No-op if we're not in a Sail Workspace
       if (
-        !(await ExtensionProvider.isActiveAndIsDendronNote(document.uri.fsPath))
+        !(await ExtensionProvider.isActiveAndIsSailNote(document.uri.fsPath))
       ) {
         return null;
       }
@@ -199,7 +197,7 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
       // For notes, let's use the noteRef functionality to render the referenced portion. ^tiagtt7sjzyw
       const referenceText = ["![["];
       if (refAtPos.vaultName)
-        referenceText.push(`dendron://${refAtPos.vaultName}/`);
+        referenceText.push(`sail://${refAtPos.vaultName}/`);
       referenceText.push(refAtPos.ref);
       if (refAtPos.anchorStart)
         referenceText.push(
@@ -225,17 +223,17 @@ export default class ReferenceHoverProvider implements vscode.HoverProvider {
       const rendered = await engine.renderNote({
         id: fakeNote.id,
         note: fakeNote,
-        dest: DendronASTDest.MD_REGULAR,
+        dest: SailASTDest.MD_REGULAR,
         flavor: ProcFlavor.HOVER_PREVIEW,
       });
       if (rendered.error) {
         const error =
-          rendered.error instanceof DendronError
+          rendered.error instanceof SailError
             ? rendered.error
-            : new DendronError({
-                message: "Error while rendering hover",
-                payload: rendered.error,
-              });
+            : new SailError({
+              message: "Error while rendering hover",
+              payload: rendered.error,
+            });
         Logger.error({
           ctx,
           msg: "Error while rendering the hover",

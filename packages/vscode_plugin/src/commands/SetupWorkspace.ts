@@ -34,7 +34,7 @@ type CommandOpts = CommandInput & {
    * override prompts
    */
   skipConfirmation?: boolean;
-  /** Create self contained vaults, overriding the Dendron VSCode setting. */
+  /** Create self contained vaults, overriding the Sail VSCode setting. */
   selfContained?: boolean;
   /**
    * Open worksapce without reloading
@@ -74,7 +74,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
         workspaceFolders,
       })) === WorkspaceType.NONE
     ) {
-      // If there's a non-Dendron workspace already open, offer to convert that to a Dendron workspace first
+      // If there's a non-Sail workspace already open, offer to convert that to a Sail workspace first
       const initNative = await VSCodeUtils.showQuickPick(
         [
           {
@@ -108,7 +108,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
           default: "docs",
           relativeTo: initNative.description,
           override: {
-            title: "Path for Dendron Native Workspace",
+            title: "Path for Sail Native Workspace",
             prompt: `Path to folder, relative to ${initNative.label}`,
           },
         });
@@ -150,7 +150,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
         [
           {
             label: EXISTING_ROOT_ACTIONS.CONTINUE,
-            detail: `Continue creating a workspace, putting Dendron files into the existing folder.`,
+            detail: `Continue creating a workspace, putting Sail files into the existing folder.`,
           },
           {
             label: EXISTING_ROOT_ACTIONS.DELETE,
@@ -170,7 +170,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
 
       if (resp === undefined || resp.label === EXISTING_ROOT_ACTIONS.ABORT) {
         vscode.window.showInformationMessage(
-          "did not initialize dendron workspace"
+          "did not initialize sail workspace"
         );
         return false;
       }
@@ -260,7 +260,7 @@ export class SetupWorkspaceCommand extends BasicCommand<
     }
 
     if (!skipOpenWs) {
-      vscode.window.showInformationMessage("opening dendron workspace");
+      vscode.window.showInformationMessage("opening sail workspace");
       if (workspaceType === WorkspaceType.CODE) {
         VSCodeUtils.openWS(
           vscode.Uri.file(path.join(rootDir, CONSTANTS.DENDRON_WS_NAME)).fsPath

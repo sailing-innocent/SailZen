@@ -6,7 +6,7 @@ import type { Plugin, Processor } from "unified";
 import { Node } from "unist";
 import { u } from "unist-builder";
 import { SiteUtils } from "../SiteUtils";
-import { DendronASTDest, DendronASTTypes, WikiLinkNoteV4 } from "../types";
+import { SailASTDest, SailASTTypes, WikiLinkNoteV4 } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
 
 // Plugin that adds backlinks at the end of each page if they exist
@@ -35,7 +35,7 @@ const plugin: Plugin = function (this: Processor) {
     if (!fname || insideNoteRef) {
       return;
     }
-    if (dest !== DendronASTDest.HTML) {
+    if (dest !== SailASTDest.HTML) {
       return;
     }
     const note = noteToRender;
@@ -122,7 +122,7 @@ const plugin: Plugin = function (this: Processor) {
             }
             return listItem(
               paragraph({
-                type: DendronASTTypes.WIKI_LINK,
+                type: SailASTTypes.WIKI_LINK,
                 value: mdLink.from.fname,
                 data: {
                   alias,

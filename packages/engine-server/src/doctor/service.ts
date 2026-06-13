@@ -2,7 +2,7 @@ import {
   assertInvalidState,
   asyncLoopOneAtATime,
   ConfigUtils,
-  DendronError,
+  SailError,
   DEngineClient,
   Disposable,
   DLink,
@@ -36,7 +36,7 @@ import {
   MDUtilsV5,
   LinkUtils,
   RemarkUtils,
-  DendronASTDest,
+  SailASTDest,
 } from "@saili/unified";
 
 export enum DoctorActionsEnum {
@@ -244,7 +244,7 @@ export class DoctorService implements Disposable {
             wsRoot,
             DoctorActionsEnum.REMOVE_DEPRECATED_CONFIGS
           );
-          if (backupPath instanceof DendronError) {
+          if (backupPath instanceof SailError) {
             return {
               exit: true,
               error: backupPath,
@@ -277,12 +277,12 @@ export class DoctorService implements Disposable {
         if (detectOut) {
           const { needsBackfill, backfilledConfig } = detectOut;
           if (needsBackfill) {
-            // back up dendron.yml first
+            // back up sail.yml first
             const backupPath = await this.createBackup(
               wsRoot,
               DoctorActionsEnum.ADD_MISSING_DEFAULT_CONFIGS
             );
-            if (backupPath instanceof DendronError) {
+            if (backupPath instanceof SailError) {
               return {
                 exit: true,
                 error: backupPath,
@@ -317,7 +317,7 @@ export class DoctorService implements Disposable {
               flavor: ProcFlavor.REGULAR,
             },
             {
-              dest: DendronASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_DENDRON,
               noteToRender: note,
               fname: note.fname,
               vault: note.vault,
@@ -348,7 +348,7 @@ export class DoctorService implements Disposable {
               flavor: ProcFlavor.REGULAR,
             },
             {
-              dest: DendronASTDest.MD_DENDRON,
+              dest: SailASTDest.MD_DENDRON,
               noteToRender: note,
               fname: note.fname,
               vault: note.vault,
@@ -467,7 +467,7 @@ export class DoctorService implements Disposable {
             wsRoot,
             DoctorActionsEnum.FIX_SELF_CONTAINED_VAULT_CONFIG
           );
-          if (out instanceof DendronError) {
+          if (out instanceof SailError) {
             return {
               exit: true,
               error: out,
@@ -516,7 +516,7 @@ export class DoctorService implements Disposable {
             wsRoot,
             DoctorActionsEnum.FIX_SELF_CONTAINED_VAULT_CONFIG
           );
-          if (out instanceof DendronError) {
+          if (out instanceof SailError) {
             return {
               exit: true,
               error: out,
@@ -590,9 +590,9 @@ export class DoctorService implements Disposable {
         break;
       }
       default:
-        throw new DendronError({
+        throw new SailError({
           message:
-            "Unexpected Doctor action. If this is something Dendron should support, please create an issue on our Github repository.",
+            "Unexpected Doctor action. If this is something Sail should support, please create an issue on our Github repository.",
         });
     }
     if (doctorAction !== undefined) {
@@ -610,16 +610,16 @@ export class DoctorService implements Disposable {
     return { exit, resp };
   }
 
-  /** Returns the path for the backup if it was able to create one, or a DendronError if one occurred during backup. */
+  /** Returns the path for the backup if it was able to create one, or a SailError if one occurred during backup. */
   async createBackup(
     wsRoot: string,
     backupInfix: string
-  ): Promise<string | DendronError> {
+  ): Promise<string | SailError> {
     try {
       const path = await DConfig.createBackup(wsRoot, backupInfix);
       return path;
     } catch (error) {
-      return new DendronError({
+      return new SailError({
         message: `Backup ${backupInfix} failed. Aborting the Doctor action.`,
         payload: error,
       });

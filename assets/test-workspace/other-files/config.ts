@@ -1,8 +1,8 @@
 /* eslint-disable */
 import {
   CONSTANTS,
-  DendronConfig,
-  DendronPublishingConfig,
+  SailConfig,
+  SailPublishingConfig,
   Time,
 } from "@saili/common-all";
 import { readYAML, writeYAML } from "@saili/common-server";
@@ -21,11 +21,11 @@ export class DConfig {
    */
   static getRaw(wsRoot: string) {
     const configPath = DConfig.configPath(wsRoot);
-    const config = readYAML(configPath) as Partial<DendronConfig>;
+    const config = readYAML(configPath) as Partial<SailConfig>;
     return config;
   }
 
-  static getSiteIndex(sconfig: DendronPublishingConfig) {
+  static getSiteIndex(sconfig: SailPublishingConfig) {
     let { siteIndex, siteHierarchies } = sconfig;
     return siteIndex || siteHierarchies[0];
   }
@@ -35,16 +35,16 @@ export class DConfig {
     config,
   }: {
     wsRoot: string;
-    config: DendronConfig;
+    config: SailConfig;
   }) {
     const configPath = DConfig.configPath(wsRoot);
     return writeYAML(configPath, config);
   }
 
   /**
-   * Create a backup of dendron.yml with an optional custom infix string. ^iRXV8AFm3hSJ
+   * Create a backup of sail.yml with an optional custom infix string. ^iRXV8AFm3hSJ
    * e.g.) createBackup(wsRoot, "foo") will result in a backup file name ^VwEHhuhP4bbK
-   * `dendron.yyyy.MM.dd.HHmmssS.foo.yml` ^backup-file
+   * `sail.yyyy.MM.dd.HHmmssS.foo.yml` ^backup-file
    *
    * @param wsRoot workspace root
    * @param infix custom string used in the backup name
@@ -52,7 +52,7 @@ export class DConfig {
   static createBackup(wsRoot: string, infix: string): string {
     const configPath = DConfig.configPath(wsRoot);
     const today = Time.now().toFormat("yyyy.MM.dd.HHmmssS");
-    const prefix = `dendron.${today}.`;
+    const prefix = `sail.${today}.`;
     const suffix = `yml`;
     const maybeInfix = infix ? `${infix}.` : "";
     const backupName = `${prefix}${maybeInfix}${suffix}`;

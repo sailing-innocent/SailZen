@@ -1,7 +1,7 @@
-// Contains types that help with Dendron's unifiedjs markdown processor.
+// Contains types that help with Sail's unifiedjs markdown processor.
 
 /** The expected output from the processor, if the processor is used to process or stringify a tree. */
-export enum DendronASTDest {
+export enum SailASTDest {
   /**
    * @deprecated - no longer needed since we don't use the markdown preview
    * enhanced anymore

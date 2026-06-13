@@ -1,6 +1,6 @@
 import fs from "fs-extra";
 import {
-  DendronError,
+  SailError,
   ERROR_SEVERITY,
   ERROR_STATUS,
   GetAllFilesOpts,
@@ -21,7 +21,7 @@ export class NodeJSFileStore implements IFileStore {
       return { data };
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CONTENT_NOT_FOUND,
           message: `Failed to read from ${uri.fsPath}.`,
           innerError: err as Error,
@@ -49,7 +49,7 @@ export class NodeJSFileStore implements IFileStore {
       }
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CONTENT_NOT_FOUND,
           message: `Failed to read from ${root}.`,
           innerError: err as Error,
@@ -68,7 +68,7 @@ export class NodeJSFileStore implements IFileStore {
       return { data: uri };
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.WRITE_FAILED,
           message: `Failed to write to ${uri.fsPath}.`,
           innerError: err as Error,
@@ -89,7 +89,7 @@ export class NodeJSFileStore implements IFileStore {
       return { data: uri };
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.DELETE_FAILED,
           message: `Failed to delete from ${uri.fsPath}.`,
           innerError: err as Error,
@@ -108,7 +108,7 @@ export class NodeJSFileStore implements IFileStore {
       return { data: newUri };
     } catch (err) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.RENAME_FAILED,
           message: `Failed to rename from ${oldUri.fsPath} to ${newUri.fsPath}.`,
           innerError: err as Error,

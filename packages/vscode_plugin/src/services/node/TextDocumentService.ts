@@ -15,7 +15,7 @@ import {
   TextDocument,
   TextDocumentChangeEvent,
 } from "vscode";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { Logger } from "../../logger";
 import { ITextDocumentService } from "../ITextDocumentService";
 import { EditorUtils } from "../../utils/EditorUtils";
@@ -24,22 +24,22 @@ import { EditorUtils } from "../../utils/EditorUtils";
  * This service keeps client state note state synchronized with the engine
  * state. It also exposes an event that allows callback functionality whenever
  * the engine has finished updating a note state. See {@link ITextDocumentService}
- * See [[Note Sync Service|dendron://dendron.docs/pkg.plugin-core.ref.note-sync-service]] for
+ * See [[Note Sync Service|sail://sail.docs/pkg.plugin-core.ref.note-sync-service]] for
  * additional docs
  */
 export class TextDocumentService implements ITextDocumentService {
   private L: DLogger;
 
   _textDocumentEventHandle: Disposable;
-  _extension: IDendronExtension;
+  _extension: ISailExtension;
 
   /**
    *
-   * @param ext Instance of IDendronExtension
+   * @param ext Instance of ISailExtension
    * @param textDocumentEvent - Event returning TextDocument, such as
    * vscode.workspace.OnDidSaveTextDocument. This call is not debounced
    */
-  constructor(ext: IDendronExtension, textDocumentEvent: Event<TextDocument>) {
+  constructor(ext: ISailExtension, textDocumentEvent: Event<TextDocument>) {
     this.L = Logger;
     this._extension = ext;
     this._textDocumentEventHandle = textDocumentEvent(this.onDidSave, this);

@@ -1,4 +1,4 @@
-import { DendronError, ERROR_STATUS } from "@saili/common-all";
+import { SailError, ERROR_STATUS } from "@saili/common-all";
 import { resolvePath, vault2Path } from "@saili/common-server";
 import fs from "fs-extra";
 import _ from "lodash";
@@ -17,7 +17,7 @@ type CommandOpts = {};
 
 type CommandInput = {};
 
-type CommandOutput = { error?: DendronError; fsPath?: string };
+type CommandOutput = { error?: SailError; fsPath?: string };
 
 export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.OPEN_LINK.key;
@@ -33,7 +33,7 @@ export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
     text = opts?.uri ?? getURLAt(VSCodeUtils.getActiveTextEditor());
 
     if (_.isUndefined(text) || text === "") {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: `no valid path or URL selected`,
       });
@@ -61,7 +61,7 @@ export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
         assetPath = resolvePath(text, getExtension().rootWorkspace.uri.fsPath);
       }
       if (!fs.existsSync(assetPath)) {
-        const error = DendronError.createFromStatus({
+        const error = SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_STATE,
           message: `no valid path or URL selected`,
         });
@@ -69,7 +69,7 @@ export class OpenLinkCommand extends BasicCommand<CommandOpts, CommandOutput> {
         return { error };
       }
       await open(assetPath).catch((err) => {
-        const error = DendronError.createFromStatus({
+        const error = SailError.createFromStatus({
           status: ERROR_STATUS.UNKNOWN,
           innerError: err,
         });

@@ -8,7 +8,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const { admZip: AdmZip } = require("./adm-zip.js");
 
-const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".dendron");
+const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
 
 async function downloadPrisma() {
 

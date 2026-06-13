@@ -11,7 +11,7 @@
 | 模块 | 功能 | 关键文件 |
 |------|------|----------|
 | **核心处理器** | 构建 remark/rehype 处理器链，支持多种渲染模式（Preview / Publishing / Hover 等） | `utilsv5.ts`, `utilsWeb.ts` |
-| **AST 类型系统** | 定义 Dendron 扩展 AST 节点类型（WikiLink、HashTag、NoteRef、BlockAnchor、SailZen 扩展节点等） | `types.ts` |
+| **AST 类型系统** | 定义 Sail 扩展 AST 节点类型（WikiLink、HashTag、NoteRef、BlockAnchor、SailZen 扩展节点等） | `types.ts` |
 | **MDast 工具** | 辅助遍历、查找标题、生成消息 AST、异步访问器等 | `utils.ts` |
 | **Remark 插件** | Wiki 链接、标签、块锚点、笔记引用、扩展图片、反向链接、层级、SailZen 引用/图注等 | `remark/*.ts` |
 | **Rehype 插件** | HTML 元素包装、Mermaid 占位等 | `rehype/*.ts` |
@@ -110,7 +110,7 @@ expect(tree.children[0].children[0].type).toBe("sailzenCite");
 
 **适用插件**：`sailzenCite`, `sailzenFigure`, `wrap`
 
-**特点**：验证插件的 parse / compile 行为，不依赖 Dendron 配置上下文。
+**特点**：验证插件的 parse / compile 行为，不依赖 Sail 配置上下文。
 
 ### 4.3 全处理器集成测试（MDUtilsV5）
 
@@ -133,7 +133,7 @@ expect(html).toContain("important");
 | 函数 | 用途 |
 |------|------|
 | `createTestVault(overrides?)` | 创建最小 DVault |
-| `createTestConfig(overrides?)` | 创建默认 DendronConfig |
+| `createTestConfig(overrides?)` | 创建默认 SailConfig |
 | `createTestNote(overrides?)` | 创建最小 NoteProps |
 | `createTestNoteWithBody(body, overrides?)` | 创建带正文笔记 |
 | `createTestNoteWithWikiLinks(links, overrides?)` | 创建带 wiki 链接笔记 |
@@ -157,7 +157,7 @@ const vault = createTestVault();
 | `createTestProcessor()` | 创建基础 remark 处理器 |
 | `processMarkdownToAST(md)` | Markdown → AST |
 | `processMarkdownToString(md)` | Markdown → String |
-| `createFullTestProcessor(note, flavor)` | 创建完整 Dendron 处理器 |
+| `createFullTestProcessor(note, flavor)` | 创建完整 Sail 处理器 |
 | `processNoteFull(note, flavor)` | 笔记 → HTML 字符串 |
 | `expectContains(actual, expected)` | 包含断言 |
 | `expectNotContains(actual, unexpected)` | 不包含断言 |
@@ -288,7 +288,7 @@ describe("myFeature integration", () => {
 - 使用 `test` 或 `it` 描述具体行为（`should ... when ...`）
 - 一个断言一个职责；相关断言可放在同一 `test` 中
 - 优先使用夹具工厂，避免硬编码大对象
-- 对需要 `DendronConfig` 的测试，使用 `createTestConfig()`
+- 对需要 `SailConfig` 的测试，使用 `createTestConfig()`
 
 ### 6.5 步骤 5：运行并验证
 
@@ -333,7 +333,7 @@ pnpm test:coverage
 
 | 模块 | 建议测试内容 |
 |------|-------------|
-| `remark/dendronPub.ts` | 标题插入、`transformNoPublish`、图片 URL 转换、wiki link opts 前缀 |
+| `remark/sailPub.ts` | 标题插入、`transformNoPublish`、图片 URL 转换、wiki link opts 前缀 |
 | `remark/noteRefsV2.ts` | 笔记引用解析、嵌套引用、锚点范围、`convertNoteRefToHAST` |
 | `remark/backlinks.ts` | 反向链接生成、链接去重 |
 | `remark/backlinksHover.ts` | Hover 预览内容生成 |
@@ -354,7 +354,7 @@ pnpm test:coverage
 
 | 模块 | 建议测试内容 |
 |------|-------------|
-| `remark/dendronPreview.ts` | Hover 预览图片 URL 重写 |
+| `remark/sailPreview.ts` | Hover 预览图片 URL 重写 |
 | `remark/publishSite.ts` | 站点发布专用转换 |
 | `remark/abbr.ts` | 缩写解析 |
 | `utilities/getParsingDependencyDicts.ts` | 解析依赖字典生成 |

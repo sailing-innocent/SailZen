@@ -6,12 +6,30 @@ settings:
 
 catalogs:
   default:
+    '@types/jest':
+      specifier: ^30.0.0
+      version: 30.0.0
+    '@types/lodash':
+      specifier: ^4.17.24
+      version: 4.17.24
+    '@types/node':
+      specifier: ^25.9.3
+      version: 25.9.3
     '@types/react':
       specifier: ^19.2.17
       version: 19.2.17
     '@types/react-dom':
       specifier: ^19.2.3
       version: 19.2.3
+    esbuild:
+      specifier: ^0.28.1
+      version: 0.28.1
+    jest:
+      specifier: ^30.4.2
+      version: 30.4.2
+    jest-config:
+      specifier: ^30.4.2
+      version: 30.4.2
     lodash:
       specifier: ^4.18.1
       version: 4.18.1
@@ -21,9 +39,15 @@ catalogs:
     react-dom:
       specifier: ^19.2.7
       version: 19.2.7
+    ts-jest:
+      specifier: ^29.4.11
+      version: 29.4.11
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
+    typescript-eslint:
+      specifier: ^8.61.0
+      version: 8.61.0
 
 patchedDependencies:
   remark-variables@1.4.9: d08619ee2c2d06210b5b6bbf9f4d126113aa18423c7b3ed40566c9930d7e6ce8
@@ -331,76 +355,6 @@ importers:
         specifier: ^10.9.2
         version: 10.9.2(@types/node@25.9.3)(typescript@6.0.3)
 
-  packages/dendron_plugin_views:
-    dependencies:
-      '@aws-amplify/core':
-        specifier: ^6.16.4
-        version: 6.16.4
-      '@reduxjs/toolkit':
-        specifier: ^2.12.0
-        version: 2.12.0(react-redux@9.3.0(@types/react@19.2.17)(react@19.2.7)(redux@5.0.1))(react@19.2.7)
-      '@saili/common-all':
-        specifier: workspace:^
-        version: link:../common-all
-      dayjs:
-        specifier: ^1.11.21
-        version: 1.11.21
-      lodash:
-        specifier: 'catalog:'
-        version: 4.18.1
-      mermaid:
-        specifier: ^11.15.0
-        version: 11.15.0
-      process:
-        specifier: ^0.11.10
-        version: 0.11.10
-      react:
-        specifier: 'catalog:'
-        version: 19.2.7
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.2.7(react@19.2.7)
-      react-redux:
-        specifier: ^9.3.0
-        version: 9.3.0(@types/react@19.2.17)(react@19.2.7)(redux@5.0.1)
-      redux-logger:
-        specifier: ^3.0.6
-        version: 3.0.6
-      web-vitals:
-        specifier: ^5.3.0
-        version: 5.3.0
-    devDependencies:
-      '@types/lodash':
-        specifier: ^4.17.24
-        version: 4.17.24
-      '@types/node':
-        specifier: ^25.9.3
-        version: 25.9.3
-      '@types/react':
-        specifier: 'catalog:'
-        version: 19.2.17
-      '@types/react-dom':
-        specifier: 'catalog:'
-        version: 19.2.3(@types/react@19.2.17)
-      '@types/redux-logger':
-        specifier: ^3.0.13
-        version: 3.0.13
-      '@vitejs/plugin-react':
-        specifier: ^6.0.2
-        version: 6.0.2(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))
-      sass:
-        specifier: ^1.101.0
-        version: 1.101.0
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.16
-        version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0)
-      vite-plugin-node-polyfills:
-        specifier: ^0.28.0
-        version: 0.28.0(rollup@4.53.5)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))
-
   packages/engine-server:
     dependencies:
       '@babel/preset-typescript':
@@ -590,6 +544,76 @@ importers:
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
+
+  packages/sail_plugin_views:
+    dependencies:
+      '@aws-amplify/core':
+        specifier: ^6.16.4
+        version: 6.16.4
+      '@reduxjs/toolkit':
+        specifier: ^2.12.0
+        version: 2.12.0(react-redux@9.3.0(@types/react@19.2.17)(react@19.2.7)(redux@5.0.1))(react@19.2.7)
+      '@saili/common-all':
+        specifier: workspace:^
+        version: link:../common-all
+      dayjs:
+        specifier: ^1.11.21
+        version: 1.11.21
+      lodash:
+        specifier: 'catalog:'
+        version: 4.18.1
+      mermaid:
+        specifier: ^11.15.0
+        version: 11.15.0
+      process:
+        specifier: ^0.11.10
+        version: 0.11.10
+      react:
+        specifier: 'catalog:'
+        version: 19.2.7
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.2.7(react@19.2.7)
+      react-redux:
+        specifier: ^9.3.0
+        version: 9.3.0(@types/react@19.2.17)(react@19.2.7)(redux@5.0.1)
+      redux-logger:
+        specifier: ^3.0.6
+        version: 3.0.6
+      web-vitals:
+        specifier: ^5.3.0
+        version: 5.3.0
+    devDependencies:
+      '@types/lodash':
+        specifier: ^4.17.24
+        version: 4.17.24
+      '@types/node':
+        specifier: ^25.9.3
+        version: 25.9.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.17)
+      '@types/redux-logger':
+        specifier: ^3.0.13
+        version: 3.0.13
+      '@vitejs/plugin-react':
+        specifier: ^6.0.2
+        version: 6.0.2(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))
+      sass:
+        specifier: ^1.101.0
+        version: 1.101.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0)
+      vite-plugin-node-polyfills:
+        specifier: ^0.28.0
+        version: 0.28.0(rollup@4.53.5)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(jiti@2.7.0)(sass@1.101.0)(terser@5.44.1)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/site:
     dependencies:
@@ -12724,7 +12748,7 @@ snapshots:
 
   cliui@8.0.1:
     dependencies:
-      string-width: 4.2.3
+      string-width: 4.2.0
       strip-ansi: 6.0.1
       wrap-ansi: 7.0.0
 
@@ -15143,7 +15167,7 @@ snapshots:
 
   md5.js@1.3.5:
     dependencies:
-      hash-base: 3.0.5
+      hash-base: 3.1.2
       inherits: 2.0.4
       safe-buffer: 5.2.1
 
@@ -17830,8 +17854,8 @@ snapshots:
   wrap-ansi@7.0.0:
     dependencies:
       ansi-styles: 4.3.0
-      string-width: 4.2.3
-      strip-ansi: 6.0.1
+      string-width: 4.2.0
+      strip-ansi: 6.0.0
 
   wrap-ansi@8.1.0:
     dependencies:

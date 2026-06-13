@@ -10,7 +10,7 @@ import _ from "lodash";
 import * as vscode from "vscode";
 import { MultiSelectBtn } from "../components/lookup/buttons";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -67,7 +67,7 @@ export class InsertNoteLinkCommand extends BasicCommand<
           const data = event.data as NoteLookupProviderSuccessResp;
           resolve({ notes: data.selectedItems, ...copts });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -76,7 +76,7 @@ export class InsertNoteLinkCommand extends BasicCommand<
         provider,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
           lc.quickPick.value = AutoCompleter.getAutoCompletedValue(

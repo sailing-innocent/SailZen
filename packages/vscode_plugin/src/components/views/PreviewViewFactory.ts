@@ -1,4 +1,4 @@
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { PreviewLinkHandler } from "./PreviewLinkHandler";
 import { PreviewProxy } from "./PreviewProxy";
 import { PreviewPanel } from "./PreviewPanel";
@@ -15,7 +15,7 @@ export class PreviewPanelFactory {
   /**
    * Get a usable PreviewProxy for showing the preview
    */
-  public static create(extension: IDendronExtension): PreviewProxy {
+  public static create(extension: ISailExtension): PreviewProxy {
     // Simple singleton implementation, since we only want one preview panel at
     // any given time.
 

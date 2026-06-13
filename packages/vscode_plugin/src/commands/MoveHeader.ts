@@ -1,7 +1,7 @@
 import {
   asyncLoopOneAtATime,
-  DendronASTDest,
-  DendronError,
+  SailASTDest,
+  SailError,
   DLink,
   DNodeUtils,
   DNoteHeaderAnchor,
@@ -11,7 +11,7 @@ import {
   ERROR_SEVERITY,
   extractNoteChangeEntryCounts,
   getSlugger,
-  DendronConfig,
+  SailConfig,
   isNotUndefined,
   NoteChangeEntry,
   NoteProps,
@@ -24,8 +24,8 @@ import { Heading, HistoryEvent, Node } from "@saili/engine-server";
 import {
   MDUtilsV5,
   Processor,
-  DendronASTNode,
-  DendronASTTypes,
+  SailASTNode,
+  SailASTTypes,
   MdastUtils,
   RemarkUtils,
   Anchor,
@@ -43,9 +43,9 @@ import {
 import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
 import { NotePickerUtils } from "../components/lookup/NotePickerUtils";
-import { DendronQuickPicker } from "../components/lookup/types";
+import { SailQuickPicker } from "../components/lookup/types";
 import { PickerUtils } from "../components/lookup/utils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -57,9 +57,9 @@ import { BasicCommand } from "./base";
 
 type CommandInput =
   | {
-      nonInteractive?: boolean;
-      useSameVault?: boolean;
-    }
+    nonInteractive?: boolean;
+    useSameVault?: boolean;
+  }
   | undefined;
 type CommandOpts = {
   dest?: NoteProps;
@@ -77,23 +77,23 @@ export class MoveHeaderCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.MOVE_HEADER.key;
 
-  private headerNotSelectedError = new DendronError({
+  private headerNotSelectedError = new SailError({
     message: "You must first select the header you want to move.",
     severity: ERROR_SEVERITY.MINOR,
   });
 
-  private noActiveNoteError = new DendronError({
+  private noActiveNoteError = new SailError({
     message: "No note open.",
     severity: ERROR_SEVERITY.MINOR,
   });
 
-  private noNodesToMoveError = new DendronError({
+  private noNodesToMoveError = new SailError({
     message:
       "There are no nodes to move. If your selection is valid, try again after reloading VSCode.",
     severity: ERROR_SEVERITY.MINOR,
   });
 
-  private noDestError = new DendronError({
+  private noDestError = new SailError({
     message: "No destination provided.",
     severity: ERROR_SEVERITY.MINOR,
   });
@@ -103,7 +103,7 @@ export class MoveHeaderCommand extends BasicCommand<
       noteToRender: note,
       fname: note.fname,
       vault: note.vault,
-      dest: DendronASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_DENDRON,
       config: DConfig.readConfigSync(engine.wsRoot),
     });
   };
@@ -138,16 +138,16 @@ export class MoveHeaderCommand extends BasicCommand<
     const proc = this.getProc(engine, maybeNote);
 
     // TODO: shoudl account for line number
-    const bodyAST: DendronASTNode = proc.parse(
+    const bodyAST: SailASTNode = proc.parse(
       maybeNote.body
-    ) as DendronASTNode;
+    ) as SailASTNode;
 
     const parsedLine = proc.parse(line);
     let targetHeader: Heading | undefined;
     let targetIndex: number | undefined;
     // Find the first occurring heading node in selected line.
     // This should be our target.
-    visit(parsedLine, [DendronASTTypes.HEADING], (heading: Heading, index) => {
+    visit(parsedLine, [SailASTTypes.HEADING], (heading: Heading, index) => {
       targetHeader = heading;
       targetIndex = index;
       return false;
@@ -207,7 +207,7 @@ export class MoveHeaderCommand extends BasicCommand<
    */
   async prepareDestination(opts: {
     engine: IEngineAPIService;
-    quickpick: DendronQuickPicker;
+    quickpick: SailQuickPicker;
     selectedItems: readonly NoteQuickInput[];
   }) {
     const { engine, quickpick, selectedItems } = opts;
@@ -270,7 +270,7 @@ export class MoveHeaderCommand extends BasicCommand<
         logger: this.L,
         onDone: async (event: HistoryEvent) => {
           const data = event.data as NoteLookupProviderSuccessResp;
-          const quickpick: DendronQuickPicker = lc.quickPick;
+          const quickpick: SailQuickPicker = lc.quickPick;
           const dest = await this.prepareDestination({
             engine,
             quickpick,
@@ -283,12 +283,12 @@ export class MoveHeaderCommand extends BasicCommand<
             engine,
           });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       this.promptForDestination(lc, opts);
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -390,7 +390,7 @@ export class MoveHeaderCommand extends BasicCommand<
     note: NoteProps,
     origin: NoteProps,
     anchorNamesToUpdate: string[],
-    config: DendronConfig
+    config: SailConfig
   ) {
     const links = LinkUtils.findLinksFromBody({
       note,

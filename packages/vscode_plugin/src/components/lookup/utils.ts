@@ -1,6 +1,6 @@
 /* eslint-disable no-dupe-class-members */
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   DNodeProps,
   DNodePropsQuickInput,
@@ -25,7 +25,7 @@ import { QuickPickItem, TextEditor, Uri, ViewColumn, window } from "vscode";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { DendronBtn, getButtonCategory } from "./ButtonTypes";
+import { SailBtn, getButtonCategory } from "./ButtonTypes";
 import {
   CREATE_NEW_DETAIL_LIST,
   CREATE_NEW_LABEL,
@@ -37,8 +37,8 @@ import type { CreateQuickPickOpts } from "./LookupControllerInterface";
 import { OnAcceptHook } from "./LookupProviderInterface";
 import { TabUtils } from "./TabUtils";
 import {
-  DendronQuickPicker,
-  DendronQuickPickState,
+  SailQuickPicker,
+  SailQuickPickState,
   VaultSelectionMode,
 } from "./types";
 
@@ -98,15 +98,15 @@ export function node2Uri(node: DNodeProps): Uri {
 
 export async function showDocAndHidePicker(
   uris: Uri[],
-  picker: DendronQuickPicker
+  picker: SailQuickPicker
 ) {
   const ctx = "showDocAndHidePicker";
-  const maybeSplitSelection = _.find(picker.buttons, (ent: DendronBtn) => {
+  const maybeSplitSelection = _.find(picker.buttons, (ent: SailBtn) => {
     return getButtonCategory(ent) === "split" && ent.pressed;
   });
   let viewColumn = ViewColumn.Active;
   if (maybeSplitSelection) {
-    const splitType = (maybeSplitSelection as DendronBtn).type;
+    const splitType = (maybeSplitSelection as SailBtn).type;
     if (splitType === "horizontal") {
       viewColumn = ViewColumn.Beside;
     } else {
@@ -175,7 +175,7 @@ export class ProviderAcceptHooks {
       const errMsg = `${vaultName}/${quickpick.value} exists`;
       window.showErrorMessage(errMsg);
       return {
-        error: new DendronError({ message: errMsg }),
+        error: new SailError({ message: errMsg }),
       };
     }
     const data: RenameNoteOpts = {
@@ -209,9 +209,9 @@ export class ProviderAcceptHooks {
 }
 
 export class PickerUtils {
-  static createDendronQuickPick(
+  static createSailQuickPick(
     opts: CreateQuickPickOpts
-  ): DendronQuickPicker {
+  ): SailQuickPicker {
     const { title, placeholder, ignoreFocusOut, initialValue } = _.defaults(
       opts,
       {
@@ -219,9 +219,9 @@ export class PickerUtils {
       }
     );
     const quickPick =
-      window.createQuickPick<DNodePropsQuickInput>() as DendronQuickPicker;
+      window.createQuickPick<DNodePropsQuickInput>() as SailQuickPicker;
     quickPick.title = title;
-    quickPick.state = DendronQuickPickState.IDLE;
+    quickPick.state = SailQuickPickState.IDLE;
     quickPick.nonInteractive = opts.nonInteractive;
     quickPick.placeholder = placeholder;
     quickPick.ignoreFocusOut = ignoreFocusOut;
@@ -260,7 +260,7 @@ export class PickerUtils {
     return quickPick;
   }
 
-  static createDendronQuickPickItem(
+  static createSailQuickPickItem(
     opts: DNodePropsQuickInput
   ): DNodePropsQuickInput {
     return {
@@ -268,7 +268,7 @@ export class PickerUtils {
     };
   }
 
-  static createDendronQuickPickItemFromNote(
+  static createSailQuickPickItemFromNote(
     opts: NoteProps
   ): DNodePropsQuickInput {
     return {
@@ -277,11 +277,11 @@ export class PickerUtils {
     };
   }
 
-  static getValue(picker: DendronQuickPicker) {
+  static getValue(picker: SailQuickPicker) {
     return picker.value;
   }
 
-  static getSelection(picker: DendronQuickPicker): DNodePropsQuickInput[] {
+  static getSelection(picker: SailQuickPicker): DNodePropsQuickInput[] {
     return [...picker.selectedItems];
   }
 
@@ -387,16 +387,16 @@ export class PickerUtils {
    * Check if this picker still has further pickers
    */
   static hasNextPicker = (
-    quickpick: DendronQuickPicker,
+    quickpick: SailQuickPicker,
     opts: {
       selectedItems: readonly DNodePropsQuickInput[];
       providerId: string;
     }
-  ): quickpick is Required<DendronQuickPicker> => {
+  ): quickpick is Required<SailQuickPicker> => {
     const { selectedItems, providerId } = opts;
     const nextPicker = quickpick.nextPicker;
     const isNewPick = PickerUtils.isCreateNewNotePicked(selectedItems[0]);
-    const isNewPickAllowed = ["lookup", "dendron.moveHeader"];
+    const isNewPickAllowed = ["lookup", "sail.moveHeader"];
     return (
       !_.isUndefined(nextPicker) &&
       (isNewPickAllowed.includes(providerId) ? isNewPick : true)
@@ -500,8 +500,8 @@ export class PickerUtils {
     const { vaults: wsVaults } = ExtensionProvider.getDWorkspace();
     const pickerOverrides = isDVaultArray(overrides)
       ? overrides.map((value) => {
-          return { vault: value, label: VaultUtils.getName(value) };
-        })
+        return { vault: value, label: VaultUtils.getName(value) };
+      })
       : overrides;
 
     const vaults: VaultPickerItem[] =
@@ -655,7 +655,7 @@ export class PickerUtils {
     return vaultSuggestions;
   }
 
-  static resetPaginationOpts(picker: DendronQuickPicker) {
+  static resetPaginationOpts(picker: SailQuickPicker) {
     delete picker.moreResults;
     delete picker.offset;
     delete picker.allResults;

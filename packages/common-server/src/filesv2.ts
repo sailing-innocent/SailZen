@@ -1,6 +1,6 @@
 import {
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   ERROR_STATUS,
   FOLDERS,
@@ -27,9 +27,9 @@ import tmp, { DirResult, dirSync } from "tmp";
 import { resolvePath } from "./files";
 import { SchemaParserV2 } from "./parser";
 
-/** Dendron should ignore any of these folders when watching or searching folders.
+/** Sail should ignore any of these folders when watching or searching folders.
  *
- * These folders are unlikely to contain anything Dendron would like to find, so we can ignore them.
+ * These folders are unlikely to contain anything Sail would like to find, so we can ignore them.
  *
  * Example usage:
  * ```ts
@@ -94,7 +94,7 @@ async function _createFileWatcher(
     numTries: 5,
   });
   if (numTries <= 0) {
-    throw new DendronError({ message: "exceeded numTries" });
+    throw new SailError({ message: "exceeded numTries" });
   }
   return new Promise(async (resolve, _reject) => {
     if (!fs.existsSync(fpath)) {
@@ -149,7 +149,7 @@ export function file2Note(
   toLowercase?: boolean
 ): RespV3<NoteProps> {
   if (!fs.existsSync(fpath)) {
-    const error = DendronError.createFromStatus({
+    const error = SailError.createFromStatus({
       status: ERROR_STATUS.INVALID_STATE,
       message: `${fpath} does not exist`,
     });
@@ -557,7 +557,7 @@ class FileUtils {
       fileStream
         .on("error", (err) =>
           resolve({
-            error: new DendronError({ innerError: err, message: "error" }),
+            error: new SailError({ innerError: err, message: "error" }),
           })
         )
         // we got to the end without a match

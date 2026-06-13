@@ -27,7 +27,7 @@ Agent Daemon (Python) 一个Agent级别的守护线程，用来开启worker和sc
 然后这些子目录发出的任务封装为Job统一走Job Scheduler，存入State Store
 最终与三个功能交互
 - Github Vault (git clone/branch/push)
-- Dendron Engine Server (via express)
+- Sail Engine Server (via express)
 - SailServer (via litestar python)
 
 [arch](./shadow_agent_arch.excalidraw.png)
@@ -85,7 +85,7 @@ class VaultSyncWorker:
 
 ### 2.3 Note Analyzer (`sail_server/agent/note_analyzer.py`)
 
-连接 Dendron Engine Server，分析笔记库状态：
+连接 Sail Engine Server，分析笔记库状态：
 - **TODO 提取**：扫描 `#task` / `- [ ]` / `[[todo]]` 等标记
 - **链接补全**：发现 `[[不存在的链接]]`，更新迁移或者是构建
 - **Schema 漂移**：笔记层级与 schema 定义不匹配
@@ -95,7 +95,7 @@ class VaultSyncWorker:
 ```python
 class NoteAnalyzerWorker:
     async def scan_and_create_tasks(self):
-        engine = DendronEngineClient.discover(self.ws_root)
+        engine = SailEngineClient.discover(self.ws_root)
         notes = await engine.query_notes(qs="*")
 
         tasks = []
@@ -251,7 +251,7 @@ if ! curl -s http://localhost:1974/health > /dev/null; then
 fi
 
 # 2. 检查 Engine Server 是否可发现
-if [ ! -f "${VAULT_PATH}/.dendron.port" ]; then
+if [ ! -f "${VAULT_PATH}/.sail.port" ]; then
     echo "[Agent] Warning: Engine Server port not found. VSCode plugin may not be active."
     echo "[Agent] Shadow Agent will use file-system fallback mode."
 fi
@@ -308,7 +308,7 @@ Agent: [生成 Markdown 报告]
 | 现有系统 | 集成方式 | 说明 |
 |---------|---------|------|
 | **Sail Server** (Litestar) | HTTP Client | Agent 调用 `/api/v1/*` 读写项目/任务/文本数据 |
-| **Engine Server** (Express) | HTTP Client | 通过 `dendron_kb.py` 同类客户端访问笔记 CRUD |
+| **Engine Server** (Express) | HTTP Client | 通过 `sail_kb.py` 同类客户端访问笔记 CRUD |
 | **DAG Pipeline** | 复用 `dag_executor.py` | 复杂分析任务走 DAG，支持 SSE 进度 |
 | **Task Scheduler** | 复用 `AnalysisTaskRunner` | LLM 驱动的文本分析任务 |
 | **Bot/Watcher** | 并行运行 | Agent Daemon 与 Feishu Bot 可共存，Bot 可转发指令给 Agent |
@@ -336,7 +336,7 @@ agent:
       local_path: "./vaults/main-notes"
       branch: "main"
       sync_interval_minutes: 30
-      engine_port_file: "./vaults/main-notes/.dendron.port"
+      engine_port_file: "./vaults/main-notes/.sail.port"
 
     - name: "work-notes"
       url: "git@github.com:company/work-notes.git"

@@ -70,7 +70,7 @@ export class SQLiteMetadataStore implements IDataStore<string, NotePropsMeta> {
     }
 
     this.status = "loading";
-    // example uri: "DATABASE_URL="file://Users/kevinlin/code/dendron/local/notes.db""
+    // example uri: "DATABASE_URL="file://Users/kevinlin/code/sail/local/notes.db""
     const dbPath = URI.file(`${wsRoot}/metadata.db`).fsPath;
     loadPrisma()
       .then(async ({ PrismaClient }: { PrismaClient: any }) => {

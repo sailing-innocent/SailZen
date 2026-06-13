@@ -1,6 +1,6 @@
 import {
   assertUnreachable,
-  DendronError,
+  SailError,
   ERROR_STATUS,
   ProcFlavor,
 } from "@saili/common-all";
@@ -27,14 +27,14 @@ import { hierarchies } from "./remark";
 import { backlinks } from "./remark/backlinks";
 import { backlinksHover } from "./remark/backlinksHover";
 import { blockAnchors } from "./remark/blockAnchors";
-import { dendronHoverPreview } from "./remark/dendronPreview";
-import { dendronPub } from "./remark/dendronPub";
+import { sailHoverPreview } from "./remark/sailPreview";
+import { sailPub } from "./remark/sailPub";
 import { extendedImage } from "./remark/extendedImage";
 import { hashtags } from "./remark/hashtag";
 // import { noteRefsV2 } from "./remark/noteRefsV2";
 import { zdocTags } from "./remark/zdocTags";
 import { wikiLinks } from "./remark/wikiLinks";
-import { DendronASTDest } from "./types";
+import { SailASTDest } from "./types";
 import { MDUtilsV5, ProcDataFullOptsV5, ProcMode, ProcOptsV5 } from "./utilsv5";
 import { Processor } from "unified";
 
@@ -56,13 +56,13 @@ export class MDUtilsV5Web {
   }
 
   /**
-   * Used for processing a Dendron markdown note
+   * Used for processing a Sail markdown note
    */
   private static _procRemarkWeb(
     opts: ProcOptsV5,
     data: Partial<ProcDataFullOptsV5>
   ) {
-    const errors: DendronError[] = [];
+    const errors: SailError[] = [];
     opts = _.defaults(opts, { flavor: ProcFlavor.REGULAR });
     let proc = (remark() as any)
       .use(remarkParse, { gfm: true })
@@ -87,7 +87,7 @@ export class MDUtilsV5Web {
       case ProcMode.FULL:
         {
           if (_.isUndefined(data)) {
-            throw DendronError.createFromStatus({
+            throw SailError.createFromStatus({
               status: ERROR_STATUS.INVALID_CONFIG,
               message: `data is required when not using raw proc`,
             });
@@ -101,8 +101,8 @@ export class MDUtilsV5Web {
 
           MDUtilsV5.setProcData(proc as any, data);
 
-          // NOTE: order matters. this needs to appear before `dendronPub`
-          if (data.dest === DendronASTDest.HTML) {
+          // NOTE: order matters. this needs to appear before `sailPub`
+          if (data.dest === SailASTDest.HTML) {
             //do not convert backlinks, children if convertLinks set to false. Used by gdoc export pod. It uses HTMLPublish pod to do the md-->html conversion
             if (
               _.isUndefined(data.wikiLinksOpts?.convertLinks) ||
@@ -111,7 +111,7 @@ export class MDUtilsV5Web {
               proc = proc.use(hierarchies).use(backlinks) as any;
             }
           }
-          // Add flavor specific plugins. These need to come before `dendronPub`
+          // Add flavor specific plugins. These need to come before `sailPub`
           // to fix extended image URLs before they get converted to HTML
           if (opts.flavor === ProcFlavor.PREVIEW) {
             // No extra plugins needed for the preview right now. We used to
@@ -123,7 +123,7 @@ export class MDUtilsV5Web {
             opts.flavor === ProcFlavor.HOVER_PREVIEW ||
             opts.flavor === ProcFlavor.BACKLINKS_PANEL_HOVER
           ) {
-            proc = proc.use(dendronHoverPreview) as any;
+            proc = proc.use(sailHoverPreview) as any;
           }
           // add additional plugins
           // TODO: Add back note ref functionality:
@@ -132,7 +132,7 @@ export class MDUtilsV5Web {
           // if (isNoteRef || opts.flavor === ProcFlavor.BACKLINKS_PANEL_HOVER) {
           //   insertTitle = false;
           // } else {
-          // const config = data.config as IntermediateDendronConfig;
+          // const config = data.config as IntermediateSailConfig;
           // const shouldApplyPublishRules =
           //   MDUtilsV5.shouldApplyPublishingRules(proc);
           // insertTitle = ConfigUtils.getEnableFMTitle(
@@ -140,13 +140,13 @@ export class MDUtilsV5Web {
           //   shouldApplyPublishRules
           // );
           // }
-          // const config = data.config as IntermediateDendronConfig;
+          // const config = data.config as IntermediateSailConfig;
           const publishingConfig = data.config?.publishing;
           const assetsPrefix = publishingConfig
             ? publishingConfig.assetsPrefix
             : "";
 
-          proc = proc.use(dendronPub, {
+          proc = proc.use(sailPub, {
             insertTitle,
             transformNoPublish: opts.flavor === ProcFlavor.PUBLISHING,
             ...data.publishOpts,
@@ -167,7 +167,7 @@ export class MDUtilsV5Web {
           // Add remaining flavor specific plugins
           if (opts.flavor === ProcFlavor.PUBLISHING) {
             const prefix = assetsPrefix ? assetsPrefix + "/notes/" : "/notes/";
-            proc = proc.use(dendronPub, {
+            proc = proc.use(sailPub, {
               wikiLinkOpts: {
                 prefix,
               },
@@ -191,7 +191,7 @@ export class MDUtilsV5Web {
   ) {
     const pRemarkParse = this.procRemarkParse(opts, {
       ...data,
-      dest: DendronASTDest.HTML,
+      dest: SailASTDest.HTML,
     });
 
     // add additional plugin for publishing
@@ -203,7 +203,7 @@ export class MDUtilsV5Web {
       .use(slug) as any;
 
     // apply plugins enabled by config
-    // const config = data?.engine?.config as IntermediateDendronConfig;
+    // const config = data?.engine?.config as IntermediateSailConfig;
     const shouldApplyPublishRules =
       MDUtilsV5.shouldApplyPublishingRules(pRehype as any);
 
@@ -230,7 +230,7 @@ export class MDUtilsV5Web {
   }
 
   /**
-   * Parse Dendron Markdown Note. No compiler is attached.
+   * Parse Sail Markdown Note. No compiler is attached.
    * @param opts
    * @param data
    * @returns

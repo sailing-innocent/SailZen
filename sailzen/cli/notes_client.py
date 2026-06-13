@@ -14,7 +14,7 @@ NotesClient CLI 工具
 - 本模块直接读写 vault 目录下的 .md 文件，不经过关系型数据库。
 - 可选与 Vault API Server 交互，但默认操作本地文件系统。
 
-笔记格式 (Dendron 风格):
+笔记格式 (Sail 风格):
   - 文件名即 note id / fname，如 daily.2026-07-13.md
   - 文件头部可选 YAML frontmatter: id, title, tags, created, updated
   - 正文为 Markdown

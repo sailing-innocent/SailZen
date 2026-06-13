@@ -1,7 +1,7 @@
-import { DendronConfigEntryCollection } from "../../types/configs/base";
-import { DendronDevConfig } from "../../types/configs/dev/DendronDevConfig";
+import { SailConfigEntryCollection } from "../../types/configs/base";
+import { SailDevConfig } from "../../types/configs/dev/SailDevConfig";
 
-export const DEV: DendronConfigEntryCollection<DendronDevConfig> = {
+export const DEV: SailConfigEntryCollection<SailDevConfig> = {
   nextServerUrl: {
     label: "Next Server URL",
     desc: "Custom URL for the nextjs server.",
@@ -28,7 +28,7 @@ export const DEV: DendronConfigEntryCollection<DendronDevConfig> = {
   },
   enableSelfContainedVaults: {
     label: "Enable self contained vaults",
-    desc: "If enabled, Dendron will create self contained vaults. Dendron can still read self contained vaults even if this is disabled.",
+    desc: "If enabled, Sail will create self contained vaults. Sail can still read self contained vaults even if this is disabled.",
   },
   forceWatcherType: {
     label: "Specify the file watcher type",

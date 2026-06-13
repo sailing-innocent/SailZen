@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DNoteRefData,
   DNoteRefLink,
   getSlugger,
@@ -11,10 +11,10 @@ import {
 import { refLink2Stringv2 } from "@saili/engine-server";
 import _ from "lodash";
 import { Position, Range, Selection, TextEditor, window } from "vscode";
-import { DendronClientUtils } from "../clientUtils";
+import { SailClientUtils } from "../clientUtils";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { clipboard } from "../utils";
 import { EditorUtils } from "../utils/EditorUtils";
@@ -29,9 +29,9 @@ export class CopyNoteRefCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.COPY_NOTE_REF.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -112,7 +112,7 @@ export class CopyNoteRefCommand extends BasicCommand<
     const { engine } = ExtensionProvider.getDWorkspace();
     const note = (await engine.findNotesMeta({ fname, vault }))[0];
     if (note) {
-      const useVaultPrefix = DendronClientUtils.shouldUseVaultPrefix(engine);
+      const useVaultPrefix = SailClientUtils.shouldUseVaultPrefix(engine);
       const link = await this.buildLink({
         note,
         useVaultPrefix,
@@ -127,7 +127,7 @@ export class CopyNoteRefCommand extends BasicCommand<
       this.showFeedback(link);
       return link;
     } else {
-      throw new DendronError({ message: `note ${fname} not found` });
+      throw new SailError({ message: `note ${fname} not found` });
     }
   }
 }

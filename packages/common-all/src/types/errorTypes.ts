@@ -1,5 +1,5 @@
 import { ERROR_SEVERITY } from "../constants";
-import { DendronError, DendronErrorProps, IDendronError } from "../error";
+import { SailError, SailErrorProps, ISailError } from "../error";
 import { VaultUtils } from "../vault";
 import { DVault } from "./DVault";
 import { NoteProps } from "./foundation";
@@ -12,14 +12,14 @@ export enum EngineInitErrorType {
 /** A duplicate note ID error.
  *
  * Note IDs must be unique, duplicate note IDs can cause issues in many parts of
- * Dendron. This error occurs when a duplicate note ID is detected during engine
- * init. It's non-fatal because most of Dendron will still function after this
+ * Sail. This error occurs when a duplicate note ID is detected during engine
+ * init. It's non-fatal because most of Sail will still function after this
  * error.
  */
-export class DuplicateNoteError extends DendronError<EngineInitErrorType.DUPLICATE_NOTE_ID> {
+export class DuplicateNoteError extends SailError<EngineInitErrorType.DUPLICATE_NOTE_ID> {
   constructor(
     opts: Omit<
-      DendronErrorProps<EngineInitErrorType.DUPLICATE_NOTE_ID>,
+      SailErrorProps<EngineInitErrorType.DUPLICATE_NOTE_ID>,
       "name" | "message" | "severity"
     > & {
       noteA: NoteProps;
@@ -56,7 +56,7 @@ export class DuplicateNoteError extends DendronError<EngineInitErrorType.DUPLICA
   };
 
   static isDuplicateNoteError(
-    error: IDendronError<any>
+    error: ISailError<any>
   ): error is DuplicateNoteError {
     return error.code === EngineInitErrorType.DUPLICATE_NOTE_ID;
   }

@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { SubProcessExitType } from "@saili/api-server";
 import {
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   DWorkspaceV2,
   ErrorFactory,
@@ -25,18 +25,18 @@ import _ from "lodash";
 import path from "path";
 import semver from "semver";
 import * as vscode from "vscode";
-import { DendronContext, DENDRON_COMMANDS, WORKSPACE_STATE } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { SailContext, DENDRON_COMMANDS, WORKSPACE_STATE } from "../constants";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { EngineAPIService } from "../services/EngineAPIService";
 import { TextDocumentServiceFactory } from "../services/TextDocumentServiceFactory";
 import { ExtensionUtils } from "../utils/ExtensionUtils";
 import { StartupUtils } from "../utils/StartupUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { WSUtils } from "../WSUtils";
-import { DendronCodeWorkspace } from "./codeWorkspace";
-import { DendronNativeWorkspace } from "./nativeWorkspace";
+import { SailCodeWorkspace } from "./codeWorkspace";
+import { SailNativeWorkspace } from "./nativeWorkspace";
 import { WorkspaceInitFactory } from "./WorkspaceInitFactory";
 import { WorkspaceInitializer } from "./workspaceInitializer";
 import { CreateNoteCommand } from "../commands/CreateNoteCommand";
@@ -86,7 +86,7 @@ function _setupTreeViewCommands(
   /**
    * This is a little flaky right now, but it works most of the time.
    * Leaving this for dev / debug purposes.
-   * Enablement is set to be DendronContext.DEV_MODE
+   * Enablement is set to be SailContext.DEV_MODE
    *
    * TODO: fix tree item register issue and flip the dev mode flag.
    */
@@ -141,7 +141,7 @@ function analyzeWorkspace({ wsService }: { wsService: WorkspaceService }) {
 
 async function getOrPromptWSRoot(workspaceFolders: string[]) {
   if (!workspaceFolders) {
-    Logger.error({ msg: "No dendron.yml found in any workspace folder" });
+    Logger.error({ msg: "No sail.yml found in any workspace folder" });
     return undefined;
   }
   if (workspaceFolders.length === 1) {
@@ -156,15 +156,15 @@ async function getOrPromptWSRoot(workspaceFolders: string[]) {
       {
         ignoreFocusOut: true,
         canPickMany: false,
-        title: "Select Dendron workspace to load",
+        title: "Select Sail workspace to load",
       }
     );
     if (!selectedRoot) {
       await vscode.window.showInformationMessage(
-        "You skipped loading any Dendron workspace, Dendron is not active. You can run the 'Developer: Reload Window' command to reactivate Dendron."
+        "You skipped loading any Sail workspace, Sail is not active. You can run the 'Developer: Reload Window' command to reactivate Sail."
       );
       Logger.info({
-        msg: "User skipped loading a Dendron workspace",
+        msg: "User skipped loading a Sail workspace",
         workspaceFolders,
       });
       return null;
@@ -174,7 +174,7 @@ async function getOrPromptWSRoot(workspaceFolders: string[]) {
 }
 
 /**
- * Get version of Dendron when workspace was last activated
+ * Get version of Sail when workspace was last activated
  */
 async function getAndCleanPreviousWSVersion({
   wsService,
@@ -183,13 +183,13 @@ async function getAndCleanPreviousWSVersion({
 }: {
   workspaceState: vscode.Memento;
   wsService: WorkspaceService;
-  ext: IDendronExtension;
+  ext: ISailExtension;
 }) {
   let previousWorkspaceVersionFromWSService = wsService.getMeta().version;
 
   // Fix a temporary issue where CLI was writing an invalid version number
-  // to .dendron.ws:
-  if (previousWorkspaceVersionFromWSService === "dendron-cli") {
+  // to .sail.ws:
+  if (previousWorkspaceVersionFromWSService === "sail-cli") {
     previousWorkspaceVersionFromWSService = "0.91.0";
   }
   if (ext.type === WorkspaceType.NATIVE) {
@@ -228,7 +228,7 @@ async function checkNoDuplicateVaultNames(vaults: DVault[]): Promise<boolean> {
     const duplicateVaultNames = Array.from(duplicates).join(", ");
     await vscode.window
       .showErrorMessage(
-        `Following vault names have duplicates: ${duplicateVaultNames} See https://dendron.so/notes/a6c03f9b-8959-4d67-8394-4d204ab69bfe.html#multiple-vaults-with-the-same-name to fix`,
+        `Following vault names have duplicates: ${duplicateVaultNames} See https://sail.so/notes/a6c03f9b-8959-4d67-8394-4d204ab69bfe.html#multiple-vaults-with-the-same-name to fix`,
         txt
       )
       .then((resp) => {
@@ -236,7 +236,7 @@ async function checkNoDuplicateVaultNames(vaults: DVault[]): Promise<boolean> {
           vscode.commands.executeCommand(
             "vscode.open",
             vscode.Uri.parse(
-              "https://dendron.so/notes/a6c03f9b-8959-4d67-8394-4d204ab69bfe.html#multiple-vaults-with-the-same-name"
+              "https://sail.so/notes/a6c03f9b-8959-4d67-8394-4d204ab69bfe.html#multiple-vaults-with-the-same-name"
             )
           );
         }
@@ -264,7 +264,7 @@ async function postReloadWorkspace({
     const errorMsg = "No workspace service found.";
     Logger.error({
       msg: errorMsg,
-      error: new DendronError({ message: errorMsg }),
+      error: new SailError({ message: errorMsg }),
     });
     return;
   }
@@ -273,7 +273,7 @@ async function postReloadWorkspace({
   const previousWsVersion = wsMeta.version;
   // stats
   // NOTE: this is legacy to upgrade .code-workspace specific settings
-  // we are moving everything to dendron.yml
+  // we are moving everything to sail.yml
   // see [[2021 06 Deprecate Workspace Settings|proj.2021-06-deprecate-workspace-settings]]
   if (previousWsVersion === CONSTANTS.DENDRON_INIT_VERSION) {
     Logger.info({ ctx, msg: "no previous global version" });
@@ -282,9 +282,9 @@ async function postReloadWorkspace({
       .then((changes) => {
         Logger.info({ ctx, msg: "postUpgrade: new wsVersion", changes });
       });
-    wsService.writeMeta({ version: DendronExtension.version() });
+    wsService.writeMeta({ version: SailExtension.version() });
   } else {
-    const newVersion = DendronExtension.version();
+    const newVersion = SailExtension.version();
     if (semver.lt(previousWsVersion, newVersion)) {
       let changes: any;
       Logger.info({ ctx, msg: "preUpgrade: new wsVersion" });
@@ -299,11 +299,11 @@ async function postReloadWorkspace({
           previousWsVersion,
           newVersion,
         });
-        wsService.writeMeta({ version: DendronExtension.version() });
+        wsService.writeMeta({ version: SailExtension.version() });
       } catch (err) {
         Logger.error({
           msg: "error upgrading",
-          error: new DendronError({ message: JSON.stringify(err) }),
+          error: new SailError({ message: JSON.stringify(err) }),
         });
         return;
       }
@@ -323,7 +323,7 @@ async function reloadWorkspace({
   ext,
   wsService,
 }: {
-  ext: IDendronExtension;
+  ext: ISailExtension;
   wsService: WorkspaceService;
 }) {
   const ctx = "reloadWorkspace";
@@ -341,7 +341,7 @@ async function reloadWorkspace({
     initializer.onWorkspaceOpen({ ws });
   }
 
-  vscode.window.showInformationMessage("Dendron is active");
+  vscode.window.showInformationMessage("Sail is active");
   Logger.info({ ctx, msg: "exit" });
 
   await postReloadWorkspace({ wsService });
@@ -355,13 +355,13 @@ async function reloadWorkspace({
 function togglePluginActiveContext(enabled: boolean) {
   const ctx = "togglePluginActiveContext";
   Logger.info({ ctx, state: `togglePluginActiveContext: ${enabled}` });
-  VSCodeUtils.setContext(DendronContext.PLUGIN_ACTIVE, enabled);
-  VSCodeUtils.setContext(DendronContext.HAS_CUSTOM_MARKDOWN_VIEW, enabled);
+  VSCodeUtils.setContext(SailContext.PLUGIN_ACTIVE, enabled);
+  VSCodeUtils.setContext(SailContext.HAS_CUSTOM_MARKDOWN_VIEW, enabled);
 }
 
 function updateEngineAPI(
   port: number | string,
-  ext: IDendronExtension
+  ext: ISailExtension
 ): EngineAPIService {
   // set engine api ^9dr6chh7ah9v
   const svc = EngineAPIService.createEngine({
@@ -377,12 +377,12 @@ function updateEngineAPI(
 }
 
 type WorkspaceActivatorValidateOpts = {
-  ext: IDendronExtension;
+  ext: ISailExtension;
   context: vscode.ExtensionContext;
 };
 
 type WorkspaceActivatorOpts = {
-  ext: IDendronExtension;
+  ext: ISailExtension;
   context: vscode.ExtensionContext;
   wsRoot: string;
   workspaceInitializer?: WorkspaceInitializer;
@@ -457,9 +457,9 @@ export class WorkspaceActivator {
 
     // --- Initialization
     Logger.info({ ctx: `${ctx}:postSetupTraits`, wsRoot });
-    const currentVersion = DendronExtension.version();
+    const currentVersion = SailExtension.version();
     const wsService = new WorkspaceService({ wsRoot });
-    const dendronConfig = workspace.config;
+    const sailConfig = workspace.config;
     ext.workspaceService = wsService;
 
     // get previous workspace version and fixup
@@ -485,7 +485,7 @@ export class WorkspaceActivator {
         currentVersion,
         previousWorkspaceVersion,
         maybeWsSettings,
-        dendronConfig,
+        sailConfig,
       });
     }
     Logger.info({ ctx: `${ctx}:postMigration`, wsRoot });
@@ -533,7 +533,7 @@ export class WorkspaceActivator {
     }
 
     // write new workspace version
-    wsService.writeMeta({ version: DendronExtension.version() });
+    wsService.writeMeta({ version: SailExtension.version() });
 
     // setup engine
     const port = await this.verifyOrStartServerProcess({ ext, wsService });
@@ -593,7 +593,7 @@ export class WorkspaceActivator {
     }
 
     ExtensionUtils.setWorkspaceContextOnActivate(wsService.config);
-    MetadataService.instance().setDendronWorkspaceActivated();
+    MetadataService.instance().setSailWorkspaceActivated();
     Logger.info({ ctx, msg: "fin startClient", durationReloadWorkspace });
 
     const stage = getStage();
@@ -613,7 +613,7 @@ export class WorkspaceActivator {
     // Add the current workspace to the recent workspace list. The current
     // workspace is either the workspace file (Code Workspace) or the current
     // folder (Native Workspace)
-    const workspace = DendronExtension.tryWorkspaceFile()?.fsPath || wsRoot;
+    const workspace = SailExtension.tryWorkspaceFile()?.fsPath || wsRoot;
     MetadataService.instance().addToRecentWorkspaces(workspace);
 
     if (workspaceInitializer?.onWorkspaceActivate) {
@@ -633,7 +633,7 @@ export class WorkspaceActivator {
 
   async initCodeWorkspace({ context, wsRoot }: WorkspaceActivatorOpts) {
     const assetUri = VSCodeUtils.getAssetUri(context);
-    const ws = new DendronCodeWorkspace({
+    const ws = new SailCodeWorkspace({
       wsRoot,
       logUri: context.logUri,
       assetUri,
@@ -643,7 +643,7 @@ export class WorkspaceActivator {
 
   async initNativeWorkspace({ context, wsRoot }: WorkspaceActivatorOpts) {
     const assetUri = VSCodeUtils.getAssetUri(context);
-    const ws = new DendronNativeWorkspace({
+    const ws = new SailNativeWorkspace({
       wsRoot,
       logUri: context.logUri,
       assetUri,
@@ -657,7 +657,7 @@ export class WorkspaceActivator {
     if (ext.type === WorkspaceType.NATIVE) {
       const workspaceFolders =
         await WorkspaceUtils.findWSRootsInWorkspaceFolders(
-          DendronExtension.workspaceFolders()!
+          SailExtension.workspaceFolders()!
         );
       if (!workspaceFolders) {
         return;
@@ -668,7 +668,7 @@ export class WorkspaceActivator {
       }
       return resp;
     } else {
-      return path.dirname(DendronExtension.workspaceFile().fsPath);
+      return path.dirname(SailExtension.workspaceFile().fsPath);
     }
   }
 
@@ -680,7 +680,7 @@ export class WorkspaceActivator {
     ext,
     wsService,
   }: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     wsService: WorkspaceService;
   }): Promise<number> {
     const context = ext.context;
@@ -694,9 +694,9 @@ export class WorkspaceActivator {
       start,
       wsService,
       onExit: (type: SubProcessExitType) => {
-        const txt = "Restart Dendron";
+        const txt = "Restart Sail";
         vscode.window
-          .showErrorMessage("Dendron engine encountered an error", txt)
+          .showErrorMessage("Sail engine encountered an error", txt)
           .then(async (resp) => {
             if (resp === txt) {
               await ExtensionUtils.activate();

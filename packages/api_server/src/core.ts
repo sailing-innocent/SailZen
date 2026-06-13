@@ -13,7 +13,7 @@ export function setLogger({
 }) {
   const logLevel = logLvl || process.env.LOG_LEVEL || "debug";
   // @ts-ignore
-  L = createLogger("dendron.server", logPath, { lvl: logLevel });
+  L = createLogger("sail.server", logPath, { lvl: logLevel });
   return L;
 }
 

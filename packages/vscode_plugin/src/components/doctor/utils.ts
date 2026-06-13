@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DuplicateNoteError,
   ErrorUtils,
   NoteUtils,
@@ -134,7 +134,7 @@ export class DoctorUtils {
 
     if (result.isValid) return true;
 
-    const error = new DendronError({
+    const error = new SailError({
       message:
         "This note has an invalid filename. Please click the button below to fix it.",
     });

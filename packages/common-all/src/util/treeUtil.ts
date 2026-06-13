@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { z } from "../parse";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import { TAGS_HIERARCHY, TAGS_HIERARCHY_BASE } from "../constants";
 import { NotePropsByIdDict, NoteProps, RespV3 } from "../types";
 import { VaultUtils } from "../vault";
@@ -189,7 +189,7 @@ export class TreeUtils {
       const fnames = note.fname.split(".");
       return { fname: fnames[fnames.length - 1], children };
     } else {
-      throw new DendronError({
+      throw new SailError({
         message: `No note found in engine for "${rootNoteId}"`,
       });
     }
@@ -229,7 +229,7 @@ export class TreeUtils {
   ): RespV3<void> {
     if (expectedTree.fname !== actualTree.fname) {
       return {
-        error: new DendronError({
+        error: new SailError({
           message: `Fname differs. Expected: "${expectedTree.fname}". Actual "${actualTree.fname}"`,
         }),
       };
@@ -244,7 +244,7 @@ export class TreeUtils {
       );
       const actualChildren = actualTree.children.map((child) => child.fname);
       return {
-        error: new DendronError({
+        error: new SailError({
           message: `Mismatch at ${expectedTree.fname}'s children. Expected: "${expectedChildren}". Actual "${actualChildren}"`,
         }),
       };
@@ -254,7 +254,7 @@ export class TreeUtils {
       const resp = this.validateTreeNodes(value, actualTree.children[idx]);
       if (resp.error) {
         return {
-          error: new DendronError({
+          error: new SailError({
             message: `Mismatch at ${expectedTree.fname}'s children. ${resp.error.message}.`,
           }),
         };

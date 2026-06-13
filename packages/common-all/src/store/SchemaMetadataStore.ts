@@ -1,12 +1,11 @@
 import _ from "lodash";
 import { ERROR_SEVERITY, ERROR_STATUS } from "../constants";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import { RespV3, SchemaModuleProps } from "../types";
 import { IDataStore } from "./IDataStore";
 
 export class SchemaMetadataStore
-  implements IDataStore<string, SchemaModuleProps>
-{
+  implements IDataStore<string, SchemaModuleProps> {
   /**
    * Map of schema root id -> SchemaModuleProps
    */
@@ -30,7 +29,7 @@ export class SchemaMetadataStore
       return { data: _.cloneDeep(maybeSchema) };
     } else {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CONTENT_NOT_FOUND,
           message: `SchemaModuleProps not found for key ${key}.`,
           severity: ERROR_SEVERITY.MINOR,

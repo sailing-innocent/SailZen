@@ -1,5 +1,5 @@
 /**
- * This file is used by {@link startServerProcess} to start the dendron engine in a separate process
+ * This file is used by {@link startServerProcess} to start the sail engine in a separate process
  */
 import { ServerUtils } from "@saili/api-server";
 import { stringifyError } from "@saili/common-all";

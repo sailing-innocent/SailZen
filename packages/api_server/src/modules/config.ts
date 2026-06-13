@@ -1,6 +1,6 @@
 import {
-  DendronError,
-  DendronConfig,
+  SailError,
+  SailConfig,
   RespV3,
   WorkspaceRequest,
 } from "@saili/common-all";
@@ -18,7 +18,7 @@ export class ConfigController {
     return ConfigController.singleton;
   }
 
-  async get({ ws }: WorkspaceRequest): Promise<RespV3<DendronConfig>> {
+  async get({ ws }: WorkspaceRequest): Promise<RespV3<SailConfig>> {
     const engine = ws
       ? await getWSEngine({ ws })
       : MemoryStore.instance().getEngine();
@@ -26,7 +26,7 @@ export class ConfigController {
       return { data: DConfig.readConfigSync(engine.wsRoot) };
     } catch (err) {
       return {
-        error: new DendronError({ message: JSON.stringify(err) }),
+        error: new SailError({ message: JSON.stringify(err) }),
       };
     }
   }

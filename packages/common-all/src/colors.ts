@@ -1,5 +1,5 @@
 export const DENDRON_COLORS: { [index: string]: string } = {
-  "dendron green": "#00A824",
+  "sail green": "#00A824",
 };
 
 // https://xkcd.com/color/rgb.txt

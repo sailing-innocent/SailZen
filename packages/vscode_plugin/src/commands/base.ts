@@ -1,13 +1,13 @@
-import { DendronError, getStage, isTSError } from "@saili/common-all";
+import { SailError, getStage, isTSError } from "@saili/common-all";
 import { DLogger } from "@saili/common-server";
 import _ from "lodash";
 import { window } from "vscode";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
 
 export type CodeCommandConstructor = {
-  new (extension: IDendronExtension): CodeCommandInstance;
+  new(extension: ISailExtension): CodeCommandInstance;
   requireActiveWorkspace: boolean;
 };
 export type CodeCommandInstance = {
@@ -19,7 +19,7 @@ export type CodeCommandInstance = {
 export type SanityCheckResults = undefined | string | "cancel";
 
 /**
- * Base class for all Dendron Plugin Commands.
+ * Base class for all Sail Plugin Commands.
  *
  *
  * Generics:
@@ -34,8 +34,7 @@ export abstract class BaseCommand<
   TOut = any,
   TGatherOutput = TOpts,
   TRunOpts = TOpts
-> implements IBaseCommand<TOpts, TOut, TGatherOutput, TRunOpts>
-{
+> implements IBaseCommand<TOpts, TOut, TGatherOutput, TRunOpts> {
   public L: DLogger;
 
   constructor(_name?: string) {
@@ -108,17 +107,17 @@ export abstract class BaseCommand<
       this.showResponse(resp);
       return resp;
     } catch (error: any) {
-      let cerror: DendronError;
+      let cerror: SailError;
 
-      if (error instanceof DendronError) {
+      if (error instanceof SailError) {
         cerror = error;
       } else if (isTSError(error)) {
-        cerror = new DendronError({
+        cerror = new SailError({
           message: `error while running command: ${error.message}`,
           innerError: error,
         });
       } else {
-        cerror = new DendronError({
+        cerror = new SailError({
           message: `unknown error while running command`,
         });
       }

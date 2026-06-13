@@ -10,6 +10,6 @@ This is a recipe.
 
 try lookup with value `recipe.` in picker. will give you some suggestions.
 
-[[Entry1|hijacked.dendron.blog.entry1]]
+[[Entry1|hijacked.sail.blog.entry1]]
 
 [[Sample Markdown 01|project.test-mark.sample-markdown-01]]

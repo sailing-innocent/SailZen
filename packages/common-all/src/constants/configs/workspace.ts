@@ -1,6 +1,6 @@
 import {
-  DendronConfigEntry,
-  DendronConfigEntryCollection,
+  SailConfigEntry,
+  SailConfigEntryCollection,
 } from "../../types/configs/base";
 import { NoteAddBehaviorEnum } from "../../types/configs/workspace/types";
 import {
@@ -8,13 +8,13 @@ import {
   JournalConfig,
 } from "../../types/configs/workspace/journal";
 import { TaskConfig } from "../../types/configs/workspace/task";
-import { DendronWorkspaceConfig } from "../../types/configs/workspace/DendronWorkspaceConfig";
-import { DendronGraphConfig } from "../../types/configs/workspace/graph";
+import { SailWorkspaceConfig } from "../../types/configs/workspace/SailWorkspaceConfig";
+import { SailGraphConfig } from "../../types/configs/workspace/graph";
 import { ScratchConfig } from "../../types/configs/workspace/scratch";
 import { VAULT_SYNC_MODES } from "./base";
 import { SELECTION_MODES } from "./commands";
 
-const ADD_BEHAVIOR: Record<NoteAddBehaviorEnum, DendronConfigEntry<string>> = {
+const ADD_BEHAVIOR: Record<NoteAddBehaviorEnum, SailConfigEntry<string>> = {
   [NoteAddBehaviorEnum.childOfDomain]: {
     value: "childOfDomain",
     label: "Child of Domain",
@@ -37,7 +37,7 @@ const ADD_BEHAVIOR: Record<NoteAddBehaviorEnum, DendronConfigEntry<string>> = {
   },
 };
 
-const GRAPH: DendronConfigEntryCollection<DendronGraphConfig> = {
+const GRAPH: SailConfigEntryCollection<SailGraphConfig> = {
   zoomSpeed: {
     label: "Zoom Speed",
     desc: "The speed at which the graph zooms in and out. Lower is slower, higher is faster.",
@@ -49,15 +49,15 @@ const GRAPH: DendronConfigEntryCollection<DendronGraphConfig> = {
 };
 
 /**
- * Given a {@link dayOfWeekNumber}, returns a {@link DendronConfigEntry} that holds
+ * Given a {@link dayOfWeekNumber}, returns a {@link SailConfigEntry} that holds
  * user friendly description of the first day of week behavior.
  *
  * @param value {@link dayOfWeekNumber}
- * @returns DendronConfigEntry
+ * @returns SailConfigEntry
  */
 // const FIRST_DAY_OF_WEEK = (
 //   value: dayOfWeekNumber
-// ): DendronConfigEntry<dayOfWeekNumber> => {
+// ): SailConfigEntry<dayOfWeekNumber> => {
 //   const dayOfWeek = [
 //     "Sunday",
 //     "Monday",
@@ -75,7 +75,7 @@ const GRAPH: DendronConfigEntryCollection<DendronGraphConfig> = {
 //   };
 // };
 
-const JOURNAL: DendronConfigEntryCollection<JournalConfig> = {
+const JOURNAL: SailConfigEntryCollection<JournalConfig> = {
   dailyDomain: {
     label: "Daily Domain",
     desc: "Domain where the journal notes are created",
@@ -96,7 +96,7 @@ const JOURNAL: DendronConfigEntryCollection<JournalConfig> = {
   // firstDayOfWeek: FIRST_DAY_OF_WEEK,
 };
 
-const SCRATCH: DendronConfigEntryCollection<ScratchConfig> = {
+const SCRATCH: SailConfigEntryCollection<ScratchConfig> = {
   name: {
     label: "Scratch Name",
     desc: "Name used for scratch notes",
@@ -108,7 +108,7 @@ const SCRATCH: DendronConfigEntryCollection<ScratchConfig> = {
   addBehavior: ADD_BEHAVIOR,
 };
 
-const TASK: DendronConfigEntryCollection<TaskConfig> = {
+const TASK: SailConfigEntryCollection<TaskConfig> = {
   name: {
     label: "Task name",
     desc: "Name used for task notes",
@@ -142,10 +142,10 @@ const TASK: DendronConfigEntryCollection<TaskConfig> = {
   },
 };
 
-export const WORKSPACE: DendronConfigEntryCollection<DendronWorkspaceConfig> = {
-  dendronVersion: {
-    label: "Dendron version",
-    desc: "Dendron version. Set up by plugin.",
+export const WORKSPACE: SailConfigEntryCollection<SailWorkspaceConfig> = {
+  sailVersion: {
+    label: "Sail version",
+    desc: "Sail version. Set up by plugin.",
   },
   workspaces: {
     label: "Workspaces",
@@ -169,7 +169,7 @@ export const WORKSPACE: DendronConfigEntryCollection<DendronWorkspaceConfig> = {
   graph: GRAPH,
   disableTelemetry: {
     label: `Disable Telemetry`,
-    desc: `Disable telemetry that collects usage data to help improve Dendron.`,
+    desc: `Disable telemetry that collects usage data to help improve Sail.`,
   },
   enableAutoCreateOnDefinition: {
     label: "Enable auto create on definition",
@@ -198,7 +198,7 @@ export const WORKSPACE: DendronConfigEntryCollection<DendronWorkspaceConfig> = {
   },
   maxNoteLength: {
     label: "Max Note Length",
-    desc: "Maximum number of characters in a note. Notes with characters exceeding this number will have some Dendron features disabled.",
+    desc: "Maximum number of characters in a note. Notes with characters exceeding this number will have some Sail features disabled.",
   },
   feedback: {
     label: "Feedback",

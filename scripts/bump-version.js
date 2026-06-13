@@ -21,7 +21,7 @@ const PACKAGES = [
   'packages/unified/package.json',
   'packages/engine-server/package.json',
   'packages/api_server/package.json',
-  'packages/dendron_plugin_views/package.json',
+  'packages/sail_plugin_views/package.json',
   'packages/site/package.json',
 ];
 

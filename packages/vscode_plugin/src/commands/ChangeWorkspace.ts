@@ -48,7 +48,7 @@ export class ChangeWorkspaceCommand extends BasicCommand<
     const wsType = await WorkspaceUtils.getWorkspaceTypeFromDir(rootDirRaw);
     if (wsType === WorkspaceType.NONE) {
       window.showErrorMessage(
-        `No Dendron workspace found. Please run ${DENDRON_COMMANDS.INIT_WS.title} to create a workspace at ${rootDirRaw}`
+        `No Sail workspace found. Please run ${DENDRON_COMMANDS.INIT_WS.title} to create a workspace at ${rootDirRaw}`
       );
       return;
     }

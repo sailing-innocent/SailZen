@@ -1,6 +1,6 @@
 import { remark } from "remark";
 import remarkParse from "remark-parse";
-import { DendronASTDest } from "../../types";
+import { SailASTDest } from "../../types";
 import { sailzenCite } from "../sailzenCite";
 import { MDUtilsV5 } from "../..";
 
@@ -44,7 +44,7 @@ describe("sailzenCite", () => {
     const processor = remark().use(remarkParse).use(sailzenCite);
 
     MDUtilsV5.setProcData(processor as any, {
-      dest: DendronASTDest.DOC_EXPORT,
+      dest: SailASTDest.DOC_EXPORT,
     });
 
     const result = processor.processSync("::cite[foo]").toString();

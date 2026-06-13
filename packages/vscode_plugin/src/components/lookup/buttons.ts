@@ -6,12 +6,12 @@ import {
 } from "@saili/common-all";
 import _ from "lodash";
 import {
-  DendronBtn,
+  SailBtn,
   LookupEffectType,
   LookupSplitType,
   LookupFilterType,
 } from "./ButtonTypes";
-import { DendronQuickPicker } from "./types";
+import { SailQuickPicker } from "./types";
 
 export type ButtonType =
   | LookupEffectType
@@ -29,9 +29,9 @@ export type ButtonCategory =
   | "effect"
   | "other";
 
-export type ButtonHandleOpts = { quickPick: DendronQuickPicker };
+export type ButtonHandleOpts = { quickPick: SailQuickPicker };
 
-export class Selection2LinkBtn extends DendronBtn {
+export class Selection2LinkBtn extends SailBtn {
   static create(pressed?: boolean) {
     return new Selection2LinkBtn({
       title: "Selection to Link",
@@ -44,7 +44,7 @@ export class Selection2LinkBtn extends DendronBtn {
   }
 }
 
-export class SelectionExtractBtn extends DendronBtn {
+export class SelectionExtractBtn extends SailBtn {
   static create(opts: { pressed?: boolean; canToggle?: boolean }) {
     const { pressed, canToggle } = _.defaults(opts, {
       pressed: false,
@@ -62,7 +62,7 @@ export class SelectionExtractBtn extends DendronBtn {
   }
 }
 
-export class Selection2ItemsBtn extends DendronBtn {
+export class Selection2ItemsBtn extends SailBtn {
   static create(opts: { pressed?: boolean; canToggle?: boolean }) {
     const { pressed, canToggle } = _.defaults(opts, {
       pressed: false,
@@ -80,7 +80,7 @@ export class Selection2ItemsBtn extends DendronBtn {
   }
 }
 
-export class JournalBtn extends DendronBtn {
+export class JournalBtn extends SailBtn {
   static create(opts?: { pressed?: boolean; canToggle?: boolean }) {
     const { pressed, canToggle } = _.defaults(opts, {
       pressed: false,
@@ -98,7 +98,7 @@ export class JournalBtn extends DendronBtn {
   }
 }
 
-export class ScratchBtn extends DendronBtn {
+export class ScratchBtn extends SailBtn {
   static create(opts: { pressed?: boolean; canToggle?: boolean }) {
     const { pressed, canToggle } = _.defaults(opts, {
       pressed: false,
@@ -116,7 +116,7 @@ export class ScratchBtn extends DendronBtn {
   }
 }
 
-export class TaskBtn extends DendronBtn {
+export class TaskBtn extends SailBtn {
   static create(pressed?: boolean) {
     return new TaskBtn({
       title: "Create Task Note",
@@ -129,7 +129,7 @@ export class TaskBtn extends DendronBtn {
   }
 }
 
-export class HorizontalSplitBtn extends DendronBtn {
+export class HorizontalSplitBtn extends SailBtn {
   static create(pressed?: boolean) {
     return new HorizontalSplitBtn({
       title: "Split Horizontal",
@@ -142,7 +142,7 @@ export class HorizontalSplitBtn extends DendronBtn {
   }
 }
 
-export class DirectChildFilterBtn extends DendronBtn {
+export class DirectChildFilterBtn extends SailBtn {
   static create(pressed?: boolean) {
     return new DirectChildFilterBtn({
       title: "Direct Child Filter",
@@ -155,7 +155,7 @@ export class DirectChildFilterBtn extends DendronBtn {
   }
 }
 
-export class MultiSelectBtn extends DendronBtn {
+export class MultiSelectBtn extends SailBtn {
   static create(opts: { pressed?: boolean; canToggle?: boolean }) {
     const { pressed, canToggle } = _.defaults(opts, {
       pressed: false,
@@ -173,7 +173,7 @@ export class MultiSelectBtn extends DendronBtn {
   }
 }
 
-export class CopyNoteLinkBtn extends DendronBtn {
+export class CopyNoteLinkBtn extends SailBtn {
   static create(pressed?: boolean) {
     return new CopyNoteLinkBtn({
       title: "Copy Note Link",
@@ -182,7 +182,7 @@ export class CopyNoteLinkBtn extends DendronBtn {
       iconOn: "menu-selection",
       type: "copyNoteLink" as LookupEffectType,
       pressed,
-      // Setting this to TRUE to retain any previous behavior. Previously DendronBtn
+      // Setting this to TRUE to retain any previous behavior. Previously SailBtn
       // would always overwrite the canToggle to TRUE. Even though this code branch
       // used to set it to FALSE.
       canToggle: true,
@@ -190,7 +190,7 @@ export class CopyNoteLinkBtn extends DendronBtn {
   }
 }
 
-export class VaultSelectButton extends DendronBtn {
+export class VaultSelectButton extends SailBtn {
   static create(opts: { pressed?: boolean; canToggle?: boolean }) {
     return new VaultSelectButton({
       title: "Select Vault",
@@ -210,7 +210,7 @@ export class VaultSelectButton extends DendronBtn {
 
 export function createAllButtons(
   typesToTurnOn: ButtonType[] = []
-): DendronBtn[] {
+): SailBtn[] {
   const buttons = [
     MultiSelectBtn.create({}),
     CopyNoteLinkBtn.create(),
@@ -224,7 +224,7 @@ export function createAllButtons(
     // VerticalSplitBtn.create(),
   ];
   typesToTurnOn.map((btnType) => {
-    (_.find(buttons, { type: btnType }) as DendronBtn).pressed = true;
+    (_.find(buttons, { type: btnType }) as SailBtn).pressed = true;
   });
   return buttons;
 }

@@ -18,7 +18,7 @@ import path from "path";
 import { Disposable, ProgressLocation, Uri, ViewColumn, window } from "vscode";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupControllerInterface";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
@@ -59,10 +59,10 @@ export class RefactorHierarchyCommand extends BasicCommand<
   key = DENDRON_COMMANDS.REFACTOR_HIERARCHY.key;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
-        extra: {
-          [key: string]: any;
-        };
-      })
+      extra: {
+        [key: string]: any;
+      };
+    })
     | undefined;
 
   entireWorkspaceQuickPickItem = {
@@ -114,12 +114,12 @@ export class RefactorHierarchyCommand extends BasicCommand<
           }
           resolve(data);
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
         onHide: () => {
           resolve(undefined);
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -129,7 +129,7 @@ export class RefactorHierarchyCommand extends BasicCommand<
         selectAll: true,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -293,12 +293,12 @@ export class RefactorHierarchyCommand extends BasicCommand<
 
     const scopedItems =
       _.isUndefined(scope) ||
-      scope.selectedItems[0] === this.entireWorkspaceQuickPickItem
+        scope.selectedItems[0] === this.entireWorkspaceQuickPickItem
         ? await engine.findNotes({ excludeStub: false })
         : scope.selectedItems.map(
-            (item) =>
-              _.omit(item, ["label", "detail", "alwaysShow"]) as DNodeProps
-          );
+          (item) =>
+            _.omit(item, ["label", "detail", "alwaysShow"]) as DNodeProps
+        );
 
     const capturedNotes: DNodeProps[] = scopedItems.filter((item) => {
       const result = matchRE.exec(item.fname);
@@ -496,8 +496,7 @@ export class RefactorHierarchyCommand extends BasicCommand<
     const { changed } = res;
     if (changed.length > 0) {
       window.showInformationMessage(
-        `Dendron updated ${
-          _.uniqBy(changed, (ent) => ent.note.fname).length
+        `Sail updated ${_.uniqBy(changed, (ent) => ent.note.fname).length
         } files`
       );
     }
@@ -518,17 +517,17 @@ export class RefactorHierarchyCommand extends BasicCommand<
 
     const { extra, ...props } = this._proxyMetricPayload;
 
-      }
+  }
 
   addAnalyticsPayload(_opts: CommandOpts, out: CommandOutput) {
     const noteChangeEntryCounts =
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({ noteChangeEntryCounts });
     } catch (error) {

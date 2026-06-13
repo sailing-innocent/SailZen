@@ -15,7 +15,7 @@ import {
   ZDOCS_TAG_PREFIX,
   ZDOCS_TAG_SUFFIX
 } from "./constants";
-import { DendronError } from "./error";
+import { SailError } from "./error";
 import { NoteDictsUtils } from "./noteDictsUtils";
 import { Time } from "./time";
 import {
@@ -59,13 +59,13 @@ import YAML, { JSON_SCHEMA } from "js-yaml";
 
 export type ValidateFnameResp =
   | {
-      isValid: false;
-      reason: InvalidFilenameReason;
-    }
+    isValid: false;
+    reason: InvalidFilenameReason;
+  }
   | {
-      isValid: true;
-      reason?: never;
-    };
+    isValid: true;
+    reason?: never;
+  };
 
 /**
  * Utilities for dealing with nodes
@@ -227,7 +227,7 @@ export class DNodeUtils {
         vault,
       })[0];
       if (_.isUndefined(_node)) {
-        throw new DendronError({ message: `no root found for ${fpath}` });
+        throw new SailError({ message: `no root found for ${fpath}` });
       }
       return _node;
     }
@@ -259,7 +259,7 @@ export class DNodeUtils {
     if (dirname === "") {
       const notes = await engine.findNotesMeta({ fname: "root", vault });
       if (notes.length === 0) {
-        throw new DendronError({ message: `no root found for ${fpath}` });
+        throw new SailError({ message: `no root found for ${fpath}` });
       }
       return notes[0];
     }
@@ -276,7 +276,7 @@ export class DNodeUtils {
   }
 
   /**
-   * Custom props are anything that is not a reserved key in Dendron
+   * Custom props are anything that is not a reserved key in Sail
    * @param props
    * @returns
    */
@@ -383,7 +383,7 @@ export class NoteUtils {
           fname: note.fname,
         }),
       };
-      throw DendronError.createFromStatus(err);
+      throw SailError.createFromStatus(err);
     }
     if (!parent) {
       const ancestor = DNodeUtils.findClosestParent(note.fname, noteDicts, {
@@ -732,7 +732,7 @@ export class NoteUtils {
       });
       return fpath;
     } catch (err) {
-      throw new DendronError({
+      throw new SailError({
         message: "bad path",
         payload: { note, wsRoot },
       });
@@ -877,7 +877,7 @@ export class NoteUtils {
       Object.entries(props).filter(([_k, v]) => isNotUndefined(v))
     );
     if (!this.isNoteProps(cleanProps))
-      throw new DendronError({
+      throw new SailError({
         message: `Note is missing some properties that are required. Found properties: ${JSON.stringify(
           props
         )}`,
@@ -940,13 +940,13 @@ export class NoteUtils {
   }
 
   /**
-   * Human readable note location. eg: `dendron://foo (uisdfsdfsdf)`
+   * Human readable note location. eg: `sail://foo (uisdfsdfsdf)`
    */
   static toNoteLocString(note: NotePropsMeta): string {
     const noteLoc = this.toNoteLoc(note);
     const out: string[] = [];
     if (noteLoc.vaultName) {
-      out.push(`dendron://${noteLoc.vaultName}/`);
+      out.push(`sail://${noteLoc.vaultName}/`);
     }
     out.push(noteLoc.fname);
     if (noteLoc.id) {
@@ -967,7 +967,7 @@ export class NoteUtils {
   static validate(maybeNoteProps: any): RespV3<boolean> {
     if (_.isUndefined(maybeNoteProps)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           message: "NoteProps is undefined",
         }),
@@ -975,7 +975,7 @@ export class NoteUtils {
     }
     if (_.isUndefined(maybeNoteProps.vault)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           message: "note vault is undefined",
         }),
@@ -983,7 +983,7 @@ export class NoteUtils {
     }
     if (!_.isString(maybeNoteProps.title)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           message: "note title not set as string",
         }),
@@ -1145,7 +1145,7 @@ export class NoteUtils {
 
   static FILE_ID_PREFIX = "file-";
 
-  /** This should be only used for files not in Dendron workspace, for example a markdown file that's not in any vault. */
+  /** This should be only used for files not in Sail workspace, for example a markdown file that's not in any vault. */
   static genIdForFile({
     filePath,
     wsRoot,
@@ -1163,7 +1163,7 @@ export class NoteUtils {
     return id.startsWith(this.FILE_ID_PREFIX);
   }
 
-  /** This should be only used for files not in Dendron workspace, for example a markdown file that's not in any vault. */
+  /** This should be only used for files not in Sail workspace, for example a markdown file that's not in any vault. */
   static createForFile(opts: {
     filePath: string;
     contents: string;
@@ -1388,7 +1388,7 @@ export class SchemaUtils {
         id: "root",
       });
       if (!rootSchemaRoot) {
-        throw DendronError.createFromStatus({
+        throw SailError.createFromStatus({
           status: ERROR_STATUS.NO_ROOT_SCHEMA_FOUND,
         });
       } else {

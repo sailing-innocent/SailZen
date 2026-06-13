@@ -1,5 +1,5 @@
 {
-    "dendron.rootDir": ".",
+    "sail.rootDir": ".",
     "editor.snippetSuggestions": "inline",
     "editor.suggest.snippetsPreventQuickSuggestions": false,
     "editor.suggest.showSnippets": true,

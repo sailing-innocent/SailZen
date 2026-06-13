@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   DVault,
   ERROR_STATUS,
   SeedConfig,
@@ -64,7 +64,7 @@ export class SeedUtils {
     const vaults = ConfigUtils.getVaults(config);
     if (vaults.length !== 1) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_STATE,
           message: `workspace must have exactly one vault. found ${JSON.stringify(
             vaults
@@ -75,7 +75,7 @@ export class SeedUtils {
     const workspaces = ConfigUtils.getWorkspace(config).workspaces;
     if (!_.isEmpty(workspaces)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.INVALID_STATE,
           message: "workspace vaults not supported",
         }),

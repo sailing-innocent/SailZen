@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   ERROR_STATUS,
   WorkspaceInitRequest,
   WorkspaceSyncRequest,
@@ -31,7 +31,7 @@ router.post(
       res.json(resp);
     } catch (err) {
       res.json({
-        error: new DendronError({
+        error: new SailError({
           message: ERROR_STATUS.ENGINE_NOT_SET,
           payload: err,
         }),

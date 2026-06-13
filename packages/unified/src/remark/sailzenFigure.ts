@@ -1,4 +1,4 @@
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 import type { Plugin, Processor } from "unified";
 import type {
   Extension as MicromarkExtension,
@@ -15,7 +15,7 @@ import type {
   Options as ToMarkdownExtension,
   Handle as ToMarkdownHandle,
 } from "mdast-util-to-markdown";
-import { DendronASTDest, DendronASTTypes, SailZenFigure } from "../types";
+import { SailASTDest, SailASTTypes, SailZenFigure } from "../types";
 import { MDUtilsV5 } from "..";
 
 /**
@@ -206,7 +206,7 @@ function createFromMarkdownExtension(): FromMarkdownExtension {
   const enterSailzenFigure: Handle = function (token) {
     this.enter(
       {
-        type: DendronASTTypes.SAILZEN_FIGURE,
+        type: SailASTTypes.SAILZEN_FIGURE,
         caption: "",
         src: "",
         options: {},
@@ -248,12 +248,12 @@ function createFromMarkdownExtension(): FromMarkdownExtension {
   };
 }
 
-function getDest(proc: Processor): DendronASTDest {
+function getDest(proc: Processor): SailASTDest {
   const procData = MDUtilsV5.getProcData(proc);
   if (procData.dest) return procData.dest;
   const directDest = (proc.data() as any).dest;
   if (directDest) return directDest;
-  return DendronASTDest.MD_DENDRON;
+  return SailASTDest.MD_DENDRON;
 }
 
 /**
@@ -271,22 +271,22 @@ function createToMarkdownExtension(proc: Processor): ToMarkdownExtension {
     const dest = getDest(proc);
     const { caption, src, options } = figNode;
     switch (dest) {
-      case DendronASTDest.MD_DENDRON:
-      case DendronASTDest.MD_REGULAR: {
+      case SailASTDest.MD_DENDRON:
+      case SailASTDest.MD_REGULAR: {
         const optsStr =
           options && Object.keys(options).length
             ? "{" + Object.entries(options).map(([k, v]) => `${k}="${v}"`).join(", ") + "}"
             : "";
         return `::figure[${caption}](${src})${optsStr}`;
       }
-      case DendronASTDest.HTML:
+      case SailASTDest.HTML:
         return `<figure>\n  <img src="${src}" alt="${caption}" />\n  <figcaption>${caption}</figcaption>\n</figure>`;
-      case DendronASTDest.DOC_EXPORT:
+      case SailASTDest.DOC_EXPORT:
         return `__FIGURE__[${src}|${caption}]`;
-      case DendronASTDest.DOC_PREVIEW:
+      case SailASTDest.DOC_PREVIEW:
         return `<figure class="sailzen-figure">\n  <div class="sailzen-figure-placeholder">📷 ${src}</div>\n  <figcaption>${caption}</figcaption>\n</figure>`;
       default:
-        throw new DendronError({
+        throw new SailError({
           message: `Unable to render sailzenFigure for dest ${dest}`,
         });
     }
@@ -294,7 +294,7 @@ function createToMarkdownExtension(proc: Processor): ToMarkdownExtension {
 
   return {
     handlers: {
-      [DendronASTTypes.SAILZEN_FIGURE]: handleSailzenFigure,
+      [SailASTTypes.SAILZEN_FIGURE]: handleSailzenFigure,
     } as any,
   };
 }

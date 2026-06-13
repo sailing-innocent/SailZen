@@ -1,7 +1,7 @@
 import {
   ConfigUtils,
-  DendronEditorViewKey,
-  DendronError,
+  SailEditorViewKey,
+  SailError,
   DMessageEnum,
   DMessageSource,
   EngineEventEmitter,
@@ -25,14 +25,14 @@ import { Logger } from "../../logger";
 import { GraphStyleService } from "../../styles";
 import { WebViewUtils } from "../../views/utils";
 import { VSCodeUtils } from "../../vsCodeUtils";
-import { DendronExtension } from "../../workspace";
+import { SailExtension } from "../../workspace";
 import { ConfigureGraphStylesCommand } from "../../commands/ConfigureGraphStyles";
 
 export class NoteGraphPanelFactory {
   private static _panel: vscode.WebviewPanel | undefined = undefined;
   private static _onEngineNoteStateChangedDisposable: Disposable | undefined;
   private static _engineEvents: EngineEventEmitter;
-  private static _ext: DendronExtension;
+  private static _ext: SailExtension;
   private static initWithNote: NoteProps | undefined;
   /**
    * These properties temporarily stores the graph theme and depth selected by user and is written
@@ -42,12 +42,12 @@ export class NoteGraphPanelFactory {
   private static graphDepth: number | undefined;
 
   static create(
-    ext: DendronExtension,
+    ext: SailExtension,
     engineEvents: EngineEventEmitter
   ): vscode.WebviewPanel {
     if (!this._panel) {
       const { bundleName: name, label } = getWebEditorViewEntry(
-        DendronEditorViewKey.NOTE_GRAPH
+        SailEditorViewKey.NOTE_GRAPH
       );
 
       this._panel = window.createWebviewPanel(
@@ -94,7 +94,7 @@ export class NoteGraphPanelFactory {
           case GraphViewMessageEnum.onSelect: {
             const resp = await this._ext.getEngine().getNote(msg.data.id);
             if (resp.error) {
-              throw new DendronError({
+              throw new SailError({
                 message: `Note not found for ${msg.data.id}`,
                 innerError: resp.error,
               });
@@ -147,7 +147,7 @@ export class NoteGraphPanelFactory {
             break;
           }
           case GraphViewMessageEnum.onReady:
-            throw new DendronError({
+            throw new SailError({
               message: "Unexpected message received from the graph view",
               payload: {
                 ctx: "NoteGraphPanelFactory",
@@ -242,7 +242,7 @@ export class NoteGraphPanelFactory {
     }
   }
   /**
-   * If the user changes focus, then the newly in-focus Dendron note
+   * If the user changes focus, then the newly in-focus Sail note
    * should be shown in the graph.
    */
   static async onOpenTextDocument(editor: TextEditor | undefined) {

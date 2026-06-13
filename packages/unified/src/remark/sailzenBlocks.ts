@@ -1,6 +1,6 @@
 import type { Plugin } from "unified";
 import type { Root, Paragraph, Text, Node, Parent } from "mdast";
-import { DendronASTTypes } from "../types";
+import { SailASTTypes } from "../types";
 
 /**
  * Remark plugin for SailZen block-level directives.
@@ -116,7 +116,7 @@ function processChildren(parent: Parent): void {
             ? contentNodes[0]
             : undefined;
         node = {
-          type: DendronASTTypes.SAILZEN_TABLE,
+          type: SailASTTypes.SAILZEN_TABLE,
           caption: directive.title,
           label: options.label || "",
           options,
@@ -125,20 +125,20 @@ function processChildren(parent: Parent): void {
         } as any;
       } else if (directive.type === "if-format") {
         node = {
-          type: DendronASTTypes.SAILZEN_IF_FORMAT,
+          type: SailASTTypes.SAILZEN_IF_FORMAT,
           format: directive.title,
           children: contentNodes,
         } as any;
       } else if (directive.type === "algorithm") {
         node = {
-          type: DendronASTTypes.SAILZEN_ALGORITHM,
+          type: SailASTTypes.SAILZEN_ALGORITHM,
           title: directive.title,
           label: options.label || "",
           children: contentNodes,
         } as any;
       } else {
         node = {
-          type: DendronASTTypes.SAILZEN_MATH_ENV,
+          type: SailASTTypes.SAILZEN_MATH_ENV,
           envType: directive.type,
           title: directive.title || undefined,
           label: options.label || undefined,

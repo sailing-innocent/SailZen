@@ -14,10 +14,10 @@ import { getDurationMilliseconds } from "@saili/common-server";
 import { HistoryService } from "@saili/engine-server";
 import _ from "lodash";
 import { CancellationTokenSource, window } from "vscode";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { Logger } from "../../logger";
 import { NotePickerUtils } from "./NotePickerUtils";
-import { IDendronQuickInputButton } from "./ButtonTypes";
+import { ISailQuickInputButton } from "./ButtonTypes";
 import {
   CREATE_NEW_LABEL,
   CREATE_NEW_NOTE_DETAIL,
@@ -30,7 +30,7 @@ import {
   OnAcceptHook,
   OnUpdatePickerItemsOpts,
 } from "./LookupProviderInterface";
-import { DendronQuickPicker, DendronQuickPickState } from "./types";
+import { SailQuickPicker, SailQuickPickState } from "./types";
 import {
   OldNewLocation,
   PickerUtils,
@@ -41,12 +41,12 @@ import {
 export class NoteLookupProvider implements ILookupProvider {
   private _onAcceptHooks: OnAcceptHook[];
   public opts: ILookupProviderOpts;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
   constructor(
     public id: string,
     opts: ILookupProviderOpts,
-    extension: IDendronExtension
+    extension: ISailExtension
   ) {
     this.extension = extension;
     this._onAcceptHooks = [];
@@ -54,7 +54,7 @@ export class NoteLookupProvider implements ILookupProvider {
   }
 
   async provide(opts: {
-    quickpick: DendronQuickPicker;
+    quickpick: SailQuickPicker;
     token: CancellationTokenSource;
     fuzzThreshold: number;
   }) {
@@ -120,13 +120,13 @@ export class NoteLookupProvider implements ILookupProvider {
 
   shouldRejectItem(opts: { item: NoteQuickInput }):
     | {
-        shouldReject: true;
-        reason: InvalidFilenameReason;
-      }
+      shouldReject: true;
+      reason: InvalidFilenameReason;
+    }
     | {
-        shouldReject: false;
-        reason?: never;
-      } {
+      shouldReject: false;
+      reason?: never;
+    } {
     const { item } = opts;
     const result = NoteUtils.validateFname(item.fname);
     const shouldReject =
@@ -149,7 +149,7 @@ export class NoteLookupProvider implements ILookupProvider {
    * @returns
    */
   onDidAccept(opts: {
-    quickpick: DendronQuickPicker;
+    quickpick: SailQuickPicker;
     cancellationToken: CancellationTokenSource;
   }) {
     return async () => {
@@ -207,7 +207,7 @@ export class NoteLookupProvider implements ILookupProvider {
         })
       ) {
         Logger.debug({ ctx, msg: "nextPicker:pre" });
-        picker.state = DendronQuickPickState.PENDING_NEXT_PICK;
+        picker.state = SailQuickPickState.PENDING_NEXT_PICK;
 
         picker.vault = await picker.nextPicker({ note: selectedItems[0] });
         // check if we exited from selecting a vault
@@ -225,7 +225,7 @@ export class NoteLookupProvider implements ILookupProvider {
       cancellationToken.cancel();
 
       if (!this.opts.noHidePickerOnAccept) {
-        picker.state = DendronQuickPickState.FULFILLED;
+        picker.state = SailQuickPickState.FULFILLED;
         picker.hide();
       }
       const onAcceptHookResp = await Promise.all(

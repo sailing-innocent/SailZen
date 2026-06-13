@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   DVault,
   EngagementEvents,
   ErrorFactory,
@@ -50,8 +50,8 @@ import {
 import { NotePickerUtils } from "../components/lookup/NotePickerUtils";
 import { QuickPickTemplateSelector } from "../components/lookup/QuickPickTemplateSelector";
 import {
-  DendronQuickPicker,
-  DendronQuickPickState,
+  SailQuickPicker,
+  SailQuickPickState,
   VaultSelectionMode,
 } from "../components/lookup/types";
 import {
@@ -60,7 +60,7 @@ import {
   PickerUtils,
 } from "../components/lookup/utils";
 import { VaultSelectionModeConfigUtils } from "../components/lookup/vaultSelectionModeConfigUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
@@ -91,7 +91,7 @@ export type CommandRunOpts = {
  * Everything that's necessary to initialize the quickpick
  */
 type CommandGatherOutput = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   controller: ILookupController;
   provider: ILookupProvider;
   noConfirm?: boolean;
@@ -108,7 +108,7 @@ export type CommandOpts = {
 } & CommandGatherOutput;
 
 export type CommandOutput = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   controller: ILookupController;
   provider: ILookupProvider;
 };
@@ -134,7 +134,7 @@ export class NoteLookupCommand extends BaseCommand<
   key = DENDRON_COMMANDS.LOOKUP_NOTE.key;
   protected _controller: ILookupController | undefined;
   protected _provider: ILookupProvider | undefined;
-  protected _quickPick: DendronQuickPicker | undefined;
+  protected _quickPick: SailQuickPicker | undefined;
 
   constructor() {
     super("LookupCommandV3");
@@ -155,7 +155,7 @@ export class NoteLookupCommand extends BaseCommand<
 
   public get controller(): ILookupController {
     if (_.isUndefined(this._controller)) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "controller not set",
       });
@@ -169,7 +169,7 @@ export class NoteLookupCommand extends BaseCommand<
 
   public get provider(): ILookupProvider {
     if (_.isUndefined(this._provider)) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "provider not set",
       });
@@ -290,7 +290,7 @@ export class NoteLookupCommand extends BaseCommand<
       lc.fuzzThreshold = copts.fuzzThreshold;
     }
 
-    VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+    VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
     const { quickpick } = await lc.prepareQuickPick({
       placeholder: "a seed",
@@ -348,8 +348,8 @@ export class NoteLookupCommand extends BaseCommand<
             if (
               !_.includes(
                 [
-                  DendronQuickPickState.PENDING_NEXT_PICK,
-                  DendronQuickPickState.FULFILLED,
+                  SailQuickPickState.PENDING_NEXT_PICK,
+                  SailQuickPickState.FULFILLED,
                 ],
                 quickpick.state
               )
@@ -361,7 +361,7 @@ export class NoteLookupCommand extends BaseCommand<
           // don't remove the lookup provider
           return;
         } else if (event.action === "error") {
-          const error = event.data.error as DendronError;
+          const error = event.data.error as SailError;
           this.L.error({ error });
           this.cleanUp();
           promiseResolve(undefined);
@@ -473,7 +473,7 @@ export class NoteLookupCommand extends BaseCommand<
     }
     this.controller = undefined;
     HistoryService.instance().remove("lookup", "lookupProvider");
-    VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+    VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
   }
 
   async acceptItem(
@@ -691,7 +691,7 @@ export class NoteLookupCommand extends BaseCommand<
     picker,
   }: {
     fname: string;
-    picker: DendronQuickPicker;
+    picker: SailQuickPicker;
   }) {
     const engine = ExtensionProvider.getEngine();
 

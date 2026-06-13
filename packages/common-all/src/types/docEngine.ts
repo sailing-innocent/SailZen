@@ -2,7 +2,7 @@
  * SailZen Doc Engine Types
  * 
  * Core type definitions for the Note-as-Source document compilation system.
- * These types extend the Dendron note model with document-oriented metadata
+ * These types extend the Sail note model with document-oriented metadata
  * for generating LaTeX, Typst, Slidev, and other output formats.
  */
 

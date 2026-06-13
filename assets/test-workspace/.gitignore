@@ -1,7 +1,7 @@
 build
 docs/*
 !docs/index.*
-.dendron.*
+.sail.*
 docs
 vault-generated/
 pods/*

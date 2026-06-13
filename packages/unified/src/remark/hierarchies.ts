@@ -12,7 +12,7 @@ import { Node, Parent } from "unist";
 import { u } from "unist-builder";
 import { visit } from "unist-util-visit";
 import { HierarchyUtils } from "../HierarchyUtils";
-import { DendronASTDest, DendronASTTypes, WikiLinkNoteV4 } from "../types";
+import { SailASTDest, SailASTTypes, WikiLinkNoteV4 } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
 import { frontmatterTag2WikiLinkNoteV4, RemarkUtils } from "./utils";
 
@@ -30,10 +30,10 @@ const FOOTNOTE_RETURN_SYMBOL = "˄";
 function footnote2html(reference: FootnoteReference) {
   return html(
     `<a id="${FOOTNOTE_REF_ID_PREFIX}${reference.identifier}"` +
-      `class="${FOOTNOTE_REF_CLASS}"` +
-      `href="#${FOOTNOTE_DEF_ID_PREFIX}${reference.identifier}">` +
-      (reference.label || reference.identifier) +
-      `</a>`
+    `class="${FOOTNOTE_REF_CLASS}"` +
+    `href="#${FOOTNOTE_DEF_ID_PREFIX}${reference.identifier}">` +
+    (reference.label || reference.identifier) +
+    `</a>`
   );
 }
 
@@ -85,7 +85,7 @@ const plugin: Plugin = function (this: Processor, _opts?: PluginOpts) {
     const { fname, dest, config, insideNoteRef } = MDUtilsV5.getProcData(proc);
     let addedBreak = false;
 
-    if (dest !== DendronASTDest.HTML) {
+    if (dest !== SailASTDest.HTML) {
       return;
     }
     // TODO: remove
@@ -113,7 +113,7 @@ const plugin: Plugin = function (this: Processor, _opts?: PluginOpts) {
       const usedFootnotes = new Set<FootnoteDefinition>();
       visit(
         root,
-        [DendronASTTypes.FOOTNOTE_REFERENCE],
+        [SailASTTypes.FOOTNOTE_REFERENCE],
         (reference: any, index: number | undefined, parent: Parent | undefined) => {
           const definition = footnotes.get(reference.identifier);
           if (definition && parent && index !== undefined) {
@@ -220,7 +220,7 @@ const plugin: Plugin = function (this: Processor, _opts?: PluginOpts) {
             _.sortBy(children, ["custom.nav_order", "title"]).map((note) => {
               return listItem(
                 paragraph({
-                  type: DendronASTTypes.WIKI_LINK,
+                  type: SailASTTypes.WIKI_LINK,
                   value: note.fname,
                   data: {
                     alias: note.title,

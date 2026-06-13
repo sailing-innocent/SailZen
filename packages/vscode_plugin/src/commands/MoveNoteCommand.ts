@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   extractNoteChangeEntryCounts,
   NoteChangeEntry,
@@ -22,7 +22,7 @@ import {
   ProviderAcceptHooks,
 } from "../components/lookup/utils";
 import { NoteLookupProviderUtils } from "../components/lookup/NoteLookupProviderUtils";
-import { DendronContext, DENDRON_COMMANDS } from "../constants";
+import { SailContext, DENDRON_COMMANDS } from "../constants";
 import { FileItem } from "../external/fileutils/FileItem";
 import { UNKNOWN_ERROR_MSG } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -30,7 +30,7 @@ import { ProceedCancel, QuickPickUtil } from "../utils/quickPick";
 import { BasicCommand } from "./base";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { NoteLookupProviderSuccessResp } from "../components/lookup/LookupProviderInterface";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 import { AutoCompleter } from "../utils/autoCompleter";
 
@@ -83,16 +83,16 @@ function isMoveNecessary(move: RenameNoteOpts) {
 
 export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.MOVE_NOTE.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
   _proxyMetricPayload:
     | (RefactoringCommandUsedPayload & {
-        extra: {
-          [key: string]: any;
-        };
-      })
+      extra: {
+        [key: string]: any;
+      };
+    })
     | undefined;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -109,9 +109,9 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     const engine = extension.getEngine();
     const vault = opts?.vaultName
       ? VaultUtils.getVaultByName({
-          vaults: engine.vaults,
-          vname: opts.vaultName,
-        })
+        vaults: engine.vaults,
+        vname: opts.vaultName,
+      })
       : undefined;
 
     const lookupCreateOpts: LookupControllerCreateOpts = {
@@ -159,14 +159,14 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
           resolve(opts);
 
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
         onError: (event: HistoryEvent) => {
-          const error = event.data.error as DendronError;
+          const error = event.data.error as SailError;
           window.showErrorMessage(error.message);
           resolve(undefined);
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -177,7 +177,7 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
         nonInteractive: opts?.nonInteractive,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -277,7 +277,7 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
         return renameOpt;
       });
     } else {
-      throw new DendronError({
+      throw new SailError({
         message: `MoveNoteCommand: No items are selected. ${UNKNOWN_ERROR_MSG}`,
       });
     }
@@ -429,17 +429,17 @@ export class MoveNoteCommand extends BasicCommand<CommandOpts, CommandOutput> {
     }
     const { extra, ...props } = this._proxyMetricPayload;
 
-      }
+  }
 
   addAnalyticsPayload(opts: CommandOpts, out: CommandOutput) {
     const noteChangeEntryCounts =
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({ opts, noteChangeEntryCounts });
     } catch (error) {

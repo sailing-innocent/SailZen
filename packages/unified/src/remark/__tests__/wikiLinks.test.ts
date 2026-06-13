@@ -7,7 +7,7 @@ import remarkParse from "remark-parse";
 import { wikiLinks, LINK_REGEX, LINK_REGEX_LOOSE, matchWikiLink } from "../wikiLinks";
 import { createTestNoteWithBody, createTestNoteWithWikiLinks } from "../../__tests__/fixtures/testNotes";
 import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("wikiLinks plugin", () => {
   describe("LINK_REGEX", () => {

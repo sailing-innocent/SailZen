@@ -1,5 +1,5 @@
 import {
-  DendronEditorViewKey,
+  SailEditorViewKey,
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import * as vscode from "vscode";
@@ -29,7 +29,7 @@ export class ConfigureWithUICommand extends BasicCommand<
   }
   async execute() {
     const { bundleName: name } = getWebEditorViewEntry(
-      DendronEditorViewKey.CONFIGURE
+      SailEditorViewKey.CONFIGURE
     );
     const ext = ExtensionProvider.getExtension();
     const port = ext.port!;

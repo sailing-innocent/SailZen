@@ -12,7 +12,7 @@ import {
   CommandRunOpts as NoteLookupRunOpts,
   NoteLookupCommand,
 } from "./NoteLookupCommand";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ConfigUtils } from "@saili/common-all";
 import { VaultSelectionModeConfigUtils } from "../components/lookup/vaultSelectionModeConfigUtils";
 
@@ -26,9 +26,9 @@ export class CreateJournalNoteCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.CREATE_JOURNAL.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }

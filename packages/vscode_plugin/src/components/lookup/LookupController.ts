@@ -2,12 +2,12 @@ import {
   assertUnreachable,
   asyncLoop,
   ConfigUtils,
-  DendronError,
+  SailError,
   DNodeType,
   DNoteAnchorPositioned,
   ERROR_STATUS,
   getSlugger,
-  DendronConfig,
+  SailConfig,
   LookupNoteTypeEnum,
   LookupSelectionTypeEnum,
   NoteChangeEntry,
@@ -24,7 +24,7 @@ import _ from "lodash";
 import * as vscode from "vscode";
 import { CancellationTokenSource } from "vscode";
 import { Utils } from "vscode-uri";
-import { DendronClientUtils } from "../../clientUtils";
+import { SailClientUtils } from "../../clientUtils";
 import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
 import { clipboard } from "../../utils";
@@ -33,11 +33,11 @@ import {
   getOneIndexedFrontmatterEndingLineNumber,
   hasAnchorsToUpdate,
 } from "../../utils/md";
-import { DendronExtension } from "../../workspace";
+import { SailExtension } from "../../workspace";
 import { LookupPanelView } from "../../views/LookupPanelView";
 import { VSCodeUtils } from "../../vsCodeUtils";
 import { LookupQuickPickView } from "../views/LookupQuickPickView";
-import { ButtonType, DendronBtn } from "./ButtonTypes";
+import { ButtonType, SailBtn } from "./ButtonTypes";
 import type {
   CreateQuickPickOpts,
   ILookupController,
@@ -48,20 +48,20 @@ import type {
 import { ILookupProvider } from "./LookupProviderInterface";
 import { ILookupViewModel } from "./LookupViewModel";
 import { NotePickerUtils } from "./NotePickerUtils";
-import { DendronQuickPicker, VaultSelectionMode } from "./types";
+import { SailQuickPicker, VaultSelectionMode } from "./types";
 import { PickerUtils } from "./utils";
 
 export { LookupControllerCreateOpts };
 
 /**
  * For initialization lifecycle,
- * see [[dendron://dendron.docs/pkg.plugin-core.t.lookup.arch]]
+ * see [[sail://sail.docs/pkg.plugin-core.t.lookup.arch]]
  */
 export class LookupController implements ILookupController {
   public nodeType: DNodeType;
   private _cancelTokenSource?: CancellationTokenSource;
 
-  private _quickPick?: DendronQuickPicker;
+  private _quickPick?: SailQuickPicker;
 
   public fuzzThreshold: number;
   private _provider?: ILookupProvider;
@@ -69,13 +69,13 @@ export class LookupController implements ILookupController {
   private _title?: string;
   private _viewModel: ILookupViewModel;
 
-  private _initButtons: DendronBtn[];
+  private _initButtons: SailBtn[];
 
   private _disposables: vscode.Disposable[] = [];
 
   constructor(opts: {
     nodeType: DNodeType;
-    buttons: DendronBtn[];
+    buttons: SailBtn[];
     fuzzThreshold?: number;
     enableLookupView?: boolean;
     title?: string;
@@ -115,14 +115,14 @@ export class LookupController implements ILookupController {
       initialValue?: string;
       provider: ILookupProvider;
     }
-  ): Promise<DendronQuickPicker> {
+  ): Promise<SailQuickPicker> {
     const { quickpick } = await this.prepareQuickPick(opts);
     return this.showQuickPick({ ...opts, quickpick });
   }
 
-  public get quickPick(): DendronQuickPicker {
+  public get quickPick(): SailQuickPicker {
     if (_.isUndefined(this._quickPick)) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "quickpick not initialized",
       });
@@ -132,14 +132,14 @@ export class LookupController implements ILookupController {
 
   public get cancelToken() {
     if (_.isUndefined(this._cancelTokenSource)) {
-      throw new DendronError({ message: "no cancel token" });
+      throw new SailError({ message: "no cancel token" });
     }
     return this._cancelTokenSource;
   }
 
   get provider() {
     if (_.isUndefined(this._provider)) {
-      throw new DendronError({ message: "no provider" });
+      throw new SailError({ message: "no provider" });
     }
     return this._provider;
   }
@@ -159,7 +159,7 @@ export class LookupController implements ILookupController {
    */
   public async prepareQuickPick(
     opts: PrepareQuickPickOpts
-  ): Promise<{ quickpick: DendronQuickPicker }> {
+  ): Promise<{ quickpick: SailQuickPicker }> {
     const ctx = "prepareQuickPick";
     Logger.info({ ctx, msg: "enter" });
     const { provider, title, selectAll } = _.defaults(opts, {
@@ -168,12 +168,12 @@ export class LookupController implements ILookupController {
         this._title ||
         [
           `Lookup (${this.nodeType})`,
-          `- version: ${DendronExtension.version()}`,
+          `- version: ${SailExtension.version()}`,
         ].join(" "),
       selectAll: false,
     });
     this._provider = provider;
-    const quickpick = PickerUtils.createDendronQuickPick(opts);
+    const quickpick = PickerUtils.createSailQuickPick(opts);
     this._quickPick = quickpick;
     // invoke button behaviors
     this._quickPick.buttons = this._initButtons;
@@ -269,11 +269,11 @@ export class LookupController implements ILookupController {
     Logger.info({ ctx, msg: "exit" });
   }
 
-  private getButtonFromArray(type: ButtonType, buttons: DendronBtn[]) {
+  private getButtonFromArray(type: ButtonType, buttons: SailBtn[]) {
     return _.find(buttons, (value) => value.type === type);
   }
 
-  private getButton(type: ButtonType): DendronBtn | undefined {
+  private getButton(type: ButtonType): SailBtn | undefined {
     if (this._quickPick) {
       return this.getButtonFromArray(type, this._quickPick?.buttons);
     }
@@ -439,7 +439,7 @@ export class LookupController implements ILookupController {
    *  Adjust View State based on what the initial button state is
    * @param buttons
    */
-  private initializeViewStateFromButtons(buttons: DendronBtn[]) {
+  private initializeViewStateFromButtons(buttons: SailBtn[]) {
     if (
       this.getButtonFromArray(LookupSelectionTypeEnum.selection2Items, buttons)
         ?.pressed
@@ -504,7 +504,7 @@ export class LookupController implements ILookupController {
     quickPick,
     mode,
   }: {
-    quickPick: DendronQuickPicker;
+    quickPick: SailQuickPicker;
     mode: VaultSelectionMode;
   }) {
     quickPick.nextPicker = async (opts: { note: NoteProps }) => {
@@ -530,7 +530,7 @@ export class LookupController implements ILookupController {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.journal);
+          return SailClientUtils.genNoteName(LookupNoteTypeEnum.journal);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -560,7 +560,7 @@ export class LookupController implements ILookupController {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.scratch);
+          return SailClientUtils.genNoteName(LookupNoteTypeEnum.scratch);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -587,7 +587,7 @@ export class LookupController implements ILookupController {
     if (enabled) {
       quickPick.modifyPickerValueFunc = () => {
         try {
-          return DendronClientUtils.genNoteName(LookupNoteTypeEnum.task);
+          return SailClientUtils.genNoteName(LookupNoteTypeEnum.task);
         } catch (error) {
           return { noteName: "", prefix: "" };
         }
@@ -725,7 +725,7 @@ export class LookupController implements ILookupController {
   private async updateBacklinksToAnchorsInSelection(opts: {
     selection: vscode.Selection | undefined;
     destNote: NoteProps;
-    config: DendronConfig;
+    config: SailConfig;
   }): Promise<NoteChangeEntry[]> {
     const { selection, destNote, config } = opts;
     if (selection === undefined) {
@@ -853,7 +853,7 @@ export class LookupController implements ILookupController {
             const editor = VSCodeUtils.getActiveTextEditor();
             const link = NoteUtils.createWikiLink({
               note,
-              useVaultPrefix: DendronClientUtils.shouldUseVaultPrefix(
+              useVaultPrefix: SailClientUtils.shouldUseVaultPrefix(
                 ExtensionProvider.getEngine()
               ),
               alias: { mode: "title" },

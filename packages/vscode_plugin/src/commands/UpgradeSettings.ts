@@ -4,7 +4,7 @@ import _ from "lodash";
 import { Extension, extensions, window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { WorkspaceConfig } from "../settings";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { BasicCommand } from "./base";
 
 const L = createLogger("UpgradeSettingsCommand");
@@ -23,7 +23,7 @@ export class UpgradeSettingsCommand extends BasicCommand<
     const ctx = "Upgrade:execute";
     L.info({ ctx });
 
-    const wsRoot = (await DendronExtension.workspaceRoots())[0];
+    const wsRoot = (await SailExtension.workspaceRoots())[0];
 
     const newConfig = await WorkspaceConfig.update(wsRoot!);
     this.L.info({ ctx, newConfig });
@@ -45,7 +45,7 @@ export class UpgradeSettingsCommand extends BasicCommand<
           badExtensions.map((ext) => ext.packageJSON.displayName).join(", "),
         ])
         .concat([
-          "- Reload the window afterwards and Dendron will offer to install the Dendron version of the extension",
+          "- Reload the window afterwards and Sail will offer to install the Sail version of the extension",
         ]);
       window.showWarningMessage(msg.join(" "));
     }

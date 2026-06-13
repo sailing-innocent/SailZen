@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   EngagementEvents,
   NoteProps,
 } from "@saili/common-all";
@@ -49,7 +49,7 @@ export class ApplyTemplateCommand extends BasicCommand<
   async gatherInputs(): Promise<CommandInput | undefined> {
     const targetNote = await WSUtils.instance().getActiveNote();
     if (_.isUndefined(targetNote)) {
-      throw new DendronError({ message: "No Dendron note open" });
+      throw new SailError({ message: "No Sail note open" });
     }
 
     const selector = new QuickPickTemplateSelector();
@@ -58,7 +58,7 @@ export class ApplyTemplateCommand extends BasicCommand<
       providerId: APPLY_TEMPLATE_LOOKUP_ID,
     });
     if (_.isUndefined(templateNote)) {
-      throw new DendronError({ message: `Template not found` });
+      throw new SailError({ message: `Template not found` });
     }
 
     return { templateNote, targetNote };
@@ -81,7 +81,7 @@ export class ApplyTemplateCommand extends BasicCommand<
     });
     const resp = await engine.writeNote(updatedTargetNote);
     if (resp.error) {
-      throw new DendronError({
+      throw new SailError({
         message: "error applying template",
         innerError: resp.error,
       });

@@ -5,7 +5,7 @@
 import { remark } from "remark";
 import remarkParse from "remark-parse";
 import { Processor } from "unified";
-import { NoteProps, DendronASTDest } from "@saili/common-all";
+import { NoteProps, SailASTDest } from "@saili/common-all";
 import { MDUtilsV5, ProcFlavor } from "../../utilsv5";
 import { ProcDataFullOptsV5 } from "../../utilsv5";
 import { createTestConfig } from "../fixtures/testNotes";
@@ -36,7 +36,7 @@ export async function processMarkdownToString(markdown: string): Promise<string>
 }
 
 /**
- * Creates a full processor with all Dendron plugins for testing
+ * Creates a full processor with all Sail plugins for testing
  */
 export function createFullTestProcessor(
   note: NoteProps,
@@ -48,14 +48,14 @@ export function createFullTestProcessor(
     fname: note.fname,
     vault: note.vault,
     config,
-    dest: DendronASTDest.HTML,
+    dest: SailASTDest.HTML,
   };
 
   return MDUtilsV5.procRehypeFull(data, { flavor });
 }
 
 /**
- * Processes a note with full Dendron processor
+ * Processes a note with full Sail processor
  */
 export async function processNoteFull(
   note: NoteProps,

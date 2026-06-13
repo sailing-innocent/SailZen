@@ -8,7 +8,7 @@
 
 ## Overview
 
-The `unified` package provides remark/rehype plugins that extend standard Markdown with Dendron-specific and SailZen-specific syntax. It sits between raw markdown text and rendered HTML, handling parsing, AST transformation, and compilation for multiple output destinations.
+The `unified` package provides remark/rehype plugins that extend standard Markdown with Sail-specific and SailZen-specific syntax. It sits between raw markdown text and rendered HTML, handling parsing, AST transformation, and compilation for multiple output destinations.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ Raw Markdown
 
 ## Custom AST Node Types
 
-Defined in `src/types.ts` as `DendronASTTypes`:
+Defined in `src/types.ts` as `SailASTTypes`:
 
 | Type String | TypeScript Interface | Purpose |
 |-------------|---------------------|---------|
@@ -68,8 +68,8 @@ Defined in `src/types.ts` as `DendronASTTypes`:
 | `sailzenFigure` | `::figure[cap](src){opts}` | ✅ Active | ❌ | Parses `key="value"` / `key=value` options |
 | `backlinks` | — | ✅ Active | ❌ | Injects backlink sections into notes |
 | `hierarchies` | — | ✅ Active | ❌ | Handles note hierarchy metadata |
-| `dendronPub` | — | ✅ Active | ❌ | Publication-ready transformations |
-| `dendronPreview` | — | ✅ Active | ❌ | Preview-specific transformations |
+| `sailPub` | — | ✅ Active | ❌ | Publication-ready transformations |
+| `sailPreview` | — | ✅ Active | ❌ | Preview-specific transformations |
 | `transformLinks` | — | ✅ Active | ❌ | Link transformation utilities |
 | `abbr` | — | ✅ Active | ❌ | Abbreviation support |
 | `publishSite` | — | ✅ Active | ❌ | Site publication logic |
@@ -100,7 +100,7 @@ All 10 modules are **untested**. They provide editor decorations (VSCode) rather
 
 ## Compiler Destinations
 
-All custom plugins switch on `DendronASTDest`:
+All custom plugins switch on `SailASTDest`:
 
 | Destination | Purpose |
 |-------------|---------|
@@ -137,7 +137,7 @@ All custom plugins switch on `DendronASTDest`:
 1. **High**: `noteRefsV2` — complex transclusion logic, anchor slicing, wildcard resolution
 2. **Medium**: `extendedImage`, `sailzenCite`, `sailzenFigure` — standard tokenizer/compiler pattern
 3. **Medium**: `backlinks`, `hierarchies` — metadata injection
-4. **Low**: `dendronPub`, `dendronPreview`, `transformLinks`, `abbr`, `publishSite`
+4. **Low**: `sailPub`, `sailPreview`, `transformLinks`, `abbr`, `publishSite`
 5. **Low**: All `decorations/` modules (VSCode-specific, harder to test headlessly)
 
 
@@ -191,7 +191,7 @@ All custom plugins switch on `DendronASTDest`:
 - `createTestProcessor()` - 创建基础的 remark processor
 - `processMarkdownToAST()` - 处理 markdown 并返回 AST
 - `processMarkdownToString()` - 处理 markdown 并返回字符串
-- `createFullTestProcessor()` - 创建完整的 Dendron processor
+- `createFullTestProcessor()` - 创建完整的 Sail processor
 - `processNoteFull()` - 使用完整 processor 处理 note
 - `expectContains()` / `expectNotContains()` - 字符串包含断言
 - `expectMatches()` / `expectNotMatches()` - 正则匹配断言
@@ -483,7 +483,7 @@ packages/unified/src/
 ├── remark/          # Custom Markdown syntax parsers (MDAST extensions)
 ├── rehype/          # HTML transformation plugins (HAST transforms)
 ├── decorations/     # Editor decoration providers (VS Code style)
-├── types.ts         # AST node types & DendronASTTypes enum
+├── types.ts         # AST node types & SailASTTypes enum
 ├── utilsv5.ts       # Server-side processor factory (MDUtilsV5)
 ├── utilsWeb.ts      # Browser-side processor factory (MDUtilsV5Web)
 ├── __tests__/       # Test suites & fixtures
@@ -497,7 +497,7 @@ Markdown Input
     ↓
 remark-parse (CommonMark)
     ↓
-remark plugins (custom tokenizers) → MDAST with DendronASTTypes nodes
+remark plugins (custom tokenizers) → MDAST with SailASTTypes nodes
     ↓
 remark-rehype
     ↓
@@ -525,8 +525,8 @@ rehype-stringify → HTML Output
 | `sailzenCite` | `remark/sailzenCite.ts` | ✅ Active | ❌ None | `::cite[foo, bar]` inline citations. Multi-dest rendering (MD/HTML/DOC). |
 | `sailzenFigure` | `remark/sailzenFigure.ts` | ✅ Active | ❌ None | `::figure[caption](src){opts}` figure directives. Option parser for key=value pairs. |
 | `abbr` | `remark/abbr.ts` | ✅ Active | ❌ None | Abbreviation expansion plugin. |
-| `dendronPub` | `remark/dendronPub.ts` | ✅ Active | ❌ None | Publishing-time link resolution & note ref HAST conversion. |
-| `dendronPreview` | `remark/dendronPreview.ts` | ✅ Active | ❌ None | Preview-mode link resolution. |
+| `sailPub` | `remark/sailPub.ts` | ✅ Active | ❌ None | Publishing-time link resolution & note ref HAST conversion. |
+| `sailPreview` | `remark/sailPreview.ts` | ✅ Active | ❌ None | Preview-mode link resolution. |
 | `transformLinks` | `remark/transformLinks.ts` | ✅ Active | ❌ None | Link transformation utilities. |
 | `backlinks` | `remark/backlinks.ts` | ✅ Active | ❌ None | Backlink injection during processing. |
 | `backlinksHover` | `remark/backlinksHover.ts` | ✅ Active | ❌ None | Hover preview for backlinks. |
@@ -552,8 +552,8 @@ const plugin: Plugin<[PluginOpts?]> = function (this: Processor, _opts?) {
 3. Register in `Parser.prototype.inlineTokenizers` and `inlineMethods`
 
 **Compiler attachment:**
-1. Register visitor in `Compiler.prototype.visitors[DendronASTTypes.X]`
-2. Switch on `DendronASTDest` (MD_DENDRON / MD_REGULAR / HTML / DOC_EXPORT / DOC_PREVIEW)
+1. Register visitor in `Compiler.prototype.visitors[SailASTTypes.X]`
+2. Switch on `SailASTDest` (MD_DENDRON / MD_REGULAR / HTML / DOC_EXPORT / DOC_PREVIEW)
 
 ---
 
@@ -610,7 +610,7 @@ Decorations analyze parsed AST to produce IDE highlighting (ranges + types). The
 | `extendedImage` | **Medium** | Custom syntax, YAML props | Regex + props parsing + HTML rendering |
 | `noteRefsV2` | **Medium** | Complex but critical | Mock `noteCacheForRenderDict`, test basic transclusion |
 | `decorations/*` | **Medium** | All 8 decorators untested | AST → decoration range assertions |
-| `dendronPub` | **Low** | Publishing logic | Integration with mock engine |
+| `sailPub` | **Low** | Publishing logic | Integration with mock engine |
 | `backlinks` | **Low** | Backlink injection | Mock engine + assert backlinks in output |
 | `hierarchies` | **Low** | Hierarchy processing | TBD based on usage |
 
@@ -649,7 +649,7 @@ Build a minimal pipeline to verify the plugin creates the correct AST node.
 import { remark } from "remark";
 import remarkParse from "remark-parse";
 import { sailzenCite } from "../sailzenCite";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("sailzenCite AST", () => {
   test("should create sailzenCite node", async () => {
@@ -659,7 +659,7 @@ describe("sailzenCite AST", () => {
 
     const ast = processor.parse("::cite[foo, bar]");
     // Traverse AST to find our custom node
-    const citeNode = findNodeByType(ast, DendronASTTypes.SAILZEN_CITE);
+    const citeNode = findNodeByType(ast, SailASTTypes.SAILZEN_CITE);
     expect(citeNode).toBeDefined();
     expect(citeNode.keys).toEqual(["foo", "bar"]);
   });
@@ -698,17 +698,17 @@ describe("sailzenCite with full processor", () => {
 
 ### Pattern D: Multi-Destination Compiler Tests
 
-For plugins with `attachCompiler` that switch on `DendronASTDest`:
+For plugins with `attachCompiler` that switch on `SailASTDest`:
 
 ```ts
-import { DendronASTDest } from "../../types";
+import { SailASTDest } from "../../types";
 import { MDUtilsV5 } from "../../utilsv5";
 
 describe("sailzenCite compiler", () => {
   test("should round-trip in MD_DENDRON mode", async () => {
     const note = createTestNoteWithBody("::cite[foo, bar]");
     const proc = MDUtilsV5.procRehypeFull(
-      { noteToRender: note, fname: note.fname, vault: note.vault, config: createTestConfig(), dest: DendronASTDest.MD_DENDRON },
+      { noteToRender: note, fname: note.fname, vault: note.vault, config: createTestConfig(), dest: SailASTDest.MD_DENDRON },
       { flavor: ProcFlavor.REGULAR }
     );
     const result = await proc.process(note.body);
@@ -733,7 +733,7 @@ describe("sailzenCite compiler", () => {
 | `::cite[keys]` | `sailzenCite` | `sailzenCite` | `::cite[foo, bar]` | MD_DENDRON, HTML, DOC_EXPORT, DOC_PREVIEW |
 | `::figure[cap](src){opts}` | `sailzenFigure` | `sailzenFigure` | `::figure[Teaser](fig1){width="80%"}` | MD_DENDRON, HTML, DOC_EXPORT, DOC_PREVIEW |
 
-### Reserved / Planned Types (in `DendronASTTypes` but not fully implemented)
+### Reserved / Planned Types (in `SailASTTypes` but not fully implemented)
 
 | Type | Status | Description |
 |------|--------|-------------|
@@ -763,7 +763,7 @@ pnpm jest packages/unified --coverage
 
 ## 9. Adding a New Custom Syntax: Checklist
 
-1. **Define AST type** in `src/types.ts` (add to `DendronASTTypes` enum + node interface)
+1. **Define AST type** in `src/types.ts` (add to `SailASTTypes` enum + node interface)
 2. **Implement remark plugin** in `src/remark/mySyntax.ts`:
    - `attachParser()` with locator + tokenizer
    - `attachCompiler()` with multi-dest visitor
@@ -902,7 +902,7 @@ import {
 } from "../myFeature";
 import { createTestNoteWithBody } from "../../__tests__/fixtures/testNotes";
 import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("myFeature plugin", () => {
   // === Tier 1: Regex ===
@@ -974,5 +974,5 @@ If your plugin reads `config.enableMyFeature`, the `processNoteFull` helper uses
 1. **Regex anchor mismatch**: `MY_FEATURE_REGEX` must be start-anchored (`^...`) because remark inline tokenizers receive text from the current position onward.
 2. **Locator function**: Always provide a `locator` on the inlineTokenizer so remark can find your syntax efficiently.
 3. **Insertion order**: Use `inlineMethods.splice(inlineMethods.indexOf("link"), 0, "myFeature")` to insert before `link` (or `"text"` for text-priority syntax).
-4. **Compiler destination**: Always handle all `DendronASTDest` values or throw a descriptive `DendronError`.
+4. **Compiler destination**: Always handle all `SailASTDest` values or throw a descriptive `SailError`.
 5. **HTML assertions**: `processNoteFull` returns a full HTML document string; use `.toContain()` for assertions rather than exact matching.

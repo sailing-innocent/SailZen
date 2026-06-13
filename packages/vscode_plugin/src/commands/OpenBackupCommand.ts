@@ -2,7 +2,7 @@ import { BackupService, IBackupService } from "@saili/common-server";
 import { QuickPickItem, Uri, window, workspace } from "vscode";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand } from "./base";
 import path from "path";
 
@@ -13,9 +13,9 @@ export class OpenBackupCommand extends BasicCommand<
   void
 > {
   key = DENDRON_COMMANDS.OPEN_BACKUP.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }

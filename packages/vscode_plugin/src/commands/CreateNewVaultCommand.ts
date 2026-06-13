@@ -5,7 +5,7 @@ import path from "path";
 import { commands, OpenDialogOptions, Uri, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -27,7 +27,7 @@ export class CreateNewVaultCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.CREATE_NEW_VAULT.key;
 
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 

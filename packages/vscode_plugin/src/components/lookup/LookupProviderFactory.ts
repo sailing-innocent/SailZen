@@ -6,12 +6,12 @@ import {
 } from "./LookupProviderInterface";
 import { SchemaLookupProvider } from "./SchemaLookupProvider";
 import { NoteLookupProvider } from "./NoteLookupProvider";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 
 export class NoteLookupProviderFactory implements INoteLookupProviderFactory {
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this.extension = extension;
   }
 
@@ -21,11 +21,10 @@ export class NoteLookupProviderFactory implements INoteLookupProviderFactory {
 }
 
 export class SchemaLookupProviderFactory
-  implements ISchemaLookupProviderFactory
-{
-  private extension: IDendronExtension;
+  implements ISchemaLookupProviderFactory {
+  private extension: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this.extension = extension;
   }
 

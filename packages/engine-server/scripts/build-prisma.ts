@@ -10,7 +10,7 @@ import fs from "fs-extra";
 import path from "path";
 import os from "os";
 
-const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".dendron");
+const DENDRON_SYSTEM_ROOT = path.join(os.homedir(), ".sail");
 
 interface BuildOptions {
   /** Source directory for generated Prisma client */

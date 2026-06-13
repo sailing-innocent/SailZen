@@ -5,7 +5,7 @@ import {
   BulkWriteNotesOpts,
   BulkWriteNotesResp,
   DeleteNoteResp,
-  DendronAPI,
+  SailAPI,
   DEngineClient,
   DEngineInitResp,
   DHookDict,
@@ -40,13 +40,12 @@ import {
   WriteNoteResp,
   WriteSchemaResp,
 } from "@saili/common-all";
-import { DendronEngineClient, HistoryService } from "@saili/engine-server";
+import { SailEngineClient, HistoryService } from "@saili/engine-server";
 import _ from "lodash";
 import { IEngineAPIService } from "./EngineAPIServiceInterface";
 
 export class EngineAPIService
-  implements DEngineClient, IEngineAPIService, EngineEventEmitter
-{
+  implements DEngineClient, IEngineAPIService, EngineEventEmitter {
   private _internalEngine: DEngineClient;
   private _engineEventEmitter: EngineEventEmitter;
   private _trustedWorkspace: boolean = true;
@@ -64,14 +63,14 @@ export class EngineAPIService
   }): EngineAPIService {
     const history = HistoryService.instance();
 
-    const api = new DendronAPI({
+    const api = new SailAPI({
       endpoint: APIUtils.getLocalEndpoint(
         _.isString(port) ? parseInt(port, 10) : port
       ),
       apiPath: "api",
     });
 
-    const newClientBase = new DendronEngineClient({
+    const newClientBase = new SailEngineClient({
       api,
       vaults,
       ws: wsRoot,

@@ -43,7 +43,7 @@ export type SettingsUpgradeOpts = {
 };
 
 export const _SETTINGS: ConfigUpdateChangeSet = {
-  "dendron.rootDir": {
+  "sail.rootDir": {
     default: ".",
   },
   // "editor.minimap.enabled": {
@@ -70,14 +70,14 @@ export const _SETTINGS: ConfigUpdateChangeSet = {
 };
 
 const _EXTENSIONS: ConfigUpdateEntry[] = [
-  { default: "dendron.dendron" },
-  { default: "dendron.dendron-paste-image" },
-  { default: "dendron.dendron-markdown-shortcuts" },
-  // Autocomplete & warnings when editing `dendron.yml`
+  { default: "sail.sail" },
+  { default: "sail.sail-paste-image" },
+  { default: "sail.sail-markdown-shortcuts" },
+  // Autocomplete & warnings when editing `sail.yml`
   { default: "redhat.vscode-yaml" },
-  { default: "dendron.dendron-markdown-links", action: "REMOVE" },
-  { default: "dendron.dendron-markdown-notes", action: "REMOVE" },
-  { default: "dendron.dendron-markdown-preview-enhanced", action: "REMOVE" },
+  { default: "sail.sail-markdown-links", action: "REMOVE" },
+  { default: "sail.sail-markdown-notes", action: "REMOVE" },
+  { default: "sail.sail-markdown-preview-enhanced", action: "REMOVE" },
   { default: "shd101wyy.markdown-preview-enhanced", action: "REMOVE" },
   { default: "kortina.vscode-markdown-notes", action: "REMOVE" },
   { default: "mushan.vscode-paste-image", action: "REMOVE" },
@@ -102,7 +102,7 @@ export class WorkspaceConfig {
   }
 
   /**
-   * Create dendron.code-workspace file
+   * Create sail.code-workspace file
    * @param wsRoot
    * @param vaults
    * @param opts
@@ -186,7 +186,7 @@ type Snippet = {
 };
 
 export class Snippets {
-  static filename = "dendron.code-snippets";
+  static filename = "sail.code-snippets";
   static defaults: { [key: string]: Snippet } = {
     todo: {
       prefix: "to",

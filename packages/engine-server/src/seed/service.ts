@@ -1,7 +1,7 @@
 import {
   assertUnreachable,
   CONSTANTS,
-  DendronError,
+  SailError,
   ERROR_STATUS,
   SeedConfig,
   SeedEntry,
@@ -28,7 +28,7 @@ export type SeedSvcResp = {
     seed: SeedConfig;
     seedPath?: string; // optional, not set if we're working with metadata only
   };
-  error?: DendronError;
+  error?: SailError;
 };
 
 export class SeedService {
@@ -57,10 +57,10 @@ export class SeedService {
 
   protected async getSeedOrErrorFromId(
     id: string
-  ): Promise<SeedConfig | DendronError> {
+  ): Promise<SeedConfig | SailError> {
     const maybeSeed = await this.registry.info({ id });
     if (!maybeSeed) {
-      return DendronError.createFromStatus({
+      return SailError.createFromStatus({
         status: ERROR_STATUS.DOES_NOT_EXIST,
         message: `seed ${id} does not exist`,
       });
@@ -80,7 +80,7 @@ export class SeedService {
     onUpdatedWorkspace?: () => Promise<void>;
   }): Promise<SeedSvcResp> {
     const seedOrError = await this.getSeedOrErrorFromId(id);
-    if (seedOrError instanceof DendronError) {
+    if (seedOrError instanceof SailError) {
       return {
         error: seedOrError,
       };
@@ -233,14 +233,14 @@ export class SeedService {
     const seeds = ConfigUtils.getWorkspace(config).seeds;
     if (!_.has(seeds, id)) {
       return {
-        error: new DendronError({
+        error: new SailError({
           status: ERROR_STATUS.DOES_NOT_EXIST,
-          message: `seed with id ${id} not in dendron.yml`,
+          message: `seed with id ${id} not in sail.yml`,
         }),
       };
     }
     const seedOrError = await this.getSeedOrErrorFromId(id);
-    if (seedOrError instanceof DendronError) {
+    if (seedOrError instanceof SailError) {
       return {
         error: seedOrError,
       };

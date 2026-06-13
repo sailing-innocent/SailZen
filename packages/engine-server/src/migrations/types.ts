@@ -1,18 +1,18 @@
 import {
-  DendronConfig,
-  DendronError,
+  SailConfig,
+  SailError,
   WorkspaceSettings,
 } from "@saili/common-all";
 import { WorkspaceService } from "../workspace";
 
 export type MigrateFunction = (opts: {
-  dendronConfig: DendronConfig;
+  sailConfig: SailConfig;
   wsConfig?: WorkspaceSettings;
   wsService: WorkspaceService;
 }) => Promise<{
-  error?: DendronError;
+  error?: SailError;
   data: {
-    dendronConfig: DendronConfig;
+    sailConfig: SailConfig;
     wsConfig?: WorkspaceSettings;
   };
 }>;
@@ -28,12 +28,12 @@ export type Migrations = {
 };
 
 export type MigrationChangeSetStatus = {
-  error?: DendronError;
+  error?: SailError;
   data: {
     version: string;
     changeName: string;
     status: "ok" | "error";
-    dendronConfig: DendronConfig;
+    sailConfig: SailConfig;
     wsConfig?: WorkspaceSettings;
   };
 };

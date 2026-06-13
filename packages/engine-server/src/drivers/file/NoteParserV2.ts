@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   DNodeUtils,
   DuplicateNoteError,
@@ -8,7 +8,7 @@ import {
   ErrorUtils,
   ERROR_SEVERITY,
   ERROR_STATUS,
-  IDendronError,
+  ISailError,
   NoteDictsUtils,
   NoteProps,
   NotePropsByFnameDict,
@@ -22,7 +22,7 @@ import {
   SchemaUtils,
   string2Note,
   globMatch,
-  DendronConfig,
+  SailConfig,
   SchemaModuleDict,
 } from "@saili/common-all";
 import { DConfig, DLogger, vault2Path } from "@saili/common-server";
@@ -32,7 +32,7 @@ import path from "path";
 import { createCacheEntry, EngineUtils } from "../../utils";
 import { NotesFileSystemCache } from "../../cache/notesFileSystemCache";
 
-// NOTE: This file has been forked in plugin-core to enable Dendron Web
+// NOTE: This file has been forked in plugin-core to enable Sail Web
 // Extension
 
 export type FileMeta = {
@@ -89,7 +89,7 @@ export class NoteParserV2 {
     allPaths: string[],
     vault: DVault,
     schemas: SchemaModuleDict
-  ): Promise<{ noteDicts: NoteDicts; errors: IDendronError[] }> {
+  ): Promise<{ noteDicts: NoteDicts; errors: ISailError[] }> {
     const ctx = "parseFiles";
     const fileMetaDict: FileMetaDict = getFileMeta(allPaths);
     const maxLvl = _.max(_.keys(fileMetaDict).map((e) => _.toInteger(e))) || 2;
@@ -104,14 +104,14 @@ export class NoteParserV2 {
     // Keep track of which notes in cache no longer exist
     const unseenKeys = this.cache.getCacheEntryKeys();
     const config = DConfig.readConfigSync(this.engine.wsRoot);
-    const errors: IDendronError<any>[] = [];
+    const errors: ISailError<any>[] = [];
 
     // get root note
     if (_.isUndefined(fileMetaDict[1])) {
       return {
         noteDicts,
         errors: [
-          DendronError.createFromStatus({
+          SailError.createFromStatus({
             status: ERROR_STATUS.NO_ROOT_NOTE_FOUND,
           }),
         ],
@@ -122,7 +122,7 @@ export class NoteParserV2 {
       return {
         noteDicts,
         errors: [
-          DendronError.createFromStatus({
+          SailError.createFromStatus({
             status: ERROR_STATUS.NO_ROOT_NOTE_FOUND,
           }),
         ],
@@ -141,7 +141,7 @@ export class NoteParserV2 {
       return {
         noteDicts,
         errors: [
-          DendronError.createFromStatus({
+          SailError.createFromStatus({
             status: ERROR_STATUS.NO_ROOT_NOTE_FOUND,
           }),
         ],
@@ -228,12 +228,12 @@ export class NoteParserV2 {
       // Phase 2: serial parent linking - addOrUpdateParents mutates noteDicts so must be sequential
       for (const { ent, resp, error: catchErr } of ioResults) {
         if (catchErr) {
-          const dendronError = ErrorFactory.wrapIfNeeded(catchErr);
-          dendronError.severity = ERROR_SEVERITY.MINOR;
-          dendronError.message =
+          const sailError = ErrorFactory.wrapIfNeeded(catchErr);
+          sailError.severity = ERROR_SEVERITY.MINOR;
+          sailError.message =
             `Failed to read ${ent.fpath} in ${vault.fsPath}: ` +
-            dendronError.message;
-          errors.push(dendronError);
+            sailError.message;
+          errors.push(sailError);
           continue;
         }
         if (resp!.error) {
@@ -310,7 +310,7 @@ export class NoteParserV2 {
     noteDicts?: NoteDicts;
     addParent: boolean;
     vault: DVault;
-    config: DendronConfig;
+    config: SailConfig;
   }): Promise<RespV2<NoteChangeEntry[]>> {
     const cleanOpts = _.defaults(opts, {
       addParent: true,
@@ -349,8 +349,8 @@ export class NoteParserV2 {
       }
       return { data: changeEntries, error };
     } catch (_err: any) {
-      if (!ErrorUtils.isDendronError(_err)) {
-        const error = DendronError.createFromStatus({
+      if (!ErrorUtils.isSailError(_err)) {
+        const error = SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           severity: ERROR_SEVERITY.MINOR,
           payload: { fname: fpath, error: stringifyError(_err) },
@@ -378,7 +378,7 @@ export class NoteParserV2 {
   }: {
     fpath: string;
     vault: DVault;
-    config: DendronConfig;
+    config: SailConfig;
   }): Promise<RespV2<NoteProps>> {
     const content = fs.readFileSync(fpath, { encoding: "utf8" });
     const { name } = path.parse(fpath);
@@ -408,7 +408,7 @@ export class NoteParserV2 {
       } else {
         // No frontmatter exists for this file, return error
         return {
-          error: new DendronError({
+          error: new SailError({
             message: `File "${fpath}" is missing frontmatter.`,
             severity: ERROR_SEVERITY.MINOR,
           }),
@@ -419,7 +419,7 @@ export class NoteParserV2 {
     note = string2Note({ content, fname: name, vault });
     note.contentHash = sig;
     // Link/anchor errors should be logged but not interfere with rest of parsing
-    let error: IDendronError | null = null;
+    let error: ISailError | null = null;
     try {
       await EngineUtils.refreshNoteLinksAndAnchors({
         note,

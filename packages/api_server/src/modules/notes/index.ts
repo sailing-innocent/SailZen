@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   EngineInfoResp,
   EngineRenameNoteRequest,
   NoteQueryRequest,
@@ -46,8 +46,8 @@ export class NoteController {
       const version = NodeJSUtils.getVersionFromPkg();
       if (!version) {
         return {
-          error: DendronError.createPlainError({
-            message: "Unable to read the Dendron version",
+          error: SailError.createPlainError({
+            message: "Unable to read the Sail version",
           }),
         };
       }
@@ -59,7 +59,7 @@ export class NoteController {
     } catch (err) {
       getLogger().error({ ctx, err });
       return {
-        error: DendronError.createPlainError({
+        error: SailError.createPlainError({
           payload: err,
           message: "unknown error",
         }),
@@ -80,7 +80,7 @@ export class NoteController {
     } catch (err) {
       getLogger().error({ ctx, err });
       return {
-        error: DendronError.createPlainError({
+        error: SailError.createPlainError({
           payload: err,
           message: "unknown error",
         }),

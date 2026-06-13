@@ -19,8 +19,8 @@ import {
 import { DConfig, getDurationMilliseconds } from "@saili/common-server";
 import {
   AnchorUtils,
-  DendronASTDest,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTTypes,
   HashTagUtils,
   HASHTAG_REGEX_LOOSE,
   LinkUtils,
@@ -46,7 +46,7 @@ import {
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { WSUtils } from "../WSUtils";
 
 function padWithZero(n: number): string {
@@ -179,161 +179,161 @@ export const provideCompletionItems = async (
   document: TextDocument,
   position: Position
 ): Promise<CompletionList | undefined> => {
-    const ctx = "provideCompletionItems";
-    const startTime = process.hrtime();
-    // No-op if we're not in a Dendron Workspace
-    if (!ExtensionProvider.getExtension().isActive()) {
-      return;
-    }
+  const ctx = "provideCompletionItems";
+  const startTime = process.hrtime();
+  // No-op if we're not in a Sail Workspace
+  if (!ExtensionProvider.getExtension().isActive()) {
+    return;
+  }
 
-    const line = document.lineAt(position).text;
-    Logger.info({ ctx, position, msg: "enter" });
+  const line = document.lineAt(position).text;
+  Logger.info({ ctx, position, msg: "enter" });
 
-    // get all matches
-    let found: RegExpMatchArray | undefined;
-    const matches = line.matchAll(NOTE_AUTOCOMPLETEABLE_REGEX);
-    for (const match of matches) {
-      if (_.isUndefined(match.groups) || _.isUndefined(match.index)) continue;
-      const { entireLink } = match.groups;
-      if (
-        match.index <= position.character &&
-        position.character <= match.index + entireLink.length
-      ) {
-        found = match;
-      }
-    }
-
-    // if no match found, exit early
+  // get all matches
+  let found: RegExpMatchArray | undefined;
+  const matches = line.matchAll(NOTE_AUTOCOMPLETEABLE_REGEX);
+  for (const match of matches) {
+    if (_.isUndefined(match.groups) || _.isUndefined(match.index)) continue;
+    const { entireLink } = match.groups;
     if (
-      _.isUndefined(found) ||
-      _.isUndefined(found.index) ||
-      _.isUndefined(found.groups)
-    )
-      return;
-
-    Logger.debug({ ctx, regexMatch: found });
-
-    // if match is hash, delegate to block auto complete
-    if (
-      (found.groups.hash || found.groups.hashNoSpace) &&
-      found.index + (found.groups.beforeAnchor?.length || 0) >
-      position.character
+      match.index <= position.character &&
+      position.character <= match.index + entireLink.length
     ) {
-      Logger.info({ ctx, msg: "letting block autocomplete take over" });
-      return;
+      found = match;
     }
+  }
 
-    // do autocomplete
-    let start: number;
-    let end: number;
-    if (found.groups.hashTag || found.groups.zdocTag) {
-      // This is a hashtag or user tag
-      start = found.index + 1 /* for the # or @ symbol */;
-      end =
-        start +
-        (found.groups.tagContents?.length ||
-          found.groups.zdocTagContents?.length ||
-          0);
-    } else {
-      // This is a wikilink or a reference
-      start = found.index + (found.groups.beforeNote?.length || 0);
-      end =
-        start +
-        (found.groups.note?.length || found.groups.noteNoSpace?.length || 0);
-    }
-    const range = new Range(position.line, start, position.line, end);
+  // if no match found, exit early
+  if (
+    _.isUndefined(found) ||
+    _.isUndefined(found.index) ||
+    _.isUndefined(found.groups)
+  )
+    return;
 
-    const engine = ExtensionProvider.getEngine();
-    const { wsRoot } = engine;
-    let completionItems: CompletionItem[];
-    const completionsIncomplete = true;
-    const currentVault = WSUtils.instance().getVaultFromDocument(document);
+  Logger.debug({ ctx, regexMatch: found });
 
-    if (found?.groups?.hashTag) {
-      completionItems = await provideCompletionsForTag({
-        type: "hashtag",
-        engine,
-        found,
-        range,
-      });
-    } else if (found?.groups?.zdocTag) {
-      completionItems = await provideCompletionsForTag({
-        type: "zdoctag",
-        engine,
-        found,
-        range,
-      });
-    } else {
-      let qsRaw: string;
-      if (found?.groups?.note) {
-        qsRaw = found?.groups?.note;
-      } else if (found?.groups?.noteNoSpace) {
-        qsRaw = found?.groups?.noteNoSpace;
-      } else {
-        qsRaw = "";
-      }
-      const insertTextTransform = async (note: NoteProps) => {
-        let resp = note.fname;
-        if (found?.groups?.noBracket !== undefined) {
-          resp += "]]";
-        }
-        if (
-          currentVault &&
-          !VaultUtils.isEqual(currentVault, note.vault, wsRoot)
-        ) {
-          const sameNameNotes = (
-            await engine.findNotesMeta({ fname: note.fname })
-          ).length;
-          if (sameNameNotes > 1) {
-            // There are multiple notes with the same name in multiple vaults,
-            // and this note is in a different vault than the current note.
-            // To generate a link to this note, we have to do an xvault link.
-            resp = `${VaultUtils.toURIPrefix(note.vault)}/${resp}`;
-          }
-        }
-        return resp;
-      };
+  // if match is hash, delegate to block auto complete
+  if (
+    (found.groups.hash || found.groups.hashNoSpace) &&
+    found.index + (found.groups.beforeAnchor?.length || 0) >
+    position.character
+  ) {
+    Logger.info({ ctx, msg: "letting block autocomplete take over" });
+    return;
+  }
 
-      const notes = await NoteLookupUtils.lookup({
-        qsRaw,
-        engine,
-      });
+  // do autocomplete
+  let start: number;
+  let end: number;
+  if (found.groups.hashTag || found.groups.zdocTag) {
+    // This is a hashtag or user tag
+    start = found.index + 1 /* for the # or @ symbol */;
+    end =
+      start +
+      (found.groups.tagContents?.length ||
+        found.groups.zdocTagContents?.length ||
+        0);
+  } else {
+    // This is a wikilink or a reference
+    start = found.index + (found.groups.beforeNote?.length || 0);
+    end =
+      start +
+      (found.groups.note?.length || found.groups.noteNoSpace?.length || 0);
+  }
+  const range = new Range(position.line, start, position.line, end);
 
-      completionItems = await Promise.all(
-        notes.map((note) =>
-          noteToCompletionItem({
-            note,
-            range,
-            insertTextTransform,
-            sortTextTransform: (note) => {
-              if (
-                currentVault &&
-                !VaultUtils.isEqual(currentVault, note.vault, wsRoot)
-              ) {
-                // For notes from other vaults than the current note, sort them after notes from the current vault.
-                // x will get sorted after numbers, so these will appear after notes without x
-                return `x${note.fname}`;
-              }
-              return;
-            },
-          })
-        )
-      );
-    }
+  const engine = ExtensionProvider.getEngine();
+  const { wsRoot } = engine;
+  let completionItems: CompletionItem[];
+  const completionsIncomplete = true;
+  const currentVault = WSUtils.instance().getVaultFromDocument(document);
 
-    const duration = getDurationMilliseconds(startTime);
-    const completionList = new CompletionList(
-      completionItems,
-      completionsIncomplete
-    );
-    Logger.debug({
-      ctx,
-      completionItemsLength: completionList.items.length,
-      incomplete: completionList.isIncomplete,
-      duration,
+  if (found?.groups?.hashTag) {
+    completionItems = await provideCompletionsForTag({
+      type: "hashtag",
+      engine,
+      found,
+      range,
     });
-    return completionList;
-  };
+  } else if (found?.groups?.zdocTag) {
+    completionItems = await provideCompletionsForTag({
+      type: "zdoctag",
+      engine,
+      found,
+      range,
+    });
+  } else {
+    let qsRaw: string;
+    if (found?.groups?.note) {
+      qsRaw = found?.groups?.note;
+    } else if (found?.groups?.noteNoSpace) {
+      qsRaw = found?.groups?.noteNoSpace;
+    } else {
+      qsRaw = "";
+    }
+    const insertTextTransform = async (note: NoteProps) => {
+      let resp = note.fname;
+      if (found?.groups?.noBracket !== undefined) {
+        resp += "]]";
+      }
+      if (
+        currentVault &&
+        !VaultUtils.isEqual(currentVault, note.vault, wsRoot)
+      ) {
+        const sameNameNotes = (
+          await engine.findNotesMeta({ fname: note.fname })
+        ).length;
+        if (sameNameNotes > 1) {
+          // There are multiple notes with the same name in multiple vaults,
+          // and this note is in a different vault than the current note.
+          // To generate a link to this note, we have to do an xvault link.
+          resp = `${VaultUtils.toURIPrefix(note.vault)}/${resp}`;
+        }
+      }
+      return resp;
+    };
+
+    const notes = await NoteLookupUtils.lookup({
+      qsRaw,
+      engine,
+    });
+
+    completionItems = await Promise.all(
+      notes.map((note) =>
+        noteToCompletionItem({
+          note,
+          range,
+          insertTextTransform,
+          sortTextTransform: (note) => {
+            if (
+              currentVault &&
+              !VaultUtils.isEqual(currentVault, note.vault, wsRoot)
+            ) {
+              // For notes from other vaults than the current note, sort them after notes from the current vault.
+              // x will get sorted after numbers, so these will appear after notes without x
+              return `x${note.fname}`;
+            }
+            return;
+          },
+        })
+      )
+    );
+  }
+
+  const duration = getDurationMilliseconds(startTime);
+  const completionList = new CompletionList(
+    completionItems,
+    completionsIncomplete
+  );
+  Logger.debug({
+    ctx,
+    completionItemsLength: completionList.items.length,
+    incomplete: completionList.isIncomplete,
+    duration,
+  });
+  return completionList;
+};
 
 /**
  * Debounced version of {@link provideCompletionItems}.
@@ -342,7 +342,7 @@ export const provideCompletionItems = async (
  * 1. without the leading edge we lose focus to the Intellisense
  * 2. without the trailing edge we may miss some keystrokes from the users at the end.
  *
- * related discussion: https://github.com/dendronhq/dendron/pull/3116#discussion_r902075154
+ * related discussion: https://github.com/sailhq/sail/pull/3116#discussion_r902075154
  */
 export const debouncedProvideCompletionItems = _.debounce(
   provideCompletionItems,
@@ -353,60 +353,60 @@ export const debouncedProvideCompletionItems = _.debounce(
 export const resolveCompletionItem = async (
   item: CompletionItem,
   token: CancellationToken
-  ): Promise<CompletionItem | undefined> => {
-    const ctx = "resolveCompletionItem";
-    const { label: fname, detail: vname } = item;
-    if (
-      !_.isString(fname) ||
-      !_.isString(vname) ||
-      token.isCancellationRequested
-    )
-      return;
+): Promise<CompletionItem | undefined> => {
+  const ctx = "resolveCompletionItem";
+  const { label: fname, detail: vname } = item;
+  if (
+    !_.isString(fname) ||
+    !_.isString(vname) ||
+    token.isCancellationRequested
+  )
+    return;
 
-    const engine = ExtensionProvider.getEngine();
-    const { vaults, wsRoot } = engine;
-    const vault = VaultUtils.getVaultByName({ vname, vaults });
-    if (_.isUndefined(vault)) {
-      Logger.info({ ctx, msg: "vault not found", fname, vault, wsRoot });
-      return;
-    }
+  const engine = ExtensionProvider.getEngine();
+  const { vaults, wsRoot } = engine;
+  const vault = VaultUtils.getVaultByName({ vname, vaults });
+  if (_.isUndefined(vault)) {
+    Logger.info({ ctx, msg: "vault not found", fname, vault, wsRoot });
+    return;
+  }
 
-    const note = (await engine.findNotesMeta({ fname, vault }))[0];
+  const note = (await engine.findNotesMeta({ fname, vault }))[0];
 
-    if (_.isUndefined(note)) {
-      Logger.info({ ctx, msg: "note not found", fname, vault, wsRoot });
-      return;
-    }
+  if (_.isUndefined(note)) {
+    Logger.info({ ctx, msg: "note not found", fname, vault, wsRoot });
+    return;
+  }
 
-    try {
-      // Render a preview of this note
-      const proc = MDUtilsV5.procRemarkFull(
-        {
-          noteToRender: note,
-          dest: DendronASTDest.MD_REGULAR,
-          vault: note.vault,
-          fname: note.fname,
-          config: DConfig.readConfigSync(engine.wsRoot, true),
-          wsRoot,
-        },
-        {
-          flavor: ProcFlavor.HOVER_PREVIEW,
-        }
-      );
-      const rendered = await proc.process(
-        `![[${VaultUtils.toURIPrefix(note.vault)}/${note.fname}]]`
-      );
-      if (token.isCancellationRequested) return;
-      item.documentation = new MarkdownString(rendered.toString());
-      Logger.debug({ ctx, msg: "rendered note" });
-    } catch (err) {
-      // Failed creating preview of the note
-      Logger.info({ ctx, err, msg: "failed to render note" });
-      return;
-    }
+  try {
+    // Render a preview of this note
+    const proc = MDUtilsV5.procRemarkFull(
+      {
+        noteToRender: note,
+        dest: SailASTDest.MD_REGULAR,
+        vault: note.vault,
+        fname: note.fname,
+        config: DConfig.readConfigSync(engine.wsRoot, true),
+        wsRoot,
+      },
+      {
+        flavor: ProcFlavor.HOVER_PREVIEW,
+      }
+    );
+    const rendered = await proc.process(
+      `![[${VaultUtils.toURIPrefix(note.vault)}/${note.fname}]]`
+    );
+    if (token.isCancellationRequested) return;
+    item.documentation = new MarkdownString(rendered.toString());
+    Logger.debug({ ctx, msg: "rendered note" });
+  } catch (err) {
+    // Failed creating preview of the note
+    Logger.info({ ctx, err, msg: "failed to render note" });
+    return;
+  }
 
-    return item;
-  };
+  return item;
+};
 
 // prettier-ignore
 const PARTIAL_WIKILINK_WITH_ANCHOR_REGEX = new RegExp("" +
@@ -441,8 +441,8 @@ export async function provideBlockCompletionItems(
 ): Promise<CompletionItem[] | undefined> {
   const ctx = "provideBlockCompletionItems";
 
-  // No-op if we're not in a Dendron Workspace
-  if (!DendronExtension.isActive()) {
+  // No-op if we're not in a Sail Workspace
+  if (!SailExtension.isActive()) {
     return;
   }
 
@@ -585,7 +585,7 @@ export async function provideBlockCompletionItems(
           new TextEdit(
             new Range(blockPosition, blockPosition),
             // To represent a whole list, the anchor must be after the list with 1 empty line between
-            block.type === DendronASTTypes.LIST
+            block.type === SailASTTypes.LIST
               ? `\n\n${AnchorUtils.anchor2string(anchor)}\n`
               : // To represent any other block, the anchor can be placed at the end of the block
               ` ${AnchorUtils.anchor2string(anchor)}`

@@ -5,12 +5,11 @@ import vscode, { FoldingRangeKind } from "vscode";
 import { VSCodeUtils } from "../vsCodeUtils";
 
 export default class FrontmatterFoldingRangeProvider
-  implements vscode.FoldingRangeProvider
-{
+  implements vscode.FoldingRangeProvider {
   /**
    * Returns the folding range of the frontmatter section of a markdown note.
    * @param document The document we want to find the folding range.
-   * @returns The frontmatter folding range of given Dendron note as an array.
+   * @returns The frontmatter folding range of given Sail note as an array.
    */
   public async provideFoldingRanges(
     document: vscode.TextDocument
@@ -22,10 +21,10 @@ export default class FrontmatterFoldingRangeProvider
       const range =
         nodePosition !== undefined
           ? new vscode.FoldingRange(
-              VSCodeUtils.point2VSCodePosition(nodePosition.start).line,
-              VSCodeUtils.point2VSCodePosition(nodePosition.end).line,
-              FoldingRangeKind.Region
-            )
+            VSCodeUtils.point2VSCodePosition(nodePosition.start).line,
+            VSCodeUtils.point2VSCodePosition(nodePosition.end).line,
+            FoldingRangeKind.Region
+          )
           : undefined;
       if (_.isUndefined(range)) return [];
       return [range];

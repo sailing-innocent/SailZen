@@ -36,7 +36,7 @@ export type ButtonCategory =
   | "effect"
   | "selectVault";
 
-export function getButtonCategory(button: DendronBtn): ButtonCategory {
+export function getButtonCategory(button: SailBtn): ButtonCategory {
   if (isSelectionBtn(button)) {
     return "selection";
   }
@@ -58,42 +58,42 @@ export function getButtonCategory(button: DendronBtn): ButtonCategory {
   throw Error(`unknown btn type ${button}`);
 }
 
-function isEffectButton(button: DendronBtn) {
+function isEffectButton(button: SailBtn) {
   return _.includes(
     ["copyNoteLink", "copyNoteRef", "multiSelect"],
     button.type
   );
 }
-function isFilterButton(button: DendronBtn) {
+function isFilterButton(button: SailBtn) {
   return _.includes(["directChildOnly"], button.type);
 }
 
-function isSelectionBtn(button: DendronBtn) {
+function isSelectionBtn(button: SailBtn) {
   return _.includes(
     ["selection2link", "selectionExtract", "selection2Items"],
     button.type
   );
 }
 
-function isNoteBtn(button: DendronBtn) {
+function isNoteBtn(button: SailBtn) {
   return _.includes(["journal", "scratch", "task"], button.type);
 }
 
-function isSplitButton(button: DendronBtn) {
+function isSplitButton(button: SailBtn) {
   return _.includes(["horizontal", "vertical"], button.type);
 }
 
-function isSelectVaultButton(button: DendronBtn) {
+function isSelectVaultButton(button: SailBtn) {
   return _.includes(["selectVault"], button.type);
 }
 
-export type IDendronQuickInputButton = QuickInputButton & {
+export type ISailQuickInputButton = QuickInputButton & {
   type: ButtonType;
   description: string;
   pressed: boolean;
 };
 
-type DendronBtnCons = {
+type SailBtnCons = {
   title: string;
   description: string;
   iconOff: string;
@@ -102,7 +102,7 @@ type DendronBtnCons = {
   pressed?: boolean;
   canToggle?: boolean;
 };
-export class DendronBtn implements IDendronQuickInputButton {
+export class SailBtn implements ISailQuickInputButton {
   public iconPathNormal: ThemeIcon;
   public iconPathPressed: ThemeIcon;
   public type: ButtonType;
@@ -110,7 +110,7 @@ export class DendronBtn implements IDendronQuickInputButton {
   private _pressed: boolean;
   public canToggle: boolean;
   public title: string;
-  public opts: DendronBtnCons;
+  public opts: SailBtnCons;
 
   public get pressed() {
     return this._pressed;
@@ -126,7 +126,7 @@ export class DendronBtn implements IDendronQuickInputButton {
     return;
   };
 
-  constructor(opts: DendronBtnCons) {
+  constructor(opts: SailBtnCons) {
     const { iconOff, iconOn, type, title, description, pressed } = opts;
     this.iconPathNormal = new vscode.ThemeIcon(iconOff);
     this.iconPathPressed = new vscode.ThemeIcon(iconOn);
@@ -138,8 +138,8 @@ export class DendronBtn implements IDendronQuickInputButton {
     this.opts = opts;
   }
 
-  clone(): DendronBtn {
-    return new DendronBtn({
+  clone(): SailBtn {
+    return new SailBtn({
       ...this.opts,
       pressed: this._pressed,
     });
@@ -151,9 +151,8 @@ export class DendronBtn implements IDendronQuickInputButton {
 
   get tooltip(): string {
     return this.description
-      ? `${this.title}, ${this.description}, status: ${
-          this.pressed ? "on" : "off"
-        }`
+      ? `${this.title}, ${this.description}, status: ${this.pressed ? "on" : "off"
+      }`
       : `${this.title}, status: ${this.pressed ? "on" : "off"}`;
   }
 

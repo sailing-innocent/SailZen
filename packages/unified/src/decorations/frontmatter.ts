@@ -1,5 +1,5 @@
 import {
-  IDendronError,
+  ISailError,
   isNotUndefined,
   NoteUtils,
   point2VSCodePosition,
@@ -62,7 +62,7 @@ export const decorateFrontmatter: Decorator<
   // Decorate the frontmatter tags
   const tags = getFrontmatterTags(parseFrontmatter(contents));
   const tagDecorations: DecorationHashTag[] = [];
-  const errors: IDendronError[] = [];
+  const errors: ISailError[] = [];
   await Promise.all(
     tags.map(async (tag) => {
       const { errors, decorations } = await decorateTag({

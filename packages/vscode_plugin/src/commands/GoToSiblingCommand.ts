@@ -31,7 +31,7 @@ export class GoToSiblingCommand extends BasicCommand<
   CommandOpts,
   CommandOutput
 > {
-  key = "dendron.goToSibling";
+  key = "sail.goToSibling";
 
   async gatherInputs(): Promise<any> {
     return {};
@@ -53,9 +53,9 @@ export class GoToSiblingCommand extends BasicCommand<
     const workspace = ext.getDWorkspace();
     const note = await this.getActiveNote(workspace.engine, fname);
 
-    // check if a Dendron note is active
+    // check if a Sail note is active
     if (!note) {
-      window.showErrorMessage("Please open a Dendron note to use this command");
+      window.showErrorMessage("Please open a Sail note to use this command");
       return {
         msg: "other_error" as const,
       };
@@ -139,13 +139,13 @@ export class GoToSiblingCommand extends BasicCommand<
         currNoteIdx !== sortedJournalNotes.length - 1
           ? sortedJournalNotes[currNoteIdx + 1]
           : // If current note is the latest journal note, get the earliest note as the sibling
-            sortedJournalNotes[0];
+          sortedJournalNotes[0];
     } else {
       sibling =
         currNoteIdx !== 0
           ? sortedJournalNotes[currNoteIdx - 1]
           : // If current note is the earliest journal note, get the last note as the sibling
-            _.last(sortedJournalNotes)!;
+          _.last(sortedJournalNotes)!;
     }
     return { data: { sibling } };
   }

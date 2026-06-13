@@ -1,7 +1,7 @@
 import {
   ConfigUtils,
   ConfirmStatus,
-  DendronConfig,
+  SailConfig,
   InstallStatus,
   Time,
   WorkspaceSettings,
@@ -22,7 +22,7 @@ import _md from "markdown-it";
 import * as vscode from "vscode";
 import { DoctorCommand, PluginDoctorActionsEnum } from "../commands/Doctor";
 import { INCOMPATIBLE_EXTENSIONS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -52,13 +52,13 @@ export class StartupUtils {
   static showManualUpgradeMessage() {
     const SHOW_ME_HOW = "Show Me How";
     const MESSAGE =
-      "You are upgrading from a legacy version of Dendron. Please follow the instructions to manually migrate your configuration.";
+      "You are upgrading from a legacy version of Sail. Please follow the instructions to manually migrate your configuration.";
     vscode.window
       .showInformationMessage(MESSAGE, SHOW_ME_HOW)
       .then(async (resp) => {
         if (resp === SHOW_ME_HOW) {
           VSCodeUtils.openLink(
-            "https://wiki.dendron.so/notes/4119x15gl9w90qx8qh1truj"
+            "https://wiki.sail.so/notes/4119x15gl9w90qx8qh1truj"
           );
         } else {
         }
@@ -86,24 +86,24 @@ export class StartupUtils {
     wsService,
     currentVersion,
     previousWorkspaceVersion,
-    dendronConfig,
+    sailConfig,
     maybeWsSettings,
   }: {
     wsService: WorkspaceService;
     currentVersion: string;
     previousWorkspaceVersion: string;
-    dendronConfig: DendronConfig;
+    sailConfig: SailConfig;
     maybeWsSettings?: WorkspaceSettings;
   }) {
     const workspaceInstallStatus = VSCodeUtils.getInstallStatusForWorkspace({
       previousWorkspaceVersion,
       currentVersion,
     });
-    // see [[Migration|dendron://dendron.docs/pkg.plugin-core.t.migration]] for overview of migration process
+    // see [[Migration|sail://sail.docs/pkg.plugin-core.t.migration]] for overview of migration process
     const changes = await wsService.runMigrationsIfNecessary({
       currentVersion,
       previousVersion: previousWorkspaceVersion,
-      dendronConfig,
+      sailConfig,
       workspaceInstallStatus,
       wsConfig: maybeWsSettings,
     });
@@ -118,7 +118,7 @@ export class StartupUtils {
   }
 
   static showDuplicateConfigEntryMessageIfNecessary(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
   }) {
     const message = StartupUtils.getDuplicateKeysMessage(opts);
     if (message !== undefined) {
@@ -129,7 +129,7 @@ export class StartupUtils {
     }
   }
 
-  static getDuplicateKeysMessage(opts: { ext: IDendronExtension }) {
+  static getDuplicateKeysMessage(opts: { ext: ISailExtension }) {
     const wsRoot = opts.ext.getDWorkspace().wsRoot;
     try {
       DConfig.getRaw(wsRoot);
@@ -144,12 +144,12 @@ export class StartupUtils {
   }
 
   static showDuplicateConfigEntryMessage(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     message: string;
   }) {
     const FIX_ISSUE = "Fix Issue";
     const MESSAGE =
-      "We have detected duplicate key(s) in dendron.yml. Dendron has activated using the last entry of the duplicate key(s)";
+      "We have detected duplicate key(s) in sail.yml. Sail has activated using the last entry of the duplicate key(s)";
     vscode.window
       .showInformationMessage(MESSAGE, FIX_ISSUE)
       .then(async (resp) => {
@@ -160,22 +160,22 @@ export class StartupUtils {
 
           const message = opts.message;
           const content = [
-            `# Duplicate Keys in \`dendron.yml\``,
+            `# Duplicate Keys in \`sail.yml\``,
             "",
-            "The message at the bottom displays the _first_ duplicate key mapping that was detected in `dendron.yml`",
+            "The message at the bottom displays the _first_ duplicate key mapping that was detected in `sail.yml`",
             "",
             "**There may be more duplicate key mappings**.",
             "",
             "Take the following steps to fix this issue.",
-            "1. Look through `dendron.yml` and remove all duplicate mappings.",
+            "1. Look through `sail.yml` and remove all duplicate mappings.",
             "",
             `    - We recommend installing the [YAML extension](${vscode.Uri.parse(
               `command:workbench.extensions.search?${JSON.stringify(
                 "@id:redhat.vscode-yaml"
               )}`
-            )}) for validating \`dendron.yml\``,
+            )}) for validating \`sail.yml\``,
             "",
-            "1. When you are done, save your changes made to `dendron.yml`",
+            "1. When you are done, save your changes made to `sail.yml`",
             "",
             `1. Reload the window for it to take effect. [Click here to reload window](${vscode.Uri.parse(
               `command:workbench.action.reloadWindow`
@@ -207,7 +207,7 @@ export class StartupUtils {
   }
 
   static showDeprecatedConfigMessageIfNecessary(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     extensionInstallStatus: InstallStatus;
   }) {
     if (StartupUtils.shouldDisplayDeprecatedConfigMessage(opts)) {
@@ -216,7 +216,7 @@ export class StartupUtils {
   }
 
   static shouldDisplayDeprecatedConfigMessage(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     extensionInstallStatus: InstallStatus;
   }): boolean {
     if (opts.extensionInstallStatus === InstallStatus.UPGRADED) {
@@ -232,10 +232,10 @@ export class StartupUtils {
     }
   }
 
-  static showDeprecatedConfigMessage(opts: { ext: IDendronExtension }) {
+  static showDeprecatedConfigMessage(opts: { ext: ISailExtension }) {
     const REMOVE_CONFIG = "Remove Deprecated Configuration";
     const MESSAGE =
-      "We have detected some deprecated configurations. Would you like to remove them from dendron.yml?";
+      "We have detected some deprecated configurations. Would you like to remove them from sail.yml?";
     vscode.window
       .showInformationMessage(MESSAGE, REMOVE_CONFIG)
       .then(async (resp) => {
@@ -251,7 +251,7 @@ export class StartupUtils {
   }
 
   static showMissingDefaultConfigMessageIfNecessary(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     extensionInstallStatus: InstallStatus;
   }) {
     if (StartupUtils.shouldDisplayMissingDefaultConfigMessage(opts)) {
@@ -260,7 +260,7 @@ export class StartupUtils {
   }
 
   static shouldDisplayMissingDefaultConfigMessage(opts: {
-    ext: IDendronExtension;
+    ext: ISailExtension;
     extensionInstallStatus: InstallStatus;
   }): boolean {
     if (opts.extensionInstallStatus === InstallStatus.UPGRADED) {
@@ -273,10 +273,10 @@ export class StartupUtils {
     }
   }
 
-  static showMissingDefaultConfigMessage(opts: { ext: IDendronExtension }) {
+  static showMissingDefaultConfigMessage(opts: { ext: ISailExtension }) {
     const ADD_CONFIG = "Add Missing Configuration";
     const MESSAGE =
-      "We have detected a missing configuration. This may happen because a new configuration was introduced, or because an existing required configuration has been deleted. Would you like to add them to dendron.yml?";
+      "We have detected a missing configuration. This may happen because a new configuration was introduced, or because an existing required configuration has been deleted. Would you like to add them to sail.yml?";
     vscode.window
       .showInformationMessage(MESSAGE, ADD_CONFIG)
       .then(async (resp) => {
@@ -364,7 +364,7 @@ export class StartupUtils {
     } else {
       // this is the first time we are asking them.
       const shouldSend =
-        metaData.dendronWorkspaceActivated !== undefined &&
+        metaData.sailWorkspaceActivated !== undefined &&
         metaData.firstWsInitialize !== undefined &&
         isInactive &&
         // this is needed since we may have prompted them before we introduced this metadata
@@ -380,7 +380,7 @@ export class StartupUtils {
     // Survey functionality removed
   }
 
-  static warnIncompatibleExtensions(opts: { ext: IDendronExtension }) {
+  static warnIncompatibleExtensions(opts: { ext: ISailExtension }) {
     const installStatus = INCOMPATIBLE_EXTENSIONS.map((extId) => {
       return { id: extId, installed: VSCodeUtils.isExtensionInstalled(extId) };
     });
@@ -395,7 +395,7 @@ export class StartupUtils {
     if (shouldDisplayWarning) {
       vscode.window
         .showWarningMessage(
-          "We have detected some extensions that may conflict with Dendron. Further action is needed for Dendron to function correctly",
+          "We have detected some extensions that may conflict with Sail. Further action is needed for Sail to function correctly",
           "Fix conflicts..."
         )
         .then(async (resp) => {
@@ -412,10 +412,10 @@ export class StartupUtils {
   }
 
   static showUninstallMarkdownLinksExtensionMessage() {
-    if (VSCodeUtils.isExtensionInstalled("dendron.dendron-markdown-links")) {
+    if (VSCodeUtils.isExtensionInstalled("sail.sail-markdown-links")) {
       vscode.window
         .showInformationMessage(
-          "Please uninstall the Dendron Markdown Links extension. Dendron has the note graph feature built-in now and having this legacy extension installed will interfere with its functionality.",
+          "Please uninstall the Sail Markdown Links extension. Sail has the note graph feature built-in now and having this legacy extension installed will interfere with its functionality.",
           { modal: true },
           { title: "Uninstall" }
         )
@@ -423,7 +423,7 @@ export class StartupUtils {
           if (resp?.title === "Uninstall") {
             await vscode.commands.executeCommand(
               "workbench.extensions.uninstallExtension",
-              "dendron.dendron-markdown-links"
+              "sail.sail-markdown-links"
             );
           }
         });
@@ -442,13 +442,13 @@ export class StartupUtils {
 
     const uri = VSCodeUtils.joinPath(
       VSCodeUtils.getAssetUri(ExtensionProvider.getExtension().context),
-      "dendron-ws",
+      "sail-ws",
       "vault",
       "v100.html"
     );
 
     const { content } = readMD(uri.fsPath);
-    const title = "Dendron Release Notes";
+    const title = "Sail Release Notes";
 
     const panel = vscode.window.createWebviewPanel(
       _.kebabCase(title),

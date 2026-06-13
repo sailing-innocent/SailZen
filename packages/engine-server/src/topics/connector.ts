@@ -1,6 +1,6 @@
 import {
-  DendronConfig,
-  DendronError,
+  SailConfig,
+  SailError,
   DEngineClient,
   DVault,
   Time,
@@ -14,7 +14,7 @@ import {
 } from "@saili/common-server";
 import fs, { FSWatcher } from "fs-extra";
 import _ from "lodash";
-import { DendronEngineClient } from "../engineClient";
+import { SailEngineClient } from "../engineClient";
 import {
   EngineUtils,
   getWSMetaFilePath,
@@ -44,7 +44,7 @@ export type EngineConnectorInitOpts = {
 
 export class EngineConnector {
   /**
-   * Conencts to the {@link DendronEngine}
+   * Conencts to the {@link SailEngine}
    *
    * @remarks
    * Before initiating a connection, {@link EngineConnector.init} needs to be called
@@ -56,14 +56,14 @@ export class EngineConnector {
   public onReady?: ({ ws }: { ws: EngineConnector }) => Promise<void>;
   public serverPortWatcher?: FSWatcher;
   public initialized: boolean;
-  public config: DendronConfig;
+  public config: SailConfig;
   public logger: DLogger;
 
   static _ENGINE_CONNECTOR: EngineConnector | undefined;
 
   static instance() {
     if (!this._ENGINE_CONNECTOR) {
-      throw new DendronError({ message: "no workspace" });
+      throw new SailError({ message: "no workspace" });
     }
     return this._ENGINE_CONNECTOR;
   }
@@ -108,7 +108,7 @@ export class EngineConnector {
     if (opts?.portOverride) {
       const engine = await this.tryToConnect({ port: opts.portOverride });
       if (!engine) {
-        throw new DendronError({ message: "error connecting" });
+        throw new SailError({ message: "error connecting" });
       }
       await this.initEngine({
         engine,
@@ -124,7 +124,7 @@ export class EngineConnector {
   }
 
   async initEngine(opts: {
-    engine: DendronEngineClient;
+    engine: SailEngineClient;
     port: number;
     init?: boolean;
   }) {
@@ -147,19 +147,19 @@ export class EngineConnector {
     const ctx = "EngineConnector:tryToConnect";
     this.logger.info({ ctx, port, msg: "enter" });
     const { wsRoot, vaults } = this;
-    const dendronEngine = DendronEngineClient.create({
+    const sailEngine = SailEngineClient.create({
       port,
       ws: wsRoot,
       vaults,
       logger: this.logger,
     });
-    const resp = await dendronEngine.info();
+    const resp = await sailEngine.info();
     if (resp.error) {
       this.logger.info({ ctx, msg: "can't connect", error: resp.error });
       return false;
     } else {
       this.logger.info({ ctx, msg: "connected", info: resp.data });
-      return dendronEngine;
+      return sailEngine;
     }
   }
 
@@ -172,7 +172,7 @@ export class EngineConnector {
 
   private async _connect(opts: {
     wsRoot: string;
-  }): Promise<false | { engine: DendronEngineClient; port: number }> {
+  }): Promise<false | { engine: SailEngineClient; port: number }> {
     const resp = EngineUtils.getPortFilePath(opts);
     const metaFpath = getWSMetaFilePath(opts);
     const ctx = "EngineConnector:_connect";

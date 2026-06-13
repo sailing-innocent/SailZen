@@ -17,7 +17,7 @@ import { VSCodeUtils } from "../vsCodeUtils";
 import { WSUtils } from "../WSUtils";
 import { BasicCommand } from "./base";
 import { RenameNoteOutput } from "./RenameNoteInternal";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 
 const md = _md();
 
@@ -51,9 +51,9 @@ export class BatchRenameNoteCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.BATCH_RENAME_NOTE.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -284,11 +284,11 @@ export class BatchRenameNoteCommand extends BasicCommand<
 
     return {
       changed: operations.map((op) =>
-        ({
-          note: {
-            fname: DNodeUtils.fname(op.newUri.fsPath),
-          },
-        } as NoteChangeEntry)
+      ({
+        note: {
+          fname: DNodeUtils.fname(op.newUri.fsPath),
+        },
+      } as NoteChangeEntry)
       ),
     };
   }
@@ -380,8 +380,7 @@ export class BatchRenameNoteCommand extends BasicCommand<
     }
     const { changed, operations } = res;
     window.showInformationMessage(
-      `Batch rename complete: ${operations.length} note(s) renamed, ${
-        _.uniqBy(changed, (ent) => ent.note.fname).length
+      `Batch rename complete: ${operations.length} note(s) renamed, ${_.uniqBy(changed, (ent) => ent.note.fname).length
       } file(s) updated.`
     );
   }
@@ -391,10 +390,10 @@ export class BatchRenameNoteCommand extends BasicCommand<
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     return noteChangeEntryCounts;
   }
 }

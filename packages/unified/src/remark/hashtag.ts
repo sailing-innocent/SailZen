@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   TAGS_HIERARCHY,
 } from "@saili/common-all";
 import { Element } from "hast";
@@ -8,7 +8,7 @@ import { Element } from "hast";
 type Eat = any;
 import type { Plugin, Processor } from "unified";
 import { SiteUtils } from "../SiteUtils";
-import { DendronASTDest, DendronASTTypes, HashTag } from "../types";
+import { SailASTDest, SailASTTypes, HashTag } from "../types";
 import { MDUtilsV5 } from "../utilsv5";
 import { PUNCTUATION_MARKS } from "./constants";
 
@@ -39,25 +39,25 @@ const GOOD_END_CHARACTER = `[^@#|\\[\\]\\s${PUNCTUATION_MARKS}]`;
 export const HASHTAG_REGEX = new RegExp(
   // Avoid matching it if there's a non-whitespace character before (like ab#cd)
   `^(?<!\\S)(?<hashTag>#)(?<tagContents>` +
-    // 2 or more characters, like #a1x or #a.x. This MUST come before 1 character case, or regex will match 1 character and stop.
-    `${GOOD_FIRST_CHARACTER}${GOOD_MIDDLE_CHARACTER}*${GOOD_END_CHARACTER}` +
-    // or
-    "|" +
-    // Just 1 character, like #a
-    `${GOOD_FIRST_CHARACTER}` +
-    ")"
+  // 2 or more characters, like #a1x or #a.x. This MUST come before 1 character case, or regex will match 1 character and stop.
+  `${GOOD_FIRST_CHARACTER}${GOOD_MIDDLE_CHARACTER}*${GOOD_END_CHARACTER}` +
+  // or
+  "|" +
+  // Just 1 character, like #a
+  `${GOOD_FIRST_CHARACTER}` +
+  ")"
 );
 /** Same as `HASHTAG_REGEX`, except that that it doesn't have to be at the start of the string. */
 export const HASHTAG_REGEX_LOOSE = new RegExp(
   // Avoid matching it if there's a non-whitespace character before (like ab#cd)
   `(?<!\\S)(?<hashTag>#)(?<tagContents>` +
-    // 2 or more characters, like #a1x or #a.x. This MUST come before 1 character case, or regex will match 1 character and stop.
-    `${GOOD_FIRST_CHARACTER}${GOOD_MIDDLE_CHARACTER}*${GOOD_END_CHARACTER}` +
-    // or
-    "|" +
-    // Just 1 character, like #a
-    `${GOOD_FIRST_CHARACTER}` +
-    ")"
+  // 2 or more characters, like #a1x or #a.x. This MUST come before 1 character case, or regex will match 1 character and stop.
+  `${GOOD_FIRST_CHARACTER}${GOOD_MIDDLE_CHARACTER}*${GOOD_END_CHARACTER}` +
+  // or
+  "|" +
+  // Just 1 character, like #a
+  `${GOOD_FIRST_CHARACTER}` +
+  ")"
 );
 /** Used for `getWordAtRange` queries. Too permissive, but the full regex breaks the function. */
 export const HASHTAG_REGEX_BASIC = new RegExp(`#${GOOD_MIDDLE_CHARACTER}+`);
@@ -120,7 +120,7 @@ function attachParser(proc: Processor) {
     const match = HASHTAG_REGEX.exec(value);
     if (match && match.groups?.tagContents) {
       return eat(match[0])({
-        type: DendronASTTypes.HASHTAG,
+        type: SailASTTypes.HASHTAG,
         // @ts-ignore
         value: match[0],
         fname: `${TAGS_HIERARCHY}${match.groups.tagContents}`,
@@ -148,13 +148,13 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest, config } = MDUtilsV5.getProcData(proc);
       const prefix = SiteUtils.getSitePrefixForNote(config);
       switch (dest) {
-        case DendronASTDest.MD_DENDRON:
+        case SailASTDest.MD_DENDRON:
           return node.value;
-        case DendronASTDest.MD_REGULAR:
-        case DendronASTDest.MD_ENHANCED_PREVIEW:
+        case SailASTDest.MD_REGULAR:
+        case SailASTDest.MD_ENHANCED_PREVIEW:
           return `[${node.value}](${prefix}${node.fname})`;
         default:
-          throw new DendronError({ message: "Unable to render hashtag" });
+          throw new SailError({ message: "Unable to render hashtag" });
       }
     };
   }

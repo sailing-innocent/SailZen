@@ -4,14 +4,14 @@ import { ExtensionProvider } from "../../ExtensionProvider";
 import { Logger } from "../../logger";
 import { CREATE_NEW_SCHEMA_DETAIL } from "./constants";
 import { NotePickerUtils, PAGINATE_LIMIT } from "./NotePickerUtils";
-import { DendronQuickPicker } from "./types";
+import { SailQuickPicker } from "./types";
 import { PickerUtils } from "./utils";
 
 export class SchemaPickerUtils {
   static async fetchPickerResultsWithCurrentValue({
     picker,
   }: {
-    picker: DendronQuickPicker;
+    picker: SailQuickPicker;
   }) {
     const { engine, wsRoot, vaults } = ExtensionProvider.getDWorkspace();
     const resp = await engine.querySchema(picker.value);
@@ -39,7 +39,7 @@ export class SchemaPickerUtils {
   }
 
   static async fetchPickerResults(opts: {
-    picker: DendronQuickPicker;
+    picker: SailQuickPicker;
     qs: string;
   }) {
     const ctx = "SchemaPickerUtils:fetchPickerResults";
@@ -67,8 +67,8 @@ export class SchemaPickerUtils {
           props: ent,
           schema: ent.schema
             ? (
-                await engine.getSchema(ent.schema.moduleId)
-              ).data
+              await engine.getSchema(ent.schema.moduleId)
+            ).data
             : undefined,
           vaults,
           alwaysShow: picker.alwaysShowAll,

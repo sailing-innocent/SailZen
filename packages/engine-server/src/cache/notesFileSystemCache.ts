@@ -1,8 +1,8 @@
 import { NotesCache, NotesCacheEntry } from "@saili/common-all";
 import _ from "lodash";
-import { DendronFileSystemCache } from "./dendronFileSystemCache";
+import { SailFileSystemCache } from "./sailFileSystemCache";
 
-export class NotesFileSystemCache extends DendronFileSystemCache<
+export class NotesFileSystemCache extends SailFileSystemCache<
   NotesCache,
   NotesCacheEntry
 > {

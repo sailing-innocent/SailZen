@@ -3,7 +3,7 @@ import {
   DateTime,
   debounceAsyncUntilComplete,
   Decoration,
-  DendronASTDest,
+  SailASTDest,
   DEngineClient,
   fromPromise,
   groupBy,
@@ -100,7 +100,7 @@ export const EDITOR_DECORATION_TYPES: {
   }),
 };
 
-export type DendronDecoration<T = any> = {
+export type SailDecoration<T = any> = {
   /**
    * type: mapping of {@link: DECORATION_TYPES} -> {@link: TextEditorDecorationType}
    */
@@ -115,8 +115,8 @@ export type DendronDecoration<T = any> = {
   data?: T;
 };
 
-type DendronNoteRefDecoration = Required<
-  DendronDecoration<NoteRefDecorator["data"]>
+type SailNoteRefDecoration = Required<
+  SailDecoration<NoteRefDecorator["data"]>
 >;
 
 function renderNoteRef({
@@ -142,7 +142,7 @@ function renderNoteRef({
   return engine.renderNote({
     id: fakeNote.id,
     note: fakeNote,
-    dest: DendronASTDest.HTML,
+    dest: SailASTDest.HTML,
     flavor: ProcFlavor.HOVER_PREVIEW,
   });
 }
@@ -177,7 +177,7 @@ export const debouncedUpdateDecorations = debounceAsyncUntilComplete({
 });
 
 async function addInlineNoteRefs(opts: {
-  decorations: DendronNoteRefDecoration[];
+  decorations: SailNoteRefDecoration[];
   document: TextDocument;
 }) {
   const ctx = "addInlineNoteRefs";
@@ -274,7 +274,7 @@ async function addInlineNoteRefs(opts: {
   disposeLastNoteRefThreadMap();
 }
 
-// see [[Decorations|dendron://dendron.docs/pkg.plugin-core.ref.decorations]] for further docs
+// see [[Decorations|sail://sail.docs/pkg.plugin-core.ref.decorations]] for further docs
 export async function updateDecorations(editor: TextEditor): Promise<{
   allDecorations?: Map<TextEditorDecorationType, DecorationOptions[]>;
   allWarnings?: Diagnostic[];
@@ -383,10 +383,10 @@ export async function updateDecorations(editor: TextEditor): Promise<{
 
     // begin: apply inline note refs
     if (config.dev?.enableExperimentalInlineNoteRef) {
-      const noteRefDecorators: DendronNoteRefDecoration[] =
+      const noteRefDecorators: SailNoteRefDecoration[] =
         vscodeDecorations.filter((ent) => {
           return ent.type === EDITOR_DECORATION_TYPES.noteRef;
-        }) as DendronNoteRefDecoration[];
+        }) as SailNoteRefDecoration[];
 
       Logger.debug({
         ctx,
@@ -430,7 +430,7 @@ export async function updateDecorations(editor: TextEditor): Promise<{
   }
 }
 
-function mapDecoration(decoration: Decoration): DendronDecoration | undefined {
+function mapDecoration(decoration: Decoration): SailDecoration | undefined {
   switch (decoration.type) {
     // Some decoration types require special processing to add per-decoration data
     case DECORATION_TYPES.timestamp:
@@ -451,7 +451,7 @@ function mapDecoration(decoration: Decoration): DendronDecoration | undefined {
 
 function mapBasicDecoration(
   decoration: Decoration
-): DendronDecoration | undefined {
+): SailDecoration | undefined {
   const type = EDITOR_DECORATION_TYPES[decoration.type];
   if (!type) return undefined;
 
@@ -464,7 +464,7 @@ function mapBasicDecoration(
   };
 }
 
-function mapTimestamp(decoration: DecorationTimestamp): DendronDecoration {
+function mapTimestamp(decoration: DecorationTimestamp): SailDecoration {
   const tsConfig = ExtensionProvider.getWorkspaceConfig().get(
     CodeConfigKeys.DEFAULT_TIMESTAMP_DECORATION_FORMAT
   ) as DateTimeFormat;
@@ -485,13 +485,13 @@ function mapTimestamp(decoration: DecorationTimestamp): DendronDecoration {
 
 function mapNoteRefLink(
   decoration: NoteRefDecorator
-): DendronNoteRefDecoration | undefined {
-  return mapBasicDecoration(decoration) as DendronNoteRefDecoration;
+): SailNoteRefDecoration | undefined {
+  return mapBasicDecoration(decoration) as SailNoteRefDecoration;
 }
 
 function mapWikilink(
   decoration: DecorationWikilink | DecorationHashTag
-): DendronDecoration | undefined {
+): SailDecoration | undefined {
   if (isDecorationHashTag(decoration)) {
     const type = EDITOR_DECORATION_TYPES[decoration.type];
     if (!type) return undefined;
@@ -518,7 +518,7 @@ function mapWikilink(
 
 function mapTaskNote(
   decoration: DecorationTaskNote
-): DendronDecoration | undefined {
+): SailDecoration | undefined {
   return {
     type: EDITOR_DECORATION_TYPES.taskNote,
     decoration: {

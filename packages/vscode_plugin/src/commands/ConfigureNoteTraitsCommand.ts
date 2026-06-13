@@ -1,4 +1,4 @@
-import { CONSTANTS, DendronError } from "@saili/common-all";
+import { CONSTANTS, SailError } from "@saili/common-all";
 import fs from "fs-extra";
 import path from "path";
 import * as vscode from "vscode";
@@ -62,7 +62,7 @@ export class ConfigureNoteTraitsCommand extends BasicCommand<
     if (await fs.pathExists(scriptPath)) {
       await VSCodeUtils.openFileInEditor(vscode.Uri.file(scriptPath));
     } else {
-      const error = DendronError.createPlainError({
+      const error = SailError.createPlainError({
         message: `${scriptPath} doesn't exist.`,
       });
       this.L.error({ error });

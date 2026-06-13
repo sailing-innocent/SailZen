@@ -1,9 +1,9 @@
-import { DendronTreeViewKey, DMessage } from "@saili/common-all";
+import { SailTreeViewKey, DMessage } from "@saili/common-all";
 import * as vscode from "vscode";
 import { WebViewUtils } from "./utils";
 
 export class SampleView implements vscode.WebviewViewProvider {
-  public static readonly viewType = DendronTreeViewKey.SAMPLE_VIEW;
+  public static readonly viewType = SailTreeViewKey.SAMPLE_VIEW;
   private _view?: vscode.WebviewView;
 
   public postMessage(msg: DMessage) {
@@ -28,7 +28,7 @@ export class SampleView implements vscode.WebviewViewProvider {
   private _getHtmlForWebview(_webview: vscode.Webview) {
     return WebViewUtils.genHTMLForTreeView({
       title: "SamplePage",
-      view: DendronTreeViewKey.SAMPLE_VIEW,
+      view: SailTreeViewKey.SAMPLE_VIEW,
     });
   }
 }

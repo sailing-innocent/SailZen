@@ -2,7 +2,7 @@ import { ConfigUtils } from "@saili/common-all";
 import { DENDRON_COMMANDS } from "../constants";
 import { BasicCommand } from "./base";
 import { VSCodeUtils, MessageSeverity } from "../vsCodeUtils";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { TaskStatusCommand } from "./TaskStatus";
 import { ConfigureCommand } from "./ConfigureCommand";
 
@@ -16,9 +16,9 @@ export class TaskCompleteCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.TASK_COMPLETE.key;
   public static requireActiveWorkspace: boolean = true;
-  private _ext: IDendronExtension;
+  private _ext: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     super();
     this._ext = extension;
   }
@@ -33,7 +33,7 @@ export class TaskCompleteCommand extends BasicCommand<
 
       await VSCodeUtils.showMessage(
         MessageSeverity.ERROR,
-        "You have no task statuses marked as complete. Please add something to 'taskCompleteStatus' in your configuration file. See: https://wiki.dendron.so/notes/SEASewZSteDK7ry1AshNG#taskcompletestatus",
+        "You have no task statuses marked as complete. Please add something to 'taskCompleteStatus' in your configuration file. See: https://wiki.sail.so/notes/SEASewZSteDK7ry1AshNG#taskcompletestatus",
         {},
         { title }
       ).then((pressed) => {

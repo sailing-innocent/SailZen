@@ -6,7 +6,7 @@
 
 ## 概述
 
-Vault API Server 是对 `@saili/engine-server`（Dendron 引擎）的独立 HTTP 封装，允许在不启动 VSCode 插件的情况下，通过标准 HTTP API 对 vault（本地 Markdown 笔记库）进行读写操作。
+Vault API Server 是对 `@saili/engine-server`（Sail 引擎）的独立 HTTP 封装，允许在不启动 VSCode 插件的情况下，通过标准 HTTP API 对 vault（本地 Markdown 笔记库）进行读写操作。
 
 ---
 
@@ -30,7 +30,7 @@ Vault API Server 是对 `@saili/engine-server`（Dendron 引擎）的独立 HTTP
 │                       │                          │
 │   ┌──────────────────▼──────────────────────┐   │
 │   │  WorkspaceController (自动初始化)         │   │
-│   │  DendronEngineV3 (引擎核心)              │   │
+│   │  SailEngineV3 (引擎核心)              │   │
 │   └──────────────────┬──────────────────────┘   │
 └──────────────────────┼──────────────────────────┘
                        │ 读写文件系统
@@ -38,7 +38,7 @@ Vault API Server 是对 `@saili/engine-server`（Dendron 引擎）的独立 HTTP
 ┌─────────────────────────────────────────────────┐
 │              Vault (本地 Markdown 文件)           │
 │   $WS_ROOT/                                      │
-│   ├── dendron.yml                                │
+│   ├── sail.yml                                │
 │   ├── vault1/                                    │
 │   │   ├── root.md                                │
 │   │   ├── daily.2026-05-06.md                    │
@@ -97,7 +97,7 @@ pnpm --filter @saili/api-server vault-server:dev
 
 | 变量 | 必须 | 默认值 | 说明 |
 |------|------|--------|------|
-| `WS_ROOT` | ✅ | - | vault 根目录路径（含 `dendron.yml` 的目录） |
+| `WS_ROOT` | ✅ | - | vault 根目录路径（含 `sail.yml` 的目录） |
 | `PORT` | ❌ | `3005` | HTTP 监听端口 |
 | `LOG_DST` | ❌ | `stdout` | 日志输出路径 |
 
@@ -314,7 +314,7 @@ vault_client.py (Python)
 
 standalone.ts (TypeScript)
     ├── @saili/api-server    (Express 路由层)
-    │   ├── @saili/engine-server  (DendronEngineV3)
+    │   ├── @saili/engine-server  (SailEngineV3)
     │   │   ├── @saili/common-all
     │   │   ├── @saili/common-server
     │   │   └── @saili/unified

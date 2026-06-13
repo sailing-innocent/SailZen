@@ -1,9 +1,9 @@
 import _ from "lodash";
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 // @ts-ignore - Eat type is not exported from remark-parse
 type Eat = any;
 import type { Plugin, Processor } from "unified";
-import { BlockAnchor, DendronASTDest } from "../types";
+import { BlockAnchor, SailASTDest } from "../types";
 import { Element } from "hast";
 import { html } from "mdast-builder";
 import { MDUtilsV5 } from "..";
@@ -83,15 +83,15 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest } = MDUtilsV5.getProcData(proc);
       const fullId = node.id;
       switch (dest) {
-        case DendronASTDest.MD_DENDRON:
+        case SailASTDest.MD_DENDRON:
           return `^${fullId}`;
-        case DendronASTDest.MD_REGULAR:
+        case SailASTDest.MD_REGULAR:
           // Regular markdown has no concept of anchors, so best to strip it out
           return "";
-        case DendronASTDest.MD_ENHANCED_PREVIEW:
+        case SailASTDest.MD_ENHANCED_PREVIEW:
           return `<a aria-hidden="true" class="block-anchor anchor-heading" id="${fullId}" href="#${fullId}">^${fullId}</a>`;
         default:
-          throw new DendronError({ message: "Unable to render block anchor" });
+          throw new SailError({ message: "Unable to render block anchor" });
       }
     };
   }

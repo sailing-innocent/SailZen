@@ -25,9 +25,9 @@ export { Snippets };
 
 export class Extensions extends EngineExtension {
   /**
-   * Get Dendron recommended extensions
+   * Get Sail recommended extensions
    */
-  static getDendronExtensionRecommendations() {
+  static getSailExtensionRecommendations() {
     return _.filter(Extensions.configEntries(), (ent) => {
       return _.isUndefined(ent.action);
     }).map((ent) => {

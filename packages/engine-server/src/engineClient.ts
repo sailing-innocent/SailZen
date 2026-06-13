@@ -6,8 +6,8 @@ import {
   ConfigUtils,
   DeleteNoteResp,
   DeleteSchemaResp,
-  DendronAPI,
-  DendronError,
+  SailAPI,
+  SailError,
   DEngineClient,
   DEngineInitResp,
   DHookDict,
@@ -60,12 +60,12 @@ import {
 import { HistoryService } from "./history";
 import { EngineUtils } from "./utils";
 
-type DendronEngineClientOpts = {
+type SailEngineClientOpts = {
   vaults: DVault[];
   ws: string;
 };
 
-export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
+export class SailEngineClient implements DEngineClient, EngineEventEmitter {
   private _onNoteChangedEmitter = new EventEmitter<NoteChangeEntry[]>();
   private _config;
 
@@ -74,7 +74,7 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
   public wsRoot: string;
   public ws: string;
   public fuseEngine: FuseEngine;
-  public api: DendronAPI;
+  public api: SailAPI;
   public vaults: DVault[];
   public history?: HistoryService;
   public logger: DLogger;
@@ -90,21 +90,21 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
     port: number | string;
     history?: HistoryService;
     logger?: DLogger;
-  } & DendronEngineClientOpts) {
-    const api = new DendronAPI({
+  } & SailEngineClientOpts) {
+    const api = new SailAPI({
       endpoint: APIUtils.getLocalEndpoint(
         _.isString(port) ? parseInt(port, 10) : port
       ),
       apiPath: "api",
       logger,
     });
-    return new DendronEngineClient({ api, vaults, ws, history });
+    return new SailEngineClient({ api, vaults, ws, history });
   }
 
   static getPort({ wsRoot }: { wsRoot: string }): number {
     const portFile = EngineUtils.getPortFilePathForWorkspace({ wsRoot });
     if (!fs.pathExistsSync(portFile)) {
-      throw new DendronError({ message: "no port file" });
+      throw new SailError({ message: "no port file" });
     }
     return _.toInteger(_.trim(fs.readFileSync(portFile, { encoding: "utf8" })));
   }
@@ -116,10 +116,10 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
     history,
     logger,
   }: {
-    api: DendronAPI;
+    api: SailAPI;
     history?: HistoryService;
     logger?: DLogger;
-  } & DendronEngineClientOpts) {
+  } & SailEngineClientOpts) {
     this.api = api;
     this.notes = {};
     this.noteFnames = {};
@@ -167,7 +167,7 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
       };
     }
     if (!resp.data) {
-      throw new DendronError({ message: "no data" });
+      throw new SailError({ message: "no data" });
     }
     const { notes, config } = resp.data;
     this._config = config;
@@ -279,7 +279,7 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
     const ws = this.ws;
     const resp = await this.api.engineDelete({ id, opts, ws });
     if (!resp.data) {
-      throw new DendronError({
+      throw new SailError({
         message: `Failed to delete note with id ${id}`,
         payload: resp.error,
       });
@@ -302,7 +302,7 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
     const ws = this.ws;
     const resp = await this.api.schemaDelete({ id, opts, ws });
     if (!resp?.data?.notes) {
-      throw new DendronError({ message: "bad delete operation" });
+      throw new SailError({ message: "bad delete operation" });
     }
     const { notes } = resp.data;
     this.notes = notes;
@@ -417,7 +417,7 @@ export class DendronEngineClient implements DEngineClient, EngineEventEmitter {
   async sync(): Promise<DEngineInitResp> {
     const resp = await this.api.workspaceSync({ ws: this.ws });
     if (!resp.data) {
-      throw new DendronError({ message: "no data", payload: resp });
+      throw new SailError({ message: "no data", payload: resp });
     }
     const { notes, config } = resp.data;
     this.notes = notes;

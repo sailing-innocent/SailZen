@@ -1,22 +1,22 @@
 import {
   ConfigureUIMessage,
   ConfigureUIMessageEnum,
-  DendronEditorViewKey,
+  SailEditorViewKey,
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import { DConfig } from "@saili/common-server";
 import * as vscode from "vscode";
 import { ConfigureCommand } from "../../commands/ConfigureCommand";
 import { WebViewUtils } from "../../views/utils";
-import { DendronExtension } from "../../workspace";
+import { SailExtension } from "../../workspace";
 
 export class ConfigureUIPanelFactory {
   private static panel: vscode.WebviewPanel | undefined = undefined;
 
-  static create(ext: DendronExtension): vscode.WebviewPanel {
+  static create(ext: SailExtension): vscode.WebviewPanel {
     if (!this.panel) {
       const { bundleName: name, label } = getWebEditorViewEntry(
-        DendronEditorViewKey.CONFIGURE
+        SailEditorViewKey.CONFIGURE
       );
       this.panel = vscode.window.createWebviewPanel(
         name, // Identifies the type of the webview. Used internally
@@ -46,7 +46,7 @@ export class ConfigureUIPanelFactory {
                 });
               }
               break;
-            case ConfigureUIMessageEnum.openDendronConfigYaml: {
+            case ConfigureUIMessageEnum.openSailConfigYaml: {
               const openConfig = new ConfigureCommand(ext);
               openConfig.run();
               break;

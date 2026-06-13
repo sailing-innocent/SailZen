@@ -1,5 +1,5 @@
 import {
-  DendronTreeViewKey,
+  SailTreeViewKey,
   DMessage,
   LookupModifierStatePayload,
   LookupNoteTypeEnum,
@@ -12,7 +12,7 @@ import * as vscode from "vscode";
 import { Disposable } from "vscode";
 import { ILookupViewModel } from "../components/lookup/LookupViewModel";
 import { VaultSelectionMode } from "../components/lookup/types";
-import { DendronContext } from "../constants";
+import { SailContext } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -36,16 +36,16 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
 
     this._disposables.push(
       vscode.window.registerWebviewViewProvider(
-        DendronTreeViewKey.LOOKUP_VIEW,
+        SailTreeViewKey.LOOKUP_VIEW,
         this
       )
     );
 
-    VSCodeUtils.setContext(DendronContext.SHOULD_SHOW_LOOKUP_VIEW, true);
+    VSCodeUtils.setContext(SailContext.SHOULD_SHOW_LOOKUP_VIEW, true);
   }
 
   dispose() {
-    VSCodeUtils.setContext(DendronContext.SHOULD_SHOW_LOOKUP_VIEW, false);
+    VSCodeUtils.setContext(SailContext.SHOULD_SHOW_LOOKUP_VIEW, false);
     this._disposables.forEach((value) => value.dispose());
   }
 
@@ -86,7 +86,7 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
 
     WebViewUtils.prepareTreeView({
       ext: ExtensionProvider.getExtension(),
-      key: DendronTreeViewKey.LOOKUP_VIEW,
+      key: SailTreeViewKey.LOOKUP_VIEW,
       webviewView,
     });
 
@@ -155,7 +155,7 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
               case "other": {
                 this._viewModel.vaultSelectionMode.value =
                   this._viewModel.vaultSelectionMode.value ===
-                  VaultSelectionMode.alwaysPrompt
+                    VaultSelectionMode.alwaysPrompt
                     ? VaultSelectionMode.smart
                     : VaultSelectionMode.alwaysPrompt;
                 break;
@@ -178,7 +178,7 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
               case LookupNoteTypeEnum.journal: {
                 this._viewModel.nameModifierMode.value =
                   this._viewModel.nameModifierMode.value ===
-                  LookupNoteTypeEnum.journal
+                    LookupNoteTypeEnum.journal
                     ? LookupNoteTypeEnum.none
                     : LookupNoteTypeEnum.journal;
                 break;
@@ -186,7 +186,7 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
               case LookupNoteTypeEnum.scratch: {
                 this._viewModel.nameModifierMode.value =
                   this._viewModel.nameModifierMode.value ===
-                  LookupNoteTypeEnum.scratch
+                    LookupNoteTypeEnum.scratch
                     ? LookupNoteTypeEnum.none
                     : LookupNoteTypeEnum.scratch;
                 break;
@@ -194,7 +194,7 @@ export class LookupPanelView implements vscode.WebviewViewProvider, Disposable {
               case LookupNoteTypeEnum.task: {
                 this._viewModel.nameModifierMode.value =
                   this._viewModel.nameModifierMode.value ===
-                  LookupNoteTypeEnum.task
+                    LookupNoteTypeEnum.task
                     ? LookupNoteTypeEnum.none
                     : LookupNoteTypeEnum.task;
                 break;

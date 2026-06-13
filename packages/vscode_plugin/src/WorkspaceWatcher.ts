@@ -30,7 +30,7 @@ import {
   workspace,
 } from "vscode";
 import { DoctorUtils } from "./components/doctor/utils";
-import { IDendronExtension } from "./dendronExtensionInterface";
+import { ISailExtension } from "./sailExtensionInterface";
 import { Logger } from "./logger";
 import { TextDocumentService } from "./services/node/TextDocumentService";
 import { ISchemaSyncService } from "./services/SchemaSyncServiceInterface";
@@ -72,7 +72,7 @@ const context = (scope: string) => {
 };
 
 /**
- * See [[Workspace Watcher|dendron://dendron.docs/pkg.plugin-core.ref.workspace-watcher]] for more docs
+ * See [[Workspace Watcher|sail://sail.docs/pkg.plugin-core.ref.workspace-watcher]] for more docs
  */
 export class WorkspaceWatcher {
   /** The documents that have been opened during this session that have not been viewed yet in the editor. */
@@ -81,7 +81,7 @@ export class WorkspaceWatcher {
     (event: TextDocumentChangeEvent) => Promise<void>
   >;
   private _schemaSyncService: ISchemaSyncService;
-  private _extension: IDendronExtension;
+  private _extension: ISailExtension;
   private _windowWatcher: WindowWatcher;
 
   constructor({
@@ -90,7 +90,7 @@ export class WorkspaceWatcher {
     windowWatcher,
   }: {
     schemaSyncService: ISchemaSyncService;
-    extension: IDendronExtension;
+    extension: ISailExtension;
     windowWatcher: WindowWatcher;
   }) {
     this._extension = extension;
@@ -370,10 +370,10 @@ export class WorkspaceWatcher {
     if (
       enablePersistentHistory &&
       mainVault &&
-      !fname.startsWith("dendron.hist")
+      !fname.startsWith("sail.hist")
     ) {
       const date = Time.now().toFormat("y.MM.dd");
-      const historyFile = `dendron.hist.${date}`;
+      const historyFile = `sail.hist.${date}`;
       const minuteAndSecond = Time.now().toFormat("MM-dd-y HH:mm");
       // check if file exists
       // format line
@@ -436,7 +436,7 @@ export class WorkspaceWatcher {
    * It updates all the references to the oldUri
    */
   onWillRenameFiles(args: FileWillRenameEvent) {
-    // No-op if we're not in a Dendron Workspace
+    // No-op if we're not in a Sail Workspace
     if (!this._extension.isActive()) {
       return;
     }
@@ -445,7 +445,7 @@ export class WorkspaceWatcher {
       const { vaults, wsRoot } = this._extension.getDWorkspace();
       const { oldUri, newUri } = files;
 
-      // No-op if we are not dealing with a Dendron note.
+      // No-op if we are not dealing with a Sail note.
       if (!NoteUtils.isNote(oldUri)) {
         return;
       }
@@ -488,7 +488,7 @@ export class WorkspaceWatcher {
    * It updates the title of the note wrt the new fname and refreshes tree view
    */
   async onDidRenameFiles(args: FileRenameEvent) {
-    // No-op if we're not in a Dendron Workspace
+    // No-op if we're not in a Sail Workspace
     if (!this._extension.isActive()) {
       return;
     }
@@ -499,7 +499,7 @@ export class WorkspaceWatcher {
       const engine = this._extension.getEngine();
       const { vaults, wsRoot } = this._extension.getDWorkspace();
 
-      // No-op if we are not dealing with a Dendron note.
+      // No-op if we are not dealing with a Sail note.
       if (!NoteUtils.isNote(newUri)) {
         return;
       }
@@ -532,8 +532,8 @@ export class WorkspaceWatcher {
   }
 
   /**
-   * Dendron will perform changes like moving the cursor when first opening a Dendron note
-   * @returns boolean : returns `true` if Dendron made changes during `onFirstOpen` and `false` otherwise
+   * Sail will perform changes like moving the cursor when first opening a Sail note
+   * @returns boolean : returns `true` if Sail made changes during `onFirstOpen` and `false` otherwise
    */
   private async onFirstOpen(editor: TextEditor) {
     Logger.info({
@@ -544,9 +544,9 @@ export class WorkspaceWatcher {
     const { vaults, wsRoot } = this._extension.getDWorkspace();
     const fpath = editor.document.uri.fsPath;
 
-    // don't apply actions to non-dendron notes
-    // NOTE: in the future if we add `onFirstOpen` actions to non-dendron notes, this logic will need to be updated
-    if (!(await WorkspaceUtils.isDendronNote({ wsRoot, vaults, fpath }))) {
+    // don't apply actions to non-sail notes
+    // NOTE: in the future if we add `onFirstOpen` actions to non-sail notes, this logic will need to be updated
+    if (!(await WorkspaceUtils.isSailNote({ wsRoot, vaults, fpath }))) {
       return false;
     }
 

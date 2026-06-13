@@ -1,6 +1,6 @@
 import {
   ConfigUtils,
-  DendronConfig,
+  SailConfig,
   LookupNoteTypeEnum,
   NoteTrait,
   NoteUtils,
@@ -8,15 +8,15 @@ import {
   onCreateProps,
   SetNameModifierResp,
 } from "@saili/common-all";
-import { DendronClientUtils } from "../clientUtils";
+import { SailClientUtils } from "../clientUtils";
 
 export class JournalNote implements NoteTrait {
   id: string = "journalNote";
   getTemplateType: any;
 
-  _config: DendronConfig;
+  _config: SailConfig;
 
-  constructor(config: DendronConfig) {
+  constructor(config: SailConfig) {
     this._config = config;
   }
 
@@ -28,7 +28,7 @@ export class JournalNote implements NoteTrait {
         const journalConfig = ConfigUtils.getJournal(config);
         // const dailyJournalDomain = journalConfig.dailyDomain;
 
-        const { noteName: fname } = DendronClientUtils.genNoteName(
+        const { noteName: fname } = SailClientUtils.genNoteName(
           LookupNoteTypeEnum.journal,
           {
             overrides: { domain: journalConfig.name },

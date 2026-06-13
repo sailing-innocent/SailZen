@@ -2,7 +2,7 @@ import _ from "lodash";
 import { URI, Utils } from "vscode-uri";
 import { ERROR_SEVERITY, ERROR_STATUS } from "../constants";
 import { NoteUtils } from "../dnode";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import {
   DNoteLoc,
   NoteProps,
@@ -62,9 +62,9 @@ export class NoteStore implements INoteStore<string> {
       this._wsRoot.fsPath
     )
       ? {
-          ...metadata.data.vault,
-          fsPath: metadata.data.vault.fsPath.slice(this._wsRoot.fsPath.length),
-        }
+        ...metadata.data.vault,
+        fsPath: metadata.data.vault.fsPath.slice(this._wsRoot.fsPath.length),
+      }
       : metadata.data.vault;
 
     const uri = Utils.joinPath(
@@ -92,7 +92,7 @@ export class NoteStore implements INoteStore<string> {
       return { data: note };
     } else {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           message: `Frontmatter missing for file ${uri.fsPath} associated with note ${key}.`,
           severity: ERROR_SEVERITY.MINOR,
@@ -189,7 +189,7 @@ export class NoteStore implements INoteStore<string> {
     // Ids don't match, return error
     if (key !== noteMeta.id) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.WRITE_FAILED,
           message: `Ids don't match between key ${key} and note meta ${noteMeta}.`,
           severity: ERROR_SEVERITY.MINOR,
@@ -250,7 +250,7 @@ export class NoteStore implements INoteStore<string> {
       return { error: metadata.error };
     } else if (metadata.data.fname === "root") {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CANT_DELETE_ROOT,
           message: `Cannot delete ${key}. Root notes cannot be deleted.`,
           severity: ERROR_SEVERITY.MINOR,

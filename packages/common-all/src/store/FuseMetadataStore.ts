@@ -2,7 +2,7 @@ import { StatusCodes } from "http-status-codes";
 import _ from "lodash";
 import { ResultAsync } from "neverthrow";
 import { SchemaUtils } from "../dnode";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import { FuseEngine } from "../FuseEngine";
 import {
   NoteChangeEntry,
@@ -28,7 +28,7 @@ export class FuseQueryStore implements IQueryStore {
         this.fuseEngine.schemaIndex.add(SchemaUtils.getModuleRoot(schema))
       ),
       (err) =>
-        new DendronError({
+        new SailError({
           message: "issue adding schema to index",
           innerError: err as Error,
         })
@@ -38,7 +38,7 @@ export class FuseQueryStore implements IQueryStore {
   queryNotes(
     qs: string,
     opts: INoteQueryOpts
-  ): ResultAsync<NotePropsMeta[], DendronError<StatusCodes | undefined>> {
+  ): ResultAsync<NotePropsMeta[], SailError<StatusCodes | undefined>> {
     const items = this.fuseEngine.queryNote({
       qs,
       ...opts,
@@ -48,23 +48,23 @@ export class FuseQueryStore implements IQueryStore {
 
   querySchemas(
     qs: string
-  ): ResultAsync<{ id: string }[], DendronError<StatusCodes | undefined>> {
+  ): ResultAsync<{ id: string }[], SailError<StatusCodes | undefined>> {
     const schemaIds = this.fuseEngine.querySchema({ qs });
     return ResultAsync.fromSafePromise(Promise.resolve(schemaIds));
   }
 
   removeSchemaFromIndex(
     schema: SchemaModuleProps
-  ): ResultAsync<void, DendronError> {
+  ): ResultAsync<void, SailError> {
     this.fuseEngine.removeSchemaFromIndex(schema);
     return ResultAsync.fromSafePromise(Promise.resolve());
   }
 
-  replaceNotesIndex(props: NotePropsByIdDict): ResultAsync<void, DendronError> {
+  replaceNotesIndex(props: NotePropsByIdDict): ResultAsync<void, SailError> {
     return ResultAsync.fromPromise(
       this.fuseEngine.replaceNotesIndex(props),
       (err) =>
-        new DendronError({
+        new SailError({
           message: "issue replacing index",
           innerError: err as Error,
         })
@@ -73,11 +73,11 @@ export class FuseQueryStore implements IQueryStore {
 
   replaceSchemasIndex(
     props: SchemaModuleDict
-  ): ResultAsync<void, DendronError> {
+  ): ResultAsync<void, SailError> {
     return ResultAsync.fromPromise(
       this.fuseEngine.replaceSchemaIndex(props),
       (err) =>
-        new DendronError({
+        new SailError({
           message: "issue replacing index",
           innerError: err as Error,
         })
@@ -86,12 +86,12 @@ export class FuseQueryStore implements IQueryStore {
 
   updateNotesIndex(
     changes: NoteChangeEntry[]
-  ): ResultAsync<void, DendronError> {
+  ): ResultAsync<void, SailError> {
     return ResultAsync.fromPromise(
       // return signature requires us to return void vs void[]
-      this.fuseEngine.updateNotesIndex(changes).then(() => {}),
+      this.fuseEngine.updateNotesIndex(changes).then(() => { }),
       (err) =>
-        new DendronError({
+        new SailError({
           message: "issue updating index",
           innerError: err as Error,
         })
@@ -99,7 +99,7 @@ export class FuseQueryStore implements IQueryStore {
   }
   updateSchemasIndex(): ResultAsync<
     void,
-    DendronError<StatusCodes | undefined>
+    SailError<StatusCodes | undefined>
   > {
     throw new Error("Method not implemented.");
   }

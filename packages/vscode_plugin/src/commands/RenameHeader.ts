@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DNodeUtils,
   extractNoteChangeEntryCounts,
   getSlugger,
@@ -9,8 +9,8 @@ import {
 } from "@saili/common-all";
 import {
   AnchorUtils,
-  DendronASTDest,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTTypes,
   MDUtilsV5,
   visit,
 } from "@saili/unified";
@@ -21,24 +21,24 @@ import { delayedUpdateDecorations } from "../features/windowDecorations";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 import { Heading } from "@saili/engine-server";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 
 type CommandOpts =
   | {
-      /** If missing, this will be parsed from the currently selected line. */
-      oldHeader?: {
-        /** The contents of the old header. */
-        text: string;
-        /** The region of the document containing the text of the old header. */
-        range: Range;
-      };
-      /** The new text for the header. */
-      newHeader?: string;
-      /** added for contextual UI analytics. */
-      source?: string;
-      /** current note that the rename is happening */
-      note?: NoteProps;
-    }
+    /** If missing, this will be parsed from the currently selected line. */
+    oldHeader?: {
+      /** The contents of the old header. */
+      text: string;
+      /** The region of the document containing the text of the old header. */
+      range: Range;
+    };
+    /** The new text for the header. */
+    newHeader?: string;
+    /** added for contextual UI analytics. */
+    source?: string;
+    /** current note that the rename is happening */
+    note?: NoteProps;
+  }
   | undefined;
 export type CommandOutput = RenameNoteResp | undefined;
 
@@ -47,9 +47,9 @@ export class RenameHeaderCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.RENAME_HEADER.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
   }
@@ -62,29 +62,29 @@ export class RenameHeaderCommand extends BasicCommand<
     const { wsUtils } = this.extension;
     const note = await wsUtils.getActiveNote();
     if (_.isUndefined(note)) {
-      throw new DendronError({
+      throw new SailError({
         message: "You must first open a note to rename a header.",
       });
     }
     if (_.isUndefined(oldHeader)) {
       // parse from current selection
       if (!editor || !selection)
-        throw new DendronError({
+        throw new SailError({
           message: "You must first select the header you want to rename.",
         });
       const line = editor.document.lineAt(selection.start.line).text;
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: DendronASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_DENDRON }
       );
       const parsedLine = proc.parse(line);
       let header: Heading | undefined;
-      visit(parsedLine, [DendronASTTypes.HEADING], (heading: Heading) => {
+      visit(parsedLine, [SailASTTypes.HEADING], (heading: Heading) => {
         header = heading;
         return false; // There can only be one header in a line
       });
       if (!header)
-        throw new DendronError({
+        throw new SailError({
           message: "You must first select the header you want to rename.",
         });
       const range = VSCodeUtils.position2VSCodeRange(
@@ -142,10 +142,10 @@ export class RenameHeaderCommand extends BasicCommand<
     let newAnchorHeader = newHeader;
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: DendronASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_DENDRON }
     );
     const parsed = proc.parse(`## ${newHeader}`);
-    visit(parsed, [DendronASTTypes.HEADING], (node: Heading) => {
+    visit(parsed, [SailASTTypes.HEADING], (node: Heading) => {
       newAnchorHeader = AnchorUtils.headerText(node);
     });
 
@@ -193,17 +193,17 @@ export class RenameHeaderCommand extends BasicCommand<
     const engine = this.extension.getEngine();
     const { vaults } = engine;
 
-      }
+  }
 
   addAnalyticsPayload(opts?: CommandOpts, out?: CommandOutput) {
     const noteChangeEntryCounts =
       out?.data !== undefined
         ? { ...extractNoteChangeEntryCounts(out.data) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({ opts, noteChangeEntryCounts });
     } catch (error) {

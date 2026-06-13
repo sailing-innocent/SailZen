@@ -1,6 +1,6 @@
 import {
-  DendronConfig,
-  DendronError,
+  SailConfig,
+  SailError,
   DEngineClient,
   DVault,
   DWorkspaceV2,
@@ -11,7 +11,7 @@ import { DConfig } from "@saili/common-server";
 import * as vscode from "vscode";
 import { Logger } from "../logger";
 
-export abstract class DendronBaseWorkspace implements DWorkspaceV2 {
+export abstract class SailBaseWorkspace implements DWorkspaceV2 {
   public wsRoot: string;
   public type = WorkspaceType.NATIVE;
   public logUri: vscode.Uri;
@@ -33,7 +33,7 @@ export abstract class DendronBaseWorkspace implements DWorkspaceV2 {
   }
 
   // TODO: optimize to not read every time
-  get config(): DendronConfig {
+  get config(): SailConfig {
     const { data, error } = DConfig.readConfigAndApplyLocalOverrideSync(
       this.wsRoot
     );
@@ -50,7 +50,7 @@ export abstract class DendronBaseWorkspace implements DWorkspaceV2 {
 
   get engine(): DEngineClient {
     if (!this._engine) {
-      throw new DendronError({ message: "no engine set" });
+      throw new SailError({ message: "no engine set" });
     }
     return this._engine;
   }

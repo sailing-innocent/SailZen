@@ -2,8 +2,8 @@ import {
   APIUtils,
   ConfigUtils,
   CONSTANTS,
-  DendronError,
-  DendronTreeViewKey,
+  SailError,
+  SailTreeViewKey,
   DWorkspaceV2,
   ERROR_STATUS,
   getStage,
@@ -36,9 +36,9 @@ import {
 import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { DENDRON_COMMANDS, GLOBAL_STATE } from "./constants";
 import {
-  DendronWorkspaceSettings,
-  IDendronExtension,
-} from "./dendronExtensionInterface";
+  SailWorkspaceSettings,
+  ISailExtension,
+} from "./sailExtensionInterface";
 import { ExtensionProvider } from "./ExtensionProvider";
 import { Backlink } from "./features/Backlink";
 import BacklinksTreeDataProvider from "./features/BacklinksTreeDataProvider";
@@ -60,7 +60,7 @@ import { WorkspaceWatcher } from "./WorkspaceWatcher";
 import { WSUtils } from "./WSUtils";
 import { IWSUtils } from "./WSUtilsInterface";
 
-let _DendronWorkspace: DendronExtension | null;
+let _SailWorkspace: SailExtension | null;
 
 export type ServerConfiguration = {
   serverPort: string;
@@ -82,7 +82,7 @@ export function whenGlobalState(key: string, cb?: () => boolean): boolean {
 
 /**
  * @deprecated: If need static access use ExtensionProvider.getDWorkspace().
- * Or preferably pass IDendronExtension to constructors of your classes. */
+ * Or preferably pass ISailExtension to constructors of your classes. */
 export function getDWorkspace(): DWorkspaceV2 {
   const ws = getExtension();
   return ws.getWorkspaceImplOrThrow();
@@ -90,15 +90,15 @@ export function getDWorkspace(): DWorkspaceV2 {
 
 /**
  * @deprecated: If need static access use ExtensionProvider.getExtension().
- * Or preferably pass IDendronExtension to constructors of your classes.
+ * Or preferably pass ISailExtension to constructors of your classes.
  * */
-export function getExtension(): DendronExtension {
-  return DendronExtension.instanceV2();
+export function getExtension(): SailExtension {
+  return SailExtension.instanceV2();
 }
 
 /**
  * @deprecated: If need static access use ExtensionProvider.getEngine().
- * Or preferably pass IDendronExtension to constructors of your classes.*/
+ * Or preferably pass ISailExtension to constructors of your classes.*/
 export function getEngine() {
   return getExtension().getEngine();
 }
@@ -116,8 +116,8 @@ export function getVaultFromUri(fileUri: Uri) {
 export const NO_WORKSPACE_IMPLEMENTATION = "no workspace implementation";
 
 // --- Main
-export class DendronExtension implements IDendronExtension {
-  static DENDRON_WORKSPACE_FILE: string = "dendron.code-workspace";
+export class SailExtension implements ISailExtension {
+  static DENDRON_WORKSPACE_FILE: string = "sail.code-workspace";
   static _SERVER_CONFIGURATION: Partial<ServerConfiguration>;
 
   private _engine?: EngineAPIService;
@@ -150,23 +150,23 @@ export class DendronExtension implements IDendronExtension {
     return getExtension().context;
   }
 
-  static instanceV2(): DendronExtension {
-    if (!_DendronWorkspace) {
-      throw Error("Dendronworkspace not initialized");
+  static instanceV2(): SailExtension {
+    if (!_SailWorkspace) {
+      throw Error("Sailworkspace not initialized");
     }
-    return _DendronWorkspace;
+    return _SailWorkspace;
   }
 
   static serverConfiguration() {
-    if (!DendronExtension._SERVER_CONFIGURATION) {
-      DendronExtension._SERVER_CONFIGURATION = {};
+    if (!SailExtension._SERVER_CONFIGURATION) {
+      SailExtension._SERVER_CONFIGURATION = {};
     }
-    return DendronExtension._SERVER_CONFIGURATION as ServerConfiguration;
+    return SailExtension._SERVER_CONFIGURATION as ServerConfiguration;
   }
 
   /**
    * @deprecated: For static access, use ExtensionProvider.getWorkspaceConfig().
-   * Or preferably pass IDendronExtension to constructors of your classes.
+   * Or preferably pass ISailExtension to constructors of your classes.
    *
    * Global Workspace configuration
    */
@@ -202,7 +202,7 @@ export class DendronExtension implements IDendronExtension {
       const out = await cb();
       return out;
     } catch (err) {
-      Logger.error({ ctx, error: err as DendronError });
+      Logger.error({ ctx, error: err as SailError });
       throw err;
     } finally {
       if (this.fileWatcher) {
@@ -214,7 +214,7 @@ export class DendronExtension implements IDendronExtension {
   async getClientAPIRootUrl() {
     const port = this.port;
     if (!port) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.ENGINE_NOT_SET,
       });
     }
@@ -260,19 +260,19 @@ export class DendronExtension implements IDendronExtension {
     return [];
   }
 
-  /** Checks if the current workspace open in VSCode is a Dendron workspace or not. */
-  static async isDendronWorkspace(): Promise<boolean | undefined> {
-    // we do a try catch because `DendronWorkspace.workspaceFile` throws an error if workspace file doesn't exist
+  /** Checks if the current workspace open in VSCode is a Sail workspace or not. */
+  static async isSailWorkspace(): Promise<boolean | undefined> {
+    // we do a try catch because `SailWorkspace.workspaceFile` throws an error if workspace file doesn't exist
     try {
       // code workspace takes precedence, if code workspace, return
       if (
         vscode.workspace.workspaceFile &&
-        path.basename(DendronExtension.workspaceFile().fsPath) ===
+        path.basename(SailExtension.workspaceFile().fsPath) ===
         this.DENDRON_WORKSPACE_FILE
       )
         return true;
 
-      const workspaceFolders = DendronExtension.workspaceFolders();
+      const workspaceFolders = SailExtension.workspaceFolders();
       if (workspaceFolders) {
         return !_.isEmpty(
           await WorkspaceUtils.findWSRootsInWorkspaceFolders(workspaceFolders)
@@ -287,12 +287,12 @@ export class DendronExtension implements IDendronExtension {
 
   /**
    * @deprecated: For static access, use ExtensionProvider.isActive().
-   * Or preferably pass IDendronExtension to constructors of your classes.
+   * Or preferably pass ISailExtension to constructors of your classes.
    *
-   * Checks if a Dendron workspace is currently active.
+   * Checks if a Sail workspace is currently active.
    */
   static isActive(_context?: vscode.ExtensionContext): boolean {
-    const ctx = "DendronExtension.isActive";
+    const ctx = "SailExtension.isActive";
     try {
       //
       const { wsRoot } = getDWorkspace();
@@ -304,21 +304,21 @@ export class DendronExtension implements IDendronExtension {
       if (err?.payload === NO_WORKSPACE_IMPLEMENTATION) return false;
       // Otherwise, that's an unexpected error
       const error =
-        err instanceof DendronError
+        err instanceof SailError
           ? err
-          : new DendronError({ message: ctx, payload: err });
+          : new SailError({ message: ctx, payload: err });
       Logger.error({ ctx, msg: "Failed to check WS active", error });
       return false;
     }
     return false;
   }
 
-  async isActiveAndIsDendronNote(fpath: string): Promise<boolean> {
+  async isActiveAndIsSailNote(fpath: string): Promise<boolean> {
     if (!this.isActive()) {
       return false;
     }
     const { wsRoot, vaults } = this.getDWorkspace();
-    return WorkspaceUtils.isDendronNote({
+    return WorkspaceUtils.isSailNote({
       wsRoot,
       vaults,
       fpath,
@@ -346,17 +346,17 @@ export class DendronExtension implements IDendronExtension {
   static async getOrCreate(
     context: vscode.ExtensionContext,
     opts?: { skipSetup?: boolean }
-  ): Promise<DendronExtension> {
-    if (!_DendronWorkspace) {
-      _DendronWorkspace = new DendronExtension(context, opts);
-      _DendronWorkspace.type = await WorkspaceUtils.getWorkspaceType({
+  ): Promise<SailExtension> {
+    if (!_SailWorkspace) {
+      _SailWorkspace = new SailExtension(context, opts);
+      _SailWorkspace.type = await WorkspaceUtils.getWorkspaceType({
         workspaceFile: vscode.workspace.workspaceFile,
         workspaceFolders: vscode.workspace.workspaceFolders,
       });
 
-      ExtensionProvider.register(_DendronWorkspace);
+      ExtensionProvider.register(_SailWorkspace);
     }
-    return _DendronWorkspace;
+    return _SailWorkspace;
   }
 
   constructor(
@@ -367,7 +367,7 @@ export class DendronExtension implements IDendronExtension {
     this.context = context;
     // set the default
     this.type = WorkspaceType.CODE;
-    _DendronWorkspace = this;
+    _SailWorkspace = this;
     this.L = Logger;
     this._disposableStore = new DisposableStore();
     this.setupViews(context);
@@ -382,7 +382,7 @@ export class DendronExtension implements IDendronExtension {
       "Show note refs"
     );
 
-    const ctx = "DendronExtension";
+    const ctx = "SailExtension";
     this.L.info({ ctx, msg: "initialized" });
   }
 
@@ -392,7 +392,7 @@ export class DendronExtension implements IDendronExtension {
 
   getWorkspaceImplOrThrow(): DWorkspaceV2 {
     if (_.isUndefined(this.workspaceImpl)) {
-      throw new DendronError({
+      throw new SailError({
         message: "no native workspace",
         payload: NO_WORKSPACE_IMPLEMENTATION,
       });
@@ -416,13 +416,13 @@ export class DendronExtension implements IDendronExtension {
   }
 
   isActive(): boolean {
-    return DendronExtension.isActive();
+    return SailExtension.isActive();
   }
 
   /** For Native workspaces (without .code-workspace file) this will return undefined. */
   async getWorkspaceSettings(): Promise<WorkspaceSettings | undefined> {
-    const ctx = "DendronExtension.getWorkspaceSettings";
-    const workspaceFile = DendronExtension.tryWorkspaceFile();
+    const ctx = "SailExtension.getWorkspaceSettings";
+    const workspaceFile = SailExtension.tryWorkspaceFile();
     if (!workspaceFile) return undefined;
     const resp = await WorkspaceUtils.getCodeWorkspaceSettings(
       path.dirname(workspaceFile.fsPath)
@@ -436,8 +436,8 @@ export class DendronExtension implements IDendronExtension {
   }
 
   getWorkspaceSettingsSync(): WorkspaceSettings | undefined {
-    const ctx = "DendronExtension.getWorkspaceSettingsSync";
-    const workspaceFile = DendronExtension.tryWorkspaceFile();
+    const ctx = "SailExtension.getWorkspaceSettingsSync";
+    const workspaceFile = SailExtension.tryWorkspaceFile();
     if (!workspaceFile) return undefined;
     const resp = WorkspaceUtils.getCodeWorkspaceSettingsSync(
       path.dirname(workspaceFile.fsPath)
@@ -450,33 +450,33 @@ export class DendronExtension implements IDendronExtension {
     }
   }
 
-  getDendronWorkspaceSettingsSync(): DendronWorkspaceSettings | undefined {
+  getSailWorkspaceSettingsSync(): SailWorkspaceSettings | undefined {
     const settings = this.getWorkspaceSettingsSync()?.settings;
     return settings;
   }
 
   getWorkspaceSettingOrDefault({
     wsConfigKey,
-    dendronConfigKey,
+    sailConfigKey,
   }: {
-    wsConfigKey: keyof DendronWorkspaceSettings;
-    dendronConfigKey: string;
+    wsConfigKey: keyof SailWorkspaceSettings;
+    sailConfigKey: string;
   }) {
     const config = getDWorkspace().config;
     // user already using new value
-    if (_.get(config, dendronConfigKey)) {
-      return _.get(config, dendronConfigKey);
+    if (_.get(config, sailConfigKey)) {
+      return _.get(config, sailConfigKey);
     }
     // migrate value from workspace setting. if not exist, migrate from new default
     const out = _.get(
-      this.getDendronWorkspaceSettingsSync(),
+      this.getSailWorkspaceSettingsSync(),
       wsConfigKey,
-      _.get(ConfigUtils.genDefaultConfig(), dendronConfigKey)
+      _.get(ConfigUtils.genDefaultConfig(), sailConfigKey)
     );
     // this should not happen
     if (_.isUndefined(out)) {
-      throw new DendronError({
-        message: `no config key found. workspace: ${wsConfigKey}, dendron.yml: ${dendronConfigKey}`,
+      throw new SailError({
+        message: `no config key found. workspace: ${wsConfigKey}, sail.yml: ${sailConfigKey}`,
       });
     }
     return out;
@@ -486,7 +486,7 @@ export class DendronExtension implements IDendronExtension {
    * The first workspace folder
    */
   get rootWorkspace(): vscode.WorkspaceFolder {
-    const wsFolders = DendronExtension.workspaceFolders();
+    const wsFolders = SailExtension.workspaceFolders();
     if (_.isEmpty(wsFolders) || _.isUndefined(wsFolders)) {
       throw Error("no ws folders");
     }
@@ -547,7 +547,7 @@ export class DendronExtension implements IDendronExtension {
     );
 
     const backlinkTreeView = vscode.window.createTreeView(
-      DendronTreeViewKey.BACKLINKS,
+      SailTreeViewKey.BACKLINKS,
       {
         treeDataProvider: backlinksTreeDataProvider,
         showCollapseAll: true,
@@ -659,7 +659,7 @@ export class DendronExtension implements IDendronExtension {
     });
     workspaceWatcher.activate(this.context);
 
-    const wsFolders = DendronExtension.workspaceFolders();
+    const wsFolders = SailExtension.workspaceFolders();
     if (_.isUndefined(wsFolders) || _.isEmpty(wsFolders)) {
       this.L.info({
         ctx,

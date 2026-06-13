@@ -2,11 +2,11 @@ import {
   asyncLoopOneAtATime,
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   DWorkspace,
   FOLDERS,
-  DendronConfig,
+  SailConfig,
   SelfContainedVault,
   VaultRemoteSource,
   VaultUtils,
@@ -178,7 +178,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
       const remote = await VSCodeUtils.showInputBox({
         title: "Remote URL",
         prompt: "Enter the URL for the git remote",
-        placeHolder: "git@github.com:dendronhq/dendron.git",
+        placeHolder: "git@github.com:sailhq/sail.git",
         ignoreFocusOut: true,
       });
       // Cancelled
@@ -206,8 +206,8 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
   async gatherInputs(): Promise<CommandOpts | undefined> {
     window.showWarningMessage(
       `This command will be deprecated in future releases. 
-      Please use Dendron: Create New Vault to create a new vault and 
-      Dendron: Add Existing Vault to add an existing vault to your workspace.`
+      Please use Sail: Create New Vault to create a new vault and 
+      Sail: Add Existing Vault to add an existing vault to your workspace.`
     );
     const sourceTypeSelected = await VSCodeUtils.showQuickPick([
       { label: VaultType.LOCAL, picked: true },
@@ -294,7 +294,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
         const { name, pathRemote: remoteUrl } = opts;
         const localUrl = path.join(wsRoot, opts.path);
         if (!remoteUrl) {
-          throw new DendronError({
+          throw new SailError({
             message:
               "Remote vault has no remote set. This should never happen, please send a bug report if you encounter this.",
           });
@@ -326,7 +326,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
         if (workspace) {
           // This is a backwards-compatibility fix until workspace vaults are
           // deprecated. If what we cloned was a workspace, then move it where
-          // Dendron expects it, because we can't override the path.
+          // Sail expects it, because we can't override the path.
           const clonedWSPath = path.join(wsRoot, workspace.name);
           await fs.move(localUrl, clonedWSPath);
           // Because we moved the workspace, we also have to recompute the vaults config.
@@ -381,7 +381,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
           path.join(vaultRootPath, CONSTANTS.DENDRON_CONFIG_FILE)
         )
       ) {
-        const vaultConfig = DConfig.getRaw(vaultRootPath) as DendronConfig;
+        const vaultConfig = DConfig.getRaw(vaultRootPath) as SailConfig;
         if (ConfigUtils.getVaults(vaultConfig)?.length > 1) {
           // Wait for the user to accept the prompt, otherwise window will
           // reload before they see the warning
@@ -404,7 +404,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
             // Open a page in the default browser that describes what transitive
             // dependencies are, and how to add them.
             await PluginFileUtils.openWithDefaultApp(
-              "https://wiki.dendron.so/notes/q9yo0y7czv8mxlkbnw1ugj1"
+              "https://wiki.sail.so/notes/q9yo0y7czv8mxlkbnw1ugj1"
             );
           }
         }
@@ -437,7 +437,7 @@ export class VaultAddCommand extends BasicCommand<CommandOpts, CommandOutput> {
     const workspaceDir = path.join(wsRoot, workspace.name);
     await fs.ensureDir(workspaceDir);
     await GitUtils.addToGitignore({
-      addPath: ".dendron.cache.*",
+      addPath: ".sail.cache.*",
       root: workspaceDir,
     });
   }

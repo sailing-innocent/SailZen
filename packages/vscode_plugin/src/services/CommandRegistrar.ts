@@ -1,7 +1,7 @@
 import { NoteTrait } from "@saili/common-all";
 import * as vscode from "vscode";
 import { CreateNoteWithTraitCommand } from "../commands/CreateNoteWithTraitCommand";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 
 /**
  * Manages registration of new VS Code commands. This service is intended for
@@ -9,20 +9,20 @@ import { IDendronExtension } from "../dendronExtensionInterface";
  * are registered onActivate() should not use this class
  */
 export class CommandRegistrar {
-  private _extension: IDendronExtension;
+  private _extension: ISailExtension;
   private context: vscode.ExtensionContext;
 
   private disposables: {
     [traitId: string]: vscode.Disposable;
   };
 
-  public CUSTOM_COMMAND_PREFIX = "dendron.customCommand.";
+  public CUSTOM_COMMAND_PREFIX = "sail.customCommand.";
 
   readonly registeredCommands: {
     [traitId: string]: string;
   };
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     this._extension = extension;
     this.context = extension.context;
     this.registeredCommands = {};

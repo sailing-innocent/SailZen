@@ -1,6 +1,6 @@
 import {
   error2PlainObject,
-  IDendronError,
+  ISailError,
   setEnv,
 } from "@saili/common-all";
 import { createDisposableLogger, LogLvl } from "@saili/common-server";
@@ -21,11 +21,11 @@ import { FileItem } from "./external/fileutils/FileItem";
 const levels = ["debug", "info", "warn", "error", "fatal"];
 export type LogPayload = Partial<{
   ctx: string;
-  error: IDendronError;
+  error: ISailError;
   msg: string;
 }>;
 
-export const UNKNOWN_ERROR_MSG = `You found a bug! We didn't think this could happen but you proved us wrong. Please file the bug here -->  https://github.com/dendronhq/dendron/issues/new?assignees=&labels=&template=bug_report.md&title= We will put our best bug exterminators on this right away!`;
+export const UNKNOWN_ERROR_MSG = `You found a bug! We didn't think this could happen but you proved us wrong. Please file the bug here -->  https://github.com/sailhq/sail/issues/new?assignees=&labels=&template=bug_report.md&title= We will put our best bug exterminators on this right away!`;
 
 // TODO: this is extracted from ./src/utils.ts
 // The reason is because `logger` is used in `utils` and importing `VSCodeUtils` inside logger causes a circular dependency
@@ -62,7 +62,7 @@ const openFileInEditor = async (
 
 export class Logger {
   static output: OutputChannel | undefined;
-  static logger: ReturnType<typeof createDisposableLogger>| undefined;
+  static logger: ReturnType<typeof createDisposableLogger> | undefined;
   static logPath?: string;
 
   static configure(context: ExtensionContext, level: LogLvl = "debug") {
@@ -85,8 +85,8 @@ export class Logger {
     const conf = workspace.getConfiguration();
     setEnv("LOG_DST", logPath);
     Logger.logPath = logPath;
-    // this.logger = createLogger("dendron", logPath);
-    this.logger = createDisposableLogger("dendron", logPath, {
+    // this.logger = createLogger("sail", logPath);
+    this.logger = createDisposableLogger("sail", logPath, {
       lvl: level,
     });
 
@@ -128,7 +128,7 @@ export class Logger {
 
   /** Log an error.
    *
-   * This should be used for internal Dendron errors that we can fix, or for
+   * This should be used for internal Sail errors that we can fix, or for
    * problems we assume should never happen.
    *
    * If the error is expected in regular execution, you can log it with

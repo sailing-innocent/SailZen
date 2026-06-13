@@ -55,14 +55,14 @@ export function genDefaultLookupConfig(): LookupConfig {
        *
        * At the time of testing:
        *
-       * At previous threshold of 0.5 string 'dendron' matched
+       * At previous threshold of 0.5 string 'sail' matched
        * 'scratch.2021.06.15.104331.make-sure-seeds-are-initialized-on-startup' with score 0.42.
        * Which is too fuzzy of a match.
        *
-       * 'rename' fuzzy matches 'dendron.scratch.2020.11.07.publish-under-original-filenames' with 0.16.
+       * 'rename' fuzzy matches 'sail.scratch.2020.11.07.publish-under-original-filenames' with 0.16.
        *
        * For reference
-       * 'dendron rename' matches 'dendron.dev.design.commands.rename' with 0.001.
+       * 'sail rename' matches 'sail.dev.design.commands.rename' with 0.001.
        *
        * Having this score too high gets too unrelated matches which pushes the
        * 'Create New' entry out of the view.

@@ -7,7 +7,7 @@ import remarkParse from "remark-parse";
 import { hashtags, HASHTAG_REGEX, HASHTAG_REGEX_LOOSE, HashTagUtils } from "../hashtag";
 import { createTestNoteWithHashtags, createTestNoteWithBody } from "../../__tests__/fixtures/testNotes";
 import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("hashtag plugin", () => {
   describe("HASHTAG_REGEX", () => {

@@ -1,7 +1,7 @@
 import {
   ConfigEvents,
   ConfigUtils,
-  DendronError,
+  SailError,
   ERROR_SEVERITY,
   VaultUtils,
 } from "@saili/common-all";
@@ -78,10 +78,10 @@ const L = Logger;
 type CommandOpts = {};
 type CommandReturns =
   | {
-      committed: SyncActionResult[];
-      pulled: SyncActionResult[];
-      pushed: SyncActionResult[];
-    }
+    committed: SyncActionResult[];
+    pulled: SyncActionResult[];
+    pushed: SyncActionResult[];
+  }
   | undefined;
 
 export class SyncCommand extends BasicCommand<CommandOpts, CommandReturns> {
@@ -219,7 +219,7 @@ export class SyncCommand extends BasicCommand<CommandOpts, CommandReturns> {
     L.info({ ctx, opts });
     const workspaceService = ExtensionProvider.getExtension().workspaceService;
     if (_.isUndefined(workspaceService))
-      throw new DendronError({
+      throw new SailError({
         message: "Workspace is not initialized",
         severity: ERROR_SEVERITY.FATAL,
       });

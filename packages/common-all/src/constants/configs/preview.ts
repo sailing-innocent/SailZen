@@ -1,5 +1,5 @@
-import { DendronConfigEntryCollection } from "../../types/configs/base";
-import { DendronPreviewConfig } from "../../types/configs/preview/preview";
+import { SailConfigEntryCollection } from "../../types/configs/base";
+import { SailPreviewConfig } from "../../types/configs/preview/preview";
 import {
   ENABLE_FM_TITLE,
   ENABLE_NOTE_TITLE_FOR_LINK,
@@ -9,7 +9,7 @@ import {
   ENABLE_HASHES_FOR_FM_TAGS,
 } from "./global";
 
-export const PREVIEW: DendronConfigEntryCollection<DendronPreviewConfig> = {
+export const PREVIEW: SailConfigEntryCollection<SailPreviewConfig> = {
   enableFMTitle: ENABLE_FM_TITLE("preview"),
   enableNoteTitleForLink: ENABLE_NOTE_TITLE_FOR_LINK("preview"),
   enableFrontmatterTags: ENABLE_FRONTMATTER_TAGS("preview"),

@@ -6,7 +6,7 @@ import os from "os";
 import path from "path";
 import {
   cleanName,
-  DendronError,
+  SailError,
   ERROR_SEVERITY,
   GetAllFilesOpts,
   globMatch,
@@ -101,8 +101,8 @@ export function deleteFile(fpath: string) {
  * This function returns the full `Dirent` which gives you access to file
  * metadata. If you don't need the metadata, see {@link getAllFiles}.
  *
- * @throws a `DendronError` with `ERROR_SEVERITY.MINOR`. This is to avoid
- * crashing the Dendron initialization, please catch the error and modify the
+ * @throws a `SailError` with `ERROR_SEVERITY.MINOR`. This is to avoid
+ * crashing the Sail initialization, please catch the error and modify the
  * severity if needed.
  */
 export async function getAllFilesWithTypes(
@@ -134,7 +134,7 @@ export async function getAllFilesWithTypes(
     };
   } catch (err) {
     return {
-      error: new DendronError({
+      error: new SailError({
         message: "Error when reading the vault",
         payload: err,
         // Marked as minor to avoid stopping initialization. Even if we can't read one vault, we might be able to read other vaults.
@@ -149,8 +149,8 @@ export async function getAllFilesWithTypes(
  * This function returns only the file name. If you need the file metadata, see
  * {@link getAllFilesWithTypes}.
  *
- * @throws a `DendronError` with `ERROR_SEVERITY.MINOR`. This is to avoid
- * crashing the Dendron initialization, please catch the error and modify the
+ * @throws a `SailError` with `ERROR_SEVERITY.MINOR`. This is to avoid
+ * crashing the Sail initialization, please catch the error and modify the
  * severity if needed.
  */
 export async function getAllFiles(
@@ -216,7 +216,7 @@ export function removeMDExtension(nodePath: string) {
 }
 
 const readFileSync = fromThrowable(fs.readFileSync, (error) => {
-  return new DendronError({
+  return new SailError({
     message: `Cannot find ${path}`,
     severity: ERROR_SEVERITY.FATAL,
     ...(error instanceof Error && { innerError: error }),
@@ -224,12 +224,12 @@ const readFileSync = fromThrowable(fs.readFileSync, (error) => {
 });
 
 export function readString(path: string) {
-  return readFileSync(path, "utf8") as Result<string, DendronError>;
+  return readFileSync(path, "utf8") as Result<string, SailError>;
 }
 
 export function readJson(path: string) {
-  return fromPromise<AnyJson, DendronError>(fs.readJSON(path), (error) => {
-    return new DendronError({
+  return fromPromise<AnyJson, SailError>(fs.readJSON(path), (error) => {
+    return new SailError({
       message: `Cannot find ${path}`,
       severity: ERROR_SEVERITY.FATAL,
       ...(error instanceof Error && { innerError: error }),

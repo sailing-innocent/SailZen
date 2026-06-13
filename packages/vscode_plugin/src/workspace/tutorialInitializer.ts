@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DWorkspaceV2,
   ErrorUtils,
   getStage,
@@ -19,7 +19,7 @@ import { PreviewPanelFactory } from "../components/views/PreviewViewFactory";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { BlankInitializer } from "./blankInitializer";
 import {
   OnWorkspaceCreationOpts,
@@ -33,8 +33,7 @@ import { TogglePreviewLockCommand } from "../commands/TogglePreviewLock";
  */
 export class TutorialInitializer
   extends BlankInitializer
-  implements WorkspaceInitializer
-{
+  implements WorkspaceInitializer {
   static getTutorialType() {
     return "main";
   }
@@ -46,8 +45,8 @@ export class TutorialInitializer
       WorkspaceActivationContext.tutorial
     );
 
-    const assetUri = VSCodeUtils.getAssetUri(DendronExtension.context());
-    const dendronWSTemplate = VSCodeUtils.joinPath(assetUri, "dendron-ws");
+    const assetUri = VSCodeUtils.getAssetUri(SailExtension.context());
+    const sailWSTemplate = VSCodeUtils.joinPath(assetUri, "sail-ws");
 
     const vpath = vault2Path({ vault: opts.wsVault!, wsRoot: opts.wsRoot });
 
@@ -55,7 +54,7 @@ export class TutorialInitializer
 
     fs.copySync(
       path.join(
-        dendronWSTemplate.fsPath,
+        sailWSTemplate.fsPath,
         "tutorial",
         "treatments",
         tutorialDir
@@ -145,7 +144,7 @@ export class TutorialInitializer
     } else {
       Logger.error({
         ctx,
-        error: new DendronError({ message: `Unable to find tutorial.md` }),
+        error: new SailError({ message: `Unable to find tutorial.md` }),
       });
     }
 
@@ -167,7 +166,7 @@ export class TutorialInitializer
       // for tutorial workspaces,
       // we want the tree view to be focused
       // so that new users can discover the tree view feature.
-      vscode.commands.executeCommand("dendron.treeView.focus");
+      vscode.commands.executeCommand("sail.treeView.focus");
     }
   }
 }

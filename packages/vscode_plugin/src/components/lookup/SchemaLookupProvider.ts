@@ -12,7 +12,7 @@ import { HistoryService } from "@saili/engine-server";
 import _ from "lodash";
 import { CancellationTokenSource, window } from "vscode";
 import { NoteLookupCommand } from "../../commands/NoteLookupCommand";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { Logger } from "../../logger";
 import { NotePickerUtils } from "../lookup/NotePickerUtils";
 import { SchemaPickerUtils } from "../lookup/SchemaPickerUtils";
@@ -25,18 +25,18 @@ import {
   ProvideOpts,
   SchemaLookupProviderSuccessResp,
 } from "./LookupProviderInterface";
-import { DendronQuickPicker, DendronQuickPickState } from "./types";
+import { SailQuickPicker, SailQuickPickState } from "./types";
 import { OldNewLocation, PickerUtils } from "./utils";
 
 export class SchemaLookupProvider implements ILookupProvider {
-  private _extension: IDendronExtension;
+  private _extension: ISailExtension;
   private _onAcceptHooks: OnAcceptHook[];
   public opts: ILookupProviderOpts;
 
   constructor(
     public id: string,
     opts: ILookupProviderOpts,
-    extension: IDendronExtension
+    extension: ISailExtension
   ) {
     this._extension = extension;
     this._onAcceptHooks = [];
@@ -84,7 +84,7 @@ export class SchemaLookupProvider implements ILookupProvider {
    * @returns
    */
   onDidAccept(opts: {
-    quickpick: DendronQuickPicker;
+    quickpick: SailQuickPicker;
     cancellationToken: CancellationTokenSource;
   }) {
     return async () => {
@@ -108,7 +108,7 @@ export class SchemaLookupProvider implements ILookupProvider {
         })
       ) {
         Logger.debug({ ctx, msg: "nextPicker:pre" });
-        picker.state = DendronQuickPickState.PENDING_NEXT_PICK;
+        picker.state = SailQuickPickState.PENDING_NEXT_PICK;
 
         picker.vault = await picker.nextPicker({ note: selectedItems[0] });
         // check if we exited from selecting a vault
@@ -126,7 +126,7 @@ export class SchemaLookupProvider implements ILookupProvider {
       if (isMultiLevel) {
         window
           .showInformationMessage(
-            "It looks like you are trying to create a multi-level [schema](https://wiki.dendron.so/notes/c5e5adde-5459-409b-b34d-a0d75cbb1052.html). This is not supported. If you are trying to create a note instead, run the `> Note Lookup` command or click on `Note Lookup`",
+            "It looks like you are trying to create a multi-level [schema](https://wiki.sail.so/notes/c5e5adde-5459-409b-b34d-a0d75cbb1052.html). This is not supported. If you are trying to create a note instead, run the `> Note Lookup` command or click on `Note Lookup`",
             ...["Note Lookup"]
           )
           .then(async (selection) => {
@@ -248,11 +248,11 @@ export class SchemaLookupProvider implements ILookupProvider {
       updatedItems =
         this.opts.allowNewNote && !perfectMatch
           ? updatedItems.concat([
-              NotePickerUtils.createNoActiveItem({
-                fname: querystring,
-                detail: CREATE_NEW_SCHEMA_DETAIL,
-              }),
-            ])
+            NotePickerUtils.createNoActiveItem({
+              fname: querystring,
+              detail: CREATE_NEW_SCHEMA_DETAIL,
+            }),
+          ])
           : updatedItems;
 
       picker.items = updatedItems;

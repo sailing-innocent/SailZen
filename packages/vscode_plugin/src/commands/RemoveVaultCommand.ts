@@ -3,7 +3,7 @@ import { WorkspaceService } from "@saili/engine-server";
 import _ from "lodash";
 import { commands, window } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
@@ -25,7 +25,7 @@ export class RemoveVaultCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.REMOVE_VAULT.key;
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
   async gatherInputs(opts?: CommandOpts): Promise<any> {
@@ -67,7 +67,7 @@ export class RemoveVaultCommand extends BasicCommand<
     await wsService.removeVault({ vault, updateWorkspace: true });
     await commands.executeCommand("workbench.action.reloadWindow");
     window.showInformationMessage(
-      "finished removing vault (from dendron). you will still need to delete the notes from your disk"
+      "finished removing vault (from sail). you will still need to delete the notes from your disk"
     );
     return { vault };
   }

@@ -2,7 +2,7 @@ import { DConfig, LocalConfigScope } from "@saili/common-server";
 import fs from "fs-extra";
 import { Uri } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -18,9 +18,9 @@ export class ConfigureLocalOverride extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.CONFIGURE_LOCAL_OVERRIDE.key;
   public static requireActiveWorkspace: boolean = true;
-  _ext: IDendronExtension;
+  _ext: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     super();
     this._ext = extension;
   }
@@ -32,14 +32,14 @@ export class ConfigureLocalOverride extends BasicCommand<
     if (configScope === undefined) {
       VSCodeUtils.showMessage(
         MessageSeverity.ERROR,
-        "Configuration scope needs to be selected to open dendronrc.yml file",
+        "Configuration scope needs to be selected to open sailrc.yml file",
         {}
       );
       return;
     }
 
-    const dendronRoot = this._ext.getDWorkspace().wsRoot;
-    const configPath = DConfig.configOverridePath(dendronRoot, configScope);
+    const sailRoot = this._ext.getDWorkspace().wsRoot;
+    const configPath = DConfig.configOverridePath(sailRoot, configScope);
 
     /* If the config file doesn't exist, create one */
     await fs.ensureFile(configPath);
@@ -56,11 +56,11 @@ const getConfigScope = async (): Promise<LocalConfigScope | undefined> => {
   const options = [
     {
       label: LocalConfigScope.WORKSPACE,
-      detail: "Configure dendronrc.yml for current workspace",
+      detail: "Configure sailrc.yml for current workspace",
     },
     {
       label: LocalConfigScope.GLOBAL,
-      detail: "Configure dendronrc.yml for all dendron workspaces",
+      detail: "Configure sailrc.yml for all sail workspaces",
     },
   ];
 

@@ -3,14 +3,14 @@
 import {
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   DNoteLoc,
   DNoteRefLink,
   DUtils,
   DVault,
   getSlugger,
-  IDendronError,
-  DendronConfig,
+  ISailError,
+  SailConfig,
   isBlockAnchor,
   NoteDicts,
   NoteDictsUtils,
@@ -31,9 +31,9 @@ import { MdastUtils } from "..";
 import { RemarkUtils } from "../remark";
 import { SiteUtils } from "../SiteUtils";
 import {
-  DendronASTDest,
-  DendronASTNode,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTNode,
+  SailASTTypes,
   NoteRefNoteRawV4,
   NoteRefNoteV4,
 } from "../types";
@@ -134,7 +134,7 @@ function shouldRenderPretty({ proc }: { proc: Processor }): boolean {
 
   // pretty refs not valid for regular markdown
   if (
-    _.includes([DendronASTDest.MD_DENDRON, DendronASTDest.MD_REGULAR], dest)
+    _.includes([SailASTDest.MD_DENDRON, SailASTDest.MD_REGULAR], dest)
   ) {
     return false;
   }
@@ -181,7 +181,7 @@ function attachParser(proc: Processor) {
         const link = LinkUtils.parseNoteRefRaw(linkMatch);
         const { value } = LinkUtils.parseLink(linkMatch);
         const refNote: NoteRefNoteRawV4 = {
-          type: DendronASTTypes.REF_LINK_V2,
+          type: SailASTTypes.REF_LINK_V2,
           data: {
             link,
           },
@@ -196,7 +196,7 @@ function attachParser(proc: Processor) {
         }
         const { value } = LinkUtils.parseLink(linkMatch);
         const refNote: NoteRefNoteV4 = {
-          type: DendronASTTypes.REF_LINK_V2,
+          type: SailASTTypes.REF_LINK_V2,
           data: {
             link,
           },
@@ -230,7 +230,7 @@ function attachCompiler(proc: Processor, _opts?: CompilerOpts) {
       const ndata = node.data;
 
       // converting to itself (used for doctor commands. preserve existing format)
-      if (dest === DendronASTDest.MD_DENDRON) {
+      if (dest === SailASTDest.MD_DENDRON) {
         return NoteRefUtils.dnodeRefLink2String(ndata.link);
       }
       return;
@@ -242,12 +242,12 @@ const MAX_REF_LVL = 3;
 
 // ^m0vy37pdpzgy
 /**
- * This exists because {@link dendronPub} converts note refs using the AST
+ * This exists because {@link sailPub} converts note refs using the AST
  */
 export function convertNoteRefToHAST(
   opts: ConvertNoteRefOpts & { procOpts: any }
-): { error: DendronError | undefined; data: Parent[] | undefined } {
-  const errors: IDendronError[] = [];
+): { error: SailError | undefined; data: Parent[] | undefined } {
+  const errors: ISailError[] = [];
   const { link, proc, compilerOpts, procOpts } = opts;
   const procData = MDUtilsV5.getProcData(proc);
   const { noteRefLvl: refLvl } = procData;
@@ -297,7 +297,7 @@ export function convertNoteRefToHAST(
         if (
           useId === undefined &&
           MDUtilsV5.isV5Active(proc) &&
-          dest === DendronASTDest.HTML
+          dest === SailASTDest.HTML
         ) {
           useId = true;
         }
@@ -310,7 +310,7 @@ export function convertNoteRefToHAST(
         });
 
         let isPublished = true;
-        if (dest === DendronASTDest.HTML) {
+        if (dest === SailASTDest.HTML) {
           if (!MDUtilsV5.isV5Active(proc)) {
             suffix = ".html";
           }
@@ -373,7 +373,7 @@ export function convertNoteRefToHAST(
   // prevent infinite nesting.
   if (refLvl >= MAX_REF_LVL) {
     return {
-      error: new DendronError({ message: "too many nested note refs" }),
+      error: new SailError({ message: "too many nested note refs" }),
       data: [MdastUtils.genMDErrorMsg("too many nested note refs")],
     };
   }
@@ -417,7 +417,7 @@ export function convertNoteRefToHAST(
         const noteIds = noteCacheForRenderDict?.notesByFname[fname];
 
         if (!noteIds) {
-          throw new DendronError({
+          throw new SailError({
             message: `Unable to find note with fname ${fname} and vault ${vault.fsPath} for note reference`,
           });
         }
@@ -427,7 +427,7 @@ export function convertNoteRefToHAST(
           .filter((props) => VaultUtils.isEqualV2(props.vault, vault));
 
         if (noteCandidates.length !== 1) {
-          throw new DendronError({
+          throw new SailError({
             message: `Unable to find note with fname ${fname} and vault ${vault.fsPath} for note reference`,
           });
         }
@@ -541,7 +541,7 @@ function removeListItems({
   for (let i = 0; i < nodes.length; i++) {
     const list = nodes[i];
     const listItem = nodes[i + 1];
-    if (list.ancestor.type !== DendronASTTypes.LIST) continue;
+    if (list.ancestor.type !== SailASTTypes.LIST) continue;
     if (_.isUndefined(listItem)) {
       console.error(
         "Found a list that has a list anchor in it, but no list items"
@@ -568,14 +568,14 @@ function removeExceptSingleItem(nodes: ParentWithIndex[]) {
   let closestListItem: Parent | undefined;
   // Find the list item closest to the anchor
   _.forEach(nodes, ({ ancestor }) => {
-    if (ancestor.type === DendronASTTypes.LIST_ITEM) {
+    if (ancestor.type === SailASTTypes.LIST_ITEM) {
       closestListItem = ancestor;
     }
   });
   if (_.isUndefined(closestListItem)) return;
   // If this list item has any nested lists, remove them to get rid of the children
   closestListItem.children = closestListItem.children.filter(
-    (node) => !(node.type === DendronASTTypes.LIST)
+    (node) => !(node.type === SailASTTypes.LIST)
   );
 }
 
@@ -585,7 +585,7 @@ function removeSingleItemNestedLists(nodes: ParentWithIndex[]): void {
   // eslint-disable-next-line no-plusplus
   for (let i = 0; i < nodes.length; i++) {
     const list = nodes[i];
-    if (list.ancestor.type !== DendronASTTypes.LIST) continue;
+    if (list.ancestor.type !== SailASTTypes.LIST) continue;
     // Find the outermost list
     if (_.isUndefined(outermost)) {
       outermost = list;
@@ -611,7 +611,7 @@ export function prepareNoteRefIndices<T>({
 }: {
   anchorStart?: string;
   anchorEnd?: string;
-  bodyAST: DendronASTNode;
+  bodyAST: SailASTNode;
   makeErrorData: (msg: string) => T;
 }): {
   start: FindAnchorResult;
@@ -768,9 +768,9 @@ function convertNoteRefToMDAST(
   noteRefProc = noteRefProc.data("fm" as any, MDUtilsV5.getFM({ note }));
   MDUtilsV5.setNoteRefLvl(noteRefProc, refLvl);
 
-  const bodyAST: DendronASTNode = noteRefProc.parse(
+  const bodyAST: SailASTNode = noteRefProc.parse(
     note.body
-  ) as DendronASTNode;
+  ) as SailASTNode;
   // Make sure to get all footnote definitions, including ones not within the range, in case they are used inside the range
   const footnotes = RemarkUtils.extractFootnoteDefs(bodyAST);
   const { anchorStart, anchorEnd, anchorStartOffset } = _.defaults(link.data, {
@@ -806,7 +806,7 @@ function convertNoteRefToMDAST(
     };
   } catch (err) {
     return {
-      error: new DendronError({
+      error: new SailError({
         message: "error processing note ref",
         payload: err,
       }),
@@ -817,37 +817,37 @@ function convertNoteRefToMDAST(
 
 type FindAnchorResult =
   | {
-      type: "block";
-      index: number;
-      anchorType?: "block";
-      node?: Node;
-    }
+    type: "block";
+    index: number;
+    anchorType?: "block";
+    node?: Node;
+  }
   | {
-      type: "header";
-      index: number;
-      anchorType?: "header";
-      node?: Heading;
-    }
+    type: "header";
+    index: number;
+    anchorType?: "header";
+    node?: Heading;
+  }
   | {
-      type: "block-begin";
-      index: number;
-      node: Node;
-    }
+    type: "block-begin";
+    index: number;
+    node: Node;
+  }
   | {
-      type: "block-end";
-      index: number;
-      node: Node;
-    }
+    type: "block-end";
+    index: number;
+    node: Node;
+  }
   | {
-      type: "list";
-      index: number;
-      ancestors: ParentWithIndex[];
-      anchorType?: "block";
-    }
+    type: "list";
+    index: number;
+    ancestors: ParentWithIndex[];
+    anchorType?: "block";
+  }
   | {
-      type: "none";
-      index: number;
-    }
+    type: "none";
+    index: number;
+  }
   | null;
 
 /** Searches for anchors, then returns the index for the top-level ancestor.
@@ -860,7 +860,7 @@ function findAnchor({
   nodes,
   match,
 }: {
-  nodes: DendronASTNode["children"];
+  nodes: SailASTNode["children"];
   match: string;
 }): FindAnchorResult {
   if (isBlockAnchor(match)) {
@@ -925,7 +925,7 @@ function findBlockAnchor({
   let foundAncestors: ParentWithIndex[] = [];
   MdastUtils.visitParentsIndices({
     nodes,
-    test: DendronASTTypes.BLOCK_ANCHOR,
+    test: SailASTTypes.BLOCK_ANCHOR,
     visitor: ({ node, index, ancestors }) => {
       // @ts-ignore
       if (node.id === match) {
@@ -943,12 +943,12 @@ function findBlockAnchor({
     if (
       foundAncestors[0].ancestor.children.length === 1 &&
       foundAncestors[0].ancestor.children[0].type ===
-        DendronASTTypes.BLOCK_ANCHOR
+      SailASTTypes.BLOCK_ANCHOR
     ) {
       // If located by itself after a block, then the block anchor refers to the previous block
       return { type: "block", index: foundIndex - 1 };
     }
-    if (foundAncestors[0].ancestor.type === DendronASTTypes.LIST) {
+    if (foundAncestors[0].ancestor.type === SailASTTypes.LIST) {
       // The block anchor is in a list, which will need special handling to slice the list elements
       return {
         type: "list",
@@ -963,7 +963,7 @@ function findBlockAnchor({
 }
 
 function getTitle(opts: {
-  config: DendronConfig;
+  config: SailConfig;
   note: NoteProps;
   loc: DNoteLoc;
   shouldApplyPublishRules?: boolean;
@@ -990,7 +990,7 @@ const genRefAsIFrame = ({
   noteId: string;
   content: Parent;
   title: string;
-  config: DendronConfig;
+  config: SailConfig;
   prettyHAST: Parent;
 }) => {
   const refId = getRefId({ id: noteId, link });

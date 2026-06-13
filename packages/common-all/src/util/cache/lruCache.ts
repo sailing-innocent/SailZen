@@ -1,6 +1,6 @@
 import { LRUCache } from "lru-cache";
 import { Cache } from "./cache";
-import { DendronError } from "../../error";
+import { SailError } from "../../error";
 
 export type LruCacheOpts = {
   /** Max number of items to keep in cache. */
@@ -11,12 +11,12 @@ export type LruCacheOpts = {
  *  Least recently used cache implementation. Deletes the least-recently-used
  *  items, when cache max items is reached.
  *  (get methods count toward recently used order) */
-export class DendronLruCache<K extends {}, T extends {}> implements Cache<K, T> {
+export class SailLruCache<K extends {}, T extends {}> implements Cache<K, T> {
   private cache: LRUCache<K, T>;
 
   constructor(opts: LruCacheOpts) {
     if (opts.maxItems <= 0) {
-      throw new DendronError({
+      throw new SailError({
         message: `Max items cannot be less than or equal to 0`,
       });
     }

@@ -1,4 +1,4 @@
-import { DendronError, DHookType, IDendronError } from "@saili/common-all";
+import { SailError, DHookType, ISailError } from "@saili/common-all";
 import { DConfig } from "@saili/common-server";
 import { HookUtils } from "@saili/engine-server";
 import fs from "fs-extra";
@@ -11,13 +11,13 @@ import { BasicCommand } from "./base";
 
 type CommandOpts = { hookName: string; hookFilter: string };
 
-type CommandOutput = { error: IDendronError } | void;
+type CommandOutput = { error: ISailError } | void;
 
 const hookTemplate = `
 /**
  @params wsRoot: string, root of your current workspace
- @params note: Object with following properties https://github.com/dendronhq/dendron/blob/master/packages/common-all/src/types/foundation.ts#L66:L66
- @params NoteUtils: utilities for working with notes. [code](https://github.com/dendronhq/dendron/blob/master/packages/common-all/src/dnode.ts#L323:L323)
+ @params note: Object with following properties https://github.com/sailhq/sail/blob/master/packages/common-all/src/types/foundation.ts#L66:L66
+ @params NoteUtils: utilities for working with notes. [code](https://github.com/sailhq/sail/blob/master/packages/common-all/src/dnode.ts#L323:L323)
  @params execa: instance of [execa](https://github.com/sindresorhus/execa#execacommandcommand-options)
  @params axios: instance of [axios](https://axios-http.com/docs/example)
  @params _: instance of [lodash](https://lodash.com/docs)
@@ -59,7 +59,7 @@ export class CreateHookCommand extends BasicCommand<
     });
     fs.ensureDirSync(path.dirname(scriptPath));
     if (fs.existsSync(scriptPath)) {
-      const error = DendronError.createPlainError({
+      const error = SailError.createPlainError({
         message: `${scriptPath} exists`,
       });
       this.L.error({ error });

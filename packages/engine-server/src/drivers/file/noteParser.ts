@@ -1,6 +1,6 @@
 /* eslint-disable no-await-in-loop */
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   DNodeUtils,
   DStore,
@@ -11,7 +11,7 @@ import {
   ERROR_SEVERITY,
   ERROR_STATUS,
   genHash,
-  IDendronError,
+  ISailError,
   isNotUndefined,
   NoteChangeEntry,
   NoteDicts,
@@ -26,7 +26,7 @@ import {
   stringifyError,
   string2Note,
   globMatch,
-  DendronConfig,
+  SailConfig,
   asyncLoopOneAtATime,
   SchemaModuleDict,
 } from "@saili/common-all";
@@ -92,7 +92,7 @@ export class NoteParser extends ParserBase {
   ): Promise<{
     notesById: NotePropsByIdDict;
     cacheUpdates: NotesCacheEntryMap;
-    errors: IDendronError[];
+    errors: ISailError[];
   }> {
     const ctx = "parseFile";
     const fileMetaDict: FileMetaDict = getFileMeta(allPaths);
@@ -108,12 +108,12 @@ export class NoteParser extends ParserBase {
     const cacheUpdates: { [key: string]: NotesCacheEntry } = {};
     // Keep track of which notes in cache no longer exist
     const unseenKeys = this.cache.getCacheEntryKeys();
-    const errors: IDendronError<any>[] = [];
+    const errors: ISailError<any>[] = [];
     const config = DConfig.readConfigSync(wsRoot);
 
     // get root note
     if (_.isUndefined(fileMetaDict[1])) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.NO_ROOT_NOTE_FOUND,
       });
     }
@@ -121,7 +121,7 @@ export class NoteParser extends ParserBase {
       (n) => n.fpath === "root.md"
     ) as FileMeta;
     if (!rootFile) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.NO_ROOT_NOTE_FOUND,
       });
     }
@@ -168,13 +168,13 @@ export class NoteParser extends ParserBase {
             }
             return parsedNote;
           } catch (err: any) {
-            const dendronError = ErrorFactory.wrapIfNeeded(err);
+            const sailError = ErrorFactory.wrapIfNeeded(err);
             // A fatal error would kill the initialization
-            dendronError.severity = ERROR_SEVERITY.MINOR;
-            dendronError.message =
+            sailError.severity = ERROR_SEVERITY.MINOR;
+            sailError.message =
               `Failed to read ${ent.fpath} in ${vault.fsPath}: ` +
-              dendronError.message;
-            errors.push(dendronError);
+              sailError.message;
+            errors.push(sailError);
             return;
           }
         }
@@ -252,13 +252,13 @@ export class NoteParser extends ParserBase {
               });
               return parsedNote;
             } catch (err: any) {
-              const dendronError = ErrorFactory.wrapIfNeeded(err);
+              const sailError = ErrorFactory.wrapIfNeeded(err);
               // A fatal error would kill the initialization
-              dendronError.severity = ERROR_SEVERITY.MINOR;
-              dendronError.message =
+              sailError.severity = ERROR_SEVERITY.MINOR;
+              sailError.message =
                 `Failed to read ${ent.fpath} in ${vault.fsPath}: ` +
-                dendronError.message;
-              errors.push(dendronError);
+                sailError.message;
+              errors.push(sailError);
               return undefined;
             }
           }
@@ -327,9 +327,9 @@ export class NoteParser extends ParserBase {
           }
         }
       } catch (err) {
-        this.logger.error({ 
-          ctx, 
-          msg: "issue doing bulk insert - meta will not be stored in database", 
+        this.logger.error({
+          ctx,
+          msg: "issue doing bulk insert - meta will not be stored in database",
           vault,
           error: err,
         });
@@ -352,8 +352,8 @@ export class NoteParser extends ParserBase {
     addParent: boolean;
     createStubs?: boolean;
     vault: DVault;
-    config: DendronConfig;
-    errors: IDendronError[];
+    config: SailConfig;
+    errors: ISailError[];
   }): Promise<{
     changeEntries: NoteChangeEntry[];
     noteHash: string;
@@ -391,8 +391,8 @@ export class NoteParser extends ParserBase {
         config,
       }));
     } catch (_err: any) {
-      if (!ErrorUtils.isDendronError(_err)) {
-        const err = DendronError.createFromStatus({
+      if (!ErrorUtils.isSailError(_err)) {
+        const err = SailError.createFromStatus({
           status: ERROR_STATUS.BAD_PARSE_FOR_NOTE,
           severity: ERROR_SEVERITY.MINOR,
           payload: { fname: fileMeta.fpath, error: stringifyError(_err) },
@@ -434,8 +434,8 @@ export class NoteParser extends ParserBase {
     fpath: string;
     vault: DVault;
     toLowercase?: boolean;
-    config: DendronConfig;
-    errors: IDendronError[];
+    config: SailConfig;
+    errors: ISailError[];
   }): Promise<{
     note: NoteProps;
     matchHash: boolean;

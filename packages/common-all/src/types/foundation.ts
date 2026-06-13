@@ -1,5 +1,5 @@
 import { URI } from "vscode-uri";
-import { DendronGlobalConfig } from ".";
+import { SailGlobalConfig } from ".";
 import { DVault } from "./DVault";
 
 export interface Point {
@@ -64,12 +64,12 @@ export type DNodePointer = string;
 export type DNodeImage = { url: string; alt: string };
 
 /**
- * Notes have a config property that can override a subset of {@link dendronConfig}
+ * Notes have a config property that can override a subset of {@link sailConfig}
  */
 export type NoteLocalConfig = Partial<{
   global: Partial<
     Pick<
-      DendronGlobalConfig,
+      SailGlobalConfig,
       "enableChildLinks" | "enablePrettyRefs" | "enableBackLinks"
     >
   >;
@@ -132,7 +132,7 @@ export type DNodeExplicitProps = {
    */
   created: number;
   /**
-   * Override of local dendron config
+   * Override of local sail config
    */
   config?: NoteLocalConfig;
 };
@@ -158,7 +158,7 @@ export type DNodeProps<T = any, TCustom = any> = DNodeExplicitProps & {
    */
   type: DNodeType;
   /**
-   * Determines whether this node is a {@link stub https://wiki.dendron.so/notes/c6fd6bc4-7f75-4cbb-8f34-f7b99bfe2d50.html#stubs}
+   * Determines whether this node is a {@link stub https://wiki.sail.so/notes/c6fd6bc4-7f75-4cbb-8f34-f7b99bfe2d50.html#stubs}
    */
   stub?: boolean;
   /**
@@ -228,17 +228,17 @@ export type SchemaTemplate = {
 
 export type SchemaProps = DNodeProps<SchemaData>;
 /**
- * Interface for a Dendron Note
+ * Interface for a Sail Note
  */
 export type NoteProps = DNodeProps<any, any>;
 
 /**
- * Dendron note metadata
+ * Sail note metadata
  */
 export type NotePropsMeta = Omit<NoteProps, "body">;
 
 /**
- * Dendron note with optional custom props
+ * Sail note with optional custom props
  */
 export type NotePropsWithOptionalCustom = Omit<NoteProps, "custom"> &
   Partial<{ custom: any }>;
@@ -274,7 +274,7 @@ export type DNoteAnchor =
 
 /**
  * Anchor without {@link DNoteHeaderAnchor.depth} info
- * @todo see migration [[DNoteAnchorBasic|dendron://dendron.docs/dev.changelog#dnoteanchorbasic]]
+ * @todo see migration [[DNoteAnchorBasic|sail://sail.docs/dev.changelog#dnoteanchorbasic]]
  */
 export type DNoteAnchorBasic =
   | DNoteBlockAnchor

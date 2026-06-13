@@ -1,20 +1,20 @@
 import {
   ConfigUtils,
-  DendronError,
+  SailError,
   DEngine,
   Diagnostic,
   GetDecorationsOpts,
-  IDendronError,
-  DendronConfig,
+  ISailError,
+  SailConfig,
   NonOptional,
   NoteProps,
   offsetRange,
 } from "@saili/common-all";
 
 import {
-  DendronASTDest,
-  DendronASTNode,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTNode,
+  SailASTTypes,
   ZDocTag,
   BlockAnchor,
   HashTag,
@@ -46,19 +46,19 @@ function runDecorator(
   const { node } = opts;
 
   switch (node.type) {
-    case DendronASTTypes.BLOCK_ANCHOR:
+    case SailASTTypes.BLOCK_ANCHOR:
       return decorateBlockAnchor(opts as DecoratorIn<BlockAnchor>);
-    case DendronASTTypes.HASHTAG:
+    case SailASTTypes.HASHTAG:
       return decorateHashTag(opts as DecoratorIn<HashTag>);
-    case DendronASTTypes.FRONTMATTER:
+    case SailASTTypes.FRONTMATTER:
       return decorateFrontmatter(
         opts as unknown as DecoratorIn<FrontmatterContent>
       );
-    case DendronASTTypes.ZDOCTAG:
+    case SailASTTypes.ZDOCTAG:
       return decorateZDocTag(opts as DecoratorIn<ZDocTag>);
-    case DendronASTTypes.WIKI_LINK:
+    case SailASTTypes.WIKI_LINK:
       return decorateWikilink(opts as unknown as DecoratorIn<WikiLinkNoteV4>);
-    case DendronASTTypes.REF_LINK_V2:
+    case SailASTTypes.REF_LINK_V2:
       return decorateReference(opts as unknown as DecoratorIn<NoteRefNoteV4>);
     default:
       return undefined;
@@ -70,14 +70,14 @@ export async function runAllDecorators(
   opts: Omit<GetDecorationsOpts, "id"> & {
     note: NoteProps;
     engine: DEngine;
-    config: DendronConfig;
+    config: SailConfig;
   }
 ) {
   const { note, ranges, config } = opts;
 
   const allDecorations: Decoration[] = [];
   const allDiagnostics: Diagnostic[] = [];
-  const allErrors: IDendronError[] = [];
+  const allErrors: ISailError[] = [];
 
   const proc = MDUtilsV5.procRemarkParse(
     {
@@ -85,7 +85,7 @@ export async function runAllDecorators(
       parseOnly: true,
     },
     {
-      dest: DendronASTDest.MD_DENDRON,
+      dest: SailASTDest.MD_DENDRON,
       vault: note.vault,
       fname: note.fname,
       config,
@@ -97,7 +97,7 @@ export async function runAllDecorators(
     if (text.length > maxNoteLength) {
       return {
         errors: [
-          new DendronError({
+          new SailError({
             message: `Stopping decorations because visible range is too large. Unless you have a massive screen or really long lines of text, this may be a bug.`,
             payload: { maxNoteLength, textLength: text.length },
           }),
@@ -109,7 +109,7 @@ export async function runAllDecorators(
     // eslint-disable-next-line no-await-in-loop
     await MdastUtils.visitAsync(tree, [], async (nodeIn) => {
       // This was parsed, it must have a position
-      const node = nodeIn as NonOptional<DendronASTNode, "position">;
+      const node = nodeIn as NonOptional<SailASTNode, "position">;
 
       // Need to update node position with the added offset from the range
       const decoratorOut = await runDecorator({

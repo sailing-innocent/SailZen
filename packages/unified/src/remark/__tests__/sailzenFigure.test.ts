@@ -1,6 +1,6 @@
 import { remark } from "remark";
 import remarkParse from "remark-parse";
-import { DendronASTDest } from "../../types";
+import { SailASTDest } from "../../types";
 import { sailzenFigure } from "../sailzenFigure";
 import { MDUtilsV5 } from "../..";
 
@@ -52,7 +52,7 @@ describe("sailzenFigure", () => {
     const processor = remark().use(remarkParse).use(sailzenFigure);
 
     MDUtilsV5.setProcData(processor as any, {
-      dest: DendronASTDest.DOC_EXPORT,
+      dest: SailASTDest.DOC_EXPORT,
     });
 
     const result = processor

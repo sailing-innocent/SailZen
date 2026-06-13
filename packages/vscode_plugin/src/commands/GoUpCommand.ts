@@ -4,7 +4,7 @@ import path from "path";
 import { Uri, window } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -13,7 +13,7 @@ type CommandOpts = {};
 type CommandOutput = void;
 
 export class GoUpCommand extends BasicCommand<CommandOpts, CommandOutput> {
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 

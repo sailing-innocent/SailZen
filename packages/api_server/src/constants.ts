@@ -1,11 +1,11 @@
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 
-export const LOG_FILE_NAME = "dendron.server.log";
+export const LOG_FILE_NAME = "sail.server.log";
 export const LOGGER_NAME = "api-server";
 
 export function getLogPath(): string {
   if (!process.env["LOG_DST"]) {
-    throw new DendronError({ message: "log not set" });
+    throw new SailError({ message: "log not set" });
   }
   return process.env["LOG_DST"];
 }

@@ -1,7 +1,7 @@
 import {
   CalendarViewMessage,
   CalendarViewMessageType,
-  DendronTreeViewKey,
+  SailTreeViewKey,
   DMessage,
   DMessageEnum,
   NoteProps,
@@ -14,16 +14,16 @@ import * as vscode from "vscode";
 
 import { CreateDailyJournalCommand } from "../commands/CreateDailyJournal";
 import { GotoNoteCommand } from "../commands/GotoNote";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { WebViewUtils } from "./utils";
 
 export class CalendarView implements vscode.WebviewViewProvider {
-  public static readonly viewType = DendronTreeViewKey.CALENDAR_VIEW;
+  public static readonly viewType = SailTreeViewKey.CALENDAR_VIEW;
   private _view?: vscode.WebviewView;
-  private _extension: IDendronExtension;
-  constructor(extension: IDendronExtension) {
+  private _extension: ISailExtension;
+  constructor(extension: ISailExtension) {
     this._extension = extension;
     this._extension.context.subscriptions.push(
       vscode.window.onDidChangeActiveTextEditor(this.onOpenTextDocument, this)
@@ -42,7 +42,7 @@ export class CalendarView implements vscode.WebviewViewProvider {
     this._view = webviewView;
     await WebViewUtils.prepareTreeView({
       ext: this._extension,
-      key: DendronTreeViewKey.CALENDAR_VIEW,
+      key: SailTreeViewKey.CALENDAR_VIEW,
       webviewView,
     });
     webviewView.webview.onDidReceiveMessage(

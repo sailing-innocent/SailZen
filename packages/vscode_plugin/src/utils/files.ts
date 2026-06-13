@@ -1,5 +1,5 @@
 import open from "open";
-import { DendronError, ERROR_STATUS } from "@saili/common-all";
+import { SailError, ERROR_STATUS } from "@saili/common-all";
 import { Logger } from "../logger";
 import _ from "lodash";
 
@@ -10,7 +10,7 @@ export class PluginFileUtils {
    */
   static async openWithDefaultApp(filePath: string) {
     await open(filePath).catch((err) => {
-      const error = DendronError.createFromStatus({
+      const error = SailError.createFromStatus({
         status: ERROR_STATUS.UNKNOWN,
         innerError: err,
       });

@@ -26,7 +26,7 @@ import { RenameHeaderCommand } from "../commands/RenameHeader";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { EditorUtils } from "../utils/EditorUtils";
 import { VSCodeUtils } from "../vsCodeUtils";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { WSUtils } from "../WSUtils";
 
 function activate(context: ExtensionContext) {
@@ -49,32 +49,32 @@ export const doctorFrontmatterProvider: CodeActionProvider = {
     context: CodeActionContext,
     _token: CancellationToken
   ) => {
-      // No-op if we're not in a Dendron Workspace
-      if (!DendronExtension.isActive()) {
-        return;
-      }
-      // Only provide fix frontmatter action if the diagnostic is correct
-      const diagnostics = context.diagnostics.filter(
-        (item) => item.code === BAD_FRONTMATTER_CODE
-      );
-      if (diagnostics.length !== 0) {
-        const action: CodeAction = {
+    // No-op if we're not in a Sail Workspace
+    if (!SailExtension.isActive()) {
+      return;
+    }
+    // Only provide fix frontmatter action if the diagnostic is correct
+    const diagnostics = context.diagnostics.filter(
+      (item) => item.code === BAD_FRONTMATTER_CODE
+    );
+    if (diagnostics.length !== 0) {
+      const action: CodeAction = {
+        title: "Fix the frontmatter",
+        diagnostics,
+        isPreferred: true,
+        kind: CodeActionKind.QuickFix,
+        command: {
+          command: new DoctorCommand(ExtensionProvider.getExtension()).key,
           title: "Fix the frontmatter",
-          diagnostics,
-          isPreferred: true,
-          kind: CodeActionKind.QuickFix,
-          command: {
-            command: new DoctorCommand(ExtensionProvider.getExtension()).key,
-            title: "Fix the frontmatter",
-            arguments: [
-              { scope: "file", action: DoctorActionsEnum.FIX_FRONTMATTER },
-            ],
-          },
-        };
-        return [action];
-      }
-      return undefined;
-    },
+          arguments: [
+            { scope: "file", action: DoctorActionsEnum.FIX_FRONTMATTER },
+          ],
+        },
+      };
+      return [action];
+    }
+    return undefined;
+  },
 };
 
 /**
@@ -91,117 +91,117 @@ export const refactorProvider: CodeActionProvider = {
     _context: CodeActionContext,
     _token: CancellationToken
   ) => {
-      // No-op if we're not in a Dendron Workspace
-      const ext = ExtensionProvider.getExtension();
-      if (!(await ext.isActiveAndIsDendronNote(_document.uri.fsPath))) {
-        return;
-      }
+    // No-op if we're not in a Sail Workspace
+    const ext = ExtensionProvider.getExtension();
+    if (!(await ext.isActiveAndIsSailNote(_document.uri.fsPath))) {
+      return;
+    }
 
-      const { editor, selection, text } = VSCodeUtils.getSelection();
-      if (!editor || !selection) return;
+    const { editor, selection, text } = VSCodeUtils.getSelection();
+    if (!editor || !selection) return;
 
-      const header = EditorUtils.getHeaderAt({
-        document: editor.document,
-        position: selection.start,
-      });
+    const header = EditorUtils.getHeaderAt({
+      document: editor.document,
+      position: selection.start,
+    });
 
-      // action declaration
-      const renameHeaderAction = {
+    // action declaration
+    const renameHeaderAction = {
+      title: "Rename Header",
+      isPreferred: true,
+      kind: CodeActionKind.RefactorInline,
+      command: {
+        command: new RenameHeaderCommand(ExtensionProvider.getExtension())
+          .key,
         title: "Rename Header",
-        isPreferred: true,
-        kind: CodeActionKind.RefactorInline,
-        command: {
-          command: new RenameHeaderCommand(ExtensionProvider.getExtension())
-            .key,
-          title: "Rename Header",
-          arguments: [{ source: "ContextualUICodeAction" }],
-        },
-      };
-      const brokenWikilinkAction = {
+        arguments: [{ source: "ContextualUICodeAction" }],
+      },
+    };
+    const brokenWikilinkAction = {
+      title: "Add missing note for wikilink declaration",
+      isPreferred: true,
+      kind: CodeActionKind.RefactorExtract,
+      command: {
+        command: new GotoNoteCommand(ExtensionProvider.getExtension()).key,
         title: "Add missing note for wikilink declaration",
-        isPreferred: true,
-        kind: CodeActionKind.RefactorExtract,
-        command: {
-          command: new GotoNoteCommand(ExtensionProvider.getExtension()).key,
-          title: "Add missing note for wikilink declaration",
-          arguments: [{ source: "ContextualUICodeAction" }],
-        },
-      };
-      const createNewNoteAction = {
+        arguments: [{ source: "ContextualUICodeAction" }],
+      },
+    };
+    const createNewNoteAction = {
+      title: "Extract text to new note",
+      isPreferred: true,
+      kind: CodeActionKind.RefactorExtract,
+      command: {
+        command: new NoteLookupCommand().key,
         title: "Extract text to new note",
-        isPreferred: true,
-        kind: CodeActionKind.RefactorExtract,
-        command: {
-          command: new NoteLookupCommand().key,
-          title: "Extract text to new note",
-          arguments: [
-            {
-              selectionType: LookupSelectionTypeEnum.selectionExtract,
-              source: "ContextualUICodeAction",
-            },
-          ],
-        },
-      };
+        arguments: [
+          {
+            selectionType: LookupSelectionTypeEnum.selectionExtract,
+            source: "ContextualUICodeAction",
+          },
+        ],
+      },
+    };
 
-      const copyHeaderRefAction = {
+    const copyHeaderRefAction = {
+      title: "Copy Header Reference",
+      isPreferred: true,
+      kind: CodeActionKind.RefactorInline,
+      command: {
+        command: new CopyNoteRefCommand(ExtensionProvider.getExtension()).key,
         title: "Copy Header Reference",
-        isPreferred: true,
-        kind: CodeActionKind.RefactorInline,
-        command: {
-          command: new CopyNoteRefCommand(ExtensionProvider.getExtension()).key,
-          title: "Copy Header Reference",
-          arguments: [{ source: "ContextualUICodeAction" }],
-        },
-      };
+        arguments: [{ source: "ContextualUICodeAction" }],
+      },
+    };
 
-      const WrapAsMarkdownLink = {
+    const WrapAsMarkdownLink = {
+      title: "Wrap as Markdown Link",
+      isPreferred: true,
+      kind: CodeActionKind.RefactorInline,
+      command: {
+        command: new PasteLinkCommand().key,
         title: "Wrap as Markdown Link",
-        isPreferred: true,
-        kind: CodeActionKind.RefactorInline,
-        command: {
-          command: new PasteLinkCommand().key,
-          title: "Wrap as Markdown Link",
-          arguments: [
-            {
-              source: "ContextualUICodeAction",
-              link: text,
-              selection,
-            },
-          ],
-        },
-      };
-
-      if (_range.isEmpty) {
-        const { engine } = ext.getDWorkspace();
-        const note = await new WSUtils(ext).getActiveNote();
-        //return a code action for create note if user clicked next to a broken wikilink
-        if (
-          note &&
-          (await EditorUtils.isBrokenWikilink({
-            editor,
-            engine,
-            note,
+        arguments: [
+          {
+            source: "ContextualUICodeAction",
+            link: text,
             selection,
-          }))
-        ) {
-          return [brokenWikilinkAction];
-        }
+          },
+        ],
+      },
+    };
 
-        //return a code action for rename header and copy header ref if user clicks next to a header
-        if (!_.isUndefined(header)) {
-          return [renameHeaderAction, copyHeaderRefAction];
-        }
-        // return if none
-        return;
-      } else {
-        //regex for url
-        if (!_.isUndefined(text) && isUrl(text)) {
-          return [WrapAsMarkdownLink];
-        }
-        return !_.isUndefined(header)
-          ? [createNewNoteAction, renameHeaderAction, copyHeaderRefAction]
-          : [createNewNoteAction];
+    if (_range.isEmpty) {
+      const { engine } = ext.getDWorkspace();
+      const note = await new WSUtils(ext).getActiveNote();
+      //return a code action for create note if user clicked next to a broken wikilink
+      if (
+        note &&
+        (await EditorUtils.isBrokenWikilink({
+          editor,
+          engine,
+          note,
+          selection,
+        }))
+      ) {
+        return [brokenWikilinkAction];
       }
-    },
+
+      //return a code action for rename header and copy header ref if user clicks next to a header
+      if (!_.isUndefined(header)) {
+        return [renameHeaderAction, copyHeaderRefAction];
+      }
+      // return if none
+      return;
+    } else {
+      //regex for url
+      if (!_.isUndefined(text) && isUrl(text)) {
+        return [WrapAsMarkdownLink];
+      }
+      return !_.isUndefined(header)
+        ? [createNewNoteAction, renameHeaderAction, copyHeaderRefAction]
+        : [createNewNoteAction];
+    }
+  },
 };
 

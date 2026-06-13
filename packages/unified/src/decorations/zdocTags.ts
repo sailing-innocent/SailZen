@@ -1,7 +1,7 @@
 import {
   position2VSCodeRange,
   ConfigUtils,
-  DendronConfig,
+  SailConfig,
   ReducedDEngine,
   TaskNoteUtils,
   VaultUtils,

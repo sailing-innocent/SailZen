@@ -1,12 +1,12 @@
 # Note Documentation 
 
-这一部分专门设计排版和导出功能，之前Dendron的导出功能只考虑了它自己的那一套web方案，我不太满意，希望能设计一套兼容书面排版和PPT的方案。
+这一部分专门设计排版和导出功能，之前Sail的导出功能只考虑了它自己的那一套web方案，我不太满意，希望能设计一套兼容书面排版和PPT的方案。
 
 ## 1. 现状分析
 
 ### 1.1 笔记库 (`vault/notes`)
 
-当前笔记库基于 **Dendron** 风格的分层命名体系，约 **8,400+** 个 Markdown 文件：
+当前笔记库基于 **Sail** 风格的分层命名体系，约 **8,400+** 个 Markdown 文件：
 
 | 命名空间 | 示例 | 用途 |
 |---------|------|------|
@@ -34,7 +34,7 @@ tags: [tool, latex]
 - Wikilink: `[[note.name]]` / `[[note.name#heading]]`
 - Note Reference: `![[note.name]]`（嵌入其他笔记内容）
 - Block Anchor: `^block-id`
-- Schema 系统：`dendron.*.schema.yml`
+- Schema 系统：`sail.*.schema.yml`
 - Hierarchical tags / hashtags
 
 ### 1.2 输出库 (`vault/doc`)
@@ -74,16 +74,16 @@ doc/
 
 ### 1.3 插件架构（SailZen VSCode Extension）
 
-当前插件基于 **Dendron Engine V3** + **Unified/Remark** 渲染管线：
+当前插件基于 **Sail Engine V3** + **Unified/Remark** 渲染管线：
 
 ```
-Markdown File → NoteParserV2 → DendronEngineV3
+Markdown File → NoteParserV2 → SailEngineV3
                                       ↓
                               Unified Processor
                               (remark plugins)
                               - wikiLinks
                               - noteRefsV2
-                              - dendronPub / dendronPreview
+                              - sailPub / sailPreview
                               - publishSite
                               - blockAnchors
                               - hashtags / zdocTags
@@ -93,7 +93,7 @@ Markdown File → NoteParserV2 → DendronEngineV3
 
 **关键扩展点**：
 - `ProcFlavor` / `ProcMode` 可区分 preview / publish / export 场景
-- `DendronASTDest` 支持 HTML / MD_DENDRON / MD_REGULAR 等目标
+- `SailASTDest` 支持 HTML / MD_DENDRON / MD_REGULAR 等目标
 - `remark` / `rehype` 插件体系可插入自定义转换
 - `NoteProps.custom` 可承载任意 frontmatter 扩展字段
 
@@ -161,7 +161,7 @@ Markdown File → NoteParserV2 → DendronEngineV3
 存储位置：
 - **Inline Profile**：笔记自身的 `doc` frontmatter 字段
 - **Project Profile**：`notes/project.<name>.doc.<format>.md` 作为根节点
-- **Shared Profile**：`.config/doc-profile.yml` 或 `dendron.yml` 的 `docProfiles` 字段
+- **Shared Profile**：`.config/doc-profile.yml` 或 `sail.yml` 的 `docProfiles` 字段
 
 #### 3.2.2 Note Role（笔记角色）
 
@@ -188,7 +188,7 @@ Markdown File → NoteParserV2 → DendronEngineV3
 
 ### 4.1 Frontmatter 扩展
 
-在现有 Dendron frontmatter 基础上新增 `doc` 顶级字段：
+在现有 Sail frontmatter 基础上新增 `doc` 顶级字段：
 
 ```yaml
 ---
@@ -605,11 +605,11 @@ sectioning:
 
 ### 7.3 Doc 模式预览
 
-新增 `DendronASTDest.DOC_PREVIEW` 目标：
+新增 `SailASTDest.DOC_PREVIEW` 目标：
 
 ```typescript
 // 在现有 preview pipeline 中新增一个分支
-if (dest === DendronASTDest.DOC_PREVIEW) {
+if (dest === SailASTDest.DOC_PREVIEW) {
   // 1. 执行 Profile Resolution（缓存结果）
   // 2. 执行 Document Assembly（仅当前笔记及其直接引用）
   // 3. 使用轻量级 renderer 显示近似排版效果
@@ -709,7 +709,7 @@ doc:
 
 | 现有组件 | 在 NoteDoc 中的复用 |
 |---------|-------------------|
-| `DendronEngineV3` | Note 查询、链接解析、graph 构建 |
+| `SailEngineV3` | Note 查询、链接解析、graph 构建 |
 | `unified` + `remark` | AST 处理管线，插入 SailZen Doc 插件 |
 | `NoteProps.custom` | 承载 `doc` frontmatter 扩展 |
 | `ProcFlavor` / `ProcMode` | 新增 `DOC_EXPORT` / `DOC_PREVIEW` 模式 |

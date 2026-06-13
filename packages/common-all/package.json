@@ -1,12 +1,12 @@
 {
   "name": "@saili/common-all",
-  "version": "0.3.15",
+  "version": "1.0.0",
   "description": "common-all",
   "type": "module",
   "license": "Apache 2.0",
   "repository": {
     "type": "git",
-    "url": "ssh://git@github.com/dendronhq/dendron.git",
+    "url": "ssh://git@github.com/sailhq/sail.git",
     "directory": "packages/common-all"
   },
   "author": {

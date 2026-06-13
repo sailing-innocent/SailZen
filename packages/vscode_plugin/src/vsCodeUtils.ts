@@ -1,7 +1,7 @@
 import {
   assertUnreachable,
   CONSTANTS,
-  DendronError,
+  SailError,
   getStage,
   InstallStatus,
   newRange,
@@ -16,7 +16,7 @@ import os from "os";
 import path from "path";
 import * as vscode from "vscode";
 import { CancellationTokenSource } from "vscode";
-import { DendronContext, GLOBAL_STATE } from "./constants";
+import { SailContext, GLOBAL_STATE } from "./constants";
 import { FileItem } from "./external/fileutils/FileItem";
 // NOTE: This file should NOT have a dependency on getDWorkspace()/getExtension()
 // If you would like to introduce a utility for workspace add it to IWSUtils/WSUtils.
@@ -130,7 +130,7 @@ export class VSCodeUtils {
   static getActiveTextEditorOrThrow() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      throw new DendronError({ message: "no active editor" });
+      throw new SailError({ message: "no active editor" });
     }
     return editor;
   }
@@ -367,11 +367,11 @@ export class VSCodeUtils {
     return !!process.env.VSCODE_DEBUGGING_EXTENSION;
   }
 
-  static setContext(key: DendronContext, status: boolean) {
+  static setContext(key: SailContext, status: boolean) {
     vscode.commands.executeCommand("setContext", key, status);
   }
 
-  static setContextStringValue(key: DendronContext, value: string) {
+  static setContextStringValue(key: SailContext, value: string) {
     vscode.commands.executeCommand("setContext", key, value);
   }
 
@@ -500,7 +500,7 @@ export class VSCodeUtils {
     );
   }
 
-  /** Opposite of `toRangeObject`, which is required to call Dendron APIs. */
+  /** Opposite of `toRangeObject`, which is required to call Sail APIs. */
   static toPlainRange(range: vscode.Range): VSRange {
     return newRange(
       range.start.line,

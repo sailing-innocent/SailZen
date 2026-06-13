@@ -4,7 +4,7 @@ import {
   DVault,
   ERROR_SEVERITY,
   FOLDERS,
-  IDendronError,
+  ISailError,
   isNotUndefined,
   NoteUtils,
   SchemaUtils,
@@ -191,7 +191,7 @@ export class ReloadIndexCommand extends BasicCommand<
     const ctx = "ReloadIndex.execute";
     this.L.info({ ctx, msg: "enter" });
     const ws = ExtensionProvider.getDWorkspace();
-    let initError: IDendronError | undefined;
+    let initError: ISailError | undefined;
     const { wsRoot, engine } = ws;
 
     // Check if there are any misconfigured self contained vaults.

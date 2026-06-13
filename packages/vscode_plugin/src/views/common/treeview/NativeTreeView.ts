@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import {
   asyncLoopOneAtATime,
-  DendronTreeViewKey,
+  SailTreeViewKey,
   TreeViewItemLabelTypeEnum,
 } from "@saili/common-all";
 import _ from "lodash";
@@ -12,8 +12,8 @@ import { TreeNote } from "./TreeNote";
 import * as vscode from "vscode";
 import { ExtensionProvider } from "../../../ExtensionProvider";
 /**
- * Class managing the vscode native version of the Dendron tree view - this is
- * the side panel UI that gives a tree view of the Dendron note hierarchy
+ * Class managing the vscode native version of the Sail tree view - this is
+ * the side panel UI that gives a tree view of the Sail note hierarchy
  */
 @injectable()
 export class NativeTreeView implements Disposable {
@@ -21,15 +21,15 @@ export class NativeTreeView implements Disposable {
   private _handler: Disposable | undefined;
   private _updateLabelTypeHandler:
     | ((opts: {
-        labelType: TreeViewItemLabelTypeEnum;
-        noRefresh?: boolean;
-      }) => void)
+      labelType: TreeViewItemLabelTypeEnum;
+      noRefresh?: boolean;
+    }) => void)
     | undefined;
   private _getExpandableTreeItemsHandler: (() => TreeNote[]) | undefined;
 
   constructor(
     @inject(EngineNoteProvider) private _provider: EngineNoteProvider
-  ) {}
+  ) { }
 
   dispose() {
     if (this._handler) {
@@ -52,7 +52,7 @@ export class NativeTreeView implements Disposable {
       this._provider
     );
 
-    this.treeView = window.createTreeView(DendronTreeViewKey.TREE_VIEW, {
+    this.treeView = window.createTreeView(SailTreeViewKey.TREE_VIEW, {
       treeDataProvider: this._provider,
       showCollapseAll: true,
     });

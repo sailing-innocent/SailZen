@@ -1,6 +1,6 @@
 import {
   assertUnreachable,
-  DendronError,
+  SailError,
   DNodeUtils,
   EngagementEvents,
   extractNoteChangeEntryCounts,
@@ -46,7 +46,7 @@ export default class RenameProvider implements vscode.RenameProvider {
       ? VaultUtils.getVaultByName({ vaults, vname: vaultName })
       : WSUtils.instance().getVaultFromDocument(document);
     if (targetVault === undefined) {
-      throw new DendronError({
+      throw new SailError({
         message: `Cannot rename note with specified vault (${vaultName}). Vault does not exist.`,
       });
     } else {
@@ -55,14 +55,14 @@ export default class RenameProvider implements vscode.RenameProvider {
         await engine.findNotes({ fname, vault: targetVault })
       )[0];
       if (targetNote === undefined) {
-        throw new DendronError({
+        throw new SailError({
           message: `Cannot rename note ${ref} that doesn't exist.`,
         });
       }
       this._targetNote = targetNote;
       const currentNote = await WSUtils.instance().getNoteFromDocument(document);
       if (_.isEqual(currentNote, targetNote)) {
-        throw new DendronError({
+        throw new SailError({
           message: `Cannot rename symbol that references current note.`,
         });
       }
@@ -78,7 +78,7 @@ export default class RenameProvider implements vscode.RenameProvider {
               : fullRefText.indexOf(ref) - 1;
           const labelOffset = label ? `${label}|`.length : 0;
           const vaultPrefixOffset = vaultName
-            ? `dendron://${vaultName}/`.length
+            ? `sail://${vaultName}/`.length
             : 0;
           const anchorOffset = anchorLength + 2;
           const start = new vscode.Position(
@@ -104,7 +104,7 @@ export default class RenameProvider implements vscode.RenameProvider {
           return reference.range;
         }
         case undefined:
-          throw new DendronError({
+          throw new SailError({
             message: "Unknown reference type",
             payload: {
               ctx: "RenameProvider.getRangeForReference",
@@ -209,10 +209,10 @@ export default class RenameProvider implements vscode.RenameProvider {
     position: vscode.Position
   ) {
     if (
-      !(await ExtensionProvider.isActiveAndIsDendronNote(document.uri.fsPath))
+      !(await ExtensionProvider.isActiveAndIsSailNote(document.uri.fsPath))
     ) {
-      throw new DendronError({
-        message: "Rename is not supported for non dendron notes",
+      throw new SailError({
+        message: "Rename is not supported for non sail notes",
       });
     }
     const { wsRoot, vaults } = ExtensionProvider.getDWorkspace();
@@ -227,7 +227,7 @@ export default class RenameProvider implements vscode.RenameProvider {
       this.refAtPos = reference;
       return this.getRangeForReference({ reference, document });
     } else {
-      throw new DendronError({
+      throw new SailError({
         message: "Rename is not supported for this symbol",
       });
     }

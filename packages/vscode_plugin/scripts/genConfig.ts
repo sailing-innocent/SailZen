@@ -3,7 +3,7 @@ import fs from "fs-extra";
 import _ from "lodash";
 import {
   CONFIG,
-  DendronContext,
+  SailContext,
   DENDRON_COMMANDS,
   DENDRON_MENUS,
   DENDRON_VIEWS,
@@ -23,7 +23,7 @@ function genEntry(entryDict: any) {
 
 function updateConfig() {
   const configuration = {
-    title: "dendron",
+    title: "sail",
   } as any;
   console.log("update config...");
   const config = genEntry(CONFIG);
@@ -79,12 +79,12 @@ function updateKeybindings() {
 
     // sanity, if command depends on plugin being active, add same when clause to keybinding
     if (
-      keyEnt.when === DendronContext.PLUGIN_ACTIVE &&
-      !configProps?.when?.includes(DendronContext.PLUGIN_ACTIVE)
+      keyEnt.when === SailContext.PLUGIN_ACTIVE &&
+      !configProps?.when?.includes(SailContext.PLUGIN_ACTIVE)
     ) {
       const when = configProps?.when
-        ? configProps.when + ` && ${DendronContext.PLUGIN_ACTIVE}`
-        : DendronContext.PLUGIN_ACTIVE;
+        ? configProps.when + ` && ${SailContext.PLUGIN_ACTIVE}`
+        : SailContext.PLUGIN_ACTIVE;
       configProps = { ...configProps, when };
     }
     return {
@@ -129,8 +129,8 @@ function main() {
   ];
   const yamlValidation = [
     {
-      fileMatch: "dendron.yml",
-      url: "./dist/dendron-yml.validator.json",
+      fileMatch: "sail.yml",
+      url: "./dist/sail-yml.validator.json",
     },
   ];
   const categories = ["Other"];

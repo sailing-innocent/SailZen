@@ -1,6 +1,6 @@
 import {
   DECORATION_TYPES,
-  DendronError,
+  SailError,
   DEngineClient,
   DNoteAnchorBasic,
   DVault,
@@ -12,8 +12,8 @@ import { Heading } from "@saili/engine-server";
 import {
   AnchorUtils,
   BlockAnchor,
-  DendronASTDest,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTTypes,
   HashTag,
   linkedNoteType,
   MdastUtils,
@@ -80,10 +80,10 @@ export class EditorUtils {
     if (headerLine.startsWith("#")) {
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: DendronASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_DENDRON }
       );
       const parsed = proc.parse(headerLine);
-      const header = select(DendronASTTypes.HEADING, parsed) as Heading | null;
+      const header = select(SailASTTypes.HEADING, parsed) as Heading | null;
       if (_.isNull(header)) return undefined;
       const headerText = AnchorUtils.headerText(header);
       if (headerText.length === 0) return undefined;
@@ -110,11 +110,11 @@ export class EditorUtils {
     const line = editor.document.lineAt(position.line);
     const proc = MDUtilsV5.procRemarkParseNoData(
       {},
-      { dest: DendronASTDest.MD_DENDRON }
+      { dest: SailASTDest.MD_DENDRON }
     );
     const parsed = proc.parse(_.trim(line.text));
     const blockAnchor = select(
-      DendronASTTypes.BLOCK_ANCHOR,
+      SailASTTypes.BLOCK_ANCHOR,
       parsed
     ) as BlockAnchor | null;
 
@@ -244,7 +244,7 @@ export class EditorUtils {
       { mode: ProcMode.FULL },
       {
         noteToRender: note,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
         vault: note.vault,
         fname: note.fname,
         config: DConfig.readConfigSync(engine.wsRoot),
@@ -257,15 +257,15 @@ export class EditorUtils {
     await MdastUtils.visitAsync(
       parsedLine,
       [
-        DendronASTTypes.WIKI_LINK,
-        DendronASTTypes.ZDOCTAG,
-        DendronASTTypes.HASHTAG,
+        SailASTTypes.WIKI_LINK,
+        SailASTTypes.ZDOCTAG,
+        SailASTTypes.HASHTAG,
       ],
       async (linkvalue) => {
         link = linkvalue as WikiLinkNoteV4 | ZDocTag | HashTag;
         if (!link) return false;
         fname =
-          link.type === DendronASTTypes.WIKI_LINK ? link.value : link.fname;
+          link.type === SailASTTypes.WIKI_LINK ? link.value : link.fname;
         type = (await linkedNoteType({ fname, engine, vaults: engine.vaults }))
           .type;
         return false;
@@ -320,7 +320,7 @@ export class EditorUtils {
     return new Promise((resolve) => {
       const proc = MDUtilsV5.procRemarkParseNoData(
         {},
-        { dest: DendronASTDest.MD_DENDRON }
+        { dest: SailASTDest.MD_DENDRON }
       );
       const parsed = proc.parse(document.getText());
       visit(parsed, ["yaml"], (node) => {
@@ -356,7 +356,7 @@ export class EditorUtils {
         return out < 1;
       });
     } else {
-      throw new DendronError({ message: "Note a note." });
+      throw new SailError({ message: "Note a note." });
     }
   }
 }

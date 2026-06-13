@@ -1,12 +1,12 @@
 import {
   assertUnreachable,
   ConfigUtils,
-  DendronError,
+  SailError,
   DNoteRefLink,
   DVault,
   ERROR_STATUS,
   getSlugger,
-  DendronConfig,
+  SailConfig,
   NoteDicts,
   NotePropsMeta,
   OptionalExceptFor,
@@ -39,8 +39,8 @@ import { hierarchies } from "./remark";
 import { backlinks } from "./remark/backlinks";
 import { BacklinkOpts, backlinksHover } from "./remark/backlinksHover";
 import { blockAnchors } from "./remark/blockAnchors";
-import { dendronHoverPreview } from "./remark/dendronPreview";
-import { dendronPub, DendronPubOpts } from "./remark/dendronPub";
+import { sailHoverPreview } from "./remark/sailPreview";
+import { sailPub, SailPubOpts } from "./remark/sailPub";
 import { extendedImage } from "./remark/extendedImage";
 import { hashtags } from "./remark/hashtag";
 import { noteRefsV2 } from "./remark/noteRefsV2";
@@ -49,7 +49,7 @@ import { wikiLinks, WikiLinksOpts } from "./remark/wikiLinks";
 import { sailzenCite } from "./remark/sailzenCite";
 import { sailzenFigure } from "./remark/sailzenFigure";
 import { sailzenBlocks } from "./remark/sailzenBlocks";
-import { DendronASTDest, UnistNode } from "./types";
+import { SailASTDest, UnistNode } from "./types";
 import path from "path";
 import { Parent } from "unist";
 
@@ -98,8 +98,8 @@ export type ProcOptsV5 = {
 export type ProcDataFullOptsV5 = {
   vault: DVault;
   fname: string;
-  dest: DendronASTDest;
-  config: DendronConfig;
+  dest: SailASTDest;
+  config: SailConfig;
   vaults?: DVault[];
 
   /**
@@ -111,7 +111,7 @@ export type ProcDataFullOptsV5 = {
    */
   fm?: any;
   wikiLinksOpts?: WikiLinksOpts;
-  publishOpts?: DendronPubOpts;
+  publishOpts?: SailPubOpts;
   backlinkHoverOpts?: BacklinkOpts;
   wsRoot?: string;
   noteToRender: NotePropsMeta;
@@ -125,13 +125,13 @@ export type ProcDataFullV5 = {
   // main properties that are configured when processor is created
   vault: DVault;
   fname: string;
-  dest: DendronASTDest;
+  dest: SailASTDest;
   wsRoot: string;
   vaults: DVault[];
 
   // derived: unless passed in, these come from engine or are set by
   // other unified plugins
-  config: DendronConfig;
+  config: SailConfig;
   insideNoteRef?: boolean;
 
   fm?: any;
@@ -215,12 +215,12 @@ export class MDUtilsV5 {
   }
 
   static getProcOpts(proc: Processor): ProcOptsV5 {
-    const _data = (proc.data("dendronProcOptsv5" as any) as ProcOptsV5 | undefined);
+    const _data = (proc.data("sailProcOptsv5" as any) as ProcOptsV5 | undefined);
     return (_data || {}) as ProcOptsV5;
   }
 
   static getProcData(proc: Processor): ProcDataFullV5 {
-    const _data = (proc.data("dendronProcDatav5" as any) as ProcDataFullV5 | undefined);
+    const _data = (proc.data("sailProcDatav5" as any) as ProcDataFullV5 | undefined);
     return (_data || {}) as ProcDataFullV5;
   }
 
@@ -229,13 +229,13 @@ export class MDUtilsV5 {
   }
 
   static setProcData(proc: Processor, opts: Partial<ProcDataFullV5>) {
-    const _data = (proc.data("dendronProcDatav5" as any) as ProcDataFullV5 | undefined) || {};
-    return proc.data("dendronProcDatav5" as any, { ..._data, ...opts });
+    const _data = (proc.data("sailProcDatav5" as any) as ProcDataFullV5 | undefined) || {};
+    return proc.data("sailProcDatav5" as any, { ..._data, ...opts });
   }
 
   static setProcOpts(proc: Processor, opts: ProcOptsV5) {
-    const _data = (proc.data("dendronProcOptsv5" as any) as ProcOptsV5 | undefined) || {};
-    return proc.data("dendronProcOptsv5" as any, { ..._data, ...opts });
+    const _data = (proc.data("sailProcOptsv5" as any) as ProcOptsV5 | undefined) || {};
+    return proc.data("sailProcOptsv5" as any, { ..._data, ...opts });
   }
 
   static isV5Active(proc: Processor) {
@@ -244,7 +244,7 @@ export class MDUtilsV5 {
 
   static shouldApplyPublishingRules(proc: Processor): boolean {
     return (
-      this.getProcData(proc).dest === DendronASTDest.HTML &&
+      this.getProcData(proc).dest === SailASTDest.HTML &&
       this.getProcOpts(proc).flavor === ProcFlavor.PUBLISHING
     );
   }
@@ -263,13 +263,13 @@ export class MDUtilsV5 {
   }
 
   /**
-   * Used for processing a Dendron markdown note
+   * Used for processing a Sail markdown note
    */
   static _procRemark(
     opts: ProcOptsV5,
     data: OptionalExceptFor<ProcDataFullOptsV5, "config">
   ) {
-    const errors: DendronError[] = [];
+    const errors: SailError[] = [];
     opts = _.defaults(opts, { flavor: ProcFlavor.REGULAR });
     let proc = (remark() as any)
       .use(remarkParse, { gfm: true })
@@ -288,8 +288,8 @@ export class MDUtilsV5 {
 
     // Add SailZen Doc syntax extensions for export/preview modes
     if (
-      data.dest === DendronASTDest.DOC_EXPORT ||
-      data.dest === DendronASTDest.DOC_PREVIEW
+      data.dest === SailASTDest.DOC_EXPORT ||
+      data.dest === SailASTDest.DOC_PREVIEW
     ) {
       proc = proc
         .use(sailzenCite)
@@ -312,7 +312,7 @@ export class MDUtilsV5 {
       case ProcMode.FULL:
         {
           if (_.isUndefined(data)) {
-            throw DendronError.createFromStatus({
+            throw SailError.createFromStatus({
               status: ERROR_STATUS.INVALID_CONFIG,
               message: `data is required when not using raw proc`,
             });
@@ -320,7 +320,7 @@ export class MDUtilsV5 {
           const requiredProps = ["vault", "fname", "dest"];
           const resp = checkProps({ requiredProps, data });
           if (!resp.valid) {
-            throw DendronError.createFromStatus({
+            throw SailError.createFromStatus({
               status: ERROR_STATUS.INVALID_CONFIG,
               message: `missing required fields in data. ${resp.missing.join(
                 " ,"
@@ -335,8 +335,8 @@ export class MDUtilsV5 {
 
           this.setProcData(proc as any, data as ProcDataFullV5);
 
-          // NOTE: order matters. this needs to appear before `dendronPub`
-          if (data.dest === DendronASTDest.HTML) {
+          // NOTE: order matters. this needs to appear before `sailPub`
+          if (data.dest === SailASTDest.HTML) {
             //do not convert backlinks, children if convertLinks set to false. Used by gdoc export pod. It uses HTMLPublish pod to do the md-->html conversion
             if (
               _.isUndefined(data.wikiLinksOpts?.convertLinks) ||
@@ -345,7 +345,7 @@ export class MDUtilsV5 {
               proc = proc.use(hierarchies).use(backlinks) as any;
             }
           }
-          // Add flavor specific plugins. These need to come before `dendronPub`
+          // Add flavor specific plugins. These need to come before `sailPub`
           // to fix extended image URLs before they get converted to HTML
           if (opts.flavor === ProcFlavor.PREVIEW) {
             // No extra plugins needed for the preview right now. We used to
@@ -357,7 +357,7 @@ export class MDUtilsV5 {
             opts.flavor === ProcFlavor.HOVER_PREVIEW ||
             opts.flavor === ProcFlavor.BACKLINKS_PANEL_HOVER
           ) {
-            proc = proc.use(dendronHoverPreview) as any;
+            proc = proc.use(sailHoverPreview) as any;
           }
           // add additional plugins
           const isNoteRef = !_.isUndefined((data as ProcDataFullV5).noteRefLvl);
@@ -376,7 +376,7 @@ export class MDUtilsV5 {
           const publishingConfig = ConfigUtils.getPublishing(config);
           const assetsPrefix = publishingConfig.assetsPrefix;
 
-          proc = proc.use(dendronPub, {
+          proc = proc.use(sailPub, {
             insertTitle,
             transformNoPublish: opts.flavor === ProcFlavor.PUBLISHING,
             ...data.publishOpts,
@@ -391,7 +391,7 @@ export class MDUtilsV5 {
           // Add remaining flavor specific plugins
           if (opts.flavor === ProcFlavor.PUBLISHING) {
             const prefix = assetsPrefix ? assetsPrefix + "/notes/" : "/notes/";
-            proc = proc.use(dendronPub, {
+            proc = proc.use(sailPub, {
               wikiLinkOpts: {
                 prefix,
               },
@@ -403,7 +403,7 @@ export class MDUtilsV5 {
         const requiredProps = ["vault", "dest"];
         const resp = checkProps({ requiredProps, data });
         if (!resp.valid) {
-          throw DendronError.createFromStatus({
+          throw SailError.createFromStatus({
             status: ERROR_STATUS.INVALID_CONFIG,
             message: `missing required fields in data. ${resp.missing.join(
               " ,"
@@ -415,7 +415,7 @@ export class MDUtilsV5 {
         this.setProcData(proc as any, data as ProcDataFullV5);
 
         // add additional plugins
-        const config = data.config as DendronConfig;
+        const config = data.config as SailConfig;
         const shouldApplyPublishRules =
           MDUtilsV5.shouldApplyPublishingRules(proc as any);
 
@@ -436,7 +436,7 @@ export class MDUtilsV5 {
   static _procRehype(opts: ProcOptsV5, data: Omit<ProcDataFullOptsV5, "dest">) {
     const pRemarkParse = this.procRemarkParse(opts, {
       ...data,
-      dest: DendronASTDest.HTML,
+      dest: SailASTDest.HTML,
     });
 
     // add additional plugin for publishing
@@ -488,7 +488,7 @@ export class MDUtilsV5 {
   }
 
   /**
-   * Parse Dendron Markdown Note. No compiler is attached.
+   * Parse Sail Markdown Note. No compiler is attached.
    * @param opts
    * @param data
    * @returns
@@ -508,7 +508,7 @@ export class MDUtilsV5 {
    */
   static procRemarkParseNoData(
     opts: Omit<ProcOptsV5, "mode" | "parseOnly">,
-    data: Partial<ProcDataFullOptsV5> & { dest: DendronASTDest }
+    data: Partial<ProcDataFullOptsV5> & { dest: SailASTDest }
   ) {
     // ProcMode.NO_DATA doesn't need config so we generate default to pass compilation
     const withConfig = { ...data, config: ConfigUtils.genDefaultConfig() };

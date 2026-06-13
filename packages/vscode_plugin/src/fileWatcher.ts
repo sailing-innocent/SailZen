@@ -54,7 +54,7 @@ export class FileWatcher {
   }
 
   static watcherType(opts: WorkspaceOpts): "plugin" | "engine" {
-    const forceWatcherType = opts.dendronConfig?.dev?.forceWatcherType;
+    const forceWatcherType = opts.sailConfig?.dev?.forceWatcherType;
     // If a certain type of watcher has been forced, try to use that
     if (forceWatcherType !== undefined) return forceWatcherType;
 

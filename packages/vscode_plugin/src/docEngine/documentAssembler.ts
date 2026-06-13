@@ -107,7 +107,7 @@ export function assembleDocument(
 /**
  * Recursively expand ![[note.ref]] patterns in markdown text.
  *
- * Supported Dendron embed-ref syntax variants:
+ * Supported Sail embed-ref syntax variants:
  *   ![[note.fname]]
  *   ![[note.fname#anchor]]
  *   ![[Alias|note.fname]]

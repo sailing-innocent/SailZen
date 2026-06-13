@@ -1,8 +1,8 @@
 import { DNodeType } from "@saili/common-all";
 import { CancellationTokenSource } from "vscode";
-import { DendronBtn } from "./ButtonTypes";
+import { SailBtn } from "./ButtonTypes";
 import { ILookupProvider } from "./LookupProviderInterface";
-import { DendronQuickPicker } from "./types";
+import { SailQuickPicker } from "./types";
 
 export type CreateQuickPickOpts = {
   title?: string;
@@ -17,7 +17,7 @@ export type CreateQuickPickOpts = {
   initialValue?: string;
   nonInteractive?: boolean;
   /**
-   * See {@link DendronQuickPicker["alwaysShow"]}
+   * See {@link SailQuickPicker["alwaysShow"]}
    */
   alwaysShow?: boolean;
   /**
@@ -32,14 +32,14 @@ export type PrepareQuickPickOpts = CreateQuickPickOpts & {
 };
 
 export type ShowQuickPickOpts = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   provider: ILookupProvider;
   nonInteractive?: boolean;
   fuzzThreshold?: number;
 };
 
 export interface ILookupController {
-  readonly quickPick: DendronQuickPicker;
+  readonly quickPick: SailQuickPicker;
 
   fuzzThreshold: number;
 
@@ -54,9 +54,9 @@ export interface ILookupController {
    */
   prepareQuickPick(
     opts: PrepareQuickPickOpts
-  ): Promise<{ quickpick: DendronQuickPicker }>;
+  ): Promise<{ quickpick: SailQuickPicker }>;
 
-  showQuickPick(opts: ShowQuickPickOpts): Promise<DendronQuickPicker>;
+  showQuickPick(opts: ShowQuickPickOpts): Promise<SailQuickPicker>;
 
   onHide(): void;
 
@@ -72,7 +72,7 @@ export interface ILookupController {
       initialValue?: string;
       provider: ILookupProvider;
     }
-  ): Promise<DendronQuickPicker>;
+  ): Promise<SailQuickPicker>;
 
   createCancelSource(): CancellationTokenSource;
 
@@ -97,7 +97,7 @@ export type LookupControllerCreateOpts = {
   /**
    * Replace default buttons
    */
-  buttons?: DendronBtn[];
+  buttons?: SailBtn[];
   /**
    * When true, don't enable vault selection
    */
@@ -113,7 +113,7 @@ export type LookupControllerCreateOpts = {
   /**
    * Additional buttons
    */
-  extraButtons?: DendronBtn[];
+  extraButtons?: SailBtn[];
   /**
    * 0.0 = exact match
    * 1.0 = match anything

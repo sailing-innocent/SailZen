@@ -1,4 +1,4 @@
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 import { DLogger } from "@saili/common-server";
 import { HistoryService } from "@saili/engine-server";
 import { ILookupController } from "./LookupControllerInterface";
@@ -40,7 +40,7 @@ export class NoteLookupProviderUtils {
               const out = await onError(event);
               resolve(out);
             } else {
-              const error = event.data.error as DendronError;
+              const error = event.data.error as SailError;
               logger.error({ error });
               resolve(undefined);
             }

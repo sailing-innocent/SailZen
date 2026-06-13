@@ -1,4 +1,4 @@
-import { DendronUserSpecial } from "./types";
+import { SailUserSpecial } from "./types";
 import { DVault } from "./types/DVault";
 
 export class DUser {
@@ -8,7 +8,7 @@ export class DUser {
   }
 
   static createAnonymous() {
-    return new DUser(DendronUserSpecial.anonymous);
+    return new DUser(SailUserSpecial.anonymous);
   }
 
   canPushVault(vault: DVault) {
@@ -19,7 +19,7 @@ export class DUser {
       return true;
     }
     if (
-      vault.userPermission.write[0] === DendronUserSpecial.everyone ||
+      vault.userPermission.write[0] === SailUserSpecial.everyone ||
       vault.userPermission.write.includes(this.username)
     ) {
       return true;

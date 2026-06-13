@@ -27,7 +27,7 @@ export type DateTimeFormat =
   | "TIME_WITH_SHORT_OFFSET";
 
 export enum CodeConfigKeys {
-  DEFAULT_TIMESTAMP_DECORATION_FORMAT = "dendron.defaultTimestampDecorationFormat",
+  DEFAULT_TIMESTAMP_DECORATION_FORMAT = "sail.defaultTimestampDecorationFormat",
 }
 
 export interface IBaseCommand<

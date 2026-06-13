@@ -1,6 +1,6 @@
 import { DWorkspaceV2 } from "@saili/common-all";
-import { DendronBaseWorkspace } from "./baseWorkspace";
+import { SailBaseWorkspace } from "./baseWorkspace";
 
-export class DendronNativeWorkspace
-  extends DendronBaseWorkspace
-  implements DWorkspaceV2 {}
+export class SailNativeWorkspace
+  extends SailBaseWorkspace
+  implements DWorkspaceV2 { }

@@ -2,7 +2,7 @@ import {
   asyncLoopOneAtATime,
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   DWorkspace,
   FOLDERS,
@@ -10,7 +10,7 @@ import {
   VaultRemoteSource,
   VaultUtils,
   WorkspaceEvents,
-  DendronConfig,
+  SailConfig,
 } from "@saili/common-all";
 import {
   DConfig,
@@ -36,7 +36,7 @@ import {
 } from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS, DENDRON_REMOTE_VAULTS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
 import { PluginFileUtils } from "../utils/files";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
@@ -67,7 +67,7 @@ export class AddExistingVaultCommand extends BasicCommand<
 > {
   key = DENDRON_COMMANDS.ADD_EXISTING_VAULT.key;
 
-  constructor(private _ext: IDendronExtension) {
+  constructor(private _ext: ISailExtension) {
     super();
   }
 
@@ -206,7 +206,7 @@ export class AddExistingVaultCommand extends BasicCommand<
       const remote = await VSCodeUtils.showInputBox({
         title: "Remote URL",
         prompt: "Enter the URL for the git remote",
-        placeHolder: "git@github.com:dendronhq/dendron.git",
+        placeHolder: "git@github.com:sailhq/sail.git",
         ignoreFocusOut: true,
       });
       // Cancelled
@@ -242,15 +242,15 @@ export class AddExistingVaultCommand extends BasicCommand<
       {
         label: VaultType.LOCAL,
         picked: true,
-        detail: "eg. /home/dendron/hello-vault",
+        detail: "eg. /home/sail/hello-vault",
         description:
-          "A local vault is a Dendron vault that is present in your computer",
+          "A local vault is a Sail vault that is present in your computer",
       },
       {
         label: VaultType.REMOTE,
-        detail: "eg. git@github.com:dendronhq/dendron-site.git",
+        detail: "eg. git@github.com:sailhq/sail-site.git",
         description:
-          "A remote vault is a Dendron vault that is available at a git endpoint",
+          "A remote vault is a Sail vault that is available at a git endpoint",
       },
     ]);
     if (!sourceTypeSelected) {
@@ -334,7 +334,7 @@ export class AddExistingVaultCommand extends BasicCommand<
         const { name, pathRemote: remoteUrl } = opts;
         const localUrl = opts.path;
         if (!remoteUrl) {
-          throw new DendronError({
+          throw new SailError({
             message:
               "Remote vault has no remote set. This should never happen, please send a bug report if you encounter this.",
           });
@@ -366,7 +366,7 @@ export class AddExistingVaultCommand extends BasicCommand<
         if (workspace) {
           // This is a backwards-compatibility fix until workspace vaults are
           // deprecated. If what we cloned was a workspace, then move it where
-          // Dendron expects it, because we can't override the path.
+          // Sail expects it, because we can't override the path.
           const clonedWSPath = path.join(wsRoot, workspace.name);
           await fs.move(localUrl, clonedWSPath);
           // Because we moved the workspace, we also have to recompute the vaults config.
@@ -421,7 +421,7 @@ export class AddExistingVaultCommand extends BasicCommand<
           path.join(vaultRootPath, CONSTANTS.DENDRON_CONFIG_FILE)
         )
       ) {
-        const vaultConfig = DConfig.getRaw(vaultRootPath) as DendronConfig;
+        const vaultConfig = DConfig.getRaw(vaultRootPath) as SailConfig;
         if (ConfigUtils.getVaults(vaultConfig)?.length > 1) {
           // Wait for the user to accept the prompt, otherwise window will
           // reload before they see the warning
@@ -444,7 +444,7 @@ export class AddExistingVaultCommand extends BasicCommand<
             // Open a page in the default browser that describes what transitive
             // dependencies are, and how to add them.
             await PluginFileUtils.openWithDefaultApp(
-              "https://wiki.dendron.so/notes/q9yo0y7czv8mxlkbnw1ugj1"
+              "https://wiki.sail.so/notes/q9yo0y7czv8mxlkbnw1ugj1"
             );
           }
         }
@@ -477,7 +477,7 @@ export class AddExistingVaultCommand extends BasicCommand<
     const workspaceDir = path.join(wsRoot, workspace.name);
     await fs.ensureDir(workspaceDir);
     await GitUtils.addToGitignore({
-      addPath: ".dendron.cache.*",
+      addPath: ".sail.cache.*",
       root: workspaceDir,
     });
   }

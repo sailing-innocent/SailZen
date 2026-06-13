@@ -10,7 +10,7 @@ This directory contains build scripts for managing Prisma client generation and 
 
 TypeScript-based build script that handles:
 - Prisma client generation validation
-- Copying generated Prisma client to runtime location (`~/.dendron/generated-prisma-client`)
+- Copying generated Prisma client to runtime location (`~/.sail/generated-prisma-client`)
 - Copying shim files (`prisma-shim.js`, `adm-zip.js`) to the compiled `lib` directory
 
 ## Usage
@@ -30,7 +30,7 @@ pnpm prisma:postinstall   # Copy files to appropriate locations
 
 1. **Prisma Generation**: `prisma generate` creates the client in `src/drivers/generated-prisma-client`
 2. **Post-install**: The build script copies:
-   - Prisma client → `~/.dendron/generated-prisma-client` (runtime location)
+   - Prisma client → `~/.sail/generated-prisma-client` (runtime location)
    - Shim files → `lib/drivers/` (compiled output)
 
 ## Architecture

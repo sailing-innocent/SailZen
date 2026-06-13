@@ -1,9 +1,9 @@
 import {
   APIUtils,
   CONSTANTS,
-  DendronEditorViewKey,
-  DendronError,
-  DendronTreeViewKey,
+  SailEditorViewKey,
+  SailError,
+  SailTreeViewKey,
   getStage,
   getWebTreeViewEntry,
   stringifyQueryParams,
@@ -16,7 +16,7 @@ import {
 } from "@saili/common-server";
 import path from "path";
 import * as vscode from "vscode";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -25,7 +25,7 @@ import fs from "fs-extra";
 export class WebViewUtils {
   /**
    * Get root uri where web view assets are store
-   * When running in development, this is in the build folder of `dendron-plugin-views`
+   * When running in development, this is in the build folder of `sail-plugin-views`
    * @returns
    */
   static getViewRootUri() {
@@ -136,8 +136,8 @@ export class WebViewUtils {
     key,
     webviewView,
   }: {
-    ext: IDendronExtension;
-    key: DendronTreeViewKey;
+    ext: ISailExtension;
+    key: SailTreeViewKey;
     webviewView: vscode.WebviewView;
   }) {
     const viewEntry = getWebTreeViewEntry(key);
@@ -169,7 +169,7 @@ export class WebViewUtils {
     view,
   }: {
     title: string;
-    view: DendronTreeViewKey | DendronEditorViewKey;
+    view: SailTreeViewKey | SailEditorViewKey;
   }) => {
     const { wsRoot, config } = ExtensionProvider.getDWorkspace();
     const ext = ExtensionProvider.getExtension();
@@ -179,11 +179,11 @@ export class WebViewUtils {
       port,
     });
 
-    // View is `dendron.{camelCase}`
-    // we want to remove `dendron` and transform camelCase to snake case
+    // View is `sail.{camelCase}`
+    // we want to remove `sail` and transform camelCase to snake case
     // In addition, if we are serving using a live nextjs server, don't append .html at the end
     const src = `${await ext.getClientAPIRootUrl()}vscode/${view.replace(
-      /^dendron\./,
+      /^sail\./,
       ""
     )}${config.dev?.nextServerUrl ? "" : ".html"}?${qs}`;
     Logger.info({ ctx: "genHTML", view, src });
@@ -225,13 +225,13 @@ export class WebViewUtils {
             vsTheme = vsTheme.replace(reduceMotionClassName,"").trim()
           }
 
-          let dendronTheme;
+          let sailTheme;
           if (vsTheme.endsWith("dark")) {
-              dendronTheme = "dark";
+              sailTheme = "dark";
           } else {
-              dendronTheme = "light";
+              sailTheme = "light";
           }
-          return {vsTheme, dendronTheme};
+          return {vsTheme, sailTheme};
       }
 
       window.addEventListener("message", (e) => {
@@ -245,7 +245,7 @@ export class WebViewUtils {
                   type: "onThemeChange",
                   source: "vscode",
                   data: {
-                      theme: getTheme().dendronTheme
+                      theme: getTheme().sailTheme
                   }
               });
               // get active editor from vscode
@@ -283,7 +283,7 @@ export class WebViewUtils {
     view,
   }: {
     title: string;
-    view: DendronTreeViewKey;
+    view: SailTreeViewKey;
   }) => {
     return WebViewUtils.genHTMLForView({ title, view });
   };
@@ -293,7 +293,7 @@ export class WebViewUtils {
     view,
   }: {
     title: string;
-    view: DendronEditorViewKey;
+    view: SailEditorViewKey;
   }) => {
     /**
      * Implementation might differ in the future

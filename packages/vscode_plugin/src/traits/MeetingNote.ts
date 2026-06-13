@@ -1,24 +1,24 @@
 import {
-  DendronConfig,
+  SailConfig,
   NoteTrait,
   OnCreateContext,
   onWillCreateProps,
   SetNameModifierResp,
 } from "@saili/common-all";
-import { DendronClientUtils } from "../clientUtils";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { SailClientUtils } from "../clientUtils";
+import { ISailExtension } from "../sailExtensionInterface";
 
 export class MeetingNote implements NoteTrait {
   id: string = "meetingNote";
   getTemplateType: any;
 
-  _config: DendronConfig;
-  _ext: IDendronExtension;
+  _config: SailConfig;
+  _ext: ISailExtension;
   _noConfirm: boolean = false;
 
   constructor(
-    config: DendronConfig,
-    ext: IDendronExtension,
+    config: SailConfig,
+    ext: ISailExtension,
     noConfirm?: boolean
   ) {
     this._config = config;
@@ -30,7 +30,7 @@ export class MeetingNote implements NoteTrait {
     const promptUserForModification = !this._noConfirm;
     return {
       setNameModifier(this, _opts: OnCreateContext): SetNameModifierResp {
-        const name = DendronClientUtils.getMeetingNoteName();
+        const name = SailClientUtils.getMeetingNoteName();
 
         return { name, promptUserForModification };
       },

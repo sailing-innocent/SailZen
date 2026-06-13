@@ -1,6 +1,6 @@
 import _ from "lodash";
 import path from "path";
-import type { DVault, DendronConfig, NoteProps } from "./types";
+import type { DVault, SailConfig, NoteProps } from "./types";
 import { RESERVED_KEYS, FOLDERS } from "./constants";
 import { ConfigUtils } from "./utils";
 import { VaultUtils } from "./vault";
@@ -21,7 +21,7 @@ const formatString = (opts: { txt: string; note: NoteProps }) => {
  */
 
 export function canShowGitLink(opts: {
-  config: DendronConfig;
+  config: SailConfig;
   note: NoteProps;
 }) {
   const { config, note } = opts;
@@ -35,23 +35,23 @@ export function canShowGitLink(opts: {
   const githubConfig = ConfigUtils.getGithubConfig(config);
   return githubConfig
     ? _.every([
-        githubConfig.enableEditLink,
-        githubConfig.editLinkText,
-        githubConfig.editRepository,
-        githubConfig.editBranch,
-        githubConfig.editViewMode,
-      ])
+      githubConfig.enableEditLink,
+      githubConfig.editLinkText,
+      githubConfig.editRepository,
+      githubConfig.editBranch,
+      githubConfig.editViewMode,
+    ])
     : false;
 }
 
-export function githubUrl(opts: { note: NoteProps; config: DendronConfig }) {
+export function githubUrl(opts: { note: NoteProps; config: SailConfig }) {
   const url = getGithubEditUrl(opts);
   return url;
 }
 
 export function getGithubEditUrl(opts: {
   note: NoteProps;
-  config: DendronConfig;
+  config: SailConfig;
   wsRoot?: string;
 }) {
   const { note, config, wsRoot } = opts;
@@ -99,7 +99,7 @@ export function getGithubEditUrl(opts: {
 }
 
 export function git2Github(gitUrl: string) {
-  // 'git@github.com:kevinslin/dendron-vault.git'
+  // 'git@github.com:kevinslin/sail-vault.git'
   // @ts-ignore
   const [_, userAndRepo] = gitUrl.split(":");
   const [user, repo] = userAndRepo.split("/");
@@ -136,8 +136,8 @@ export function getRepoNameFromURL(url: string): string {
  * this even if the vault has no remote.
  *
  * This is the relative path within the dependencies folder, like
- * `github.com/dendronhq/dendron-site`. For more details see the
- * [[Self Contained Vaults RFC|dendron://dendron.docs/rfc.42-self-contained-vaults]]
+ * `github.com/sailhq/sail-site`. For more details see the
+ * [[Self Contained Vaults RFC|sail://sail.docs/rfc.42-self-contained-vaults]]
  */
 export function remoteUrlToDependencyPath({
   vaultName,
@@ -150,13 +150,13 @@ export function remoteUrlToDependencyPath({
   // local-only folder.
   if (url === undefined) return FOLDERS.LOCAL_DEPENDENCY;
   // Check if it matches any web URLs like
-  // https://github.com/dendronhq/dendron-site.git This may also look like
-  // http://example.com:8000/dendronhq/dendron-site.git, we skip the port
+  // https://github.com/sailhq/sail-site.git This may also look like
+  // http://example.com:8000/sailhq/sail-site.git, we skip the port
   const webMatch =
     // starts with http:// or https://
     // followed by the domain, which will continue until we hit /
     // if we see a port definition like :8000, we skip it for simplicity
-    // then we have the path of the URL, like dendronhq/dendron-site
+    // then we have the path of the URL, like sailhq/sail-site
     // finally, if there's a `.git` we'll discard that for a cleaner name
     /^(https?:\/\/)(?<domain>[^/:]+)(:[0-9]+)?\/(?<path>.+?)(\.git)?$/.exec(
       url
@@ -170,13 +170,13 @@ export function remoteUrlToDependencyPath({
     );
   }
   // Check if it matches any SSH URLs like
-  // git@github.com:dendronhq/dendron-site.git This may also look like
-  // git@example.com:220/dendronhq/dendron-site.git, we skip the port and the
+  // git@github.com:sailhq/sail-site.git This may also look like
+  // git@example.com:220/sailhq/sail-site.git, we skip the port and the
   const sshMatch =
     // SSH urls start with a user, like git@ or gitlab@, which we skip
     // followed by the domain, which will continue until we hit :
     // if we see a port definition like :8000, we skip it for simplicity
-    // then we have the path of the URL, like dendronhq/dendron-site
+    // then we have the path of the URL, like sailhq/sail-site
     // this path may optionally begin with a /, which we'll skip
     // finally, if there's a `.git` we'll discard that for a cleaner name
     /^([^@]+@)(?<domain>[^:/]+):([0-9]+\/)?\/?(?<path>.+?)(\.git)?$/.exec(url);

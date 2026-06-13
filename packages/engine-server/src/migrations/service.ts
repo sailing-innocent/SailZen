@@ -1,5 +1,5 @@
 import {
-  DendronConfig,
+  SailConfig,
   getStage,
   InstallStatus,
   WorkspaceSettings,
@@ -15,7 +15,7 @@ import { MigrationChangeSetStatus, Migrations } from "./types";
 type ApplyMigrationRuleOpts = {
   currentVersion: string;
   previousVersion: string;
-  dendronConfig: DendronConfig;
+  sailConfig: SailConfig;
   wsConfig?: WorkspaceSettings;
   wsService: WorkspaceService;
   migrations?: Migrations[];
@@ -69,14 +69,14 @@ export class MigrationService {
     if (!_.isEmpty(changes)) {
       const { data } = _.last(changes)!;
 
-      // TODO: this should only be set if the migration is backwards incompatible with previous dendron versions
+      // TODO: this should only be set if the migration is backwards incompatible with previous sail versions
       ConfigUtils.setWorkspaceProp(
-        data.dendronConfig,
-        "dendronVersion",
+        data.sailConfig,
+        "sailVersion",
         currentVersion
       );
 
-      await wsService.setConfig(data.dendronConfig);
+      await wsService.setConfig(data.sailConfig);
       // wsConfig is undefined for native workspaces
       if (data.wsConfig) wsService.setCodeWorkspaceSettingsSync(data.wsConfig);
     }
@@ -101,8 +101,8 @@ export class MigrationService {
       async (prev, change) => {
         const { data } = await prev;
         logger.info({ ctx: "applyMigrationChange", name: change.name });
-        const { dendronConfig, wsConfig } = data;
-        const out = await change.func({ dendronConfig, wsConfig, wsService });
+        const { sailConfig, wsConfig } = data;
+        const out = await change.func({ sailConfig, wsConfig, wsService });
         const changeStatus: MigrationChangeSetStatus = {
           data: {
             changeName: change.name,

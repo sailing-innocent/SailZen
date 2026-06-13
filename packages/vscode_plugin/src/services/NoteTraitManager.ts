@@ -1,7 +1,7 @@
 import {
   asyncLoopOneAtATime,
   CONSTANTS,
-  DendronError,
+  SailError,
   ERROR_SEVERITY,
   NoteTrait,
   OnCreateContext,
@@ -42,7 +42,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
   registerTrait(trait: NoteTrait): RespV2<void> {
     if (this.registeredTraits.has(trait.id)) {
       return ResponseUtil.createUnhappyResponse({
-        error: new DendronError({
+        error: new SailError({
           message: `Type with ID ${trait.id} has already been registered`,
           severity: ERROR_SEVERITY.MINOR,
         }),
@@ -62,7 +62,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
         trait.OnCreate.setTitle(testContext);
       } catch (error: any) {
         return ResponseUtil.createUnhappyResponse({
-          error: new DendronError({
+          error: new SailError({
             message: `Error in OnCreate.setTitle function.`,
             innerError: error,
           }),
@@ -75,7 +75,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
         trait.OnCreate.setTemplate();
       } catch (error: any) {
         return ResponseUtil.createUnhappyResponse({
-          error: new DendronError({
+          error: new SailError({
             message: `Error in OnCreate.setTemplate function.`,
             innerError: error,
           }),
@@ -88,7 +88,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
         trait.OnWillCreate.setNameModifier(testContext);
       } catch (error: any) {
         return ResponseUtil.createUnhappyResponse({
-          error: new DendronError({
+          error: new SailError({
             message: `Error in OnWillCreate.setNameModifier function.`,
             innerError: error,
           }),
@@ -194,7 +194,7 @@ export class NoteTraitManager implements NoteTraitService, vscode.Disposable {
       await newNoteTrait.initialize();
     } catch (error: any) {
       return {
-        error: new DendronError({
+        error: new SailError({
           message: `Error in ${path.basename(fsPath)} file.`,
           innerError: error,
         }),

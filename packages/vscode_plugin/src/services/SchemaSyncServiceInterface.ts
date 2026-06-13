@@ -3,7 +3,7 @@ import vscode, { Uri } from "vscode";
 
 /**
  * Interface for schema sync service to get instance of its implementation
- * refer to IDendronExtension interface.
+ * refer to ISailExtension interface.
  * */
 export interface ISchemaSyncService {
   onDidSave({ document }: { document: vscode.TextDocument }): Promise<void>;

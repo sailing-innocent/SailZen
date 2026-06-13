@@ -1,7 +1,7 @@
 import {
   CONSTANTS,
-  DendronConfig,
-  DendronError,
+  SailConfig,
+  SailError,
   DHookEntry,
   DHookType,
   ERROR_SEVERITY,
@@ -27,7 +27,7 @@ export class HookUtils {
     hookType,
     hookEntry,
   }: {
-    config: DendronConfig;
+    config: SailConfig;
     hookType: DHookType;
     hookEntry: DHookEntry;
   }) {
@@ -62,7 +62,7 @@ export class HookUtils {
     hookType,
     hookId,
   }: {
-    config: DendronConfig;
+    config: SailConfig;
     hookType: DHookType;
     hookId: string;
   }) {
@@ -116,7 +116,7 @@ export class HookUtils {
     });
     if (!fs.existsSync(hookPath)) {
       return {
-        error: new DendronError({
+        error: new SailError({
           severity: ERROR_SEVERITY.MINOR,
           message: `hook ${hook.id} has missing script. ${hookPath} doesn't exist`,
         }),

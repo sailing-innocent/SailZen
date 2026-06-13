@@ -1,7 +1,7 @@
 import { extractNoteChangeEntryCounts } from "@saili/common-all";
 import _ from "lodash";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { BasicCommand } from "./base";
 import {
   MoveNoteCommand,
@@ -14,7 +14,7 @@ type CommandInput = any;
 type CommandOutput = MoveNoteCommandOutput;
 
 /**
- * This is `Dendron: Rename Note`.
+ * This is `Sail: Rename Note`.
  * Currently (as of 2022-06-15),
  * this is simply wrapping methods of the move note command and calling them with a custom option.
  * This is done to correctly register the command and to properly instrument command usage.
@@ -26,10 +26,10 @@ export class RenameNoteCommand extends BasicCommand<
   CommandOutput
 > {
   key = DENDRON_COMMANDS.RENAME_NOTE.key;
-  private extension: IDendronExtension;
+  private extension: ISailExtension;
   private _moveNoteCommand;
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     super();
     this.extension = ext;
     this._moveNoteCommand = new MoveNoteCommand(this.extension);
@@ -67,17 +67,17 @@ export class RenameNoteCommand extends BasicCommand<
 
     const { extra, ...props } = this._moveNoteCommand._proxyMetricPayload;
 
-      }
+  }
 
   addAnalyticsPayload(_opts: CommandOpts, out: CommandOutput) {
     const noteChangeEntryCounts =
       out !== undefined
         ? { ...extractNoteChangeEntryCounts(out.changed) }
         : {
-            createdCount: 0,
-            updatedCount: 0,
-            deletedCount: 0,
-          };
+          createdCount: 0,
+          updatedCount: 0,
+          deletedCount: 0,
+        };
     try {
       this.trackProxyMetrics({ noteChangeEntryCounts });
     } catch (error) {

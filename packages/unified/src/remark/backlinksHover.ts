@@ -3,7 +3,7 @@ import type { Transformer, Processor } from "unified";
 import { Node, Parent, Position } from "unist";
 import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
-import { DendronASTTypes } from "../types";
+import { SailASTTypes } from "../types";
 import { RemarkUtils } from "./utils";
 
 /**
@@ -58,7 +58,7 @@ export function backlinksHover(
     // In the first visit, set the beginning and end markers of the document.
     visit(
       tree,
-      [DendronASTTypes.ROOT],
+      [SailASTTypes.ROOT],
       (node: Node, _index: any, _parent: any) => {
         if (RemarkUtils.isRoot(node)) {
           documentEndLine = node.position?.end.line ?? 0;
@@ -128,7 +128,7 @@ export function backlinksHover(
             wiklinkText += `#${node.data.anchorHeader}`;
           }
 
-          (node as Node).type = DendronASTTypes.HTML;
+          (node as Node).type = SailASTTypes.HTML;
           (node as unknown as HTML).value = getHTMLToHighlightText(
             `[[${wiklinkText}]]`
           );
@@ -148,7 +148,7 @@ export function backlinksHover(
             noteRefText += `:#${node.data.link.data.anchorEnd}`;
           }
 
-          (node as Node).type = DendronASTTypes.HTML;
+          (node as Node).type = SailASTTypes.HTML;
           (node as unknown as HTML).value = getHTMLToHighlightText(
             `![[${noteRefText}]]`
           );
@@ -176,7 +176,7 @@ export function backlinksHover(
             contents.length
           );
 
-          (node as Node).type = DendronASTTypes.HTML;
+          (node as Node).type = SailASTTypes.HTML;
           (node as unknown as HTML).value = `${prefix}${getHTMLToHighlightText(
             candidate
           )}${suffix}`;
@@ -188,7 +188,7 @@ export function backlinksHover(
           backlinkLineNumber === node.position?.start.line &&
           node.position.start.column === _opts.location.start.column
         ) {
-          (node as Node).type = DendronASTTypes.HTML;
+          (node as Node).type = SailASTTypes.HTML;
           (node as unknown as HTML).value = getHTMLToHighlightText(node.value);
         }
       }
@@ -198,7 +198,7 @@ export function backlinksHover(
     // In the third visit, add the contextual line marker information
     visit(
       tree,
-      [DendronASTTypes.ROOT],
+      [SailASTTypes.ROOT],
       (node: Node, _index: any, _parent: any) => {
         if (!RemarkUtils.isRoot(node) || !node.position) {
           return;
@@ -210,10 +210,10 @@ export function backlinksHover(
             : `Line ${lowerLineLimit - 1}`;
 
         const lowerBoundParagraph: Paragraph = {
-          type: DendronASTTypes.PARAGRAPH,
+          type: SailASTTypes.PARAGRAPH,
           children: [
             {
-              type: DendronASTTypes.HTML,
+              type: SailASTTypes.HTML,
               value: `--- <i>${lowerBoundText}</i> ---`,
             },
           ],
@@ -227,10 +227,10 @@ export function backlinksHover(
             : `Line ${upperLineLimit + 1}`;
 
         const upperBoundParagraph: Paragraph = {
-          type: DendronASTTypes.PARAGRAPH,
+          type: SailASTTypes.PARAGRAPH,
           children: [
             {
-              type: DendronASTTypes.HTML,
+              type: SailASTTypes.HTML,
               value: `--- <i>${upperBoundText}</i> ---`,
             },
           ],

@@ -1,4 +1,4 @@
-export * from "./dendronPub";
+export * from "./sailPub";
 export * from "./hierarchies";
 export * from "./transformLinks";
 export { convertNoteRefToHAST, NoteRefUtils } from "./noteRefsV2";
@@ -46,6 +46,6 @@ export {
   extendedImage2htmlRaw,
 } from "./extendedImage";
 export type { Image, Link } from "mdast";
-export { makeImageUrlFullPath } from "./dendronPreview";
+export { makeImageUrlFullPath } from "./sailPreview";
 export * from "./backlinksHover";
 export { abbrPlugin, AbbrOpts } from "./abbr";

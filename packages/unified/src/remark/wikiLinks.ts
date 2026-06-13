@@ -2,7 +2,7 @@
 import {
   ConfigUtils,
   CONSTANTS,
-  DendronError,
+  SailError,
   NoteDictsUtils,
   NoteUtils,
   Position,
@@ -14,8 +14,8 @@ import type { Extension as MicromarkExtension, Tokenizer, State, Effects, Code }
 import type { Extension as FromMarkdownExtension, Handle } from "mdast-util-from-markdown";
 import type { Options as ToMarkdownExtension, Handle as ToMarkdownHandle } from "mdast-util-to-markdown";
 import {
-  DendronASTDest,
-  DendronASTTypes,
+  SailASTDest,
+  SailASTTypes,
   WikiLinkDataV4,
   WikiLinkNoteV4,
 } from "../types";
@@ -151,7 +151,7 @@ function createFromMarkdownExtension(): FromMarkdownExtension {
   const enterWikiLink: Handle = function (token) {
     this.enter(
       {
-        type: DendronASTTypes.WIKI_LINK as any,
+        type: SailASTTypes.WIKI_LINK as any,
         value: "",
         data: {} as any,
       } as any,
@@ -162,7 +162,7 @@ function createFromMarkdownExtension(): FromMarkdownExtension {
   const exitWikiLinkData: Handle = function (token) {
     // Get the raw content from the token using sliceSerialize
     const linkContent = this.sliceSerialize(token);
-    
+
     // DEBUG: Log token content
     // console.log("[wikiLinks.exitWikiLinkData] Token content", {
     //   linkContent,
@@ -170,7 +170,7 @@ function createFromMarkdownExtension(): FromMarkdownExtension {
     //   tokenStart: token.start,
     //   tokenEnd: token.end,
     // });
-    
+
     const node = this.stack[this.stack.length - 1] as unknown as WikiLinkNoteV4;
 
     // Parse the link content
@@ -269,7 +269,7 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
     );
 
     if (
-      dest !== DendronASTDest.MD_DENDRON &&
+      dest !== SailASTDest.MD_DENDRON &&
       enableNoteTitleForLink &&
       !data.alias
     ) {
@@ -290,8 +290,8 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
       }
     }
 
-    // if converting back to dendron md, no further processing
-    if (dest === DendronASTDest.MD_DENDRON) {
+    // if converting back to sail md, no further processing
+    if (dest === SailASTDest.MD_DENDRON) {
       return LinkUtils.renderNoteLink({
         link: {
           from: {
@@ -303,14 +303,14 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
           data: {
             xvault: !_.isUndefined(data.vaultName),
           },
-          type: LinkUtils.astType2DLinkType(DendronASTTypes.WIKI_LINK),
+          type: LinkUtils.astType2DLinkType(SailASTTypes.WIKI_LINK),
           position: wikiNode.position as Position,
         },
         dest,
       });
     }
 
-    if (copts.useId && dest === DendronASTDest.HTML) {
+    if (copts.useId && dest === SailASTDest.HTML) {
       let notes;
       const { noteCacheForRenderDict } = MDUtilsV5.getProcData(proc);
       if (noteCacheForRenderDict) {
@@ -333,15 +333,14 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
 
     const aliasToUse = alias ?? value;
     switch (dest) {
-      case DendronASTDest.MD_REGULAR: {
+      case SailASTDest.MD_REGULAR: {
         return `[${aliasToUse}](${copts.prefix || ""}${normalizeSpaces(
           value
         )})`;
       }
-      case DendronASTDest.HTML: {
-        return `[${aliasToUse}](${copts.prefix || ""}${value}.html${
-          data.anchorHeader ? "#" + data.anchorHeader : ""
-        })`;
+      case SailASTDest.HTML: {
+        return `[${aliasToUse}](${copts.prefix || ""}${value}.html${data.anchorHeader ? "#" + data.anchorHeader : ""
+          })`;
       }
       default:
         return `unhandled case: ${dest}`;
@@ -350,7 +349,7 @@ function createToMarkdownExtension(proc: Processor, opts?: CompilerOpts): ToMark
 
   return {
     handlers: {
-      [DendronASTTypes.WIKI_LINK]: handleWikiLink,
+      [SailASTTypes.WIKI_LINK]: handleWikiLink,
     } as any,
   };
 }

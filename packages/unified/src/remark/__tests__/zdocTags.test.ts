@@ -7,7 +7,7 @@ import remarkParse from "remark-parse";
 import { zdocTags, ZDOCTAG_REGEX, ZDOCTAG_REGEX_LOOSE, ZDocTagUtils } from "../zdocTags";
 import { createTestNoteWithBody } from "../../__tests__/fixtures/testNotes";
 import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("zdocTags plugin", () => {
   describe("ZDOCTAG_REGEX", () => {

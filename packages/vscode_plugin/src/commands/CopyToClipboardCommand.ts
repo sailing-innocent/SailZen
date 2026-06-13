@@ -22,7 +22,7 @@ export enum CopyToClipboardSourceEnum {
  * e.g.)
  *
  * // you can use this in a markdown link to invoke commands
- * const commandUri = `command:dendron.copyToClipboard?${encodeURIComponent({
+ * const commandUri = `command:sail.copyToClipboard?${encodeURIComponent({
  *   text: "some text",
  *   message: "copied!"
  * })}`

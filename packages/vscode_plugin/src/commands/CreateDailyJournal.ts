@@ -17,7 +17,7 @@ import path from "path";
 import * as vscode from "vscode";
 import { PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { JournalNote } from "../traits/journal";
 import { VSCodeUtils } from "../vsCodeUtils";
@@ -36,12 +36,12 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
   static requireActiveWorkspace: boolean = true;
   public static DENDRON_TEMPLATES_FNAME: string = "templates";
 
-  constructor(ext: IDendronExtension) {
+  constructor(ext: ISailExtension) {
     const initTrait = () => {
       const config = ExtensionProvider.getDWorkspace().config;
       return new JournalNote(config);
     };
-    super(ext, "dendron.journal", initTrait);
+    super(ext, "sail.journal", initTrait);
     // override the key to maintain compatibility
     this.key = DENDRON_COMMANDS.CREATE_DAILY_JOURNAL_NOTE.key;
   }
@@ -52,9 +52,9 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
     const maybeDailyVault = journalConfig.dailyVault;
     const vault = maybeDailyVault
       ? VaultUtils.getVaultByName({
-          vaults: this._extension.getEngine().vaults,
-          vname: maybeDailyVault,
-        })
+        vaults: this._extension.getEngine().vaults,
+        vname: maybeDailyVault,
+      })
       : undefined;
     let isFirstTime = false;
     let isSchemaCreated = false;
@@ -112,9 +112,9 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
 
     const maybeVault = journalConfig.dailyVault
       ? VaultUtils.getVaultByName({
-          vaults: this._extension.getEngine().vaults,
-          vname: journalConfig.dailyVault,
-        })
+        vaults: this._extension.getEngine().vaults,
+        vname: journalConfig.dailyVault,
+      })
       : undefined;
     const vaultPath = vault2Path({
       vault: maybeVault || PickerUtils.getVaultForOpenEditor(),
@@ -122,7 +122,7 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
     });
 
     const uri = vscode.Uri.file(
-      SchemaUtils.getPath({ root: vaultPath, fname: `dendron.${dailyDomain}` })
+      SchemaUtils.getPath({ root: vaultPath, fname: `sail.${dailyDomain}` })
     );
 
     const topLevel = {
@@ -195,9 +195,9 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
 
     const maybeVault = journalConfig.dailyVault
       ? VaultUtils.getVaultByName({
-          vaults: this._extension.getEngine().vaults,
-          vname: journalConfig.dailyVault,
-        })
+        vaults: this._extension.getEngine().vaults,
+        vname: journalConfig.dailyVault,
+      })
       : undefined;
     const vault = maybeVault || PickerUtils.getVaultForOpenEditor();
     const vaultPath = vault2Path({
@@ -219,9 +219,9 @@ export class CreateDailyJournalCommand extends CreateNoteWithTraitCommand {
     }
 
     const assetUri = VSCodeUtils.getAssetUri(this._extension.context);
-    const dendronWSTemplate = VSCodeUtils.joinPath(assetUri, "dendron-ws");
+    const sailWSTemplate = VSCodeUtils.joinPath(assetUri, "sail-ws");
 
-    const src = path.join(dendronWSTemplate.fsPath, "templates", fileName);
+    const src = path.join(sailWSTemplate.fsPath, "templates", fileName);
     const body = (await fs.readFile(src)).toString();
 
     // Ensure that engine state is aware of the template before returning so

@@ -7,7 +7,7 @@ export type HistoryEvent = {
   /**
    * Used to further narrow down the source.
    * This is used in {@link LookupProvider} as this can be embedded in multiple commands (eg. NoteLookup vs RenameNote)
-   * For example, for [RenameNote](https://github.com/dendronhq/dendron/blob/6c98d466536632530399bd45f1220ae725ff3e2f/packages/plugin-core/src/commands/RenameNoteV2a.ts#L52-L52),
+   * For example, for [RenameNote](https://github.com/sailhq/sail/blob/6c98d466536632530399bd45f1220ae725ff3e2f/packages/plugin-core/src/commands/RenameNoteV2a.ts#L52-L52),
    * the id is "rename" whereas for NoteLookup, the id is "lookup"
    */
   id?: string;
@@ -67,7 +67,7 @@ interface IHistoryService {
 let _HISTORY_SERVICE: undefined | HistoryService = undefined;
 
 /**
- * Keeps of lifecycle events in Dendron.
+ * Keeps of lifecycle events in Sail.
  */
 export class HistoryService implements IHistoryService {
   public readonly events: HistoryEvent[];

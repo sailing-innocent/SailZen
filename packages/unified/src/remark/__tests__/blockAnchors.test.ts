@@ -12,7 +12,7 @@ import {
 } from "../blockAnchors";
 import { createTestNoteWithBody } from "../../__tests__/fixtures/testNotes";
 import { processNoteFull } from "../../__tests__/utils/testHelpers";
-import { DendronASTTypes } from "../../types";
+import { SailASTTypes } from "../../types";
 
 describe("blockAnchors plugin", () => {
   describe("BLOCK_LINK_REGEX", () => {

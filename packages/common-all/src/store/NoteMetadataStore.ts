@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { ERROR_STATUS, ERROR_SEVERITY } from "../constants";
-import { DendronError } from "../error";
+import { SailError } from "../error";
 import { NoteFnameDictUtils } from "../noteDictsUtils";
 import { NotePropsMeta, NotePropsByFnameDict, RespV3 } from "../types";
 import { FindNoteOpts } from "../types/FindNoteOpts";
@@ -38,7 +38,7 @@ export class NoteMetadataStore implements INoteMetadataStore {
       return { data: _.cloneDeep(maybeNote) };
     } else {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.CONTENT_NOT_FOUND,
           message: `NoteProps metadata not found for key ${key}.`,
           severity: ERROR_SEVERITY.MINOR,

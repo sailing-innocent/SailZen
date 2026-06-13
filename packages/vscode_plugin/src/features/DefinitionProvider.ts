@@ -67,9 +67,9 @@ export default class DefinitionProvider implements vscode.DefinitionProvider {
     _token: vscode.CancellationToken
   ): Promise<vscode.Location | vscode.Location[] | undefined> {
     try {
-      // No-op if we're not in a Dendron Workspace
+      // No-op if we're not in a Sail Workspace
       if (
-        !(await ExtensionProvider.isActiveAndIsDendronNote(document.uri.fsPath))
+        !(await ExtensionProvider.isActiveAndIsSailNote(document.uri.fsPath))
       ) {
         return;
       }

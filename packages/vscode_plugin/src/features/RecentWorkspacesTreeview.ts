@@ -1,4 +1,4 @@
-import { DendronTreeViewKey } from "@saili/common-all";
+import { SailTreeViewKey } from "@saili/common-all";
 import { MetadataService } from "@saili/engine-server";
 import * as vscode from "vscode";
 import {
@@ -9,7 +9,7 @@ import {
   Uri,
 } from "vscode";
 
-type DendronWorkspaceMenuItem = {
+type SailWorkspaceMenuItem = {
   fsPath: string;
 };
 
@@ -17,9 +17,8 @@ type DendronWorkspaceMenuItem = {
  * Data provider for the Recent Workspaces Tree View
  */
 class RecentWorkspacesTreeDataProvider
-  implements TreeDataProvider<DendronWorkspaceMenuItem>
-{
-  getTreeItem(element: DendronWorkspaceMenuItem): TreeItem {
+  implements TreeDataProvider<SailWorkspaceMenuItem> {
+  getTreeItem(element: SailWorkspaceMenuItem): TreeItem {
     return {
       label: element.fsPath,
       collapsibleState: TreeItemCollapsibleState.None,
@@ -33,8 +32,8 @@ class RecentWorkspacesTreeDataProvider
   }
 
   getChildren(
-    element?: DendronWorkspaceMenuItem
-  ): ProviderResult<DendronWorkspaceMenuItem[]> {
+    element?: SailWorkspaceMenuItem
+  ): ProviderResult<SailWorkspaceMenuItem[]> {
     switch (element) {
       case undefined:
         return MetadataService.instance().RecentWorkspaces?.map(
@@ -51,13 +50,13 @@ class RecentWorkspacesTreeDataProvider
 }
 
 /**
- * Creates a tree view for the 'Recent Workspaces' panel in the Dendron Custom
+ * Creates a tree view for the 'Recent Workspaces' panel in the Sail Custom
  * View Container
  * @returns
  */
-export default function setupRecentWorkspacesTreeView(): vscode.TreeView<DendronWorkspaceMenuItem> {
+export default function setupRecentWorkspacesTreeView(): vscode.TreeView<SailWorkspaceMenuItem> {
   const treeView = vscode.window.createTreeView(
-    DendronTreeViewKey.RECENT_WORKSPACES,
+    SailTreeViewKey.RECENT_WORKSPACES,
     {
       treeDataProvider: new RecentWorkspacesTreeDataProvider(),
     }

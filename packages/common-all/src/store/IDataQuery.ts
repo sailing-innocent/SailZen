@@ -1,6 +1,6 @@
 import { ResultAsync } from "neverthrow";
 import {
-  DendronError,
+  SailError,
   NoteChangeEntry,
   NotePropsByIdDict,
   NotePropsMeta,
@@ -21,19 +21,19 @@ export interface IQueryStore {
   queryNotes(
     qs: string,
     opts: INoteQueryOpts
-  ): ResultAsync<NotePropsMeta[], DendronError>;
+  ): ResultAsync<NotePropsMeta[], SailError>;
   querySchemas(
     qs: string,
     opts?: INoteQueryOpts
-  ): ResultAsync<{ id: string }[], DendronError>;
-  updateNotesIndex(changes: NoteChangeEntry[]): ResultAsync<void, DendronError>;
-  updateSchemasIndex(): ResultAsync<void, DendronError>;
-  replaceNotesIndex(props: NotePropsByIdDict): ResultAsync<void, DendronError>;
-  replaceSchemasIndex(props: SchemaModuleDict): ResultAsync<void, DendronError>;
+  ): ResultAsync<{ id: string }[], SailError>;
+  updateNotesIndex(changes: NoteChangeEntry[]): ResultAsync<void, SailError>;
+  updateSchemasIndex(): ResultAsync<void, SailError>;
+  replaceNotesIndex(props: NotePropsByIdDict): ResultAsync<void, SailError>;
+  replaceSchemasIndex(props: SchemaModuleDict): ResultAsync<void, SailError>;
 
   removeSchemaFromIndex(
     schema: SchemaModuleProps
-  ): ResultAsync<void, DendronError>;
+  ): ResultAsync<void, SailError>;
 
-  addSchemaToIndex(schema: SchemaModuleProps): ResultAsync<void, DendronError>;
+  addSchemaToIndex(schema: SchemaModuleProps): ResultAsync<void, SailError>;
 }

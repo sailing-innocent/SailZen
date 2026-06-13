@@ -22,7 +22,7 @@ export type SEOImage = {
  */
 export function genDefaultSEOConfig(): SEOConfig {
   return {
-    title: "Dendron",
+    title: "Sail",
     description: "Personal Knowledge Space",
   };
 }
@@ -32,7 +32,7 @@ export function genDefaultSEOConfig(): SEOConfig {
  */
 export const seoSchema = schemaForType<SEOConfig>()(
   z.object({
-    title: z.string().optional().default("Dendron"),
+    title: z.string().optional().default("Sail"),
     description: z.string().optional().default("Personal Knowledge Space"),
     author: z.string().optional(),
     twitter: z.string().optional(),

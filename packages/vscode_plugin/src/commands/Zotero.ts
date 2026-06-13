@@ -169,17 +169,17 @@ async function openPDFZotero(): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand("dendron.zotero.openInZotero", openInZotero)
+    vscode.commands.registerCommand("sail.zotero.openInZotero", openInZotero)
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("dendron.zotero.openPDFZotero", openPDFZotero)
+    vscode.commands.registerCommand("sail.zotero.openPDFZotero", openPDFZotero)
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("dendron.zotero.CitationPicker", showZoteroPicker)
+    vscode.commands.registerCommand("sail.zotero.CitationPicker", showZoteroPicker)
   );
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "dendron.zotero.importAsBibNote",
+      "sail.zotero.importAsBibNote",
       importZoteroAsBibNote
     )
   );

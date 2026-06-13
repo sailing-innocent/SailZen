@@ -46,68 +46,68 @@ export type SeedBrowserAssets = {
 export type SeedRegistryDict = { [key: string]: SeedConfig | undefined };
 
 export const SEED_REGISTRY: SeedRegistryDict = {
-  "dendron.dendron-site": {
-    id: "dendron.dendron-site",
-    name: "dendron-site",
-    publisher: "dendron",
+  "sail.sail-site": {
+    id: "sail.sail-site",
+    name: "sail-site",
+    publisher: "sail",
     description:
-      "The Dendron Wiki. This contains the Dendron user guide, from getting started to advanced features. This also has information for Dendron developers.",
+      "The Sail Wiki. This contains the Sail user guide, from getting started to advanced features. This also has information for Sail developers.",
     license: "Creative Commons Attribution 4.0 International",
     root: "vault",
     repository: {
       type: "git",
-      url: "https://github.com/dendronhq/dendron-site.git",
+      url: "https://github.com/sailhq/sail-site.git",
     },
     site: {
-      url: "https://wiki.dendron.so",
-      index: "dendron",
+      url: "https://wiki.sail.so",
+      index: "sail",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
-  "dendron.handbook": {
-    id: "dendron.handbook",
+  "sail.handbook": {
+    id: "sail.handbook",
     name: "handbook",
-    publisher: "dendron",
+    publisher: "sail",
     description:
-      "The Dendron Company Handbook. Outlines Company Values and Principles.",
+      "The Sail Company Handbook. Outlines Company Values and Principles.",
     license: "Creative Commons Attribution 4.0 International",
     root: "handbook",
     repository: {
       type: "git",
-      url: "https://github.com/dendronhq/handbook.git",
+      url: "https://github.com/sailhq/handbook.git",
     },
     site: {
-      url: "https://handbook.dendron.so",
+      url: "https://handbook.sail.so",
       index: "handbook",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
-  "dendron.templates": {
-    id: "dendron.templates",
+  "sail.templates": {
+    id: "sail.templates",
     name: "templates",
-    publisher: "dendron",
-    description: "Templates that can be applied to your new Dendron notes.",
+    publisher: "sail",
+    description: "Templates that can be applied to your new Sail notes.",
     license: "Creative Commons Attribution 4.0 International",
     root: "templates",
     repository: {
       type: "git",
-      url: "https://github.com/dendronhq/templates.git",
+      url: "https://github.com/sailhq/templates.git",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
-  "dendron.tldr": {
-    id: "dendron.tldr",
+  "sail.tldr": {
+    id: "sail.tldr",
     name: "tldr",
-    publisher: "dendron",
+    publisher: "sail",
     description: "Documentation for the most popular CLI tools.",
     license: "Creative Commons Attribution 4.0 International",
     root: "vault",
@@ -116,18 +116,18 @@ export const SEED_REGISTRY: SeedRegistryDict = {
       url: "https://github.com/kevinslin/seed-tldr.git",
     },
     site: {
-      url: "https://tldr.dendron.so",
+      url: "https://tldr.sail.so",
       index: "cli",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
-  "dendron.xkcd": {
-    id: "dendron.xkcd",
+  "sail.xkcd": {
+    id: "sail.xkcd",
     name: "xkcd",
-    publisher: "dendron",
+    publisher: "sail",
     description: "A complete collection of xkcd comics by Randall Monroe",
     license: "Creative Commons Attribution-NonCommercial 2.5 License",
     root: "vault",
@@ -136,30 +136,30 @@ export const SEED_REGISTRY: SeedRegistryDict = {
       url: "https://github.com/kevinslin/seed-xkcd.git",
     },
     site: {
-      url: "https://xkcd.dendron.so",
+      url: "https://xkcd.sail.so",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
-  "dendron.aws": {
-    id: "dendron.aws",
+  "sail.aws": {
+    id: "sail.aws",
     name: "aws",
-    publisher: "dendron",
+    publisher: "sail",
     description: "Documentation on all things related to AWS.",
     license: "Multiple",
     root: "vault",
     repository: {
       type: "git",
-      url: "https://github.com/dendronhq/dendron-aws-vault.git",
+      url: "https://github.com/sailhq/sail-aws-vault.git",
     },
     site: {
-      url: "https://aws.dendron.so",
+      url: "https://aws.sail.so",
     },
     assets: {
       publisherLogo:
-        "https://org-dendron-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
+        "https://org-sail-public-assets.s3.amazonaws.com/images/tutorial-logo_small.png",
     },
   },
 };

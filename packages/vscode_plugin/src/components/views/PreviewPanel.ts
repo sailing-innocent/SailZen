@@ -1,7 +1,7 @@
 import {
   assertUnreachable,
-  DendronASTDest,
-  DendronEditorViewKey,
+  SailASTDest,
+  SailEditorViewKey,
   DMessageEnum,
   getWebEditorViewEntry,
   isWebUri,
@@ -11,13 +11,13 @@ import {
   NoteViewMessageEnum,
   OnDidChangeActiveTextEditorMsg,
   memoize,
-  DendronError,
+  SailError,
   ConfigUtils,
 } from "@saili/common-all";
 import { DConfig } from "@saili/common-server";
 import { WorkspaceUtils } from "@saili/engine-server";
 import {
-  DendronASTTypes,
+  SailASTTypes,
   Image,
   makeImageUrlFullPath,
   MDUtilsV5,
@@ -25,7 +25,7 @@ import {
 } from "@saili/unified";
 import _ from "lodash";
 import * as vscode from "vscode";
-import { IDendronExtension } from "../../dendronExtensionInterface";
+import { ISailExtension } from "../../sailExtensionInterface";
 import { Logger } from "../../logger";
 import { ITextDocumentService } from "../../services/ITextDocumentService";
 import { WebViewUtils } from "../../views/utils";
@@ -42,7 +42,7 @@ import { PreviewProxy } from "./PreviewProxy";
  * closed.
  */
 export class PreviewPanel implements PreviewProxy, vscode.Disposable {
-  private _ext: IDendronExtension;
+  private _ext: ISailExtension;
   private _panel: vscode.WebviewPanel | undefined;
   private _textDocumentService: ITextDocumentService;
   private _onDidChangeActiveTextEditor: vscode.Disposable | undefined =
@@ -53,7 +53,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
 
   /**
    *
-   * @param param0 extension - IDendronExtension implementation. linkHandler -
+   * @param param0 extension - ISailExtension implementation. linkHandler -
    * Implementation to handle preview link clicked events
    */
   constructor({
@@ -61,7 +61,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     linkHandler,
     textDocumentService,
   }: {
-    extension: IDendronExtension;
+    extension: ISailExtension;
     linkHandler: IPreviewLinkHandler;
     textDocumentService: ITextDocumentService;
   }) {
@@ -75,7 +75,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
    * @param note - if specified, this will override the preview contents with
    * the contents specified in this parameter. Otherwise, the contents of the
    * preview will follow default behavior (it will show the currently in-focus
-   * Dendron note).
+   * Sail note).
    */
   async show(note?: NoteProps): Promise<void> {
     if (this._panel) {
@@ -90,7 +90,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
       const { wsRoot } = engine;
 
       const { bundleName: name, label } = getWebEditorViewEntry(
-        DendronEditorViewKey.NOTE_PREVIEW
+        SailEditorViewKey.NOTE_PREVIEW
       );
 
       this._panel = vscode.window.createWebviewPanel(
@@ -242,8 +242,8 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
           const activeTextEditor = VSCodeUtils.getActiveTextEditor();
           const maybeNote = !_.isUndefined(activeTextEditor)
             ? await this._ext.wsUtils.tryGetNoteFromDocument(
-                activeTextEditor?.document
-              )
+              activeTextEditor?.document
+            )
             : undefined;
 
           if (!_.isUndefined(maybeNote)) {
@@ -269,7 +269,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
       }
     });
 
-    // If the user changes focus, then the newly in-focus Dendron note should be
+    // If the user changes focus, then the newly in-focus Sail note should be
     // shown in the preview
     this._onDidChangeActiveTextEditor =
       vscode.window.onDidChangeActiveTextEditor(
@@ -277,7 +277,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
           if (
             !editor ||
             editor.document.uri.fsPath !==
-              vscode.window.activeTextEditor?.document.uri.fsPath ||
+            vscode.window.activeTextEditor?.document.uri.fsPath ||
             (await this.isLockedAndDirty())
           ) {
             return;
@@ -327,7 +327,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     fn: (note: NoteProps, panel: vscode.WebviewPanel) => {
       const parser = MDUtilsV5.procRemarkFull({
         noteToRender: note,
-        dest: DendronASTDest.MD_DENDRON,
+        dest: SailASTDest.MD_DENDRON,
         fname: note.fname,
         vault: note.vault,
         config: DConfig.readConfigSync(this._ext.getDWorkspace().wsRoot, true),
@@ -338,7 +338,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
       // ^preview-rewrites-images
       visit(
         tree,
-        [DendronASTTypes.IMAGE, DendronASTTypes.EXTENDED_IMAGE],
+        [SailASTTypes.IMAGE, SailASTTypes.EXTENDED_IMAGE],
         (image: Image) => {
           if (!isWebUri(image.url)) {
             makeImageUrlFullPath({ node: image, proc: parser });
@@ -456,7 +456,7 @@ export class PreviewPanel implements PreviewProxy, vscode.Disposable {
     return {
       rewriteImageUrls: (note: NoteProps) => {
         if (!this._panel)
-          throw new DendronError({
+          throw new SailError({
             message: "Panel used before being initalized",
           });
         return this.rewriteImageUrls(note, this._panel);

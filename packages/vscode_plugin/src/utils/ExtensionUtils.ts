@@ -2,7 +2,7 @@ import { launchv2, ServerUtils } from "@saili/api-server";
 import {
   ConfigUtils,
   CONSTANTS,
-  DendronConfig,
+  SailConfig,
   getStage,
   InstallStatus,
   TaskNoteUtils,
@@ -20,15 +20,15 @@ import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
 import * as vscode from "vscode";
-import { CONFIG, DendronContext } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { CONFIG, SailContext } from "../constants";
+import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IBaseCommand } from "../types";
 import { MarkdownUtils } from "../utils/md";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { URI, Utils } from "vscode-uri";
-import { DendronExtension } from "../workspace";
+import { SailExtension } from "../workspace";
 import { Duration } from "luxon";
 
 /** Before sending saved telemetry events, wait this long (in ms) to make sure
@@ -72,7 +72,7 @@ async function startServerProcess(): Promise<{
     });
     return { port: out.port, subprocess: out.subprocess as ExecaChildProcess };
   } catch (err) {
-    // TODO: change to error, wait for https://github.com/dendronhq/dendron/issues/3227 to be resolved first
+    // TODO: change to error, wait for https://github.com/sailhq/sail/issues/3227 to be resolved first
     Logger.info({ msg: "failed to spawn a subshell" });
     const out = await launchv2({
       logPath: path.join(__dirname, "..", "..", "sailzen.server.log"),
@@ -177,17 +177,17 @@ export class ExtensionUtils {
     return ExtensionUtils._TUTORIAL_IDS;
   }
 
-  static setWorkspaceContextOnActivate(dendronConfig: DendronConfig) {
+  static setWorkspaceContextOnActivate(sailConfig: SailConfig) {
     if (VSCodeUtils.isDevMode()) {
       vscode.commands.executeCommand(
         "setContext",
-        DendronContext.DEV_MODE,
+        SailContext.DEV_MODE,
         true
       );
     }
     // used for enablement of legacy show preview command.
     VSCodeUtils.setContext(
-      DendronContext.HAS_LEGACY_PREVIEW,
+      SailContext.HAS_LEGACY_PREVIEW,
       MarkdownUtils.hasLegacyPreview()
     );
   }
@@ -248,7 +248,7 @@ export class ExtensionUtils {
       const metadata = MetadataService.instance().getMeta();
       if (metadata.firstInstall === undefined && !UUIDPathExists) {
         MetadataService.instance().setInitialInstall();
-        const version = DendronExtension.version();
+        const version = SailExtension.version();
         MetadataService.instance().setInitialInstallVersion(version);
       } else {
         // we still want to proceed with InstallStatus.INITIAL_INSTALL because we want everything
@@ -275,7 +275,7 @@ export class ExtensionUtils {
     activatedSuccess,
   }: {
     durationReloadWorkspace: number;
-    ext: IDendronExtension;
+    ext: ISailExtension;
     activatedSuccess: boolean;
   }) {
     const engine = ext.getEngine();
@@ -284,7 +284,7 @@ export class ExtensionUtils {
       wsRoot,
       vaults,
       type: workspaceType,
-      config: dendronConfig,
+      config: sailConfig,
     } = workspace;
     const notes = await engine.findNotesMeta({ excludeStub: false });
     let numNotes = notes.length;
@@ -368,15 +368,15 @@ export class ExtensionUtils {
     const codeWorkspacePresent = await fs.pathExists(
       path.join(wsRoot, CONSTANTS.DENDRON_WS_NAME)
     );
-    const publishigConfig = ConfigUtils.getPublishing(dendronConfig);
+    const publishigConfig = ConfigUtils.getPublishing(sailConfig);
     const siteUrl = publishigConfig.siteUrl;
-    const publishingTheme = dendronConfig?.publishing?.theme;
-    const previewTheme = dendronConfig?.preview?.theme;
+    const publishingTheme = sailConfig?.publishing?.theme;
+    const previewTheme = sailConfig?.preview?.theme;
     const { workspaceFile, workspaceFolders } = vscode.workspace;
-    const configVersion = ConfigUtils.getVersion(dendronConfig);
+    const configVersion = ConfigUtils.getVersion(sailConfig);
 
-    const configDiff = ConfigUtils.findDifference({ config: dendronConfig });
-    const dendronConfigChanged = configDiff.length > 0;
+    const configDiff = ConfigUtils.findDifference({ config: sailConfig });
+    const sailConfigChanged = configDiff.length > 0;
 
     const trackProps = {
       duration: durationReloadWorkspace,
@@ -394,7 +394,7 @@ export class ExtensionUtils {
       codeWorkspacePresent,
       configVersion,
       selfContainedVaultsEnabled:
-        dendronConfig.dev?.enableSelfContainedVaults || false,
+        sailConfig.dev?.enableSelfContainedVaults || false,
       numSelfContainedVaults: vaults.filter(VaultUtils.isSelfContained).length,
       numRemoteVaults: vaults.filter(VaultUtils.isRemote).length,
       numWorkspaceVaults: vaults.filter(
@@ -409,10 +409,10 @@ export class ExtensionUtils {
         : workspaceFolders.length,
       hasLocalConfig: false,
       numLocalConfigVaults: 0,
-      dendronConfigChanged,
+      sailConfigChanged,
     };
 
-    if (dendronConfigChanged) {
+    if (sailConfigChanged) {
       _.set(trackProps, "numConfigChanged", configDiff.length);
     }
 
@@ -474,7 +474,7 @@ export class ExtensionUtils {
 
     StartupProfiler.write(wsRoot, {
       timestamp: new Date().toISOString(),
-      version: DendronExtension.version(),
+      version: SailExtension.version(),
       activationSucceeded: activatedSuccess,
       noteCount: numNotes,
       vaultCount: vaults.length,

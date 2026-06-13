@@ -47,7 +47,7 @@ export enum PriorTools {
 
 type Metadata = Partial<{
   /**
-   * When was dendron first installed
+   * When was sail first installed
    */
   firstInstall: number;
   /**
@@ -79,9 +79,9 @@ type Metadata = Partial<{
    */
   initialSurveyStatus: InitialSurveyStatusEnum;
   /**
-   * Set if a user has activated a dendron workspace
+   * Set if a user has activated a sail workspace
    */
-  dendronWorkspaceActivated: number;
+  sailWorkspaceActivated: number;
   /**
    * When the user first used lookup
    */
@@ -99,7 +99,7 @@ type Metadata = Partial<{
    */
   featureShowcase: { [key in ShowcaseEntry]?: number };
   /**
-   * Global version of Dendron
+   * Global version of Sail
    */
   version: string;
   /**
@@ -128,7 +128,7 @@ type Metadata = Partial<{
   priorTools: [PriorTools];
 
   /**
-   * The most recently opened Dendron workspaces
+   * The most recently opened Sail workspaces
    */
   recentWorkspaces: string[];
 
@@ -286,8 +286,8 @@ export class MetadataService {
     this.setMeta("lapsedUserMsgSendTime", Time.now().toSeconds());
   }
 
-  setDendronWorkspaceActivated() {
-    this.setMeta("dendronWorkspaceActivated", Time.now().toSeconds());
+  setSailWorkspaceActivated() {
+    this.setMeta("sailWorkspaceActivated", Time.now().toSeconds());
   }
 
   setFirstLookupTime() {

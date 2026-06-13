@@ -3,7 +3,7 @@ import type { Transformer, Processor } from "unified";
 import { Node } from "unist";
 import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
-import { DendronASTDest, WikiLinkNoteV4, DendronASTTypes } from "../types";
+import { SailASTDest, WikiLinkNoteV4, SailASTTypes } from "../types";
 import { PublishUtils } from "../utils";
 import { MDUtilsV5 } from "../utilsv5";
 
@@ -19,11 +19,11 @@ function plugin(this: Processor, opts: PluginOpts): Transformer {
   const proc = this;
   const { dest, config } = MDUtilsV5.getProcData(proc);
   function transformer(tree: Node, _file: VFile) {
-    if (dest !== DendronASTDest.HTML) {
+    if (dest !== SailASTDest.HTML) {
       return;
     }
     visit(tree, (node: Node, _idx: number | undefined, _parent: Node | undefined) => {
-      if (node.type === DendronASTTypes.WIKI_LINK) {
+      if (node.type === SailASTTypes.WIKI_LINK) {
         const cnode = node as WikiLinkNoteV4;
         const value = cnode.value;
         const href = PublishUtils.getSiteUrl(config);

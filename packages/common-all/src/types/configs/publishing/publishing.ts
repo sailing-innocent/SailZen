@@ -20,7 +20,7 @@ const searchModeSchema = z.enum([SearchMode.SEARCH, SearchMode.LOOKUP]);
 /**
  * Namespace for all publishing related configurations
  */
-export type DendronPublishingConfig = {
+export type SailPublishingConfig = {
   enableFMTitle?: boolean; // TODO: split implementation to respect non-global config
   enableHierarchyDisplay?: boolean; // TODO: split
   hierarchyDisplayTitle?: string; // TODO: split
@@ -62,8 +62,8 @@ export type DendronPublishingConfig = {
   searchMode?: SearchMode;
 };
 
-export type CleanDendronPublishingConfig = DendronPublishingConfig &
-  Required<Pick<DendronPublishingConfig, "siteIndex" | "siteUrl">>;
+export type CleanSailPublishingConfig = SailPublishingConfig &
+  Required<Pick<SailPublishingConfig, "siteIndex" | "siteUrl">>;
 
 export type DuplicateNoteAction = "useVault";
 
@@ -92,7 +92,7 @@ export type GoogleAnalyticsConfig = {
   tracking?: string;
 };
 
-export const publishingSchema = schemaForType<DendronPublishingConfig>()(
+export const publishingSchema = schemaForType<SailPublishingConfig>()(
   z
     .object({
       enableFMTitle: z.boolean().optional().default(true),
@@ -139,10 +139,10 @@ export const publishingSchema = schemaForType<DendronPublishingConfig>()(
 );
 
 /**
- * Generate default {@link DendronPublishingConfig}
- * @returns DendronPublishingConfig
+ * Generate default {@link SailPublishingConfig}
+ * @returns SailPublishingConfig
  */
-export function genDefaultPublishingConfig(): DendronPublishingConfig {
+export function genDefaultPublishingConfig(): SailPublishingConfig {
   return {
     enableFMTitle: true,
     enableNoteTitleForLink: true,

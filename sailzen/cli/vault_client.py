@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # @file vault_client.py
-# @brief VaultClient CLI - 通过 HTTP API 读写 Dendron Vault 中的笔记
+# @brief VaultClient CLI - 通过 HTTP API 读写 Sail Vault 中的笔记
 # @author sailing-innocent
 # @date 2026-05-06
 # @version 1.0

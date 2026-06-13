@@ -5,7 +5,7 @@ import { BacklinkUtils } from "../BacklinkUtils";
 import { ERROR_SEVERITY, ERROR_STATUS } from "../constants";
 import { DLogger } from "../DLogger";
 import { DNodeUtils, NoteUtils } from "../dnode";
-import { DendronCompositeError, DendronError } from "../error";
+import { SailCompositeError, SailError } from "../error";
 import { INoteStore, IQueryStore } from "../store";
 import {
   BulkGetNoteMetaResp,
@@ -37,8 +37,8 @@ import { isNotUndefined } from "../utils";
 import { VaultUtils } from "../vault";
 
 /**
- * Abstract base class that contains common logic between DendronEngineV3 and
- * DendronEngineV3Web
+ * Abstract base class that contains common logic between SailEngineV3 and
+ * SailEngineV3Web
  */
 export abstract class EngineV3Base implements ReducedDEngine {
   protected noteStore;
@@ -86,7 +86,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
       .filter(isNotUndefined);
 
     return {
-      error: errors.length > 0 ? new DendronCompositeError(errors) : undefined,
+      error: errors.length > 0 ? new SailCompositeError(errors) : undefined,
       data: bulkResponses
         .flatMap((response) => response.data)
         .filter(isNotUndefined),
@@ -104,7 +104,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
       .filter(isNotUndefined);
 
     return {
-      error: errors.length > 0 ? new DendronCompositeError(errors) : undefined,
+      error: errors.length > 0 ? new SailCompositeError(errors) : undefined,
       data: bulkResponses
         .flatMap((response) => response.data)
         .filter(isNotUndefined),
@@ -139,7 +139,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
       .filter(isNotUndefined);
 
     return {
-      error: errors.length > 0 ? new DendronCompositeError(errors) : undefined,
+      error: errors.length > 0 ? new SailCompositeError(errors) : undefined,
       data: writeResponses
         .flatMap((response) => response.data)
         .filter(isNotUndefined),
@@ -155,7 +155,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
   ): Promise<DeleteNoteResp> {
     const ctx = "DEngine:deleteNote";
     if (id === "root") {
-      throw new DendronError({
+      throw new SailError({
         message: "",
         status: ERROR_STATUS.CANT_DELETE_ROOT,
       });
@@ -165,7 +165,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
     const resp = await this.noteStore.getMetadata(id);
     if (resp.error) {
       return {
-        error: new DendronError({
+        error: new SailError({
           status: ERROR_STATUS.DOES_NOT_EXIST,
           message: `Unable to delete ${id}: Note does not exist`,
         }),
@@ -180,7 +180,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
 
     if (!noteToDelete.parent) {
       return {
-        error: new DendronError({
+        error: new SailError({
           status: ERROR_STATUS.NO_PARENT_FOR_NOTE,
           message: `No parent found for ${noteToDelete.fname}`,
         }),
@@ -189,7 +189,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
     const parentResp = await this.noteStore.get(noteToDelete.parent);
     if (parentResp.error) {
       return {
-        error: new DendronError({
+        error: new SailError({
           status: ERROR_STATUS.NO_PARENT_FOR_NOTE,
           message: `Unable to delete ${noteToDelete.fname}: Note's parent does not exist in engine: ${noteToDelete.parent}`,
           innerError: parentResp.error,
@@ -225,7 +225,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
         changes.push({ note: parentNote, status: "delete" });
         if (!parentNote.parent) {
           return {
-            error: new DendronError({
+            error: new SailError({
               status: ERROR_STATUS.NO_PARENT_FOR_NOTE,
               message: `No parent found for ${parentNote.fname}`,
             }),
@@ -238,7 +238,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
           parentNote = parentResp.data;
         } else {
           return {
-            error: new DendronError({
+            error: new SailError({
               status: ERROR_STATUS.NO_PARENT_FOR_NOTE,
               message: `Unable to delete ${noteToDelete.fname}: Note ${parentNote?.fname}'s parent does not exist in engine: ${parentNote.parent}`,
             }),
@@ -264,7 +264,7 @@ export abstract class EngineV3Base implements ReducedDEngine {
       : await this.noteStore.delete(id);
     if (deleteResp.error) {
       return {
-        error: new DendronError({
+        error: new SailError({
           message: `Unable to delete note ${id}`,
           severity: ERROR_SEVERITY.MINOR,
           payload: deleteResp.error,

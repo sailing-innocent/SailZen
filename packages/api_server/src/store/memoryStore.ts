@@ -1,4 +1,4 @@
-import { DendronError, DEngine } from "@saili/common-all";
+import { SailError, DEngine } from "@saili/common-all";
 import _ from "lodash";
 
 const STORE: any = {};
@@ -24,7 +24,7 @@ export class MemoryStore {
   getEngine(): DEngine {
     const out = _.values(STORE)[0];
     if (!out) {
-      throw new DendronError({ message: "STORE is empty" });
+      throw new SailError({ message: "STORE is empty" });
     }
     return out;
   }

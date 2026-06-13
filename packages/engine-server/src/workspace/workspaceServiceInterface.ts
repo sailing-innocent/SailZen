@@ -1,4 +1,4 @@
-import { DEngineClient, DVault, DendronConfig } from "@saili/common-all";
+import { DEngineClient, DVault, SailConfig } from "@saili/common-all";
 
 export enum SyncActionStatus {
   DONE = "",
@@ -26,7 +26,7 @@ export type SyncActionResult = {
 };
 
 export interface IWorkspaceService {
-  get config(): DendronConfig;
+  get config(): SailConfig;
 
   commitAndAddAll(opts: { engine: DEngineClient }): Promise<SyncActionResult[]>;
 

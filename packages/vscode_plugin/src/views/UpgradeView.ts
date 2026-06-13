@@ -20,7 +20,7 @@ const UPGRADE_VIEW_HTML = `<!DOCTYPE html>
   </style>
 </head>
 <body>
-  <iframe id="iframeView" src="https://wiki.dendron.so/notes/9bc92432-a24c-492b-b831-4d5378c1692b/"></iframe>
+  <iframe id="iframeView" src="https://wiki.sail.so/notes/9bc92432-a24c-492b-b831-4d5378c1692b/"></iframe>
 </body>
 
 </html>`;

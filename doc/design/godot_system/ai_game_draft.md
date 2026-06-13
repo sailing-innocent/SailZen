@@ -128,7 +128,7 @@ SceneTree 概览（单局战斗）
 1. **先写「风格 Bible」**：用 500 字定义你的游戏基调（例如："轻松幽默的卡通奇幻，对话简短带网络梗，避免苦大仇深"）。
 2. **锁定角色 Prompt**：每个角色给 Kimi 一个固定前缀，例如 `[艾拉：元气少女骑士，说话带「本小姐」，喜欢用食物比喻]`。
 3. **批量生成 + 人工筛选**：一次让 Kimi 生成 5 个版本的技能名/对话，你挑最好的。
-4. **版本管理**：用你现有的 **VSCode Dendron 笔记** 管理所有文案资产！这是 SailZen 的天然优势——每个角色、每章剧情都是一个 Markdown Note，带标签和链接。
+4. **版本管理**：用你现有的 **VSCode Sail 笔记** 管理所有文案资产！这是 SailZen 的天然优势——每个角色、每章剧情都是一个 Markdown Note，带标签和链接。
 
 ### 3.2 贴图：Z-Image 本地出图 + Krita 修正
 
@@ -207,7 +207,7 @@ Krita / GIMP 精修（抠图、调色、改细节）
 |----------|-------------------|
 | **飞书 Bot / 卡片** | **CI/CD 通知 + 任务看板**。游戏构建完成后推送到飞书；用卡片做每日开发任务追踪（代替了外部项目管理工具）。 |
 | **SailZen 服务器（Litestar）** | **游戏数据后台 + 内容管理**。可扩展一个「游戏 CMS」：管理关卡配置、角色数值、对话文本，甚至作为热更新服务器。 |
-| **VSCode 插件（Dendron 笔记）** | **叙事设计器 +  Wiki 百科**。用 Markdown + YAML frontmatter 管理所有角色卡、剧情树、世界观设定。Dendron 的层级链接非常适合做「章节 → 场景 → 对话」的导航。 |
+| **VSCode 插件（Sail 笔记）** | **叙事设计器 +  Wiki 百科**。用 Markdown + YAML frontmatter 管理所有角色卡、剧情树、世界观设定。Sail 的层级链接非常适合做「章节 → 场景 → 对话」的导航。 |
 | **Kimi API 封装** | 已有 Python 调用层，可直接用于批量生成文案/代码辅助。 |
 | **Z-Image 本地部署** | 图像资产生成节点。 |
 | **Python 生态（uv + SQLAlchemy）** | 可快速搭建「游戏平衡模拟器」：用 Python 跑战斗数值模拟，验证 30 小时流程中的数值曲线。 |
@@ -275,7 +275,7 @@ SailZen Server (Litestar)
 
 | 工具 | 用途 |
 |------|------|
-| **Dendron / Obsidian（已有 VSCode 插件基础）** | 剧情树、角色关系网、世界观 Bible |
+| **Sail / Obsidian（已有 VSCode 插件基础）** | 剧情树、角色关系网、世界观 Bible |
 | **LDtk**（Level Designer Toolkit） | 如果你嫌 Godot TileMap 编辑器不够好用，LDtk 是 2D 关卡设计神器，可导出 JSON 再导入 Godot |
 | **draw.io / Excalidraw** | 画战斗流程图、UI 线框图、关卡布局草图 |
 
@@ -297,7 +297,7 @@ SailZen Server (Litestar)
 
 - [ ] Godot 4.4 安装，跑通 GDQuest Tactical RPG Movement Demo
 - [ ] Z-Image 本地 ComfyUI 工作流调通，产出第一批角色概念图（3-5 个）
-- [ ] Kimi 生成第一章剧本 + 5 个角色人设，导入 Dendron 笔记
+- [ ] Kimi 生成第一章剧本 + 5 个角色人设，导入 Sail 笔记
 - [ ] 搭建 Git 仓库 + Git LFS
 
 ### Phase 1：战斗原型（3-4 周）
@@ -337,7 +337,7 @@ SailZen Server (Litestar)
 | 工作流 | 主力 | 你的角色 | 产出物 |
 |--------|------|----------|--------|
 | 代码框架 | **Kimi**（辅助生成 GDScript）+ 你 | 审校、调试、性能优化 | `.gd` 脚本、场景 `.tscn` |
-| 剧情文案 | **Kimi** | 给方向、审校、拼接 | Markdown 剧本（存 Dendron） |
+| 剧情文案 | **Kimi** | 给方向、审校、拼接 | Markdown 剧本（存 Sail） |
 | 概念原画/贴图 | **Z-Image** | Prompt 工程、筛选、Krita 精修 | PNG Sprite、Tileset |
 | 角色动画 | **你**（Spine/骨骼） | AI 暂无法稳定出连贯动画 | 骨骼文件 / Sprite Sheet |
 | BGM/音效 | **Suno + 可灵** | 选曲、剪辑、循环处理 | Ogg 音频文件 |
@@ -351,7 +351,7 @@ SailZen Server (Litestar)
 
 1. **画风漂移**：Z-Image 出图不稳定，第 1 章和第 10 章角色像两个游戏。**解法**：开头花 3 天锁定「风格 Bible + 固定 Prompt 模板 + 参考图集」，后期只微调。
 2. **战斗系统过度设计**：想做出 *Fire Emblem* 的武器三角 + *XCOM* 的掩体 + *Disgaea* 的投掷……**解法**：只做「移动+普攻+2 个技能+待机」，其他系统发售后更新。
-3. **文案写不完**：30 小时对应数万字对话。**解法**：Kimi 批量产出，你只做「主编」不做「主笔」。用 Dendron 的模板笔记快速结构化生成 Prompt。
+3. **文案写不完**：30 小时对应数万字对话。**解法**：Kimi 批量产出，你只做「主编」不做「主笔」。用 Sail 的模板笔记快速结构化生成 Prompt。
 4. **后期数值崩坏**：前期一刀一个，后期刮痧 50 回合。**解法**：第 2 周就写好 Python 模拟器，跑 1000 场自动化战斗，监控 TTK（Time To Kill）。
 5. **没有随时可玩的版本**：做了 3 个月还是黑屏代码。**解法**：Phase 1 结束就必须有一个「能打完一场战斗」的可执行文件，每周都保持可运行状态。
 
@@ -361,7 +361,7 @@ SailZen Server (Litestar)
 
 - [ ] 新建 Git 仓库（独立 repo，开启 Git LFS）
 - [ ] 下载 Godot 4.4，导入 GDQuest Tactical RPG + ramaureirac/godot-tactical-rpg 学习
-- [ ] 在 Dendron 里新建 `game-design/` 层级，写入：世界观 Bible、风格指南、角色模板
+- [ ] 在 Sail 里新建 `game-design/` 层级，写入：世界观 Bible、风格指南、角色模板
 - [ ] 调通 Z-Image 批量出图脚本（1 个 Prompt 出 4 张图自动保存）
 - [ ] 用 Kimi 生成「第 1 章剧本 + 3 个角色人设」作为试金石
 - [ ] 在 SailZen Server 里规划 `/api/v1/game/` 路由，搭建最小 CMS

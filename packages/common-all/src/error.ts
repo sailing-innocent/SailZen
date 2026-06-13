@@ -4,7 +4,7 @@ import { AxiosError } from "axios";
 import { ERROR_SEVERITY, ERROR_STATUS } from "./constants";
 import { RespV3, RespV3ErrorResp } from "./types";
 
-export type DendronErrorProps<TCode = StatusCodes | undefined> = {
+export type SailErrorProps<TCode = StatusCodes | undefined> = {
   /**
    * Arbitrary payload
    */
@@ -21,7 +21,7 @@ export type DendronErrorProps<TCode = StatusCodes | undefined> = {
   code?: TCode;
 
   /**
-   * @deprecated - should only used in DendronServerError
+   * @deprecated - should only used in SailServerError
    * Custom status errors
    */
   status?: string;
@@ -44,13 +44,12 @@ type ServerErrorProps = {
   code?: StatusCodes;
 };
 
-export type IDendronError<TCode = StatusCodes | undefined> =
-  DendronErrorProps<TCode>;
+export type ISailError<TCode = StatusCodes | undefined> =
+  SailErrorProps<TCode>;
 
-export class DendronError<TCode = StatusCodes | undefined>
+export class SailError<TCode = StatusCodes | undefined>
   extends Error
-  implements IDendronError<TCode>
-{
+  implements ISailError<TCode> {
   public status?: string;
   public payload?: string;
   public severity?: ERROR_SEVERITY;
@@ -98,24 +97,24 @@ export class DendronError<TCode = StatusCodes | undefined>
     return this.severity === ERROR_SEVERITY.FATAL;
   }
 
-  static isDendronError(error: any): error is IDendronError {
+  static isSailError(error: any): error is ISailError {
     return error?.message !== undefined;
   }
 
-  static createPlainError(props: Omit<DendronErrorProps, "name">) {
+  static createPlainError(props: Omit<SailErrorProps, "name">) {
     return error2PlainObject({
       ...props,
       // isComposite: false,
-      name: "DendronError",
+      name: "SailError",
     });
   }
 
   static createFromStatus({
     status,
     ...rest
-  }: { status: ERROR_STATUS } & Partial<DendronErrorProps>): DendronError {
-    return new DendronError({
-      name: "DendronError",
+  }: { status: ERROR_STATUS } & Partial<SailErrorProps>): SailError {
+    return new SailError({
+      name: "SailError",
       message: status,
       status,
       ...rest,
@@ -129,9 +128,9 @@ export class DendronError<TCode = StatusCodes | undefined>
     severity,
     code,
     innerError,
-  }: Omit<DendronErrorProps<TCode>, "name">) {
+  }: Omit<SailErrorProps<TCode>, "name">) {
     super(message);
-    this.name = "DendronError";
+    this.name = "SailError";
     this.status = status || "unknown";
     this.severity = severity;
     this.message = message || "";
@@ -153,12 +152,12 @@ export class DendronError<TCode = StatusCodes | undefined>
   }
 }
 
-export class DendronCompositeError extends Error implements IDendronError {
-  public payload: DendronErrorProps[];
+export class SailCompositeError extends Error implements ISailError {
+  public payload: SailErrorProps[];
   public severity?: ERROR_SEVERITY;
-  public errors: IDendronError[];
+  public errors: ISailError[];
 
-  constructor(errors: IDendronError[]) {
+  constructor(errors: ISailError[]) {
     super();
     this.payload = errors.map((err) => error2PlainObject(err));
     this.errors = errors;
@@ -189,9 +188,9 @@ export class DendronCompositeError extends Error implements IDendronError {
     }
   }
 
-  static isDendronCompositeError(
-    error: IDendronError
-  ): error is DendronCompositeError {
+  static isSailCompositeError(
+    error: ISailError
+  ): error is SailCompositeError {
     if (error.payload && _.isString(error.payload)) {
       try {
         // Sometimes these sections get serialized when going across from engine to UI
@@ -203,7 +202,7 @@ export class DendronCompositeError extends Error implements IDendronError {
 
     return (
       _.isArray(error.payload) &&
-      error.payload.every(DendronError.isDendronError)
+      error.payload.every(SailError.isSailError)
     );
   }
 }
@@ -212,19 +211,18 @@ export class DendronCompositeError extends Error implements IDendronError {
  *
  * If it is a single error, then returns that single error in a list.
  *
- * If this was not a Dendron error, then returns an empty list.
+ * If this was not a Sail error, then returns an empty list.
  */
 export function errorsList(error: any) {
-  if (DendronCompositeError.isDendronCompositeError(error))
+  if (SailCompositeError.isSailCompositeError(error))
     return error.payload;
-  if (DendronError.isDendronError(error)) return [error];
+  if (SailError.isSailError(error)) return [error];
   return [];
 }
 
-export class DendronServerError
-  extends DendronError<StatusCodes>
-  implements IDendronError, ServerErrorProps
-{
+export class SailServerError
+  extends SailError<StatusCodes>
+  implements ISailError, ServerErrorProps {
   /**
    * Optional HTTP status code for error
    */
@@ -236,26 +234,25 @@ export class DendronServerError
   declare public status?: string;
 }
 
-export class IllegalOperationError extends DendronError {}
+export class IllegalOperationError extends SailError { }
 
 export function stringifyError(err: Error) {
   return JSON.stringify(err, Object.getOwnPropertyNames(err));
 }
 
-export const error2PlainObject = (err: IDendronError): DendronErrorProps => {
-  const out: Partial<DendronErrorProps> = {};
+export const error2PlainObject = (err: ISailError): SailErrorProps => {
+  const out: Partial<SailErrorProps> = {};
   Object.getOwnPropertyNames(err).forEach((k) => {
     // @ts-ignore
     out[k] = err[k];
   });
-  return out as DendronErrorProps;
+  return out as SailErrorProps;
 };
 
 export class ErrorMessages {
   static formatShouldNeverOccurMsg(description?: string) {
-    return `${
-      description === undefined ? "" : description + " "
-    }This error should never occur! Please report a bug if you have encountered this.`;
+    return `${description === undefined ? "" : description + " "
+      }This error should never occur! Please report a bug if you have encountered this.`;
   }
 }
 
@@ -297,7 +294,7 @@ export class ErrorMessages {
  * Warning! Never use this function without a parameter. It won't actually do any type checks then.
  */
 export function assertUnreachable(_never: never): never {
-  throw new DendronError({
+  throw new SailError({
     message: ErrorMessages.formatShouldNeverOccurMsg(),
   });
 }
@@ -306,7 +303,7 @@ export function assertUnreachable(_never: never): never {
  * Helper function to raise invalid state
  */
 export function assertInvalidState(msg: string): never {
-  throw new DendronError({
+  throw new SailError({
     status: ERROR_STATUS.INVALID_STATE,
     message: msg,
   });
@@ -317,15 +314,15 @@ export class ErrorFactory {
   /**
    * Not found
    */
-  static create404Error({ url }: { url: string }): DendronError {
-    return new DendronError({
+  static create404Error({ url }: { url: string }): SailError {
+    return new SailError({
       message: `resource ${url} does not exist`,
       severity: ERROR_SEVERITY.FATAL,
     });
   }
 
-  static createUnexpectedEventError({ event }: { event: any }): DendronError {
-    return new DendronError({
+  static createUnexpectedEventError({ event }: { event: any }): SailError {
+    return new SailError({
       message: `unexpected event: '${this.safeStringify(event)}'`,
     });
   }
@@ -334,8 +331,8 @@ export class ErrorFactory {
     message,
   }: {
     message: string;
-  }): DendronError {
-    return new DendronError({
+  }): SailError {
+    return new SailError({
       status: ERROR_STATUS.INVALID_STATE,
       message,
     });
@@ -345,11 +342,11 @@ export class ErrorFactory {
     message,
   }: {
     message: string;
-  }): DendronError {
-    return new DendronError({
+  }): SailError {
+    return new SailError({
       message,
 
-      // Setting severity as minor since Dendron could still be functional even
+      // Setting severity as minor since Sail could still be functional even
       // if some particular schema is malformed.
       severity: ERROR_SEVERITY.MINOR,
     });
@@ -365,23 +362,23 @@ export class ErrorFactory {
     }
   }
 
-  /** Wraps the error in DendronError WHEN the instance is not already a DendronError. */
-  static wrapIfNeeded(err: any): DendronError {
-    if (err instanceof DendronError) {
-      // If its already a dendron error we don't need to wrap it.
+  /** Wraps the error in SailError WHEN the instance is not already a SailError. */
+  static wrapIfNeeded(err: any): SailError {
+    if (err instanceof SailError) {
+      // If its already a sail error we don't need to wrap it.
       return err;
     } else if (err instanceof Error) {
       // If its an instance of some other error we will wrap it and keep track
       // of the inner error which was the cause.
-      return new DendronError({
+      return new SailError({
         message: err.message,
         innerError: err,
       });
     } else {
       // Hopefully we aren't reaching this branch but in case someone throws
       // some object that does not inherit from Error we will attempt to
-      // safe stringify it into message and wrap as DendronError.
-      return new DendronError({
+      // safe stringify it into message and wrap as SailError.
+      return new SailError({
         message: this.safeStringify(err),
       });
     }
@@ -393,8 +390,8 @@ export class ErrorUtils {
     return _.has(error, "isAxiosError");
   }
 
-  static isDendronError(error: unknown): error is DendronError {
-    return _.get(error, "name", "") as string === "DendronError";
+  static isSailError(error: unknown): error is SailError {
+    return _.get(error, "name", "") as string === "SailError";
   }
   /**
    * Given a RespV3, ensure it is an error resp.

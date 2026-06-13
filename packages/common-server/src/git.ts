@@ -1,13 +1,13 @@
 import {
   CONSTANTS,
-  DendronError,
+  SailError,
   DVault,
   DWorkspace,
   NoteProps,
   ConfigUtils,
   GitUtils as CommonGitUtils,
   FOLDERS,
-  DendronConfig,
+  SailConfig,
 } from "@saili/common-all";
 
 
@@ -32,7 +32,7 @@ export { simpleGit, SimpleGit, SimpleGitResetMode };
  * Utilities for working with git urls
  */
 export class GitUtils {
-  static canShowGitLink(opts: { config: DendronConfig; note: NoteProps }) {
+  static canShowGitLink(opts: { config: SailConfig; note: NoteProps }) {
     return CommonGitUtils.canShowGitLink(opts);
   }
   static getGithubAccessTokenUrl(opts: {
@@ -48,7 +48,7 @@ export class GitUtils {
 
   static getGithubEditUrl(opts: {
     note: NoteProps;
-    config: DendronConfig;
+    config: SailConfig;
     wsRoot: string;
   }) {
     return CommonGitUtils.getGithubEditUrl(opts);
@@ -107,7 +107,7 @@ export class GitUtils {
     ) {
       const config = (await readYAMLAsync(
         path.join(repoPath, CONSTANTS.DENDRON_CONFIG_FILE)
-      )) as DendronConfig;
+      )) as SailConfig;
       const workspace = path.basename(repoPath);
       const vaultsConfig = ConfigUtils.getVaults(config);
       const vaults = vaultsConfig.map((ent) => {
@@ -168,9 +168,8 @@ export class GitUtils {
     const [owner, repo] = await this.getGitProviderOwnerAndRepository(uri);
     const branch = await this.getCurrentBranch(uri);
     const currentFile = file.replace(/^\//, "").replace(/^\\/, "");
-    return `https://${hostname}/${owner}/${repo}/blob/${branch}/${currentFile}#L${
-      line + 1
-    }:L${endLine + 1}`;
+    return `https://${hostname}/${owner}/${repo}/blob/${branch}/${currentFile}#L${line + 1
+      }:L${endLine + 1}`;
   }
 
   static async getGitHostname(uri: string): Promise<string> {
@@ -200,7 +199,7 @@ export class GitUtils {
     } catch (e) {
       const remotes = await this.getRemoteNames(uri);
       if (!remotes.includes(remoteName)) {
-        throw new DendronError({
+        throw new SailError({
           message: `Your configuration contains an invalid remoteName. You should probably use one of these:\n ${remotes.join(
             "\n"
           )}`,

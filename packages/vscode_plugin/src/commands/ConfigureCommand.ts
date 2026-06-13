@@ -1,7 +1,7 @@
 import { DConfig } from "@saili/common-server";
 import { Uri } from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { VSCodeUtils } from "../vsCodeUtils";
 import { BasicCommand } from "./base";
 
@@ -12,9 +12,9 @@ type CommandOutput = void;
 export class ConfigureCommand extends BasicCommand<CommandOpts, CommandOutput> {
   key = DENDRON_COMMANDS.CONFIGURE_RAW.key;
   public static requireActiveWorkspace: boolean = true;
-  private _ext: IDendronExtension;
+  private _ext: ISailExtension;
 
-  constructor(extension: IDendronExtension) {
+  constructor(extension: ISailExtension) {
     super();
     this._ext = extension;
   }
@@ -23,8 +23,8 @@ export class ConfigureCommand extends BasicCommand<CommandOpts, CommandOutput> {
     return {};
   }
   async execute() {
-    const dendronRoot = this._ext.getDWorkspace().wsRoot;
-    const configPath = DConfig.configPath(dendronRoot);
+    const sailRoot = this._ext.getDWorkspace().wsRoot;
+    const configPath = DConfig.configPath(sailRoot);
     const uri = Uri.file(configPath);
     await VSCodeUtils.openFileInEditor(uri);
     return;

@@ -1,6 +1,6 @@
 import {
   asyncLoop,
-  DendronError,
+  SailError,
   Disposable,
   DLogger,
   ERROR_STATUS,
@@ -80,8 +80,8 @@ export class BackupService implements Disposable, IBackupService {
    *
    * `{file name without extension}.{yyyy.MM.dd.HHmmssS, if enabled}.{infix, if enabled}.{extension}`
    *
-   * e.g.) Given `dendron.yml`, timestamp, and infix `migrate-config`,
-   * the resulting backup file name is `dendron.2022.03.14.3239848.migrate-config.yml`
+   * e.g.) Given `sail.yml`, timestamp, and infix `migrate-config`,
+   * the resulting backup file name is `sail.2022.03.14.3239848.migrate-config.yml`
    *
    * Note that with `timestamp: false` and no infix, this will return the same inputted filename.
    *
@@ -117,7 +117,7 @@ export class BackupService implements Disposable, IBackupService {
    * @param opts.timestamp flag to enable timestamp in backup file name.
    * @param opts.infix optional custom infix to append right before the extension.
    * @param opts.nameOverride if given, it will be used instead of calling {@link generateBackupFileName}.
-   * @returns A promise of response containing either the path of the backup or a DendronError
+   * @returns A promise of response containing either the path of the backup or a SailError
    * ^b0jdi7ncbflr
    */
   async backup(opts: {
@@ -141,7 +141,7 @@ export class BackupService implements Disposable, IBackupService {
     fs.copyFileSync(pathToBackup, backupPath);
     if (!fs.existsSync(backupPath)) {
       return {
-        error: DendronError.createFromStatus({
+        error: SailError.createFromStatus({
           status: ERROR_STATUS.BACKUP_FAILED,
           message: `backup for ${pathToBackup} failed.`,
         }),

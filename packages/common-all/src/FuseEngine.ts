@@ -336,10 +336,10 @@ export class FuseEngine {
   static formatQueryForFuse({ qs }: { qs: string }): string {
     // Fuse does not appear to see [*] as anything special.
     // For example:
-    // `dev*vs` matches `dendron.dev.ref.vscode` with score of 0.5
+    // `dev*vs` matches `sail.dev.ref.vscode` with score of 0.5
     //
     // To compare with
-    // `dev vs` matches `dendron.dev.ref.vscode` with score of 0.001
+    // `dev vs` matches `sail.dev.ref.vscode` with score of 0.001
     //
     // Fuse extended search https://fusejs.io/examples.html#extended-search
     // uses spaces for AND and '|' for OR hence this function will replace '*' with spaces.

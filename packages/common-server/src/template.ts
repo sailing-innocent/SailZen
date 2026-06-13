@@ -1,9 +1,9 @@
 import {
-  DendronError,
+  SailError,
   DEngineClient,
   DVault,
   NoteProps,
-  parseDendronURI,
+  parseSailURI,
   RespV3,
   SchemaUtils,
   Time,
@@ -17,7 +17,7 @@ type TemplateFunctionProps = {
   targetNote: NoteProps;
 };
 
-interface DendronHandlebarsHelpers extends HelperOptions {
+interface SailHandlebarsHelpers extends HelperOptions {
   data: {
     root: NoteProps & {
       FNAME: string;
@@ -117,8 +117,8 @@ class TemplateHelpers {
     },
 
     fnameToDate: (
-      patternOrOptions: string | DendronHandlebarsHelpers,
-      options?: DendronHandlebarsHelpers
+      patternOrOptions: string | SailHandlebarsHelpers,
+      options?: SailHandlebarsHelpers
     ) => {
       let pattern = "(?<year>[\\d]{4}).(?<month>[\\d]{2}).(?<day>[\\d]{2})";
       let fname;
@@ -215,7 +215,7 @@ export class TemplateUtils {
 
     if (maybeTemplate) {
       // Support xvault template
-      const { link: fname, vaultName } = parseDendronURI(maybeTemplate?.id);
+      const { link: fname, vaultName } = parseSailURI(maybeTemplate?.id);
 
       // If vault is specified, lookup by template id + vault
       if (!_.isUndefined(vaultName)) {
@@ -226,7 +226,7 @@ export class TemplateUtils {
         // If vault is not found, skip lookup through rest of notes and return error
         if (_.isUndefined(maybeVault)) {
           return {
-            error: new DendronError({
+            error: new SailError({
               message: `No vault found for ${vaultName}`,
             }),
           };

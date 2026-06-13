@@ -40,7 +40,7 @@ export class EngineNoteProvider
   private setLabelContext(labelType: TreeViewItemLabelTypeEnum) {
     vscode.commands.executeCommand(
       "setContext",
-      "dendron:treeviewItemLabelType",
+      "sail:treeviewItemLabelType",
       labelType
     );
   }

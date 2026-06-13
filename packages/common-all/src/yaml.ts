@@ -2,10 +2,10 @@ import YAML from "js-yaml";
 import { fromThrowable, Result } from "neverthrow";
 import type { AnyJson } from "./types";
 import { ERROR_SEVERITY } from "./constants";
-import { DendronError } from "./error";
+import { SailError } from "./error";
 
 const load = fromThrowable(YAML.load, (error) => {
-  return new DendronError({
+  return new SailError({
     message:
       error instanceof YAML.YAMLException
         ? `${error.name}: ${error.message}`
@@ -16,7 +16,7 @@ const load = fromThrowable(YAML.load, (error) => {
 });
 
 const dump = fromThrowable(YAML.dump, (error) => {
-  return new DendronError({
+  return new SailError({
     message:
       error instanceof YAML.YAMLException
         ? `${error.name}: ${error.message}`
@@ -30,7 +30,7 @@ export const fromStr = (str: string, overwriteDuplicate?: boolean) => {
   return load(str, {
     schema: YAML.JSON_SCHEMA,
     json: overwriteDuplicate ?? false,
-  }) as Result<AnyJson, DendronError>;
+  }) as Result<AnyJson, SailError>;
 };
 
 export const toStr = (data: any) => {

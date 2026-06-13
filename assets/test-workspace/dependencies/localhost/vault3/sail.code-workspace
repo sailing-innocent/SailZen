@@ -1,0 +1,36 @@
+{
+  "folders": [
+    {
+      "path": "notes",
+      "name": "vault3"
+    }
+  ],
+  "settings": {
+    "sail.rootDir": ".",
+    "files.autoSave": "onFocusChange",
+    "pasteImage.path": "${currentFileDir}/assets/images",
+    "pasteImage.prefix": "/",
+    "markdown-preview-enhanced.enableWikiLinkSyntax": true,
+    "markdown-preview-enhanced.wikiLinkFileExtension": ".md",
+    "editor.snippetSuggestions": "inline",
+    "editor.suggest.snippetsPreventQuickSuggestions": false,
+    "editor.suggest.showSnippets": true,
+    "editor.tabCompletion": "on",
+    "sail.enableSelfContainedVaultWorkspace": true
+  },
+  "extensions": {
+    "recommendations": [
+      "sail.sail-paste-image",
+      "sail.sail-markdown-shortcuts",
+      "redhat.vscode-yaml"
+    ],
+    "unwantedRecommendations": [
+      "sail.sail-markdown-links",
+      "sail.sail-markdown-notes",
+      "sail.sail-markdown-preview-enhanced",
+      "shd101wyy.markdown-preview-enhanced",
+      "kortina.vscode-markdown-notes",
+      "mushan.vscode-paste-image"
+    ]
+  }
+}

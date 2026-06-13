@@ -1,4 +1,4 @@
-import { DendronQuickPicker } from "./types";
+import { SailQuickPicker } from "./types";
 import { CancellationToken, CancellationTokenSource } from "vscode";
 import {
   DNodePropsQuickInput,
@@ -14,18 +14,18 @@ export type ILookupProvider = {
   onUpdatePickerItems: (opts: OnUpdatePickerItemsOpts) => Promise<void>;
   registerOnAcceptHook: (hook: OnAcceptHook) => void;
   onDidAccept(opts: {
-    quickpick: DendronQuickPicker;
+    quickpick: SailQuickPicker;
     cancellationToken: CancellationTokenSource;
   }): any;
   shouldRejectItem?: (opts: { item: NoteQuickInput }) =>
     | {
-        shouldReject: true;
-        reason: InvalidFilenameReason;
-      }
+      shouldReject: true;
+      reason: InvalidFilenameReason;
+    }
     | {
-        shouldReject: false;
-        reason?: never;
-      };
+      shouldReject: false;
+      reason?: never;
+    };
 };
 
 export interface INoteLookupProviderFactory {
@@ -37,13 +37,13 @@ export interface ISchemaLookupProviderFactory {
 }
 
 export type ProvideOpts = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   token: CancellationTokenSource;
   fuzzThreshold: number;
 };
 
 export type OnUpdatePickerItemsOpts = {
-  picker: DendronQuickPicker;
+  picker: SailQuickPicker;
   token?: CancellationToken;
   fuzzThreshold?: number;
   /**
@@ -91,7 +91,7 @@ export type SchemaLookupProviderSuccessResp<T = never> = {
 };
 
 export type OnAcceptHook = (opts: {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   selectedItems: NoteQuickInput[];
 }) => Promise<RespV2<any>>;
 

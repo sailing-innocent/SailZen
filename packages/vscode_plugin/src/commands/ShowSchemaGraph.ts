@@ -1,5 +1,5 @@
 import {
-  DendronEditorViewKey,
+  SailEditorViewKey,
   getWebEditorViewEntry,
 } from "@saili/common-all";
 import vscode from "vscode";
@@ -31,7 +31,7 @@ export class ShowSchemaGraphCommand extends BasicCommand<
 
   async execute() {
     const { bundleName: name } = getWebEditorViewEntry(
-      DendronEditorViewKey.SCHEMA_GRAPH
+      SailEditorViewKey.SCHEMA_GRAPH
     );
     const ext = ExtensionProvider.getExtension();
     const port = ext.port!;

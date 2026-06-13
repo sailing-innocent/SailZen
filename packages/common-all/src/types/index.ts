@@ -28,7 +28,7 @@ export type Stage = "dev" | "prod" | "test";
 
 export type DEngineMode = "exact" | "fuzzy";
 
-export type DendronSiteFM = {
+export type SailSiteFM = {
   published?: boolean;
   noindex?: boolean;
   /**
@@ -55,7 +55,7 @@ export type DendronSiteFM = {
   skipLevels?: number;
 };
 
-export enum DendronUserSpecial {
+export enum SailUserSpecial {
   "everyone" = "everyone",
   "anonymous" = "anonymous",
 }

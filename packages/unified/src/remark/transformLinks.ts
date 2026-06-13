@@ -3,7 +3,7 @@ import type { Transformer, Processor } from "unified";
 import { Node } from "unist";
 import { visit } from "unist-util-visit";
 import { VFile } from "vfile";
-import { DendronASTTypes, NoteRefNoteV4, WikiLinkNoteV4 } from "../types";
+import { SailASTTypes, NoteRefNoteV4, WikiLinkNoteV4 } from "../types";
 
 type PluginOpts = {
   from: DNoteLoc;
@@ -18,7 +18,7 @@ function plugin(this: Processor, opts: PluginOpts): Transformer {
   const proc = this;
   function transformer(tree: Node, _file: VFile) {
     visit(tree, (node: Node, _idx: number | undefined, _parent: Node | undefined) => {
-      if (node.type === DendronASTTypes.WIKI_LINK) {
+      if (node.type === SailASTTypes.WIKI_LINK) {
         let cnode = node as WikiLinkNoteV4;
         if (cnode.value.toLowerCase() === opts.from.fname.toLowerCase()) {
           cnode.value = opts.to.fname;
@@ -30,7 +30,7 @@ function plugin(this: Processor, opts: PluginOpts): Transformer {
           }
         }
       }
-      if (node.type === DendronASTTypes.REF_LINK_V2) {
+      if (node.type === SailASTTypes.REF_LINK_V2) {
         let cnode = node as NoteRefNoteV4;
         if (
           cnode.data.link.from.fname.toLowerCase() ===

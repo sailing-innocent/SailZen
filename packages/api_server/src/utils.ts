@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DEngine,
   ERROR_SEVERITY,
   ERROR_STATUS,
@@ -116,7 +116,7 @@ export class ServerUtils {
         return _.isUndefined(process.env[k]);
       })
     ) {
-      throw new DendronError({
+      throw new SailError({
         message: "no value found for env variable",
         status: ERROR_STATUS.INVALID_CONFIG,
       });
@@ -149,12 +149,12 @@ export class ServerUtils {
   }: Omit<ServerArgs, "scriptPath">) {
     const { port: finalPort } = await launchv2({
       port,
-      logPath: path.join(logPath, "dendron.server.log"),
+      logPath: path.join(logPath, "sail.server.log"),
       nextServerUrl,
       nextStaticRoot,
     });
     if (!process.send) {
-      throw new DendronError({ message: "expect a child process" });
+      throw new SailError({ message: "expect a child process" });
     }
     process.send(`${finalPort}`);
     return { port: finalPort };
@@ -173,7 +173,7 @@ export class ServerUtils {
   }: ServerArgs): Promise<{ port: number; subprocess: Subprocess }> {
     const logger = createLogger(
       "execServer",
-      path.join(logPath, "dendron.log")
+      path.join(logPath, "sail.log")
     );
     const execa = await import("execa");
     return new Promise((resolve, reject) => {
@@ -190,20 +190,20 @@ export class ServerUtils {
       logger.info({ state: "post:exec.node" });
       subprocess.on("close", (code: any) => {
         logger.error({ state: "close" });
-        reject(new DendronError({ message: "close", payload: { code } }));
+        reject(new SailError({ message: "close", payload: { code } }));
       });
       subprocess.on("disconnect", () => {
         logger.error({ state: "disconnect" });
-        reject(new DendronError({ message: "disconnect" }));
+        reject(new SailError({ message: "disconnect" }));
       });
       subprocess.on("exit", (code: any) => {
         logger.error({ state: "exit" });
-        reject(new DendronError({ message: "exit", payload: { code } }));
+        reject(new SailError({ message: "exit", payload: { code } }));
       });
       subprocess.on("error", (err: Error) => {
         logger.error({ state: "error", payload: err });
         reject(
-          new DendronError({ message: "error", payload: stringifyError(err) })
+          new SailError({ message: "error", payload: stringifyError(err) })
         );
       });
       subprocess.on("message", (message: any) => {
@@ -211,7 +211,7 @@ export class ServerUtils {
         const port = parseInt(message as string, 10);
         if (port <= 0) {
           reject({
-            error: new DendronError({
+            error: new SailError({
               message: "port is smaller than 0",
               severity: ERROR_SEVERITY.FATAL,
             }),

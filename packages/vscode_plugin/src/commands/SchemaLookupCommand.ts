@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DVault,
   ERROR_STATUS,
   ErrorFactory,
@@ -12,7 +12,7 @@ import { getDurationMilliseconds, vault2Path } from "@saili/common-server";
 import { HistoryService } from "@saili/engine-server";
 import _ from "lodash";
 import { Uri } from "vscode";
-import { DendronQuickPicker } from "../components/lookup/types";
+import { SailQuickPicker } from "../components/lookup/types";
 import { OldNewLocation, PickerUtils } from "../components/lookup/utils";
 import { DENDRON_COMMANDS } from "../constants";
 import { Logger } from "../logger";
@@ -30,7 +30,7 @@ type CommandRunOpts = {
 };
 
 type CommandGatherOutput = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   controller: ILookupController;
   provider: ILookupProvider;
   noConfirm?: boolean;
@@ -42,7 +42,7 @@ type CommandOpts = {
 } & CommandGatherOutput;
 
 export type CommandOutput = {
-  quickpick: DendronQuickPicker;
+  quickpick: SailQuickPicker;
   controller: ILookupController;
   provider: ILookupProvider;
 };
@@ -69,7 +69,7 @@ export class SchemaLookupCommand extends BaseCommand<
 
   protected get controller(): ILookupController {
     if (_.isUndefined(this._controller)) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "controller not set",
       });
@@ -79,7 +79,7 @@ export class SchemaLookupCommand extends BaseCommand<
 
   protected get provider(): ILookupProvider {
     if (_.isUndefined(this._provider)) {
-      throw DendronError.createFromStatus({
+      throw SailError.createFromStatus({
         status: ERROR_STATUS.INVALID_STATE,
         message: "provider not set",
       });
@@ -144,7 +144,7 @@ export class SchemaLookupCommand extends BaseCommand<
             };
             resolve(_opts);
           } else if (event.action === "error") {
-            const error = event.data.error as DendronError;
+            const error = event.data.error as SailError;
             this.L.error({ error });
             resolve(undefined);
           } else if (

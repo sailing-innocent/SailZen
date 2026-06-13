@@ -1,4 +1,4 @@
-import { DendronError, NoteTrait } from "@saili/common-all";
+import { SailError, NoteTrait } from "@saili/common-all";
 import * as vscode from "vscode";
 import { DENDRON_COMMANDS } from "../constants";
 import { ExtensionProvider } from "../ExtensionProvider";
@@ -73,7 +73,7 @@ export class CreateNoteWithUserDefinedTrait extends BaseCommand<
       );
 
     if (!cmd) {
-      throw new DendronError({ message: "Unexpected unregistered type" });
+      throw new SailError({ message: "Unexpected unregistered type" });
     }
     await vscode.commands.executeCommand(cmd);
 

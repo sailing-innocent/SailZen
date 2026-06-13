@@ -6,8 +6,8 @@
 import {
   NoteProps,
   DVault,
-  genDefaultDendronConfig,
-  DendronConfig,
+  genDefaultSailConfig,
+  SailConfig,
 } from "@saili/common-all";
 
 /**
@@ -23,9 +23,9 @@ export function createTestVault(overrides?: Partial<DVault>): DVault {
 /**
  * Creates a default test config
  */
-export function createTestConfig(overrides?: Partial<DendronConfig>): DendronConfig {
+export function createTestConfig(overrides?: Partial<SailConfig>): SailConfig {
   return {
-    ...genDefaultDendronConfig(),
+    ...genDefaultSailConfig(),
     ...overrides,
   };
 }

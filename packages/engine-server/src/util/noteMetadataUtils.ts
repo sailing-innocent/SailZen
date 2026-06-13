@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DLink,
   ErrorFactory,
   isNumeric,
@@ -202,10 +202,9 @@ export class NoteMetadataUtils {
   }: ExtractPropWithFilter): RespV3<DLink | undefined> {
     const tags = this.extractTags({ note, filters });
     if (tags.length > 1) {
-      const error = new DendronError({
-        message: `singleTag field has multiple values. note: ${
-          note.fname
-        }, tags: ${tags.map((ent) => ent.alias).join(", ")}`,
+      const error = new SailError({
+        message: `singleTag field has multiple values. note: ${note.fname
+          }, tags: ${tags.map((ent) => ent.alias).join(", ")}`,
       });
       return { error };
     }

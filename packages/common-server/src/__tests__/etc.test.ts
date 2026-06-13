@@ -71,6 +71,8 @@ describe("etc", () => {
         expect(html).toContain("<!DOCTYPE html>");
         expect(html).toContain("test-view");
         expect(html).toContain("/test.js");
+        expect(html).toContain('/test.js"');
+        expect(html).toContain('type="module"');
         expect(html).toContain("/test.css");
         expect(html).toContain("/test");
         expect(html).toContain("/workspace");

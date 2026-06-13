@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DVault,
   NoteTrait,
   OnCreateContext,
@@ -7,13 +7,13 @@ import {
   EngagementEvents,
   NoteUtils,
   SetNameModifierResp,
-  parseDendronURI,
+  parseSailURI,
   VaultUtils,
 } from "@saili/common-all";
 import { HistoryEvent } from "@saili/engine-server";
 import path from "path";
 import * as vscode from "vscode";
-import { IDendronExtension } from "../dendronExtensionInterface";
+import { ISailExtension } from "../sailExtensionInterface";
 import { LookupControllerCreateOpts } from "../components/lookup/LookupController";
 import { PickerUtils } from "../components/lookup/utils";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
@@ -26,7 +26,7 @@ import { TemplateUtils } from "@saili/common-server";
 import { TraitUtils } from "../traits/TraitUtils";
 import _ from "lodash";
 import { Disposable } from "vscode";
-import { DendronContext } from "../constants";
+import { SailContext } from "../constants";
 import { AutoCompleter } from "../utils/autoCompleter";
 import { AutoCompletableRegistrar } from "../utils/registers/AutoCompletableRegistrar";
 
@@ -47,10 +47,10 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
   key: string;
   private _trait: NoteTrait | undefined;
   private initTrait: () => NoteTrait;
-  protected _extension: IDendronExtension;
+  protected _extension: ISailExtension;
 
   constructor(
-    ext: IDendronExtension,
+    ext: ISailExtension,
     commandId: string,
     // TODO: refactor trait to `initTratCb` and remove static initialization of trait
     trait: NoteTrait | (() => NoteTrait)
@@ -71,7 +71,7 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
     if (!this._trait) {
       this._trait = this.initTrait();
       if (_.isUndefined(this._trait)) {
-        throw new DendronError({
+        throw new SailError({
           message: `unable to init trait for ${this.key}`,
         });
       }
@@ -226,7 +226,7 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
       }
       let maybeVault: DVault | undefined;
       // for cross vault template
-      const { link: fname, vaultName } = parseDendronURI(templateNoteName);
+      const { link: fname, vaultName } = parseSailURI(templateNoteName);
       if (!_.isUndefined(vaultName)) {
         maybeVault = VaultUtils.getVaultByName({
           vname: vaultName,
@@ -333,10 +333,10 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
           });
 
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
         onError: (event: HistoryEvent) => {
-          const error = event.data.error as DendronError;
+          const error = event.data.error as SailError;
           vscode.window.showErrorMessage(error.message);
           resolve(undefined);
           NoteLookupProviderUtils.cleanup({
@@ -344,7 +344,7 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
             controller: lc,
           });
           disposable?.dispose();
-          VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, false);
+          VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, false);
         },
       });
       lc.show({
@@ -354,7 +354,7 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
         title: `Create Note with Trait`,
       });
 
-      VSCodeUtils.setContext(DendronContext.NOTE_LOOK_UP_ACTIVE, true);
+      VSCodeUtils.setContext(SailContext.NOTE_LOOK_UP_ACTIVE, true);
 
       disposable = AutoCompletableRegistrar.OnAutoComplete(() => {
         if (lc.quickPick) {
@@ -378,9 +378,9 @@ export class CreateNoteWithTraitCommand extends BaseCommand<
     const selectedText = document ? document.getText(range).trim() : "";
     const openNoteName = vscode.window.activeTextEditor?.document.uri.fsPath
       ? path.basename(
-          vscode.window.activeTextEditor?.document.uri.fsPath,
-          ".md"
-        )
+        vscode.window.activeTextEditor?.document.uri.fsPath,
+        ".md"
+      )
       : "";
 
     return {

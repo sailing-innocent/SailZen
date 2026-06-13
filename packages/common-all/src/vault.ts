@@ -2,7 +2,7 @@ import _ from "lodash";
 import path from "path";
 import { FOLDERS, normalizeUnixPath } from ".";
 import { CONSTANTS } from "./constants";
-import { DendronError } from "./error";
+import { SailError } from "./error";
 import { WorkspaceFolderRaw } from "./types";
 import { DVault } from "./types/DVault";
 import { NonOptional } from "./utils";
@@ -123,7 +123,7 @@ export class VaultUtils {
   }) {
     const vault = this.getVaultByName({ vaults, vname });
     if (!vault) {
-      throw new DendronError({ message: `vault with name ${vname} not found` });
+      throw new SailError({ message: `vault with name ${vname} not found` });
     }
     return vault;
   }
@@ -154,7 +154,7 @@ export class VaultUtils {
       return unixPath === normalizeUnixPath(VaultUtils.getRelPath(ent).trim());
     });
     if (!vault) {
-      throw new DendronError({
+      throw new SailError({
         message: "no vault found",
         payload: { wsRoot, fsPath, vaults, normPath, msg: "no vault found" },
       });
@@ -253,7 +253,7 @@ export class VaultUtils {
 
   static FILE_VAULT_PREFIX = "dir-";
 
-  /** Creates a dummy vault for files that are not in Dendron workspace, for example a markdown file that's not in any vault. Do not use for notes. */
+  /** Creates a dummy vault for files that are not in Sail workspace, for example a markdown file that's not in any vault. Do not use for notes. */
   static createForFile({
     filePath,
     wsRoot,

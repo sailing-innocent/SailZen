@@ -10,7 +10,7 @@ function createVault() {
 	const vaultRoot = path.join(__dirname, "..", vaultName);
 	fs.ensureDirSync(vaultRoot);
 	console.log(vaultRoot);
-	$.commandSync("dendron seed init test.vault-generated --mode create_workspace", {cwd: vaultRoot, shell: true});
+	$.commandSync("sail seed init test.vault-generated --mode create_workspace", {cwd: vaultRoot, shell: true});
 }
 
 async function main() {

@@ -1,9 +1,9 @@
 import _ from "lodash";
-import { DendronError } from "@saili/common-all";
+import { SailError } from "@saili/common-all";
 // @ts-ignore - Eat type is not exported from remark-parse
 type Eat = any;
 import type { Plugin, Processor } from "unified";
-import { DendronASTDest, DendronASTTypes, ExtendedImage } from "../types";
+import { SailASTDest, SailASTTypes, ExtendedImage } from "../types";
 import { Element } from "hast";
 import { html } from "mdast-builder";
 import YAML from "js-yaml";
@@ -54,7 +54,7 @@ function attachParser(proc: Processor) {
       }
 
       return eat(match[0])({
-        type: DendronASTTypes.EXTENDED_IMAGE,
+        type: SailASTTypes.EXTENDED_IMAGE,
         // @ts-ignore
         value,
         url: match.groups.url,
@@ -84,19 +84,19 @@ function attachCompiler(proc: Processor, _opts?: PluginOpts) {
       const { dest } = MDUtilsV5.getProcData(proc);
       const alt = node.alt ? node.alt : "";
       switch (dest) {
-        case DendronASTDest.MD_DENDRON:
+        case SailASTDest.MD_DENDRON:
           return `![${alt}](${node.url})${_.trim(
             YAML.dump(node.props, {
               /* Inline-only so we get JSON style {foo: bar} */
               flowLevel: 0,
             })
           )}`;
-        case DendronASTDest.MD_REGULAR:
+        case SailASTDest.MD_REGULAR:
           return `![${alt}](${node.url})`;
-        case DendronASTDest.MD_ENHANCED_PREVIEW:
+        case SailASTDest.MD_ENHANCED_PREVIEW:
           return extendedImage2htmlRaw(node);
         default:
-          throw new DendronError({
+          throw new SailError({
             message: "Unable to render extended image",
           });
       }

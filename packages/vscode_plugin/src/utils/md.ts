@@ -104,7 +104,7 @@ export const containsOtherKnownExts = (pathParam: string): boolean =>
 export class MarkdownUtils {
   static hasLegacyPreview() {
     return !_.isUndefined(
-      extensions.getExtension("dendron.dendron-markdown-preview-enhanced")
+      extensions.getExtension("sail.sail-markdown-preview-enhanced")
     );
   }
 
@@ -329,9 +329,9 @@ export async function getReferenceAtPosition({
       }
     }
     // if not, it could be a frontmatter tag
-    // only parse if this is a dendron note
+    // only parse if this is a sail note
     if (
-      !(await WorkspaceUtils.isDendronNote({
+      !(await WorkspaceUtils.isSailNote({
         wsRoot,
         vaults,
         fpath: document.uri.fsPath,

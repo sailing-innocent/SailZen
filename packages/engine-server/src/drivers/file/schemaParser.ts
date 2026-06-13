@@ -1,5 +1,5 @@
 import {
-  DendronError,
+  SailError,
   DVault,
   ERROR_STATUS,
   SchemaModuleProps,
@@ -38,7 +38,7 @@ export class SchemaParser {
     vault: DVault
   ): Promise<{
     schemas: SchemaModuleProps[];
-    errors: DendronError[] | null;
+    errors: SailError[] | null;
   }> {
     const ctx = "parse";
     this.logger.info({ ctx, msg: "enter", fpaths, vault });
@@ -56,7 +56,7 @@ export class SchemaParser {
           const vpath = vault2Path({ wsRoot: this.wsRoot, vault });
           const fullPath = path.join(vpath, fpath);
 
-          return new DendronError({
+          return new SailError({
             message: message || ERROR_STATUS.BAD_PARSE_FOR_SCHEMA,
             status: ERROR_STATUS.BAD_PARSE_FOR_SCHEMA,
             payload: { fpath, message, fullPath },
@@ -66,12 +66,12 @@ export class SchemaParser {
     );
     const errors = _.filter(
       out,
-      (ent) => ent instanceof DendronError
-    ) as DendronError[];
+      (ent) => ent instanceof SailError
+    ) as SailError[];
     return {
       schemas: _.reject(
         out,
-        (ent) => ent instanceof DendronError
+        (ent) => ent instanceof SailError
       ) as SchemaModuleProps[],
       errors: _.isEmpty(errors) ? null : errors,
     };

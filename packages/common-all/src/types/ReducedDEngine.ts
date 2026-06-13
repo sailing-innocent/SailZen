@@ -1,7 +1,7 @@
 import { DEngine } from "./typesv2";
 
 /**
- * Subset of DEngine capabilities designed to support Dendron as a Web Extension
+ * Subset of DEngine capabilities designed to support Sail as a Web Extension
  */
 export type ReducedDEngine = Pick<
   DEngine,
