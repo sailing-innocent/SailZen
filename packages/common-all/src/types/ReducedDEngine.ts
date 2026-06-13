@@ -1,4 +1,4 @@
-import { DEngine } from "./typesv2";
+import { DEngine } from "./types";
 
 /**
  * Subset of DEngine capabilities designed to support Sail as a Web Extension

@@ -1,5 +1,5 @@
 import { URI } from "vscode-uri";
-import { DEngineClient } from "./typesv2";
+import { DEngineClient } from "./types";
 import { DVault } from "./DVault";
 import { SailConfig } from "./configs";
 

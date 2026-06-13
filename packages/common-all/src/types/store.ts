@@ -1,5 +1,5 @@
 import { NoteProps, NotePropsMeta } from "./foundation";
-import { SchemaModuleProps } from "./typesv2";
+import { SchemaModuleProps } from "./types";
 
 // Types used on the store layer
 

@@ -5,7 +5,7 @@ export * from "./foundation";
 export * from "./hooks";
 export * from "./noteTrait";
 export * from "./seed";
-export * from "./typesv2";
+export * from "./types";
 export * from "./DWorkspaceV2";
 export * from "./seed";
 export * from "./compat";
