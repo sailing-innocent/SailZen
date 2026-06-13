@@ -7,8 +7,7 @@ import { DVault } from "../types/DVault";
 import { genHash } from "../utils";
 
 /**
- * NOTE: Temporarily duplicated from common-server/filesv2.ts to get Sail Web
- * Extension working
+ * Shared note parsing helper used by server-side file utilities.
  * @param calculateHash - when set, add `contentHash` property to the note
  *  Default: false
  * @returns

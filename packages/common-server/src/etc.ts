@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
-import { findUpTo } from "./filesv2";
+import { findUpTo } from "./files";
 
 // Get __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);

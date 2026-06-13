@@ -20,7 +20,7 @@ import simpleGit, {
 } from "simple-git";
 import { parse } from "url";
 import { readYAMLAsync } from "./index.js";
-import { vault2Path } from "./filesv2";
+import { vault2Path } from "./files";
 
 export { simpleGit, SimpleGit, SimpleGitResetMode };
 

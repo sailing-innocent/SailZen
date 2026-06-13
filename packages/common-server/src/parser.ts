@@ -15,9 +15,11 @@ import {
   SchemaRaw,
   SchemaUtils,
 } from "@saili/common-all";
+import fs from "fs-extra";
 import _ from "lodash";
 import path from "path";
-import { file2Schema, vault2Path } from "./filesv2";
+import YAML from "js-yaml";
+import { vault2Path } from "./files";
 import { createLogger, DLogger } from "./logger";
 import Ajv from "ajv";
 import AjvErrors from "ajv-errors";
@@ -363,4 +365,35 @@ export class SchemaParserV2 extends ParserBaseV2 {
       vault: root,
     };
   }
+}
+
+export async function file2Schema(
+  fpath: string,
+  wsRoot: string
+): Promise<SchemaModuleProps> {
+  const root = { fsPath: path.dirname(fpath) };
+  const fname = path.basename(fpath, ".schema.yml");
+  const schemaOpts = YAML.load(
+    await fs.readFile(fpath, { encoding: "utf8" })
+  ) as SchemaModuleOpts;
+  return SchemaParserV2.parseRaw(schemaOpts, { root, fname, wsRoot });
+}
+
+export async function string2Schema({
+  vault,
+  content,
+  fname,
+  wsRoot,
+}: {
+  vault: DVault;
+  content: string;
+  fname: string;
+  wsRoot: string;
+}) {
+  const schemaOpts = YAML.load(content) as SchemaModuleOpts;
+  return SchemaParserV2.parseRaw(schemaOpts, {
+    root: vault,
+    fname,
+    wsRoot,
+  });
 }

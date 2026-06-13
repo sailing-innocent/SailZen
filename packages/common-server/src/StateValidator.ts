@@ -10,7 +10,7 @@ import {
 } from "@saili/common-all";
 import path from "path";
 import { getAllFiles } from "./files";
-import { vault2Path } from "./filesv2";
+import { vault2Path } from "./files";
 
 /**
  * Validate correctness of engine notes compared with filesystem.
