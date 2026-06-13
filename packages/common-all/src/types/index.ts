@@ -18,7 +18,6 @@ export * from "./errorTypes";
 export * from "./store";
 export * from "./ReducedDEngine";
 export * from "./DVault";
-export * from "./DWorkspace";
 export * from "./FindNoteOpts";
 export * from "./SeedEntry";
 export * from "./configs";

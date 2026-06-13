@@ -2,12 +2,22 @@ import { URI } from "vscode-uri";
 import { DEngineClient } from "./types";
 import { DVault } from "./DVault";
 import { SailConfig } from "./configs";
+import { RemoteEndpoint } from "./RemoteEndpoint";
 
 export enum WorkspaceType {
   NATIVE = "NATIVE",
   CODE = "CODE",
   NONE = "NONE",
 }
+
+export type DWorkspaceLegacy = {
+  name: string;
+  vaults: DVault[];
+  remote: RemoteEndpoint;
+};
+
+export type DWorkspaceEntry = Omit<DWorkspaceLegacy, "name" | "vaults">;
+
 
 export type DWorkspaceV2 = {
   /**

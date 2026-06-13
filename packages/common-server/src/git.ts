@@ -2,7 +2,7 @@ import {
   CONSTANTS,
   SailError,
   DVault,
-  DWorkspace,
+  DWorkspaceLegacy,
   NoteProps,
   ConfigUtils,
   GitUtils as CommonGitUtils,
@@ -94,7 +94,7 @@ export class GitUtils {
     repoPath: string;
     repoUrl: string;
     wsRoot: string;
-  }): Promise<{ vaults: DVault[]; workspace?: DWorkspace }> {
+  }): Promise<{ vaults: DVault[]; workspace?: DWorkspaceLegacy }> {
     const { repoPath, wsRoot, repoUrl } = opts;
     // is workspace root
     if (

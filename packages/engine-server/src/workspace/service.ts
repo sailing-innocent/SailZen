@@ -12,7 +12,7 @@ import {
   DUtils,
   DVault,
   DVaultSync,
-  DWorkspace,
+  DWorkspaceLegacy,
   DWorkspaceEntry,
   FOLDERS,
   InstallStatus,
@@ -244,7 +244,7 @@ export class WorkspaceService implements Disposable, IWorkspaceService {
    * @param param0
    * @returns `{vaults}` that have been added
    */
-  async addWorkspace({ workspace }: { workspace: DWorkspace }) {
+  async addWorkspace({ workspace }: { workspace: DWorkspaceLegacy }) {
     const config = DConfig.readConfigSync(this.wsRoot);
     const allWorkspaces = ConfigUtils.getWorkspace(config).workspaces || {};
     allWorkspaces[workspace.name] = _.omit(workspace, ["name", "vaults"]);
