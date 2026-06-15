@@ -75,6 +75,7 @@ class PlanExecutor(BaseHandler):
             "enter_plan_mode": (self._exec_enter_plan_mode, "进入计划模式"),
             "revise_plan": (self._exec_revise_plan, "修订计划"),
             "approve_plan": (self._exec_approve_plan, "批准执行计划"),
+            "execute_plan": (self._exec_execute_plan, "执行已批准计划"),
             "cancel_plan": (self._exec_cancel_plan, "取消计划"),
             "check_plan_update": (self._exec_check_plan_update, "检查计划文档更新"),
         }
@@ -238,6 +239,12 @@ class PlanExecutor(BaseHandler):
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
         self._plan_mode.cancel(chat_id, mid, ctx)
+
+    def _exec_execute_plan(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        """Execute an already approved plan (alias for approve in plan mode)."""
+        self._plan_mode.approve(chat_id, mid, ctx)
 
     def _exec_check_plan_update(
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext

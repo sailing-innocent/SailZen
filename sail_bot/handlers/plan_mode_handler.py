@@ -59,6 +59,14 @@ class PlanModeHandler(BaseHandler):
             self.revise(chat_id, message_id, ctx, requirement)
             return
 
+        # Inform user when switching from an active coding workspace
+        if ctx.mode == "coding" and ctx.active_workspace:
+            self.ctx.messaging.reply_text(
+                message_id,
+                f"已暂停当前工作区 **{ctx.active_workspace}**，进入计划模式。"
+                "计划批准执行后将自动切回该工作区。",
+            )
+
         ctx.mode = "planning"
         ctx.plan_state = PlanModeState(
             status="draft",
