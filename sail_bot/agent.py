@@ -181,6 +181,15 @@ class FeishuBotAgent:
 
                 self._contexts[chat_id] = ctx
 
+                # Log plan mode recovery
+                if ctx.mode == "planning" and ctx.plan_state:
+                    logger.info(
+                        "Recovered plan mode session for %s: status=%s title=%s",
+                        chat_id,
+                        ctx.plan_state.status,
+                        ctx.plan_state.plan_title,
+                    )
+
             if self._contexts:
                 logger.info("Loaded %s conversation(s)", len(self._contexts))
             if reset_count > 0:

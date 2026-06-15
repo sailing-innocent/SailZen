@@ -803,6 +803,183 @@ class CardRenderer:
         )
 
     # ------------------------------------------------------------------
+    # Plan mode cards
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def plan_review(
+        title: str,
+        requirement: str,
+        doc_url: str,
+        preview_steps: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Create a plan review card with approve/revise/cancel actions.
+
+        Args:
+            title: Plan title
+            requirement: Original user requirement
+            doc_url: Link to the plan document
+            preview_steps: Optional list of step preview strings
+        """
+        elements: List[Dict[str, Any]] = [
+            text(f"📋 **{title}**", bold=True),
+            note("计划已生成，请审阅飞书文档。你可以批准执行、提出修改或取消。"),
+        ]
+
+        if requirement:
+            elements.append(divider())
+            elements.append(text("🎯 **需求**", bold=True))
+            elements.append(text(requirement[:300]))
+
+        if preview_steps:
+            elements.append(divider())
+            elements.append(text("🪜 **关键步骤**", bold=True))
+            for step in preview_steps:
+                elements.append(note(step))
+
+        elements.append(divider())
+        if doc_url:
+            elements.append(
+                text(f"📄 **[查看完整计划文档]({doc_url})**", bold=True)
+            )
+
+        elements.append(
+            action_row(
+                [
+                    button(
+                        "✅ 批准执行",
+                        "callback",
+                        {"action": "btn_approve_plan"},
+                        ButtonStyle.PRIMARY,
+                    ),
+                    button(
+                        "📝 提出修改",
+                        "callback",
+                        {"action": "btn_revise_plan"},
+                        ButtonStyle.DEFAULT,
+                    ),
+                    button(
+                        "❌ 取消",
+                        "callback",
+                        {"action": "btn_cancel_plan"},
+                        ButtonStyle.DANGER,
+                    ),
+                ]
+            )
+        )
+
+        return card(
+            elements=elements,
+            title="📝 计划审阅",
+            color=CardColor.BLUE,
+        )
+
+    @staticmethod
+    def plan_revising(doc_url: str = "") -> Dict[str, Any]:
+        """Create a card shown while the plan is being revised."""
+        elements: List[Dict[str, Any]] = [
+            text("正在根据你的意见修订计划，请稍候…"),
+        ]
+        if doc_url:
+            elements.append(text(f"📄 [查看文档]({doc_url})"))
+        return card(
+            elements=elements,
+            title="🔄 修订中",
+            color=CardColor.BLUE,
+        )
+
+    @staticmethod
+    def plan_executing(
+        plan_title: str,
+        current_step: str,
+        completed_steps: Optional[List[str]] = None,
+        total_steps: int = 0,
+        elapsed: int = 0,
+    ) -> Dict[str, Any]:
+        """Create a plan execution progress card.
+
+        Args:
+            plan_title: Title of the plan
+            current_step: Description of the current step
+            completed_steps: List of completed step descriptions
+            total_steps: Total number of steps
+            elapsed: Elapsed seconds
+        """
+        completed_steps = completed_steps or []
+        progress_pct = 0
+        if total_steps > 0:
+            progress_pct = min(
+                100, int(len(completed_steps) / total_steps * 100)
+            )
+
+        elements: List[Dict[str, Any]] = [
+            text(f"🚀 **{plan_title}**", bold=True),
+            text(f"当前步骤：{current_step}"),
+        ]
+
+        if progress_pct > 0:
+            filled = progress_pct // 10
+            bar = "█" * filled + "░" * (10 - filled)
+            elements.append(text(f"{bar}  {progress_pct}%"))
+
+        if completed_steps:
+            elements.append(divider())
+            elements.append(text("✅ 已完成", bold=True))
+            for step in completed_steps[-5:]:
+                elements.append(note(step))
+
+        if elapsed:
+            elements.append(note(f"已用时 {elapsed}s"))
+
+        elements.append(
+            action_row(
+                [
+                    button(
+                        "❌ 取消执行",
+                        "callback",
+                        {"action": "btn_cancel_plan"},
+                        ButtonStyle.DANGER,
+                    )
+                ]
+            )
+        )
+
+        return card(
+            elements=elements,
+            title="⏳ 计划执行中",
+            color=CardColor.BLUE,
+        )
+
+    @staticmethod
+    def plan_done(
+        summary: str,
+        doc_url: str = "",
+        elapsed: int = 0,
+    ) -> Dict[str, Any]:
+        """Create a card shown when plan execution completes."""
+        elements: List[Dict[str, Any]] = [text(summary)]
+        if doc_url:
+            elements.append(text(f"📄 [查看计划文档]({doc_url})"))
+        if elapsed:
+            elements.append(note(f"总耗时 {elapsed}s"))
+        return card(
+            elements=elements,
+            title="✅ 计划执行完成",
+            color=CardColor.GREEN,
+        )
+
+    @staticmethod
+    def plan_cancelled() -> Dict[str, Any]:
+        """Create a card shown when plan mode is cancelled."""
+        return card(
+            elements=[
+                text("计划模式已取消。你可以随时发送新的需求重新开始。"),
+            ],
+            title="❌ 计划已取消",
+            color=CardColor.RED,
+        )
+
+    # ------------------------------------------------------------------
     # Utility
     # ------------------------------------------------------------------
 

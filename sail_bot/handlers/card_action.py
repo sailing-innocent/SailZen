@@ -104,6 +104,17 @@ class CardActionHandler(BaseHandler):
                     action_type, value, chat_id, message_id
                 )
 
+            # Handle plan mode button actions
+            if action_type in (
+                "btn_approve_plan",
+                "btn_revise_plan",
+                "btn_cancel_plan",
+                "btn_refresh_plan",
+            ):
+                return self._handle_plan_button(
+                    action_type, value, chat_id, message_id
+                )
+
             # Route other actions to background execution
             return self._route_to_background(action_type, path, chat_id, message_id)
 
@@ -487,6 +498,60 @@ class CardActionHandler(BaseHandler):
             "btn_show_dashboard": "正在打开面板...",
             "btn_refresh_dashboard": "正在刷新...",
             "btn_stop_all": "正在停止全部工作区...",
+        }
+
+        return P2CardActionTriggerResponse(
+            {
+                "toast": {
+                    "type": "info",
+                    "content": toast_messages.get(action_type, "处理中..."),
+                    "i18n": {
+                        "zh_cn": toast_messages.get(action_type, "处理中..."),
+                        "en_us": "Processing...",
+                    },
+                }
+            }
+        )
+
+    def _handle_plan_button(
+        self, action_type: str, value: dict, chat_id: str, message_id: str
+    ) -> Any:
+        """Handle plan mode card button clicks."""
+        ctx = self.ctx.get_or_create_context(chat_id)
+
+        def execute() -> None:
+            try:
+                from sail_bot.handlers.plan_mode_handler import PlanModeHandler
+
+                handler = PlanModeHandler(self.ctx)
+                if action_type == "btn_approve_plan":
+                    handler.approve(chat_id, message_id, ctx)
+                elif action_type == "btn_revise_plan":
+                    # Prompt user to send revision text
+                    card = CardRenderer.result(
+                        title="请提出修改意见",
+                        content="请直接回复你的修改意见，例如：\n• 第一步改成先迁移数据库\n• 增加测试步骤\n\n或直接编辑飞书文档后回复「已更新」。",
+                        success=True,
+                    )
+                    self.ctx.messaging.reply_card(message_id, card)
+                elif action_type == "btn_cancel_plan":
+                    handler.cancel(chat_id, message_id, ctx)
+                elif action_type == "btn_refresh_plan":
+                    handler._check_doc_update_and_show_review(chat_id, message_id, ctx)
+            except Exception as exc:
+                logger.error("Plan button error: %s", exc, exc_info=True)
+                error_card = CardRenderer.error(
+                    "操作失败", f"执行操作时出错: {str(exc)}"
+                )
+                self.ctx.messaging.update_card(message_id, error_card)
+
+        threading.Thread(target=execute, daemon=True).start()
+
+        toast_messages = {
+            "btn_approve_plan": "开始执行计划...",
+            "btn_revise_plan": "请回复修改意见",
+            "btn_cancel_plan": "计划已取消",
+            "btn_refresh_plan": "正在刷新计划...",
         }
 
         return P2CardActionTriggerResponse(

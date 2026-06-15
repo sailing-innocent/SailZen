@@ -131,8 +131,13 @@ _BRAIN_SYSTEM = """你是飞书机器人，帮用户控制Agent开发环境。�
 返回JSON：
 {{"action":"...","params":{{}},"confirm_required":false,"confirm_summary":"","reply":"","reasoning":""}}
 
-actions: start_workspace|stop_workspace|send_task|show_status|show_help|chat|clarify
-规则：stop_workspace需确认；长消息或破坏性操作需确认
+actions: start_workspace|stop_workspace|send_task|show_status|show_help|chat|clarify|enter_plan_mode|revise_plan|approve_plan|cancel_plan
+规则：
+- stop_workspace需确认；长消息或破坏性操作需确认
+- 用户想制定/规划/计划长任务时返回 enter_plan_mode，参数 {requirement: 用户需求}
+- 在 planning 模式下用户说修改意见时返回 revise_plan，参数 {feedback: 用户意见}
+- 在 planning 模式下用户批准/执行时返回 approve_plan
+- 在 planning 模式下用户取消时返回 cancel_plan
 注意：推断用户意图，只返回JSON"""
 
 _BRAIN_FALLBACK_ACTIONS = {
@@ -205,6 +210,15 @@ _BRAIN_FALLBACK_ACTIONS = {
         "enter_image_gen",
         {},
     ),
+    # Plan mode triggers
+    "plan": ("enter_plan_mode", {}),
+    "plan mode": ("enter_plan_mode", {}),
+    "制定计划": ("enter_plan_mode", {}),
+    "做个计划": ("enter_plan_mode", {}),
+    "帮我规划": ("enter_plan_mode", {}),
+    "帮我计划": ("enter_plan_mode", {}),
+    "规划一下": ("enter_plan_mode", {}),
+    "规划": ("enter_plan_mode", {}),
 }
 
 
@@ -641,11 +655,29 @@ class BotBrain:
                 action="send_task", params={"task": text, "path": ctx.active_workspace}
             )
 
+        # === 状态4：计划模式 ===
+        if ctx.mode == "planning":
+            # Approval triggers
+            if t in {"批准", "执行", "开始执行", "确认", "approve", "execute", "go", "ok", "好"}:
+                return ActionPlan(action="approve_plan", params={})
+            # Cancel triggers
+            if t in {"取消", "退出", "exit", "quit", "cancel", "不做了"}:
+                return ActionPlan(action="cancel_plan", params={})
+            # Direct doc update signal
+            if t in {"已更新", "更新好了", "改好了", "done"}:
+                return ActionPlan(action="check_plan_update", params={})
+            # Everything else is revision feedback
+            return ActionPlan(action="revise_plan", params={"feedback": text})
+
         # === 状态1：不在工作区（idle）===
         # Level 1: 精确匹配（完全匹配，无歧义）
         for kw, (action, params) in _BRAIN_FALLBACK_ACTIONS.items():
             if t == kw:
                 return ActionPlan(action=action, params=params)
+
+        # Plan mode keyword matching
+        if any(k in t for k in ["plan mode", "制定计划", "做个计划", "帮我规划", "帮我计划", "规划一下"]):
+            return ActionPlan(action="enter_plan_mode", params={"requirement": text})
 
         # 工作区面板指令
         if any(k in t for k in ["工作区", "面板", "workspace", "dashboard"]):
@@ -679,6 +711,17 @@ class BotBrain:
         # 启动图片生成模式
         if any(k in t for k in ["生成图片", "画图", "image"]):
             return ActionPlan(action="enter_image_gen", params={})
+
+        # 启动计划模式（关键词命中但非精确匹配）
+        if any(
+            k in t
+            for k in [
+                "计划",
+                "规划",
+                "plan",
+            ]
+        ):
+            return ActionPlan(action="enter_plan_mode", params={"requirement": text})
 
         # 返回 chat action 表示需要 LLM 处理（Level 2）
         return ActionPlan(action="chat")

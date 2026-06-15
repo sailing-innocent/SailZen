@@ -41,6 +41,7 @@ class PlanExecutor(BaseHandler):
         from sail_bot.handlers.task_handler import TaskHandler
         from sail_bot.handlers.self_update_handler import SelfUpdateHandler
         from sail_bot.handlers.image_gen_handler import ImageGenHandler
+        from sail_bot.handlers.plan_mode_handler import PlanModeHandler
 
         self._help = HelpHandler(ctx)
         self._status = StatusHandler(ctx)
@@ -51,6 +52,7 @@ class PlanExecutor(BaseHandler):
         self._task = TaskHandler(ctx)
         self._update = SelfUpdateHandler(ctx)
         self._image_gen = ImageGenHandler(ctx)
+        self._plan_mode = PlanModeHandler(ctx)
 
         self._registry: Dict[str, tuple[Callable, str]] = {
             "show_help": (self._exec_help, "显示帮助信息"),
@@ -70,6 +72,11 @@ class PlanExecutor(BaseHandler):
             "edit_image": (self._exec_edit_image, "编辑图片"),
             "save_image": (self._exec_save_image, "保存图片"),
             "exit_image_gen": (self._exec_exit_image_gen, "退出图片生成模式"),
+            "enter_plan_mode": (self._exec_enter_plan_mode, "进入计划模式"),
+            "revise_plan": (self._exec_revise_plan, "修订计划"),
+            "approve_plan": (self._exec_approve_plan, "批准执行计划"),
+            "cancel_plan": (self._exec_cancel_plan, "取消计划"),
+            "check_plan_update": (self._exec_check_plan_update, "检查计划文档更新"),
         }
 
     def execute(
@@ -207,3 +214,32 @@ class PlanExecutor(BaseHandler):
         self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
     ) -> None:
         self._image_gen.handle_exit(chat_id, mid, ctx)
+
+    def _exec_enter_plan_mode(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        requirement = plan.params.get("requirement", "")
+        if not requirement:
+            requirement = plan.params.get("task", "")
+        self._plan_mode.enter(chat_id, mid, ctx, requirement)
+
+    def _exec_revise_plan(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        feedback = plan.params.get("feedback", "")
+        self._plan_mode.revise(chat_id, mid, ctx, feedback)
+
+    def _exec_approve_plan(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._plan_mode.approve(chat_id, mid, ctx)
+
+    def _exec_cancel_plan(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._plan_mode.cancel(chat_id, mid, ctx)
+
+    def _exec_check_plan_update(
+        self, plan: ActionPlan, chat_id: str, mid: str, ctx: ConversationContext
+    ) -> None:
+        self._plan_mode._check_doc_update_and_show_review(chat_id, mid, ctx)

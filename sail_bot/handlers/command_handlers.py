@@ -31,6 +31,7 @@ class HelpHandler(BaseHandler):
             commands=[
                 ("启动 <项目>", "启动工作区", "启动 sz"),
                 ("停止", "停止工作区", "停止 sz"),
+                ("帮我规划 <需求>", "进入计划模式", "帮我规划健康管理重构"),
             ],
             projects=self.ctx.config.projects,
         )
@@ -91,9 +92,16 @@ class StatusHandler(BaseHandler):
         else:
             status_lines.append("⚪ 当前工作区: 未选择")
         if ctx:
-            status_lines.append(
-                f"📝 模式: {'coding' if ctx.mode == 'coding' else 'idle'}"
-            )
+            mode_label = {
+                "coding": "coding",
+                "planning": "planning（计划模式）",
+                "image_gen": "image_gen",
+            }.get(ctx.mode, ctx.mode)
+            status_lines.append(f"📝 模式: {mode_label}")
+            if ctx.mode == "planning" and ctx.plan_state:
+                status_lines.append(
+                    f"📋 计划: {ctx.plan_state.plan_title or '未命名'} ({ctx.plan_state.status})"
+                )
         status_lines.append("")
 
         # 2. Workspace connectivity status

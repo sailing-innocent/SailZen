@@ -132,6 +132,31 @@ class MessageHandler(BaseHandler):
         """
         force_flag = "--force" in text or "强制" in text
 
+        # Plan mode recovery: if a persisted plan session exists, prompt to
+        # resume only when the user sends a non-plan-related message.
+        if ctx.mode == "planning" and ctx.plan_state:
+            if ctx.plan_state.status in {"draft", "review", "revising", "approved"}:
+                t = text.strip().lower()
+                plan_commands = {
+                    "plan mode", "制定计划", "做个计划", "帮我规划", "帮我计划",
+                    "规划一下", "批准", "执行", "开始执行", "确认", "approve",
+                    "execute", "go", "ok", "好", "取消", "退出", "exit", "quit",
+                    "cancel", "不做了", "已更新", "更新好了", "改好了", "done",
+                }
+                if t not in plan_commands:
+                    from sail_bot.handlers.plan_mode_handler import PlanModeHandler
+                    handler = PlanModeHandler(self.ctx)
+                    if handler.resume_on_message(chat_id, message_id, ctx):
+                        return ActionPlan(action="noop"), None
+
+        # When already in planning mode, route through PlanModeHandler
+        # to handle approve/cancel/revise naturally.
+        if ctx.mode == "planning" and ctx.plan_state:
+            from sail_bot.handlers.plan_mode_handler import PlanModeHandler
+            handler = PlanModeHandler(self.ctx)
+            if handler.handle_message_in_plan_mode(text, chat_id, message_id, ctx):
+                return ActionPlan(action="noop"), None
+
         # Check for pending confirmation reply
         if ctx.pending:
             decision = self.ctx.brain.check_confirmation_reply(text)
