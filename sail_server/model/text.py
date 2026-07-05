@@ -17,6 +17,7 @@ from sail_server.infrastructure.orm.text import (
     Work,
     Edition,
     DocumentNode,
+    NoteItem,
 )
 from sail_server.application.dto.text import (
     WorkCreateRequest,
@@ -28,6 +29,9 @@ from sail_server.application.dto.text import (
     DocumentNodeCreateRequest,
     DocumentNodeUpdateRequest,
     DocumentNodeResponse,
+    NoteItemCreateRequest,
+    NoteItemUpdateRequest,
+    NoteItemResponse,
 )
 
 
@@ -655,3 +659,109 @@ def get_chapter_count_impl(db: Session, edition_id: int) -> int:
         .scalar()
         or 0
     )
+
+
+# ============================================================================
+# NoteItem CRUD Operations
+# ============================================================================
+
+
+def _note_to_response(note: NoteItem) -> NoteItemResponse:
+    return NoteItemResponse(
+        id=note.id,
+        category=note.category,
+        setting_file=note.setting_file,
+        work_id=note.work_id,
+        edition_id=note.edition_id,
+        title=note.title,
+        slug=note.slug,
+        meta_data=note.meta_data or {},
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+    )
+
+
+def create_note_item_impl(
+    db: Session, data: NoteItemCreateRequest
+) -> NoteItemResponse:
+    """创建笔记索引"""
+    note = NoteItem(
+        category=data.category,
+        setting_file=data.setting_file,
+        work_id=data.work_id,
+        edition_id=data.edition_id,
+        title=data.title,
+        slug=data.slug,
+        meta_data=data.meta_data or {},
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _note_to_response(note)
+
+
+def get_note_item_impl(db: Session, note_id: int) -> Optional[NoteItemResponse]:
+    """获取单个笔记索引"""
+    note = db.query(NoteItem).filter(NoteItem.id == note_id).first()
+    if not note:
+        return None
+    return _note_to_response(note)
+
+
+def get_note_items_impl(
+    db: Session,
+    category: Optional[str] = None,
+    work_id: Optional[int] = None,
+    edition_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+) -> List[NoteItemResponse]:
+    """获取笔记索引列表，支持过滤"""
+    query = db.query(NoteItem)
+    if category is not None:
+        query = query.filter(NoteItem.category == category)
+    if work_id is not None:
+        query = query.filter(NoteItem.work_id == work_id)
+    if edition_id is not None:
+        query = query.filter(NoteItem.edition_id == edition_id)
+    notes = query.order_by(NoteItem.updated_at.desc()).offset(skip).limit(limit).all()
+    return [_note_to_response(note) for note in notes]
+
+
+def update_note_item_impl(
+    db: Session, note_id: int, data: NoteItemUpdateRequest
+) -> Optional[NoteItemResponse]:
+    """更新笔记索引"""
+    note = db.query(NoteItem).filter(NoteItem.id == note_id).first()
+    if not note:
+        return None
+
+    if data.category is not None:
+        note.category = data.category
+    if data.setting_file is not None:
+        note.setting_file = data.setting_file
+    if data.work_id is not None:
+        note.work_id = data.work_id
+    if data.edition_id is not None:
+        note.edition_id = data.edition_id
+    if data.title is not None:
+        note.title = data.title
+    if data.slug is not None:
+        note.slug = data.slug
+    if data.meta_data is not None:
+        note.meta_data = data.meta_data
+
+    db.commit()
+    db.refresh(note)
+    return _note_to_response(note)
+
+
+def delete_note_item_impl(db: Session, note_id: int) -> Optional[NoteItemResponse]:
+    """删除笔记索引"""
+    note = db.query(NoteItem).filter(NoteItem.id == note_id).first()
+    if not note:
+        return None
+    note_data = _note_to_response(note)
+    db.delete(note)
+    db.commit()
+    return note_data

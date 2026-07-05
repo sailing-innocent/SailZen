@@ -32,7 +32,7 @@ from typing import Generator, List, Optional
 
 
 class HistoryEventController(Controller):
-    """历史事件控制器"""
+    """历史事件控制器（已废弃，新数据请使用 /api/v1/text/note/ 的 history 类别）"""
 
     path = "/event"
 

@@ -94,6 +94,36 @@ class Edition(ORMBase):
     )
 
 
+class NoteItem(ORMBase):
+    """
+    笔记索引表 - 轻量级索引，实际内容由 workspace 下的 Markdown 文件承载
+
+    category: character | setting | geography | outline | plot | history | person |
+              timeline | relationship | misc
+    """
+
+    __tablename__ = "note_items"
+
+    id = Column(Integer, primary_key=True)
+    category = Column(String, nullable=False, index=True)
+    setting_file = Column(String, nullable=False)  # relative to workspace root
+    work_id = Column(
+        Integer, ForeignKey("works.id", ondelete="SET NULL"), nullable=True
+    )
+    edition_id = Column(
+        Integer, ForeignKey("editions.id", ondelete="SET NULL"), nullable=True
+    )
+    title = Column(String, nullable=True)  # 缓存，可选
+    slug = Column(String, nullable=True, unique=True)  # URL/文件名友好标识
+    meta_data = Column(JSONB, default={})  # 扩展字段，如 frontmatter 摘要
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
+
 class DocumentNode(ORMBase):
     """
     文档节点表 - 树形结构存储文本内容

@@ -37,6 +37,9 @@ from sail_server.infrastructure.orm import (
     health, finance, life, project, history, text, necessity
 )
 
+# 确保 NoteItem 表被加载
+from sail_server.infrastructure.orm.text import NoteItem
+
 
 # ============================================================================
 # 配置

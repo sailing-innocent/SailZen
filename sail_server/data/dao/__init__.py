@@ -20,27 +20,14 @@ Phase 4 重构目标：将数据访问逻辑从 Model 层提取到 DAO 层
 
 from .base import BaseDAO
 
-# Analysis
-from .analysis import (
-    CharacterDAO,
-    CharacterAliasDAO,
-    CharacterAttributeDAO,
-    OutlineDAO,
-    OutlineNodeDAO,
-    OutlineEventDAO,
-    SettingDAO,
-    SettingAttributeDAO,
-    TextEvidenceDAO,
-)
+# Text
+from .text import WorkDAO, EditionDAO, DocumentNodeDAO, NoteItemDAO
 
 # Finance
 from .finance import AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
 
 # Health
 from .health import WeightDAO, BodySizeDAO, ExerciseDAO, WeightPlanDAO
-
-# Text
-from .text import WorkDAO, EditionDAO, DocumentNodeDAO
 
 # Project
 from .project import ProjectDAO, MissionDAO
@@ -65,16 +52,6 @@ from .life import ServiceAccountDAO
 
 __all__ = [
     "BaseDAO",
-    # Analysis
-    "CharacterDAO",
-    "CharacterAliasDAO",
-    "CharacterAttributeDAO",
-    "OutlineDAO",
-    "OutlineNodeDAO",
-    "OutlineEventDAO",
-    "SettingDAO",
-    "SettingAttributeDAO",
-    "TextEvidenceDAO",
     # Finance
     "AccountDAO",
     "TransactionDAO",
@@ -89,6 +66,7 @@ __all__ = [
     "WorkDAO",
     "EditionDAO",
     "DocumentNodeDAO",
+    "NoteItemDAO",
     # Project
     "ProjectDAO",
     "MissionDAO",

@@ -29,8 +29,8 @@ SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。�
 | 健康管理 | 🔶 部分实现 | [设计文档](./doc/design/manager/health.md) |
 | 物资管理 | ✅ 已实现 | [设计文档](./doc/design/manager/necessity.md) |
 | 文本管理 | ✅ 已实现 | [设计文档](./doc/design/manager/text.md) |
-| AI文本分析 | ✅ 已实现 | [系统设计](./doc/design/text-analysis-system.md) |
-| 历史/人物档案 | ✅ 已实现 | HistoryEvent + Person 表 |
+| AI文本分析 | ✅ 已实现 | 分析产物输出为 Markdown 笔记 + 双向链接 |
+| 历史/人物档案 | ✅ 已实现 | 已迁移至 NoteItem + Markdown 笔记体系 |
 
 ## Technology Stack
 

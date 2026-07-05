@@ -187,3 +187,98 @@ class DocumentNodeListResponse(BaseModel):
 
     nodes: List[DocumentNodeResponse]
     total: int
+
+
+# ============================================================================
+# NoteItem DTOs
+# ============================================================================
+
+
+NOTE_CATEGORIES = [
+    "character",
+    "setting",
+    "geography",
+    "outline",
+    "plot",
+    "history",
+    "person",
+    "timeline",
+    "relationship",
+    "misc",
+]
+
+
+class NoteItemBase(BaseModel):
+    """笔记索引基础信息"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str = Field(description="笔记分类")
+    setting_file: str = Field(description="Markdown 文件相对 workspace 路径")
+    work_id: Optional[int] = Field(default=None, description="关联作品 ID")
+    edition_id: Optional[int] = Field(default=None, description="关联版本 ID")
+    title: Optional[str] = Field(default=None, description="标题缓存")
+    slug: Optional[str] = Field(default=None, description="URL/文件名友好标识")
+
+
+class NoteItemCreateRequest(BaseModel):
+    """创建笔记索引请求"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str = Field(description="笔记分类")
+    setting_file: str = Field(description="Markdown 文件相对 workspace 路径")
+    work_id: Optional[int] = Field(default=None, description="关联作品 ID")
+    edition_id: Optional[int] = Field(default=None, description="关联版本 ID")
+    title: Optional[str] = Field(default=None, description="标题缓存")
+    slug: Optional[str] = Field(default=None, description="URL/文件名友好标识")
+    meta_data: Optional[Dict[str, Any]] = Field(
+        default_factory=dict, description="扩展元数据"
+    )
+
+
+class NoteItemUpdateRequest(BaseModel):
+    """更新笔记索引请求"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category: Optional[str] = Field(default=None, description="笔记分类")
+    setting_file: Optional[str] = Field(
+        default=None, description="Markdown 文件相对 workspace 路径"
+    )
+    work_id: Optional[int] = Field(default=None, description="关联作品 ID")
+    edition_id: Optional[int] = Field(default=None, description="关联版本 ID")
+    title: Optional[str] = Field(default=None, description="标题缓存")
+    slug: Optional[str] = Field(default=None, description="URL/文件名友好标识")
+    meta_data: Optional[Dict[str, Any]] = Field(default=None, description="扩展元数据")
+
+
+class NoteItemResponse(NoteItemBase):
+    """笔记索引响应"""
+
+    id: int = Field(description="笔记 ID")
+    meta_data: Dict[str, Any] = Field(default_factory=dict, description="扩展元数据")
+    created_at: datetime = Field(description="创建时间")
+    updated_at: datetime = Field(description="更新时间")
+
+
+class NoteItemListResponse(BaseModel):
+    """笔记索引列表响应"""
+
+    notes: List[NoteItemResponse]
+    total: int
+
+
+class NoteItemContentResponse(BaseModel):
+    """笔记 Markdown 内容响应"""
+
+    id: int = Field(description="笔记 ID")
+    setting_file: str = Field(description="文件路径")
+    content: str = Field(description="Markdown 原始内容")
+
+
+class NoteLinkGraphResponse(BaseModel):
+    """双向链接图谱响应"""
+
+    nodes: List[Dict[str, Any]] = Field(default_factory=list, description="节点列表")
+    edges: List[Dict[str, Any]] = Field(default_factory=list, description="链接边列表")

@@ -24,6 +24,11 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from sailzen.dag_client.nodes.base import NodeContext, NodeExecutor, NodeResult
+from sail_server.utils.note_links import (
+    make_note_slug,
+    make_note_setting_file,
+    normalize_note_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -421,3 +426,131 @@ class BatchTextCollectorNode(NodeExecutor):
             data=output_data,
             output=f"Collected {len(success_chapters)}/{len(chapters)} chapters ({failed} failed)",
         )
+
+
+class NoteSyncNode(NodeExecutor):
+    """将合并后的分析结果保存为 Markdown 笔记（NoteItem + .md 文件）。
+
+    参数::
+
+        {
+            "sail_server_url": "http://localhost:8000",
+            "edition_id": 1,
+            "work_id": 1,                  # 可选
+            "category": "character",       # 笔记分类
+            "title": "人物笔记",           # 笔记标题
+            "content": "..."               # Markdown 内容（或从上游结果生成）
+        }
+
+    上游依赖:
+      - merge_<dimension> 等合并结果（可选，用于自动生成 content）
+
+    输出:
+      - note_id: 创建/更新的 NoteItem ID
+      - setting_file: Markdown 文件路径
+    """
+
+    node_type = "note_sync"
+
+    def validate_params(self, params: Dict[str, Any]) -> Optional[str]:
+        if not params.get("sail_server_url"):
+            return "Missing sail_server_url"
+        if not params.get("category"):
+            return "Missing category"
+        if not params.get("title"):
+            return "Missing title"
+        return None
+
+    async def execute(self, ctx: NodeContext) -> NodeResult:
+        import httpx
+
+        url = ctx.params["sail_server_url"].rstrip("/")
+        category = ctx.params["category"]
+        title = ctx.params["title"]
+        edition_id = ctx.params.get("edition_id")
+        work_id = ctx.params.get("work_id")
+
+        # 优先使用显式 content，否则从上游 merge 结果生成
+        content = ctx.params.get("content")
+        if not content:
+            content = self._build_content_from_upstream(ctx, category)
+
+        slug = make_note_slug(title)
+        setting_file = make_note_setting_file(category, slug)
+
+        # 1. 创建 NoteItem
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            create_resp = await client.post(
+                f"{url}/api/v1/text/note/",
+                json={
+                    "category": category,
+                    "setting_file": setting_file,
+                    "title": title,
+                    "slug": slug,
+                    "work_id": work_id,
+                    "edition_id": edition_id,
+                    "meta_data": {"source": "dag_analysis", "dimension": category},
+                },
+            )
+            create_resp.raise_for_status()
+            note = create_resp.json()
+            note_id = note["id"]
+
+            # 2. 规范化并写入 Markdown 内容
+            final_content = normalize_note_content(
+                content,
+                note_id=note_id,
+                category=category,
+                title=title,
+                slug=slug,
+                work_slug=str(work_id) if work_id else None,
+                edition_slug=str(edition_id) if edition_id else None,
+            )
+            put_resp = await client.put(
+                f"{url}/api/v1/text/note/{note_id}/content",
+                json={"content": final_content},
+            )
+            put_resp.raise_for_status()
+
+        output_data = {
+            "note_id": note_id,
+            "setting_file": setting_file,
+            "category": category,
+            "title": title,
+        }
+        if ctx.store:
+            ctx.store.save_artifact(
+                ctx.run_id, f"note_sync_{category}.json",
+                json.dumps(output_data, ensure_ascii=False, indent=2)
+            )
+
+        return NodeResult.ok(
+            data=output_data,
+            output=f"Synced {category} note: {setting_file} (id={note_id})",
+        )
+
+    def _build_content_from_upstream(self, ctx: NodeContext, category: str) -> str:
+        """从上游合并结果构建 Markdown 内容"""
+        upstream_key = f"merge_{category}"
+        merged = ctx.upstream_results.get(upstream_key, {})
+        if isinstance(merged, dict):
+            data = merged.get("data", merged)
+        else:
+            data = merged
+
+        lines = [f"# {category} 分析笔记", ""]
+        lines.append(f"- 维度: {category}")
+        lines.append(f"- 生成时间: {datetime.now().isoformat()}")
+        lines.append("")
+        lines.append("## 分析结果")
+        lines.append("")
+        lines.append("```json")
+        lines.append(json.dumps(data, ensure_ascii=False, indent=2))
+        lines.append("```")
+        lines.append("")
+        lines.append("## 证据引用")
+        lines.append("")
+        edition_id = ctx.params.get("edition_id")
+        if edition_id:
+            lines.append(f"- 来源版本: [[document_nodes/edition/{edition_id}]]")
+        return "\n".join(lines)

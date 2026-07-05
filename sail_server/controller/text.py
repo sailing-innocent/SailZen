@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 from litestar import Controller, delete, get, post, put, Request
-from litestar.exceptions import NotFoundException
+from litestar.exceptions import NotFoundException, HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,13 @@ from sail_server.application.dto.text import (
     EditionResponse,
     DocumentNodeResponse,
     DocumentNodeUpdateRequest,
+    NoteItemCreateRequest,
+    NoteItemUpdateRequest,
+    NoteItemResponse,
+    NoteItemListResponse,
+    NoteItemContentResponse,
+    NoteLinkGraphResponse,
+    NOTE_CATEGORIES,
 )
 from sail_server.model.text import (
     create_work_impl,
@@ -44,11 +51,20 @@ from sail_server.model.text import (
     batch_insert_chapters_impl,
     get_chapter_count_impl,
     ChapterBatchItem,
+    create_note_item_impl,
+    get_note_item_impl,
+    get_note_items_impl,
+    update_note_item_impl,
+    delete_note_item_impl,
 )
 
 from sqlalchemy.orm import Session
 from typing import Generator, List, Optional
 from pydantic import BaseModel, Field
+from pathlib import Path
+
+from sail_server.utils.note_links import build_link_graph
+from sail_server.config.paths import SERVER_DATA_DIR
 
 
 # ============================================================================
@@ -473,3 +489,180 @@ class DocumentNodeController(Controller):
             raise NotFoundException(detail=f"Node with ID {node_id} not found")
         logger.info(f"Updated node {node_id}")
         return node
+
+
+# ============================================================================
+# NoteItem Controller
+# ============================================================================
+
+
+class NoteContentUpdateRequest(BaseModel):
+    """笔记 Markdown 内容更新请求"""
+
+    content: str = Field(description="Markdown 原始内容")
+
+
+def _resolve_note_file_path(setting_file: str) -> Path:
+    """解析 note 文件绝对路径，限制在 workspace 内防止路径遍历"""
+    # 支持以 workspace/notes 或 notes 开头的相对路径
+    rel = setting_file
+    if rel.startswith("/"):
+        rel = rel.lstrip("/")
+    # 统一基于 SERVER_DATA_DIR 解析
+    base = SERVER_DATA_DIR
+    target = (base / rel).resolve()
+    base_resolved = base.resolve()
+    # 路径安全检查
+    try:
+        target.relative_to(base_resolved)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid note file path (outside workspace): {setting_file}"
+        )
+    return target
+
+
+class NoteItemController(Controller):
+    """笔记索引与 Markdown 内容控制器"""
+
+    path = "/note"
+
+    @get("")
+    async def list_notes(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        category: Optional[str] = None,
+        work_id: Optional[int] = None,
+        edition_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> NoteItemListResponse:
+        """获取笔记索引列表"""
+        db = next(router_dependency)
+        notes = get_note_items_impl(db, category, work_id, edition_id, skip, limit)
+        total = len(notes)  # 简化，实际可额外 count
+        logger.info(
+            f"List notes: category={category}, work={work_id}, edition={edition_id}, count={len(notes)}"
+        )
+        return NoteItemListResponse(notes=notes, total=total)
+
+    @post("/")
+    async def create_note(
+        self,
+        data: NoteItemCreateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemResponse:
+        """创建笔记索引"""
+        db = next(router_dependency)
+        note = create_note_item_impl(db, data)
+        logger.info(f"Created note item {note.id}: {note.setting_file}")
+        return note
+
+    @get("/{note_id:int}")
+    async def get_note(
+        self,
+        note_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemResponse:
+        """获取单个笔记索引"""
+        db = next(router_dependency)
+        note = get_note_item_impl(db, note_id)
+        if not note:
+            raise NotFoundException(detail=f"Note item with ID {note_id} not found")
+        logger.info(f"Get note item {note_id}")
+        return note
+
+    @put("/{note_id:int}")
+    async def update_note(
+        self,
+        note_id: int,
+        data: NoteItemUpdateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemResponse:
+        """更新笔记索引"""
+        db = next(router_dependency)
+        note = update_note_item_impl(db, note_id, data)
+        if not note:
+            raise NotFoundException(detail=f"Note item with ID {note_id} not found")
+        logger.info(f"Updated note item {note_id}")
+        return note
+
+    @delete("/{note_id:int}", status_code=200)
+    async def delete_note(
+        self,
+        note_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemResponse:
+        """删除笔记索引"""
+        db = next(router_dependency)
+        note = delete_note_item_impl(db, note_id)
+        if not note:
+            raise NotFoundException(detail=f"Note item with ID {note_id} not found")
+        logger.info(f"Deleted note item {note_id}")
+        return note
+
+    @get("/{note_id:int}/content")
+    async def get_note_content(
+        self,
+        note_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemContentResponse:
+        """获取笔记 Markdown 原始内容"""
+        db = next(router_dependency)
+        note = get_note_item_impl(db, note_id)
+        if not note:
+            raise NotFoundException(detail=f"Note item with ID {note_id} not found")
+        file_path = _resolve_note_file_path(note.setting_file)
+        if not file_path.exists():
+            content = ""
+        else:
+            content = file_path.read_text(encoding="utf-8")
+        logger.info(f"Get note content {note_id}, size={len(content)}")
+        return NoteItemContentResponse(
+            id=note.id, setting_file=note.setting_file, content=content
+        )
+
+    @put("/{note_id:int}/content")
+    async def update_note_content(
+        self,
+        note_id: int,
+        data: NoteContentUpdateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteItemContentResponse:
+        """更新笔记 Markdown 原始内容"""
+        db = next(router_dependency)
+        note = get_note_item_impl(db, note_id)
+        if not note:
+            raise NotFoundException(detail=f"Note item with ID {note_id} not found")
+        file_path = _resolve_note_file_path(note.setting_file)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        # 清理 NUL 字符，避免 PostgreSQL text 字段问题
+        content = data.content.replace("\x00", "")
+        file_path.write_text(content, encoding="utf-8")
+        logger.info(f"Updated note content {note_id}, size={len(content)}")
+        return NoteItemContentResponse(
+            id=note.id, setting_file=note.setting_file, content=content
+        )
+
+    @get("/links")
+    async def get_note_links(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> NoteLinkGraphResponse:
+        """获取所有笔记的双向链接图谱"""
+        db = next(router_dependency)
+        notes = get_note_items_impl(db, skip=0, limit=10000)
+        graph = build_link_graph(
+            [(n.id, n.title or n.slug or str(n.id), n.setting_file) for n in notes],
+            workspace_root=SERVER_DATA_DIR,
+        )
+        logger.info(f"Get note link graph: {len(graph.get('nodes', []))} nodes")
+        return NoteLinkGraphResponse(**graph)

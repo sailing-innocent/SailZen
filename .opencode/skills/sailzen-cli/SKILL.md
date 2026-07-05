@@ -1,6 +1,6 @@
 ---
 name: sailzen-cli
-description: SailZen CLI 工具使用指南。通过 sailzen 命令行工具与远程 sail_server 交互，支持财务交易（transaction）的拉取/编辑/上传工作流。适用于需要批量修改交易记录、导出 CSV 离线编辑后回传等场景。
+description: SailZen CLI 工具使用指南。通过 sailzen 命令行工具与远程 sail_server 交互，支持财务交易（transaction）的拉取/编辑/上传工作流，以及文本/创作笔记（NoteItem）的同步管理。适用于需要批量修改交易记录、导出 CSV 离线编辑后回传、同步 Markdown 笔记等场景。
 ---
 
 # SailZen CLI Skill
@@ -34,6 +34,7 @@ sailzen <module> <command> [options]
 
 当前支持的模块：
 - `finance` — 财务交易管理
+- `note` — 服务器 NoteItem / 创作笔记同步管理（list/pull/push/create/delete/sync/links）
 
 ## 服务器地址
 
@@ -66,6 +67,85 @@ SERVER_PORT=8000
 ```bash
 --server http://<host>:<port>
 ```
+
+## Note 模块
+
+### 子命令一览
+
+| 命令 | 别名 | 说明 |
+|------|------|------|
+| `list` | `ls` | 列出服务器上的 NoteItem，可按 category 过滤 |
+| `pull` | — | 拉取 NoteItem 并在本地生成/更新 Markdown 文件 |
+| `push` | — | 扫描本地 Markdown 文件，同步到服务器 |
+| `create` | `new` | 创建新的 NoteItem + 空 Markdown 文件 |
+| `delete` | `rm` | 删除 NoteItem 及对应文件 |
+| `sync` | — | 双向同步（pull + push） |
+| `links` | — | 获取双向链接图谱 |
+| `export-csv` | — | 导出 NoteItem 到 CSV（批量编辑） |
+
+### 工作区根目录
+
+Note 模块需要指定本地工作区根目录（即 `workspace/`），可通过以下方式：
+
+1. `--workspace` 参数
+2. `NOTE_WORKSPACE_ROOT` 环境变量
+3. 默认当前目录 `.`
+
+### list — 列出笔记
+
+```bash
+sailzen note list
+sailzen note list --category character
+sailzen note list --work-id 1
+```
+
+### pull — 拉取笔记到本地
+
+```bash
+sailzen note pull --id 42
+sailzen note pull --category character
+sailzen note pull --workspace ./data
+```
+
+### push — 推送本地笔记到服务器
+
+```bash
+sailzen note push notes/text/
+sailzen note push --workspace ./data
+```
+
+### create — 创建新笔记
+
+```bash
+sailzen note create --category character --title "Alice" --work-id 1
+sailzen note create --category setting --title "魔法体系" --tags "magic,world"
+```
+
+### sync — 双向同步
+
+```bash
+sailzen note sync --workspace ./data
+```
+
+### links — 双向链接图谱
+
+```bash
+sailzen note links
+sailzen note links --json
+```
+
+### 底层 API 映射
+
+| CLI 命令 | HTTP 方法 | API 路径 |
+|----------|-----------|----------|
+| `list` | GET | `/api/v1/text/note/` |
+| `pull` | GET | `/api/v1/text/note/{id}` + `/api/v1/text/note/{id}/content` |
+| `push` | POST/PUT | `/api/v1/text/note/` + `/api/v1/text/note/{id}/content` |
+| `create` | POST | `/api/v1/text/note/` |
+| `delete` | DELETE | `/api/v1/text/note/{id}` |
+| `links` | GET | `/api/v1/text/note/links` |
+
+---
 
 ## Finance 模块
 
@@ -305,7 +385,8 @@ sailzen/
 ├── __main__.py          # 入口，路由到子模块
 └── cli/
     ├── __init__.py
-    └── finance_client.py  # FinanceClient 实现
+    ├── finance_client.py  # FinanceClient 实现
+    └── note_client.py     # NoteItemClient 实现
 ```
 
 添加新模块只需：

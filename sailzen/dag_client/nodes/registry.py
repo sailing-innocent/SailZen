@@ -65,12 +65,13 @@ class NodeRegistry:
 
         try:
             from sailzen.dag_client.nodes.novel_analysis_nodes import (
-                BatchSplitNode, BatchMergeNode, ReportNode, BatchTextCollectorNode
+                BatchSplitNode, BatchMergeNode, ReportNode, BatchTextCollectorNode, NoteSyncNode
             )
             self.register("batch_split", BatchSplitNode)
             self.register("batch_merge", BatchMergeNode)
             self.register("report", ReportNode)
             self.register("batch_text_collector", BatchTextCollectorNode)
+            self.register("note_sync", NoteSyncNode)
         except Exception as exc:
             logger.warning("Failed to register novel analysis nodes: %s", exc)
 

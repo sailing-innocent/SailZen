@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.text import Work, Edition, DocumentNode
+from sail_server.infrastructure.orm.text import Work, Edition, DocumentNode, NoteItem
 from sail_server.data.dao.base import BaseDAO
 
 
@@ -141,5 +141,80 @@ class DocumentNodeDAO(BaseDAO[DocumentNode]):
                 DocumentNode.node_type == "chapter",
             )
             .order_by(DocumentNode.sort_index)
+            .all()
+        )
+
+
+class NoteItemDAO(BaseDAO[NoteItem]):
+    """笔记索引 DAO"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, NoteItem)
+
+    def get_by_slug(self, slug: str) -> Optional[NoteItem]:
+        """通过 slug 获取笔记索引"""
+        return self.db.query(NoteItem).filter(NoteItem.slug == slug).first()
+
+    def get_by_category(
+        self, category: str, skip: int = 0, limit: int = 100
+    ) -> List[NoteItem]:
+        """按分类获取笔记索引"""
+        return (
+            self.db.query(NoteItem)
+            .filter(NoteItem.category == category)
+            .order_by(NoteItem.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    def get_by_work(self, work_id: int, skip: int = 0, limit: int = 100) -> List[NoteItem]:
+        """获取关联作品的所有笔记索引"""
+        return (
+            self.db.query(NoteItem)
+            .filter(NoteItem.work_id == work_id)
+            .order_by(NoteItem.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    def get_by_edition(
+        self, edition_id: int, skip: int = 0, limit: int = 100
+    ) -> List[NoteItem]:
+        """获取关联版本的所有笔记索引"""
+        return (
+            self.db.query(NoteItem)
+            .filter(NoteItem.edition_id == edition_id)
+            .order_by(NoteItem.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+    def get_by_file(self, setting_file: str) -> Optional[NoteItem]:
+        """通过文件路径获取笔记索引"""
+        return self.db.query(NoteItem).filter(NoteItem.setting_file == setting_file).first()
+
+    def filter_notes(
+        self,
+        category: Optional[str] = None,
+        work_id: Optional[int] = None,
+        edition_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[NoteItem]:
+        """多条件过滤笔记索引"""
+        query = self.db.query(NoteItem)
+        if category is not None:
+            query = query.filter(NoteItem.category == category)
+        if work_id is not None:
+            query = query.filter(NoteItem.work_id == work_id)
+        if edition_id is not None:
+            query = query.filter(NoteItem.edition_id == edition_id)
+        return (
+            query.order_by(NoteItem.updated_at.desc())
+            .offset(skip)
+            .limit(limit)
             .all()
         )

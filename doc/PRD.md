@@ -210,7 +210,7 @@ interface Budget {
 ### 3.5 文本管理 (Text Management)
 
 #### 3.5.1 功能概述
-长篇文本的结构化管理，支持作品、版本、章节层级。
+长篇文本的结构化管理，支持作品、版本、章节层级。文本管理提供**章节（DocumentNode）**这一结构化骨架，而人物、设定、地理、剧情片段等创作素材则通过第 3.6 节的**笔记（NoteItem）**体系管理，二者通过双向链接弱关联。
 
 #### 3.5.2 核心功能
 
@@ -221,13 +221,151 @@ interface Budget {
 | **章节管理** | 层级章节、排序索引 | P0 |
 | **文本导入** | AI辅助分章、编码检测 | P1 |
 | **内容搜索** | 全文搜索、标签过滤 | P1 |
+| **笔记关联** | 章节与笔记的双向链接、证据引用 | P1 |
 
 ---
 
-### 3.6 AI文本分析系统 (Text Analysis) ⭐
+### 3.6 文本大纲与笔记管理 (Knowledge Notes for Fiction) ⭐
 
 #### 3.6.1 功能概述
-基于LLM的智能文本分析系统，支持大纲提取、人物检测、设定提取等。
+将人物、设定、地理、剧情、历史等创作素材统一作为 workspace 下的 **Markdown 笔记** 管理。数据库中只保留轻量级索引 `note_items`，真正的非结构化内容由 `.md` 文件承载，由 LLM 负责生成、解析与关联。
+
+**设计原则**: *Notes are notes. Databases are databases.*
+
+#### 3.6.2 核心概念
+
+| 概念 | 说明 |
+|------|------|
+| `NoteItem` | 数据库中的轻量索引（id / category / setting_file / work_id / edition_id） |
+| `Setting File` | 实际的 `.md` 文件，位于 `workspace/notes/text/<category>/<slug>.md` |
+| `Category` | 笔记分类枚举，见 3.6.7 |
+| `双向链接` | `[[note-id]]` / `[[title#heading]]` 形式，用于构建知识图谱 |
+
+#### 3.6.3 核心功能
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| **Markdown 笔记 CRUD** | 通过 sailzen-cli / VSCode / site 读写 `.md` 文件 | P0 |
+| **双向链接解析** | 解析 `[[...]]` 并构建链接图谱 | P1 |
+| **按 category 浏览过滤** | 人物 / 设定 / 地理 / 大纲 / 剧情片段等 | P0 |
+| **弱关联 Work/Edition/DocumentNode** | 笔记与作品、版本、章节通过 frontmatter 与链接弱关联 | P1 |
+
+#### 3.6.4 AI 分析产物输出
+
+AI 文本分析（大纲提取、人物检测、设定提取、地理识别）完成后，产物直接保存为 Markdown 笔记：
+
+| 分析类型 | 输出路径 |
+|----------|----------|
+| 人物检测 | `workspace/notes/text/characters/<slug>.md` |
+| 设定提取 | `workspace/notes/text/settings/<slug>.md` |
+| 地理识别 | `workspace/notes/text/geography/<slug>.md` |
+| 大纲提取 | `workspace/notes/text/outlines/<slug>.md` |
+| 剧情片段 | `workspace/notes/text/plots/<slug>.md` |
+| 历史事件 | `workspace/notes/text/history/<slug>.md` |
+| 人物档案 | `workspace/notes/text/persons/<slug>.md` |
+
+任务完成后执行：
+1. LLM 生成 Markdown 内容（含 YAML frontmatter）
+2. 后端 / CLI 写入 `.md` 文件
+3. 创建 / 更新 `note_items` 记录，`setting_file` 指向该文件
+4. 在正文中插入指向原文 `DocumentNode` 的双向链接作为证据
+
+#### 3.6.5 Markdown Frontmatter 规范
+
+```yaml
+---
+id: note-item-id-or-guid
+category: character
+title: 人物名称
+slug: character-name
+work: work-slug
+edition: edition-slug
+created: 2026-03-01T12:00:00
+updated: 2026-03-01T12:00:00
+tags: [protagonist, mage]
+related:
+  - [[settings/魔法体系]]
+  - [[geography/王都]]
+  - [[plots/主角觉醒]]
+---
+```
+
+正文完全自由，由 LLM 生成/维护；双向链接由解析器处理。
+
+#### 3.6.6 文件系统约定
+
+```
+workspace/
+├── notes/
+│   └── text/                    # 文本/创作相关笔记
+│       ├── characters/          # 人物
+│       ├── settings/            # 设定
+│       ├── geography/           # 地理
+│       ├── outlines/            # 大纲
+│       ├── plots/               # 剧情片段
+│       ├── history/             # 历史事件
+│       └── persons/             # 人物档案（现实/历史）
+```
+
+命名规则：`<category>/<slug>.md`，slug 可基于 title 自动转换或显式指定。
+
+#### 3.6.7 Category 枚举
+
+```typescript
+type NoteCategory =
+  | 'character'      // 人物
+  | 'setting'        // 设定
+  | 'geography'      // 地理
+  | 'outline'        // 大纲
+  | 'plot'           // 剧情片段
+  | 'history'        // 历史事件
+  | 'person'         // 现实/历史人物档案
+  | 'timeline'       // 时间线
+  | 'relationship'   // 关系图谱说明
+  | 'misc'           // 其他
+```
+
+#### 3.6.8 AI Workflow 设计
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    AI 分析工作流 (4阶段)                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Phase 1: 范围选择 (Range Selection)                            │
+│  ├─ 单章/连续章节/多选/全文/自定义范围                          │
+│  ├─ Token预算预估                                               │
+│  └─ 上下文构建 (Context Engineering)                            │
+│                                                                 │
+│  Phase 2: 任务配置 (Task Configuration)                         │
+│  ├─ 分析类型选择（大纲/人物/设定/关系）                         │
+│  ├─ 粒度配置（幕/弧/场景/节拍）                                 │
+│  ├─ LLM提供商选择                                               │
+│  └─ 提示词模板选择                                              │
+│                                                                 │
+│  Phase 3: AI 执行 (AI Execution)                                │
+│  ├─ 文本分块 (Chunking)                                         │
+│  ├─ 并行处理                                                    │
+│  ├─ 进度追踪（实时SSE推送）                                     │
+│  ├─ 检查点机制（断点续传）                                      │
+│  └─ 结果合并为 Markdown 笔记                                    │
+│                                                                 │
+│  Phase 4: 结果审核 (Result Review)                              │
+│  ├─ Markdown 预览与编辑                                         │
+│  ├─ 人工确认/修改                                               │
+│  ├─ 证据关联（双向链接到 DocumentNode）                         │
+│  └─ 保存为 NoteItem + .md 文件                                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+详见: [大纲提取 V2 设计文档](./design/outline-extraction-v2.md)
+
+---
+
+### 3.6 AI文本分析系统 (Text Analysis) [旧版，已并入 3.6 笔记管理]
+
+> 注：原 3.6 节关于结构化存储人物/设定/大纲的内容已并入“文本大纲与笔记管理”。AI 分析产物统一输出为 Markdown 笔记，不再单独建立 `Character` / `Setting` / `Outline` 等结构化表。
 
 #### 3.6.2 核心分析功能
 
@@ -279,31 +417,6 @@ interface Budget {
 **输入**: 选定文本范围  
 **输出**: 结构化大纲节点 + 转折点
 
-```typescript
-interface OutlineExtractionConfig {
-  granularity: 'act' | 'arc' | 'scene' | 'beat'
-  outline_type: 'main' | 'subplot' | 'character_arc' | 'theme'
-  extract_turning_points: boolean
-  extract_characters: boolean
-  max_nodes: number
-  temperature: number
-  llm_provider?: string
-  llm_model?: string
-}
-
-interface ExtractedOutlineNode {
-  id: string
-  node_type: 'act' | 'arc' | 'scene' | 'beat'
-  title: string
-  summary: string
-  significance: 'critical' | 'major' | 'normal' | 'minor'
-  sort_index: number
-  parent_id?: string
-  characters?: string[]
-  evidence_list: TextEvidence[]
-}
-```
-
 **异常处理**:
 - 超长文本自动分块处理
 - API限流自动重试(指数退避)
@@ -329,24 +442,6 @@ interface ExtractedOutlineNode {
 4. **关系**: 分析人物间关系
 5. **弧光**: 追踪人物变化轨迹
 
-```typescript
-interface CharacterDetectionConfig {
-  detect_aliases: boolean
-  detect_attributes: boolean
-  detect_relations: boolean
-  min_confidence: number
-  max_characters: number
-}
-
-interface DetectedCharacter {
-  canonical_name: string
-  aliases: { alias: string; alias_type: string }[]
-  role_type: 'protagonist' | 'antagonist' | 'deuteragonist' | 'supporting' | 'minor'
-  description: string
-  attributes: { category: string; key: string; value: string; confidence: number }[]
-  relations: { target_name: string; relation_type: string; description?: string }[]
-}
-```
 
 #### 3.6.6 任务调度系统
 
@@ -390,15 +485,19 @@ PENDING → QUEUED → RUNNING → COMPLETED
 ### 3.8 历史事件追踪 (History Timeline)
 
 #### 3.8.1 功能概述
-时间线事件管理，支持个人历史记录和作品时间线。
+历史事件与现实/历史人物档案统一作为 Markdown 笔记管理，通过 `note_items` 中 `category='history'` 与 `category='person'` 的索引进行组织。时间线视图通过解析 Markdown frontmatter 中的时间字段渲染。
+
+旧版 `HistoryEvent` / `Person` 结构化表已废弃，数据已迁移到 `note_items` + `notes/text/history/*.md` / `notes/text/persons/*.md`。
 
 #### 3.8.2 核心功能
 
 | 功能 | 描述 | 优先级 |
 |------|------|--------|
-| **事件CRUD** | 时间点/时间段事件 | P1 |
+| **事件笔记 CRUD** | Markdown 笔记形式记录事件，frontmatter 支持 `start_time` / `end_time` | P1 |
+| **人物档案笔记** | 现实/历史人物档案保存为 `.md` | P1 |
 | **分类标签** | 事件分类、颜色标记 | P1 |
-| **时间线视图** | 可视化时间线展示 | P2 |
+| **时间线视图** | 通过解析 frontmatter 时间字段可视化展示 | P2 |
+| **数据迁移** | 旧结构化表数据迁移到 NoteItem 体系 | P1 |
 
 ---
 
@@ -436,8 +535,9 @@ PENDING → QUEUED → RUNNING → COMPLETED
 
 | 模块 | AI应用场景 | 状态 |
 |------|------------|------|
-| **文本分析** | 大纲提取、人物检测、设定提取 | ✅ 已实现 |
+| **文本分析** | 大纲提取、人物检测、设定提取 → 输出为 Markdown 笔记 + 双向链接 | ✅ 已实现 |
 | **文本导入** | 智能分章、章节识别 | ✅ 已实现 |
+| **历史/人物档案** | 归入 NoteItem 笔记体系 | ✅ 已实现 |
 | **财务分析** | 消费分类、异常检测、预算建议 | 📋 规划中 |
 | **健康分析** | 趋势预测、健康建议 | 📋 规划中 |
 | **项目规划** | 任务拆解、时间估算 | 📋 规划中 |
@@ -530,26 +630,25 @@ interface PromptTemplate {
 │   ├──► Work (作品)                                              │
 │   │      ├──► Edition (版本)                                    │
 │   │      │      ├──► DocumentNode (章节)                        │
-│   │      │      ├──► Character (人物)                           │
-│   │      │      ├──► Setting (设定)                             │
-│   │      │      ├──► Outline (大纲)                             │
-│   │      │      └──► AnalysisTask (分析任务)                    │
-│   │      │                                                        │
-│   │      └──► CharacterRelation (人物关系)                      │
-│   │                                                                │
+│   │      │      └──► NoteItem (category = outline/character/    │
+│   │      │              setting/geography/plot/...)             │
+│   │      │              └──► setting_file -> *.md               │
+│   │      │                                                      │
+│   │      └──► AnalysisTask (分析任务)                           │
+│   │                                                             │
 │   ├──► Account (财务账户)                                       │
 │   │      └──► Transaction (交易记录)                            │
-│   │                                                                │
+│   │                                                             │
 │   ├──► Project (项目)                                           │
 │   │      └──► Mission (任务)                                    │
-│   │                                                                │
+│   │                                                             │
 │   ├──► WeightRecord (体重记录)                                  │
-│   │                                                                │
+│   │                                                             │
 │   ├──► Residence (住所)                                         │
 │   │      ├──► Container (容器)                                  │
 │   │      └──► Item (物品)                                       │
-│   │                                                                │
-│   └──► HistoryEvent (历史事件)                                  │
+│   │                                                             │
+│   └──► NoteItem (历史/人物/时间线等，由 .md 文件承载)           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
