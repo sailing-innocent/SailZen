@@ -177,6 +177,7 @@ const TransactionAddCard: React.FC<TransactionAddCardProps> = (props: Transactio
               <DatePicker
                 label=""
                 placeholder="选择日期"
+                value={new Date(htime * 1000)}
                 onChange={(date: Date) => {
                   setHtime(Math.floor(date.getTime() / 1000))
                 }}
