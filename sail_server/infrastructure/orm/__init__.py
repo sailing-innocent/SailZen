@@ -58,6 +58,8 @@ from sail_server.infrastructure.orm.history import (
 # Life Models
 from sail_server.infrastructure.orm.life import (
     ServiceAccount,
+    Day,
+    TimeSpan,
 )
 
 # Finance Models
@@ -105,6 +107,8 @@ __all__ = [
     "HistoryEvent",
     # Life
     "ServiceAccount",
+    "Day",
+    "TimeSpan",
     # Finance
     "Account",
     "Transaction",

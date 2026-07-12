@@ -103,6 +103,7 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.file_storage import router as file_storage_router
+        from sail_server.router.life import router as life_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -115,6 +116,7 @@ class SailServer:
                 text_router,
                 necessity_router,
                 file_storage_router,
+                life_router,
             ],
         )
 
@@ -175,6 +177,23 @@ class SailServer:
                 db.close()
         except Exception as e:
             logger.warning(f"[Startup] Failed to seed finance tags: {e}")
+
+        # 初始化时间系统（幂等）
+        try:
+            from sail_server.model.life import init_time_system_impl
+            from sail_server.db import Database
+
+            db = Database.get_instance().get_db_session()
+            try:
+                result = init_time_system_impl(db)
+                logger.info(
+                    f"[Startup] Time system initialized: "
+                    f"{result['total_days']} days, {result['total_spans']} spans"
+                )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to initialize time system: {e}")
 
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger

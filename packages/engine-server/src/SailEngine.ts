@@ -93,7 +93,7 @@ import {
 import _ from "lodash";
 import path from "path";
 import { NotesFileSystemCache } from "./cache/notesFileSystemCache";
-import { NoteParser } from "./drivers/file/NoteParser";
+import { NoteParser } from "./drivers/file/noteParser";
 import { SchemaParser } from "./drivers/file/schemaParser";
 import { NodeJSFileStore } from "./store";
 import { HookUtils, RequireHookResp } from "./topics/hooks";
