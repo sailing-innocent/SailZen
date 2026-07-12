@@ -17,11 +17,23 @@ const DatePicker: React.FC<DatePickerProps> = (props: DatePickerProps) => {
 
   const [open, setOpen] = useState(false)
   const [date, setDate] = useState<Date | undefined>(value)
+  const [month, setMonth] = useState<Date>(value ?? new Date())
   const displayDate = date ? date.toLocaleDateString() : placeholder || 'Select date'
 
   // Update local state when value prop changes
   React.useEffect(() => {
-    setDate(value)
+    setDate((current) => {
+      if (value === undefined) return value
+      if (current && current.getTime() === value.getTime()) return current
+      return value
+    })
+    if (value) {
+      setMonth((current) => {
+        const sameYear = current.getFullYear() === value.getFullYear()
+        const sameMonth = current.getMonth() === value.getMonth()
+        return sameYear && sameMonth ? current : value
+      })
+    }
   }, [value])
   return (
     <div className="flex flex-col gap-3">
@@ -39,9 +51,14 @@ const DatePicker: React.FC<DatePickerProps> = (props: DatePickerProps) => {
           <Calendar
             mode="single"
             selected={date}
+            month={month}
+            onMonthChange={setMonth}
             captionLayout="dropdown"
             onSelect={(date) => {
               setDate(date)
+              if (date) {
+                setMonth(date)
+              }
               setOpen(false)
               onChange(date as Date)
             }}
