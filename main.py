@@ -75,7 +75,7 @@ def main():
     parser.add_argument("--task", type=str, help="Task to run")
     parser.add_argument("--args", type=str, nargs="+", help="Task arguments")
     parser.add_argument(
-        "--prod", type=bool, help="use production mode", action="store_true"
+        "--prod", help="use production mode", action="store_true"
     )
     args = parser.parse_args()
     from sail.utils import read_env
