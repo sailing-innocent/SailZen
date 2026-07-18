@@ -48,6 +48,8 @@ export enum SailASTTypes {
   SAILZEN_MATH_ENV = "sailzenMathEnv",
   SAILZEN_ALGORITHM = "sailzenAlgorithm",
   SAILZEN_IF_FORMAT = "sailzenIfFormat",
+  /** Page element marker, e.g. `$$PREFIX$$`. See remark/pageElements. */
+  PAGE_ELEMENT = "pageElement",
   // Not sail-specific, included here for convenience
   ROOT = "root",
   HEADING = "heading",
@@ -208,4 +210,17 @@ export type SailZenIfFormat = SailASTNode & {
   type: SailASTTypes.SAILZEN_IF_FORMAT;
   format: string;
   children?: UnistNode[];
+};
+
+/** Page element marker node: `<sail-elem key="PREFIX" />`.
+ * Content is resolved at render time via the page element registry; see
+ * `remark/pageElements`. */
+export type PageElement = SailASTNode & {
+  type: SailASTTypes.PAGE_ELEMENT;
+  /** Registered provider key, e.g. "PREFIX". */
+  key: string;
+  /** Parsed marker arguments. */
+  args: import("./remark/pageElements/types").PageElementArgs;
+  /** Original marker text, used for lossless markdown round-trips. */
+  raw: string;
 };

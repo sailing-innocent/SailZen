@@ -49,6 +49,7 @@ import { wikiLinks, WikiLinksOpts } from "./remark/wikiLinks";
 import { sailzenCite } from "./remark/sailzenCite";
 import { sailzenFigure } from "./remark/sailzenFigure";
 import { sailzenBlocks } from "./remark/sailzenBlocks";
+import { pageElements } from "./remark/pageElements";
 import { SailASTDest, UnistNode } from "./types";
 import path from "path";
 import { Parent } from "unist";
@@ -281,6 +282,7 @@ export class MDUtilsV5 {
       .use(hashtags)
       .use(zdocTags)
       .use(extendedImage)
+      .use(pageElements)
       .use(remarkGfm)
       .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)

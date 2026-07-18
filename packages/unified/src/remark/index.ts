@@ -49,3 +49,4 @@ export type { Image, Link } from "mdast";
 export { makeImageUrlFullPath } from "./sailPreview";
 export * from "./backlinksHover";
 export { abbrPlugin, AbbrOpts } from "./abbr";
+export * from "./pageElements";
