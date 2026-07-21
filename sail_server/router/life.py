@@ -9,13 +9,14 @@
 """
 生活时间管理路由
 
-注册 Day 与 TimeSpan 控制器到 /api/v1/life 路径下。
+注册 Day / TimeSpan / Weather 控制器到 /api/v1/life 路径下。
 """
 
 from litestar import Router
 from litestar.di import Provide
 
 from sail_server.controller.life import DayController, TimeSpanController
+from sail_server.controller.weather import WeatherController
 from sail_server.db import get_db_dependency
 
 
@@ -25,5 +26,6 @@ router = Router(
     route_handlers=[
         DayController,
         TimeSpanController,
+        WeatherController,
     ],
 )

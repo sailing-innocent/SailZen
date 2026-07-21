@@ -1111,6 +1111,16 @@
             "latexmk",
             "xmake"
           ]
+        },
+        "sailzen.sailServer.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:1974",
+          "description": "sail_server 远端接口地址（weather 等页面元素数据源）。例如 http://192.168.1.100:1974"
+        },
+        "sailzen.sailServer.weatherCacheTtlMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "天气页面元素的客户端缓存时间（分钟）。"
         }
       }
     },

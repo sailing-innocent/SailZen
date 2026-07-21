@@ -49,6 +49,8 @@ class SailServer:
         self.api_router = None
         self.debug = True
         self.log_file = None
+        # 天气后台更新任务（on_startup 中按 WEATHER_ENABLED 启动）
+        self._weather_task: "asyncio.Task | None" = None
 
     def init(self):
         # 日志已在 main() 中初始化，直接获取 logger
@@ -195,11 +197,33 @@ class SailServer:
         except Exception as e:
             logger.warning(f"[Startup] Failed to initialize time system: {e}")
 
+        # 启动天气后台更新循环（失败仅告警，不影响服务启动）
+        try:
+            if os.environ.get("WEATHER_ENABLED", "true").lower() == "true":
+                from sail_server.db import Database
+                from sail_server.model.weather import weather_update_loop
+
+                self._weather_task = asyncio.create_task(
+                    weather_update_loop(Database.get_instance().get_db_session)
+                )
+                logger.info("[Startup] Weather update loop started")
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to start weather update loop: {e}")
+
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger
 
         logger = get_logger("sail_server")
         logger.info("Server shutting down...")
+
+        # 取消天气后台更新任务
+        if self._weather_task is not None:
+            import contextlib
+
+            self._weather_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._weather_task
+            self._weather_task = None
 
     def run(self):
         from sail_server.utils.logging_config import get_logger
