@@ -51,6 +51,8 @@ class SailServer:
         self.log_file = None
         # 天气后台更新任务（on_startup 中按 WEATHER_ENABLED 启动）
         self._weather_task: "asyncio.Task | None" = None
+        # 提醒调度任务（on_startup 中按 REMINDER_ENABLED 启动）
+        self._reminder_task: "asyncio.Task | None" = None
 
     def init(self):
         # 日志已在 main() 中初始化，直接获取 logger
@@ -106,6 +108,7 @@ class SailServer:
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.life import router as life_router
+        from sail_server.router.reminder import router as reminder_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -119,6 +122,7 @@ class SailServer:
                 necessity_router,
                 file_storage_router,
                 life_router,
+                reminder_router,
             ],
         )
 
@@ -210,6 +214,19 @@ class SailServer:
         except Exception as e:
             logger.warning(f"[Startup] Failed to start weather update loop: {e}")
 
+        # 启动提醒调度循环（失败仅告警，不影响服务启动）
+        try:
+            if os.environ.get("REMINDER_ENABLED", "true").lower() == "true":
+                from sail_server.db import Database
+                from sail_server.model.reminder_scheduler import reminder_scan_loop
+
+                self._reminder_task = asyncio.create_task(
+                    reminder_scan_loop(Database.get_instance().get_db_session)
+                )
+                logger.info("[Startup] Reminder scan loop started")
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to start reminder scan loop: {e}")
+
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger
 
@@ -224,6 +241,15 @@ class SailServer:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._weather_task
             self._weather_task = None
+
+        # 取消提醒调度任务
+        if self._reminder_task is not None:
+            import contextlib
+
+            self._reminder_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._reminder_task
+            self._reminder_task = None
 
     def run(self):
         from sail_server.utils.logging_config import get_logger

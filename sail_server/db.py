@@ -24,6 +24,7 @@ from sail_server.infrastructure.orm import project
 from sail_server.infrastructure.orm import history
 from sail_server.infrastructure.orm import text
 from sail_server.infrastructure.orm import necessity
+from sail_server.infrastructure.orm import reminder
 
 __all__ = [
     "Database",

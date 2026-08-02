@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 接管主题，XML 仅提供无 ActionBar 的平台宿主主题 -->
+    <style name="Theme.SailZen" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+
+    <!-- 延后弹窗（透明 Dialog Activity） -->
+    <style name="Theme.SailZen.Dialog" parent="android:Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+</resources>

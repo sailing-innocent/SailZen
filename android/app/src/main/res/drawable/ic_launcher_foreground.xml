@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标前景：铃铛（adaptive icon 前景层，中心安全区内） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,76c3.3,0 6,-2.7 6,-6L48,70c0,3.3 2.7,6 6,6zM72,58L72,43c0,-9.21 -4.89,-16.92 -13.5,-18.96L58.5,22c0,-2.49 -2.01,-4.5 -4.5,-4.5S49.5,19.51 49.5,22v2.04C40.89,26.08 36,33.79 36,43v15l-6,6v3h48v-3l-6,-6z" />
+</vector>

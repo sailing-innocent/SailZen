@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SailZen</string>
+
+    <!-- 通知渠道 -->
+    <string name="channel_urgent_name">紧急提醒</string>
+    <string name="channel_urgent_desc">urgent 优先级或连续延后升级后的强提醒（响铃+震动）</string>
+    <string name="channel_reminder_name">普通提醒</string>
+    <string name="channel_reminder_desc">常规提醒通知</string>
+    <string name="channel_silent_name">静默提醒</string>
+    <string name="channel_silent_desc">安静时段内的非紧急提醒（无声入库）</string>
+    <string name="channel_service_name">后台服务</string>
+    <string name="channel_service_desc">保持与服务器长连接的常驻通知</string>
+
+    <!-- 通知动作 -->
+    <string name="action_handle">处理</string>
+    <string name="action_snooze">延后</string>
+    <string name="action_dismiss">忽略</string>
+    <string name="action_done">完成</string>
+
+    <!-- 延后选项（与服务端 snooze option 契约一致） -->
+    <string name="snooze_15m">15 分钟</string>
+    <string name="snooze_1h">1 小时</string>
+    <string name="snooze_tonight">今晚</string>
+    <string name="snooze_tomorrow">明天</string>
+    <string name="snooze_dialog_title">延后到什么时候？</string>
+
+    <!-- 常驻服务通知 -->
+    <string name="service_notification_title">SailZen 提醒服务运行中</string>
+    <string name="service_notification_text">今日待办 %1$d 条</string>
+
+    <!-- Inbox -->
+    <string name="inbox_title">提醒</string>
+    <string name="inbox_tab_pending">待处理</string>
+    <string name="inbox_tab_history">历史</string>
+    <string name="inbox_summary_title">今日小结</string>
+    <string name="inbox_empty_pending">没有待处理的提醒</string>
+    <string name="inbox_empty_history">今天还没有提醒记录</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_server_url">服务器地址</string>
+    <string name="settings_api_token">API Token（可留空）</string>
+    <string name="settings_quiet_start">安静时段开始</string>
+    <string name="settings_quiet_end">安静时段结束</string>
+    <string name="settings_save">保存并连接</string>
+    <string name="settings_saved">已保存，正在重新连接…</string>
+    <string name="settings_connected">已连接</string>
+    <string name="settings_disconnected">未连接</string>
+    <string name="settings_device_id">设备 ID</string>
+</resources>

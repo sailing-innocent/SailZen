@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:name=".SailZenApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SailZen"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic="true" 仅限局域网调试（MVP）；外网部署必须经 VPN 或 HTTPS 反代 -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 延后二级选项弹窗（透明 Dialog Activity） -->
+        <activity
+            android:name=".core.reminder.SnoozeDialogActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.SailZen.Dialog" />
+
+        <!-- 前台服务：维持 WebSocket 长连接 -->
+        <service
+            android:name=".core.bg.ReminderService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- 通知三动作路由 -->
+        <receiver
+            android:name=".core.reminder.ReminderActionReceiver"
+            android:exported="false" />
+
+        <!-- 本地兜底闹钟 -->
+        <receiver
+            android:name=".core.reminder.AlarmReceiver"
+            android:exported="false" />
+
+        <!-- 开机自启（系统广播，必须 exported） -->
+        <receiver
+            android:name=".core.bg.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

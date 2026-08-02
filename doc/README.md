@@ -28,6 +28,7 @@
 | 文档 | 说明 |
 |------|------|
 | [design/overview.md](./design/overview.md) | 系统架构总览 |
+| [design/android_app/README.md](./design/android_app/README.md) | Android App 设计 (提醒反馈闭环/随手采集) 📋 |
 | [design/vscode_plugin_architecture.md](./design/vscode_plugin_architecture.md) | VSCode 插件架构指南 |
 | [design/text-analysis-system.md](./design/text-analysis-system.md) | AI文本分析系统设计 |
 | [design/outline-extraction.md](./design/outline-extraction.md) | 大纲提取功能设计 |
@@ -86,6 +87,8 @@ doc/
 │
 ├── design/                            # 架构设计文档
 │   ├── overview.md                    # 系统架构总览
+│   ├── android_app/                   # Android App 设计
+│   │   └── README.md                  # 定位/提醒反馈闭环/推送通道/服务端配套
 │   ├── text-analysis-system.md        # AI文本分析系统设计
 │   ├── outline-extraction.md          # 大纲提取设计
 │   ├── agent-system.md                # Agent系统设计
