@@ -20,6 +20,8 @@
 JSON 字段使用 sail_server.data.types.JSONB（PG 原生 / SQLite Text+JSON）。
 """
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -84,8 +86,11 @@ class ReminderEvent(ORMBase):
     detail = Column(JSONB, default=dict)
     # 客户端实际发生时间（离线补偿），naive 本地时间
     client_event_ts = Column(TIMESTAMP, nullable=True)
-    # 服务端收到时间
-    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    # 服务端收到时间（ORM 插入走 Python 侧 naive local，对齐模块时间口径；
+    # server_default 仅为裸 SQL 兼容——SQLite CURRENT_TIMESTAMP 是 UTC 会导致口径偏差）
+    created_at = Column(
+        TIMESTAMP, default=datetime.now, server_default=func.current_timestamp()
+    )
 
 
 class ReminderRule(ORMBase):

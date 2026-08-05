@@ -1,0 +1,79 @@
+id: rhythm_nightly_plan
+name: Rhythm Nightly Plan
+description: >
+  每晚 22:00 生成明日计划：拉取明日命中模板与待排事务 → LLM 预审（分拣建议由人确认后生效）
+  → rhythm plan tomorrow → warnings 非空时通过 reminder 提醒人过目。
+  Schedule: 0 22 * * *
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: triage
+    type: sailzen_cli
+    name: 拉取 INBOX 待分拣（AI 分拣建议写回，待人确认）
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: suggest-triage
+      args: ["--limit", "20", "--json"]
+      timeout: 60
+
+  - id: plan_tomorrow
+    type: sailzen_cli
+    name: 生成明日计划
+    depends_on: [triage]
+    params:
+      module: rhythm
+      command: plan
+      args: ["tomorrow", "--json"]
+      timeout: 120
+
+  - id: review_warnings
+    type: llm_reasoning
+    name: 汇总计划警告与未排入项
+    depends_on: [plan_tomorrow]
+    params:
+      prompt_template: |
+        以下是明日计划的 JSON 输出（含 blocks/warnings/unplaced）。
+        请用中文简要汇总：
+        1. 明日时间线要点（工作/生活/事业安排是否合理）
+        2. warnings 中的风险（加班/预算/缓冲不足/刚性冲突）
+        3. unplaced 未排入事务及建议（fallback/defer/改期）
+        如果没有 warnings 和 unplaced，回复 "ALL_CLEAR"。
+
+        {{ upstream.plan_tomorrow.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1500
+
+  - id: check_warnings
+    type: condition
+    name: 有需要人过目的警告？
+    depends_on: [review_warnings]
+    params:
+      condition: "'ALL_CLEAR' not in upstream.review_warnings.response"
+      true_next: [notify_user]
+      false_next: []
+
+  - id: notify_user
+    type: reminder_emit
+    name: 提醒人过目明日计划
+    depends_on: [check_warnings]
+    params:
+      title: "明日计划待过目"
+      content: |
+        🌙 明日计划已生成，存在需要注意的项：
+
+        {{ upstream.review_warnings.response }}
+
+        请通过 sailzen rhythm timeline tomorrow 查看，或在 App 时间线页确认。
+      priority: normal
+      channel: lark_im

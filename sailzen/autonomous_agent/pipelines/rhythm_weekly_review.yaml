@@ -1,0 +1,86 @@
+id: rhythm_weekly_review
+name: Rhythm Weekly Review
+description: >
+  每周日 21:00 生成节奏周报：review --week --md → LLM 生成周评与纠偏建议
+  （戒律阈值微调/habit 频率升降档/venture 预算重估/权重微调）→ 写回
+  rhythm_reviews.ai_summary（经 CLI summary）→ reminder 推送 → notes 归档。
+  Schedule: 0 21 * * 0
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: weekly_review
+    type: sailzen_cli
+    name: 拉取本周节奏复盘（Markdown）
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: review
+      args: ["--week", "--md"]
+      timeout: 60
+
+  - id: ai_summary
+    type: llm_reasoning
+    name: LLM 生成周评与纠偏建议
+    depends_on: [weekly_review]
+    params:
+      prompt_template: |
+        以下是本周节奏复盘数据（节奏分/戒律合规率/习惯达标率/事业预算达成/
+        缓冲消耗/三域投入/侵占事件）。
+        请生成一段中文周评（200 字内），并给出下周纠偏建议（逐条）：
+        - 戒律阈值是否需要微调
+        - 习惯频率升档/降档建议
+        - 事业周预算重估
+        - 三域权重微调建议
+        语气：专业、温和、可执行。
+
+        {{ upstream.weekly_review.stdout }}
+      provider: kimi
+      temperature: 0.5
+      max_tokens: 2000
+      output_file: "weekly_summary.md"
+
+  - id: write_back
+    type: sailzen_cli
+    name: 写回 ai_summary（week 周期键由复盘输出推断）
+    depends_on: [ai_summary]
+    params:
+      module: rhythm
+      command: summary
+      args: ["--scope", "week", "--file", "weekly_summary.md"]
+      timeout: 60
+
+  - id: archive_notes
+    type: sailzen_cli
+    name: 周报归档 notes 模块（本地 Markdown 笔记库）
+    depends_on: [write_back]
+    params:
+      module: notes
+      command: write
+      args: ["rhythm.weekly.{{ today }}", "--file", "weekly_summary.md",
+             "--title", "节奏周报 {{ today }}", "--tags", "rhythm,weekly,review"]
+      timeout: 60
+
+  - id: notify_review
+    type: reminder_emit
+    name: 推送周报
+    depends_on: [archive_notes]
+    params:
+      title: "本周节奏周报"
+      content: |
+        📊 本周节奏周报：
+
+        {{ upstream.weekly_review.stdout }}
+
+        AI 周评：
+        {{ upstream.ai_summary.response }}
+      priority: normal
+      channel: lark_im

@@ -29,6 +29,7 @@ SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。�
 | 健康管理 | 🔶 部分实现 | [设计文档](./doc/design/manager/health.md) |
 | 物资管理 | ✅ 已实现 | [设计文档](./doc/design/manager/necessity.md) |
 | 文本管理 | ✅ 已实现 | [设计文档](./doc/design/manager/text.md) |
+| 节奏管理(Rhythm) | ✅ M1/M2 已实现 | [设计文档](./doc/design/manager/rhythm.md) |
 | AI文本分析 | ✅ 已实现 | 分析产物输出为 Markdown 笔记 + 双向链接 |
 | 历史/人物档案 | ✅ 已实现 | 已迁移至 NoteItem + Markdown 笔记体系 |
 
@@ -360,8 +361,9 @@ works = db.query(Work).all()
 | Project   | `/project`   | 任务板、任务管理         |
 | Text      | `/text`      | 文本导入、章节管理、阅读 |
 | Analysis  | `/analysis`  | 角色档案、大纲、设定提取 |
-| Necessity | `/necessity` | 库存、住所、行程追踪     |
-| History   | `/history`   | 时间线事件追踪           |
+| Necessity | `/necessity` | 库存、住所、行程追踪           |
+| History   | `/history`   | 时间线事件追踪                 |
+| Rhythm    | `/rhythm`    | 统一事务、日时间线、打卡、事业、复盘 |
 
 ## Version Management
 

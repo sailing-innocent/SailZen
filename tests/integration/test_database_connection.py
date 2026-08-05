@@ -29,7 +29,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm.finance import Account
-from sail_server.db import Database
+
+try:
+    from sail_server.db import Database
+except RuntimeError as _db_err:
+    # 未配置 POSTGRE_URI 且未启用 sqlite 时跳过整个模块（需本地 PG 环境）
+    pytest.skip(f"数据库未配置，跳过集成测试: {_db_err}", allow_module_level=True)
 
 
 # 标记需要数据库的测试

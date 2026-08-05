@@ -55,6 +55,7 @@
 | 健康管理 | [design/manager/health.md](./design/manager/health.md) | 🔶 部分实现 |
 | 物资管理 | [design/manager/necessity.md](./design/manager/necessity.md) | ✅ 已实现 |
 | 文本管理 | [design/manager/text.md](./design/manager/text.md) | ✅ 已实现 |
+| 节奏管理(Rhythm) | [design/manager/rhythm.md](./design/manager/rhythm.md) | ✅ M1/M2 已实现 |
 
 ### 运维文档
 
@@ -98,6 +99,7 @@ doc/
 │       ├── project.md                 # 项目管理
 │       ├── health.md                  # 健康管理
 │       ├── necessity.md               # 物资管理
+│       ├── rhythm.md                  # 节奏管理（生活/工作/事业统一编排）
 │       └── text.md                    # 文本管理
 │
 ├── dev/                               # 开发文档

@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sailzen.app.core.reminder.ReminderRepository
+import com.sailzen.app.core.rhythm.RhythmRepository
 import java.util.concurrent.TimeUnit
 
 /**
@@ -46,6 +47,8 @@ class SyncWorker(
             } else {
                 repository.syncPending()
                 repository.flushPendingFeedback()
+                // Rhythm M3：补传离线 done/defer/checkin/capture
+                RhythmRepository.get(applicationContext).flushPending()
                 Result.success()
             }
         } catch (e: Exception) {

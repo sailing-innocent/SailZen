@@ -17,6 +17,8 @@ object ApiClient {
 
     private var cachedKey: String? = null
     private var cachedApi: ReminderApi? = null
+    private var cachedRhythmKey: String? = null
+    private var cachedRhythmApi: RhythmApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -24,12 +26,8 @@ object ApiClient {
         encodeDefaults = true
     }
 
-    @Synchronized
-    fun api(baseUrl: String, token: String): ReminderApi {
+    private fun buildRetrofit(baseUrl: String, token: String): Retrofit {
         val normalized = normalizeBaseUrl(baseUrl)
-        val key = "$normalized|$token"
-        cachedApi?.let { if (cachedKey == key) return it }
-
         val okHttp = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
@@ -51,15 +49,33 @@ object ApiClient {
             )
             .build()
 
-        val retrofit = Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl("$normalized/")
             .client(okHttp)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
+    }
 
-        return retrofit.create(ReminderApi::class.java).also {
+    @Synchronized
+    fun api(baseUrl: String, token: String): ReminderApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedApi?.let { if (cachedKey == key) return it }
+        return buildRetrofit(normalized, token).create(ReminderApi::class.java).also {
             cachedKey = key
             cachedApi = it
+        }
+    }
+
+    /** Rhythm API（M3，缓存键与 ReminderApi 独立） */
+    @Synchronized
+    fun rhythmApi(baseUrl: String, token: String): RhythmApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedRhythmApi?.let { if (cachedRhythmKey == key) return it }
+        return buildRetrofit(normalized, token).create(RhythmApi::class.java).also {
+            cachedRhythmKey = key
+            cachedRhythmApi = it
         }
     }
 

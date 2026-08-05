@@ -35,3 +35,17 @@ data class PendingFeedback(
     val clientEventTs: String,
     val retryCount: Int = 0,
 )
+
+/**
+ * Rhythm 离线动作队列（M3）：网络不可用时暂存 done/defer/checkin/capture，
+ * 联网后按序批量补传（复用提醒“离线排队补传”模式）。
+ */
+@Entity(tableName = "pending_rhythm_action")
+data class PendingRhythmAction(
+    @PrimaryKey(autoGenerate = true) val autoId: Long = 0,
+    val actionType: String, // block_done | block_skip | block_move | checkin | capture | defer
+    val targetId: Int = 0, // block_id / affair_id（capture 为 0）
+    val payloadJson: String = "{}", // 请求体 JSON
+    val clientEventTs: String,
+    val retryCount: Int = 0,
+)

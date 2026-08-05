@@ -12,8 +12,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.navigation.compose.rememberNavController
 import com.sailzen.app.core.reminder.ReminderActionReceiver
+import com.sailzen.app.core.rhythm.QuickCaptureTileService
 import com.sailzen.app.ui.navigation.Routes
 import com.sailzen.app.ui.navigation.SailZenNavGraph
 import com.sailzen.app.ui.theme.SailZenTheme
@@ -22,6 +24,9 @@ class MainActivity : ComponentActivity() {
 
     /** 通知跳入的 reminder_id（-1 表示无） */
     private val reminderIdState = mutableIntStateOf(-1)
+
+    /** 快速捕获磁贴跳入标记 */
+    private val openCaptureState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,7 +56,10 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                SailZenNavGraph(navController = navController)
+                SailZenNavGraph(
+                    navController = navController,
+                    openCapture = openCaptureState.value,
+                )
             }
         }
     }
@@ -65,6 +73,11 @@ class MainActivity : ComponentActivity() {
         val reminderId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, -1) ?: -1
         if (reminderId > 0) {
             reminderIdState.intValue = reminderId
+        }
+        if (intent?.getBooleanExtra(QuickCaptureTileService.EXTRA_OPEN_CAPTURE, false) == true) {
+            openCaptureState.value = true
+            // 消费掉，避免重复弹窗
+            intent.removeExtra(QuickCaptureTileService.EXTRA_OPEN_CAPTURE)
         }
     }
 }

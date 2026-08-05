@@ -62,3 +62,22 @@ interface FeedbackDao {
     @Query("SELECT COUNT(*) FROM pending_feedback")
     fun observeCount(): Flow<Int>
 }
+
+@Dao
+interface RhythmActionDao {
+
+    @Insert
+    suspend fun insert(item: PendingRhythmAction): Long
+
+    @Query("SELECT * FROM pending_rhythm_action ORDER BY autoId ASC")
+    suspend fun all(): List<PendingRhythmAction>
+
+    @Query("DELETE FROM pending_rhythm_action WHERE autoId = :autoId")
+    suspend fun delete(autoId: Long)
+
+    @Query("UPDATE pending_rhythm_action SET retryCount = retryCount + 1 WHERE autoId = :autoId")
+    suspend fun bumpRetry(autoId: Long)
+
+    @Query("SELECT COUNT(*) FROM pending_rhythm_action")
+    fun observeCount(): Flow<Int>
+}

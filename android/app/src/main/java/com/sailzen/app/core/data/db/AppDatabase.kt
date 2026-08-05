@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [CachedReminder::class, PendingFeedback::class],
-    version = 1,
+    entities = [CachedReminder::class, PendingFeedback::class, PendingRhythmAction::class],
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -15,6 +15,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
 
     abstract fun feedbackDao(): FeedbackDao
+
+    abstract fun rhythmActionDao(): RhythmActionDao
 
     companion object {
         @Volatile
@@ -26,7 +28,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "sailzen.db",
-                ).build().also { instance = it }
+                )
+                    // 本地仅为缓存与离线队列（Server 是唯一事实源），升级允许重建
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

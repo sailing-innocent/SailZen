@@ -45,6 +45,7 @@ class SailServer:
             "/necessity",
             "/file-storage",
             "/dag-pipeline",
+            "/rhythm",
         ]
         self.api_router = None
         self.debug = True
@@ -109,6 +110,7 @@ class SailServer:
         from sail_server.router.file_storage import router as file_storage_router
         from sail_server.router.life import router as life_router
         from sail_server.router.reminder import router as reminder_router
+        from sail_server.router.rhythm import router as rhythm_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -123,6 +125,7 @@ class SailServer:
                 file_storage_router,
                 life_router,
                 reminder_router,
+                rhythm_router,
             ],
         )
 

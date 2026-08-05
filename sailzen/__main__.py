@@ -27,6 +27,7 @@ def main():
         print("  health    健康数据管理(体重/运动/减重计划导出分析)")
         print("  notes     本地 Markdown 笔记库管理(git 托管)")
         print("  note      服务器 NoteItem / 创作笔记同步管理")
+        print("  rhythm    生活/工作节奏综合优先级调节(统一事务/时间线/打卡/事业/复盘)")
         print()
         print("Examples:")
         print("  sailzen finance list-accounts --server http://localhost:8000")
@@ -64,9 +65,14 @@ def main():
         from sailzen.cli.note_client import main as note_main
 
         note_main()
+    elif module == "rhythm":
+        sys.argv.pop(1)
+        from sailzen.cli.rhythm_client import main as rhythm_main
+
+        rhythm_main()
     else:
         print(f"Unknown module: {module}", file=sys.stderr)
-        print("Available modules: finance, health, notes, note", file=sys.stderr)
+        print("Available modules: finance, health, notes, note, rhythm", file=sys.stderr)
         sys.exit(1)
 
 

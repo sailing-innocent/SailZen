@@ -70,6 +70,17 @@ from sail_server.infrastructure.orm.finance import (
     BudgetItem,
 )
 
+# Rhythm Models
+from sail_server.infrastructure.orm.rhythm import (
+    RhythmAffair,
+    RhythmTimeBlock,
+    RhythmDayTemplate,
+    RhythmDisciplineLog,
+    RhythmEnergyProfile,
+    RhythmPolicy,
+    RhythmReview,
+)
+
 __all__ = [
     # Base
     "ORMBase",
@@ -114,4 +125,12 @@ __all__ = [
     "Transaction",
     "Budget",
     "BudgetItem",
+    # Rhythm
+    "RhythmAffair",
+    "RhythmTimeBlock",
+    "RhythmDayTemplate",
+    "RhythmDisciplineLog",
+    "RhythmEnergyProfile",
+    "RhythmPolicy",
+    "RhythmReview",
 ]

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SailZen</string>
+    <string name="quick_capture_tile_label">快速捕获</string>
 
     <!-- 通知渠道 -->
     <string name="channel_urgent_name">紧急提醒</string>

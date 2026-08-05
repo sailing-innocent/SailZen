@@ -1,0 +1,70 @@
+id: rhythm_goal_decompose
+name: Rhythm Goal Decompose
+description: >
+  每周一 09:00 把 venture/长期目标按双周（复用 TimeSpan BIWEEK/QBW）拆成
+  里程碑/任务草案 → suggest-split 待确认；确认后 work 域子项经 project API 落成 Mission。
+  Schedule: 0 9 * * 1
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: venture_status
+    type: sailzen_cli
+    name: 拉取 venture 进度与里程碑
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: venture
+      args: ["status", "--json"]
+      timeout: 60
+
+  - id: decompose
+    type: llm_reasoning
+    name: 双周里程碑分解草案
+    depends_on: [venture_status]
+    params:
+      prompt_template: |
+        以下是长期事业进度 JSON。请按"未来两个双周"分解推进草案：
+        对每个 venture 输出拆分建议 children 数组（每项含 title/est_minutes/
+        urgency_ddl 建议），格式符合 sailzen rhythm split 的 split.json：
+        {"children": [{"title": "...", "kind": "task_oneoff", "domain": "career",
+        "est_minutes": 120}, ...]}
+        只输出 JSON，不要多余文字。若当前双周里程碑已足够，输出 {"children": []}。
+
+        {{ upstream.venture_status.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 2000
+
+  - id: check_children
+    type: condition
+    name: 有待确认拆分草案？
+    depends_on: [decompose]
+    params:
+      condition: "'\"children\": []' not in upstream.decompose.response"
+      true_next: [notify_decompose]
+      false_next: []
+
+  - id: notify_decompose
+    type: reminder_emit
+    name: 推送拆分草案待确认
+    depends_on: [check_children]
+    params:
+      title: "事业双周分解草案待确认"
+      content: |
+        🧩 长期事业双周分解草案（待确认）：
+
+        {{ upstream.decompose.response }}
+
+        确认后：sailzen rhythm split <venture_id> --file split.json
+        （work 域子项将经 project API 落成 Mission）
+      priority: normal
+      channel: lark_im

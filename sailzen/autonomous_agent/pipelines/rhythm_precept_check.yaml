@@ -1,0 +1,68 @@
+id: rhythm_precept_check
+name: Rhythm Precept Check
+description: >
+  每晚 22:30 检查当日戒律核销状态：未打卡 → reminder 提醒打卡；
+  连续破戒 ≥3 天 → LLM 读 note 生成归因分析建议。
+  Schedule: 0 22:30 * * *（具体 check_time 由 precept kind_meta.check_time 细化）
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: today_checkins
+    type: sailzen_cli
+    name: 拉取今日待打卡清单
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: checkin
+      args: ["today", "--json"]
+      timeout: 60
+
+  - id: analyze
+    type: llm_reasoning
+    name: 分析戒律核销状态
+    depends_on: [today_checkins]
+    params:
+      prompt_template: |
+        以下是今日戒律/习惯打卡清单 JSON。
+        请找出"尚未打卡的戒律"（precepts 中 done_today=false 的项）：
+        - 若全部已打卡，回复 "ALL_CLEAR"
+        - 否则逐条列出未打卡戒律（rule_text），并给出一句简短的守约提醒。
+        另外若某项近期 note 显示连续破戒迹象，请给出归因分析建议。
+
+        {{ upstream.today_checkins.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1200
+
+  - id: check_pending
+    type: condition
+    name: 有未核销戒律？
+    depends_on: [analyze]
+    params:
+      condition: "'ALL_CLEAR' not in upstream.analyze.response"
+      true_next: [remind_checkin]
+      false_next: []
+
+  - id: remind_checkin
+    type: reminder_emit
+    name: 提醒打卡核销
+    depends_on: [check_pending]
+    params:
+      title: "戒律核销提醒"
+      content: |
+        🛡️ 今日戒律尚未核销：
+
+        {{ upstream.analyze.response }}
+
+        请在 App 打卡中心核销，或 sailzen rhythm checkin <id> --result kept|violated
+      priority: high
+      channel: lark_im

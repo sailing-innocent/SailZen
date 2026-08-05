@@ -1,0 +1,61 @@
+id: rhythm_venture_weekly
+name: Rhythm Venture Weekly
+description: >
+  每周日 20:00 检查长期事业：周预算达成 / 里程碑推进 / 倒排压力 →
+  LLM 生成下周事业安排建议（业余时间区分配草案）→ 待确认。
+  Schedule: 0 20 * * 0
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: venture_status
+    type: sailzen_cli
+    name: 拉取全部 venture 倒排进度
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: venture
+      args: ["status", "--json"]
+      timeout: 60
+
+  - id: weekly_suggest
+    type: llm_reasoning
+    name: 生成下周事业安排建议
+    depends_on: [venture_status]
+    params:
+      prompt_template: |
+        以下是长期事业的倒排进度 JSON（weeks_left/weekly_budget_hours/
+        week_consumed_hours/countdown_pressure/milestones）。
+        请生成下周事业安排建议（中文）：
+        1. 本周预算达成评价（欠载/超支）
+        2. 倒排压力灯解读（>1.0 表示按当前节奏无法按期，需上调周预算或砍里程碑范围）
+        3. 下周业余时间区分配草案（weekday 19:30-22:30 / weekend 两段）
+        4. 下一里程碑的推进动作
+
+        {{ upstream.venture_status.stdout }}
+      provider: kimi
+      temperature: 0.4
+      max_tokens: 2000
+
+  - id: notify_weekly
+    type: reminder_emit
+    name: 推送事业周报建议（待确认）
+    depends_on: [weekly_suggest]
+    params:
+      title: "事业周报与下周安排建议"
+      content: |
+        🚀 长期事业周度检查：
+
+        {{ upstream.weekly_suggest.response }}
+
+        （建议待确认；采纳后可 sailzen rhythm hint/confirm 落地）
+      priority: normal
+      channel: lark_im

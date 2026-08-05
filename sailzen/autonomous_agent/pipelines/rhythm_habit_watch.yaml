@@ -1,0 +1,68 @@
+id: rhythm_habit_watch
+name: Rhythm Habit Watch
+description: >
+  每晚 20:00 计算各 ACTIVE habit 的周缺口压力：
+  压力 >0.8（剩余次数逼近剩余天数）→ 提醒安排 / 建议最小剂量 fallback（如 30min→10min 居家替代）。
+  Schedule: 0 20 * * *
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: habit_board
+    type: sailzen_cli
+    name: 拉取习惯看板（streak/本周缺口）
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: habit
+      args: ["board", "--json"]
+      timeout: 60
+
+  - id: gap_analysis
+    type: llm_reasoning
+    name: 周缺口压力分析
+    depends_on: [habit_board]
+    params:
+      prompt_template: |
+        以下是习惯看板 JSON（含 week_done/week_target/streak）。
+        今天是周中/周末，请评估每个习惯的周缺口压力：
+        压力 = 剩余目标次数 / 本周剩余天数。
+        - 若所有习惯压力均 ≤0.8，回复 "ALL_CLEAR"
+        - 否则对压力 >0.8 的习惯给出：
+          1. 今晚/明天的具体安排建议（偏好槽位优先）
+          2. "最小剂量" fallback（如 30min 运动 → 10min 居家替代）
+
+        {{ upstream.habit_board.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1200
+
+  - id: check_gap
+    type: condition
+    name: 有高压习惯？
+    depends_on: [gap_analysis]
+    params:
+      condition: "'ALL_CLEAR' not in upstream.gap_analysis.response"
+      true_next: [remind_habit]
+      false_next: []
+
+  - id: remind_habit
+    type: reminder_emit
+    name: 提醒安排或启用最小剂量
+    depends_on: [check_gap]
+    params:
+      title: "习惯周缺口提醒"
+      content: |
+        🌱 以下习惯本周达标压力较大：
+
+        {{ upstream.gap_analysis.response }}
+      priority: normal
+      channel: lark_im

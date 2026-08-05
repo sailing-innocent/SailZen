@@ -1,0 +1,51 @@
+id: rhythm_encroachment_watch
+name: Rhythm Encroachment Watch
+description: >
+  每小时巡检当日侵占事件（工作穿透守护窗 / career 越界进工作窗 / 刚性块被挤 /
+  加班超窗）→ 有侵占 → high 优先级 reminder。
+  Schedule: 0 * * * *
+
+autonomy_level: fully_autonomous
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: conflicts
+    type: sailzen_cli
+    name: 拉取当日侵占报告
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: conflicts
+      args: ["today", "--json"]
+      timeout: 60
+
+  - id: check_encroachment
+    type: condition
+    name: 有侵占事件？
+    depends_on: [conflicts]
+    params:
+      condition: "'\"encroachments\": []' not in upstream.conflicts.stdout"
+      true_next: [notify_encroachment]
+      false_next: []
+
+  - id: notify_encroachment
+    type: reminder_emit
+    name: 高优先级侵占告警
+    depends_on: [check_encroachment]
+    params:
+      title: "节奏侵占告警"
+      content: |
+        ⚠️ 检测到节奏侵占事件：
+
+        {{ upstream.conflicts.stdout }}
+
+        请查看 sailzen rhythm timeline today 定位冲突块。
+      priority: high
+      channel: lark_im

@@ -1,0 +1,83 @@
+id: rhythm_evening_check
+name: Rhythm Evening Check
+description: >
+  每晚 21:00 检查：当日 hard precept 未守 / habit 未完成且窗口将尽 →
+  提示启用 fallback（Plan B/最小剂量）或 defer。
+  Schedule: 0 21 * * *
+
+autonomy_level: human_in_loop
+
+nodes:
+  - id: health_check
+    type: state_check
+    name: Check sail_server health
+    params:
+      endpoint: "http://localhost:1974/api/v1/health"
+      expected_status: 200
+      timeout: 10
+
+  - id: today_checkins
+    type: sailzen_cli
+    name: 拉取今日待打卡清单
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: checkin
+      args: ["today", "--json"]
+      timeout: 60
+
+  - id: timeline
+    type: sailzen_cli
+    name: 拉取当日时间线（缓冲余量/未执行块）
+    depends_on: [health_check]
+    params:
+      module: rhythm
+      command: timeline
+      args: ["today", "--json"]
+      timeout: 60
+
+  - id: evening_analysis
+    type: llm_reasoning
+    name: 晚间风险分析
+    depends_on: [today_checkins, timeline]
+    params:
+      prompt_template: |
+        现在是晚上 21:00，当日窗口将尽。基于以下两份 JSON：
+        1. 今日待打卡清单（precepts/habits 的 done_today）
+        2. 当日时间线（blocks 状态/buffer 余量）
+        请找出风险项并给出建议：
+        - hard severity 戒律未守 → 强提醒
+        - habit 今日未达成且本周有缺口 → 建议"最小剂量" fallback 或 defer 到明天
+        - 时间线上仍 PLANNED 的重要块 → 建议启动或 defer
+        若无风险，回复 "ALL_CLEAR"。
+
+        待打卡清单：
+        {{ upstream.today_checkins.stdout }}
+
+        时间线：
+        {{ upstream.timeline.stdout }}
+      provider: kimi
+      temperature: 0.3
+      max_tokens: 1500
+
+  - id: check_risk
+    type: condition
+    name: 有晚间风险？
+    depends_on: [evening_analysis]
+    params:
+      condition: "'ALL_CLEAR' not in upstream.evening_analysis.response"
+      true_next: [notify_evening]
+      false_next: []
+
+  - id: notify_evening
+    type: reminder_emit
+    name: 晚间检查提醒
+    depends_on: [check_risk]
+    params:
+      title: "晚间节奏检查"
+      content: |
+        🌆 当日窗口将尽，以下事项建议处理（fallback 或 defer）：
+
+        {{ upstream.evening_analysis.response }}
+      priority: high
+      channel: lark_im
