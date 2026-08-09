@@ -12,6 +12,7 @@ from .health import router as health_router
 from .history import router as history_router
 from .life import router as life_router
 from .necessity import router as necessity_router
+from .pems import router as pems_router
 from .project import router as project_router
 from .text import router as text_router
 
@@ -23,6 +24,7 @@ __all__ = [
     "history_router",
     "life_router",
     "necessity_router",
+    "pems_router",
     "project_router",
     "text_router",
 ]

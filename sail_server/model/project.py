@@ -45,6 +45,10 @@ def _project_to_response(project: Project) -> ProjectResponse:
         state=project.state,
         start_time_qbw=project.start_time_qbw,
         end_time_qbw=project.end_time_qbw,
+        timespan_id=project.timespan_id,
+        energy_budget=project.energy_budget or 0,
+        priority=project.priority or 0,
+        tags=project.tags or [],
         ctime=project.ctime,
         mtime=project.mtime,
     )
@@ -63,6 +67,10 @@ def create_project_impl(db, project_create: ProjectCreateRequest) -> ProjectResp
         end_time_qbw=project_create.end_time_qbw
         if project_create.end_time_qbw is not None
         else now + 1,
+        timespan_id=project_create.timespan_id,
+        energy_budget=project_create.energy_budget or 0,
+        priority=project_create.priority or 0,
+        tags=project_create.tags or [],
     )
     db.add(project)
     db.commit()
@@ -148,6 +156,14 @@ def update_project_impl(
         project.start_time_qbw = project_update.start_time_qbw
     if project_update.end_time_qbw is not None:
         project.end_time_qbw = project_update.end_time_qbw
+    if project_update.timespan_id is not None:
+        project.timespan_id = project_update.timespan_id
+    if project_update.energy_budget is not None:
+        project.energy_budget = project_update.energy_budget
+    if project_update.priority is not None:
+        project.priority = project_update.priority
+    if project_update.tags is not None:
+        project.tags = list(project_update.tags)
 
     project.mtime = datetime.now()
     db.commit()
@@ -182,6 +198,12 @@ def _mission_to_response(mission: Mission) -> MissionResponse:
         project_id=mission.project_id,
         state=mission.state,
         ddl=mission.ddl,
+        planned_minutes=mission.planned_minutes or 0,
+        actual_minutes=mission.actual_minutes or 0,
+        energy_cost=mission.energy_cost or 0,
+        day_id=mission.day_id,
+        milestone_id=mission.milestone_id,
+        health_constraint=mission.health_constraint or "normal",
         lft=mission.lft,
         rgt=mission.rgt,
         tree_id=mission.tree_id,
@@ -199,6 +221,12 @@ def create_mission_impl(db, mission_create: MissionCreateRequest) -> MissionResp
         project_id=mission_create.project_id,
         state=MissionState.PENDING,
         ddl=mission_create.ddl,
+        planned_minutes=mission_create.planned_minutes or 0,
+        actual_minutes=mission_create.actual_minutes or 0,
+        energy_cost=mission_create.energy_cost or 0,
+        day_id=mission_create.day_id,
+        milestone_id=mission_create.milestone_id,
+        health_constraint=mission_create.health_constraint or "normal",
     )
     db.add(mission)
     db.commit()
@@ -284,6 +312,18 @@ def update_mission_impl(
         mission.state = mission_update.state
     if mission_update.ddl is not None:
         mission.ddl = mission_update.ddl
+    if mission_update.planned_minutes is not None:
+        mission.planned_minutes = mission_update.planned_minutes
+    if mission_update.actual_minutes is not None:
+        mission.actual_minutes = mission_update.actual_minutes
+    if mission_update.energy_cost is not None:
+        mission.energy_cost = mission_update.energy_cost
+    if mission_update.day_id is not None:
+        mission.day_id = mission_update.day_id
+    if mission_update.milestone_id is not None:
+        mission.milestone_id = mission_update.milestone_id
+    if mission_update.health_constraint is not None:
+        mission.health_constraint = mission_update.health_constraint
 
     mission.mtime = datetime.now()
     db.commit()

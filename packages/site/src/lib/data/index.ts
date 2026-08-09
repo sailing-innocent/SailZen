@@ -8,4 +8,4 @@
 export * from './money'
 export * from './health'
 export * from './content'
-export * from './money'
+export * from './pems'

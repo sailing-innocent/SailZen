@@ -13,7 +13,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, List, Union
+from typing import Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
@@ -132,6 +132,10 @@ class ProjectBase(BaseModel):
     state: Optional[int] = Field(default=0, description="项目状态")
     start_time_qbw: Optional[int] = Field(default=0, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=0, description="结束时间(QBW格式)")
+    timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
+    energy_budget: Optional[int] = Field(default=0, description="项目总精力预算")
+    priority: Optional[int] = Field(default=0, description="项目优先级")
+    tags: Optional[List[str]] = Field(default_factory=list, description="标签")
 
 
 class ProjectCreateRequest(BaseModel):
@@ -143,6 +147,10 @@ class ProjectCreateRequest(BaseModel):
     description: str = Field(default="", description="项目描述")
     start_time_qbw: Optional[int] = Field(default=None, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=None, description="结束时间(QBW格式)")
+    timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
+    energy_budget: Optional[int] = Field(default=None, description="项目总精力预算")
+    priority: Optional[int] = Field(default=None, description="项目优先级")
+    tags: Optional[List[str]] = Field(default=None, description="标签")
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -155,6 +163,10 @@ class ProjectUpdateRequest(BaseModel):
     state: Optional[int] = Field(default=None, description="项目状态")
     start_time_qbw: Optional[int] = Field(default=None, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=None, description="结束时间(QBW格式)")
+    timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
+    energy_budget: Optional[int] = Field(default=None, description="项目总精力预算")
+    priority: Optional[int] = Field(default=None, description="项目优先级")
+    tags: Optional[List[str]] = Field(default=None, description="标签")
 
 
 class ProjectResponse(ProjectBase):
@@ -188,6 +200,14 @@ class MissionBase(BaseModel):
     project_id: Optional[int] = Field(default=None, description="所属项目ID")
     state: int = Field(default=0, description="任务状态")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
+    planned_minutes: Optional[int] = Field(default=0, description="预计耗时(分钟)")
+    actual_minutes: Optional[int] = Field(default=0, description="实际耗时汇总(分钟)")
+    energy_cost: Optional[int] = Field(default=0, description="预计精力消耗")
+    day_id: Optional[int] = Field(default=None, description="计划执行日ID")
+    milestone_id: Optional[int] = Field(default=None, description="归属里程碑ID")
+    health_constraint: Optional[str] = Field(
+        default="normal", description="健康约束: normal | high_energy | low_energy_ok"
+    )
 
 
 class MissionCreateRequest(BaseModel):
@@ -200,8 +220,14 @@ class MissionCreateRequest(BaseModel):
     parent_id: Optional[int] = Field(default=None, description="父任务ID")
     project_id: Optional[int] = Field(default=None, description="所属项目ID")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
+    planned_minutes: Optional[int] = Field(default=None, description="预计耗时(分钟)")
+    actual_minutes: Optional[int] = Field(default=None, description="实际耗时汇总(分钟)")
+    energy_cost: Optional[int] = Field(default=None, description="预计精力消耗")
+    day_id: Optional[int] = Field(default=None, description="计划执行日ID")
+    milestone_id: Optional[int] = Field(default=None, description="归属里程碑ID")
+    health_constraint: Optional[str] = Field(default=None, description="健康约束")
 
-    @field_validator("parent_id", "project_id", mode="before")
+    @field_validator("parent_id", "project_id", "milestone_id", "day_id", mode="before")
     @classmethod
     def convert_zero_to_none(cls, v):
         """Convert 0 to None to avoid foreign key constraint violations"""
@@ -229,6 +255,12 @@ class MissionUpdateRequest(BaseModel):
     description: Optional[str] = Field(default=None, description="任务描述")
     state: Optional[int] = Field(default=None, description="任务状态")
     ddl: Optional[datetime] = Field(default=None, description="截止时间")
+    planned_minutes: Optional[int] = Field(default=None, description="预计耗时(分钟)")
+    actual_minutes: Optional[int] = Field(default=None, description="实际耗时汇总(分钟)")
+    energy_cost: Optional[int] = Field(default=None, description="预计精力消耗")
+    day_id: Optional[int] = Field(default=None, description="计划执行日ID")
+    milestone_id: Optional[int] = Field(default=None, description="归属里程碑ID")
+    health_constraint: Optional[str] = Field(default=None, description="健康约束")
 
     @field_validator("ddl", mode="before")
     @classmethod

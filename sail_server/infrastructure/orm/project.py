@@ -16,6 +16,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func
 from sqlalchemy.orm import relationship
 
 from sail_server.infrastructure.orm.orm_base import ORMBase
+from sail_server.data.types import ARRAY
 
 
 class Project(ORMBase):
@@ -26,8 +27,33 @@ class Project(ORMBase):
     state = Column(Integer)  # Project State
     start_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
     end_time_qbw = Column(Integer)  # QBWTime (YYYYQQWW format)
+    timespan_id = Column(
+        Integer, ForeignKey("timespans.id"), nullable=True, default=None, index=True
+    )
+    energy_budget = Column(Integer, default=0)
+    priority = Column(Integer, default=0)
+    tags = Column(ARRAY(String), default=list)
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+    timespan = relationship("TimeSpan", foreign_keys=[timespan_id])
+
+
+class Milestone(ORMBase):
+    """项目里程碑"""
+
+    __tablename__ = "milestones"
+    id = Column(Integer, primary_key=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id"), nullable=False, index=True
+    )
+    name = Column(String)
+    description = Column(String)
+    day_id = Column(
+        Integer, ForeignKey("days.id"), nullable=False, index=True
+    )
+    state = Column(Integer, default=0)  # 0 pending, 1 done, 2 skipped
+    energy_weight = Column(Integer, default=0)
 
 
 class Mission(ORMBase):
@@ -44,6 +70,22 @@ class Mission(ORMBase):
     project_id = Column(
         Integer, ForeignKey("projects.id"), nullable=True, default=None
     )  # project id, null means no project
+
+    # PEMS fields
+    planned_minutes = Column(Integer, default=0)
+    actual_minutes = Column(Integer, default=0)
+    energy_cost = Column(Integer, default=0)
+    day_id = Column(
+        Integer, ForeignKey("days.id"), nullable=True, default=None, index=True
+    )
+    milestone_id = Column(
+        Integer, ForeignKey("milestones.id"), nullable=True, default=None, index=True
+    )
+    health_constraint = Column(
+        String, default="normal"
+    )  # normal | high_energy | low_energy_ok
+
+    day = relationship("Day", foreign_keys=[day_id])
 
     # end basic Mission info
 

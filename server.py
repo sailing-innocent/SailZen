@@ -37,6 +37,7 @@ class SailServer:
         self.site_dist = os.environ.get("SITE_DIST", "site_dist")
         self.page_alias = [
             "/agent",
+            "/energy",
             "/health",
             "/money",
             "/project",
@@ -111,6 +112,7 @@ class SailServer:
         from sail_server.router.life import router as life_router
         from sail_server.router.reminder import router as reminder_router
         from sail_server.router.rhythm import router as rhythm_router
+        from sail_server.router.pems import router as pems_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -126,6 +128,7 @@ class SailServer:
                 life_router,
                 reminder_router,
                 rhythm_router,
+                pems_router,
             ],
         )
 

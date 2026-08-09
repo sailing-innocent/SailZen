@@ -10,6 +10,10 @@ from sail_server.infrastructure.orm.health import (
     Weight,
     Exercise,
     WeightPlan,
+    Sleep,
+    EnergyLevel,
+    Mood,
+    HealthSignal,
 )
 from sail_server.application.dto.health import (
     WeightBase,
@@ -21,6 +25,14 @@ from sail_server.application.dto.health import (
     WeightPlanBase,
     WeightPlanCreateRequest,
     WeightPlanResponse,
+    SleepCreateRequest,
+    SleepResponse,
+    EnergyLevelCreateRequest,
+    EnergyLevelResponse,
+    MoodCreateRequest,
+    MoodResponse,
+    HealthSignalCreateRequest,
+    HealthSignalResponse,
 )
 import numpy as np
 from datetime import datetime
@@ -643,3 +655,275 @@ def delete_exercise_impl(db, id=None):
     else:
         db.query(Exercise).delete()
     db.commit()
+
+# ===================================================
+# Sleep implementations
+# ===================================================
+
+
+def _sleep_hours_to_minutes(hours: float) -> int:
+    return int(round(hours * 60))
+
+
+def _sleep_minutes_to_hours(minutes: int) -> float:
+    return round(minutes / 60.0, 2)
+
+
+def read_from_sleep(sleep: Sleep) -> SleepResponse:
+    """Convert Sleep ORM to SleepResponse"""
+    return SleepResponse(
+        id=sleep.id,
+        day_id=sleep.day_id,
+        hours=_sleep_minutes_to_hours(sleep.hours),
+        quality=sleep.quality,
+        description=sleep.description,
+        htime=sleep.htime.timestamp() if sleep.htime else None,
+    )
+
+
+def create_sleep_impl(db, sleep_create: SleepCreateRequest) -> SleepResponse:
+    """Create a new sleep record"""
+    htime = datetime.now()
+    if sleep_create.htime:
+        htime = datetime.fromtimestamp(sleep_create.htime)
+    sleep = Sleep(
+        day_id=sleep_create.day_id,
+        htime=htime,
+        hours=_sleep_hours_to_minutes(sleep_create.hours),
+        quality=sleep_create.quality,
+        description=sleep_create.description,
+    )
+    db.add(sleep)
+    db.commit()
+    db.refresh(sleep)
+    return read_from_sleep(sleep)
+
+
+def read_sleep_impl(db, sleep_id: int) -> SleepResponse | None:
+    """Read a single sleep record by ID"""
+    sleep = db.query(Sleep).filter(Sleep.id == sleep_id).first()
+    return read_from_sleep(sleep) if sleep else None
+
+
+def read_sleeps_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    day_id: int = None,
+    start_time: float = None,
+    end_time: float = None,
+) -> list[SleepResponse]:
+    """Read multiple sleep records with filtering"""
+    query = db.query(Sleep)
+    if day_id is not None:
+        query = query.filter(Sleep.day_id == day_id)
+    if start_time is not None:
+        query = query.filter(Sleep.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(Sleep.htime <= datetime.fromtimestamp(end_time))
+    query = query.order_by(Sleep.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    sleeps = query.all()
+    return [read_from_sleep(s) for s in sleeps]
+
+
+# ===================================================
+# Energy Level implementations
+# ===================================================
+
+
+def read_from_energy_level(energy: EnergyLevel) -> EnergyLevelResponse:
+    """Convert EnergyLevel ORM to EnergyLevelResponse"""
+    return EnergyLevelResponse(
+        id=energy.id,
+        day_id=energy.day_id,
+        score=energy.score,
+        description=energy.description,
+        htime=energy.htime.timestamp() if energy.htime else None,
+    )
+
+
+def create_energy_level_impl(
+    db, energy_create: EnergyLevelCreateRequest
+) -> EnergyLevelResponse:
+    """Create a new energy level record"""
+    htime = datetime.now()
+    if energy_create.htime:
+        htime = datetime.fromtimestamp(energy_create.htime)
+    energy = EnergyLevel(
+        day_id=energy_create.day_id,
+        htime=htime,
+        score=energy_create.score,
+        description=energy_create.description,
+    )
+    db.add(energy)
+    db.commit()
+    db.refresh(energy)
+    return read_from_energy_level(energy)
+
+
+def read_energy_level_impl(db, energy_id: int) -> EnergyLevelResponse | None:
+    """Read a single energy level record by ID"""
+    energy = db.query(EnergyLevel).filter(EnergyLevel.id == energy_id).first()
+    return read_from_energy_level(energy) if energy else None
+
+
+def read_energy_levels_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    day_id: int = None,
+    start_time: float = None,
+    end_time: float = None,
+) -> list[EnergyLevelResponse]:
+    """Read multiple energy level records with filtering"""
+    query = db.query(EnergyLevel)
+    if day_id is not None:
+        query = query.filter(EnergyLevel.day_id == day_id)
+    if start_time is not None:
+        query = query.filter(EnergyLevel.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(EnergyLevel.htime <= datetime.fromtimestamp(end_time))
+    query = query.order_by(EnergyLevel.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    energies = query.all()
+    return [read_from_energy_level(e) for e in energies]
+
+
+# ===================================================
+# Mood implementations
+# ===================================================
+
+
+def read_from_mood(mood: Mood) -> MoodResponse:
+    """Convert Mood ORM to MoodResponse"""
+    return MoodResponse(
+        id=mood.id,
+        day_id=mood.day_id,
+        score=mood.score,
+        description=mood.description,
+        htime=mood.htime.timestamp() if mood.htime else None,
+    )
+
+
+def create_mood_impl(db, mood_create: MoodCreateRequest) -> MoodResponse:
+    """Create a new mood record"""
+    htime = datetime.now()
+    if mood_create.htime:
+        htime = datetime.fromtimestamp(mood_create.htime)
+    mood = Mood(
+        day_id=mood_create.day_id,
+        htime=htime,
+        score=mood_create.score,
+        description=mood_create.description,
+    )
+    db.add(mood)
+    db.commit()
+    db.refresh(mood)
+    return read_from_mood(mood)
+
+
+def read_mood_impl(db, mood_id: int) -> MoodResponse | None:
+    """Read a single mood record by ID"""
+    mood = db.query(Mood).filter(Mood.id == mood_id).first()
+    return read_from_mood(mood) if mood else None
+
+
+def read_moods_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    day_id: int = None,
+    start_time: float = None,
+    end_time: float = None,
+) -> list[MoodResponse]:
+    """Read multiple mood records with filtering"""
+    query = db.query(Mood)
+    if day_id is not None:
+        query = query.filter(Mood.day_id == day_id)
+    if start_time is not None:
+        query = query.filter(Mood.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(Mood.htime <= datetime.fromtimestamp(end_time))
+    query = query.order_by(Mood.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    moods = query.all()
+    return [read_from_mood(m) for m in moods]
+
+
+# ===================================================
+# HealthSignal implementations
+# ===================================================
+
+
+def read_from_health_signal(signal: HealthSignal) -> HealthSignalResponse:
+    """Convert HealthSignal ORM to HealthSignalResponse"""
+    return HealthSignalResponse(
+        id=signal.id,
+        signal_type=signal.signal_type,
+        ref_id=signal.ref_id,
+        day_id=signal.day_id,
+        htime=signal.htime.timestamp() if signal.htime else None,
+        value_json=signal.value_json or {},
+        score=signal.score,
+    )
+
+
+def create_health_signal_impl(
+    db, signal_create: HealthSignalCreateRequest
+) -> HealthSignalResponse:
+    """Create a new health signal index"""
+    htime = datetime.now()
+    if signal_create.htime:
+        htime = datetime.fromtimestamp(signal_create.htime)
+    signal = HealthSignal(
+        signal_type=signal_create.signal_type,
+        ref_id=signal_create.ref_id,
+        day_id=signal_create.day_id,
+        htime=htime,
+        value_json=signal_create.value_json or {},
+        score=signal_create.score,
+    )
+    db.add(signal)
+    db.commit()
+    db.refresh(signal)
+    return read_from_health_signal(signal)
+
+
+def read_health_signals_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    day_id: int = None,
+    signal_type: str = None,
+    start_time: float = None,
+    end_time: float = None,
+) -> list[HealthSignalResponse]:
+    """Read multiple health signals with filtering"""
+    query = db.query(HealthSignal)
+    if day_id is not None:
+        query = query.filter(HealthSignal.day_id == day_id)
+    if signal_type is not None:
+        query = query.filter(HealthSignal.signal_type == signal_type)
+    if start_time is not None:
+        query = query.filter(HealthSignal.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(HealthSignal.htime <= datetime.fromtimestamp(end_time))
+    query = query.order_by(HealthSignal.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    signals = query.all()
+    return [read_from_health_signal(s) for s in signals]
+
+
+def delete_health_signal_impl(db, signal_id: int) -> bool:
+    """Delete a health signal index by ID"""
+    signal = db.query(HealthSignal).filter(HealthSignal.id == signal_id).first()
+    if signal is None:
+        return False
+    db.delete(signal)
+    db.commit()
+    return True
