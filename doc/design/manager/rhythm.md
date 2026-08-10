@@ -11,7 +11,7 @@
 
 ---
 
-## 1. 事务分类学（AffairKind，9 类）
+## 1. 事务分类学（AffairKind，10 类）
 
 两个正交维度：
 
@@ -28,6 +28,7 @@
 | `task_oneoff` | 一次性工作任务 | work | 一次性 | 按 ddl 紧迫度竞争弹性工作区（工作窗内优先，超窗标记 overtime） | 写季度总结；修复线上 bug |
 | `task_maintenance` | 长期维护任务 | work | 长期 | SLA 周期制：interval_days + last_done_at，越接近/超期紧迫度越高 | 每周代码巡检；服务器月度维护 |
 | `venture` | 长期事业 | career | 长期，可毕业 | 目标日倒排：target_date + 每周业余小时预算 + 里程碑链；仅排业余时间区 | 2027-04 独立游戏上线：每周 8h |
+| `async_callback` | 异步回调 | work/career | 长期，多阶段 | 阶段化排程：KICKOFF/REVIEWING 排实时窗（work_hours_only 限工作窗）；DELEGATED 画 informational 提醒块；round+1 返工，max_rounds 上限 | 让 AI 起草方案→24h 后审阅→不满意返工 |
 | `buffer` | 系统缓冲 | — | 系统生成 | 强制留白(min_buffer_ratio)，分散插入，只读禁编辑 | — |
 | `generic` | 未分类 | 待定 | 一次性 | 捕获默认值；停留 INBOX 等待 AI 分拣 + 人确认改判 | "给车做保养"（一句话捕获） |
 
@@ -38,6 +39,7 @@
 - 固定起止不可移动（旅行/车票）→ `fixed_plan`
 - 业余长期推进且有目标日 → `venture`(career)
 - 工作一次性交付 → `task_oneoff`(work)；周期性维护 → `task_maintenance`(work)
+- 多阶段 + 含等待期 + 可返工（构思→委托→审阅→返工） → `async_callback`(work，对外业务回调置 work_hours_only=true)
 
 `python -m sailzen rhythm kinds` 输出即为本表的权威机器可读版本（文档/CLI/prompt 三处同源）。
 
@@ -51,6 +53,7 @@
 | task_maintenance | `{"interval_days": int, "last_done_at": datetime?, "session_minutes": int}` |
 | venture | `{"target_date": date, "weekly_budget_hours": float, "spare_time_only": bool, "total_est_hours": float}` |
 | fixed_plan | `{"immovable": bool, "fixed_start": datetime, "fixed_end": datetime, "legs": [int]}` |
+| async_callback | `{"phases": [{"name","est_minutes","energy_cost"}×3], "current_phase": str, "round": int, "max_rounds": int, "work_hours_only": bool, "delegate_to": str, "est_wait_hours": float, "last_handoff_at": dt?, "last_return_at": dt?, "next_review_at": dt?, "revision_history": [...]}` |
 | task_oneoff / generic / buffer | `{}`（无额外约束） |
 
 校验策略：M1 宽松（缺字段补默认值；类型错误 400），M2 起 CLI `hint`/`capture`/`split`
@@ -85,6 +88,22 @@ INBOX ──confirm──► ACTIVE ⇄ PAUSED ──► ARCHIVED(终)
 - PAUSED 暂停实例化（如旅行期间暂停运动 habit）；合规统计对 PAUSED 周期记 exempt。
 - `buffer` 由系统生成，禁止人工创建/编辑/删除（400）。
 
+**async_callback 阶段机**（长期流子集，独立状态机；CONFIRM→ACTIVE 即 KICKOFF 起步）:
+
+```
+INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED ──return_review──► REVIEWING
+                                  │                                              │
+                                  │                                              ├─approve──► COMPLETED(终)
+                                  │                                              └─request_revision──► DELEGATED（round+1，≤max_rounds）
+                                  └─pause──► PAUSED ──resume──► ACTIVE
+```
+
+- KICKOFF/REVIEWING 阶段排实时窗（work_hours_only=true 时仅进 work_window）。
+- DELEGATED 阶段不占实时窗，由 plan_day 在 next_review_at 落点画 informational
+  `async_wait` 提醒块（0 精力，允许 focus 跨越）。
+- `REQUEST_REVISION` 触发 round+1 并回 DELEGATED；超过 max_rounds → 400 拒绝（建议 APPROVE 接受或 CANCEL）。
+- work_hours_only 事务的 next_review_at 自动顺延到下个工作窗（09-12/14-18 工作日）。
+
 ## 3. 数据模型（7 张表，前缀 rhythm_）
 
 | 表 | 说明 |
@@ -97,7 +116,7 @@ INBOX ──confirm──► ACTIVE ⇄ PAUSED ──► ARCHIVED(终)
 | `rhythm_policies` | 守护策略（rule_type×5/params/scope/enabled） |
 | `rhythm_reviews` | 节奏复盘快照（scope/period_key/rhythm_score/domain_minutes/四项明细/encroachments/ai_summary） |
 
-- block_type: `sleep/commute/work_window/micro_rest/meal/precept/habit/fixed/focus/light/career/rest/buffer`
+- block_type: `sleep/commute/work_window/micro_rest/meal/precept/habit/fixed/focus/light/career/rest/buffer/async_kickoff/async_review/async_wait`
 - 打卡 result: precept → `kept/violated/exempt`；habit → `done/missed/exempt`
 - cycle_key: daily → `2026-10-26`；weekly → `W2026-44`（ISO 周）
 - 迁移 SQL: `sail_server/migration/20261026_add_rhythm.sql`（PG）；SQLite 由 create_all 自动建表
@@ -114,6 +133,7 @@ INBOX ──confirm──► ACTIVE ⇄ PAUSED ──► ARCHIVED(终)
 | task_maintenance | clamp((now-last_done_at)/interval_days, 0, 1.2)；从未完成→1.0 |
 | habit | 本周剩余目标次数 / 本周剩余可排日数（封顶 1.2） |
 | venture | 剩余估算工时 / (剩余周数 × weekly_budget_hours)（封顶 1.2） |
+| async_callback | DELEGATED→0；kickoff/review 按 ddl≤1d→1.0/≤3d→0.8/≤7d→0.5，无 ddl 用 next_review_at 反推（≤6h→1.0/≤24h→0.8/≤72h→0.5），否则 0.3 |
 | fixed/precept/base_rhythm/buffer | 不参与评分（刚性/规则铺底） |
 
 ```

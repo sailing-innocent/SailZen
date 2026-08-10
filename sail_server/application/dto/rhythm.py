@@ -41,7 +41,7 @@ class AffairDomain(str, Enum):
 
 
 class AffairKind(str, Enum):
-    """事务种类（9 类，决定生命周期形态/排程行为/元数据 schema/复盘指标）"""
+    """事务种类（10 类，决定生命周期形态/排程行为/元数据 schema/复盘指标）"""
 
     BASE_RHYTHM = "base_rhythm"  # 基础节奏（每日骨架，由模板实例化）
     PRECEPT = "precept"  # 戒律（按日/按周规则，打卡核销）
@@ -50,24 +50,26 @@ class AffairKind(str, Enum):
     TASK_ONEOFF = "task_oneoff"  # 一次性工作任务
     TASK_MAINTENANCE = "task_maintenance"  # 长期维护任务（SLA 周期制）
     VENTURE = "venture"  # 长期事业（目标日倒排，仅业余时间区）
+    ASYNC_CALLBACK = "async_callback"  # 异步回调（多阶段：构思→委托→审阅→返工）
     BUFFER = "buffer"  # 系统缓冲（只读）
     GENERIC = "generic"  # 未分类（捕获默认，待 AI 分拣 + 人确认）
 
 
 #: 一次性流 kind（fixed_plan / task_oneoff / generic / venture 里程碑子项）
 ONEOFF_KINDS = {AffairKind.FIXED_PLAN, AffairKind.TASK_ONEOFF, AffairKind.GENERIC}
-#: 长期流 kind（持续生成 occurrence，不产生 DONE；venture 可毕业）
+#: 长期流 kind（持续生成 occurrence，不产生 DONE；venture 可毕业，async_callback 走独立阶段机）
 LONGTERM_KINDS = {
     AffairKind.BASE_RHYTHM,
     AffairKind.PRECEPT,
     AffairKind.HABIT,
     AffairKind.TASK_MAINTENANCE,
     AffairKind.VENTURE,
+    AffairKind.ASYNC_CALLBACK,
 }
 
 
 class AffairState(str, Enum):
-    """事务状态（双生命周期）"""
+    """事务状态（双生命周期 + async_callback 阶段机）"""
 
     INBOX = "INBOX"
     PLANNED = "PLANNED"
@@ -79,10 +81,20 @@ class AffairState(str, Enum):
     ACTIVE = "ACTIVE"
     PAUSED = "PAUSED"
     ARCHIVED = "ARCHIVED"  # 终态
+    # async_callback 专属阶段状态（长期流子集，ACTIVE 时进入 KICKOFF）
+    KICKOFF = "KICKOFF"
+    DELEGATED = "DELEGATED"
+    REVIEWING = "REVIEWING"
+    COMPLETED = "COMPLETED"  # async_callback 终态
 
 
 #: 终态集合
-TERMINAL_STATES = {AffairState.DONE, AffairState.CANCELED, AffairState.ARCHIVED}
+TERMINAL_STATES = {
+    AffairState.DONE,
+    AffairState.CANCELED,
+    AffairState.ARCHIVED,
+    AffairState.COMPLETED,
+}
 
 
 class AffairAction(str, Enum):
@@ -99,10 +111,15 @@ class AffairAction(str, Enum):
     RESUME = "resume"
     ARCHIVE = "archive"
     GRADUATE = "graduate"
+    # async_callback 阶段推进动作
+    HANDOFF = "handoff"  # KICKOFF → DELEGATED（委托交付）
+    RETURN_REVIEW = "return_review"  # DELEGATED → REVIEWING（结果返回待审）
+    APPROVE = "approve"  # REVIEWING → COMPLETED（采纳结果）
+    REQUEST_REVISION = "request_revision"  # REVIEWING → DELEGATED（不满意，启下一轮）
 
 
 class BlockType(str, Enum):
-    """时间线块类型（12 类）"""
+    """时间线块类型（13 类）"""
 
     SLEEP = "sleep"
     COMMUTE = "commute"
@@ -117,6 +134,10 @@ class BlockType(str, Enum):
     CAREER = "career"
     REST = "rest"
     BUFFER = "buffer"
+    # async_callback 专用块
+    ASYNC_KICKOFF = "async_kickoff"  # 构思/沟通阶段块（占实时窗，进 work_window 或业余区）
+    ASYNC_REVIEW = "async_review"  # 审阅阶段块（占实时窗）
+    ASYNC_WAIT = "async_wait"  # DELEGATED 等待期提示块（informational，0 精力，不占实时窗）
 
 
 class BlockStatus(str, Enum):
@@ -219,6 +240,48 @@ class FixedPlanMeta(BaseModel):
     legs: List[int] = Field(default_factory=list, description="子事务（行程段）ID 列表")
 
 
+class AsyncCallbackPhase(BaseModel):
+    """async_callback 单阶段预算（精力点数粗刻度见 §4.2）"""
+
+    name: str = Field(description="阶段名 kickoff/delegated/review")
+    est_minutes: int = Field(default=30, ge=0, description="单次实时窗时长")
+    energy_cost: int = Field(default=10, ge=0, description="单次精力点数")
+
+
+class AsyncCallbackMeta(BaseModel):
+    """async_callback 异步回调元数据
+
+    生命周期: INBOX→ACTIVE(=KICKOFF)→DELEGATED→REVIEWING→COMPLETED，
+    REVIEWING 可 REQUEST_REVISION 回 DELEGATED（round+1），最多 max_rounds 轮。
+    work_hours_only=true 时 kickoff/review 块只进 work_window（如需对接他人/外部系统）。
+    """
+
+    phases: List[AsyncCallbackPhase] = Field(
+        default_factory=lambda: [
+            AsyncCallbackPhase(name="kickoff", est_minutes=30, energy_cost=25),
+            AsyncCallbackPhase(name="delegated", est_minutes=0, energy_cost=0),
+            AsyncCallbackPhase(name="review", est_minutes=20, energy_cost=15),
+        ],
+        description="阶段定义（kickoff/delegated/review 三段）",
+    )
+    current_phase: str = Field(default="kickoff", description="当前阶段名")
+    round: int = Field(default=1, ge=1, description="当前轮次（1 起，不满意 +1）")
+    max_rounds: int = Field(default=3, ge=1, description="最大轮次上限")
+    work_hours_only: bool = Field(
+        default=False,
+        description="true 时 kickoff/review 仅排 work_window（如对外业务回调，需上班时间进行）",
+    )
+    delegate_to: str = Field(default="ai", description="委托对象 ai|human:xxx|system:yyy")
+    est_wait_hours: float = Field(
+        default=24.0, ge=0, description="DELEGATED 阶段预期等待时长（小时，到点提醒去 review）"
+    )
+    last_handoff_at: Optional[datetime] = Field(default=None, description="最近一次 HANDOFF 时间")
+    last_return_at: Optional[datetime] = Field(default=None, description="最近一次 RETURN_REVIEW 时间")
+    next_review_at: Optional[datetime] = Field(
+        default=None, description="下次 review 提醒时间（HANDOFF 时计算：now+est_wait_hours，work_hours_only 推到下个工作窗）"
+    )
+
+
 #: kind → kind_meta 校验模型 分发表
 KIND_META_MODELS: Dict[AffairKind, type[BaseModel]] = {
     AffairKind.BASE_RHYTHM: BaseRhythmMeta,
@@ -227,6 +290,7 @@ KIND_META_MODELS: Dict[AffairKind, type[BaseModel]] = {
     AffairKind.TASK_MAINTENANCE: MaintenanceMeta,
     AffairKind.VENTURE: VentureMeta,
     AffairKind.FIXED_PLAN: FixedPlanMeta,
+    AffairKind.ASYNC_CALLBACK: AsyncCallbackMeta,
 }
 
 
@@ -283,6 +347,32 @@ LONGTERM_TRANSITIONS: Dict[AffairAction, tuple[set[AffairState], AffairState]] =
     AffairAction.GRADUATE: ({AffairState.ACTIVE}, AffairState.DONE),
 }
 
+#: async_callback 阶段状态机（长期流子集，CONFIRM→ACTIVE=KICKOFF 起步）。
+#: REVIEWING → REQUEST_REVISION → DELEGATED 时 round+1，max_rounds 上限由 model 层校验。
+ASYNC_CALLBACK_TRANSITIONS: Dict[AffairAction, tuple[set[AffairState], AffairState]] = {
+    AffairAction.CONFIRM: ({AffairState.INBOX}, AffairState.ACTIVE),
+    # ACTIVE 即 KICKOFF 阶段：HANDOFF 进入委托等待
+    AffairAction.HANDOFF: ({AffairState.ACTIVE, AffairState.KICKOFF}, AffairState.DELEGATED),
+    # DELEGATED 等待期结束、结果返回 → 进入审阅
+    AffairAction.RETURN_REVIEW: ({AffairState.DELEGATED}, AffairState.REVIEWING),
+    # REVIEWING 满意 → 完成
+    AffairAction.APPROVE: ({AffairState.REVIEWING}, AffairState.COMPLETED),
+    # REVIEWING 不满意 → 返工回 DELEGATED（round+1，model 层校验不超 max_rounds）
+    AffairAction.REQUEST_REVISION: ({AffairState.REVIEWING}, AffairState.DELEGATED),
+    # 通用长期流动作（兼容）
+    AffairAction.PAUSE: (
+        {AffairState.ACTIVE, AffairState.DELEGATED, AffairState.REVIEWING},
+        AffairState.PAUSED,
+    ),
+    AffairAction.RESUME: ({AffairState.PAUSED}, AffairState.ACTIVE),
+    AffairAction.ARCHIVE: (
+        {AffairState.ACTIVE, AffairState.PAUSED, AffairState.DELEGATED, AffairState.REVIEWING},
+        AffairState.ARCHIVED,
+    ),
+    AffairAction.CANCEL: ({AffairState.INBOX}, AffairState.CANCELED),
+    AffairAction.DISMISS: ({AffairState.INBOX}, AffairState.CANCELED),
+}
+
 
 def is_longterm_kind(kind: AffairKind) -> bool:
     return kind in LONGTERM_KINDS
@@ -291,7 +381,13 @@ def is_longterm_kind(kind: AffairKind) -> bool:
 def resolve_transition(
     kind: AffairKind, action: AffairAction
 ) -> Optional[tuple[set[AffairState], AffairState]]:
-    """按 kind 生命周期形态解析 action 对应的 (前置状态集, 目标状态)。"""
+    """按 kind 生命周期形态解析 action 对应的 (前置状态集, 目标状态)。
+
+    async_callback 走独立阶段机（KICKOFF/DELEGATED/REVIEWING/COMPLETED）；
+    其余长期流走通用 LONGTERM_TRANSITIONS。
+    """
+    if kind == AffairKind.ASYNC_CALLBACK:
+        return ASYNC_CALLBACK_TRANSITIONS.get(action)
     if is_longterm_kind(kind):
         return LONGTERM_TRANSITIONS.get(action)
     return ONEOFF_TRANSITIONS.get(action)
@@ -406,6 +502,19 @@ class AffairStateRequest(BaseModel):
     )
     defer_end: Optional[datetime] = Field(default=None, description="defer 的新窗口终点")
     force: bool = Field(default=False, description="人工强制（如预算不足仍钉入）")
+    # async_callback 阶段参数
+    handoff_now: bool = Field(
+        default=True,
+        description="HANDOFF 时是否立即推进 DELEGATED（false 仅写元数据，等排程触发）",
+    )
+    revision_note: str = Field(
+        default="", description="REQUEST_REVISION 时的不满意说明（写入 kind_meta.ref）"
+    )
+    est_wait_hours: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description="HANDOFF 时覆盖 kind_meta.est_wait_hours（本次预期等待时长）",
+    )
 
 
 class ConfirmHintRequest(BaseModel):

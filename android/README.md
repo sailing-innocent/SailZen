@@ -7,7 +7,7 @@ SailZen 随身哨兵 —— 提醒触达与反馈终端（M1：提醒闭环最�
 ## 快速开始
 
 1. 用 Android Studio（Koala/Ladybug+，JDK 17）**Open** 本目录（`android/`）。
-2. 首次 sync 若无 wrapper，执行一次 `gradle wrapper --gradle-version 8.9`（或让 IDE 自动生成）。
+2. 首次 sync 若无 wrapper，执行一次 `gradle wrapper --gradle-version 9.2`（或让 IDE 自动生成）。
 3. Run `app` 到真机/模拟器（API ≥ 26，与服务器同局域网）。
 4. 首次打开进入「设置」页填写服务器地址（如 `http://192.168.x.x:1974`）与 Token（服务端未配置 `SAILZEN_API_TOKEN` 可留空），保存后自动连接。
 

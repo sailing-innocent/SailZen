@@ -568,3 +568,114 @@ class TestPlanVersion:
             .all()
         )
         assert moved_done == []
+
+
+# ============================================================================
+# async_callback 排程（KICKOFF/REVIEWING 排实时窗 / DELEGATED informational 提醒块）
+# ============================================================================
+
+
+class TestAsyncCallbackPlan:
+    def _create_async(self, db: Session, work_hours_only=False, est_wait_hours=2.0) -> int:
+        from sail_server.application.dto.rhythm import AffairDomain
+
+        affair = create_affair_impl(
+            db,
+            AffairCreateRequest(
+                title="AI 文案",
+                kind=AffairKind.ASYNC_CALLBACK,
+                domain=AffairDomain.WORK,
+                kind_meta={
+                    "work_hours_only": work_hours_only,
+                    "est_wait_hours": est_wait_hours,
+                    "max_rounds": 3,
+                },
+            ),
+        )
+        return affair.id
+
+    def test_kickoff_plans_async_kickoff_block_in_work_window(self, db: Session):
+        """KICKOFF(ACTIVE) 阶段排 async_kickoff 块，落在 work_window 内"""
+        _setup_template(db)
+        aid = self._create_async(db)
+        _confirm(db, aid)  # → ACTIVE(=KICKOFF)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        kickoff = [b for b in plan.blocks if b.block_type == "async_kickoff"]
+        assert len(kickoff) == 1
+        # work_hours_only=False 时仍优先排工作窗（09-12/13-18）
+        s, e = kickoff[0].start_time, kickoff[0].end_time
+        assert s.hour >= 9 and (s.hour < 12 or 13 <= s.hour < 18)
+        assert kickoff[0].ref.get("phase") == "kickoff"
+        assert kickoff[0].ref.get("round") == 1
+
+    def test_delegated_plans_informational_async_wait_block(self, db: Session):
+        """DELEGATED 阶段画 informational async_wait 提醒块，0 精力，不占排程空间"""
+        _setup_template(db)
+        aid = self._create_async(db, est_wait_hours=4.0)
+        _confirm(db, aid)
+        transit_affair_state_impl(
+            db, aid, AffairStateRequest(action=AffairAction.HANDOFF, est_wait_hours=4.0)
+        )
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        wait = [b for b in plan.blocks if b.block_type == "async_wait"]
+        # next_review_at 在 +4h，落在当日 TEST_DATE 内
+        from datetime import datetime
+        from sail_server.model.rhythm import get_affair_impl
+
+        nxt_str = get_affair_impl(db, aid).kind_meta["next_review_at"]
+        nxt = datetime.fromisoformat(nxt_str)
+        if nxt.date() == TEST_DATE:
+            assert len(wait) == 1
+            assert wait[0].ref.get("informational") is True
+            assert wait[0].ref.get("phase") == "delegated"
+            # informational 块不进 _occupied_intervals，不被后续 focus 重复占用
+            from sail_server.model.rhythm_planner import _occupied_intervals, _existing_blocks
+            day_id = wait[0].day_id
+            occupied = _occupied_intervals(_existing_blocks(db, day_id))
+            assert not any(o[0] == wait[0].start_time and o[1] == wait[0].end_time for o in occupied)
+        else:
+            # 跨日时不画当日块
+            assert len(wait) == 0
+
+    def test_reviewing_plans_async_review_block(self, db: Session):
+        """REVIEWING 阶段排 async_review 块"""
+        _setup_template(db)
+        aid = self._create_async(db)
+        _confirm(db, aid)
+        transit_affair_state_impl(
+            db, aid, AffairStateRequest(action=AffairAction.HANDOFF, est_wait_hours=2.0)
+        )
+        transit_affair_state_impl(
+            db, aid, AffairStateRequest(action=AffairAction.RETURN_REVIEW)
+        )
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        review = [b for b in plan.blocks if b.block_type == "async_review"]
+        assert len(review) == 1
+        assert review[0].ref.get("phase") == "review"
+
+    def test_work_hours_only_blocks_outside_work_window_unplaced(self, db: Session):
+        """work_hours_only=true 且无工作窗模板 → async_kickoff 排不下（unplaced）"""
+        # 不建模板 → 无 work_window
+        aid = self._create_async(db, work_hours_only=True)
+        _confirm(db, aid)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        kickoff = [b for b in plan.blocks if b.block_type == "async_kickoff"]
+        assert len(kickoff) == 0
+        unplaced_async = [u for u in plan.unplaced if u.affair_id == aid]
+        assert len(unplaced_async) == 1
+
+    def test_paused_async_no_blocks(self, db: Session):
+        """PAUSED 的 async_callback 不生成块"""
+        _setup_template(db)
+        aid = self._create_async(db)
+        _confirm(db, aid)
+        transit_affair_state_impl(
+            db, aid, AffairStateRequest(action=AffairAction.PAUSE)
+        )
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        async_blocks = [
+            b for b in plan.blocks
+            if b.affair_id == aid
+            and b.block_type in ("async_kickoff", "async_review", "async_wait")
+        ]
+        assert async_blocks == []

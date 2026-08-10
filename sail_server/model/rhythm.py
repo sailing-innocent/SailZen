@@ -165,6 +165,7 @@ _DEFAULT_DOMAIN_BY_KIND: Dict[AffairKind, AffairDomain] = {
     AffairKind.TASK_ONEOFF: AffairDomain.WORK,
     AffairKind.TASK_MAINTENANCE: AffairDomain.WORK,
     AffairKind.VENTURE: AffairDomain.CAREER,
+    AffairKind.ASYNC_CALLBACK: AffairDomain.WORK,
     AffairKind.GENERIC: AffairDomain.LIFE,
 }
 
@@ -434,6 +435,110 @@ def delete_affair_impl(db: Session, affair_id: int) -> Optional[AffairResponse]:
 # ============================================================================
 
 
+def _compute_next_review_window(now: datetime, est_wait_hours: float, work_hours_only: bool) -> datetime:
+    """计算下次 review 提醒时间：now + est_wait_hours；work_hours_only 时推到下个工作窗内。
+
+    工作窗口径（与 profile 默认一致，简化版）：工作日 09:00-12:00, 14:00-18:00；
+    非工作窗或周末 → 顺延到下个工作日 09:00。仅作提醒锚点，不与排程器耦合。
+    """
+    from datetime import time as _time
+
+    candidate = now + timedelta(hours=max(est_wait_hours, 0.0))
+    if not work_hours_only:
+        return candidate
+    # work_hours_only：顺延到工作窗
+    for _ in range(14 * 24):  # 最多扫两周
+        wd = candidate.weekday()
+        if wd < 5:  # 周一..周五
+            t = candidate.time()
+            if _time(9, 0) <= t < _time(12, 0) or _time(14, 0) <= t < _time(18, 0):
+                return candidate
+            if t < _time(9, 0):
+                return candidate.replace(hour=9, minute=0, second=0, microsecond=0)
+            if _time(12, 0) <= t < _time(14, 0):
+                return candidate.replace(hour=14, minute=0, second=0, microsecond=0)
+            # 18:00 之后 → 次日 09:00
+            candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+        else:
+            # 周末 → 下周一 09:00
+            days_to_mon = 7 - wd
+            candidate = (candidate + timedelta(days=days_to_mon)).replace(hour=9, minute=0, second=0, microsecond=0)
+    return candidate
+
+
+def _advance_async_callback_phase(
+    db: Session, affair: RhythmAffair, action: AffairAction, request: AffairStateRequest
+) -> None:
+    """async_callback 阶段推进时维护 kind_meta.current_phase/round/last_*/next_review_at。
+
+    - HANDOFF: current_phase=delegated, last_handoff_at=now, next_review_at=计算
+    - RETURN_REVIEW: current_phase=review, last_return_at=now
+    - REQUEST_REVISION: round+1（校验不超 max_rounds）, current_phase=kickoff→delegated 的特殊路径，
+      实际 kind_meta.current_phase 设回 delegated 等待下一轮委托
+    - APPROVE: current_phase=done
+    - CONFIRM: current_phase=kickoff（起步）
+    """
+    meta = dict(affair.kind_meta or {})
+    now = _now()
+
+    if action == AffairAction.CONFIRM:
+        meta["current_phase"] = "kickoff"
+        meta.setdefault("round", 1)
+    elif action == AffairAction.HANDOFF:
+        meta["current_phase"] = "delegated"
+        meta["last_handoff_at"] = now.isoformat()
+        if request.est_wait_hours is not None:
+            meta["est_wait_hours"] = float(request.est_wait_hours)
+        wait = float(meta.get("est_wait_hours") or 24.0)
+        work_only = bool(meta.get("work_hours_only", False))
+        meta["next_review_at"] = _compute_next_review_window(now, wait, work_only).isoformat()
+    elif action == AffairAction.RETURN_REVIEW:
+        meta["current_phase"] = "review"
+        meta["last_return_at"] = now.isoformat()
+        meta["next_review_at"] = None
+    elif action == AffairAction.REQUEST_REVISION:
+        round_n = int(meta.get("round") or 1)
+        max_rounds = int(meta.get("max_rounds") or 3)
+        if round_n >= max_rounds:
+            raise RhythmBadRequestError(
+                f"已达 max_rounds={max_rounds}，不可再 REQUEST_REVISION（建议 APPROVE 接受或 CANCEL）"
+            )
+        meta["round"] = round_n + 1
+        meta["current_phase"] = "delegated"
+        meta["last_handoff_at"] = now.isoformat()
+        # 记录返工原因供 AI 复盘
+        if request.revision_note:
+            meta.setdefault("revision_history", []).append(
+                {"round": round_n, "note": request.revision_note, "at": now.isoformat()}
+            )
+        wait = float(meta.get("est_wait_hours") or 24.0)
+        work_only = bool(meta.get("work_hours_only", False))
+        meta["next_review_at"] = _compute_next_review_window(now, wait, work_only).isoformat()
+    elif action == AffairAction.APPROVE:
+        meta["current_phase"] = "done"
+        meta["next_review_at"] = None
+
+    affair.kind_meta = meta
+    # 写入 energy_cost/est_minutes 为当前阶段值（供排程器与精力预算消费）
+    phases = {p.get("name"): p for p in meta.get("phases") or [] if isinstance(p, dict)}
+    cur = meta.get("current_phase")
+    if cur in phases:
+        cur_phase = phases[cur]
+        if action in (AffairAction.CONFIRM, AffairAction.HANDOFF, AffairAction.REQUEST_REVISION):
+            # 进入 kickoff 或 delegated：affair 状态后续由 transition 设 ACTIVE/DELEGATED
+            # 对 kickoff 阶段排程器需读 energy_cost/est_minutes
+            if cur == "kickoff":
+                affair.energy_cost = int(cur_phase.get("energy_cost") or 25)
+                affair.est_minutes = int(cur_phase.get("est_minutes") or 30)
+            elif cur == "delegated":
+                # delegated 不占实时窗，energy_cost=0
+                affair.energy_cost = 0
+                affair.est_minutes = 0
+        elif action == AffairAction.RETURN_REVIEW and cur == "review":
+            affair.energy_cost = int(cur_phase.get("energy_cost") or 15)
+            affair.est_minutes = int(cur_phase.get("est_minutes") or 20)
+
+
 def _pin_fixed_plan_blocks(db: Session, affair: RhythmAffair) -> None:
     """fixed_plan confirm 后立即钉入刚性块（按日切片，跨天每天一块）。
 
@@ -566,6 +671,10 @@ def transit_affair_state_impl(
     if action == AffairAction.CONFIRM and affair.domain is None:
         affair.domain = _DEFAULT_DOMAIN_BY_KIND[kind].value
 
+    # async_callback 阶段推进：维护 current_phase/round/last_*/next_review_at
+    if kind == AffairKind.ASYNC_CALLBACK:
+        _advance_async_callback_phase(db, affair, action, request)
+
     affair.state = target.value
     db.commit()
     db.refresh(affair)
@@ -612,8 +721,28 @@ def confirm_hint_impl(
         affair.kind_meta = validate_kind_meta(new_kind, merged["kind_meta"])
     else:
         affair.kind_meta = validate_kind_meta(new_kind, affair.kind_meta or {})
-    for field in ("importance", "energy_cost", "money_cost", "est_minutes",
-                  "window_start", "window_end", "urgency_ddl", "fallback_plan"):
+    # 校验 AI hint 覆盖的字段范围（绕过 DTO 的 ge/le 会入库非法值）
+    if merged.get("importance") is not None:
+        v = int(merged["importance"])
+        if not 1 <= v <= 5:
+            raise RhythmBadRequestError(f"importance 越界（1-5）: {v}")
+        affair.importance = v
+    if merged.get("energy_cost") is not None:
+        v = int(merged["energy_cost"])
+        if v < 0:
+            raise RhythmBadRequestError(f"energy_cost 不能为负: {v}")
+        affair.energy_cost = v
+    if merged.get("money_cost") is not None:
+        v = float(merged["money_cost"])
+        if v < 0:
+            raise RhythmBadRequestError(f"money_cost 不能为负: {v}")
+        affair.money_cost = v
+    if merged.get("est_minutes") is not None:
+        v = int(merged["est_minutes"])
+        if v < 0:
+            raise RhythmBadRequestError(f"est_minutes 不能为负: {v}")
+        affair.est_minutes = v
+    for field in ("window_start", "window_end", "urgency_ddl", "fallback_plan"):
         if merged.get(field) is not None:
             setattr(affair, field, merged[field])
 
@@ -1267,6 +1396,13 @@ def set_block_status_impl(
     target = request.status
     if BlockStatus(block.status) == BlockStatus.MOVED:
         raise RhythmStateConflictError("MOVED 块属于旧计划版本，不可反馈")
+    # 幂等：已经是目标状态则不重复触发副作用（避免 habit streak 重复 +1）
+    if BlockStatus(block.status) == target:
+        db.refresh(block)
+        affair = None
+        if block.affair_id:
+            affair = db.query(RhythmAffair).filter(RhythmAffair.id == block.affair_id).first()
+        return block_to_response(block, affair)
 
     block.status = target.value
     db.commit()

@@ -173,6 +173,7 @@ def compute_urgency(affair: RhythmAffair, ctx: ScoreContext) -> float:
         weekly_budget = float(meta.get("weekly_budget_hours") or 0.0)
         total_est = float(meta.get("total_est_hours") or 0.0)
         target = meta.get("target_date")
+        # 配置缺失兜底：无目标日/预算/总估 → 中性紧迫度，进入排程竞争
         if not target or weekly_budget <= 0 or total_est <= 0:
             return 0.5
         if isinstance(target, str):
@@ -181,6 +182,40 @@ def compute_urgency(affair: RhythmAffair, ctx: ScoreContext) -> float:
         if weeks_left <= 0:
             return 1.2
         return min(total_est / (weeks_left * weekly_budget), 1.2)
+
+    if kind == AffairKind.ASYNC_CALLBACK:
+        # DELEGATED 阶段不占实时窗，不参与排程评分
+        if affair.state == AffairState.DELEGATED.value:
+            return 0.0
+        # kickoff/review 阶段：按 ddl 紧迫度（与 task_oneoff 同口径），
+        # 无 ddl 时按 review 提醒锚点 next_review_at 反推紧迫度
+        ddl = affair.urgency_ddl
+        if ddl is not None:
+            days = (ddl - now).total_seconds() / 86400.0
+            if days <= 1:
+                return 1.0
+            if days <= 3:
+                return 0.8
+            if days <= 7:
+                return 0.5
+            return 0.2
+        # 无 ddl：用 next_review_at 作为软 ddl
+        meta = affair.kind_meta or {}
+        nxt = meta.get("next_review_at")
+        if nxt:
+            try:
+                nxt_dt = datetime.fromisoformat(str(nxt))
+                hours = (nxt_dt - now).total_seconds() / 3600.0
+                if hours <= 6:
+                    return 1.0
+                if hours <= 24:
+                    return 0.8
+                if hours <= 72:
+                    return 0.5
+                return 0.2
+            except (ValueError, TypeError):
+                pass
+        return 0.3
 
     # fixed_plan / precept / base_rhythm / buffer 不参与评分（刚性/规则铺底）
     return 0.0
@@ -706,6 +741,61 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                 UnplacedItem(affair_id=v.id, title=v.title, reason="业余时间区窗口冲突")
             )
 
+    # ---- Step 6.5: async_callback DELEGATED 阶段 informational 提醒块 ----
+    # DELEGATED 阶段不占实时窗，仅在 next_review_at 落点画一个 informational 块提醒"去 review"。
+    # work_hours_only 事务的 next_review_at 已被推到工作窗，此处直接用该锚点。
+    delegated_asyncs = (
+        db.query(RhythmAffair)
+        .filter(
+            RhythmAffair.kind == AffairKind.ASYNC_CALLBACK.value,
+            RhythmAffair.state == AffairState.DELEGATED.value,
+        )
+        .all()
+    )
+    for a in delegated_asyncs:
+        meta = a.kind_meta or {}
+        nxt = meta.get("next_review_at")
+        if not nxt:
+            continue
+        try:
+            anchor = datetime.fromisoformat(str(nxt))
+        except (ValueError, TypeError):
+            continue
+        # 仅画在当日范围内的提醒块
+        if not (day_start <= anchor < day_end):
+            continue
+        # 幂等：当日已有该 affair 的 async_wait 块则跳过
+        existing = (
+            db.query(RhythmTimeBlock)
+            .filter(
+                RhythmTimeBlock.day_id == day.id,
+                RhythmTimeBlock.affair_id == a.id,
+                RhythmTimeBlock.block_type == "async_wait",
+                RhythmTimeBlock.status != "MOVED",
+            )
+            .first()
+        )
+        if existing is not None:
+            continue
+        # informational 块：30 分钟窗（不占排程空间，允许 focus 跨越）
+        end_anchor = anchor + timedelta(minutes=30)
+        blk = RhythmTimeBlock(
+            day_id=day.id, affair_id=a.id, block_type="async_wait",
+            start_time=anchor, end_time=end_anchor, status="PLANNED",
+            pinned=False, plan_version=new_version,
+            ref={
+                "label": f"审阅提醒: {a.title}",
+                "informational": True,
+                "phase": "delegated",
+                "round": meta.get("round", 1),
+                "delegate_to": meta.get("delegate_to", "ai"),
+            },
+        )
+        db.add(blk)
+        db.flush()
+        ctx.blocks.append(blk)
+        live_blocks = _existing_blocks(db, day.id)
+
     # ---- Step 7: 习惯与工作任务竞争（生活地板优先于工作）----
     score_ctx = _build_score_context(db, d, profile, week_day_ids)
 
@@ -774,18 +864,48 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                 continue
         duration = int(task.est_minutes or 30)
         occupied = _occupied_intervals(live_blocks)
+        # async_callback: kickoff/review 阶段专用 block_type，work_hours_only 时仅进 work_window
+        task_kind = _kind_of(task)
+        is_async = task_kind == AffairKind.ASYNC_CALLBACK
+        async_meta = task.kind_meta or {} if is_async else {}
+        work_only = bool(async_meta.get("work_hours_only", False)) if is_async else False
+        cur_phase = async_meta.get("current_phase") if is_async else None
+        if is_async:
+            # DELEGATED 阶段不排实时窗（应由 informational 块处理，这里跳过）
+            if cur_phase == "delegated":
+                continue
+            block_type = "async_review" if cur_phase == "review" else "async_kickoff"
+        else:
+            block_type = "focus"
         # 工作窗内部的可排空间（work_window 是容器，focus 排入其中）
         free_in_work = _free_intervals(awake, occupied)
-        placed = _place_in_free(free_in_work, duration, candidates=work_windows or None)
+        # work_hours_only 时禁止超窗（async 对外业务回调必须工作时间内进行）
+        # work_only 且无工作窗 → 直接 unplaced（不进任意自由区、不超窗）
+        if work_only and not work_windows:
+            ctx.unplaced.append(
+                UnplacedItem(
+                    affair_id=task.id, title=task.title,
+                    reason="无工作窗模板（work_hours_only 禁止超窗）",
+                )
+            )
+            continue
+        candidates = work_windows or None
+        placed = _place_in_free(free_in_work, duration, candidates=candidates)
         overtime = False
-        if placed is None and work_windows:
+        if placed is None and work_windows and not work_only:
             # 工作窗放不下 → 超窗排程（侵占可视化）
             free_outside = _free_intervals(awake, occupied, extra_busy=work_windows)
             placed = _place_in_free(free_outside, duration)
             overtime = placed is not None
-        elif placed is None:
+        elif placed is None and not work_only:
             # 无工作窗模板：清醒窗内任意自由区
             placed = _place_in_free(free_in_work, duration)
+        # work_hours_only 且无工作窗/工作窗放不下 → unplaced（不超窗）
+        if placed is None and work_only:
+            ctx.unplaced.append(
+                UnplacedItem(affair_id=task.id, title=task.title, reason="工作窗放不下（work_hours_only 禁止超窗）")
+            )
+            continue
         if placed is not None:
             ref: Dict[str, Any] = {"label": task.title}
             if overtime:
@@ -797,7 +917,10 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                         affair_id=task.id,
                     )
                 )
-            ctx.add_block("focus", placed[0], placed[1], affair=task, ref=ref)
+            if is_async:
+                ref["phase"] = cur_phase
+                ref["round"] = async_meta.get("round", 1)
+            ctx.add_block(block_type, placed[0], placed[1], affair=task, ref=ref)
             live_blocks = _existing_blocks(db, day.id)
             # 连续专注上限：超长 focus 后强制插 rest（max_consecutive_focus policy）
             if max_focus_min is not None and duration >= max_focus_min:
@@ -1022,6 +1145,38 @@ def _collect_competing_tasks(
             continue
         tasks.append(m)
 
+    # async_callback 的 kickoff(ACTIVE) / review(REVIEWING) 阶段需排实时窗
+    asyncs = (
+        db.query(RhythmAffair)
+        .filter(
+            RhythmAffair.kind == AffairKind.ASYNC_CALLBACK.value,
+            RhythmAffair.state.in_([
+                AffairState.ACTIVE.value,
+                AffairState.REVIEWING.value,
+            ]),
+        )
+        .all()
+    )
+    for a in asyncs:
+        # 窗口过滤（与 oneoff 同口径）
+        if a.window_start is not None and a.window_start >= day_end:
+            continue
+        if a.window_end is not None and a.window_end < day_start:
+            continue
+        dup = (
+            db.query(RhythmTimeBlock)
+            .join(Day, Day.id == RhythmTimeBlock.day_id)
+            .filter(
+                Day.date == d,
+                RhythmTimeBlock.affair_id == a.id,
+                RhythmTimeBlock.status != "MOVED",
+            )
+            .first()
+        )
+        if dup is not None:
+            continue
+        tasks.append(a)
+
     scored = [(t, compute_score(t, ctx)) for t in tasks]
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored
@@ -1098,11 +1253,17 @@ def detect_conflicts_impl(db: Session, d: date) -> List[EncroachmentItem]:
                     datetime.combine(d, _parse_hhmm(rng[1], "22:30")),
                 )
             )
-    # spare_time_guard 默认启用（§4.1 policies）
-    if spare_windows:
+    # spare_time_guard 默认启用（§4.1 policies）；显式禁用 policy 才跳过
+    guard_enabled = True
+    for p in policies:
+        if p.rule_type == "spare_time_guard" and not p.enabled:
+            guard_enabled = False
+            break
+    if guard_enabled:
         for b in blocks:
             if b.block_type != "career":
                 continue
+            # 无业余时间区配置时，career 块只要存在即越界
             fully_inside = any(
                 b.start_time >= w[0] and b.end_time <= w[1] for w in spare_windows
             )
@@ -1293,12 +1454,21 @@ def _compute_review_for_range(
             )
             .all()
         )
-        sleep_ids = [
-            a.id
-            for a in sleep_precepts
-            if (a.kind_meta or {}).get("severity") == "hard"
-            and ("睡" in str((a.kind_meta or {}).get("rule_text", "")) or True)
-        ]
+        def _is_sleep_precept(a: RhythmAffair) -> bool:
+            meta = a.kind_meta or {}
+            if meta.get("severity") != "hard":
+                return False
+            rule_text = str(meta.get("rule_text", ""))
+            if "睡" in rule_text or "sleep" in rule_text.lower():
+                return True
+            # check_time 在睡眠窗内（22:00 次日 07:00）也视作睡眠戒律
+            try:
+                h, _ = str(meta.get("check_time", "22:30")).split(":")[:2]
+                return int(h) >= 22 or int(h) < 7
+            except (ValueError, IndexError):
+                return False
+
+        sleep_ids = [a.id for a in sleep_precepts if _is_sleep_precept(a)]
         if sleep_ids:
             sleep_logs = (
                 db.query(RhythmDisciplineLog)
@@ -1331,7 +1501,8 @@ def _compute_review_for_range(
         freq = int((h.kind_meta or {}).get("freq_per_week") or 3)
         # 含首尾日的周数（Mon..Sun = 7 天 = 1 周）
         weeks = max(((end - start).days + 1) / 7.0, 1 / 7)
-        target = max(freq * weeks, 1)
+        # target 用真实计算值，不再 floor 到 1：避免"1 次达成即满分"高估
+        target = freq * weeks
         done = (
             db.query(RhythmDisciplineLog)
             .filter(

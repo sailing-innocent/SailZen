@@ -77,6 +77,27 @@ class TestKindMetaValidation:
         )
         assert meta["immovable"] is True
 
+    def test_async_callback_meta_defaults(self):
+        """async_callback 元数据：缺字段补默认三阶段"""
+        meta = validate_kind_meta(AffairKind.ASYNC_CALLBACK, {})
+        assert meta["current_phase"] == "kickoff"
+        assert meta["round"] == 1
+        assert meta["max_rounds"] == 3
+        assert meta["work_hours_only"] is False
+        assert meta["delegate_to"] == "ai"
+        assert len(meta["phases"]) == 3
+        phase_names = [p["name"] for p in meta["phases"]]
+        assert phase_names == ["kickoff", "delegated", "review"]
+
+    def test_async_callback_meta_work_hours_only(self):
+        meta = validate_kind_meta(
+            AffairKind.ASYNC_CALLBACK,
+            {"work_hours_only": True, "delegate_to": "human:alice", "max_rounds": 5},
+        )
+        assert meta["work_hours_only"] is True
+        assert meta["delegate_to"] == "human:alice"
+        assert meta["max_rounds"] == 5
+
     def test_task_oneoff_meta_passthrough(self):
         """task_oneoff / generic / buffer 无额外约束"""
         assert validate_kind_meta(AffairKind.TASK_ONEOFF, {}) == {}

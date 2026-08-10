@@ -256,3 +256,124 @@ class TestLongtermFlow:
         affair_id = self._active_habit(db)
         with pytest.raises(RhythmBadRequestError):
             _transit(db, affair_id, AffairAction.GRADUATE)
+
+
+# ============================================================================
+# async_callback 阶段机（KICKOFF/DELEGATED/REVIEWING/COMPLETED + 返工）
+# ============================================================================
+
+
+class TestAsyncCallbackStateMachine:
+    def _create_async(self, db: Session, max_rounds=3, work_hours_only=False) -> int:
+        affair = create_affair_impl(
+            db,
+            AffairCreateRequest(
+                title="AI 文案回调",
+                kind=AffairKind.ASYNC_CALLBACK,
+                domain="work",
+                kind_meta={
+                    "max_rounds": max_rounds,
+                    "work_hours_only": work_hours_only,
+                    "est_wait_hours": 2.0,
+                    "delegate_to": "ai",
+                },
+            ),
+        )
+        return affair.id
+
+    def test_confirm_to_active_kickoff(self, db: Session):
+        """CONFIRM → ACTIVE，current_phase=kickoff，energy/est 取自 kickoff 阶段"""
+        aid = self._create_async(db)
+        resp = _transit(db, aid, AffairAction.CONFIRM)
+        assert resp.state == AffairState.ACTIVE
+        assert resp.kind_meta["current_phase"] == "kickoff"
+        assert resp.energy_cost == 25  # kickoff 默认
+        assert resp.est_minutes == 30
+
+    def test_handoff_to_delegated_computes_next_review(self, db: Session):
+        aid = self._create_async(db, work_hours_only=True)
+        _transit(db, aid, AffairAction.CONFIRM)
+        resp = _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        assert resp.state == AffairState.DELEGATED
+        assert resp.kind_meta["current_phase"] == "delegated"
+        assert resp.kind_meta["next_review_at"] is not None
+        # work_hours_only 时 next_review_at 应落在工作窗（工作日 09-12/14-18）
+        from datetime import datetime
+        nxt = datetime.fromisoformat(resp.kind_meta["next_review_at"])
+        assert nxt.weekday() < 5
+        assert 9 <= nxt.hour < 12 or 14 <= nxt.hour < 18
+        # DELEGATED 阶段 energy_cost 归零
+        assert resp.energy_cost == 0
+
+    def test_return_review_to_reviewing(self, db: Session):
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        resp = _transit(db, aid, AffairAction.RETURN_REVIEW)
+        assert resp.state == AffairState.REVIEWING
+        assert resp.kind_meta["current_phase"] == "review"
+        assert resp.energy_cost == 15  # review 默认
+        assert resp.kind_meta["next_review_at"] is None
+
+    def test_approve_to_completed(self, db: Session):
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        _transit(db, aid, AffairAction.RETURN_REVIEW)
+        resp = _transit(db, aid, AffairAction.APPROVE)
+        assert resp.state == AffairState.COMPLETED
+        assert resp.kind_meta["current_phase"] == "done"
+
+    def test_request_revision_increments_round_and_back_to_delegated(self, db: Session):
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        _transit(db, aid, AffairAction.RETURN_REVIEW)
+        resp = _transit(
+            db, aid, AffairAction.REQUEST_REVISION, revision_note="文案太正式"
+        )
+        assert resp.state == AffairState.DELEGATED
+        assert resp.kind_meta["round"] == 2
+        assert resp.kind_meta["current_phase"] == "delegated"
+        assert len(resp.kind_meta["revision_history"]) == 1
+        assert resp.kind_meta["revision_history"][0]["note"] == "文案太正式"
+
+    def test_request_revision_over_max_rounds_400(self, db: Session):
+        aid = self._create_async(db, max_rounds=2)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        _transit(db, aid, AffairAction.RETURN_REVIEW)
+        # round1 → 2 (达 max，仍允许)
+        _transit(db, aid, AffairAction.REQUEST_REVISION, revision_note="r1")
+        _transit(db, aid, AffairAction.RETURN_REVIEW)
+        # round2 → 3 超 max，应拒
+        with pytest.raises(RhythmBadRequestError):
+            _transit(db, aid, AffairAction.REQUEST_REVISION, revision_note="r2")
+
+    def test_handoff_from_delegated_409(self, db: Session):
+        """DELEGATED 不允许再次 HANDOFF（前置 ACTIVE/KICKOFF）"""
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        with pytest.raises(RhythmStateConflictError):
+            _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+
+    def test_pause_resume(self, db: Session):
+        """async_callback 支持 PAUSE/RESUME（DELEGATED 等待期可暂停）"""
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        paused = _transit(db, aid, AffairAction.PAUSE)
+        assert paused.state == AffairState.PAUSED
+        resumed = _transit(db, aid, AffairAction.RESUME)
+        assert resumed.state == AffairState.ACTIVE
+
+    def test_completed_is_terminal(self, db: Session):
+        """COMPLETED 是终态，不允许再转移"""
+        aid = self._create_async(db)
+        _transit(db, aid, AffairAction.CONFIRM)
+        _transit(db, aid, AffairAction.HANDOFF, est_wait_hours=2.0)
+        _transit(db, aid, AffairAction.RETURN_REVIEW)
+        _transit(db, aid, AffairAction.APPROVE)
+        with pytest.raises(RhythmStateConflictError):
+            _transit(db, aid, AffairAction.PAUSE)
