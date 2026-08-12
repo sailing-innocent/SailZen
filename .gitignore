@@ -4,6 +4,7 @@ logs
 
 # Bot runtime data
 data/bot/
+.codemaker
 
 # SQLite database files
 data/*.db

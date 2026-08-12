@@ -421,7 +421,6 @@ private fun TimelineBlockItem(
 
     SwipeToDismissBox(
         state = dismissState,
-        enableDismissFromEndToEnd = deferrable,
         backgroundContent = {
             val isDone = dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             Box(

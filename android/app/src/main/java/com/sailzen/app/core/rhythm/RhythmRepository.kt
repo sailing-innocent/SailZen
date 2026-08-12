@@ -83,8 +83,14 @@ class RhythmRepository private constructor(private val context: Context) {
                 Log.w(TAG, "capture failed, queue offline: ${e.message}")
             }
         }
-        enqueue("capture", 0, """{"title":${json.encodeToString(title)},"kind":"$kind""" +
-            (domain?.let { ""","domain":"$it"""" } ?: "") + "}")
+        val payload = run {
+            val o = org.json.JSONObject()
+            o.put("title", title)
+            o.put("kind", kind)
+            if (domain != null) o.put("domain", domain)
+            o.toString()
+        }
+        enqueue("capture", 0, payload)
         return false
     }
 
@@ -194,10 +200,14 @@ class RhythmRepository private constructor(private val context: Context) {
                 Log.w(TAG, "checkin failed, queue offline: ${e.message}")
             }
         }
-        enqueue(
-            "checkin", affairId,
-            """{"affair_id":$affairId,"result":"$result","note":${json.encodeToString(note)}}""",
-        )
+        val payload = run {
+            val o = org.json.JSONObject()
+            o.put("affair_id", affairId)
+            o.put("result", result)
+            o.put("note", note)
+            o.toString()
+        }
+        enqueue("checkin", affairId, payload)
         return false
     }
 
