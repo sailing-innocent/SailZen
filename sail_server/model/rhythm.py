@@ -52,13 +52,20 @@ from sail_server.application.dto.rhythm import (
     ConfirmHintRequest,
     DayTemplateResponse,
     DayTemplateUpsertRequest,
+    DomainMinutes,
     EnergyProfileResponse,
     EnergyProfileUpsertRequest,
     HABIT_RESULTS,
+    HealthCheckinRequest,
+    HealthCheckinResponse,
+    InfoCollectionType,
     PolicyCreateRequest,
     PolicyResponse,
     PolicyUpdateRequest,
     PRECEPT_RESULTS,
+    ProjectTimelineResponse,
+    ReviewTimespanResponse,
+    RhythmDayViewResponse,
     TimeBlockCreateRequest,
     TimeBlockResponse,
     VentureMilestoneRequest,
@@ -67,7 +74,9 @@ from sail_server.application.dto.rhythm import (
     resolve_transition,
     validate_kind_meta,
 )
-from sail_server.infrastructure.orm.life import Day
+from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Weight
+from sail_server.infrastructure.orm.life import Day, TimeSpan
+from sail_server.infrastructure.orm.project import Mission, Project
 from sail_server.infrastructure.orm.rhythm import (
     RhythmAffair,
     RhythmDayTemplate,
@@ -200,6 +209,7 @@ def affair_to_response(a: RhythmAffair) -> AffairResponse:
         day_id=a.day_id,
         timespan_id=a.timespan_id,
         parent_id=a.parent_id,
+        info_collection_type=InfoCollectionType(a.info_collection_type) if a.info_collection_type else None,
         ai_hint=a.ai_hint or {},
         score=float(a.score or 0),
         ref=a.ref or {},
@@ -333,6 +343,7 @@ def create_affair_impl(db: Session, request: AffairCreateRequest) -> AffairRespo
         day_id=request.day_id,
         timespan_id=request.timespan_id,
         parent_id=request.parent_id,
+        info_collection_type=request.info_collection_type.value if request.info_collection_type else None,
         ref=request.ref or {},
     )
     db.add(affair)
@@ -354,6 +365,8 @@ def list_affairs_impl(
     kinds: Optional[List[str]] = None,
     day_id: Optional[int] = None,
     parent_id: Optional[int] = None,
+    urgency_ddl_before: Optional[datetime] = None,
+    urgency_ddl_after: Optional[datetime] = None,
     skip: int = 0,
     limit: int = -1,
 ) -> List[AffairResponse]:
@@ -368,6 +381,10 @@ def list_affairs_impl(
         query = query.filter(RhythmAffair.day_id == day_id)
     if parent_id is not None:
         query = query.filter(RhythmAffair.parent_id == parent_id)
+    if urgency_ddl_before is not None:
+        query = query.filter(RhythmAffair.urgency_ddl <= urgency_ddl_before)
+    if urgency_ddl_after is not None:
+        query = query.filter(RhythmAffair.urgency_ddl >= urgency_ddl_after)
     query = query.order_by(RhythmAffair.id.desc())
     if skip > 0:
         query = query.offset(skip)
@@ -405,6 +422,8 @@ def update_affair_impl(
         "splittable", "min_chunk_minutes", "fallback_plan", "recurrence_rule_id",
         "mission_id", "day_id", "timespan_id", "parent_id", "ai_hint", "ref",
     ]
+    if request.info_collection_type is not None:
+        affair.info_collection_type = request.info_collection_type.value
     for field in simple_fields:
         value = getattr(request, field, None)
         if value is not None:
@@ -973,6 +992,175 @@ def checkin_impl(db: Session, request: CheckinRequest) -> CheckinLogResponse:
     return _log_to_response(log)
 
 
+#: 健康速记 collection_type → 标题映射
+_HEALTH_AFFAIRS: Dict[str, str] = {
+    InfoCollectionType.WEIGHT.value: "健康速记：体重",
+    InfoCollectionType.MEAL.value: "健康速记：饮食",
+    InfoCollectionType.EXERCISE.value: "健康速记：运动",
+    InfoCollectionType.MEDICATION.value: "健康速记：用药",
+    InfoCollectionType.SLEEP.value: "健康速记：睡眠",
+    InfoCollectionType.MOOD.value: "健康速记：情绪",
+}
+
+
+def _get_or_create_health_affair(db: Session, collection_type: str) -> RhythmAffair:
+    """为每种信息收集类型维护一个长期 precept 事务，用于 rhythm 打卡日志。"""
+    affair = (
+        db.query(RhythmAffair)
+        .filter(
+            RhythmAffair.kind == AffairKind.PRECEPT.value,
+            RhythmAffair.info_collection_type == collection_type,
+        )
+        .first()
+    )
+    if affair is None:
+        affair = RhythmAffair(
+            title=_HEALTH_AFFAIRS.get(collection_type, f"健康速记：{collection_type}"),
+            kind=AffairKind.PRECEPT.value,
+            domain=AffairDomain.LIFE.value,
+            state=AffairState.ACTIVE.value,
+            info_collection_type=collection_type,
+            kind_meta={"cycle": "daily", "rule_text": f"记录{collection_type}"},
+        )
+        db.add(affair)
+        db.commit()
+        db.refresh(affair)
+    return affair
+
+
+def health_checkin_impl(db: Session, request: HealthCheckinRequest) -> HealthCheckinResponse:
+    """健康速记：写入 health.* 表 + RhythmDisciplineLog（同一事务）。"""
+    collection_type = request.collection_type.value
+    log_date = request.log_date or _today()
+    day = _get_or_create_day(db, log_date)
+    now = _now()
+    ref_id: Optional[int] = None
+
+    try:
+        if collection_type == InfoCollectionType.WEIGHT.value:
+            value_kg = float(request.payload.get("value_kg", 0))
+            measured_at = request.payload.get("measured_at")
+            if measured_at:
+                measured_at = datetime.fromisoformat(str(measured_at))
+            record = Weight(
+                value=str(value_kg),
+                htime=measured_at or now,
+                description=request.note,
+            )
+            db.add(record)
+            db.flush()
+            ref_id = record.id
+            db.add(
+                HealthSignal(
+                    signal_type="weight",
+                    ref_id=record.id,
+                    day_id=day.id,
+                    htime=record.htime,
+                    value_json={"value_kg": value_kg, "note": request.note},
+                )
+            )
+
+        elif collection_type == InfoCollectionType.EXERCISE.value:
+            record = Exercise(
+                htime=now,
+                description=request.payload.get("activity", ""),
+            )
+            db.add(record)
+            db.flush()
+            ref_id = record.id
+            db.add(
+                HealthSignal(
+                    signal_type="exercise",
+                    ref_id=record.id,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+
+        elif collection_type == InfoCollectionType.MEAL.value:
+            db.add(
+                HealthSignal(
+                    signal_type="meal",
+                    ref_id=0,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+            db.flush()
+            ref_id = 0
+
+        elif collection_type == InfoCollectionType.MEDICATION.value:
+            db.add(
+                HealthSignal(
+                    signal_type="medication",
+                    ref_id=0,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+            db.flush()
+            ref_id = 0
+
+        elif collection_type == InfoCollectionType.SLEEP.value:
+            db.add(
+                HealthSignal(
+                    signal_type="sleep",
+                    ref_id=0,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+            db.flush()
+            ref_id = 0
+
+        elif collection_type == InfoCollectionType.MOOD.value:
+            db.add(
+                HealthSignal(
+                    signal_type="mood",
+                    ref_id=0,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+            db.flush()
+            ref_id = 0
+
+        else:
+            raise RhythmBadRequestError(f"未知 collection_type: {collection_type}")
+
+        # 双写 rhythm 打卡日志
+        affair = _get_or_create_health_affair(db, collection_type)
+        log = RhythmDisciplineLog(
+            affair_id=affair.id,
+            log_date=log_date,
+            cycle_key=log_date.isoformat(),
+            result=CheckinResult.DONE.value,
+            note=request.note,
+            source="health",
+        )
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+
+        return HealthCheckinResponse(
+            id=log.id,
+            collection_type=collection_type,
+            log_date=log_date,
+            ref_id=ref_id,
+            affair_id=affair.id,
+            note=request.note,
+            created_at=log.created_at,
+        )
+    except (ValueError, TypeError) as e:
+        db.rollback()
+        raise RhythmBadRequestError(f"健康速记数据格式错误: {e}") from e
+
+
 def list_checkins_impl(
     db: Session,
     affair_id: Optional[int] = None,
@@ -1449,7 +1637,7 @@ def set_block_status_impl(
 def move_block_impl(
     db: Session, block_id: int, request: BlockMoveRequest
 ) -> TimeBlockResponse:
-    """手动拖改（pinned 块拒绝 409）"""
+    """手动拖改（pinned 块拒绝，409）"""
     block = db.query(RhythmTimeBlock).filter(RhythmTimeBlock.id == block_id).first()
     if block is None:
         raise RhythmNotFoundError(f"TimeBlock {block_id} not found")
@@ -1467,3 +1655,182 @@ def move_block_impl(
     if block.affair_id:
         affair = db.query(RhythmAffair).filter(RhythmAffair.id == block.affair_id).first()
     return block_to_response(block, affair)
+
+
+# ============================================================================
+# 合并自 PEMS 的视图/复盘/健康
+# ============================================================================
+
+
+def _health_signal_item(signal: HealthSignal) -> Dict[str, Any]:
+    return {
+        "signal_type": signal.signal_type,
+        "ref_id": signal.ref_id,
+        "value_json": signal.value_json or {},
+        "htime": signal.htime,
+    }
+
+
+def get_rhythm_day_view_impl(db: Session, d: date) -> RhythmDayViewResponse:
+    """统一日视图：时间线 + 能量 + 打卡 + 健康信号。"""
+    from sail_server.model.rhythm_planner import get_day_timeline_impl
+
+    timeline = get_day_timeline_impl(db, d, with_checkins=True)
+    health_signals = (
+        db.query(HealthSignal)
+        .filter(HealthSignal.day_id == timeline.day_id)
+        .order_by(HealthSignal.htime)
+        .all()
+    )
+
+    energy_available = max(timeline.energy_budget - timeline.energy_consumed, 0)
+    insights: List[str] = []
+    if energy_available < timeline.energy_budget * 0.2:
+        insights.append(f"精力余量仅 {energy_available}，注意保留缓冲。")
+    if timeline.buffer_free_minutes < 30:
+        insights.append("缓冲时间不足 30 分钟，谨慎接受临时任务。")
+
+    return RhythmDayViewResponse(
+        date=d,
+        day_id=timeline.day_id,
+        plan_version=timeline.plan_version,
+        blocks=timeline.blocks,
+        domain_minutes=timeline.domain_minutes,
+        energy_consumed=timeline.energy_consumed,
+        energy_budget=timeline.energy_budget,
+        energy_available=energy_available,
+        buffer_total_minutes=timeline.buffer_total_minutes,
+        buffer_free_minutes=timeline.buffer_free_minutes,
+        checkins=timeline.checkins,
+        health_signals=[_health_signal_item(s) for s in health_signals],
+        insights=insights,
+        warnings=timeline.warnings,
+    )
+
+
+def project_timeline_impl(db: Session, project_id: int) -> ProjectTimelineResponse:
+    """项目时间线：聚合该项目下所有 mission 关联的 rhythm 事务块。"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project is None:
+        raise RhythmNotFoundError(f"Project {project_id} not found")
+
+    missions = db.query(Mission).filter(Mission.project_id == project_id).all()
+    mission_ids = {m.id for m in missions}
+
+    affairs = (
+        db.query(RhythmAffair)
+        .filter(
+            (RhythmAffair.mission_id.in_(mission_ids) if mission_ids else False)
+            | (RhythmAffair.ref.op("->>")("project_id").cast(Integer) == project_id)
+        )
+        .all()
+    )
+    affair_ids = {a.id for a in affairs}
+
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    if project.start_time_qbw:
+        from sail_server.utils.time_utils import QuarterBiWeekTime
+        start_date = QuarterBiWeekTime.from_qbw(project.start_time_qbw).to_date()
+    if project.end_time_qbw:
+        from sail_server.utils.time_utils import QuarterBiWeekTime
+        end_date = QuarterBiWeekTime.from_qbw(project.end_time_qbw).to_date()
+
+    blocks: List[RhythmTimeBlock] = []
+    if affair_ids:
+        blocks = (
+            db.query(RhythmTimeBlock)
+            .filter(
+                RhythmTimeBlock.affair_id.in_(affair_ids),
+                RhythmTimeBlock.status.in_(["PLANNED", "DOING", "DONE"]),
+            )
+            .order_by(RhythmTimeBlock.start_time)
+            .all()
+        )
+
+    domain_minutes = DomainMinutes()
+    energy_consumed = 0
+    for b in blocks:
+        if b.status not in ("PLANNED", "DOING", "DONE"):
+            continue
+        duration = int((b.end_time - b.start_time).total_seconds() // 60)
+        if b.affair_id and b.affair_id in affair_ids:
+            a = next((x for x in affairs if x.id == b.affair_id), None)
+            if a and a.domain:
+                if a.domain == "life":
+                    domain_minutes.life += duration
+                elif a.domain == "work":
+                    domain_minutes.work += duration
+                elif a.domain == "career":
+                    domain_minutes.career += duration
+        if b.status == "DONE":
+            a = next((x for x in affairs if x.id == b.affair_id), None)
+            if a:
+                energy_consumed += a.energy_cost or 0
+
+    profile = get_or_create_profile(db)
+    return ProjectTimelineResponse(
+        project_id=project.id,
+        project_name=project.name or "",
+        start_date=start_date,
+        end_date=end_date,
+        blocks=blocks_to_response(db, blocks),
+        domain_minutes=domain_minutes,
+        energy_consumed=energy_consumed,
+        energy_budget=int(profile.daily_energy_budget or 100),
+    )
+
+
+def review_timespan_impl(db: Session, timespan_id: int) -> ReviewTimespanResponse:
+    """周期复盘：基于 TimeSpan 起止日调用日复盘聚合。"""
+    from sail_server.model.rhythm_planner import get_day_review_impl
+
+    span = db.query(TimeSpan).filter(TimeSpan.id == timespan_id).first()
+    if span is None:
+        raise RhythmNotFoundError(f"TimeSpan {timespan_id} not found")
+
+    start = span.start_day.date if span.start_day else None
+    end = span.end_day.date if span.end_day else None
+    if start is None or end is None:
+        raise RhythmBadRequestError(f"TimeSpan {timespan_id} 缺少起止日期")
+
+    # 聚合区间内每日 ReviewResponse
+    domain_minutes_acc = {"life": 0, "work": 0, "career": 0}
+    total_score = 0.0
+    count = 0
+    precept_ok = precept_total = 0
+    habit_done = habit_total = 0
+    sleep_kept = sleep_total = 0
+    venture_done = 0.0
+    venture_est = 0.0
+    all_encroachments: List[Any] = []
+    day = start
+    while day <= end:
+        review = get_day_review_impl(db, day)
+        total_score += review.rhythm_score
+        count += 1
+        dm = review.domain_minutes or {}
+        for k in domain_minutes_acc:
+            domain_minutes_acc[k] += int(dm.get(k, 0) or 0)
+        # 近似指标：跨日复盘没有独立的 precept/habit/sleep 计数，
+        # 这里使用 rhythm_score 作为整体健康度代理
+        all_encroachments.extend(review.encroachments or [])
+        day += timedelta(days=1)
+
+    profile = get_or_create_profile(db)
+    avg_score = total_score / count if count > 0 else 0.0
+    return ReviewTimespanResponse(
+        id=None,
+        scope="timespan",
+        period_key=span.name or f"TS{timespan_id}",
+        timespan_id=timespan_id,
+        rhythm_score=round(avg_score, 2),
+        domain_minutes=domain_minutes_acc,
+        precept_compliance_rate=0.0,
+        habit_consistency=0.0,
+        sleep_window_keeping=0.0,
+        venture_budget_fulfillment=0.0,
+        buffer_consumed=0.0,
+        encroachments=all_encroachments,
+        ai_summary="",
+    )

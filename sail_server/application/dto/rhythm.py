@@ -40,6 +40,17 @@ class AffairDomain(str, Enum):
     CAREER = "career"
 
 
+class InfoCollectionType(str, Enum):
+    """信息收集类型（健康速记等跨 kind 场景）"""
+
+    WEIGHT = "weight"
+    MEAL = "meal"
+    EXERCISE = "exercise"
+    MEDICATION = "medication"
+    SLEEP = "sleep"
+    MOOD = "mood"
+
+
 class AffairKind(str, Enum):
     """事务种类（10 类，决定生命周期形态/排程行为/元数据 schema/复盘指标）"""
 
@@ -422,6 +433,9 @@ class AffairCreateRequest(BaseModel):
     day_id: Optional[int] = Field(default=None, description="目标日锚点（life.days）")
     timespan_id: Optional[int] = Field(default=None, description="目标 TimeSpan")
     parent_id: Optional[int] = Field(default=None, description="父事务（拆分树/里程碑链）")
+    info_collection_type: Optional[InfoCollectionType] = Field(
+        default=None, description="信息收集类型（健康速记）"
+    )
     ref: Dict[str, Any] = Field(default_factory=dict, description="扩展字段")
 
 
@@ -449,6 +463,9 @@ class AffairUpdateRequest(BaseModel):
     day_id: Optional[int] = Field(default=None, description="目标日锚点")
     timespan_id: Optional[int] = Field(default=None, description="目标 TimeSpan")
     parent_id: Optional[int] = Field(default=None, description="父事务")
+    info_collection_type: Optional[InfoCollectionType] = Field(
+        default=None, description="信息收集类型（健康速记）"
+    )
     ai_hint: Optional[Dict[str, Any]] = Field(default=None, description="AI 建议快照")
     ref: Optional[Dict[str, Any]] = Field(default=None, description="扩展字段")
 
@@ -481,6 +498,7 @@ class AffairResponse(BaseModel):
     day_id: Optional[int] = None
     timespan_id: Optional[int] = None
     parent_id: Optional[int] = None
+    info_collection_type: Optional[InfoCollectionType] = None
     ai_hint: Dict[str, Any] = Field(default_factory=dict)
     score: float = 0.0
     ref: Dict[str, Any] = Field(default_factory=dict)
@@ -774,6 +792,35 @@ class DayTimelineResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
+class HealthSignalItem(BaseModel):
+    """当日健康信号条目"""
+
+    signal_type: str
+    ref_id: int
+    value_json: Dict[str, Any] = Field(default_factory=dict)
+    htime: Optional[datetime] = None
+
+
+class RhythmDayViewResponse(BaseModel):
+    """统一日视图（PEMS day view 合并进 Rhythm）"""
+
+    date: date_type
+    day_id: int
+    plan_version: int = 0
+    blocks: List[TimeBlockResponse] = Field(default_factory=list)
+    domain_minutes: DomainMinutes = Field(default_factory=DomainMinutes)
+    energy_consumed: int = Field(default=0)
+    energy_budget: int = Field(default=100)
+    energy_available: int = Field(default=100, description="剩余可用精力预算")
+    buffer_total_minutes: int = Field(default=0)
+    buffer_free_minutes: int = Field(default=0)
+    checkins: Optional[CheckinTodayResponse] = None
+    health_signals: List[HealthSignalItem] = Field(default_factory=list)
+    insights: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    note: Optional[str] = Field(default=None, description="日复盘备注")
+
+
 # ============================================================================
 # Plan DTOs
 # ============================================================================
@@ -934,3 +981,76 @@ class ReviewSummaryUpdateRequest(BaseModel):
     """Agent 写回周评语"""
 
     ai_summary: str
+
+
+# ============================================================================
+# HealthCheckin DTOs
+# ============================================================================
+
+
+class WeightPayload(BaseModel):
+    value_kg: float = Field(description="体重（kg）")
+    measured_at: Optional[datetime] = Field(default=None, description="测量时间 ISO")
+
+
+class MealPayload(BaseModel):
+    meal_type: str = Field(description="breakfast | lunch | dinner | snack")
+    foods: Optional[List[str]] = Field(default=None, description="食物列表")
+    estimated_calories: Optional[int] = Field(default=None, ge=0)
+
+
+class ExercisePayload(BaseModel):
+    activity: str = Field(description="运动项目")
+    duration_minutes: Optional[int] = Field(default=None, ge=0)
+    intensity: Optional[str] = Field(default="moderate", description="light | moderate | vigorous")
+
+
+class MedicationPayload(BaseModel):
+    name: str = Field(description="药品名")
+    dose: Optional[str] = Field(default=None)
+    taken_at: Optional[datetime] = Field(default=None)
+
+
+class HealthCheckinRequest(BaseModel):
+    """健康速记请求（Android 提醒闭环入口）"""
+
+    collection_type: InfoCollectionType
+    log_date: Optional[date_type] = Field(default=None, description="归属日（默认今天）")
+    payload: Dict[str, Any] = Field(default_factory=dict, description="具体数据")
+    note: str = Field(default="", description="备注")
+
+
+class HealthCheckinResponse(BaseModel):
+    """健康速记响应"""
+
+    id: int
+    collection_type: str
+    log_date: date_type
+    ref_id: Optional[int] = Field(default=None, description="health 表记录 ID")
+    affair_id: Optional[int] = Field(default=None, description="关联 rhythm_affairs.id")
+    note: str = ""
+    created_at: Optional[datetime] = None
+
+
+# ============================================================================
+# Project Timeline / Timespan Review DTOs
+# ============================================================================
+
+
+class ProjectTimelineResponse(BaseModel):
+    """项目时间线（PEMS project timeline 合并进 Rhythm）"""
+
+    project_id: int
+    project_name: str
+    start_date: Optional[date_type] = None
+    end_date: Optional[date_type] = None
+    blocks: List[TimeBlockResponse] = Field(default_factory=list)
+    domain_minutes: DomainMinutes = Field(default_factory=DomainMinutes)
+    energy_consumed: int = 0
+    energy_budget: int = 100
+
+
+class ReviewTimespanResponse(ReviewResponse):
+    """周期复盘视图（PEMS timespan review 合并进 Rhythm）"""
+
+    timespan_id: int

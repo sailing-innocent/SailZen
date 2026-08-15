@@ -267,3 +267,66 @@ class TestEndToEnd:
         resp = client.get(f"{BASE}/plan/conflicts", params={"date": str(TEST_DATE)})
         assert resp.status_code == 200
         assert "encroachments" in resp.json()
+
+
+class TestMergedPEMSFeatures:
+    def test_urgency_ddl_range_query(self, client: TestClient):
+        """list_affairs 支持 urgency_ddl 范围过滤"""
+        resp = client.post(
+            f"{BASE}/affair/",
+            json={
+                "title": "DDL 今天",
+                "kind": "task_oneoff",
+                "urgency_ddl": f"{TEST_DATE}T23:59:00",
+            },
+        )
+        assert resp.status_code == 201
+
+        resp = client.get(
+            f"{BASE}/affair/",
+            params={
+                "urgency_ddl_after": f"{TEST_DATE}T00:00:00",
+                "urgency_ddl_before": f"{TEST_DATE}T23:59:59",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["affairs"]) >= 1
+        titles = {a["title"] for a in data["affairs"]}
+        assert "DDL 今天" in titles
+
+    def test_health_checkin_weight(self, client: TestClient):
+        """健康速记双写 health 表与 rhythm 打卡日志"""
+        resp = client.post(
+            f"{BASE}/checkin/health",
+            json={
+                "collection_type": "weight",
+                "log_date": str(TEST_DATE),
+                "payload": {"value_kg": 70.5},
+                "note": "晨重",
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["collection_type"] == "weight"
+        assert data["affair_id"] is not None
+
+    def test_day_view(self, client: TestClient):
+        """统一日视图包含时间线、能量、打卡、健康信号"""
+        client.post(f"{BASE}/template/", json=make_template_payload())
+        client.post(f"{BASE}/plan/day", json={"date": str(TEST_DATE)})
+        client.post(
+            f"{BASE}/checkin/health",
+            json={
+                "collection_type": "exercise",
+                "log_date": str(TEST_DATE),
+                "payload": {"activity": "跑步", "duration_minutes": 30},
+            },
+        )
+        resp = client.get(f"{BASE}/timeline/day-view", params={"date": str(TEST_DATE)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "health_signals" in data
+        assert data["energy_budget"] == 100
+        assert data["energy_available"] >= 0
+        assert any(s["signal_type"] == "exercise" for s in data["health_signals"])

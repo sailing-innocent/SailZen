@@ -21,6 +21,7 @@ import logging
 import os
 from contextlib import contextmanager
 from datetime import date as date_type
+from datetime import datetime
 from typing import Generator, List, Optional
 
 from litestar import Controller, Request, delete, get, post, put
@@ -54,15 +55,21 @@ from sail_server.application.dto.rhythm import (
     EncroachmentItem,
     EnergyProfileResponse,
     EnergyProfileUpsertRequest,
+    HealthCheckinRequest,
+    HealthCheckinResponse,
+    InfoCollectionType,
     PlanDayRequest,
     PlanDayResponse,
     PolicyCreateRequest,
     PolicyListResponse,
     PolicyResponse,
     PolicyUpdateRequest,
+    ProjectTimelineResponse,
     RebalanceRequest,
     ReviewResponse,
     ReviewSummaryUpdateRequest,
+    ReviewTimespanResponse,
+    RhythmDayViewResponse,
     TimeBlockCreateRequest,
     TimeBlockResponse,
     VentureMilestoneRequest,
@@ -84,13 +91,17 @@ from sail_server.model.rhythm import (
     get_active_template_impl,
     get_affair_impl,
     get_energy_profile_impl,
+    get_rhythm_day_view_impl,
     get_template_impl,
+    health_checkin_impl,
     list_affairs_impl,
     list_checkins_impl,
     list_policies_impl,
     list_templates_impl,
     milestone_done_impl,
     move_block_impl,
+    project_timeline_impl,
+    review_timespan_impl,
     set_block_status_impl,
     split_affair_impl,
     today_checkins_impl,
@@ -176,13 +187,26 @@ class AffairController(Controller):
         kind: Optional[List[str]] = Parameter(query="kind", default=None),
         day_id: Optional[int] = None,
         parent_id: Optional[int] = None,
+        urgency_ddl_before: Optional[datetime] = None,
+        urgency_ddl_after: Optional[datetime] = None,
         skip: int = 0,
         limit: int = -1,
     ) -> AffairListResponse:
-        """事务列表（state/domain/kind[多值]/day_id 过滤）"""
+        """事务列表（state/domain/kind[多值]/day_id/urgency_ddl 范围过滤）"""
         _check_auth(request)
         db = next(router_dependency)
-        affairs = list_affairs_impl(db, state_, domain, kind, day_id, parent_id, skip, limit)
+        affairs = list_affairs_impl(
+            db,
+            state_,
+            domain,
+            kind,
+            day_id,
+            parent_id,
+            urgency_ddl_before,
+            urgency_ddl_after,
+            skip,
+            limit,
+        )
         return AffairListResponse(affairs=affairs, total=len(affairs))
 
     @get("/{affair_id:int}")
@@ -424,6 +448,19 @@ class CheckinController(Controller):
         db = next(router_dependency)
         return today_checkins_impl(db, date)
 
+    @post("/health")
+    async def health_checkin(
+        self,
+        data: HealthCheckinRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> HealthCheckinResponse:
+        """健康速记（体重/饮食/运动/用药/睡眠/情绪），双写 health 表与 rhythm 打卡日志"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return health_checkin_impl(db, data)
+
 
 # ============================================================================
 # Venture Controller（长期事业进度）
@@ -494,6 +531,19 @@ class TimelineController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return get_day_timeline_impl(db, date)
+
+    @get("/day-view")
+    async def day_view(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        date: date_type,
+    ) -> RhythmDayViewResponse:
+        """统一日视图（PEMS 合并）：时间线 + 能量 + 打卡 + 健康信号"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_rhythm_day_view_impl(db, date)
 
     @post("/block")
     async def create_block(
@@ -751,3 +801,29 @@ class ReviewController(Controller):
         _check_auth(request)
         db = next(router_dependency)
         return list_encroachments_impl(db, start_date, end_date)
+
+    @get("/timespan/{timespan_id:int}")
+    async def timespan_review(
+        self,
+        timespan_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ReviewTimespanResponse:
+        """周期复盘（TimeSpan 级别聚合）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return review_timespan_impl(db, timespan_id)
+
+    @get("/project/{project_id:int}/timeline")
+    async def project_timeline(
+        self,
+        project_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ProjectTimelineResponse:
+        """项目时间线（PEMS 合并）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return project_timeline_impl(db, project_id)

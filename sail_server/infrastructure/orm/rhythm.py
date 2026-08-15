@@ -103,6 +103,9 @@ class RhythmAffair(ORMBase):
     timespan_id = Column(Integer, ForeignKey("timespans.id"), nullable=True)
     # 拆分树/里程碑链/行程段（自引用）
     parent_id = Column(Integer, ForeignKey("rhythm_affairs.id"), nullable=True)
+    # 信息收集类型：weight / meal / exercise / medication / sleep / mood
+    # 用于健康速记等场景，与 kind 正交，仅作元数据标记
+    info_collection_type = Column(String(32), nullable=True, index=True)
     # AI 建议快照（含 kind 分拣建议、kind_meta 草案、理由、置信度）
     ai_hint = Column(JSONB, default=dict)
     # 最近一次优先级评分（冗余，便于排序）
