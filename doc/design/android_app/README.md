@@ -1,8 +1,7 @@
 # SailZen Android App 设计文档
 
-> **版本**: v0.1 (Draft)
+> **版本**: v0.1
 > **更新**: 2026-08-02
-> **状态**: 📋 待 Review
 > **关联文档**: [PRD](../../PRD.md) | [系统架构总览](../overview.md) | [Autonomous Agent 设计](../agent-system/autonomous-agent.md)
 
 ---

@@ -26,7 +26,7 @@
 | 实施计划 §3.5 `ReminderPushManager` 用 `asyncio.Lock` | 实现采用 `threading.Lock`（临界区仅 dict 读写） | 单例跨事件循环场景（如 pytest 多次 `asyncio.run`）下 `asyncio.Lock` 存在 loop 绑定问题，功能等价且更稳健 |
 | 实施计划 §3.3 转移表未覆盖 EXPIRED 态反馈 | EXPIRED 按 DELIVERED 同等处理（可 dismiss/snooze/open/resolve） | EXPIRED 是调度器中间态，用户迟到反馈不应 409，避免竞态 |
 
-### 1.2 实现期本机验证结果（2026-08-02，Windows + Python 3.13 + SQLite）
+### 1.2 实现期本机验证结果
 
 - `uv run pytest tests/unit/test_reminder.py -v`：**17/17 通过**；全量 `tests/unit`：**235 passed, 7 skipped**（无回归）。
 - `uv run scripts/reminder_e2e_check.py`（对运行中的真实服务端，含 WS 监听）：**22/22 PASS**。

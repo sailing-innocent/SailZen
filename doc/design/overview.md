@@ -2,13 +2,14 @@
 
 ## 概述
 
-SailZen 包含三大核心组件：
+SailZen 包含四大核心组件：
 
 | 组件 | 用途 | 技术 |
 |------|------|------|
 | sail_server | 后端 API + 数据持久化 | Python + Litestar + PostgreSQL |
 | site | Web 前端 | React + TypeScript + Vite |
 | vscode_plugin | 笔记管理 | TypeScript + VSCode API |
+| android_app | 安卓app | Kotlin |
 
 ## 模块架构
 
