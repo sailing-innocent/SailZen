@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.HealthSignalItemDto
 import com.sailzen.app.core.network.dto.ReviewDto
+import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.rhythm.RhythmRepository
 import java.time.LocalDate
@@ -21,6 +23,8 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     data class UiState(
         val date: LocalDate = LocalDate.now(),
         val timeline: DayTimelineDto? = null,
+        val dayView: RhythmDayViewDto? = null,
+        val healthSignals: List<HealthSignalItemDto> = emptyList(),
         val inbox: List<AffairDto> = emptyList(),
         val refreshing: Boolean = false,
         val configured: Boolean = true,
@@ -51,12 +55,29 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.update { it.copy(refreshing = true) }
             repository.flushPending()
-            val timeline = repository.timeline(_uiState.value.date)
+            val dayView = repository.dayView(_uiState.value.date)
+            val timeline = dayView?.blocks?.let { blocks ->
+                DayTimelineDto(
+                    date = dayView.date,
+                    dayId = dayView.dayId,
+                    planVersion = dayView.planVersion,
+                    blocks = blocks,
+                    domainMinutes = dayView.domainMinutes,
+                    energyConsumed = dayView.energyConsumed,
+                    energyBudget = dayView.energyBudget,
+                    bufferTotalMinutes = dayView.bufferTotalMinutes,
+                    bufferFreeMinutes = dayView.bufferFreeMinutes,
+                    checkins = dayView.checkins,
+                    warnings = dayView.warnings,
+                )
+            } ?: repository.timeline(_uiState.value.date)
             val inbox = repository.inbox()
             val weekReview = repository.reviewWeek()
             _uiState.update {
                 it.copy(
                     timeline = timeline,
+                    dayView = dayView,
+                    healthSignals = dayView?.healthSignals ?: emptyList(),
                     inbox = inbox,
                     weekReview = weekReview,
                     refreshing = false,

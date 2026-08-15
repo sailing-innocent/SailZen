@@ -63,6 +63,7 @@
 |------|------|
 | [maintain/Database.md](./maintain/Database.md) | 数据库维护指南 |
 | [maintain/TestCase.md](./maintain/TestCase.md) | 测试用例维护 |
+| [maintain/RhythmUpgradeHandbook.md](./maintain/RhythmUpgradeHandbook.md) | Rhythm-PEMS 合并升级手册 |
 
 ---
 

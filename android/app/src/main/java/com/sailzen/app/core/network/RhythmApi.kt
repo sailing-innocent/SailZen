@@ -96,8 +96,8 @@ interface RhythmApi {
     @GET("api/v1/rhythm/review/timespan/{id}")
     suspend fun reviewTimespan(@Path("id") id: Int): ReviewTimespanDto
 
-    @GET("api/v1/rhythm/review/project/{id}/timeline")
-    suspend fun projectTimeline(@Path("id") id: Int): ProjectTimelineDto
+    @GET("api/v1/rhythm/review/project/{project_id}")
+    suspend fun projectTimeline(@Path("project_id") projectId: Int): ProjectTimelineDto
 
     // ---------------- Day View / Health ----------------
 

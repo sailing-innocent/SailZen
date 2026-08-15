@@ -19,6 +19,7 @@ import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
+import kotlinx.serialization.encodeToString
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
 import com.sailzen.app.core.network.dto.ProjectTimelineDto
@@ -287,7 +288,7 @@ class RhythmRepository private constructor(private val context: Context) {
         payload: Map<String, Any>,
         note: String = "",
         date: LocalDate = LocalDate.now(),
-    ): HealthCheckinResponse? = try {
+    ): HealthCheckinResponse? {
         val jsonPayload = org.json.JSONObject(payload).toString()
         val body = HealthCheckinRequest(
             collectionType = collectionType,
@@ -295,10 +296,20 @@ class RhythmRepository private constructor(private val context: Context) {
             payload = json.parseToJsonElement(jsonPayload).jsonObject,
             note = note,
         )
-        apiOrNull()?.healthCheckin(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "healthCheckin failed: ${e.message}")
-        null
+        val api = apiOrNull()
+        if (api != null) {
+            try {
+                return api.healthCheckin(body)
+            } catch (e: Exception) {
+                Log.w(TAG, "healthCheckin failed, queue offline: ${e.message}")
+            }
+        }
+        enqueue(
+            "health_checkin",
+            0,
+            ApiClient.json.encodeToString(body),
+        )
+        return null
     }
 
     // ------------------------------------------------------------------
@@ -340,6 +351,9 @@ class RhythmRepository private constructor(private val context: Context) {
                     )
                     "capture" -> api.capture(
                         ApiClient.json.decodeFromString<AffairCreateRequest>(item.payloadJson),
+                    )
+                    "health_checkin" -> api.healthCheckin(
+                        ApiClient.json.decodeFromString<HealthCheckinRequest>(item.payloadJson),
                     )
                     "defer" -> api.transit(
                         item.targetId,

@@ -18,6 +18,8 @@ SailZen 3.0 是当前主要开发目标，核心愿景是：**"开发一个真�
 
 SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。它由 TypeScript/JavaScript monorepo（前端/扩展）和 Python 后端（数据管理与 API 服务）组成。
 
+> **最新合并升级**: [Rhythm-PEMS 合并升级手册](./doc/maintain/RhythmUpgradeHandbook.md) - PEMS 已合并进 Rhythm，Android 健康打卡闭环已补齐。
+
 该项目基于 Sail（分层笔记工具）扩展，增加了个人财务追踪、健康监测、项目管理、文本分析和必需品/库存管理等功能。
 
 ### 核心功能模块

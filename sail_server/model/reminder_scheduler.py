@@ -35,8 +35,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from sail_server.infrastructure.orm.life import Day
 from sail_server.infrastructure.orm.reminder import Reminder, ReminderRule
 from sail_server.model.reminder import (
+    DEFAULT_QUIET_HOURS,
     STATE_ARCHIVED,
     STATE_DELIVERED,
     STATE_EXPIRED,
@@ -44,6 +46,7 @@ from sail_server.model.reminder import (
     STATE_PENDING,
     STATE_SNOOZED,
     _add_event,
+    is_in_quiet_hours,
     read_from_reminder,
 )
 
@@ -71,6 +74,148 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
+    """基于 Rhythm 画像与当日数据生成日常提醒（早安/三餐/工作焦点/运动/体重）。
+
+    幂等：同一天同类 brief 只生成一次。
+    """
+    from datetime import time as _time
+
+    from sail_server.infrastructure.orm.health import Weight
+    from sail_server.infrastructure.orm.rhythm import (
+        RhythmAffair,
+        RhythmDisciplineLog,
+    )
+    from sail_server.model.rhythm import get_or_create_profile
+
+    profile = get_or_create_profile(db)
+    today = now.date()
+    day = db.query(Day).filter(Day.date == today).first()
+    day_id = day.id if day else None
+
+    created = 0
+
+    def _today_exists(type_: str) -> bool:
+        return (
+            db.query(Reminder)
+            .filter(
+                Reminder.type == type_,
+                Reminder.trigger_time >= datetime.combine(today, datetime.min.time()),
+                Reminder.trigger_time < datetime.combine(today + timedelta(days=1), datetime.min.time()),
+            )
+            .first()
+            is not None
+        )
+
+    def _create(type_: str, title: str, body: str, trigger: datetime, payload: Dict[str, Any]) -> None:
+        nonlocal created
+        if _today_exists(type_):
+            return
+        quiet_hours = profile.spare_time_windows or DEFAULT_QUIET_HOURS
+        if is_in_quiet_hours(quiet_hours, trigger):
+            return
+        r = Reminder(
+            type=type_,
+            title=title,
+            body=body,
+            priority="normal",
+            source="rhythm",
+            state=STATE_PENDING,
+            trigger_time=trigger,
+            expire_after_minutes=120,
+            payload=payload,
+        )
+        db.add(r)
+        db.flush()
+        _add_event(db, r.id, "created", {"source": "rhythm_daily_brief"})
+        created += 1
+
+    def _time(hour: int, minute: int) -> datetime:
+        return datetime.combine(today, _time(hour, minute))
+
+    # 起床提醒：sleep_end
+    sleep_end = str(profile.sleep_end or "07:00")
+    h, m = int(sleep_end.split(":")[0]), int(sleep_end.split(":")[1])
+    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _time(h, m), {"sub_type": "wake_up"})
+
+    # 三餐提醒
+    for label, hh, mm in [("早餐", 8, 0), ("午餐", 12, 0), ("晚餐", 18, 30)]:
+        _create(
+            "rhythm.meal",
+            f"{label}时间",
+            f"记录{label}",
+            _time(hh, mm),
+            {"meal_type": label, "collection_type": "meal"},
+        )
+
+    # 体重（若今日无体重记录）
+    has_weight = False
+    if day_id:
+        day_start = datetime.combine(today, datetime.min.time())
+        has_weight = db.query(Weight).filter(Weight.htime >= day_start).first() is not None
+    if not has_weight:
+        _create(
+            "rhythm.weight",
+            "记录今日体重",
+            "早起体重打卡",
+            _time(8, 30),
+            {"collection_type": "weight"},
+        )
+
+    # 工作焦点
+    _create(
+        "rhythm.work_focus",
+        "进入工作焦点",
+        "查看今日 focus 块并开始执行",
+        _time(9, 30),
+        {"sub_type": "morning_focus"},
+    )
+
+    # 运动习惯：若存在 habit 且今日无完成记录
+    exercise_habit = (
+        db.query(RhythmAffair)
+        .filter(
+            RhythmAffair.kind == "habit",
+            RhythmAffair.title.ilike("%运动%"),
+            RhythmAffair.state == "ACTIVE",
+        )
+        .first()
+    )
+    if exercise_habit and day_id:
+        done_today = (
+            db.query(RhythmDisciplineLog)
+            .filter(
+                RhythmDisciplineLog.affair_id == exercise_habit.id,
+                RhythmDisciplineLog.log_date == today,
+                RhythmDisciplineLog.result == "done",
+            )
+            .first()
+            is not None
+        )
+        if not done_today:
+            _create(
+                "rhythm.exercise",
+                "运动打卡",
+                exercise_habit.title,
+                _time(19, 0),
+                {"collection_type": "exercise", "affair_id": exercise_habit.id},
+            )
+
+    # 睡眠提醒：sleep_start 前 30 分钟
+    sleep_start = str(profile.sleep_start or "23:30")
+    h, m = int(sleep_start.split(":")[0]), int(sleep_start.split(":")[1])
+    _create(
+        "rhythm.daily_brief",
+        "准备入睡",
+        f"{sleep_start} 睡眠窗即将开始",
+        _time(h, m) - timedelta(minutes=30),
+        {"sub_type": "sleep_prep"},
+    )
+
+    db.commit()
+    return created
+
+
 def scan_once(
     db_factory: Callable[[], Session],
     push: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -91,11 +236,21 @@ def scan_once(
         "expired": 0,
         "retried": 0,
         "archived": 0,
+        "rhythm_brief_created": 0,
     }
     pushed_payloads: List[Dict[str, Any]] = []
 
     db = db_factory()
     try:
+        # --------------------------------------------------------------
+        # 0. Rhythm 日常 brief 生成
+        # --------------------------------------------------------------
+        try:
+            stats["rhythm_brief_created"] = _generate_rhythm_daily_brief(db, now)
+        except Exception as e:
+            logger.warning(f"[reminder] rhythm daily brief generation failed: {e}")
+            stats["rhythm_brief_created"] = 0
+
         # --------------------------------------------------------------
         # 1. 到点投递：PENDING AND trigger_time <= now
         # --------------------------------------------------------------

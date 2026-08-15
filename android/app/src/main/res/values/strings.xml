@@ -49,4 +49,17 @@
     <string name="settings_connected">已连接</string>
     <string name="settings_disconnected">未连接</string>
     <string name="settings_device_id">设备 ID</string>
+
+    <!-- 健康打卡 -->
+    <string name="health_checkin_title">健康速记</string>
+    <string name="health_checkin_weight">体重</string>
+    <string name="health_checkin_meal">饮食</string>
+    <string name="health_checkin_exercise">运动</string>
+    <string name="health_checkin_medication">用药</string>
+    <string name="health_checkin_sleep">睡眠</string>
+    <string name="health_checkin_mood">心情</string>
+    <string name="health_checkin_submit">提交</string>
+    <string name="health_checkin_success">记录成功</string>
+    <string name="health_signals_title">今日健康信号</string>
+    <string name="health_checkin_entry">健康打卡</string>
 </resources>

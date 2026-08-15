@@ -99,7 +99,13 @@ fun SailZenNavGraph(
                     openCapture = openCapture,
                 )
             }
-            composable(Routes.CHECKIN) { CheckinScreen() }
+            composable(Routes.CHECKIN) {
+                CheckinScreen(
+                    onOpenHealthCheckin = {
+                        navController.navigate(Routes.healthCheckin())
+                    },
+                )
+            }
             composable(Routes.VENTURE) { VentureScreen() }
             composable(
                 route = Routes.HEALTH_CHECKIN,

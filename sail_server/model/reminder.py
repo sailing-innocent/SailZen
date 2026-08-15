@@ -93,6 +93,19 @@ SNOOZED_AGENT_REVIEW_AT = 5
 VALID_ACTIONS = {"dismiss", "snooze", "open", "resolve"}
 VALID_SNOOZE_OPTIONS = {"15m", "1h", "tonight", "tomorrow"}
 
+#: 默认安静时段：睡眠窗（与 rhythm 默认 sleep window 对齐）
+DEFAULT_QUIET_HOURS = {"start": "22:00", "end": "07:00"}
+
+#: rhythm 提醒类型集合
+RHYTHM_REMINDER_TYPES = {
+    "rhythm.daily_brief",
+    "rhythm.weight",
+    "rhythm.meal",
+    "rhythm.exercise",
+    "rhythm.medication",
+    "rhythm.work_focus",
+}
+
 
 # ============================================================================
 # Exceptions（Controller 层映射为 HTTP 状态码）
@@ -219,11 +232,77 @@ def read_from_rule(rule: ReminderRule) -> ReminderRuleResponse:
         enabled=bool(rule.enabled),
         priority=rule.priority or "normal",
         retry_policy=rule.retry_policy or {},
-        quiet_hours=rule.quiet_hours,
+        quiet_hours=rule.quiet_hours if rule.quiet_hours is not None else DEFAULT_QUIET_HOURS,
         frequency_level=rule.frequency_level or 0,
         created_at=rule.created_at,
         updated_at=rule.updated_at,
     )
+
+
+def _parse_hhmm(value: Any) -> Optional[tuple]:
+    """解析 HH:MM 为 (hour, minute)"""
+    if not value:
+        return None
+    try:
+        s = str(value).strip()
+        h, m = s.split(":")
+        return int(h), int(m)
+    except Exception:
+        return None
+
+
+def is_in_quiet_hours(quiet_hours: Optional[Dict[str, Any]], now: datetime) -> bool:
+    """判断当前时间是否处于安静时段。跨天时段（如 22:00-07:00）兼容。"""
+    cfg = quiet_hours or DEFAULT_QUIET_HOURS
+    start = _parse_hhmm(cfg.get("start"))
+    end = _parse_hhmm(cfg.get("end"))
+    if start is None or end is None:
+        return False
+    now_min = now.hour * 60 + now.minute
+    st_min = start[0] * 60 + start[1]
+    et_min = end[0] * 60 + end[1]
+    if st_min <= et_min:
+        return st_min <= now_min <= et_min
+    return now_min >= st_min or now_min <= et_min
+
+
+def parse_reminder_payload(r: Reminder) -> Dict[str, Any]:
+    """解析提醒 payload 中的深链参数与 Rhythm 相关字段。
+
+    返回字段:
+      - affair_id: int or None（来自 payload['affair_id'] 或 title/body 中的 #<id>）
+      - checkin_kind: str or None（payload['checkin_kind']）
+      - meal_type: str or None（payload['meal_type']）
+      - collection_type: str or None（payload['collection_type']）
+      - deep_link: str or None（payload['deep_link']）
+    """
+    payload = r.payload or {}
+    result: Dict[str, Any] = {
+        "affair_id": None,
+        "checkin_kind": None,
+        "meal_type": None,
+        "collection_type": None,
+        "deep_link": None,
+    }
+
+    def _extract_int(text: str) -> Optional[int]:
+        if not text:
+            return None
+        import re
+        m = re.search(r"#(\d+)", text)
+        if m:
+            try:
+                return int(m.group(1))
+            except ValueError:
+                return None
+        return None
+
+    result["affair_id"] = payload.get("affair_id") or _extract_int(r.title or "") or _extract_int(r.body or "")
+    result["checkin_kind"] = payload.get("checkin_kind")
+    result["meal_type"] = payload.get("meal_type")
+    result["collection_type"] = payload.get("collection_type")
+    result["deep_link"] = payload.get("deep_link")
+    return result
 
 
 def _get_reminder_or_404(db: Session, reminder_id: int) -> Reminder:

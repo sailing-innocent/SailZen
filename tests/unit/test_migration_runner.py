@@ -40,15 +40,15 @@ def sqlite_db():
         Database._Database__backend = None
 
 
-def test_migration_adds_pems_columns(sqlite_db):
-    """验证自动迁移会给 projects/missions 表添加 PEMS 阶段字段。"""
+def test_migration_schema_matches_orm(sqlite_db):
+    """验证自动迁移后的 schema 与当前 ORM 一致。"""
     engine = sqlite_db.get_bind()
     inspector = inspect(engine)
 
     mission_cols = {c["name"] for c in inspector.get_columns("missions")}
     project_cols = {c["name"] for c in inspector.get_columns("projects")}
 
-    # ORM 模型中的字段必须存在
+    # missions 原生字段保留
     assert "planned_minutes" in mission_cols
     assert "actual_minutes" in mission_cols
     assert "energy_cost" in mission_cols
@@ -56,10 +56,15 @@ def test_migration_adds_pems_columns(sqlite_db):
     assert "milestone_id" in mission_cols
     assert "health_constraint" in mission_cols
 
+    # projects 原生字段保留；PEMS 新增字段已移除
     assert "timespan_id" in project_cols
-    assert "energy_budget" in project_cols
-    assert "priority" in project_cols
-    assert "tags" in project_cols
+    assert "energy_budget" not in project_cols
+    assert "priority" not in project_cols
+    assert "tags" not in project_cols
+
+    # rhythm_affairs 新增字段
+    rhythm_cols = {c["name"] for c in inspector.get_columns("rhythm_affairs")}
+    assert "info_collection_type" in rhythm_cols
 
 
 def test_migration_is_idempotent(sqlite_db):

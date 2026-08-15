@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -39,14 +40,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.core.network.dto.CheckinTodayItemDto
+import com.sailzen.app.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CheckinScreen(viewModel: CheckinViewModel = viewModel()) {
+fun CheckinScreen(
+    onOpenHealthCheckin: (() -> Unit)? = null,
+    viewModel: CheckinViewModel = viewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -54,6 +60,11 @@ fun CheckinScreen(viewModel: CheckinViewModel = viewModel()) {
             TopAppBar(
                 title = { Text("打卡 ${state.checkins?.date ?: ""}") },
                 actions = {
+                    onOpenHealthCheckin?.let { onClick ->
+                        IconButton(onClick = onClick) {
+                            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.health_checkin_entry))
+                        }
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }

@@ -56,11 +56,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.CAPTURE_KINDS
+import com.sailzen.app.core.network.dto.HealthSignalItemDto
 import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.network.dto.kindLabel
@@ -80,6 +82,37 @@ fun blockColor(blockType: String): Color = when (blockType) {
     "career" -> Color(0xFFFF9800)
     "buffer" -> Color(0xFFBDBDBD)
     else -> Color(0xFF9E9E9E)
+}
+
+@Composable
+private fun HealthSignalCard(signal: HealthSignalItemDto) {
+    val label = when (signal.signalType) {
+        "weight" -> "体重"
+        "meal" -> "饮食"
+        "exercise" -> "运动"
+        "medication" -> "用药"
+        "sleep" -> "睡眠"
+        "mood" -> "心情"
+        else -> signal.signalType
+    }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, fontWeight = FontWeight.Medium)
+                Text(
+                    signal.valueJson.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                )
+            }
+            signal.htime?.let {
+                Text(it.substring(11, 16), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
 }
 
 private fun hhmm(iso: String): String =
@@ -160,6 +193,21 @@ fun TimelineScreen(
             state.weekReview?.let { review ->
                 item {
                     WeekRhythmCard(review = review, onClick = { viewModel.openWeekReview() })
+                }
+            }
+
+            // ---------------- 今日健康信号摘要 ----------------
+            if (state.healthSignals.isNotEmpty()) {
+                item {
+                    Text(
+                        stringResource(R.string.health_signals_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                items(state.healthSignals, key = { "hs-${it.refId}-${it.signalType}" }) { signal ->
+                    HealthSignalCard(signal = signal)
                 }
             }
 

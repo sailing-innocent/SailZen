@@ -815,7 +815,7 @@ class ReviewController(Controller):
         with _map_errors():
             return review_timespan_impl(db, timespan_id)
 
-    @get("/project/{project_id:int}/timeline")
+    @get("/review/project/{project_id:int}")
     async def project_timeline(
         self,
         project_id: int,
