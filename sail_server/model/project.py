@@ -46,9 +46,6 @@ def _project_to_response(project: Project) -> ProjectResponse:
         start_time_qbw=project.start_time_qbw,
         end_time_qbw=project.end_time_qbw,
         timespan_id=project.timespan_id,
-        energy_budget=project.energy_budget or 0,
-        priority=project.priority or 0,
-        tags=project.tags or [],
         ctime=project.ctime,
         mtime=project.mtime,
     )
@@ -68,9 +65,6 @@ def create_project_impl(db, project_create: ProjectCreateRequest) -> ProjectResp
         if project_create.end_time_qbw is not None
         else now + 1,
         timespan_id=project_create.timespan_id,
-        energy_budget=project_create.energy_budget or 0,
-        priority=project_create.priority or 0,
-        tags=project_create.tags or [],
     )
     db.add(project)
     db.commit()
@@ -158,12 +152,6 @@ def update_project_impl(
         project.end_time_qbw = project_update.end_time_qbw
     if project_update.timespan_id is not None:
         project.timespan_id = project_update.timespan_id
-    if project_update.energy_budget is not None:
-        project.energy_budget = project_update.energy_budget
-    if project_update.priority is not None:
-        project.priority = project_update.priority
-    if project_update.tags is not None:
-        project.tags = list(project_update.tags)
 
     project.mtime = datetime.now()
     db.commit()

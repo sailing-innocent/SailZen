@@ -36,7 +36,6 @@ MIGRATION_DIR = Path(__file__).parent
 
 # Python 迁移脚本（跨后端，通常用于给已有表添加列）
 PYTHON_MIGRATIONS: List[Path] = [
-    MIGRATION_DIR / "20260301_pems_phase1.py",
 ]
 
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）

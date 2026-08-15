@@ -133,9 +133,6 @@ class ProjectBase(BaseModel):
     start_time_qbw: Optional[int] = Field(default=0, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=0, description="结束时间(QBW格式)")
     timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
-    energy_budget: Optional[int] = Field(default=0, description="项目总精力预算")
-    priority: Optional[int] = Field(default=0, description="项目优先级")
-    tags: Optional[List[str]] = Field(default_factory=list, description="标签")
 
 
 class ProjectCreateRequest(BaseModel):
@@ -148,9 +145,6 @@ class ProjectCreateRequest(BaseModel):
     start_time_qbw: Optional[int] = Field(default=None, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=None, description="结束时间(QBW格式)")
     timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
-    energy_budget: Optional[int] = Field(default=None, description="项目总精力预算")
-    priority: Optional[int] = Field(default=None, description="项目优先级")
-    tags: Optional[List[str]] = Field(default=None, description="标签")
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -164,9 +158,6 @@ class ProjectUpdateRequest(BaseModel):
     start_time_qbw: Optional[int] = Field(default=None, description="开始时间(QBW格式)")
     end_time_qbw: Optional[int] = Field(default=None, description="结束时间(QBW格式)")
     timespan_id: Optional[int] = Field(default=None, description="归属时间跨度ID")
-    energy_budget: Optional[int] = Field(default=None, description="项目总精力预算")
-    priority: Optional[int] = Field(default=None, description="项目优先级")
-    tags: Optional[List[str]] = Field(default=None, description="标签")
 
 
 class ProjectResponse(ProjectBase):

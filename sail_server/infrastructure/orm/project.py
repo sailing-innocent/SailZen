@@ -16,7 +16,6 @@ from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func
 from sqlalchemy.orm import relationship
 
 from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.data.types import ARRAY
 
 
 class Project(ORMBase):
@@ -30,9 +29,6 @@ class Project(ORMBase):
     timespan_id = Column(
         Integer, ForeignKey("timespans.id"), nullable=True, default=None, index=True
     )
-    energy_budget = Column(Integer, default=0)
-    priority = Column(Integer, default=0)
-    tags = Column(ARRAY(String), default=list)
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
 
