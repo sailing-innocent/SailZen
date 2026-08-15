@@ -1,5 +1,5 @@
 -- Migration: 添加 Rhythm（生活/工作节奏综合优先级调节工具）7 张表
--- Date: 2026-10-26
+-- Date: 2026-08-15
 -- Author: sailing-innocent
 -- Description: 统一事务（Affair 9 类 kind 双生命周期）、日时间线块、基础节奏模板、
 --              戒律/习惯打卡日志、精力画像、守护策略、节奏复盘快照。

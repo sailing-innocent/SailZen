@@ -116,6 +116,15 @@ class Database:
         )
         self.create_all()
 
+        # 自动运行迁移脚本，保证 schema 与 ORM 模型一致（无痛迁移）
+        try:
+            from sail_server.migration import run_migrations
+
+            run_migrations()
+        except Exception as e:
+            print(f"[Database] Migration failed: {e}")
+            raise
+
     @property
     def backend(self) -> str:
         """返回当前数据库后端类型: 'postgres' 或 'sqlite'"""

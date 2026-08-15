@@ -28,10 +28,13 @@ def _column_exists(inspector, table_name: str, column_name: str) -> bool:
     return any(c["name"] == column_name for c in columns)
 
 
-def migrate():
+def migrate(db=None):
     from sail_server.db import Database
 
-    db = Database.get_instance().get_db_session()
+    close_after = False
+    if db is None:
+        db = Database.get_instance().get_db_session()
+        close_after = True
     try:
         engine = db.get_bind()
         inspector = inspect(engine)
@@ -82,7 +85,8 @@ def migrate():
         print(f"[migrate] Migration failed: {e}")
         raise
     finally:
-        db.close()
+        if close_after:
+            db.close()
 
 
 if __name__ == "__main__":
