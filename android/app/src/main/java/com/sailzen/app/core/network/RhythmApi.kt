@@ -11,9 +11,14 @@ import com.sailzen.app.core.network.dto.CheckinRequest
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.ConfirmHintRequest
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.HealthCheckinRequest
+import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
+import com.sailzen.app.core.network.dto.ProjectTimelineDto
 import com.sailzen.app.core.network.dto.ReviewDto
+import com.sailzen.app.core.network.dto.ReviewTimespanDto
+import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import retrofit2.http.Body
@@ -87,4 +92,18 @@ interface RhythmApi {
 
     @GET("api/v1/rhythm/review/week")
     suspend fun reviewWeek(@Query("span") span: String? = null): ReviewDto
+
+    @GET("api/v1/rhythm/review/timespan/{id}")
+    suspend fun reviewTimespan(@Path("id") id: Int): ReviewTimespanDto
+
+    @GET("api/v1/rhythm/review/project/{id}/timeline")
+    suspend fun projectTimeline(@Path("id") id: Int): ProjectTimelineDto
+
+    // ---------------- Day View / Health ----------------
+
+    @GET("api/v1/rhythm/timeline/day-view")
+    suspend fun dayView(@Query("date") date: String): RhythmDayViewDto
+
+    @POST("api/v1/rhythm/checkin/health")
+    suspend fun healthCheckin(@Body body: HealthCheckinRequest): HealthCheckinResponse
 }

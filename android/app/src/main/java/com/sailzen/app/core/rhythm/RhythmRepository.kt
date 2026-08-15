@@ -16,9 +16,15 @@ import com.sailzen.app.core.network.dto.CheckinRequest
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.ConfirmHintRequest
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.HealthCheckinRequest
+import com.sailzen.app.core.network.dto.HealthCheckinResponse
+import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
+import com.sailzen.app.core.network.dto.ProjectTimelineDto
 import com.sailzen.app.core.network.dto.ReviewDto
+import com.sailzen.app.core.network.dto.ReviewTimespanDto
+import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import com.sailzen.app.core.reminder.ReminderRepository.Companion.nowIso
 import java.time.LocalDate
@@ -248,6 +254,50 @@ class RhythmRepository private constructor(private val context: Context) {
         apiOrNull()?.reviewWeek(span)
     } catch (e: Exception) {
         Log.w(TAG, "reviewWeek failed: ${e.message}")
+        null
+    }
+
+    suspend fun reviewTimespan(timespanId: Int): ReviewTimespanDto? = try {
+        apiOrNull()?.reviewTimespan(timespanId)
+    } catch (e: Exception) {
+        Log.w(TAG, "reviewTimespan failed: ${e.message}")
+        null
+    }
+
+    suspend fun projectTimeline(projectId: Int): ProjectTimelineDto? = try {
+        apiOrNull()?.projectTimeline(projectId)
+    } catch (e: Exception) {
+        Log.w(TAG, "projectTimeline failed: ${e.message}")
+        null
+    }
+
+    // ------------------------------------------------------------------
+    // 统一日视图 / 健康速记
+    // ------------------------------------------------------------------
+
+    suspend fun dayView(date: LocalDate = LocalDate.now()): RhythmDayViewDto? = try {
+        apiOrNull()?.dayView(date.toString())
+    } catch (e: Exception) {
+        Log.w(TAG, "dayView failed: ${e.message}")
+        null
+    }
+
+    suspend fun healthCheckin(
+        collectionType: InfoCollectionType,
+        payload: Map<String, Any>,
+        note: String = "",
+        date: LocalDate = LocalDate.now(),
+    ): HealthCheckinResponse? = try {
+        val jsonPayload = org.json.JSONObject(payload).toString()
+        val body = HealthCheckinRequest(
+            collectionType = collectionType,
+            logDate = date.toString(),
+            payload = json.parseToJsonElement(jsonPayload).jsonObject,
+            note = note,
+        )
+        apiOrNull()?.healthCheckin(body)
+    } catch (e: Exception) {
+        Log.w(TAG, "healthCheckin failed: ${e.message}")
         null
     }
 

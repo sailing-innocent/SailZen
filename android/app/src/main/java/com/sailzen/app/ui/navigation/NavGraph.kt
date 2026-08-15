@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.sailzen.app.feature.checkin.CheckinScreen
+import com.sailzen.app.feature.health.HealthCheckinScreen
 import com.sailzen.app.feature.inbox.InboxScreen
 import com.sailzen.app.feature.settings.SettingsScreen
 import com.sailzen.app.feature.timeline.TimelineScreen
@@ -32,8 +33,10 @@ object Routes {
     const val VENTURE = "venture"
     const val INBOX = "inbox?reminder_id={reminder_id}"
     const val SETTINGS = "settings"
+    const val HEALTH_CHECKIN = "health_checkin?type={type}"
 
     fun inbox(reminderId: Int = -1) = "inbox?reminder_id=$reminderId"
+    fun healthCheckin(type: String = "weight") = "health_checkin?type=$type"
 }
 
 private data class TabItem(
@@ -98,6 +101,23 @@ fun SailZenNavGraph(
             }
             composable(Routes.CHECKIN) { CheckinScreen() }
             composable(Routes.VENTURE) { VentureScreen() }
+            composable(
+                route = Routes.HEALTH_CHECKIN,
+                arguments = listOf(
+                    navArgument("type") {
+                        type = NavType.StringType
+                        defaultValue = "weight"
+                    },
+                ),
+            ) { entry ->
+                val typeName = entry.arguments?.getString("type") ?: "weight"
+                HealthCheckinScreen(
+                    initialType = runCatching {
+                        com.sailzen.app.core.network.dto.InfoCollectionType.valueOf(typeName)
+                    }.getOrNull(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(
                 route = Routes.INBOX,
                 arguments = listOf(

@@ -11,6 +11,11 @@ import kotlinx.serialization.json.JsonObject
  */
 
 @Serializable
+enum class InfoCollectionType {
+    weight, meal, exercise, medication, sleep, mood
+}
+
+@Serializable
 data class AffairDto(
     val id: Int,
     val title: String,
@@ -28,6 +33,7 @@ data class AffairDto(
     @SerialName("window_end") val windowEnd: String? = null,
     @SerialName("fallback_plan") val fallbackPlan: String = "",
     @SerialName("parent_id") val parentId: Int? = null,
+    @SerialName("info_collection_type") val infoCollectionType: String? = null,
     @SerialName("ai_hint") val aiHint: JsonObject = JsonObject(emptyMap()),
     val score: Double = 0.0,
 )
@@ -196,6 +202,81 @@ data class ReviewDto(
     val id: Int? = null,
     val scope: String,
     @SerialName("period_key") val periodKey: String,
+    @SerialName("rhythm_score") val rhythmScore: Double = 0.0,
+    @SerialName("domain_minutes") val domainMinutes: JsonObject = JsonObject(emptyMap()),
+    @SerialName("precept_compliance_rate") val preceptComplianceRate: Double = 0.0,
+    @SerialName("habit_consistency") val habitConsistency: Double = 0.0,
+    @SerialName("sleep_window_keeping") val sleepWindowKeeping: Double = 0.0,
+    @SerialName("venture_budget_fulfillment") val ventureBudgetFulfillment: Double = 0.0,
+    @SerialName("buffer_consumed") val bufferConsumed: Double = 0.0,
+    val encroachments: List<JsonElement> = emptyList(),
+    @SerialName("ai_summary") val aiSummary: String = "",
+)
+
+@Serializable
+data class HealthSignalItemDto(
+    @SerialName("signal_type") val signalType: String,
+    @SerialName("ref_id") val refId: Int,
+    @SerialName("value_json") val valueJson: JsonObject = JsonObject(emptyMap()),
+    val htime: String? = null,
+)
+
+@Serializable
+data class RhythmDayViewDto(
+    val date: String,
+    @SerialName("day_id") val dayId: Int,
+    @SerialName("plan_version") val planVersion: Int = 0,
+    val blocks: List<TimeBlockDto> = emptyList(),
+    @SerialName("domain_minutes") val domainMinutes: DomainMinutesDto = DomainMinutesDto(),
+    @SerialName("energy_consumed") val energyConsumed: Int = 0,
+    @SerialName("energy_budget") val energyBudget: Int = 100,
+    @SerialName("energy_available") val energyAvailable: Int = 100,
+    @SerialName("buffer_total_minutes") val bufferTotalMinutes: Int = 0,
+    @SerialName("buffer_free_minutes") val bufferFreeMinutes: Int = 0,
+    val checkins: CheckinTodayDto? = null,
+    @SerialName("health_signals") val healthSignals: List<HealthSignalItemDto> = emptyList(),
+    val insights: List<String> = emptyList(),
+    val warnings: List<String> = emptyList(),
+    val note: String? = null,
+)
+
+@Serializable
+data class HealthCheckinRequest(
+    @SerialName("collection_type") val collectionType: InfoCollectionType,
+    @SerialName("log_date") val logDate: String? = null,
+    val payload: JsonObject = JsonObject(emptyMap()),
+    val note: String = "",
+)
+
+@Serializable
+data class HealthCheckinResponse(
+    val id: Int,
+    @SerialName("collection_type") val collectionType: String,
+    @SerialName("log_date") val logDate: String,
+    @SerialName("ref_id") val refId: Int? = null,
+    @SerialName("affair_id") val affairId: Int? = null,
+    val note: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+@Serializable
+data class ProjectTimelineDto(
+    @SerialName("project_id") val projectId: Int,
+    @SerialName("project_name") val projectName: String,
+    @SerialName("start_date") val startDate: String? = null,
+    @SerialName("end_date") val endDate: String? = null,
+    val blocks: List<TimeBlockDto> = emptyList(),
+    @SerialName("domain_minutes") val domainMinutes: DomainMinutesDto = DomainMinutesDto(),
+    @SerialName("energy_consumed") val energyConsumed: Int = 0,
+    @SerialName("energy_budget") val energyBudget: Int = 100,
+)
+
+@Serializable
+data class ReviewTimespanDto(
+    val id: Int? = null,
+    val scope: String,
+    @SerialName("period_key") val periodKey: String,
+    @SerialName("timespan_id") val timespanId: Int,
     @SerialName("rhythm_score") val rhythmScore: Double = 0.0,
     @SerialName("domain_minutes") val domainMinutes: JsonObject = JsonObject(emptyMap()),
     @SerialName("precept_compliance_rate") val preceptComplianceRate: Double = 0.0,
