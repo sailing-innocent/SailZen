@@ -50,6 +50,7 @@ import com.sailzen.app.core.network.dto.DashboardExerciseItemDto
 import com.sailzen.app.core.network.dto.DashboardMedicationItemDto
 import com.sailzen.app.core.network.dto.DashboardSleepItemDto
 import com.sailzen.app.core.network.dto.DashboardWeightItemDto
+import com.sailzen.app.core.network.dto.HealthDashboardDto
 import com.sailzen.app.ui.components.SectionCard
 import com.sailzen.app.ui.navigation.Routes
 import java.time.LocalDate

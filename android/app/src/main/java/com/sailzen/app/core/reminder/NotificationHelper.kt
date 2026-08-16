@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.sailzen.app.MainActivity
 import com.sailzen.app.R
+import com.sailzen.app.core.health.HealthAlarmActionReceiver
 
 /**
  * 通知构建器（设计文档 §6.2 / 附录 C）。

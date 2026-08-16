@@ -19,6 +19,8 @@ object ApiClient {
     private var cachedApi: ReminderApi? = null
     private var cachedHealthKey: String? = null
     private var cachedHealthApi: HealthApi? = null
+    private var cachedRhythmKey: String? = null
+    private var cachedRhythmApi: RhythmApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true

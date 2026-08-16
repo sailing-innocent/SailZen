@@ -70,7 +70,7 @@
     <string name="health_sleep_hours">睡眠 %.1f 小时</string>
     <string name="health_exercise_minutes">运动 %d 分钟</string>
     <string name="health_medication_compliance">用药依从性 %d%%</string>
-    <string name="health_diet_calories">热量 %d / %d kcal</string>
+    <string name="health_diet_calories">热量 %1$d / %2$d kcal</string>
     <string name="health_weight_status_above">偏高</string>
     <string name="health_weight_status_below">偏低</string>
     <string name="health_weight_status_normal">正常</string>
@@ -86,4 +86,11 @@
     <string name="health_nutrition_goal">营养目标</string>
     <string name="health_exercise_goal">运动目标</string>
     <string name="health_record_exercise">记录运动</string>
+    <string name="health_checkin_entry">健康打卡</string>
+    <string name="health_checkin_weight">记录体重</string>
+    <string name="health_checkin_medication">记录用药</string>
+    <string name="health_checkin_sleep">记录睡眠</string>
+    <string name="health_checkin_exercise">记录运动</string>
+    <string name="health_checkin_meal">记录饮食</string>
+    <string name="health_signals_title">健康信号</string>
 </resources>

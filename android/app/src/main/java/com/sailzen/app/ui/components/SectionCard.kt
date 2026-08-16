@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 fun SectionCard(
     title: String,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
+    onClick: () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(

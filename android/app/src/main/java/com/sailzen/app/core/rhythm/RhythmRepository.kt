@@ -6,6 +6,7 @@ import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.data.db.AppDatabase
 import com.sailzen.app.core.data.db.PendingRhythmAction
 import com.sailzen.app.core.network.ApiClient
+import com.sailzen.app.core.network.HealthApi
 import com.sailzen.app.core.network.RhythmApi
 import com.sailzen.app.core.network.dto.AffairCreateRequest
 import com.sailzen.app.core.network.dto.AffairDto
@@ -16,6 +17,11 @@ import com.sailzen.app.core.network.dto.CheckinRequest
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.ConfirmHintRequest
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.DietCreateRequest
+import com.sailzen.app.core.network.dto.ExerciseCreateRequest
+import com.sailzen.app.core.network.dto.MedicationCreateRequest
+import com.sailzen.app.core.network.dto.SleepCreateRequest
+import com.sailzen.app.core.network.dto.WeightCreateRequest
 import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
@@ -295,7 +301,7 @@ class RhythmRepository private constructor(private val context: Context) {
 
     suspend fun healthCheckin(
         collectionType: InfoCollectionType,
-        payload: Map<String, Any>,
+        payload: Map<String, Any?>,
         note: String = "",
         date: LocalDate = LocalDate.now(),
     ): HealthCheckinResponse? {
