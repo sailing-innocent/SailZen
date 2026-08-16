@@ -65,6 +65,7 @@ import com.sailzen.app.core.network.dto.CAPTURE_KINDS
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
 import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
+import com.sailzen.app.R
 import com.sailzen.app.core.network.dto.kindLabel
 
 /** 块类型配色（设计文档 §8：骨架淡色铺底、fixed 深蓝锁定、precept 紫、habit 绿、career 橙、buffer 灰） */
