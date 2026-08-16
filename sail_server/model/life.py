@@ -12,10 +12,12 @@
 提供 Day 与 TimeSpan 的 CRUD 操作和时间系统初始化逻辑。
 """
 
+from collections import Counter
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from sail_server.infrastructure.orm.life import Day, TimeSpan
@@ -611,6 +613,16 @@ def init_days_impl(
     if start_date >= end_date:
         return 0
 
+    expected = (end_date - start_date).days
+    day_count = (
+        db.query(func.count(Day.id))
+        .filter(Day.date >= start_date, Day.date < end_date)
+        .scalar()
+    )
+    if day_count == expected:
+        logger.info("No new days to initialize")
+        return 0
+
     existing_dates = {d[0] for d in db.query(Day.date).filter(
         Day.date >= start_date, Day.date < end_date
     ).all()}
@@ -667,17 +679,27 @@ def init_timespans_impl(
     years = _iter_years(hyears)
 
     all_defs = weeks + biweeks + months + bimonths + quarters + hyears + years
+    classes = {d.class_ for d in all_defs}
+    expected_counts = Counter(d.class_ for d in all_defs)
+
+    # 快速路径：若各类别数量均已符合预期，则跳过繁重的全量加载与关系修复
+    existing_counts = {
+        class_: db.query(func.count(TimeSpan.id))
+        .filter(TimeSpan.class_ == class_)
+        .scalar()
+        for class_ in classes
+    }
+    if all(existing_counts.get(c, 0) == expected_counts[c] for c in expected_counts):
+        logger.info("No new timespans to initialize")
+        return existing_counts
 
     # 查询已存在的跨度，按 (class, name) 索引
     existing_spans = (
-        db.query(TimeSpan)
-        .filter(TimeSpan.class_.in_([d.class_ for d in all_defs]))
-        .all()
+        db.query(TimeSpan).filter(TimeSpan.class_.in_(classes)).all()
     )
     existing_key_to_span = {(s.class_, s.name): s for s in existing_spans}
 
     # 创建缺失的跨度
-    created_count = 0
     new_spans = []
     for d in all_defs:
         key = (d.class_, d.name)
@@ -701,7 +723,6 @@ def init_timespans_impl(
             ref={},
         )
         new_spans.append(span)
-        created_count += 1
 
     if new_spans:
         db.add_all(new_spans)
@@ -710,22 +731,15 @@ def init_timespans_impl(
             db.refresh(span)
         logger.info(f"Initialized {len(new_spans)} new timespans")
 
-    # 重新查询所有相关跨度以建立 name -> id 映射
-    refreshed_spans = (
-        db.query(TimeSpan)
-        .filter(TimeSpan.class_.in_([d.class_ for d in all_defs]))
-        .all()
-    )
-    key_to_id = {(s.class_, s.name): s.id for s in refreshed_spans}
+    # 用已加载的对象直接建立/更新父子关系，避免 N+1 查询
+    all_key_to_span = dict(existing_key_to_span)
+    all_key_to_span.update({(s.class_, s.name): s for s in new_spans})
+    key_to_id = {key: s.id for key, s in all_key_to_span.items()}
 
-    # 建立/更新父子关系
     updated_parents = 0
     for d in all_defs:
         key = (d.class_, d.name)
-        span_id = key_to_id.get(key)
-        if span_id is None:
-            continue
-        span = db.query(TimeSpan).filter(TimeSpan.id == span_id).first()
+        span = all_key_to_span.get(key)
         if span is None:
             continue
 
@@ -736,7 +750,7 @@ def init_timespans_impl(
             if child_id is not None:
                 child_ids.append(child_id)
 
-        # 即使子关系无变化也写入，保证幂等且一致
+        # 仅在实际变化时写入
         if set(span.child_span_ids or []) != set(child_ids):
             span.child_span_ids = child_ids
             updated_parents += 1
@@ -745,14 +759,7 @@ def init_timespans_impl(
         db.commit()
         logger.info(f"Updated {updated_parents} parent timespan child relationships")
 
-    # 统计各 class 的数量
-    stats = {}
-    for class_ in {d.class_ for d in all_defs}:
-        stats[class_] = (
-            db.query(TimeSpan).filter(TimeSpan.class_ == class_).count()
-        )
-
-    return stats
+    return expected_counts
 
 
 def _child_class(parent_class: str) -> str:

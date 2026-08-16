@@ -32,9 +32,9 @@ test('api_get_weights', async () => {
 
 test('api_update_weight_plan builds PUT request', async () => {
   // This test assumes a running server; it verifies the function resolves and returns shape.
-  const result = await api_update_weight_plan(1, { target_weight: 70 })
+  const result = await api_update_weight_plan(1, { targetWeight: '70' })
   expect(result).toHaveProperty('id')
-  expect(result).toHaveProperty('target_weight')
+  expect(result).toHaveProperty('targetWeight')
 })
 
 test('api_delete_weight_plan resolves without throwing', async () => {

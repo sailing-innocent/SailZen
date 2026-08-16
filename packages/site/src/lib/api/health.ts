@@ -24,6 +24,19 @@ import {
 
 const HEALTH_API_BASE = API_BASE + '/health'
 
+// Normalize a backend htime value (timestamp in seconds or ISO datetime string)
+// to a Unix timestamp in seconds.
+const normalizeHtime = (htime: number | string | undefined | null): number => {
+  if (htime === undefined || htime === null) {
+    return Math.floor(Date.now() / 1000)
+  }
+  if (typeof htime === 'number') {
+    return htime
+  }
+  const parsed = Date.parse(htime)
+  return isNaN(parsed) ? Math.floor(Date.now() / 1000) : Math.floor(parsed / 1000)
+}
+
 // ==================== Weight APIs ====================
 
 const api_get_weight = async (index: number): Promise<WeightData> => {
@@ -96,6 +109,20 @@ const api_create_weight = async (newWeight: WeightCreateProps): Promise<WeightDa
     return response.json()
   } catch (error) {
     console.error('Failed to create weight data:', error)
+    throw error
+  }
+}
+
+const api_delete_weight = async (id: number): Promise<void> => {
+  try {
+    const response = await fetch(`${SERVER_URL}/${HEALTH_API_BASE}/weight/${id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      throw new Error(`Error deleting weight data: ${response.statusText}`)
+    }
+  } catch (error) {
+    console.error('Failed to delete weight data:', error)
     throw error
   }
 }
@@ -326,7 +353,20 @@ const api_get_weights_with_status = async (
     if (!response.ok) {
       throw new Error(`Error fetching weights with status: ${response.statusText}`)
     }
-    return response.json()
+    const data = (await response.json()) as Array<{
+      id: number
+      value: number
+      htime: number | string
+      tag?: string
+      description?: string
+      expected_value: number
+      status: 'above' | 'below' | 'normal'
+      diff: number
+    }>
+    return data.map((item) => ({
+      ...item,
+      htime: normalizeHtime(item.htime),
+    }))
   } catch (error) {
     console.error('Failed to fetch weights with status:', error)
     return []
@@ -400,6 +440,7 @@ export {
   api_get_weight,
   api_get_weights,
   api_create_weight,
+  api_delete_weight,
   api_analyze_weight_trend,
   api_predict_weight,
   api_create_weight_plan,

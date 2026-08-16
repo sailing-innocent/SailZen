@@ -1,5 +1,11 @@
 import React from 'react'
-import { type WeightCreateProps, type ExerciseCreateProps, type WeightPlanCreateProps, type WeightPlanCurveType } from '@lib/data'
+import {
+  type WeightCreateProps,
+  type ExerciseCreateProps,
+  type WeightPlanCreateProps,
+  type WeightPlanCurveType,
+  type WeightRecordWithStatus,
+} from '@lib/data'
 import { type HealthState, useHealthStore } from '@lib/store/health'
 
 import PageLayout from '@components/page_layout'
@@ -19,9 +25,19 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { Trash2, Target, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { Trash2, Target, TrendingDown, TrendingUp, Minus, Scale, CalendarDays } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 
 type DateSpanChoice = '7d' | '30d' | '90d' | '1y' | 'all'
@@ -40,9 +56,17 @@ const dateSpanSelectOptions: DateSpanOption[] = [
   { value: 'all', label: 'All Time', getDate: () => new Date(0) },
 ]
 
+const curveLabel: Record<WeightPlanCurveType, string> = {
+  linear: 'Linear',
+  polynomial: 'Polynomial (ease-out)',
+  exponential: 'Exponential',
+}
+
 const HealthPage = () => {
   const fetchWeights = useHealthStore((state: HealthState) => state.fetchWeights)
   const createWeight = useHealthStore((state: HealthState) => state.createWeight)
+  const deleteWeight = useHealthStore((state: HealthState) => state.deleteWeight)
+  const weightsWithStatus = useHealthStore((state: HealthState) => state.weightsWithStatus)
   const exercises = useHealthStore((state: HealthState) => state.exercises)
   const fetchExercises = useHealthStore((state: HealthState) => state.fetchExercises)
   const createExercise = useHealthStore((state: HealthState) => state.createExercise)
@@ -59,6 +83,7 @@ const HealthPage = () => {
   const weightSaveMessage = useHealthStore((state: HealthState) => state.weightSaveMessage)
   const fetchPlanCheckinStatus = useHealthStore((state: HealthState) => state.fetchPlanCheckinStatus)
   const fetchWeightsWithStatus = useHealthStore((state: HealthState) => state.fetchWeightsWithStatus)
+  const fetchPlanExpected = useHealthStore((state: HealthState) => state.fetchPlanExpected)
   const isMobile = useIsMobile()
 
   const selectItems = dateSpanSelectOptions.map((option) => (
@@ -73,6 +98,8 @@ const HealthPage = () => {
 
   const [createDate, setCreateDate] = React.useState<Date>(new Date()) // Default to today
   const [createWeightValue, setCreateWeightValue] = React.useState<string>('')
+  const [createWeightTag, setCreateWeightTag] = React.useState<string>('raw')
+  const [createWeightDescription, setCreateWeightDescription] = React.useState<string>('')
 
   // Exercise form state
   const [exerciseDate, setExerciseDate] = React.useState<Date>(new Date())
@@ -92,7 +119,7 @@ const HealthPage = () => {
   const [planDescription, setPlanDescription] = React.useState<string>('')
   const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState<boolean>(false)
 
-  // Fetch plan on mount and when plan changes
+  // Fetch plan on mount
   React.useEffect(() => {
     fetchWeightPlan().then(() => {
       fetchPlanCheckinStatus()
@@ -103,7 +130,7 @@ const HealthPage = () => {
     const startDateUnix = Math.floor(startDate.getTime() / 1000)
     const endDateUnix = Math.floor(endDate.getTime() / 1000)
     fetchWeights(0, 4096, startDateUnix, endDateUnix)
-    // Also fetch weights with status for the chart
+    // Also fetch weights with status for the chart and list
     fetchWeightsWithStatus(startDateUnix, endDateUnix)
     // Fetch plan expected points aligned to current date range
     fetchPlanExpected(startDateUnix, endDateUnix)
@@ -130,12 +157,9 @@ const HealthPage = () => {
     setEndDate(now)
   }, [dateSpan])
 
-  // Fetch plan checkin status when plan changes
-  React.useEffect(() => {
-    if (weightPlan) {
-      fetchPlanCheckinStatus()
-    }
-  }, [weightPlan, fetchPlanCheckinStatus])
+  const sortedWeights = React.useMemo(() => {
+    return [...weightsWithStatus].sort((a, b) => b.htime - a.htime)
+  }, [weightsWithStatus])
 
   const handleCreateExercise = async () => {
     const props: ExerciseCreateProps = {
@@ -152,18 +176,22 @@ const HealthPage = () => {
     await deleteExercise(id)
   }
 
+  const handleDeleteWeight = async (id: number) => {
+    await deleteWeight(id)
+  }
+
   // Populate plan dialog when opening or when existing plan changes
   React.useEffect(() => {
     if (weightPlan) {
-      setPlanTargetWeight(String(weightPlan.target_weight))
-      setPlanInitialWeight(weightPlan.initial_weight ? String(weightPlan.initial_weight) : '')
-      setPlanInitialWeightAuto(weightPlan.initial_weight === null || weightPlan.initial_weight === undefined)
-      setPlanStartDate(new Date(weightPlan.start_time * 1000))
-      setPlanTargetDate(new Date(weightPlan.target_time * 1000))
-      setPlanCurveType(weightPlan.curve_type || 'linear')
-      setPlanNotifyEnabled(weightPlan.notify_enabled || false)
-      setPlanNotifyTime(weightPlan.notify_time || '08:30')
-      setPlanFeedbackEnabled(weightPlan.feedback_enabled || false)
+      setPlanTargetWeight(String(weightPlan.targetWeight))
+      setPlanInitialWeight(weightPlan.initialWeight ? String(weightPlan.initialWeight) : '')
+      setPlanInitialWeightAuto(weightPlan.initialWeight === null || weightPlan.initialWeight === undefined)
+      setPlanStartDate(new Date(weightPlan.startTime * 1000))
+      setPlanTargetDate(new Date(weightPlan.targetTime * 1000))
+      setPlanCurveType(weightPlan.curveType || 'linear')
+      setPlanNotifyEnabled(weightPlan.notifyEnabled || false)
+      setPlanNotifyTime(weightPlan.notifyTime || '08:30')
+      setPlanFeedbackEnabled(weightPlan.feedbackEnabled || false)
       setPlanDescription(weightPlan.description || '')
     } else {
       setPlanTargetWeight('')
@@ -178,17 +206,18 @@ const HealthPage = () => {
       setPlanDescription('')
     }
   }, [weightPlan, isPlanDialogOpen])
+
   const handleCreatePlan = async () => {
     const props: WeightPlanCreateProps = {
-      target_weight: parseFloat(planTargetWeight),
-      initial_weight: planInitialWeightAuto ? null : parseFloat(planInitialWeight),
-      start_time: Math.floor(planStartDate.getTime() / 1000),
-      target_time: Math.floor(planTargetDate.getTime() / 1000),
+      targetWeight: planTargetWeight.trim(),
+      initialWeight: planInitialWeightAuto ? null : planInitialWeight.trim(),
+      startTime: Math.floor(planStartDate.getTime() / 1000),
+      targetTime: Math.floor(planTargetDate.getTime() / 1000),
       description: planDescription,
-      curve_type: planCurveType,
-      notify_enabled: planNotifyEnabled,
-      notify_time: planNotifyTime,
-      feedback_enabled: planFeedbackEnabled,
+      curveType: planCurveType,
+      notifyEnabled: planNotifyEnabled,
+      notifyTime: planNotifyTime,
+      feedbackEnabled: planFeedbackEnabled,
     }
     if (weightPlan && weightPlan.id > 0) {
       await updateWeightPlan(weightPlan.id, props)
@@ -229,12 +258,30 @@ const HealthPage = () => {
     }
   }
 
+  const getStatusBadge = (record: WeightRecordWithStatus) => {
+    switch (record.status) {
+      case 'above':
+        return <Badge variant="destructive">Above +{record.diff.toFixed(1)} kg</Badge>
+      case 'below':
+        return <Badge className="bg-green-500 hover:bg-green-600">Below {record.diff.toFixed(1)} kg</Badge>
+      default:
+        return <Badge variant="secondary">On Target</Badge>
+    }
+  }
+
+  const daysRemaining = React.useMemo(() => {
+    if (!weightPlan) return null
+    const end = new Date(weightPlan.targetTime * 1000)
+    const diffMs = end.getTime() - Date.now()
+    return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+  }, [weightPlan])
+
   return (
     <>
       <PageLayout>
         {/* 体重管理部分 */}
         <div className={isMobile ? 'text-lg px-2' : 'text-xl'}>体重管理</div>
-        
+
         {/* 趋势和控制率概览 */}
         {analysisResult && (
           <div className={`grid gap-4 ${isMobile ? 'grid-cols-2 px-2' : 'grid-cols-4'} mb-4`}>
@@ -253,7 +300,11 @@ const HealthPage = () => {
               <div className="text-xs text-gray-500">Weekly Δ</div>
               <div className="text-lg font-bold">{(analysisResult.slope * 7).toFixed(2)} kg</div>
             </div>
-            <div className={`${isOnTrack ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'} rounded-lg p-3`}>
+            <div
+              className={`${
+                isOnTrack ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'
+              } rounded-lg p-3`}
+            >
               <div className="text-xs text-gray-500">Control</div>
               <div className="text-lg font-bold">{controlRate.toFixed(0)}%</div>
             </div>
@@ -343,19 +394,49 @@ const HealthPage = () => {
                       }}
                     />
                   </div>
+                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="weight-tag" className={isMobile ? '' : 'text-right'}>
+                      Tag
+                    </Label>
+                    <Input
+                      id="weight-tag"
+                      className={isMobile ? 'w-full' : 'col-span-3'}
+                      placeholder="e.g., morning / raw"
+                      value={createWeightTag}
+                      onChange={(e) => setCreateWeightTag(e.target.value)}
+                    />
+                  </div>
+                  <div className={`grid items-start gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
+                    <Label htmlFor="weight-description" className={isMobile ? '' : 'text-right pt-2'}>
+                      Description
+                    </Label>
+                    <Textarea
+                      id="weight-description"
+                      className={isMobile ? 'w-full' : 'col-span-3'}
+                      placeholder="Optional note..."
+                      value={createWeightDescription}
+                      onChange={(e) => setCreateWeightDescription(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
                 </div>
                 <DialogFooter>
                   <DialogClose
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
                     onClick={async () => {
                       const props: WeightCreateProps = {
                         value: createWeightValue,
                         htime: Math.floor(createDate.getTime() / 1000),
+                        tag: createWeightTag || 'raw',
+                        description: createWeightDescription,
                       }
                       await createWeight(props)
                       setCreateWeightValue('')
+                      setCreateWeightTag('raw')
+                      setCreateWeightDescription('')
                       setCreateDate(new Date())
                     }}
+                    disabled={!createWeightValue.trim() || isNaN(parseFloat(createWeightValue))}
                   >
                     Save
                   </DialogClose>
@@ -384,8 +465,8 @@ const HealthPage = () => {
                   {weightPlan && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md text-sm">
                       <div className="font-medium">Current Plan:</div>
-                      <div>Target: {weightPlan.target_weight} kg</div>
-                      <div>By: {new Date(weightPlan.target_time * 1000).toLocaleDateString()}</div>
+                      <div>Target: {weightPlan.targetWeight} kg</div>
+                      <div>By: {new Date(weightPlan.targetTime * 1000).toLocaleDateString()}</div>
                     </div>
                   )}
                   <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
@@ -538,9 +619,60 @@ const HealthPage = () => {
             </Dialog>
           </div>
         </div>
+
         <div className={isMobile ? 'px-2' : ''}>
+          {/* 计划卡片 */}
+          {weightPlan && (
+            <Card className="mb-4 mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} flex items-center gap-2`}>
+                  <Scale className="h-5 w-5" />
+                  Current Weight Plan
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-4'}`}>
+                  <div>
+                    <div className="text-xs text-gray-500">Target</div>
+                    <div className="text-lg font-bold">{weightPlan.targetWeight} kg</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Initial</div>
+                    <div className="text-lg font-bold">
+                      {weightPlan.initialWeight ? `${weightPlan.initialWeight} kg` : 'Auto'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Control Rate</div>
+                    <div className={`text-lg font-bold ${isOnTrack ? 'text-green-500' : 'text-red-500'}`}>
+                      {controlRate.toFixed(0)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500">Days Left</div>
+                    <div className="text-lg font-bold">{daysRemaining ?? '-'}</div>
+                  </div>
+                </div>
+                <div className={`mt-3 flex flex-wrap gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+                  <div className="flex items-center gap-1 text-gray-500">
+                    <CalendarDays className="h-4 w-4" />
+                    {new Date(weightPlan.startTime * 1000).toLocaleDateString()} →{' '}
+                    {new Date(weightPlan.targetTime * 1000).toLocaleDateString()}
+                  </div>
+                  <Badge variant="outline">{curveLabel[weightPlan.curveType || 'linear']}</Badge>
+                  {weightPlan.feedbackEnabled && (
+                    <Badge variant="secondary">Rhythm Feedback On</Badge>
+                  )}
+                  {weightPlan.notifyEnabled && (
+                    <Badge variant="secondary">Notify at {weightPlan.notifyTime}</Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Rhythm 状态徽章 */}
-          {weightPlan && weightPlan.feedback_enabled && planCheckinStatus && (
+          {weightPlan && weightPlan.feedbackEnabled && planCheckinStatus && (
             <div className="flex gap-2 mb-3">
               <div
                 className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -557,6 +689,48 @@ const HealthPage = () => {
             </div>
           )}
           <WeightChart />
+        </div>
+
+        {/* 体重记录列表 */}
+        <div className={`${isMobile ? 'text-lg px-2 mt-8' : 'text-xl mt-10'} border-t pt-6`}>体重记录</div>
+        <div className={`${isMobile ? 'px-2' : ''} mt-4`}>
+          {sortedWeights.length === 0 ? (
+            <div className="text-gray-500 text-sm">No weight records yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {sortedWeights.map((record) => (
+                <div
+                  key={record.id}
+                  className="border rounded-lg p-3 bg-white dark:bg-gray-800 flex justify-between items-start gap-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <div className="text-xs text-gray-500">{formatDate(record.htime)}</div>
+                      {record.tag && record.tag !== 'raw' && (
+                        <Badge variant="outline" className="text-xs">
+                          {record.tag}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-base font-semibold">{record.value.toFixed(1)} kg</span>
+                      {getStatusBadge(record)}
+                    </div>
+                    {record.description && (
+                      <div className="text-xs text-gray-500 mt-1 break-words">{record.description}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteWeight(record.id)}
+                    className="text-red-500 hover:text-red-700 p-1 flex-shrink-0"
+                    title="Delete"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 运动记录部分 */}

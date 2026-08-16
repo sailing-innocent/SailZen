@@ -78,3 +78,5 @@ def test_migration_is_idempotent(sqlite_db):
     # 验证仍能正常查询
     result = sqlite_db.execute(text("SELECT COUNT(*) FROM missions")).scalar()
     assert result == 0
+
+

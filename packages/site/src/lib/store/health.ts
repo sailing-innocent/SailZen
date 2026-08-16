@@ -17,6 +17,7 @@ import {
 import {
   api_get_weights,
   api_create_weight,
+  api_delete_weight,
   api_get_exercises,
   api_create_exercise,
   api_delete_exercise,
@@ -41,6 +42,7 @@ export interface HealthState {
   setCurrentDateRange: (start: number | null, end: number | null) => void
   fetchWeights: (skip: number, limit: number, start: number, end: number) => Promise<void>
   createWeight: (weight: WeightCreateProps) => Promise<void>
+  deleteWeight: (id: number) => Promise<void>
 
   // Weight analysis
   analysisResult: WeightAnalysisResult | null
@@ -118,10 +120,30 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
       currentStartTime || undefined,
       currentEndTime || undefined
     )
+    await get().fetchPlanExpected(
+      currentStartTime || Math.floor(Date.now() / 1000) - 90 * 86400,
+      currentEndTime || Math.floor(Date.now() / 1000)
+    )
     await get().fetchPlanCheckinStatus()
-    if (weightPlan?.feedback_enabled) {
+    if (weightPlan?.feedbackEnabled) {
       set({ weightSaveMessage: '已记录体重并同步 Rhythm 打卡' })
       setTimeout(() => get().clearWeightSaveMessage(), 3000)
+    }
+  },
+  deleteWeight: async (id: number) => {
+    await api_delete_weight(id)
+    set(
+      (state: HealthState): HealthState => ({
+        ...state,
+        weights: state.weights.filter((w) => w.id !== id),
+        weightsWithStatus: state.weightsWithStatus.filter((w) => w.id !== id),
+      })
+    )
+    // Refresh plan-related state
+    await get().fetchPlanProgress()
+    const { currentStartTime, currentEndTime } = get()
+    if (currentStartTime && currentEndTime) {
+      await get().fetchPlanExpected(currentStartTime, currentEndTime)
     }
   },
 
@@ -141,6 +163,7 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
   // Weight plan state
   weightPlan: null,
   planProgress: null,
+  dailyPredictions: [],
   planExpectedPoints: [],
   controlRate: 0,
   isOnTrack: true,

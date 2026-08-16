@@ -918,8 +918,13 @@ def get_weights_with_plan_status_impl(
     """
     plan = _get_weight_plan_by_id(db, plan_id) if plan_id else _get_active_weight_plan(db)
 
-    # Get weight records (no default time limit, return all if not specified)
-    weights = read_weights_impl(db, 0, -1, start_time, end_time, "raw")
+    # Get raw weight records directly from ORM (read_weights_impl returns WeightResponse where htime is float)
+    query = db.query(Weight).filter(Weight.tag == "raw")
+    if start_time is not None:
+        query = query.filter(Weight.htime >= datetime.fromtimestamp(start_time))
+    if end_time is not None:
+        query = query.filter(Weight.htime <= datetime.fromtimestamp(end_time))
+    weights = query.order_by(Weight.htime).all()
 
     if not plan:
         # No plan, return records without status
@@ -927,7 +932,9 @@ def get_weights_with_plan_status_impl(
             {
                 "id": w.id,
                 "value": float(w.value),
-                "htime": w.htime,
+                "htime": w.htime.timestamp(),
+                "tag": w.tag,
+                "description": w.description,
                 "expected_value": 0.0,
                 "status": "normal",
                 "diff": 0.0,
@@ -948,15 +955,15 @@ def get_weights_with_plan_status_impl(
 
     for w in weights:
         weight_value = float(w.value)
-        weight_time = w.htime
+        weight_time_ts = w.htime.timestamp()
 
         # Calculate expected weight at this time
-        if weight_time < plan_data.start_time.timestamp():
+        if weight_time_ts < plan_data.start_time.timestamp():
             # Before plan start, no expectation
             expected_value = weight_value
             diff = 0.0
             status = "normal"
-        elif weight_time > plan_data.target_time.timestamp():
+        elif weight_time_ts > plan_data.target_time.timestamp():
             # After plan end, use target weight
             expected_value = target_weight
             diff = weight_value - expected_value
@@ -968,7 +975,7 @@ def get_weights_with_plan_status_impl(
                 status = "normal"
         else:
             # During plan period, interpolate using curve type
-            days_from_start = (weight_time - plan_data.start_time.timestamp()) / 86400
+            days_from_start = (weight_time_ts - plan_data.start_time.timestamp()) / 86400
             progress = days_from_start / total_days if total_days > 0 else 1.0
             expected_value = _compute_expected_weight(
                 start_weight, target_weight, progress, plan_data.curve_type
@@ -986,14 +993,15 @@ def get_weights_with_plan_status_impl(
             {
                 "id": w.id,
                 "value": weight_value,
-                "htime": weight_time,
+                "htime": weight_time_ts,
+                "tag": w.tag,
+                "description": w.description,
                 "expected_value": float(expected_value),
                 "status": status,
                 "diff": float(diff),
             }
         )
 
-    return result
     return result
 
 

@@ -139,6 +139,35 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
             </div>
           </div>
 
+          {/* PEMS fields */}
+          {(mission.planned_minutes !== undefined || mission.energy_cost !== undefined || mission.health_constraint) && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">精力与耗时</Label>
+              <div className="flex flex-wrap gap-2">
+                {mission.planned_minutes !== undefined && mission.planned_minutes > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    预计 {mission.planned_minutes} 分钟
+                  </Badge>
+                )}
+                {mission.actual_minutes !== undefined && mission.actual_minutes > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    实际 {mission.actual_minutes} 分钟
+                  </Badge>
+                )}
+                {mission.energy_cost !== undefined && mission.energy_cost > 0 && (
+                  <Badge variant="outline" className="text-xs">
+                    精力 {mission.energy_cost}
+                  </Badge>
+                )}
+                {mission.health_constraint && mission.health_constraint !== 'normal' && (
+                  <Badge variant="outline" className="text-xs">
+                    {mission.health_constraint === 'high_energy' ? '高精力' : '低精力可'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Description */}
           {mission.description && (
             <div className="space-y-2">

@@ -49,6 +49,7 @@ class InfoCollectionType(str, Enum):
     MEDICATION = "medication"
     SLEEP = "sleep"
     MOOD = "mood"
+    ENERGY = "energy"
 
 
 class AffairKind(str, Enum):

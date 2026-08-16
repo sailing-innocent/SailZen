@@ -1,6 +1,6 @@
-import React, { useMemo, useCallback, useEffect } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { type HealthState, useHealthStore } from '@lib/store/health'
-import { Line, LineChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, ComposedChart } from 'recharts'
+import { Line, CartesianGrid, XAxis, YAxis, ResponsiveContainer, ComposedChart } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@components/ui/chart'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -41,7 +41,7 @@ interface ChartDataPoint {
 const WeightChart: React.FC = () => {
   const isLoading = useHealthStore((state: HealthState) => state.isLoading)
   const analysisResult = useHealthStore((state: HealthState) => state.analysisResult)
-  const dailyPredictions = useHealthStore((state: HealthState) => state.dailyPredictions)
+
   const weightPlan = useHealthStore((state: HealthState) => state.weightPlan)
   const isOnTrack = useHealthStore((state: HealthState) => state.isOnTrack)
   const controlRate = useHealthStore((state: HealthState) => state.controlRate)
@@ -255,7 +255,7 @@ const WeightChart: React.FC = () => {
               </span>
             </div>
             <div className="text-gray-500">
-              Target: {weightPlan.target_weight}kg by {new Date(weightPlan.target_time * 1000).toLocaleDateString()}
+              Target: {weightPlan.targetWeight}kg by {new Date(weightPlan.targetTime * 1000).toLocaleDateString()}
             </div>
           </div>
         )}

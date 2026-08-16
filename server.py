@@ -24,6 +24,7 @@ import argparse
 
 from sail_server.exception_handlers import exception_handlers
 from litestar.static_files import create_static_files_router
+from litestar.plugins.pydantic import PydanticPlugin
 
 
 class SailServer:
@@ -161,6 +162,7 @@ class SailServer:
                 on_shutdown=[self.on_shutdown],
                 openapi_config=openapi_config,
                 middleware=middleware,
+                plugins=[PydanticPlugin(prefer_alias=True)],
             )
         except Exception as e:
             # 如果初始化失败，记录错误并重新抛出

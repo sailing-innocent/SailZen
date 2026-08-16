@@ -9,6 +9,8 @@
 export interface WeightCreateProps {
   value: string
   htime: number
+  tag?: string
+  description?: string
 }
 
 export interface WeightData extends WeightCreateProps {
@@ -55,21 +57,21 @@ export interface WeightPredictionResponse {
 export type WeightPlanCurveType = 'linear' | 'polynomial' | 'exponential'
 
 export interface WeightPlanCreateProps {
-  target_weight: number
-  initial_weight?: number | null
-  start_time: number
-  target_time: number
+  targetWeight: string
+  initialWeight?: string | null
+  startTime: number
+  targetTime: number
   description?: string
-  curve_type: WeightPlanCurveType
-  notify_enabled: boolean
-  notify_time?: string
-  feedback_enabled: boolean
+  curveType: WeightPlanCurveType
+  notifyEnabled: boolean
+  notifyTime?: string
+  feedbackEnabled: boolean
 }
 
 export interface WeightPlanData extends WeightPlanCreateProps {
   id: number
-  created_at: number
-  rhythm_affair_id?: number | null
+  createdAt: number
+  rhythmAffairId?: number | null
 }
 
 export interface WeightExpectedPoint {
@@ -81,6 +83,8 @@ export interface WeightRecordWithStatus {
   id: number
   value: number
   htime: number
+  tag?: string
+  description?: string
   expected_value: number
   status: 'above' | 'below' | 'normal'
   diff: number

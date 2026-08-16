@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from litestar import Litestar, Router
 from litestar.di import Provide
 from litestar.testing import TestClient
+from litestar.plugins.pydantic import PydanticPlugin
 
 from sail_server.controller.health import WeightController, WeightPlanController, ExerciseController
 from sail_server.infrastructure.orm.rhythm import RhythmAffair, RhythmDisciplineLog
@@ -48,7 +49,7 @@ def client(db: Session) -> TestClient:
             ExerciseController,
         ],
     )
-    app = Litestar(route_handlers=[router])
+    app = Litestar(route_handlers=[router], plugins=[PydanticPlugin(prefer_alias=True)])
     with TestClient(app=app) as client:
         yield client
 
@@ -81,16 +82,16 @@ class TestWeightPlanCrud:
         )
         assert resp.status_code == 201
         data = resp.json()
-        assert data["target_weight"] == "70"
-        assert data["initial_weight"] == "75"
-        assert data["curve_type"] == "polynomial"
-        assert data["notify_enabled"] is True
-        assert data["notify_time"] == "07:30"
-        assert data["feedback_enabled"] is True
-        assert data["rhythm_affair_id"] is not None
+        assert data["targetWeight"] == "70"
+        assert data["initialWeight"] == "75"
+        assert data["curveType"] == "polynomial"
+        assert data["notifyEnabled"] is True
+        assert data["notifyTime"] == "07:30"
+        assert data["feedbackEnabled"] is True
+        assert data["rhythmAffairId"] is not None
 
         # 验证 rhythm_affairs 中存在对应 PRECEPT
-        affair = db.query(RhythmAffair).filter(RhythmAffair.id == data["rhythm_affair_id"]).first()
+        affair = db.query(RhythmAffair).filter(RhythmAffair.id == data["rhythmAffairId"]).first()
         assert affair is not None
         assert affair.kind == "precept"
         assert affair.state == "ACTIVE"
@@ -116,8 +117,8 @@ class TestWeightPlanCrud:
         )
         assert update.status_code == 200
         data = update.json()
-        assert data["target_weight"] == "68"
-        assert data["curve_type"] == "exponential"
+        assert data["targetWeight"] == "68"
+        assert data["curveType"] == "exponential"
 
         # 验证 target_weight 返回值同步变化
         today = datetime.now().date().isoformat()
@@ -139,7 +140,7 @@ class TestWeightPlanCrud:
         )
         assert create.status_code == 201
         plan_id = create.json()["id"]
-        affair_id = create.json()["rhythm_affair_id"]
+        affair_id = create.json()["rhythmAffairId"]
 
         resp = client.delete(f"{BASE}/weight/plan/{plan_id}")
         assert resp.status_code == 200
@@ -264,6 +265,51 @@ class TestExpectedRange:
 
 
 # ============================================================================
+# Weights with status
+# ============================================================================
+
+
+class TestWeightsWithStatus:
+    def test_weights_with_status_against_active_plan(self, client: TestClient):
+        start = datetime.now() - timedelta(days=5)
+        target = datetime.now() + timedelta(days=10)
+        client.post(
+            f"{BASE}/weight/plan/",
+            json={
+                "target_weight": "70",
+                "initial_weight": "80",
+                "curve_type": "linear",
+                "start_time": start.isoformat(),
+                "target_time": target.isoformat(),
+            },
+        )
+
+        # 插入一条位于计划期内的体重记录
+        resp = client.post(
+            f"{BASE}/weight/",
+            json={"value": 78.0, "htime": datetime.now().timestamp()},
+        )
+        assert resp.status_code == 201
+
+        range_start = datetime.now() - timedelta(days=7)
+        range_end = datetime.now() + timedelta(days=7)
+        resp = client.get(
+            f"{BASE}/weight/plan/weights-with-status",
+            params={
+                "start": range_start.timestamp(),
+                "end": range_end.timestamp(),
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["value"] == pytest.approx(78.0, abs=0.01)
+        assert "status" in data[0]
+        assert "expected_value" in data[0]
+        assert "diff" in data[0]
+
+
+# ============================================================================
 # Rhythm feedback
 # ============================================================================
 
@@ -318,7 +364,7 @@ class TestRhythmFeedback:
             },
         )
         assert create.status_code == 201
-        affair_id = create.json()["rhythm_affair_id"]
+        affair_id = create.json()["rhythmAffairId"]
 
         # 创建体重记录
         resp = client.post(

@@ -76,6 +76,7 @@ from sail_server.application.dto.rhythm import (
 )
 from sail_server.application.dto.health import (
     DietCreateRequest,
+    EnergyLevelCreateRequest,
     MedicationCreateRequest,
     MoodCreateRequest,
     SleepCreateRequest,
@@ -83,6 +84,7 @@ from sail_server.application.dto.health import (
 from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Medication, DietLog, Weight
 from sail_server.model.health import (
     create_diet_impl,
+    create_energy_level_impl,
     create_medication_impl,
     create_mood_impl,
     create_sleep_impl,
@@ -1021,6 +1023,7 @@ _HEALTH_AFFAIRS: Dict[str, str] = {
     InfoCollectionType.MEDICATION.value: "健康速记：用药",
     InfoCollectionType.SLEEP.value: "健康速记：睡眠",
     InfoCollectionType.MOOD.value: "健康速记：情绪",
+    InfoCollectionType.ENERGY.value: "健康速记：精力",
 }
 
 
@@ -1214,6 +1217,30 @@ def health_checkin_impl(db: Session, request: HealthCheckinRequest) -> HealthChe
                 HealthSignal(
                     signal_type="mood",
                     ref_id=mood.id,
+                    day_id=day.id,
+                    htime=now,
+                    value_json=dict(request.payload),
+                )
+            )
+
+        elif collection_type == InfoCollectionType.ENERGY.value:
+            htime = None
+            if request.payload.get("htime"):
+                htime = float(request.payload.get("htime"))
+            energy = create_energy_level_impl(
+                db,
+                EnergyLevelCreateRequest(
+                    score=int(request.payload.get("score", 3)),
+                    description=str(request.payload.get("description", "")),
+                    day_id=day.id,
+                    htime=htime,
+                ),
+            )
+            ref_id = energy.id
+            db.add(
+                HealthSignal(
+                    signal_type="energy",
+                    ref_id=energy.id,
                     day_id=day.id,
                     htime=now,
                     value_json=dict(request.payload),

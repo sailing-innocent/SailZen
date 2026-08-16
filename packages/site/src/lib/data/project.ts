@@ -16,13 +16,24 @@ export interface MissionCreateProps {
     description?: string,
     parent_id?: number,
     project_id?: number,
-    ddl?: number
+    ddl?: number,
+    planned_minutes?: number,
+    actual_minutes?: number,
+    energy_cost?: number,
+    day_id?: number,
+    milestone_id?: number,
+    health_constraint?: 'normal' | 'high_energy' | 'low_energy_ok'
 }
 
 export interface MissionData extends Omit<MissionCreateProps, 'ddl'> {
     id: number,
     state: number | undefined
     ddl: number | string | null | undefined  // Can be ISO string from API or number timestamp
+    lft?: number
+    rgt?: number
+    tree_id?: number
+    ctime?: number | string
+    mtime?: number | string
 }
 
 // Mission State Constants
