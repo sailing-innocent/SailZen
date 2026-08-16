@@ -133,10 +133,32 @@ fun TimelineScreen(
         if (openCapture) viewModel.openCapture()
     }
 
+    // 每次进入页面时刷新服务器配置与连接状态
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.refresh()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("时间线 ${state.date}") },
+                title = {
+                    Column {
+                        Text("时间线 ${state.date}")
+                        Text(
+                            text = when {
+                                state.serverUrl.isBlank() -> "未配置服务器地址"
+                                state.connected -> "${state.serverUrl} ● 已连接"
+                                else -> "${state.serverUrl} ● 未连接"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (state.connected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.plan() }, enabled = !state.planning) {
                         if (state.planning) {

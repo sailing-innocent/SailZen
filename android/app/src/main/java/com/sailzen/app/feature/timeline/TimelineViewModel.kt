@@ -3,6 +3,8 @@ package com.sailzen.app.feature.timeline
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.bg.ReminderService
+import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
@@ -28,6 +30,8 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         val inbox: List<AffairDto> = emptyList(),
         val refreshing: Boolean = false,
         val configured: Boolean = true,
+        val serverUrl: String = "",
+        val connected: Boolean = false,
         val queuedCount: Int = 0,
         val planning: Boolean = false,
         val planBBlock: TimeBlockDto? = null, // 长按查看 Plan B 的块
@@ -38,6 +42,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val repository = RhythmRepository.get(application)
+    private val settings = SettingsManager.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -46,6 +51,16 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             repository.observeQueuedCount().collect { count ->
                 _uiState.update { it.copy(queuedCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            settings.serverUrlFlow.collect { url ->
+                _uiState.update { it.copy(serverUrl = url, configured = url.isNotBlank()) }
+            }
+        }
+        viewModelScope.launch {
+            ReminderService.connectedState.collect { connected ->
+                _uiState.update { it.copy(connected = connected) }
             }
         }
         refresh()
@@ -81,7 +96,9 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
                     inbox = inbox,
                     weekReview = weekReview,
                     refreshing = false,
-                    configured = repository.serverConfigured(),
+                    configured = settings.serverUrl().isNotBlank(),
+                    serverUrl = settings.serverUrl(),
+                    connected = ReminderService.connectedState.value,
                 )
             }
         }
