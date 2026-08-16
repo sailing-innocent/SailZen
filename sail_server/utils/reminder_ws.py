@@ -44,11 +44,11 @@ class ReminderPushManager:
 
     def register(self, device_id: str, socket: Any) -> None:
         with self._lock:
-            if device_id in self._devices:
-                logger.info(f"[reminder_ws] device {device_id} re-connected, replace socket")
+            is_reconnect = device_id in self._devices
             self._devices[device_id] = socket
+        action = "re-connected (replace socket)" if is_reconnect else "registered"
         logger.info(
-            f"[reminder_ws] device {device_id} registered, online={self.online_count()}"
+            f"[reminder_ws] device {device_id} {action}, online={self.online_count()}"
         )
 
     def unregister(self, device_id: str) -> None:

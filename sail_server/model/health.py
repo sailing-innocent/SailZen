@@ -67,11 +67,16 @@ from sail_server.application.dto.health import (
     DashboardDietItem,
     DashboardMoodItem,
 )
+import logging
+import traceback
+
 import numpy as np
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 from sqlalchemy import func, cast, Float
 from typing import Optional, List
+
+logger = logging.getLogger(__name__)
 
 
 # ===================================================
@@ -592,14 +597,22 @@ def create_weight_plan_impl(
     db, plan_data: WeightPlanCreateRequest
 ) -> WeightPlanResponse:
     """Create a new weight plan"""
+    curve_type = (
+        plan_data.curve_type.value
+        if isinstance(plan_data.curve_type, WeightPlanCurveType)
+        else str(plan_data.curve_type)
+    )
+    logger.debug(
+        f"[create_weight_plan_impl] input: target_weight={plan_data.target_weight}, "
+        f"initial_weight={plan_data.initial_weight}, curve_type={curve_type}, "
+        f"start_time={plan_data.start_time}, target_time={plan_data.target_time}, "
+        f"notify_enabled={plan_data.notify_enabled}, feedback_enabled={plan_data.feedback_enabled}, "
+        f"notify_time={plan_data.notify_time}"
+    )
     plan = WeightPlan(
         target_weight=plan_data.target_weight,
         initial_weight=plan_data.initial_weight,
-        curve_type=(
-            plan_data.curve_type.value
-            if isinstance(plan_data.curve_type, WeightPlanCurveType)
-            else str(plan_data.curve_type)
-        ),
+        curve_type=curve_type,
         start_time=plan_data.start_time if plan_data.start_time else datetime.now(),
         target_time=plan_data.target_time if plan_data.target_time else datetime.now(),
         description=plan_data.description,
@@ -608,8 +621,14 @@ def create_weight_plan_impl(
         feedback_enabled=plan_data.feedback_enabled,
     )
     db.add(plan)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:
+        logger.exception(f"[create_weight_plan_impl] database commit failed: {exc}")
+        db.rollback()
+        raise
     db.refresh(plan)
+    logger.debug(f"[create_weight_plan_impl] persisted plan id={plan.id}")
 
     if plan.notify_enabled or plan.feedback_enabled:
         affair_id = _create_or_update_weight_plan_affair(db, plan)
@@ -617,8 +636,11 @@ def create_weight_plan_impl(
             plan.rhythm_affair_id = affair_id
             db.commit()
             db.refresh(plan)
+        logger.debug(f"[create_weight_plan_impl] rhythm_affair_id={plan.rhythm_affair_id}")
 
-    return read_from_weight_plan(plan)
+    response = read_from_weight_plan(plan)
+    logger.debug(f"[create_weight_plan_impl] response: {response.model_dump()}")
+    return response
 
 
 def update_weight_plan_impl(
@@ -1825,72 +1847,97 @@ def health_dashboard_impl(db, target_date: date = None) -> HealthDashboardRespon
     if target_date is None:
         target_date = date.today()
 
-    weight_latest = _latest_weight(db)
-    weight_plan = _get_active_weight_plan(db)
-    weight_target = None
-    if weight_plan is not None:
-        try:
-            weight_target = float(weight_plan.target_weight)
-        except (ValueError, TypeError):
-            weight_target = None
+    logger.info(f"[health_dashboard] building dashboard for {target_date}")
+    try:
+        weight_latest = _latest_weight(db)
+        logger.debug(f"[health_dashboard] latest weight: {weight_latest}")
+        weight_plan = _get_active_weight_plan(db)
+        logger.debug(f"[health_dashboard] active weight plan: {weight_plan.id if weight_plan else None}")
+        weight_target = None
+        if weight_plan is not None:
+            try:
+                weight_target = float(weight_plan.target_weight)
+            except (ValueError, TypeError):
+                weight_target = None
 
-    weight_status = "normal"
-    if weight_latest is not None and weight_plan is not None:
-        weight_status = _weight_status(db, weight_latest)
+        weight_status = "normal"
+        if weight_latest is not None and weight_plan is not None:
+            weight_status = _weight_status(db, weight_latest)
+            logger.debug(f"[health_dashboard] weight status: {weight_status}")
 
-    sleep_hours = _last_night_sleep_hours(db)
-    sleep_goal_obj = read_sleep_schedule_goal_impl(db, target_date)
-    sleep_goal = sleep_goal_obj.target_hours if sleep_goal_obj else 8.0
-    sleep_status = "normal"
-    if sleep_hours is not None and sleep_hours < sleep_goal - 0.5:
-        sleep_status = "below"
-    elif sleep_hours is not None and sleep_hours > sleep_goal + 0.5:
-        sleep_status = "above"
+        sleep_hours = _last_night_sleep_hours(db)
+        logger.debug(f"[health_dashboard] last night sleep hours: {sleep_hours}")
+        sleep_goal_obj = read_sleep_schedule_goal_impl(db, target_date)
+        sleep_goal = sleep_goal_obj.target_hours if sleep_goal_obj else 8.0
+        sleep_status = "normal"
+        if sleep_hours is not None and sleep_hours < sleep_goal - 0.5:
+            sleep_status = "below"
+        elif sleep_hours is not None and sleep_hours > sleep_goal + 0.5:
+            sleep_status = "above"
 
-    exercise_minutes = _today_exercise_minutes(db)
-    exercise_goal_minutes = 30  # 默认每日 30 分钟
+        logger.debug("[health_dashboard] computing exercise stats...")
+        exercise_minutes = _today_exercise_minutes(db)
+        logger.debug(f"[health_dashboard] exercise minutes: {exercise_minutes}")
+        exercise_goal_minutes = 30  # 默认每日 30 分钟
 
-    med_total, med_taken, med_compliance = _today_medication_stats(db)
-    cal_actual, cal_goal, sugar_actual, sugar_goal = _today_diet_summary(db)
-    mood_score = _today_mood_score(db)
+        logger.debug("[health_dashboard] computing medication stats...")
+        med_total, med_taken, med_compliance = _today_medication_stats(db)
+        logger.debug(f"[health_dashboard] medication: {med_total}/{med_taken} compliance={med_compliance}")
 
-    warnings = _build_dashboard_warnings(
-        db,
-        weight_latest,
-        sleep_hours,
-        exercise_minutes,
-        sugar_actual,
-        sugar_goal,
-    )
+        logger.debug("[health_dashboard] computing diet summary...")
+        cal_actual, cal_goal, sugar_actual, sugar_goal = _today_diet_summary(db)
+        logger.debug(f"[health_dashboard] diet: cal={cal_actual}/{cal_goal}, sugar={sugar_actual}/{sugar_goal}")
 
-    return HealthDashboardResponse(
-        date=target_date.isoformat(),
-        weight=DashboardWeightItem(
-            latest=weight_latest,
-            plan_target=weight_target,
-            status=weight_status,
-        ),
-        sleep=DashboardSleepItem(
-            last_night_hours=sleep_hours,
-            goal=sleep_goal,
-            status=sleep_status,
-        ),
-        exercise=DashboardExerciseItem(
-            today_minutes=exercise_minutes,
-            goal_minutes=exercise_goal_minutes,
-            completed=exercise_minutes >= exercise_goal_minutes,
-        ),
-        medication=DashboardMedicationItem(
-            total=med_total,
-            taken=med_taken,
-            compliance=med_compliance,
-        ),
-        diet=DashboardDietItem(
-            calories_actual=cal_actual,
-            calories_goal=cal_goal,
-            sugar_actual=sugar_actual,
-            sugar_goal=sugar_goal,
-        ),
-        mood=DashboardMoodItem(score=mood_score),
-        warnings=warnings,
-    )
+        logger.debug("[health_dashboard] computing mood score...")
+        mood_score = _today_mood_score(db)
+        logger.debug(f"[health_dashboard] mood score: {mood_score}")
+
+        logger.debug("[health_dashboard] building warnings...")
+        warnings = _build_dashboard_warnings(
+            db,
+            weight_latest,
+            sleep_hours,
+            exercise_minutes,
+            sugar_actual,
+            sugar_goal,
+        )
+
+        response = HealthDashboardResponse(
+            date=target_date.isoformat(),
+            weight=DashboardWeightItem(
+                latest=weight_latest,
+                plan_target=weight_target,
+                status=weight_status,
+            ),
+            sleep=DashboardSleepItem(
+                last_night_hours=sleep_hours,
+                goal=sleep_goal,
+                status=sleep_status,
+            ),
+            exercise=DashboardExerciseItem(
+                today_minutes=exercise_minutes,
+                goal_minutes=exercise_goal_minutes,
+                completed=exercise_minutes >= exercise_goal_minutes,
+            ),
+            medication=DashboardMedicationItem(
+                total=med_total,
+                taken=med_taken,
+                compliance=med_compliance,
+            ),
+            diet=DashboardDietItem(
+                calories_actual=cal_actual,
+                calories_goal=cal_goal,
+                sugar_actual=sugar_actual,
+                sugar_goal=sugar_goal,
+            ),
+            mood=DashboardMoodItem(score=mood_score),
+            warnings=warnings,
+        )
+        logger.info(f"[health_dashboard] dashboard built successfully for {target_date}")
+        return response
+    except Exception as e:
+        logger.error(
+            f"[health_dashboard] failed to build dashboard for {target_date}: "
+            f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        )
+        raise

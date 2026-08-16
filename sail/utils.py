@@ -5,6 +5,8 @@
 # @date 2025-04-21
 # @version 1.0
 # ---------------------------------
+import os
+
 import dotenv
 
 
@@ -22,3 +24,5 @@ def read_env(mode="dev"):
     print(f"Loading environment variables from {env_file}")
     # 明确指定 UTF-8 编码，避免 Windows 系统默认使用 GBK 导致的解析错误
     dotenv.load_dotenv(env_file, encoding="utf-8")
+    # 让代码里可以通过 ENV 判断当前运行模式（dev / debug / prod）
+    os.environ["ENV"] = mode

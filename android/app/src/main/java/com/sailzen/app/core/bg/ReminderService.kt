@@ -61,7 +61,7 @@ class ReminderService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(
             NotificationHelper.SERVICE_NOTIFICATION_ID,
-            NotificationHelper.buildServiceNotification(this, 0),
+            NotificationHelper.buildServiceNotification(this, 0, connectedState.value),
         )
         startWebSocket()
         startPeriodicRefresh()
@@ -103,6 +103,13 @@ class ReminderService : Service() {
                 }
             },
             onStateChange = { connected -> connectedState.value = connected },
+            onDetailedStateChange = { state, detail ->
+                android.util.Log.d("ReminderService", "WS state=$state detail=$detail")
+                // 连接异常时刷新常驻通知，把状态透出到通知文本
+                serviceScope.launch {
+                    refreshServiceNotification()
+                }
+            },
         ).also { it.start() }
     }
 
@@ -125,7 +132,7 @@ class ReminderService : Service() {
         try {
             NotificationManagerCompat.from(this).notify(
                 NotificationHelper.SERVICE_NOTIFICATION_ID,
-                NotificationHelper.buildServiceNotification(this, count),
+                NotificationHelper.buildServiceNotification(this, count, connectedState.value),
             )
         } catch (_: SecurityException) {
             // 无通知权限时静默

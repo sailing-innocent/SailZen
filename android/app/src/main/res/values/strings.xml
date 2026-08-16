@@ -30,7 +30,9 @@
 
     <!-- 常驻服务通知 -->
     <string name="service_notification_title">SailZen 提醒服务运行中</string>
-    <string name="service_notification_text">今日待办 %1$d 条</string>
+    <string name="service_notification_text">今日待办 %1$d 条 · %2$s</string>
+    <string name="service_status_connected">已连接</string>
+    <string name="service_status_reconnecting">重连中</string>
 
     <!-- Inbox -->
     <string name="inbox_title">提醒</string>

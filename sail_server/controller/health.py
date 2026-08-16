@@ -260,8 +260,17 @@ class WeightPlanController(Controller):
         Create a new weight plan.
         """
         db = next(router_dependency)
-        plan = create_weight_plan_impl(db, data)
+        logger.debug(f"[create_weight_plan] request data: {data.model_dump()}")
+        try:
+            plan = create_weight_plan_impl(db, data)
+        except Exception as exc:
+            logger.exception(
+                f"[create_weight_plan] failed to create weight plan: {exc}; "
+                f"request data: {data.model_dump()}"
+            )
+            raise
         logger.info(f"Create weight plan: {plan}")
+        logger.debug(f"[create_weight_plan] response: {plan.model_dump()}")
         return plan
 
     @get("/progress")

@@ -20,6 +20,19 @@ from pydantic import BaseModel, Field, ConfigDict, field_serializer
 
 
 # ============================================================================
+# Naming helpers
+# ============================================================================
+
+
+def _to_lower_camel_case(snake_str: str) -> str:
+    """将 snake_case 转换为 lowerCamelCase，用于兼容 Android 客户端字段命名。"""
+    components = snake_str.split("_")
+    if len(components) == 1:
+        return components[0]
+    return components[0] + "".join(part.title() for part in components[1:])
+
+
+# ============================================================================
 # Weight DTOs
 # ============================================================================
 
@@ -144,7 +157,12 @@ class WeightPlanCurveType(str, Enum):
 class WeightPlanBase(BaseModel):
     """体重计划基础信息"""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=_to_lower_camel_case,
+        populate_by_name=True,
+        serialize_by_alias=True,
+    )
 
     target_weight: str = Field(description="目标体重 (kg)")
     initial_weight: Optional[str] = Field(

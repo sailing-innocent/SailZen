@@ -222,17 +222,32 @@ object NotificationHelper {
     }
 
     /** 前台服务常驻通知（今日待办数） */
-    fun buildServiceNotification(context: Context, pendingCount: Int): Notification {
+    fun buildServiceNotification(
+        context: Context,
+        pendingCount: Int,
+        connected: Boolean = false,
+    ): Notification {
         val contentIntent = PendingIntent.getActivity(
             context,
             0,
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val statusText = if (connected) {
+            context.getString(R.string.service_status_connected)
+        } else {
+            context.getString(R.string.service_status_reconnecting)
+        }
         return NotificationCompat.Builder(context, CHANNEL_SERVICE)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.service_notification_title))
-            .setContentText(context.getString(R.string.service_notification_text, pendingCount))
+            .setContentText(
+                context.getString(
+                    R.string.service_notification_text,
+                    pendingCount,
+                    statusText,
+                )
+            )
             .setContentIntent(contentIntent)
             .setOngoing(true)
             .setShowWhen(false)
