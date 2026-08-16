@@ -46,9 +46,19 @@ const WeightChart: React.FC = () => {
   const isOnTrack = useHealthStore((state: HealthState) => state.isOnTrack)
   const controlRate = useHealthStore((state: HealthState) => state.controlRate)
   const weightsWithStatus = useHealthStore((state: HealthState) => state.weightsWithStatus)
+  const planExpectedPoints = useHealthStore((state: HealthState) => state.planExpectedPoints)
+  const currentStartTime = useHealthStore((state: HealthState) => state.currentStartTime)
+  const currentEndTime = useHealthStore((state: HealthState) => state.currentEndTime)
   const fetchWeightAnalysis = useHealthStore((state: HealthState) => state.fetchWeightAnalysis)
   const fetchPlanProgress = useHealthStore((state: HealthState) => state.fetchPlanProgress)
   const isMobile = useIsMobile()
+
+  const startOfDayMs = (ts: number): number => {
+    const d = new Date(ts)
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  const dayMs = 24 * 60 * 60 * 1000
 
   // Fetch plan progress on mount
   useEffect(() => {
@@ -64,60 +74,63 @@ const WeightChart: React.FC = () => {
     }
   }, [weightsWithStatus.length])
 
-  // Build chart data combining actual weights with status, predictions, and plan
+  // Build chart data with a fixed daily skeleton aligned to the selected date range
   const chartData = useMemo(() => {
+    const rangeStart = currentStartTime ? startOfDayMs(currentStartTime * 1000) : null
+    const rangeEnd = currentEndTime ? startOfDayMs(currentEndTime * 1000) : null
+
     const data: ChartDataPoint[] = []
-    
-    // Add actual weight points with status
+    if (rangeStart !== null && rangeEnd !== null && rangeEnd >= rangeStart) {
+      for (let t = rangeStart; t <= rangeEnd; t += dayMs) {
+        data.push({ timestamp: t })
+      }
+    }
+
+    // Fill actual weights keyed by day
+    const weightByDay = new Map<number, typeof weightsWithStatus[0]>()
     weightsWithStatus.forEach((w) => {
-      const timestamp = w.htime * 1000
-      data.push({
-        timestamp,
-        value: w.value,
-        status: w.status,
-        expectedValue: w.expected_value,
-        diff: w.diff,
-      })
+      weightByDay.set(startOfDayMs(w.htime * 1000), w)
+    })
+    data.forEach((p) => {
+      const w = weightByDay.get(p.timestamp)
+      if (w) {
+        p.value = w.value
+        p.status = w.status
+        p.expectedValue = w.expected_value
+        p.diff = w.diff
+      }
     })
 
-    // Add predicted points from analysis (future predictions)
+    // Fill plan expected weights keyed by day
+    const expectedByDay = new Map<number, number>()
+    planExpectedPoints.forEach((ep) => {
+      expectedByDay.set(startOfDayMs(ep.htime * 1000), ep.expected_weight)
+    })
+    data.forEach((p) => {
+      const expected = expectedByDay.get(p.timestamp)
+      if (expected !== undefined) {
+        p.planExpected = expected
+      }
+    })
+
+    // Fill predicted points from analysis (future predictions)
     if (analysisResult?.predicted_weights) {
+      const predictedByDay = new Map<number, number>()
       analysisResult.predicted_weights.forEach((p) => {
         if (!p.is_actual) {
-          const timestamp = p.htime * 1000
-          // Check if this point already exists
-          const existing = data.find((d) => Math.abs(d.timestamp - timestamp) < 86400000)
-          if (existing) {
-            existing.predicted = p.value
-          } else {
-            data.push({
-              timestamp,
-              predicted: p.value,
-            })
-          }
+          predictedByDay.set(startOfDayMs(p.htime * 1000), p.value)
+        }
+      })
+      data.forEach((p) => {
+        const predicted = predictedByDay.get(p.timestamp)
+        if (predicted !== undefined) {
+          p.predicted = predicted
         }
       })
     }
 
-    // Add plan expected weights
-    if (dailyPredictions?.length > 0) {
-      dailyPredictions.forEach((d) => {
-        const timestamp = d.htime * 1000
-        const existing = data.find((item) => Math.abs(item.timestamp - timestamp) < 86400000)
-        if (existing) {
-          existing.planExpected = d.expected_weight
-        } else {
-          data.push({
-            timestamp,
-            planExpected: d.expected_weight,
-          })
-        }
-      })
-    }
-
-    // Sort by timestamp
-    return data.sort((a, b) => a.timestamp - b.timestamp)
-  }, [weightsWithStatus, analysisResult, dailyPredictions])
+    return data
+  }, [weightsWithStatus, analysisResult, planExpectedPoints, currentStartTime, currentEndTime])
 
   // Get color based on status
   const getStatusColor = (status?: string) => {
@@ -290,7 +303,10 @@ const WeightChart: React.FC = () => {
                 <XAxis
                   dataKey="timestamp"
                   type="number"
-                  domain={['dataMin - 86400000', 'dataMax + 86400000']}
+                  domain={[
+                    currentStartTime ? startOfDayMs(currentStartTime * 1000) : 'dataMin',
+                    currentEndTime ? startOfDayMs(currentEndTime * 1000) : 'dataMax',
+                  ]}
                   tickLine={false}
                   axisLine={false}
                   minTickGap={isMobile ? 50 : 32}
@@ -314,7 +330,7 @@ const WeightChart: React.FC = () => {
                 />
 
                 {/* Plan Target Line */}
-                {dailyPredictions.length > 0 && (
+                {planExpectedPoints.length > 0 && (
                   <Line
                     type="monotone"
                     dataKey="planExpected"
@@ -323,6 +339,7 @@ const WeightChart: React.FC = () => {
                     strokeDasharray="5 5"
                     dot={false}
                     name="Plan Target"
+                    connectNulls
                   />
                 )}
 
@@ -392,7 +409,7 @@ const WeightChart: React.FC = () => {
               <div className="w-3 h-3 rounded-full bg-green-500 opacity-50" style={{ background: '#10b981' }} />
               <span>Predicted</span>
             </div>
-            {dailyPredictions.length > 0 && (
+            {planExpectedPoints.length > 0 && (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full bg-amber-500" />
                 <span>Plan Target</span>

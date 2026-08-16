@@ -3,7 +3,7 @@ export default {
   testEnvironment: "node",
   setupFiles: ['<rootDir>/src/jest-setup.ts'],
   transform: {
-    "^.+.tsx?$": ["ts-jest",{}],
+    "^.+.tsx?$": ["ts-jest", { tsconfig: "tsconfig.test.json" }],
   },
   moduleNameMapper: {
     "^@lib/(.*)$": "<rootDir>/src/lib/$1",

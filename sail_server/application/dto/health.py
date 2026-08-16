@@ -12,10 +12,11 @@
 原位置: sail_server/data/health.py
 """
 
-from datetime import datetime
+from datetime import datetime, date
+from enum import Enum
 from typing import Optional, List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 
 
 # ============================================================================
@@ -127,12 +128,26 @@ class ExerciseListResponse(BaseModel):
 # ============================================================================
 
 
+class WeightPlanCurveType(str, Enum):
+    """体重计划目标曲线类型"""
+
+    LINEAR = "linear"
+    POLYNOMIAL = "polynomial"
+    EXPONENTIAL = "exponential"
+
+
 class WeightPlanBase(BaseModel):
     """体重计划基础信息"""
 
     model_config = ConfigDict(from_attributes=True)
 
     target_weight: str = Field(description="目标体重 (kg)")
+    initial_weight: Optional[str] = Field(
+        default=None, description="起始体重 (kg)，None 则自动取 start_time 后第一次记录"
+    )
+    curve_type: WeightPlanCurveType = Field(
+        default=WeightPlanCurveType.LINEAR, description="目标曲线类型"
+    )
     description: str = Field(default="", description="计划描述")
 
 
@@ -141,6 +156,27 @@ class WeightPlanCreateRequest(WeightPlanBase):
 
     start_time: Optional[datetime] = Field(default=None, description="计划开始时间")
     target_time: Optional[datetime] = Field(default=None, description="计划目标时间")
+    notify_enabled: bool = Field(default=False, description="是否启用 Rhythm 提醒")
+    notify_time: Optional[str] = Field(
+        default="08:30", pattern=r"^\d{2}:\d{2}$", description="提醒时间 HH:MM"
+    )
+    feedback_enabled: bool = Field(
+        default=False, description="记录体重时是否同步 Rhythm 打卡"
+    )
+
+
+class WeightPlanUpdateRequest(WeightPlanBase):
+    """更新体重计划请求"""
+
+    start_time: Optional[datetime] = Field(default=None, description="计划开始时间")
+    target_time: Optional[datetime] = Field(default=None, description="计划目标时间")
+    notify_enabled: bool = Field(default=False, description="是否启用 Rhythm 提醒")
+    notify_time: Optional[str] = Field(
+        default="08:30", pattern=r"^\d{2}:\d{2}$", description="提醒时间 HH:MM"
+    )
+    feedback_enabled: bool = Field(
+        default=False, description="记录体重时是否同步 Rhythm 打卡"
+    )
 
 
 class WeightPlanResponse(WeightPlanBase):
@@ -150,6 +186,30 @@ class WeightPlanResponse(WeightPlanBase):
     start_time: datetime = Field(description="计划开始时间")
     target_time: datetime = Field(description="计划目标时间")
     created_at: datetime = Field(description="创建时间")
+    notify_enabled: bool = Field(description="是否启用 Rhythm 提醒")
+    notify_time: Optional[str] = Field(description="提醒时间 HH:MM")
+    feedback_enabled: bool = Field(description="记录体重时是否同步 Rhythm 打卡")
+    rhythm_affair_id: Optional[int] = Field(
+        default=None, description="关联 Rhythm 事务 ID"
+    )
+
+    @field_serializer("start_time", "target_time", "created_at")
+    def serialize_datetime(self, value: datetime) -> float:
+        return value.timestamp()
+
+
+class WeightExpectedPoint(BaseModel):
+    """按日期范围返回的预期体重单点"""
+
+    htime: float = Field(description="当天 00:00:00 时间戳（秒）")
+    expected_weight: float = Field(description="预期体重 (kg)")
+
+
+class WeightExpectedRangeResponse(BaseModel):
+    """按日期范围返回的预期体重响应"""
+
+    plan: WeightPlanResponse = Field(description="当前活跃计划")
+    points: List[WeightExpectedPoint] = Field(description="区间内每一天的预期体重")
 
 
 class WeightPlanListResponse(BaseModel):

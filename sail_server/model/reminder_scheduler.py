@@ -81,7 +81,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
     """
     from datetime import time as _time
 
-    from sail_server.infrastructure.orm.health import Weight
+    from sail_server.infrastructure.orm.health import Weight, WeightPlan
     from sail_server.infrastructure.orm.rhythm import (
         RhythmAffair,
         RhythmDisciplineLog,
@@ -130,13 +130,13 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         _add_event(db, r.id, "created", {"source": "rhythm_daily_brief"})
         created += 1
 
-    def _time(hour: int, minute: int) -> datetime:
+    def _make_time(hour: int, minute: int) -> datetime:
         return datetime.combine(today, _time(hour, minute))
 
     # 起床提醒：sleep_end
     sleep_end = str(profile.sleep_end or "07:00")
     h, m = int(sleep_end.split(":")[0]), int(sleep_end.split(":")[1])
-    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _time(h, m), {"sub_type": "wake_up"})
+    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _make_time(h, m), {"sub_type": "wake_up"})
 
     # 三餐提醒
     for label, hh, mm in [("早餐", 8, 0), ("午餐", 12, 0), ("晚餐", 18, 30)]:
@@ -144,21 +144,84 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
             "rhythm.meal",
             f"{label}时间",
             f"记录{label}",
-            _time(hh, mm),
+            _make_time(hh, mm),
             {"meal_type": label, "collection_type": "meal"},
         )
 
-    # 体重（若今日无体重记录）
+    def _today_plan_reminder_exists(plan_id: int) -> bool:
+        """检查今天是否已为指定体重计划生成 rhythm.weight 提醒。"""
+        start = datetime.combine(today, datetime.min.time())
+        end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        reminders = (
+            db.query(Reminder)
+            .filter(
+                Reminder.type == "rhythm.weight",
+                Reminder.trigger_time >= start,
+                Reminder.trigger_time < end,
+            )
+            .all()
+        )
+        for r in reminders:
+            payload = r.payload or {}
+            if payload.get("plan_id") == plan_id:
+                return True
+        return False
+
+    # 体重计划个性化提醒：每个 notify_enabled=True 的计划按 notify_time 提醒一次
     has_weight = False
     if day_id:
         day_start = datetime.combine(today, datetime.min.time())
-        has_weight = db.query(Weight).filter(Weight.htime >= day_start).first() is not None
+        has_weight = (
+            db.query(Weight).filter(Weight.htime >= day_start).first() is not None
+        )
+
+    active_plans = (
+        db.query(WeightPlan)
+        .filter(
+            WeightPlan.notify_enabled == True,
+            WeightPlan.target_time >= datetime.combine(today, datetime.min.time()),
+        )
+        .all()
+    )
+    for plan in active_plans:
+        if has_weight or _today_plan_reminder_exists(plan.id):
+            continue
+        notify_time = plan.notify_time or "08:30"
+        try:
+            hh, mm = map(int, notify_time.split(":"))
+        except ValueError:
+            hh, mm = 8, 30
+        trigger = datetime.combine(today, _time(hh, mm))
+        quiet_hours = profile.spare_time_windows or DEFAULT_QUIET_HOURS
+        if is_in_quiet_hours(quiet_hours, trigger):
+            continue
+        r = Reminder(
+            type="rhythm.weight",
+            title="记录体重",
+            body=f"计划 #{plan.id} 体重打卡",
+            priority="normal",
+            source="rhythm",
+            state=STATE_PENDING,
+            trigger_time=trigger,
+            expire_after_minutes=120,
+            payload={
+                "collection_type": "weight",
+                "plan_id": plan.id,
+                "affair_id": plan.rhythm_affair_id,
+            },
+        )
+        db.add(r)
+        db.flush()
+        _add_event(db, r.id, "created", {"source": "rhythm_weight_plan"})
+        created += 1
+
+    # 默认体重提醒（无计划或计划未启用提醒时兜底）
     if not has_weight:
         _create(
             "rhythm.weight",
             "记录今日体重",
             "早起体重打卡",
-            _time(8, 30),
+            _make_time(8, 30),
             {"collection_type": "weight"},
         )
 
@@ -167,7 +230,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         "rhythm.work_focus",
         "进入工作焦点",
         "查看今日 focus 块并开始执行",
-        _time(9, 30),
+                    _make_time(9, 30),
         {"sub_type": "morning_focus"},
     )
 
@@ -197,7 +260,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
                 "rhythm.exercise",
                 "运动打卡",
                 exercise_habit.title,
-                _time(19, 0),
+                _make_time(19, 0),
                 {"collection_type": "exercise", "affair_id": exercise_habit.id},
             )
 
@@ -208,7 +271,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         "rhythm.daily_brief",
         "准备入睡",
         f"{sleep_start} 睡眠窗即将开始",
-        _time(h, m) - timedelta(minutes=30),
+        _make_time(h, m) - timedelta(minutes=30),
         {"sub_type": "sleep_prep"},
     )
 

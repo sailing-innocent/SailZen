@@ -52,16 +52,29 @@ export interface WeightPredictionResponse {
 }
 
 // Weight Plan Types
+export type WeightPlanCurveType = 'linear' | 'polynomial' | 'exponential'
+
 export interface WeightPlanCreateProps {
   target_weight: number
-  start_time: number  // Can be custom date, not necessarily today
+  initial_weight?: number | null
+  start_time: number
   target_time: number
   description?: string
+  curve_type: WeightPlanCurveType
+  notify_enabled: boolean
+  notify_time?: string
+  feedback_enabled: boolean
 }
 
 export interface WeightPlanData extends WeightPlanCreateProps {
   id: number
   created_at: number
+  rhythm_affair_id?: number | null
+}
+
+export interface WeightExpectedPoint {
+  htime: number
+  expected_weight: number
 }
 
 export interface WeightRecordWithStatus {
@@ -87,4 +100,16 @@ export interface WeightPlanProgress {
   expected_current_weight: number
   daily_predictions: DailyPrediction[]
   is_on_track: boolean
+}
+
+export interface WeightExpectedRangeResponse {
+  plan: WeightPlanData
+  points: WeightExpectedPoint[]
+}
+
+export interface WeightPlanCheckinStatus {
+  plan_id: number
+  affair_id: number
+  today_done: boolean
+  streak: number
 }

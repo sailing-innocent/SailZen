@@ -12,7 +12,7 @@
 从 sail_server/data/health.py 迁移
 """
 
-from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func
+from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func, Boolean
 from sqlalchemy.orm import relationship
 
 from sail_server.infrastructure.orm import ORMBase
@@ -67,6 +67,16 @@ class WeightPlan(ORMBase):
     target_time = Column(TIMESTAMP)  # plan target time
     description = Column(String, default="")  # plan description
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+    # 新增字段：起始体重、曲线类型、Rhythm 提醒与反馈联动
+    initial_weight = Column(String, nullable=True)  # initial weight in kg; None means auto-detect
+    curve_type = Column(String, default="linear")  # linear / polynomial / exponential
+    notify_enabled = Column(Boolean, default=False)  # enable Rhythm reminder
+    notify_time = Column(String, default="08:30")  # HH:MM reminder time
+    rhythm_affair_id = Column(
+        Integer, ForeignKey("rhythm_affairs.id"), nullable=True
+    )
+    feedback_enabled = Column(Boolean, default=False)  # sync weight record to Rhythm checkin
 
 
 class Sleep(ORMBase):

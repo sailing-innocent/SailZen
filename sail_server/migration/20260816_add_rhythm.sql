@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS rhythm_affairs (
     day_id INTEGER REFERENCES days(id),
     timespan_id INTEGER REFERENCES timespans(id),
     parent_id INTEGER REFERENCES rhythm_affairs(id),
+    info_collection_type VARCHAR(32),           -- 信息收集类型：weight / meal / exercise / medication / sleep / mood
     ai_hint JSONB DEFAULT '{}',
     score NUMERIC(10, 4) DEFAULT 0,
     ref JSONB DEFAULT '{}',
@@ -40,8 +41,12 @@ CREATE TABLE IF NOT EXISTS rhythm_affairs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_kind ON rhythm_affairs(kind);
-CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_state ON rhythm_affairs(state);
-CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_domain ON rhythm_affairs(domain);
+CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_parent_id ON rhythm_affairs(parent_id);
+CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_ai_hint ON rhythm_affairs USING GIN (ai_hint);
+
+-- 兼容：旧库已按早期脚本建表时未包含该列
+ALTER TABLE rhythm_affairs ADD COLUMN IF NOT EXISTS info_collection_type VARCHAR(32);
+CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_info_collection_type ON rhythm_affairs(info_collection_type);
 CREATE INDEX IF NOT EXISTS idx_rhythm_affairs_day_id ON rhythm_affairs(day_id);
 
 -- ============================================================================

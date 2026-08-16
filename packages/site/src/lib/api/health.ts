@@ -18,6 +18,8 @@ import {
   type WeightPlanData,
   type WeightPlanProgress,
   type WeightRecordWithStatus,
+  type WeightExpectedPoint,
+  type WeightPlanCheckinStatus,
 } from '@lib/data/health'
 
 const HEALTH_API_BASE = API_BASE + '/health'
@@ -188,6 +190,93 @@ const api_get_weight_plan = async (): Promise<WeightPlanData | null> => {
   }
 }
 
+const api_update_weight_plan = async (
+  id: number,
+  plan: Partial<WeightPlanCreateProps>
+): Promise<WeightPlanData> => {
+  try {
+    const response = await fetch(`${SERVER_URL}/${HEALTH_API_BASE}/weight/plan/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(plan),
+    })
+    if (!response.ok) {
+      throw new Error(`Error updating weight plan: ${response.statusText}`)
+    }
+    return response.json()
+  } catch (error) {
+    console.error('Failed to update weight plan:', error)
+    throw error
+  }
+}
+
+const api_delete_weight_plan = async (id: number): Promise<void> => {
+  try {
+    const response = await fetch(`${SERVER_URL}/${HEALTH_API_BASE}/weight/plan/${id}`, {
+      method: 'DELETE',
+    })
+    if (!response.ok) {
+      throw new Error(`Error deleting weight plan: ${response.statusText}`)
+    }
+  } catch (error) {
+    console.error('Failed to delete weight plan:', error)
+    throw error
+  }
+}
+
+const api_get_weight_plan_expected = async (
+  start: number,
+  end: number,
+  planId?: number
+): Promise<WeightExpectedPoint[]> => {
+  try {
+    const params = new URLSearchParams()
+    params.append('start', start.toString())
+    params.append('end', end.toString())
+    if (planId !== undefined && planId !== null) {
+      params.append('plan_id', planId.toString())
+    }
+    const response = await fetch(
+      `${SERVER_URL}/${HEALTH_API_BASE}/weight/plan/expected?${params}`
+    )
+    if (!response.ok) {
+      if (response.status === 404) {
+        return []
+      }
+      throw new Error(`Error fetching weight plan expected range: ${response.statusText}`)
+    }
+    const data = await response.json()
+    return data?.points || []
+  } catch (error) {
+    console.error('Failed to fetch weight plan expected range:', error)
+    return []
+  }
+}
+const api_get_weight_plan_checkin_status = async (
+  planId?: number
+): Promise<WeightPlanCheckinStatus | null> => {
+  try {
+    const params = new URLSearchParams()
+    if (planId !== undefined && planId !== null) {
+      params.append('plan_id', planId.toString())
+    }
+    const response = await fetch(
+      `${SERVER_URL}/${HEALTH_API_BASE}/weight/plan/checkin-status?${params}`
+    )
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Error fetching weight plan checkin status: ${response.statusText}`)
+    }
+    return response.json()
+  } catch (error) {
+    console.error('Failed to fetch weight plan checkin status:', error)
+    return null
+  }
+}
 const api_get_weight_plan_progress = async (planId?: number): Promise<WeightPlanProgress | null> => {
   try {
     const params = new URLSearchParams()
@@ -314,8 +403,12 @@ export {
   api_analyze_weight_trend,
   api_predict_weight,
   api_create_weight_plan,
+  api_update_weight_plan,
+  api_delete_weight_plan,
   api_get_weight_plan,
   api_get_weight_plan_progress,
+  api_get_weight_plan_expected,
+  api_get_weight_plan_checkin_status,
   api_get_weights_with_status,
   api_get_exercises,
   api_create_exercise,

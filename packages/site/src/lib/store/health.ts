@@ -10,6 +10,8 @@ import {
   type WeightPlanProgress,
   type DailyPrediction,
   type WeightRecordWithStatus,
+  type WeightExpectedPoint,
+  type WeightPlanCheckinStatus,
 } from '@lib/data/health'
 
 import {
@@ -20,8 +22,12 @@ import {
   api_delete_exercise,
   api_analyze_weight_trend,
   api_create_weight_plan,
+  api_update_weight_plan,
+  api_delete_weight_plan,
   api_get_weight_plan,
   api_get_weight_plan_progress,
+  api_get_weight_plan_expected,
+  api_get_weight_plan_checkin_status,
   api_get_weights_with_status,
 } from '@lib/api/health'
 
@@ -44,11 +50,19 @@ export interface HealthState {
   weightPlan: WeightPlanData | null
   planProgress: WeightPlanProgress | null
   dailyPredictions: DailyPrediction[]
+  planExpectedPoints: WeightExpectedPoint[]
   controlRate: number
   isOnTrack: boolean
+  planCheckinStatus: WeightPlanCheckinStatus | null
+  weightSaveMessage: string | null
   fetchWeightPlan: () => Promise<void>
   createWeightPlan: (plan: WeightPlanCreateProps) => Promise<void>
+  updateWeightPlan: (id: number, plan: Partial<WeightPlanCreateProps>) => Promise<void>
+  deleteWeightPlan: (id: number) => Promise<void>
   fetchPlanProgress: () => Promise<void>
+  fetchPlanExpected: (start: number, end: number) => Promise<void>
+  fetchPlanCheckinStatus: () => Promise<void>
+  clearWeightSaveMessage: () => void
 
   // Weight records with status (compared to plan)
   weightsWithStatus: WeightRecordWithStatus[]
@@ -99,11 +113,16 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
     )
     // Refresh plan progress and weights with status using current date range
     await get().fetchPlanProgress()
-    const { currentStartTime, currentEndTime } = get()
+    const { currentStartTime, currentEndTime, weightPlan } = get()
     await get().fetchWeightsWithStatus(
       currentStartTime || undefined,
       currentEndTime || undefined
     )
+    await get().fetchPlanCheckinStatus()
+    if (weightPlan?.feedback_enabled) {
+      set({ weightSaveMessage: '已记录体重并同步 Rhythm 打卡' })
+      setTimeout(() => get().clearWeightSaveMessage(), 3000)
+    }
   },
 
   // Weight analysis state
@@ -122,9 +141,11 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
   // Weight plan state
   weightPlan: null,
   planProgress: null,
-  dailyPredictions: [],
+  planExpectedPoints: [],
   controlRate: 0,
   isOnTrack: true,
+  planCheckinStatus: null,
+  weightSaveMessage: null,
   fetchWeightPlan: async () => {
     try {
       const plan = await api_get_weight_plan()
@@ -137,8 +158,33 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
   createWeightPlan: async (plan: WeightPlanCreateProps) => {
     const new_plan = await api_create_weight_plan(plan)
     set({ weightPlan: new_plan })
-    // Fetch progress after creating plan
+    // Fetch progress and expected range after creating plan
     await get().fetchPlanProgress()
+    const { currentStartTime, currentEndTime } = get()
+    if (currentStartTime && currentEndTime) {
+      await get().fetchPlanExpected(currentStartTime, currentEndTime)
+    }
+  },
+  updateWeightPlan: async (id: number, plan: Partial<WeightPlanCreateProps>) => {
+    const updated = await api_update_weight_plan(id, plan)
+    set({ weightPlan: updated })
+    await get().fetchPlanProgress()
+    const { currentStartTime, currentEndTime } = get()
+    if (currentStartTime && currentEndTime) {
+      await get().fetchPlanExpected(currentStartTime, currentEndTime)
+    }
+  },
+  deleteWeightPlan: async (id: number) => {
+    await api_delete_weight_plan(id)
+    set({
+      weightPlan: null,
+      planProgress: null,
+      dailyPredictions: [],
+      planExpectedPoints: [],
+      controlRate: 0,
+      isOnTrack: true,
+      planCheckinStatus: null,
+    })
   },
   fetchPlanProgress: async () => {
     try {
@@ -155,8 +201,10 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
         set({
           planProgress: null,
           dailyPredictions: [],
+          planExpectedPoints: [],
           controlRate: 0,
           isOnTrack: true,
+          planCheckinStatus: null,
         })
       }
     } catch (error) {
@@ -164,9 +212,35 @@ export const useHealthStore: UseBoundStore<StoreApi<HealthState>> = create<Healt
       set({
         planProgress: null,
         dailyPredictions: [],
+        planExpectedPoints: [],
         controlRate: 0,
         isOnTrack: true,
+        planCheckinStatus: null,
       })
+    }
+  },
+  fetchPlanCheckinStatus: async () => {
+    try {
+      const { weightPlan } = get()
+      if (!weightPlan) {
+        set({ planCheckinStatus: null })
+        return
+      }
+      const status = await api_get_weight_plan_checkin_status(weightPlan.id)
+      set({ planCheckinStatus: status })
+    } catch (error) {
+      console.error('Failed to fetch plan checkin status:', error)
+      set({ planCheckinStatus: null })
+    }
+  },
+  clearWeightSaveMessage: () => set({ weightSaveMessage: null }),
+  fetchPlanExpected: async (start: number, end: number) => {
+    try {
+      const points = await api_get_weight_plan_expected(start, end)
+      set({ planExpectedPoints: points || [] })
+    } catch (error) {
+      console.error('Failed to fetch plan expected range:', error)
+      set({ planExpectedPoints: [] })
     }
   },
 

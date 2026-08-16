@@ -41,8 +41,8 @@ PYTHON_MIGRATIONS: List[Path] = [
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）
 SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20260301_add_day_timespan.sql",
-    MIGRATION_DIR / "20260806_add_note_items.sql",
-    MIGRATION_DIR / "20261026_add_rhythm.sql",
+    MIGRATION_DIR / "20260816_add_rhythm.sql",
+    MIGRATION_DIR / "20261115_add_weight_plan_config.sql",
 ]
 
 

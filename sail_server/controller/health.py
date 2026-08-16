@@ -17,7 +17,9 @@ from sail_server.application.dto.health import (
     ExerciseCreateRequest,
     ExerciseResponse,
     WeightPlanCreateRequest,
+    WeightPlanUpdateRequest,
     WeightPlanResponse,
+    WeightExpectedRangeResponse,
 )
 
 from sail_server.model.health import (
@@ -34,9 +36,13 @@ from sail_server.model.health import (
     analyze_weight_trend_impl,
     predict_weight_impl,
     create_weight_plan_impl,
+    update_weight_plan_impl,
+    delete_weight_plan_impl,
     get_active_weight_plan_impl,
     get_weight_plan_progress_impl,
     get_weights_with_plan_status_impl,
+    get_expected_weights_impl,
+    get_weight_plan_checkin_status_impl,
 )
 from sqlalchemy.orm import Session
 from typing import Generator
@@ -258,6 +264,72 @@ class WeightPlanController(Controller):
         db = next(router_dependency)
         result = get_weights_with_plan_status_impl(db, start, end, plan_id)
         logger.info(f"Get {len(result)} weights with status")
+        return result
+
+    @get("/checkin-status")
+    async def get_weight_plan_checkin_status(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        plan_id: int | None = None,
+    ) -> dict | None:
+        """
+        Get Rhythm checkin status for the active weight plan (today done + streak).
+        """
+        db = next(router_dependency)
+        status = get_weight_plan_checkin_status_impl(db, plan_id)
+        logger.info(f"Weight plan checkin status: {status}")
+        return status
+
+
+    @put("/{plan_id:int}")
+    async def update_weight_plan(
+        self,
+        plan_id: int,
+        data: WeightPlanUpdateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> WeightPlanResponse | None:
+        """
+        Update an existing weight plan.
+        """
+        db = next(router_dependency)
+        plan = update_weight_plan_impl(db, plan_id, data)
+        logger.info(f"Update weight plan: {plan}")
+        if plan is None:
+            return None
+        return plan
+
+    @delete("/{plan_id:int}", status_code=200)
+    async def delete_weight_plan(
+        self,
+        plan_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict | None:
+        """
+        Delete a weight plan.
+        """
+        db = next(router_dependency)
+        result = delete_weight_plan_impl(db, plan_id)
+        logger.info(f"Delete weight plan: {result}")
+        return result
+
+    @get("/expected")
+    async def get_weight_plan_expected(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        start: float,
+        end: float,
+        plan_id: int | None = None,
+    ) -> WeightExpectedRangeResponse | None:
+        """
+        Get expected weights for a date range aligned to the active plan.
+        """
+        db = next(router_dependency)
+        result = get_expected_weights_impl(db, start, end, plan_id)
+        logger.info(f"Get weight plan expected range [{start}, {end}]: {len(result.points) if result else 0} points")
         return result
 
 
