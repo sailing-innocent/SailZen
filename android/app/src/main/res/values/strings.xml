@@ -12,6 +12,8 @@
     <string name="channel_silent_desc">安静时段内的非紧急提醒（无声入库）</string>
     <string name="channel_service_name">后台服务</string>
     <string name="channel_service_desc">保持与服务器长连接的常驻通知</string>
+    <string name="channel_health_name">健康提醒</string>
+    <string name="channel_health_desc">用药、就寝、起床等本地健康提醒</string>
 
     <!-- 通知动作 -->
     <string name="action_handle">处理</string>

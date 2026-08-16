@@ -28,6 +28,8 @@ object NotificationHelper {
     const val CHANNEL_SILENT = "silent"
     const val CHANNEL_SERVICE = "service"
 
+    const val CHANNEL_HEALTH = "health"
+
     const val SERVICE_NOTIFICATION_ID = 1
 
     fun createChannels(context: Context) {
@@ -55,6 +57,13 @@ object NotificationHelper {
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     description = context.getString(R.string.channel_silent_desc)
+                },
+                NotificationChannel(
+                    CHANNEL_HEALTH,
+                    context.getString(R.string.channel_health_name),
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = context.getString(R.string.channel_health_desc)
                 },
                 NotificationChannel(
                     CHANNEL_SERVICE,
@@ -146,6 +155,69 @@ object NotificationHelper {
                 actionIntent(ReminderActionReceiver.ACTION_DISMISS, 3),
             )
             .build()
+    }
+
+    /**
+     * 用药提醒通知。
+     */
+    fun notifyMedication(context: Context, medicationId: Int, name: String) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            medicationId,
+            Intent(context, com.sailzen.app.MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val takeIntent = PendingIntent.getBroadcast(
+            context,
+            medicationId,
+            Intent(context, HealthAlarmActionReceiver::class.java)
+                .setAction(HealthAlarmActionReceiver.ACTION_TAKE_MEDICATION)
+                .putExtra(HealthAlarmActionReceiver.EXTRA_MEDICATION_ID, medicationId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_HEALTH)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("用药提醒")
+            .setContentText("记得服用 $name")
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent)
+            .addAction(0, context.getString(R.string.health_taken), takeIntent)
+            .build()
+        NotificationManagerCompat.from(context).notify(medicationId, notification)
+    }
+
+    /**
+     * 作息提醒通知。
+     */
+    fun notifySleep(context: Context, isBedtime: Boolean) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val contentIntent = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, com.sailzen.app.MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val title = if (isBedtime) "就寝提醒" else "起床提醒"
+        val text = if (isBedtime) "该准备睡觉了" else "该起床了"
+        val notification = NotificationCompat.Builder(context, CHANNEL_HEALTH)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setAutoCancel(true)
+            .setContentIntent(contentIntent)
+            .build()
+        NotificationManagerCompat.from(context).notify(if (isBedtime) 2001 else 2002, notification)
     }
 
     /** 前台服务常驻通知（今日待办数） */

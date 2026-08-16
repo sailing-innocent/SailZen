@@ -34,6 +34,8 @@ from sail_server.application.dto.health import (
     SleepResponse,
     SleepScheduleGoalCreateRequest,
     SleepScheduleGoalResponse,
+    MoodCreateRequest,
+    MoodResponse,
     HealthDashboardResponse,
 )
 
@@ -75,6 +77,9 @@ from sail_server.model.health import (
     read_sleeps_impl,
     upsert_sleep_schedule_goal_impl,
     read_sleep_schedule_goal_impl,
+    create_mood_impl,
+    read_mood_impl,
+    read_moods_impl,
     health_dashboard_impl,
 )
 from sqlalchemy.orm import Session
@@ -139,8 +144,8 @@ class WeightController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = 10,
-        start: float = None,  # timestamp as float in seconds
-        end: float = None,  # timestamp as float in seconds
+        start: float | None = None,  # timestamp as float in seconds
+        end: float | None = None,  # timestamp as float in seconds
     ) -> list[WeightResponse]:
         """
         Get the weight data list.
@@ -154,8 +159,8 @@ class WeightController(Controller):
     async def get_weights_avg(
         self,
         router_dependency: Generator[Session, None, None],
-        start: float = None,  # timestamp as float in seconds
-        end: float = None,  # timestamp as float in seconds
+        start: float | None = None,  # timestamp as float in seconds
+        end: float | None = None,  # timestamp as float in seconds
     ) -> dict:
         """
         Get the weight data list.
@@ -189,8 +194,8 @@ class WeightController(Controller):
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-        start: float = None,  # timestamp as float in seconds
-        end: float = None,
+        start: float | None = None,  # timestamp as float in seconds
+        end: float | None = None,
         model_type: str = "linear",  # 'linear' or 'polynomial'
     ) -> dict:
         """
@@ -209,8 +214,8 @@ class WeightController(Controller):
         request: Request,
         target_time: float,  # target timestamp for prediction
         model_type: str = "linear",
-        start: float = None,
-        end: float = None,
+        start: float | None = None,
+        end: float | None = None,
     ) -> dict:
         """
         Predict weight at a specific future timestamp.
@@ -396,8 +401,8 @@ class ExerciseController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-        start: float = None,
-        end: float = None,
+        start: float | None = None,
+        end: float | None = None,
     ) -> list[ExerciseResponse]:
         """
         Get the exercise record list.
@@ -484,8 +489,8 @@ class SleepController(Controller):
         router_dependency: Generator[Session, None, None],
         skip: int = 0,
         limit: int = -1,
-        start: float = None,
-        end: float = None,
+        start: float | None = None,
+        end: float | None = None,
     ) -> list[SleepResponse]:
         """Get sleep record list."""
         db = next(router_dependency)
@@ -733,3 +738,38 @@ def _parse_date(date_str: str | None) -> date | None:
         return datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+# ===================================================
+# Mood Controller
+# ===================================================
+
+class MoodController(Controller):
+    path = "/mood"
+
+    @get()
+    async def get_mood_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        skip: int = 0,
+        limit: int = -1,
+        start: float | None = None,
+        end: float | None = None,
+    ) -> list[MoodResponse]:
+        """Get mood record list."""
+        db = next(router_dependency)
+        moods = read_moods_impl(db, skip, limit, None, start, end)
+        return moods
+
+    @post()
+    async def create_mood(
+        self,
+        data: MoodCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> MoodResponse:
+        """Create a new mood record."""
+        db = next(router_dependency)
+        mood = create_mood_impl(db, data)
+        logger.info(f"Create mood: {mood}")
+        return mood

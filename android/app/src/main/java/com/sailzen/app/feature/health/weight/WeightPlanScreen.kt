@@ -113,7 +113,7 @@ private fun PlanSummaryCard(plan: com.sailzen.app.core.network.dto.WeightPlanDto
         Text("曲线类型 ${plan.curveType}", style = MaterialTheme.typography.bodyMedium)
         progress?.let {
             Text("控制率 ${(it.controlRate * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-            LinearProgressIndicator(progress = { it.controlRate.toFloat() }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(progress = it.controlRate.toFloat(), modifier = Modifier.fillMaxWidth())
         }
         checkin?.let {
             Text("今日打卡 ${if (it.todayDone) "✓" else "未打卡"}  连续 ${it.streak} 天", style = MaterialTheme.typography.bodyMedium)

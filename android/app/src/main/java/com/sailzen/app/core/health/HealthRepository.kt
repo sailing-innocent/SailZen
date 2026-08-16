@@ -3,6 +3,7 @@ package com.sailzen.app.core.health
 import android.content.Context
 import android.util.Log
 import com.sailzen.app.core.data.SettingsManager
+import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.HealthApi
 import com.sailzen.app.core.network.dto.DietCreateRequest
@@ -31,8 +32,6 @@ import com.sailzen.app.core.network.dto.WeightPlanDto
 import com.sailzen.app.core.network.dto.WeightPlanProgressDto
 import com.sailzen.app.core.network.dto.WeightWithStatusDto
 import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -72,13 +71,11 @@ class HealthRepository private constructor(private val context: Context) {
         }
     }
 
-    fun isoDate(date: LocalDate): String = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    fun isoDate(date: LocalDate): String = HealthDateUtils.isoDate(date)
 
-    fun epochSeconds(date: LocalDate): Double =
-        date.atStartOfDay(ZoneId.systemDefault()).toEpochSecond().toDouble()
+    fun epochSeconds(date: LocalDate): Double = HealthDateUtils.epochSeconds(date)
 
-    fun epochSecondsEnd(date: LocalDate): Double =
-        date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toEpochSecond().toDouble() - 1
+    fun epochSecondsEnd(date: LocalDate): Double = HealthDateUtils.epochSecondsEnd(date)
 
     // ------------------------------------------------------------------
     // Dashboard

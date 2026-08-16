@@ -33,6 +33,7 @@ from sail_server.controller.health import (
     MedicationController,
     DietController,
     HealthDashboardController,
+    MoodController,
 )
 from sail_server.controller.rhythm import CheckinController
 from sail_server.infrastructure.orm.health import Medication, DietLog, Sleep, SleepScheduleGoal
@@ -62,6 +63,7 @@ def client(db: Session) -> TestClient:
             MedicationController,
             DietController,
             HealthDashboardController,
+            MoodController,
         ],
     )
     rhythm_router = Router(
@@ -212,6 +214,21 @@ class TestDashboardApi:
         assert data["exercise"]["today_minutes"] == 30
         assert data["diet"]["calories_actual"] == 1800
         assert data["medication"]["taken"] == 1
+
+
+class TestMoodApi:
+    def test_create_and_list_mood(self, client: TestClient, db: Session):
+        resp = client.post(
+            f"{BASE}/mood",
+            json={"score": 4, "description": "不错的一天"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["score"] == 4
+
+        resp = client.get(f"{BASE}/mood")
+        assert resp.status_code == 200
+        assert len(resp.json()) >= 1
 
 
 class TestHealthCheckinDualWrite:

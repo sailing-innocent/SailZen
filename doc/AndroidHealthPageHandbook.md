@@ -41,8 +41,9 @@
 - `MedicationController`
 - `DietController`
 - `HealthDashboardController`
+- `MoodController`
 
-新增路由挂载：`/sleep`、`/sleep-schedule`、`/medication`、`/diet`、`/dashboard`。
+新增路由挂载：`/sleep`、`/sleep-schedule`、`/medication`、`/diet`、`/dashboard`、`/mood`。
 
 ### 1.5 Rhythm 健康速记双写
 
@@ -55,6 +56,14 @@
 文件: `sail_server/migration/20261120_health_upgrade.sql`
 
 包含 `exercises` 扩展、`medications`、`diet_logs`、`nutrition_goals`、`sleep_schedule_goals` 建表及索引。
+
+### 1.7 健康闹钟本地提醒（Phase 5 部分）
+
+- `HealthAlarmScheduler`：根据今日未服用用药计划和作息目标设置 `AlarmManager`。
+- `AlarmReceiver` 扩展：识别用药/就寝/起床闹钟并弹出通知。
+- `NotificationHelper` 新增健康通知渠道与用药/作息通知。
+- `HealthAlarmActionReceiver`：处理「已服用」动作，直接上报服务端。
+- `MedicationViewModel` / `SleepScheduleViewModel` 在加载数据后调度本地提醒。
 
 ## 二、Android 数据层变更
 
@@ -133,8 +142,8 @@
 ## 五、已知待完善项（后续人工/迭代）
 
 1. **Phase 4 剩余**：为 medication/exercise/sleep/diet 创建独立 `RhythmAffair` 并联动打卡统计；目前仅通过 `health_checkin` 统一写入日志。
-2. **Phase 5 剩余**：用药/作息本地 `AlarmManager` 提醒与通知快捷动作（`SCHEDULE_EXACT_ALARM` 权限引导）。
-3. **Android 测试**：补齐 `HealthRepository`/`HealthHomeViewModel` 单元测试。
+2. **Phase 5 已完成项**：用药/作息本地 `AlarmManager` 提醒与通知动作已 wired；`SCHEDULE_EXACT_ALARM` 已在 `AndroidManifest.xml` 声明。开机后需重新调度（可后续在 `BootReceiver` 中补充）。
+3. **Android 测试**：已新增 `HealthDateUtilsTest` 与 `HealthHomeViewModelTest` 作为起点；Android 编译需人工在 Android Studio 中验证。
 4. **图表优化**：当前 Canvas 图表为 M1 简化版，后续可替换为 MPAndroidChart 或 Compose 图表库。
 5. **日期选择器**：HealthHomeScreen 当前仅用 TextButton 占位，需接入 Material DatePicker。
 
@@ -154,9 +163,15 @@
 - `android/app/src/main/java/com/sailzen/app/core/network/dto/HealthDtos.kt`
 - `android/app/src/main/java/com/sailzen/app/core/network/HealthApi.kt`
 - `android/app/src/main/java/com/sailzen/app/core/network/ApiClient.kt`
-- `android/app/src/main/java/com/sailzen/app/core/health/HealthRepository.kt`
+- `android/app/src/main/java/com/sailzen/app/core/health/HealthAlarmScheduler.kt`
+- `android/app/src/main/java/com/sailzen/app/core/health/HealthAlarmActionReceiver.kt`
+- `android/app/src/main/java/com/sailzen/app/core/health/HealthDateUtils.kt`
 - `android/app/src/main/java/com/sailzen/app/core/rhythm/RhythmRepository.kt`
-- `android/app/src/main/java/com/sailzen/app/core/sync/SyncWorker.kt`
+- `android/app/src/main/AndroidManifest.xml`
+- `android/app/src/main/java/com/sailzen/app/core/reminder/AlarmReceiver.kt`
+- `android/app/src/main/java/com/sailzen/app/core/reminder/NotificationHelper.kt`
+- `android/app/src/test/java/com/sailzen/app/core/health/HealthDateUtilsTest.kt`
+- `android/app/src/test/java/com/sailzen/app/feature/health/HealthHomeViewModelTest.kt`
 - `android/app/src/main/java/com/sailzen/app/ui/navigation/NavGraph.kt`
 - `android/app/src/main/java/com/sailzen/app/ui/components/*.kt`
 - `android/app/src/main/java/com/sailzen/app/feature/health/HealthHomeScreen.kt`

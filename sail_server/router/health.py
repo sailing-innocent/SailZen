@@ -17,6 +17,7 @@ from sail_server.controller.health import (
     MedicationController,
     DietController,
     HealthDashboardController,
+    MoodController,
 )
 from sail_server.db import get_db_dependency
 
@@ -33,5 +34,6 @@ router = Router(
         MedicationController,
         DietController,
         HealthDashboardController,
+        MoodController,
     ],
 )

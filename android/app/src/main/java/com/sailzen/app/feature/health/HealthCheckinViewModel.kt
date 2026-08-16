@@ -3,12 +3,12 @@ package com.sailzen.app.feature.health
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.rhythm.RhythmRepository
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -73,10 +73,8 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
 
     private fun timestampSeconds(): Double {
         val state = _uiState.value
-        val timeParts = state.time.split(":")
-        val hour = timeParts.getOrNull(0)?.toIntOrNull() ?: 0
-        val minute = timeParts.getOrNull(1)?.toIntOrNull() ?: 0
-        return state.date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toEpochSecond().toDouble()
+        val (hour, minute) = HealthDateUtils.parseTime(state.time)
+        return HealthDateUtils.timestampFor(state.date, hour, minute)
     }
 
     fun submit() {

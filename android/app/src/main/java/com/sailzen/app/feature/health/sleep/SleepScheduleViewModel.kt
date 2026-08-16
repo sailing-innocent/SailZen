@@ -3,6 +3,7 @@ package com.sailzen.app.feature.health.sleep
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.health.HealthAlarmScheduler
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.SleepCreateRequest
 import com.sailzen.app.core.network.dto.SleepDto
@@ -42,6 +43,7 @@ class SleepScheduleViewModel(application: Application) : AndroidViewModel(applic
                 _uiState.value.selectedDate,
             )
             _uiState.update { it.copy(loading = false, goal = goal, sleeps = sleeps) }
+            HealthAlarmScheduler.scheduleSleep(getApplication(), goal)
         }
     }
 

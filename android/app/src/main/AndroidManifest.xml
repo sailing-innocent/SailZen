@@ -49,6 +49,11 @@
             android:name=".core.reminder.ReminderActionReceiver"
             android:exported="false" />
 
+        <!-- 健康闹钟通知动作 -->
+        <receiver
+            android:name=".core.health.HealthAlarmActionReceiver"
+            android:exported="false" />
+
         <!-- 本地兜底闹钟 -->
         <receiver
             android:name=".core.reminder.AlarmReceiver"

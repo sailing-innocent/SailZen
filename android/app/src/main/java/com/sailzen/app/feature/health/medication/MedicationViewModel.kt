@@ -3,6 +3,7 @@ package com.sailzen.app.feature.health.medication
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.health.HealthAlarmScheduler
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.MedicationCreateRequest
 import com.sailzen.app.core.network.dto.MedicationDto
@@ -40,6 +41,7 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
             val today = repository.medicationToday(_uiState.value.selectedDate)
             val meds = repository.medications(_uiState.value.selectedDate)
             _uiState.update { it.copy(loading = false, today = today, medications = meds) }
+            HealthAlarmScheduler.scheduleMedications(getApplication(), meds)
         }
     }
 
