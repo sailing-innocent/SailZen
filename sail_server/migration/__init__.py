@@ -42,6 +42,7 @@ PYTHON_MIGRATIONS: List[Path] = [
 SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20260301_add_day_timespan.sql",
     MIGRATION_DIR / "20260816_add_rhythm.sql",
+    MIGRATION_DIR / "20260817_add_reminder_scan_indexes.sql",
     MIGRATION_DIR / "20261115_add_weight_plan_config.sql",
     MIGRATION_DIR / "20261120_health_upgrade.sql",
 ]

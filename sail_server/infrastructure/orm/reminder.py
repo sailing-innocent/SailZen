@@ -26,6 +26,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     ForeignKey,
+    Index,
     Integer,
     String,
     TIMESTAMP,
@@ -70,6 +71,14 @@ class Reminder(ORMBase):
         TIMESTAMP,
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
+    )
+
+    __table_args__ = (
+        # 调度器扫描用复合索引，避免全表遍历
+        Index("ix_reminders_state_trigger_time", "state", "trigger_time"),
+        Index("ix_reminders_state_next_trigger_time", "state", "next_trigger_time"),
+        Index("ix_reminders_state_updated_at", "state", "updated_at"),
+        Index("ix_reminders_state_last_delivered_at", "state", "last_delivered_at"),
     )
 
 

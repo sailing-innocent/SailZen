@@ -30,9 +30,11 @@ asyncio.create_task 启动、on_shutdown cancel。
 import asyncio
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from sail_server.infrastructure.orm.life import Day
@@ -55,12 +57,24 @@ logger = logging.getLogger(__name__)
 DEFAULT_SCAN_INTERVAL_SECONDS = 30
 MAX_BACKOFF_SECONDS = 30 * 60
 
+#: 过期扫描 SQL 过滤：把 last_delivered_at + expire_after_minutes 的判定下推到数据库，
+#: 避免加载全部历史 DELIVERED 行。表达式按后端区分（SQLite / PostgreSQL）。
+_SQLITE_EXPIRED_CLAUSE = (
+    "datetime(last_delivered_at, '+' || COALESCE(expire_after_minutes, 240) || ' minutes') <= :now"
+)
+_PG_EXPIRED_CLAUSE = (
+    "last_delivered_at + (COALESCE(expire_after_minutes, 240) || ' minutes')::interval <= :now"
+)
+
 #: OPENED 无完成回落时长（设计文档 §2.3.1：30 分钟）
 OPEN_FALLBACK_MINUTES = 30
 
 #: 无 rule 时的默认重试策略
 DEFAULT_MAX_RETRY = 0
 DEFAULT_RETRY_INTERVAL_MINUTES = 60
+
+#: 每轮扫描单表最大处理行数，防止启动/重连时阻塞事件循环
+DEFAULT_SCAN_BATCH_SIZE = 200
 
 
 def _env_int(name: str, default: int) -> int:
@@ -72,6 +86,20 @@ def _env_int(name: str, default: int) -> int:
     except ValueError:
         logger.warning(f"[reminder] invalid int env {name}={raw!r}, use {default}")
         return default
+
+
+def _build_expired_filter(db: Session, now: datetime):
+    """构造过期判定 SQL 过滤条件（后端相关），直接由数据库索引驱动。
+
+    SQLite: datetime(last_delivered_at, '+' || expire_after_minutes || ' minutes') <= now
+    PostgreSQL: last_delivered_at + (expire_after_minutes || ' minutes')::interval <= now
+    """
+    backend = db.bind.dialect.name if db.bind else "sqlite"
+    if backend == "sqlite":
+        return text(_SQLITE_EXPIRED_CLAUSE).bindparams(
+            now=now.strftime("%Y-%m-%d %H:%M:%S")
+        )
+    return text(_PG_EXPIRED_CLAUSE).bindparams(now=now)
 
 
 def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
@@ -152,6 +180,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         """检查今天是否已为指定体重计划生成 rhythm.weight 提醒。"""
         start = datetime.combine(today, datetime.min.time())
         end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        # 加 limit 避免历史数据过多时全量加载；同一天同类型计划提醒通常 <= 几个
         reminders = (
             db.query(Reminder)
             .filter(
@@ -159,6 +188,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
                 Reminder.trigger_time >= start,
                 Reminder.trigger_time < end,
             )
+            .limit(50)
             .all()
         )
         for r in reminders:
@@ -302,6 +332,7 @@ def scan_once(
         "rhythm_brief_created": 0,
     }
     pushed_payloads: List[Dict[str, Any]] = []
+    batch_size = _env_int("REMINDER_SCAN_BATCH_SIZE", DEFAULT_SCAN_BATCH_SIZE)
 
     db = db_factory()
     try:
@@ -317,122 +348,160 @@ def scan_once(
         # --------------------------------------------------------------
         # 1. 到点投递：PENDING AND trigger_time <= now
         # --------------------------------------------------------------
-        rows = (
-            db.query(Reminder)
-            .filter(
-                Reminder.state == STATE_PENDING,
-                Reminder.trigger_time <= now,
+        # 按 batch 处理，避免历史 PENDING 堆积时一次加载全部行
+        while True:
+            rows = (
+                db.query(Reminder)
+                .filter(
+                    Reminder.state == STATE_PENDING,
+                    Reminder.trigger_time <= now,
+                )
+                .order_by(Reminder.trigger_time)
+                .limit(batch_size)
+                .all()
             )
-            .all()
-        )
-        for r in rows:
-            r.state = STATE_DELIVERED
-            r.last_delivered_at = now
-            _add_event(db, r.id, "delivered", {})
+            if not rows:
+                break
+            for r in rows:
+                r.state = STATE_DELIVERED
+                r.last_delivered_at = now
+                _add_event(db, r.id, "delivered", {})
+                pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
+                stats["delivered"] += 1
             db.commit()
-            pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
-            stats["delivered"] += 1
+            if len(rows) < batch_size:
+                break
 
         # --------------------------------------------------------------
         # 2. snooze 重投：SNOOZED AND next_trigger_time <= now
         # --------------------------------------------------------------
-        rows = (
-            db.query(Reminder)
-            .filter(
-                Reminder.state == STATE_SNOOZED,
-                Reminder.next_trigger_time.isnot(None),
-                Reminder.next_trigger_time <= now,
+        while True:
+            rows = (
+                db.query(Reminder)
+                .filter(
+                    Reminder.state == STATE_SNOOZED,
+                    Reminder.next_trigger_time.isnot(None),
+                    Reminder.next_trigger_time <= now,
+                )
+                .order_by(Reminder.next_trigger_time)
+                .limit(batch_size)
+                .all()
             )
-            .all()
-        )
-        for r in rows:
-            r.state = STATE_DELIVERED
-            r.last_delivered_at = now
-            r.next_trigger_time = None
-            _add_event(
-                db,
-                r.id,
-                "delivered",
-                {"redelivery": True, "snooze_count": r.snooze_count or 0},
-            )
+            if not rows:
+                break
+            for r in rows:
+                r.state = STATE_DELIVERED
+                r.last_delivered_at = now
+                r.next_trigger_time = None
+                _add_event(
+                    db,
+                    r.id,
+                    "delivered",
+                    {"redelivery": True, "snooze_count": r.snooze_count or 0},
+                )
+                pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
+                stats["redelivered"] += 1
             db.commit()
-            pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
-            stats["redelivered"] += 1
+            if len(rows) < batch_size:
+                break
 
         # --------------------------------------------------------------
         # 3. OPENED 回落：OPENED AND updated_at <= now - 30min
         # --------------------------------------------------------------
         fallback_before = now - timedelta(minutes=OPEN_FALLBACK_MINUTES)
-        rows = (
-            db.query(Reminder)
-            .filter(
-                Reminder.state == STATE_OPENED,
-                Reminder.updated_at.isnot(None),
-                Reminder.updated_at <= fallback_before,
-            )
-            .all()
-        )
-        for r in rows:
-            r.state = STATE_DELIVERED
-            r.last_delivered_at = now
-            _add_event(db, r.id, "redelivered", {"reason": "open_timeout"})
-            db.commit()
-            pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
-            stats["fallback"] += 1
-
-        # --------------------------------------------------------------
-        # 4. 过期处理：DELIVERED AND last_delivered_at <= now - expire_after_minutes
-        # --------------------------------------------------------------
-        rows = (
-            db.query(Reminder)
-            .filter(
-                Reminder.state == STATE_DELIVERED,
-                Reminder.last_delivered_at.isnot(None),
-            )
-            .all()
-        )
-        for r in rows:
-            expire_minutes = r.expire_after_minutes or 240
-            if r.last_delivered_at + timedelta(minutes=expire_minutes) > now:
-                continue  # 未过期
-            r.state = STATE_EXPIRED
-            _add_event(db, r.id, "expired", {"expire_after_minutes": expire_minutes})
-            stats["expired"] += 1
-
-            # 按 rule.retry_policy 决定重投或归档
-            retry_policy: Dict[str, Any] = {}
-            if r.rule_id is not None:
-                rule = (
-                    db.query(ReminderRule)
-                    .filter(ReminderRule.id == r.rule_id)
-                    .first()
+        while True:
+            rows = (
+                db.query(Reminder)
+                .filter(
+                    Reminder.state == STATE_OPENED,
+                    Reminder.updated_at.isnot(None),
+                    Reminder.updated_at <= fallback_before,
                 )
-                if rule is not None:
-                    retry_policy = rule.retry_policy or {}
-            max_retry = int(retry_policy.get("max_retry", DEFAULT_MAX_RETRY))
-            retry_interval = int(
-                retry_policy.get("retry_interval_minutes", DEFAULT_RETRY_INTERVAL_MINUTES)
+                .order_by(Reminder.updated_at)
+                .limit(batch_size)
+                .all()
             )
+            if not rows:
+                break
+            for r in rows:
+                r.state = STATE_DELIVERED
+                r.last_delivered_at = now
+                _add_event(db, r.id, "redelivered", {"reason": "open_timeout"})
+                pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
+                stats["fallback"] += 1
+            db.commit()
+            if len(rows) < batch_size:
+                break
 
-            if (r.retry_count or 0) < max_retry:
-                r.retry_count = (r.retry_count or 0) + 1
-                r.state = STATE_PENDING
-                r.trigger_time = now + timedelta(minutes=retry_interval)
+        # --------------------------------------------------------------
+        # 4. 过期处理：DELIVERED AND last_delivered_at + expire_after_minutes <= now
+        # --------------------------------------------------------------
+        # 历史 DELIVERED 可能极多，把过期判定下推到数据库（利用复合索引），
+        # 只加载确实可能过期的行，并按 batch 处理避免单次事务过大。
+        expired_filter = _build_expired_filter(db, now)
+        while True:
+            rows = (
+                db.query(Reminder)
+                .filter(
+                    Reminder.state == STATE_DELIVERED,
+                    Reminder.last_delivered_at.isnot(None),
+                    expired_filter,
+                )
+                .order_by(Reminder.last_delivered_at)
+                .limit(batch_size)
+                .all()
+            )
+            if not rows:
+                break
+            for r in rows:
+                expire_minutes = r.expire_after_minutes or 240
+                # 数据库过滤已做，二次校验保证测试注入 now 时行为一致
+                if r.last_delivered_at + timedelta(minutes=expire_minutes) > now:
+                    continue  # 未过期
+                r.state = STATE_EXPIRED
                 _add_event(
-                    db,
-                    r.id,
-                    "redelivered",
-                    {
-                        "reason": "retry",
-                        "retry_count": r.retry_count,
-                        "next_trigger_time": r.trigger_time.isoformat(),
-                    },
+                    db, r.id, "expired", {"expire_after_minutes": expire_minutes}
                 )
-                stats["retried"] += 1
-            else:
-                r.state = STATE_ARCHIVED
-                stats["archived"] += 1
+                stats["expired"] += 1
+
+                # 按 rule.retry_policy 决定重投或归档
+                retry_policy: Dict[str, Any] = {}
+                if r.rule_id is not None:
+                    rule = (
+                        db.query(ReminderRule)
+                        .filter(ReminderRule.id == r.rule_id)
+                        .first()
+                    )
+                    if rule is not None:
+                        retry_policy = rule.retry_policy or {}
+                max_retry = int(retry_policy.get("max_retry", DEFAULT_MAX_RETRY))
+                retry_interval = int(
+                    retry_policy.get(
+                        "retry_interval_minutes", DEFAULT_RETRY_INTERVAL_MINUTES
+                    )
+                )
+
+                if (r.retry_count or 0) < max_retry:
+                    r.retry_count = (r.retry_count or 0) + 1
+                    r.state = STATE_PENDING
+                    r.trigger_time = now + timedelta(minutes=retry_interval)
+                    _add_event(
+                        db,
+                        r.id,
+                        "redelivered",
+                        {
+                            "reason": "retry",
+                            "retry_count": r.retry_count,
+                            "next_trigger_time": r.trigger_time.isoformat(),
+                        },
+                    )
+                    stats["retried"] += 1
+                else:
+                    r.state = STATE_ARCHIVED
+                    stats["archived"] += 1
             db.commit()
+            if len(rows) < batch_size:
+                break
     finally:
         db.close()
 
@@ -451,41 +520,65 @@ async def reminder_scan_loop(
     db_factory: Callable[[], Session],
     interval_seconds: Optional[int] = None,
 ) -> None:
-    """提醒调度后台循环：启动后立即执行一轮，然后按间隔循环。
+    """提醒调度后台循环：启动后稍等再执行，然后按间隔循环。
 
+    - 启动时先 sleep 一小段时间，避免启动高峰与首个连接/请求竞争；
     - 间隔取 REMINDER_SCAN_INTERVAL_SECONDS（默认 30s）；
     - 未捕获异常按指数退避（60s 起、30min 封顶）后继续；
     - 任务被取消（服务关闭）时向上抛 CancelledError 安静退出；
-    - DB 扫描在 to_thread 中执行，推送经 run_coroutine_threadsafe 回事件循环。
+    - DB 扫描在专属单线程 Executor 中执行，避免占满默认线程池；
+    - 推送经 run_coroutine_threadsafe 回事件循环。
     """
     from sail_server.utils.reminder_ws import get_reminder_push_manager
 
     interval_seconds = interval_seconds or _env_int(
         "REMINDER_SCAN_INTERVAL_SECONDS", DEFAULT_SCAN_INTERVAL_SECONDS
     )
+    initial_delay = _env_int("REMINDER_SCAN_INITIAL_DELAY_SECONDS", 2)
     manager = get_reminder_push_manager()
     loop = asyncio.get_running_loop()
+    # 单线程专用 Executor：扫描任务串行执行，且不挤占其他 to_thread 用户
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="reminder_scan")
 
     def push(payload: Dict[str, Any]) -> None:
         # 无在线设备时不视为错误（WorkManager 轮询 /pending 兜回）
         asyncio.run_coroutine_threadsafe(manager.broadcast_reminder(payload), loop)
 
-    logger.info(f"[reminder] scan loop started, interval={interval_seconds}s")
+    logger.info(
+        f"[reminder] scan loop started, interval={interval_seconds}s, "
+        f"initial_delay={initial_delay}s"
+    )
+
+    # 启动时短暂等待，让服务器先完成启动握手、避免首个请求被阻塞
+    try:
+        await asyncio.sleep(initial_delay)
+    except asyncio.CancelledError:
+        logger.info("[reminder] scan loop cancelled during initial delay")
+        executor.shutdown(wait=False)
+        raise
+
     backoff_seconds = 0
-    while True:
-        try:
-            stats = await asyncio.to_thread(scan_once, db_factory, push)
-            if any(stats.values()):
-                logger.info(f"[reminder] scan round done: {stats}")
-            backoff_seconds = 0
-            sleep_seconds = interval_seconds
-        except asyncio.CancelledError:
-            logger.info("[reminder] scan loop cancelled")
-            raise
-        except Exception as e:
-            logger.error(f"[reminder] scan round failed: {e}")
-            backoff_seconds = (
-                min(MAX_BACKOFF_SECONDS, backoff_seconds * 2) if backoff_seconds else 60
-            )
-            sleep_seconds = backoff_seconds
-        await asyncio.sleep(sleep_seconds)
+    try:
+        while True:
+            try:
+                stats = await loop.run_in_executor(
+                    executor, scan_once, db_factory, push
+                )
+                if any(stats.values()):
+                    logger.info(f"[reminder] scan round done: {stats}")
+                backoff_seconds = 0
+                sleep_seconds = interval_seconds
+            except asyncio.CancelledError:
+                logger.info("[reminder] scan loop cancelled")
+                raise
+            except Exception as e:
+                logger.error(f"[reminder] scan round failed: {e}")
+                backoff_seconds = (
+                    min(MAX_BACKOFF_SECONDS, backoff_seconds * 2)
+                    if backoff_seconds
+                    else 60
+                )
+                sleep_seconds = backoff_seconds
+            await asyncio.sleep(sleep_seconds)
+    finally:
+        executor.shutdown(wait=False)

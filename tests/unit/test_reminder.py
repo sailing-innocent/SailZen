@@ -58,10 +58,19 @@ from sail_server.model.reminder import (
     list_pending_impl,
     register_device_impl,
 )
+from sail_server.model import reminder_scheduler
 from sail_server.model.reminder_scheduler import scan_once
 from sail_server.utils.reminder_ws import ReminderPushManager
 
 pytestmark = pytest.mark.unit
+
+
+@pytest.fixture(scope="function", autouse=True)
+def disable_rhythm_daily_brief(monkeypatch):
+    """单元测试里关闭 rhythm daily brief 生成，避免扫描时额外创建提醒干扰断言。"""
+    monkeypatch.setattr(
+        reminder_scheduler, "_generate_rhythm_daily_brief", lambda db, now: 0
+    )
 
 
 # ============================================================================
