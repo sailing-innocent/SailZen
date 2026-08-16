@@ -103,9 +103,18 @@ fun SettingsScreen(
                 label = { Text(stringResource(R.string.settings_server_url)) },
                 placeholder = { Text("http://192.168.x.x:1974") },
                 singleLine = true,
+                enabled = !state.serverUrlLocked,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (state.serverUrlLocked) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.settings_server_url_locked_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedTextField(

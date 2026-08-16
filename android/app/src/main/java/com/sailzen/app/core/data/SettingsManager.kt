@@ -1,6 +1,7 @@
 package com.sailzen.app.core.data
 
 import android.content.Context
+import com.sailzen.app.BuildConfig
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -44,7 +45,7 @@ class SettingsManager private constructor(private val context: Context) {
     // ------------------------------------------------------------------
 
     val serverUrlFlow: Flow<String> =
-        context.dataStore.data.map { it[KEY_SERVER_URL] ?: "" }
+        context.dataStore.data.map { it[KEY_SERVER_URL] ?: defaultServerUrl() }
 
     val apiTokenFlow: Flow<String> =
         context.dataStore.data.map { it[KEY_API_TOKEN] ?: "" }
@@ -63,7 +64,7 @@ class SettingsManager private constructor(private val context: Context) {
     // ------------------------------------------------------------------
 
     suspend fun serverUrl(): String =
-        context.dataStore.data.first()[KEY_SERVER_URL] ?: ""
+        context.dataStore.data.first()[KEY_SERVER_URL] ?: defaultServerUrl()
 
     suspend fun apiToken(): String =
         context.dataStore.data.first()[KEY_API_TOKEN] ?: ""
@@ -91,8 +92,13 @@ class SettingsManager private constructor(private val context: Context) {
     // ------------------------------------------------------------------
 
     suspend fun saveServerConfig(serverUrl: String, apiToken: String) {
+        val url = if (BuildConfig.SERVER_URL_LOCKED) {
+            defaultServerUrl()
+        } else {
+            serverUrl.trim().trimEnd('/')
+        }
         context.dataStore.edit {
-            it[KEY_SERVER_URL] = serverUrl.trim().trimEnd('/')
+            it[KEY_SERVER_URL] = url
             it[KEY_API_TOKEN] = apiToken.trim()
         }
     }
@@ -134,4 +140,10 @@ class SettingsManager private constructor(private val context: Context) {
         } catch (_: Exception) {
             null
         }
+
+    /** 返回当前构建类型默认服务器地址；release 构建中被锁定，禁止用户修改。 */
+    fun defaultServerUrl(): String = BuildConfig.SERVER_URL
+
+    /** 服务器地址是否已被发布包锁定。 */
+    fun isServerUrlLocked(): Boolean = BuildConfig.SERVER_URL_LOCKED
 }

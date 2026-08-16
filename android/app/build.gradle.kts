@@ -1,3 +1,7 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,9 +22,16 @@ android {
         versionName = "0.1.0"
     }
 
+    // 远程服务器地址：release 构建通过 gradle 属性或环境变量注入，打包后锁定不可修改
+    val releaseServerUrl = providers.gradleProperty("SAILZEN_RELEASE_SERVER_URL")
+        .orElse(providers.environmentVariable("SAILZEN_RELEASE_SERVER_URL"))
+        .getOrElse("")
+
     buildTypes {
         debug {
-            // M1 验收构建：不混淆
+            // M1 验收构建：不混淆；允许用户修改服务器地址
+            buildConfigField("String", "SERVER_URL", "\"\"")
+            buildConfigField("boolean", "SERVER_URL_LOCKED", "false")
         }
         release {
             isMinifyEnabled = false
@@ -28,6 +39,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // 公网发布包锁定服务器地址，避免用户误改
+            buildConfigField("String", "SERVER_URL", "\"$releaseServerUrl\"")
+            buildConfigField("boolean", "SERVER_URL_LOCKED", "true")
         }
     }
 
@@ -40,6 +54,20 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+}
+
+// 按构建类型输出带版本、构建类型的 APK 文件名，方便复制到开发机真机验证
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            val buildType = variant.buildType
+            val version = android.defaultConfig.versionName ?: "0.0.0"
+            val timestamp = SimpleDateFormat("MMddHHmm", Locale.getDefault()).format(Date())
+            val suffix = if (buildType == "debug") "debug" else "release"
+            output.outputFileName.set("SailZen-${version}-${suffix}-${timestamp}.apk")
+        }
     }
 }
 

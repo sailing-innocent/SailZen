@@ -16,6 +16,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     data class UiState(
         val serverUrl: String = "",
+        val serverUrlLocked: Boolean = false,
         val apiToken: String = "",
         val quietStart: String = "23:00",
         val quietEnd: String = "08:00",
@@ -30,6 +31,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        _uiState.update { it.copy(serverUrlLocked = settings.isServerUrlLocked()) }
         viewModelScope.launch {
             settings.serverUrlFlow.collect { v -> _uiState.update { it.copy(serverUrl = v) } }
         }
@@ -67,10 +69,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun save() {
         val current = _uiState.value
         viewModelScope.launch {
-            settings.saveServerConfig(current.serverUrl, current.apiToken)
+            val url = if (current.serverUrlLocked) settings.defaultServerUrl() else current.serverUrl
+            settings.saveServerConfig(url, current.apiToken)
             settings.saveQuietHours(current.quietStart, current.quietEnd)
             // 重启前台服务以应用新配置
-            if (current.serverUrl.isNotBlank()) {
+            if (settings.serverUrl().isNotBlank()) {
                 ReminderService.restart(getApplication())
             } else {
                 ReminderService.stop(getApplication())

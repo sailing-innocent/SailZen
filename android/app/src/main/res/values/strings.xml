@@ -49,6 +49,7 @@
     <string name="settings_connected">已连接</string>
     <string name="settings_disconnected">未连接</string>
     <string name="settings_device_id">设备 ID</string>
+    <string name="settings_server_url_locked_hint">Release 包已锁定服务器地址，不可修改</string>
 
     <!-- 健康打卡 -->
     <string name="health_checkin_title">健康速记</string>
