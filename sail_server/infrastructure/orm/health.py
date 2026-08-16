@@ -12,7 +12,7 @@
 从 sail_server/data/health.py 迁移
 """
 
-from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func, Boolean
+from sqlalchemy import Column, Date, Float, Integer, String, ForeignKey, TIMESTAMP, func, Boolean
 from sqlalchemy.orm import relationship
 
 from sail_server.infrastructure.orm import ORMBase
@@ -53,6 +53,11 @@ class Exercise(ORMBase):
     id = Column(Integer, primary_key=True)
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
     description = Column(String, default="")  # natural language description
+    exercise_type = Column(String, default="")  # 运动类型，如 running / walking / strength
+    duration_minutes = Column(Integer, default=0)  # 运动时长（分钟）
+    calories = Column(Integer, default=0)  # 消耗热量（千卡）
+    completed = Column(Boolean, default=True)  # 是否完成
+    source = Column(String, default="health")  # 来源：health / exercise_plan / rhythm
 
 
 class WeightPlan(ORMBase):
@@ -143,3 +148,68 @@ class HealthSignal(ORMBase):
     score = Column(Integer, nullable=True)
 
     day = relationship("Day", foreign_keys=[day_id])
+
+
+class Medication(ORMBase):
+    """用药/保健品记录"""
+
+    __tablename__ = "medications"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)  # 药品/保健品名
+    dosage = Column(String, default="")  # 剂量，如 "500mg"
+    frequency = Column(String, default="daily")  # daily / weekly / as_needed
+    schedule_times = Column(JSONB, default=list)  # ["08:00", "20:00"]
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # 本次记录时间
+    planned_date = Column(Date)  # 计划服用日期
+    taken = Column(Boolean, default=False)  # 是否已服用
+    taken_at = Column(TIMESTAMP, nullable=True)  # 实际服用时间
+    note = Column(String, default="")
+    is_supplement = Column(Boolean, default=False)  # 是否保健品
+
+
+class DietLog(ORMBase):
+    """饮食记录"""
+
+    __tablename__ = "diet_logs"
+    id = Column(Integer, primary_key=True)
+    meal_type = Column(String, default="snack")  # breakfast/lunch/dinner/snack
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp())
+    description = Column(String, default="")  # 文字描述
+    photo_path = Column(String, nullable=True)  # 照片路径（未来扩展）
+    # 营养实际值（单位克， nullable 表示未填写）
+    calories = Column(Float, nullable=True)
+    carbs = Column(Float, nullable=True)  # 碳水化合物
+    sugar = Column(Float, nullable=True)
+    protein = Column(Float, nullable=True)
+    fat = Column(Float, nullable=True)
+    fiber = Column(Float, nullable=True)
+    sodium = Column(Float, nullable=True)  # 钠 mg
+    # 微量元素（可 JSON 扩展）
+    micronutrients = Column(JSONB, default=dict)
+
+
+class NutritionGoal(ORMBase):
+    """每日营养目标"""
+
+    __tablename__ = "nutrition_goals"
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, unique=True)  # 目标日期
+    calories = Column(Float, nullable=True)
+    carbs = Column(Float, nullable=True)
+    sugar = Column(Float, nullable=True)
+    protein = Column(Float, nullable=True)
+    fat = Column(Float, nullable=True)
+    fiber = Column(Float, nullable=True)
+    sodium = Column(Float, nullable=True)
+    micronutrients = Column(JSONB, default=dict)
+
+
+class SleepScheduleGoal(ORMBase):
+    """作息目标"""
+
+    __tablename__ = "sleep_schedule_goals"
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, unique=True)
+    bed_time = Column(String, default="23:00")  # "23:00"
+    wake_time = Column(String, default="07:00")  # "07:00"
+    target_hours = Column(Float, default=8.0)  # 目标睡眠时长

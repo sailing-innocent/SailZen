@@ -12,7 +12,7 @@
 原位置: sail_server/data/health.py
 """
 
-from datetime import datetime, date
+from datetime import datetime, date as date_type
 from enum import Enum
 from typing import Optional, List
 
@@ -101,6 +101,11 @@ class ExerciseBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     description: str = Field(default="", description="运动描述")
+    exercise_type: str = Field(default="", description="运动类型，如 running / walking / strength")
+    duration_minutes: int = Field(default=0, ge=0, description="运动时长（分钟）")
+    calories: int = Field(default=0, ge=0, description="消耗热量（千卡）")
+    completed: bool = Field(default=True, description="是否完成")
+    source: str = Field(default="health", description="来源：health / exercise_plan / rhythm")
 
 
 class ExerciseCreateRequest(ExerciseBase):
@@ -326,6 +331,270 @@ class MoodListResponse(BaseModel):
 
     moods: List[MoodResponse]
     total: int
+
+
+# ============================================================================
+# Medication DTOs
+# ============================================================================
+
+
+class MedicationBase(BaseModel):
+    """用药/保健品记录基础信息"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str = Field(description="药品/保健品名")
+    dosage: Optional[str] = Field(default="", description="剂量，如 500mg")
+    frequency: str = Field(default="daily", description="daily / weekly / as_needed")
+    schedule_times: List[str] = Field(default_factory=list, description="服用时间点，如 [\"08:00\", \"20:00\"]")
+    planned_date: Optional[date_type] = Field(default=None, description="计划服用日期")
+    taken: bool = Field(default=False, description="是否已服用")
+    note: Optional[str] = Field(default="", description="备注")
+    is_supplement: bool = Field(default=False, description="是否保健品")
+
+
+class MedicationCreateRequest(MedicationBase):
+    """创建用药记录请求"""
+
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
+    taken_at: Optional[float] = Field(default=None, description="实际服用时间戳")
+
+
+class MedicationUpdateRequest(BaseModel):
+    """更新用药记录请求（仅允许更新服用状态与时间）"""
+
+    taken: bool = Field(default=True, description="是否已服用")
+    taken_at: Optional[float] = Field(default=None, description="实际服用时间戳")
+    note: Optional[str] = Field(default=None, description="备注")
+
+
+class MedicationResponse(MedicationBase):
+    """用药记录响应"""
+
+    id: int = Field(description="记录ID")
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
+    taken_at: Optional[float] = Field(default=None, description="实际服用时间戳")
+
+
+class MedicationListResponse(BaseModel):
+    """用药记录列表响应"""
+
+    medications: List[MedicationResponse]
+    total: int
+
+
+class MedicationTodayDto(BaseModel):
+    """今日用药清单与完成率"""
+
+    date: str = Field(description="日期 YYYY-MM-DD")
+    medications: List[MedicationResponse] = Field(default_factory=list)
+    total: int = 0
+    taken: int = 0
+    compliance: float = Field(default=0.0, description="完成率 0-1")
+
+
+class MedicationStatsDto(BaseModel):
+    """近 N 天用药依从性统计"""
+
+    days: int = Field(description="统计天数")
+    total: int = 0
+    taken: int = 0
+    compliance: float = 0.0
+
+
+# ============================================================================
+# Diet / Nutrition DTOs
+# ============================================================================
+
+
+class MealType(str, Enum):
+    """餐次类型"""
+
+    BREAKFAST = "breakfast"
+    LUNCH = "lunch"
+    DINNER = "dinner"
+    SNACK = "snack"
+
+
+class DietLogBase(BaseModel):
+    """饮食记录基础信息"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    meal_type: MealType = Field(default=MealType.SNACK, description="餐次")
+    description: Optional[str] = Field(default="", description="文字描述")
+    photo_path: Optional[str] = Field(default=None, description="照片路径")
+    calories: Optional[float] = Field(default=None, description="热量（千卡）")
+    carbs: Optional[float] = Field(default=None, description="碳水化合物（克）")
+    sugar: Optional[float] = Field(default=None, description="糖分（克）")
+    protein: Optional[float] = Field(default=None, description="蛋白质（克）")
+    fat: Optional[float] = Field(default=None, description="脂肪（克）")
+    fiber: Optional[float] = Field(default=None, description="纤维（克）")
+    sodium: Optional[float] = Field(default=None, description="钠（mg）")
+    micronutrients: Optional[dict] = Field(default_factory=dict, description="微量元素")
+
+
+class DietCreateRequest(DietLogBase):
+    """创建饮食记录请求"""
+
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
+
+
+class DietResponse(DietLogBase):
+    """饮食记录响应"""
+
+    id: int = Field(description="记录ID")
+    htime: Optional[float] = Field(default=None, description="发生时间戳")
+
+
+class DietListResponse(BaseModel):
+    """饮食记录列表响应"""
+
+    diets: List[DietResponse]
+    total: int
+
+
+class NutrientActualVsGoal(BaseModel):
+    """单一营养素实际 vs 目标"""
+
+    actual: Optional[float] = None
+    goal: Optional[float] = None
+    unit: str = "g"
+
+
+class DietSummaryDto(BaseModel):
+    """当日饮食汇总 + 目标对比"""
+
+    date: str = Field(description="日期 YYYY-MM-DD")
+    calories: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    carbs: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    sugar: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    protein: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    fat: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    fiber: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    sodium: NutrientActualVsGoal = Field(default_factory=NutrientActualVsGoal)
+    micronutrients: dict = Field(default_factory=dict)
+
+
+class NutritionGoalBase(BaseModel):
+    """营养目标基础信息"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type = Field(description="目标日期")
+    calories: Optional[float] = Field(default=None, description="热量目标（千卡）")
+    carbs: Optional[float] = Field(default=None, description="碳水目标（克）")
+    sugar: Optional[float] = Field(default=None, description="糖分目标（克）")
+    protein: Optional[float] = Field(default=None, description="蛋白质目标（克）")
+    fat: Optional[float] = Field(default=None, description="脂肪目标（克）")
+    fiber: Optional[float] = Field(default=None, description="纤维目标（克）")
+    sodium: Optional[float] = Field(default=None, description="钠目标（mg）")
+    micronutrients: Optional[dict] = Field(default_factory=dict, description="微量元素目标")
+
+
+class NutritionGoalCreateRequest(NutritionGoalBase):
+    """创建/更新营养目标请求"""
+
+    pass
+
+
+class NutritionGoalResponse(NutritionGoalBase):
+    """营养目标响应"""
+
+    id: int = Field(description="目标ID")
+
+
+# ============================================================================
+# Sleep Schedule DTOs
+# ============================================================================
+
+
+class SleepScheduleGoalBase(BaseModel):
+    """作息目标基础信息"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: date_type = Field(description="目标日期")
+    bed_time: str = Field(default="23:00", pattern=r"^\d{2}:\d{2}$", description="就寝时间 HH:MM")
+    wake_time: str = Field(default="07:00", pattern=r"^\d{2}:\d{2}$", description="起床时间 HH:MM")
+    target_hours: float = Field(default=8.0, gt=0, description="目标睡眠时长（小时）")
+
+
+class SleepScheduleGoalCreateRequest(SleepScheduleGoalBase):
+    """创建作息目标请求"""
+
+    pass
+
+
+class SleepScheduleGoalResponse(SleepScheduleGoalBase):
+    """作息目标响应"""
+
+    id: int = Field(description="目标ID")
+
+
+# ============================================================================
+# Health Dashboard DTO
+# ============================================================================
+
+
+class DashboardWeightItem(BaseModel):
+    """体重概览项"""
+
+    latest: Optional[float] = None
+    plan_target: Optional[float] = None
+    status: str = "normal"  # normal | above | below
+
+
+class DashboardSleepItem(BaseModel):
+    """睡眠概览项"""
+
+    last_night_hours: Optional[float] = None
+    goal: Optional[float] = None
+    status: str = "normal"
+
+
+class DashboardExerciseItem(BaseModel):
+    """运动概览项"""
+
+    today_minutes: int = 0
+    goal_minutes: int = 0
+    completed: bool = False
+
+
+class DashboardMedicationItem(BaseModel):
+    """用药概览项"""
+
+    total: int = 0
+    taken: int = 0
+    compliance: float = 0.0
+
+
+class DashboardDietItem(BaseModel):
+    """饮食概览项"""
+
+    calories_actual: Optional[float] = None
+    calories_goal: Optional[float] = None
+    sugar_actual: Optional[float] = None
+    sugar_goal: Optional[float] = None
+
+
+class DashboardMoodItem(BaseModel):
+    """心情概览项"""
+
+    score: Optional[int] = None
+
+
+class HealthDashboardResponse(BaseModel):
+    """健康首页聚合响应"""
+
+    date: str = Field(description="日期 YYYY-MM-DD")
+    weight: DashboardWeightItem = Field(default_factory=DashboardWeightItem)
+    sleep: DashboardSleepItem = Field(default_factory=DashboardSleepItem)
+    exercise: DashboardExerciseItem = Field(default_factory=DashboardExerciseItem)
+    medication: DashboardMedicationItem = Field(default_factory=DashboardMedicationItem)
+    diet: DashboardDietItem = Field(default_factory=DashboardDietItem)
+    mood: DashboardMoodItem = Field(default_factory=DashboardMoodItem)
+    warnings: List[str] = Field(default_factory=list)
 
 
 # ============================================================================

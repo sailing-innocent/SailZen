@@ -28,3 +28,27 @@ app/src/main/java/com/sailzen/app/
 │   └── settings/            # 服务器/Token/安静时段/连接状态
 └── ui/                      # Material3 主题 + 导航
 ```
+
+## 健康管理模块（M1 升级）
+
+本次升级将「健康」提升为底部独立 Tab，核心入口为 `HealthHomeScreen`，子模块包括：
+
+- `feature/health/HealthHomeScreen`：今日概览、异常提示、模块入口、快速记录。
+- `feature/health/weight/WeightCurveScreen` / `WeightPlanScreen`：体重曲线、计划进度与打卡状态。
+- `feature/health/medication/MedicationScreen`：今日用药清单、服用打卡、添加用药。
+- `feature/health/sleep/SleepScheduleScreen`：作息目标、睡眠记录、近 7 天柱状图。
+- `feature/diet/DietScreen`：三餐记录、营养目标 vs 实际、热量/碳水/糖/蛋白质等。
+- `feature/exercise/ExerciseScreen`：运动目标完成度、快速记录、自定义记录。
+- `feature/health/HealthCheckinScreen`：统一快速入口，支持日期/时间与各类型结构化字段。
+
+数据层：
+- `core/network/HealthApi.kt` + `dto/HealthDtos.kt`：对接后端 `/api/v1/health/*`。
+- `core/health/HealthRepository.kt`：封装 API 调用与日期/时间戳转换。
+- `core/rhythm/RhythmRepository.kt`：离线队列已扩展 `health_*` 动作类型。
+- `core/sync/SyncWorker.kt`：冲刷离线队列时同步刷新健康首页概览。
+
+后端配套：
+- `/api/v1/health/medication`、`/diet`、`/sleep`、`/sleep-schedule`、`/dashboard`。
+- 健康速记 `/api/v1/rhythm/checkin/health` 已双写 `DietLog` / `Medication` / `Sleep` / `Mood` 专用表。
+
+详见完整实施手册：`../doc/AndroidHealthPageHandbook.md`。

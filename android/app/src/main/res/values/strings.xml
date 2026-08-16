@@ -51,16 +51,37 @@
     <string name="settings_device_id">设备 ID</string>
     <string name="settings_server_url_locked_hint">Release 包已锁定服务器地址，不可修改</string>
 
-    <!-- 健康打卡 -->
-    <string name="health_checkin_title">健康速记</string>
-    <string name="health_checkin_weight">体重</string>
-    <string name="health_checkin_meal">饮食</string>
-    <string name="health_checkin_exercise">运动</string>
-    <string name="health_checkin_medication">用药</string>
-    <string name="health_checkin_sleep">睡眠</string>
-    <string name="health_checkin_mood">心情</string>
-    <string name="health_checkin_submit">提交</string>
-    <string name="health_checkin_success">记录成功</string>
-    <string name="health_signals_title">今日健康信号</string>
-    <string name="health_checkin_entry">健康打卡</string>
+    <!-- 健康模块 -->
+    <string name="health_tab">健康</string>
+    <string name="health_home_title">健康</string>
+    <string name="health_weight_curve">体重曲线</string>
+    <string name="health_weight_plan">体重计划</string>
+    <string name="health_medication">用药节律</string>
+    <string name="health_sleep_schedule">作息节律</string>
+    <string name="health_diet">饮食三餐</string>
+    <string name="health_exercise">必备运动</string>
+    <string name="health_quick_record">快速记录</string>
+    <string name="health_today_overview">今日概览</string>
+    <string name="health_warnings">异常提示</string>
+    <string name="health_weight_latest">当前体重 %.1f kg</string>
+    <string name="health_weight_plan_target">目标 %.1f kg</string>
+    <string name="health_sleep_hours">睡眠 %.1f 小时</string>
+    <string name="health_exercise_minutes">运动 %d 分钟</string>
+    <string name="health_medication_compliance">用药依从性 %d%%</string>
+    <string name="health_diet_calories">热量 %d / %d kcal</string>
+    <string name="health_weight_status_above">偏高</string>
+    <string name="health_weight_status_below">偏低</string>
+    <string name="health_weight_status_normal">正常</string>
+    <string name="health_no_plan">暂无活跃计划</string>
+    <string name="health_create_plan">创建计划</string>
+    <string name="health_taken">已服用</string>
+    <string name="health_take">服用</string>
+    <string name="health_add_medication">添加用药</string>
+    <string name="health_bed_time">就寝 %s</string>
+    <string name="health_wake_time">起床 %s</string>
+    <string name="health_record_sleep">记录睡眠</string>
+    <string name="health_add_meal">添加饮食</string>
+    <string name="health_nutrition_goal">营养目标</string>
+    <string name="health_exercise_goal">运动目标</string>
+    <string name="health_record_exercise">记录运动</string>
 </resources>

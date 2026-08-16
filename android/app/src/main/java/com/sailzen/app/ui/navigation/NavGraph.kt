@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -21,7 +22,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.sailzen.app.feature.checkin.CheckinScreen
+import com.sailzen.app.feature.diet.DietScreen
+import com.sailzen.app.feature.exercise.ExerciseScreen
 import com.sailzen.app.feature.health.HealthCheckinScreen
+import com.sailzen.app.feature.health.HealthHomeScreen
+import com.sailzen.app.feature.health.medication.MedicationScreen
+import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
+import com.sailzen.app.feature.health.weight.WeightCurveScreen
+import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
 import com.sailzen.app.feature.settings.SettingsScreen
 import com.sailzen.app.feature.timeline.TimelineScreen
@@ -31,9 +39,16 @@ object Routes {
     const val TIMELINE = "timeline"
     const val CHECKIN = "checkin"
     const val VENTURE = "venture"
+    const val HEALTH = "health"
+    const val HEALTH_WEIGHT_CURVE = "health_weight_curve"
+    const val HEALTH_WEIGHT_PLAN = "health_weight_plan"
+    const val HEALTH_MEDICATION = "health_medication"
+    const val HEALTH_SLEEP = "health_sleep"
+    const val HEALTH_DIET = "health_diet"
+    const val HEALTH_EXERCISE = "health_exercise"
+    const val HEALTH_CHECKIN = "health_checkin?type={type}"
     const val INBOX = "inbox?reminder_id={reminder_id}"
     const val SETTINGS = "settings"
-    const val HEALTH_CHECKIN = "health_checkin?type={type}"
 
     fun inbox(reminderId: Int = -1) = "inbox?reminder_id=$reminderId"
     fun healthCheckin(type: String = "weight") = "health_checkin?type=$type"
@@ -50,6 +65,7 @@ private val TABS = listOf(
     TabItem(Routes.CHECKIN, "打卡", Icons.Default.CheckCircle),
     TabItem(Routes.VENTURE, "事业", Icons.Default.Star),
     TabItem("inbox_tab", "收件箱", Icons.Default.Email),
+    TabItem(Routes.HEALTH, "健康", Icons.Default.Favorite),
 )
 
 @Composable
@@ -107,6 +123,18 @@ fun SailZenNavGraph(
                 )
             }
             composable(Routes.VENTURE) { VentureScreen() }
+            composable(Routes.HEALTH) {
+                HealthHomeScreen(
+                    onNavigate = { route -> navController.navigate(route) },
+                    onOpenHealthCheckin = { navController.navigate(Routes.healthCheckin()) },
+                )
+            }
+            composable(Routes.HEALTH_WEIGHT_CURVE) { WeightCurveScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.HEALTH_WEIGHT_PLAN) { WeightPlanScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.HEALTH_MEDICATION) { MedicationScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.HEALTH_SLEEP) { SleepScheduleScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.HEALTH_DIET) { DietScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.HEALTH_EXERCISE) { ExerciseScreen(onBack = { navController.popBackStack() }) }
             composable(
                 route = Routes.HEALTH_CHECKIN,
                 arguments = listOf(

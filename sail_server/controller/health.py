@@ -20,6 +20,21 @@ from sail_server.application.dto.health import (
     WeightPlanUpdateRequest,
     WeightPlanResponse,
     WeightExpectedRangeResponse,
+    MedicationCreateRequest,
+    MedicationUpdateRequest,
+    MedicationResponse,
+    MedicationTodayDto,
+    MedicationStatsDto,
+    DietCreateRequest,
+    DietResponse,
+    DietSummaryDto,
+    NutritionGoalCreateRequest,
+    NutritionGoalResponse,
+    SleepCreateRequest,
+    SleepResponse,
+    SleepScheduleGoalCreateRequest,
+    SleepScheduleGoalResponse,
+    HealthDashboardResponse,
 )
 
 from sail_server.model.health import (
@@ -43,11 +58,29 @@ from sail_server.model.health import (
     get_weights_with_plan_status_impl,
     get_expected_weights_impl,
     get_weight_plan_checkin_status_impl,
+    create_medication_impl,
+    read_medication_impl,
+    read_medications_impl,
+    update_medication_impl,
+    medication_today_impl,
+    medication_stats_impl,
+    create_diet_impl,
+    read_diet_impl,
+    read_diets_impl,
+    diet_summary_impl,
+    upsert_nutrition_goal_impl,
+    read_nutrition_goal_impl,
+    create_sleep_impl,
+    read_sleep_impl,
+    read_sleeps_impl,
+    upsert_sleep_schedule_goal_impl,
+    read_sleep_schedule_goal_impl,
+    health_dashboard_impl,
 )
 from sqlalchemy.orm import Session
 from typing import Generator
 
-from datetime import datetime
+from datetime import datetime, date
 
 
 # ===================================================
@@ -421,3 +454,282 @@ class ExerciseController(Controller):
         db = next(router_dependency)
         delete_exercise_impl(db, exercise_id)
         logger.info(f"Delete exercise: {exercise_id}")
+
+
+# ===================================================
+# Sleep Controller
+# ===================================================
+
+class SleepController(Controller):
+    path = "/sleep"
+
+    @get("/{sleep_id:int}")
+    async def get_sleep(
+        self,
+        sleep_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> SleepResponse:
+        """Get a sleep record."""
+        db = next(router_dependency)
+        sleep = read_sleep_impl(db, sleep_id)
+        logger.info(f"Get sleep: {sleep}")
+        if sleep is None:
+            return None
+        return sleep
+
+    @get()
+    async def get_sleep_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        skip: int = 0,
+        limit: int = -1,
+        start: float = None,
+        end: float = None,
+    ) -> list[SleepResponse]:
+        """Get sleep record list."""
+        db = next(router_dependency)
+        sleeps = read_sleeps_impl(db, skip, limit, None, start, end)
+        return sleeps
+
+    @post()
+    async def create_sleep(
+        self,
+        data: SleepCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> SleepResponse:
+        """Create a new sleep record."""
+        db = next(router_dependency)
+        sleep = create_sleep_impl(db, data)
+        logger.info(f"Create sleep: {sleep}")
+        return sleep
+
+
+# ===================================================
+# Sleep Schedule Controller
+# ===================================================
+
+class SleepScheduleController(Controller):
+    path = "/sleep-schedule"
+
+    @get()
+    async def get_sleep_schedule_goal(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        date: str = None,
+    ) -> SleepScheduleGoalResponse | None:
+        """Get sleep schedule goal for a date (default today)."""
+        db = next(router_dependency)
+        target_date = _parse_date(date) or date.today()
+        goal = read_sleep_schedule_goal_impl(db, target_date)
+        logger.info(f"Get sleep schedule goal: {goal}")
+        return goal
+
+    @post()
+    async def create_or_update_sleep_schedule_goal(
+        self,
+        data: SleepScheduleGoalCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> SleepScheduleGoalResponse:
+        """Create or update sleep schedule goal."""
+        db = next(router_dependency)
+        goal = upsert_sleep_schedule_goal_impl(db, data)
+        logger.info(f"Upsert sleep schedule goal: {goal}")
+        return goal
+
+
+# ===================================================
+# Medication Controller
+# ===================================================
+
+class MedicationController(Controller):
+    path = "/medication"
+
+    @get()
+    async def get_medication_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        date: str = None,
+        taken: bool = None,
+        skip: int = 0,
+        limit: int = -1,
+    ) -> list[MedicationResponse]:
+        """Get medication list, optionally filtered by date and taken status."""
+        db = next(router_dependency)
+        target_date = _parse_date(date)
+        medications = read_medications_impl(db, skip, limit, target_date, taken)
+        return medications
+
+    @post()
+    async def create_medication(
+        self,
+        data: MedicationCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> MedicationResponse:
+        """Create a new medication record."""
+        db = next(router_dependency)
+        medication = create_medication_impl(db, data)
+        logger.info(f"Create medication: {medication}")
+        return medication
+
+    @put("/{medication_id:int}")
+    async def update_medication(
+        self,
+        medication_id: int,
+        data: MedicationUpdateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> MedicationResponse:
+        """Update medication taken status."""
+        db = next(router_dependency)
+        medication = update_medication_impl(db, medication_id, data)
+        logger.info(f"Update medication: {medication}")
+        if medication is None:
+            return None
+        return medication
+
+    @get("/today")
+    async def get_medication_today(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        date: str = None,
+    ) -> MedicationTodayDto:
+        """Get today's medication list and compliance."""
+        db = next(router_dependency)
+        target_date = _parse_date(date) or date.today()
+        result = medication_today_impl(db, target_date)
+        logger.info(f"Get medication today: {result}")
+        return result
+
+    @get("/stats")
+    async def get_medication_stats(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        days: int = 7,
+        end_date: str = None,
+    ) -> MedicationStatsDto:
+        """Get medication compliance stats for the last N days."""
+        db = next(router_dependency)
+        end = _parse_date(end_date) or date.today()
+        result = medication_stats_impl(db, days, end)
+        logger.info(f"Get medication stats: {result}")
+        return result
+
+
+# ===================================================
+# Diet Controller
+# ===================================================
+
+class DietController(Controller):
+    path = "/diet"
+
+    @get()
+    async def get_diet_list(
+        self,
+        router_dependency: Generator[Session, None, None],
+        date: str = None,
+        meal_type: str = None,
+        skip: int = 0,
+        limit: int = -1,
+    ) -> list[DietResponse]:
+        """Get diet records, optionally filtered by date and meal type."""
+        db = next(router_dependency)
+        target_date = _parse_date(date)
+        meal = None
+        if meal_type:
+            try:
+                from sail_server.application.dto.health import MealType
+                meal = MealType(meal_type)
+            except ValueError:
+                pass
+        diets = read_diets_impl(db, skip, limit, target_date, meal)
+        return diets
+
+    @post()
+    async def create_diet(
+        self,
+        data: DietCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> DietResponse:
+        """Create a new diet record."""
+        db = next(router_dependency)
+        diet = create_diet_impl(db, data)
+        logger.info(f"Create diet: {diet}")
+        return diet
+
+    @get("/summary")
+    async def get_diet_summary(
+        self,
+        router_dependency: Generator[Session, None, None],
+        date: str = None,
+    ) -> DietSummaryDto:
+        """Get daily diet summary with nutrition goals."""
+        db = next(router_dependency)
+        target_date = _parse_date(date) or date.today()
+        result = diet_summary_impl(db, target_date)
+        logger.info(f"Get diet summary: {result}")
+        return result
+
+    @post("/goal")
+    async def create_or_update_nutrition_goal(
+        self,
+        data: NutritionGoalCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> NutritionGoalResponse:
+        """Create or update daily nutrition goal."""
+        db = next(router_dependency)
+        goal = upsert_nutrition_goal_impl(db, data)
+        logger.info(f"Upsert nutrition goal: {goal}")
+        return goal
+
+    @get("/goal")
+    async def get_nutrition_goal(
+        self,
+        router_dependency: Generator[Session, None, None],
+        date: str = None,
+    ) -> NutritionGoalResponse | None:
+        """Get nutrition goal for a date."""
+        db = next(router_dependency)
+        target_date = _parse_date(date) or date.today()
+        goal = read_nutrition_goal_impl(db, target_date)
+        logger.info(f"Get nutrition goal: {goal}")
+        return goal
+
+
+# ===================================================
+# Health Dashboard Controller
+# ===================================================
+
+class HealthDashboardController(Controller):
+    path = "/dashboard"
+
+    @get()
+    async def get_dashboard(
+        self,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+        date: str = None,
+    ) -> HealthDashboardResponse:
+        """Get health dashboard overview for a date."""
+        db = next(router_dependency)
+        target_date = _parse_date(date) or date.today()
+        result = health_dashboard_impl(db, target_date)
+        logger.info(f"Get health dashboard: {result}")
+        return result
+
+
+def _parse_date(date_str: str | None) -> date | None:
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None

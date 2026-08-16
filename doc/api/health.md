@@ -12,6 +12,11 @@
 | **体重分析** | 趋势线分析、目标预测 |
 | **体重计划** | 制定减重/增重计划，追踪进度 |
 | **运动记录** | 记录运动类型、时长、消耗 |
+| **睡眠记录** | 记录睡眠时长与质量 |
+| **用药记录** | 每日用药计划、打卡、依从性 |
+| **饮食记录** | 三餐记录、营养目标与实际对比 |
+| **作息目标** | 设定就寝/起床时间与目标睡眠时长 |
+| **健康概览** | 首页聚合今日/近 7 天健康数据 |
 
 ---
 
@@ -531,3 +536,189 @@ interface ExerciseCreateProps {
 ---
 
 *本文档由 AI Agent 维护，如有疑问请参考源代码或联系开发团队。*
+
+---
+
+## 💊 用药记录 API
+
+### 获取用药记录列表
+
+```http
+GET /api/v1/health/medication
+```
+
+**参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| date | string | 否 | 日期 YYYY-MM-DD |
+| taken | bool | 否 | 是否已服用 |
+| skip | int | 否 | 跳过记录数 |
+| limit | int | 否 | 返回记录数，-1 表示全部 |
+
+**响应:**
+```json
+[
+  {
+    "id": 1,
+    "name": "维生素 D",
+    "dosage": "500mg",
+    "frequency": "daily",
+    "schedule_times": ["08:00", "20:00"],
+    "planned_date": "2026-08-10",
+    "taken": true,
+    "taken_at": 1700000000
+  }
+]
+```
+
+### 创建用药记录
+
+```http
+POST /api/v1/health/medication
+```
+
+**请求体:**
+```json
+{
+  "name": "维生素 D",
+  "dosage": "500mg",
+  "frequency": "daily",
+  "schedule_times": ["08:00", "20:00"],
+  "planned_date": "2026-08-10",
+  "taken": false,
+  "is_supplement": true
+}
+```
+
+### 更新服用状态
+
+```http
+PUT /api/v1/health/medication/{id}
+```
+
+**请求体:**
+```json
+{
+  "taken": true,
+  "taken_at": 1700000000
+}
+```
+
+### 今日用药清单与完成率
+
+```http
+GET /api/v1/health/medication/today?date=2026-08-10
+```
+
+### 近 N 天依从性统计
+
+```http
+GET /api/v1/health/medication/stats?days=7&end_date=2026-08-10
+```
+
+---
+
+## 🍽️ 饮食记录 API
+
+### 获取饮食记录
+
+```http
+GET /api/v1/health/diet?date=2026-08-10&meal_type=lunch
+```
+
+### 创建饮食记录
+
+```http
+POST /api/v1/health/diet
+```
+
+**请求体:**
+```json
+{
+  "meal_type": "lunch",
+  "description": "鸡胸肉沙拉",
+  "calories": 450,
+  "carbs": 30,
+  "sugar": 5,
+  "protein": 35,
+  "fat": 12,
+  "fiber": 8,
+  "sodium": 320
+}
+```
+
+### 当日饮食汇总与目标对比
+
+```http
+GET /api/v1/health/diet/summary?date=2026-08-10
+```
+
+### 设置/获取营养目标
+
+```http
+POST /api/v1/health/diet/goal
+GET /api/v1/health/diet/goal?date=2026-08-10
+```
+
+---
+
+## 😴 睡眠/作息 API
+
+### 睡眠记录
+
+```http
+GET /api/v1/health/sleep
+POST /api/v1/health/sleep
+```
+
+**POST 请求体:**
+```json
+{
+  "hours": 7.5,
+  "quality": 4,
+  "description": ""
+}
+```
+
+### 作息目标
+
+```http
+GET /api/v1/health/sleep-schedule?date=2026-08-10
+POST /api/v1/health/sleep-schedule
+```
+
+**POST 请求体:**
+```json
+{
+  "date": "2026-08-10",
+  "bed_time": "23:00",
+  "wake_time": "07:00",
+  "target_hours": 8.0
+}
+```
+
+---
+
+## 📊 健康首页聚合 API
+
+```http
+GET /api/v1/health/dashboard?date=2026-08-10
+```
+
+**响应:**
+```json
+{
+  "date": "2026-08-10",
+  "weight": { "latest": 70.5, "plan_target": 70.0, "status": "normal" },
+  "sleep": { "last_night_hours": 7.5, "goal": 8.0, "status": "normal" },
+  "exercise": { "today_minutes": 30, "goal_minutes": 45, "completed": false },
+  "medication": { "total": 3, "taken": 2, "compliance": 0.67 },
+  "diet": { "calories_actual": 1800, "calories_goal": 2000, "sugar_actual": 45, "sugar_goal": 50 },
+  "mood": { "score": 4 },
+  "warnings": ["今日运动未达标", "昨日睡眠不足"]
+}
+```
+
+---
+
+*本文档由 AI Agent 维护，已同步 M1 健康升级。*

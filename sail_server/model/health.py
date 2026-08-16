@@ -14,6 +14,10 @@ from sail_server.infrastructure.orm.health import (
     EnergyLevel,
     Mood,
     HealthSignal,
+    Medication,
+    DietLog,
+    NutritionGoal,
+    SleepScheduleGoal,
 )
 from sail_server.application.dto.health import (
     WeightBase,
@@ -37,11 +41,37 @@ from sail_server.application.dto.health import (
     MoodResponse,
     HealthSignalCreateRequest,
     HealthSignalResponse,
+    MedicationBase,
+    MedicationCreateRequest,
+    MedicationUpdateRequest,
+    MedicationResponse,
+    MedicationTodayDto,
+    MedicationStatsDto,
+    MealType,
+    DietLogBase,
+    DietCreateRequest,
+    DietResponse,
+    NutritionGoalBase,
+    NutritionGoalCreateRequest,
+    NutritionGoalResponse,
+    SleepScheduleGoalBase,
+    SleepScheduleGoalCreateRequest,
+    SleepScheduleGoalResponse,
+    NutrientActualVsGoal,
+    DietSummaryDto,
+    HealthDashboardResponse,
+    DashboardWeightItem,
+    DashboardSleepItem,
+    DashboardExerciseItem,
+    DashboardMedicationItem,
+    DashboardDietItem,
+    DashboardMoodItem,
 )
 import numpy as np
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
 from sqlalchemy import func, cast, Float
+from typing import Optional, List
 
 
 # ===================================================
@@ -956,6 +986,11 @@ def read_from_exercise(exercise: Exercise) -> ExerciseResponse:
         id=exercise.id,
         htime=exercise.htime.timestamp(),
         description=exercise.description,
+        exercise_type=exercise.exercise_type or "",
+        duration_minutes=exercise.duration_minutes or 0,
+        calories=exercise.calories or 0,
+        completed=bool(exercise.completed) if exercise.completed is not None else True,
+        source=exercise.source or "health",
     )
 
 
@@ -968,6 +1003,11 @@ def create_exercise_impl(
         if exercise_create.htime
         else datetime.now(),
         description=exercise_create.description,
+        exercise_type=exercise_create.exercise_type,
+        duration_minutes=exercise_create.duration_minutes,
+        calories=exercise_create.calories,
+        completed=exercise_create.completed,
+        source=exercise_create.source,
     )
     db.add(exercise)
     db.commit()
@@ -1010,6 +1050,11 @@ def update_exercise_impl(
         return None
     # Note: htime is not in ExerciseBase, so we don't update it here
     exercise_rec.description = exercise.description
+    exercise_rec.exercise_type = exercise.exercise_type
+    exercise_rec.duration_minutes = exercise.duration_minutes
+    exercise_rec.calories = exercise.calories
+    exercise_rec.completed = exercise.completed
+    exercise_rec.source = exercise.source
     db.commit()
     return read_exercise_impl(db, id)
 
@@ -1293,3 +1338,559 @@ def delete_health_signal_impl(db, signal_id: int) -> bool:
     db.delete(signal)
     db.commit()
     return True
+
+# ===================================================
+# Medication implementations
+# ===================================================
+
+
+def read_from_medication(medication: Medication) -> MedicationResponse:
+    """Convert Medication ORM to MedicationResponse"""
+    return MedicationResponse(
+        id=medication.id,
+        name=medication.name,
+        dosage=medication.dosage or "",
+        frequency=medication.frequency or "daily",
+        schedule_times=medication.schedule_times or [],
+        planned_date=medication.planned_date,
+        taken=bool(medication.taken) if medication.taken is not None else False,
+        note=medication.note or "",
+        is_supplement=bool(medication.is_supplement) if medication.is_supplement is not None else False,
+        htime=medication.htime.timestamp() if medication.htime else None,
+        taken_at=medication.taken_at.timestamp() if medication.taken_at else None,
+    )
+
+
+def create_medication_impl(
+    db, medication_create: MedicationCreateRequest
+) -> MedicationResponse:
+    """Create a new medication record"""
+    htime = datetime.now()
+    if medication_create.htime:
+        htime = datetime.fromtimestamp(medication_create.htime)
+    taken_at = None
+    if medication_create.taken_at:
+        taken_at = datetime.fromtimestamp(medication_create.taken_at)
+    medication = Medication(
+        name=medication_create.name,
+        dosage=medication_create.dosage or "",
+        frequency=medication_create.frequency or "daily",
+        schedule_times=medication_create.schedule_times or [],
+        htime=htime,
+        planned_date=medication_create.planned_date,
+        taken=medication_create.taken,
+        taken_at=taken_at,
+        note=medication_create.note or "",
+        is_supplement=medication_create.is_supplement,
+    )
+    db.add(medication)
+    db.commit()
+    db.refresh(medication)
+    return read_from_medication(medication)
+
+
+def update_medication_impl(
+    db, medication_id: int, update: MedicationUpdateRequest
+) -> MedicationResponse | None:
+    """Update medication taken status"""
+    medication = db.query(Medication).filter(Medication.id == medication_id).first()
+    if medication is None:
+        return None
+    medication.taken = update.taken
+    if update.taken_at is not None:
+        medication.taken_at = datetime.fromtimestamp(update.taken_at)
+    elif update.taken and medication.taken_at is None:
+        medication.taken_at = datetime.now()
+    if update.note is not None:
+        medication.note = update.note
+    db.commit()
+    db.refresh(medication)
+    return read_from_medication(medication)
+
+
+def read_medication_impl(db, medication_id: int) -> MedicationResponse | None:
+    """Read a single medication record by ID"""
+    medication = db.query(Medication).filter(Medication.id == medication_id).first()
+    return read_from_medication(medication) if medication else None
+
+
+def read_medications_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    planned_date: date = None,
+    taken: bool = None,
+) -> list[MedicationResponse]:
+    """Read multiple medication records with filtering"""
+    query = db.query(Medication)
+    if planned_date is not None:
+        query = query.filter(Medication.planned_date == planned_date)
+    if taken is not None:
+        query = query.filter(Medication.taken == taken)
+    query = query.order_by(Medication.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    medications = query.all()
+    return [read_from_medication(m) for m in medications]
+
+
+def medication_today_impl(db, target_date: date) -> MedicationTodayDto:
+    """Get today's medication list and compliance"""
+    medications = (
+        db.query(Medication)
+        .filter(Medication.planned_date == target_date)
+        .order_by(Medication.htime.asc())
+        .all()
+    )
+    total = len(medications)
+    taken = sum(1 for m in medications if m.taken)
+    compliance = taken / total if total > 0 else 0.0
+    return MedicationTodayDto(
+        date=target_date.isoformat(),
+        medications=[read_from_medication(m) for m in medications],
+        total=total,
+        taken=taken,
+        compliance=compliance,
+    )
+
+
+def medication_stats_impl(db, days: int = 7, end_date: date = None) -> MedicationStatsDto:
+    """Get medication compliance stats for the last N days"""
+    if end_date is None:
+        end_date = date.today()
+    start_date = end_date - timedelta(days=days - 1)
+    medications = (
+        db.query(Medication)
+        .filter(Medication.planned_date >= start_date)
+        .filter(Medication.planned_date <= end_date)
+        .all()
+    )
+    total = len(medications)
+    taken = sum(1 for m in medications if m.taken)
+    compliance = taken / total if total > 0 else 0.0
+    return MedicationStatsDto(days=days, total=total, taken=taken, compliance=compliance)
+
+
+# ===================================================
+# Diet / Nutrition implementations
+# ===================================================
+
+
+def read_from_diet(diet: DietLog) -> DietResponse:
+    """Convert DietLog ORM to DietResponse"""
+    return DietResponse(
+        id=diet.id,
+        meal_type=MealType(diet.meal_type) if diet.meal_type else MealType.SNACK,
+        description=diet.description or "",
+        photo_path=diet.photo_path,
+        calories=diet.calories,
+        carbs=diet.carbs,
+        sugar=diet.sugar,
+        protein=diet.protein,
+        fat=diet.fat,
+        fiber=diet.fiber,
+        sodium=diet.sodium,
+        micronutrients=diet.micronutrients or {},
+        htime=diet.htime.timestamp() if diet.htime else None,
+    )
+
+
+def create_diet_impl(db, diet_create: DietCreateRequest) -> DietResponse:
+    """Create a new diet log record"""
+    htime = datetime.now()
+    if diet_create.htime:
+        htime = datetime.fromtimestamp(diet_create.htime)
+    diet = DietLog(
+        meal_type=diet_create.meal_type.value,
+        htime=htime,
+        description=diet_create.description or "",
+        photo_path=diet_create.photo_path,
+        calories=diet_create.calories,
+        carbs=diet_create.carbs,
+        sugar=diet_create.sugar,
+        protein=diet_create.protein,
+        fat=diet_create.fat,
+        fiber=diet_create.fiber,
+        sodium=diet_create.sodium,
+        micronutrients=diet_create.micronutrients or {},
+    )
+    db.add(diet)
+    db.commit()
+    db.refresh(diet)
+    return read_from_diet(diet)
+
+
+def read_diet_impl(db, diet_id: int) -> DietResponse | None:
+    """Read a single diet record by ID"""
+    diet = db.query(DietLog).filter(DietLog.id == diet_id).first()
+    return read_from_diet(diet) if diet else None
+
+
+def read_diets_impl(
+    db,
+    skip: int = 0,
+    limit: int = -1,
+    target_date: date = None,
+    meal_type: MealType = None,
+) -> list[DietResponse]:
+    """Read multiple diet records with filtering"""
+    query = db.query(DietLog)
+    if target_date is not None:
+        start_dt = datetime.combine(target_date, datetime.min.time())
+        end_dt = datetime.combine(target_date, datetime.max.time())
+        query = query.filter(DietLog.htime >= start_dt).filter(DietLog.htime <= end_dt)
+    if meal_type is not None:
+        query = query.filter(DietLog.meal_type == meal_type.value)
+    query = query.order_by(DietLog.htime.desc()).offset(skip)
+    if limit != -1:
+        query = query.limit(limit)
+    diets = query.all()
+    return [read_from_diet(d) for d in diets]
+
+
+def diet_summary_impl(db, target_date: date) -> DietSummaryDto:
+    """Get daily diet summary with nutrition goals"""
+    start_dt = datetime.combine(target_date, datetime.min.time())
+    end_dt = datetime.combine(target_date, datetime.max.time())
+    diets = (
+        db.query(DietLog)
+        .filter(DietLog.htime >= start_dt)
+        .filter(DietLog.htime <= end_dt)
+        .all()
+    )
+
+    def sum_field(field_name: str) -> Optional[float]:
+        total = 0.0
+        has_value = False
+        for d in diets:
+            value = getattr(d, field_name, None)
+            if value is not None:
+                total += value
+                has_value = True
+        return total if has_value else None
+
+    actual = {
+        "calories": sum_field("calories"),
+        "carbs": sum_field("carbs"),
+        "sugar": sum_field("sugar"),
+        "protein": sum_field("protein"),
+        "fat": sum_field("fat"),
+        "fiber": sum_field("fiber"),
+        "sodium": sum_field("sodium"),
+    }
+
+    goal = db.query(NutritionGoal).filter(NutritionGoal.date == target_date).first()
+
+    def build_nutrient(key: str, unit: str = "g") -> NutrientActualVsGoal:
+        return NutrientActualVsGoal(
+            actual=actual.get(key),
+            goal=getattr(goal, key, None) if goal else None,
+            unit=unit,
+        )
+
+    return DietSummaryDto(
+        date=target_date.isoformat(),
+        calories=build_nutrient("calories", "kcal"),
+        carbs=build_nutrient("carbs"),
+        sugar=build_nutrient("sugar"),
+        protein=build_nutrient("protein"),
+        fat=build_nutrient("fat"),
+        fiber=build_nutrient("fiber"),
+        sodium=build_nutrient("sodium", "mg"),
+        micronutrients={},
+    )
+
+
+def read_from_nutrition_goal(goal: NutritionGoal) -> NutritionGoalResponse:
+    """Convert NutritionGoal ORM to NutritionGoalResponse"""
+    return NutritionGoalResponse(
+        id=goal.id,
+        date=goal.date,
+        calories=goal.calories,
+        carbs=goal.carbs,
+        sugar=goal.sugar,
+        protein=goal.protein,
+        fat=goal.fat,
+        fiber=goal.fiber,
+        sodium=goal.sodium,
+        micronutrients=goal.micronutrients or {},
+    )
+
+
+def upsert_nutrition_goal_impl(
+    db, goal_data: NutritionGoalCreateRequest
+) -> NutritionGoalResponse:
+    """Create or update daily nutrition goal"""
+    goal = db.query(NutritionGoal).filter(NutritionGoal.date == goal_data.date).first()
+    if goal is None:
+        goal = NutritionGoal(date=goal_data.date)
+        db.add(goal)
+    for field in ["calories", "carbs", "sugar", "protein", "fat", "fiber", "sodium", "micronutrients"]:
+        value = getattr(goal_data, field, None)
+        if value is not None:
+            setattr(goal, field, value)
+    db.commit()
+    db.refresh(goal)
+    return read_from_nutrition_goal(goal)
+
+
+def read_nutrition_goal_impl(db, target_date: date) -> NutritionGoalResponse | None:
+    """Read nutrition goal for a specific date"""
+    goal = db.query(NutritionGoal).filter(NutritionGoal.date == target_date).first()
+    return read_from_nutrition_goal(goal) if goal else None
+
+
+# ===================================================
+# Sleep Schedule Goal implementations
+# ===================================================
+
+
+def read_from_sleep_schedule_goal(goal: SleepScheduleGoal) -> SleepScheduleGoalResponse:
+    """Convert SleepScheduleGoal ORM to SleepScheduleGoalResponse"""
+    return SleepScheduleGoalResponse(
+        id=goal.id,
+        date=goal.date,
+        bed_time=goal.bed_time or "23:00",
+        wake_time=goal.wake_time or "07:00",
+        target_hours=goal.target_hours or 8.0,
+    )
+
+
+def upsert_sleep_schedule_goal_impl(
+    db, goal_data: SleepScheduleGoalCreateRequest
+) -> SleepScheduleGoalResponse:
+    """Create or update sleep schedule goal for a date"""
+    goal = db.query(SleepScheduleGoal).filter(SleepScheduleGoal.date == goal_data.date).first()
+    if goal is None:
+        goal = SleepScheduleGoal(date=goal_data.date)
+        db.add(goal)
+    goal.bed_time = goal_data.bed_time
+    goal.wake_time = goal_data.wake_time
+    goal.target_hours = goal_data.target_hours
+    db.commit()
+    db.refresh(goal)
+    return read_from_sleep_schedule_goal(goal)
+
+
+def read_sleep_schedule_goal_impl(db, target_date: date) -> SleepScheduleGoalResponse | None:
+    """Read sleep schedule goal for a specific date"""
+    goal = db.query(SleepScheduleGoal).filter(SleepScheduleGoal.date == target_date).first()
+    return read_from_sleep_schedule_goal(goal) if goal else None
+
+
+# ===================================================
+# Health Dashboard implementation
+# ===================================================
+
+
+def _latest_weight(db) -> Optional[float]:
+    weight = db.query(Weight).order_by(Weight.htime.desc()).first()
+    if weight is None or weight.value is None:
+        return None
+    try:
+        return float(weight.value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _weight_status(db, latest: float) -> str:
+    plan = _get_active_weight_plan(db)
+    if plan is None:
+        return "normal"
+    target_date = date.today()
+    if target_date < plan.start_time.date():
+        return "normal"
+    expected = target_weight_impl(db, target_date)
+    if expected is None:
+        return "normal"
+    expected_value = expected.get("value")
+    if expected_value is None:
+        return "normal"
+    diff = latest - expected_value
+    if diff > 0.5:
+        return "above"
+    elif diff < -0.5:
+        return "below"
+    return "normal"
+
+
+def _last_night_sleep_hours(db) -> Optional[float]:
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    start_dt = datetime.combine(yesterday, datetime.min.time())
+    end_dt = datetime.combine(today, datetime.min.time())
+    sleep = (
+        db.query(Sleep)
+        .filter(Sleep.htime >= start_dt)
+        .filter(Sleep.htime < end_dt)
+        .order_by(Sleep.htime.desc())
+        .first()
+    )
+    if sleep is None:
+        return None
+    return _sleep_minutes_to_hours(sleep.hours)
+
+
+def _today_exercise_minutes(db) -> int:
+    today = date.today()
+    start_dt = datetime.combine(today, datetime.min.time())
+    end_dt = datetime.combine(today, datetime.max.time())
+    exercises = (
+        db.query(Exercise)
+        .filter(Exercise.htime >= start_dt)
+        .filter(Exercise.htime <= end_dt)
+        .filter(Exercise.completed == True)
+        .all()
+    )
+    return sum(e.duration_minutes or 0 for e in exercises)
+
+
+def _today_medication_stats(db) -> tuple[int, int, float]:
+    today = date.today()
+    meds = db.query(Medication).filter(Medication.planned_date == today).all()
+    total = len(meds)
+    taken = sum(1 for m in meds if m.taken)
+    compliance = taken / total if total > 0 else 0.0
+    return total, taken, compliance
+
+
+def _today_diet_summary(db) -> tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
+    today = date.today()
+    summary = diet_summary_impl(db, today)
+    return (
+        summary.calories.actual,
+        summary.calories.goal,
+        summary.sugar.actual,
+        summary.sugar.goal,
+    )
+
+
+def _today_mood_score(db) -> Optional[int]:
+    today = date.today()
+    start_dt = datetime.combine(today, datetime.min.time())
+    end_dt = datetime.combine(today, datetime.max.time())
+    mood = (
+        db.query(Mood)
+        .filter(Mood.htime >= start_dt)
+        .filter(Mood.htime <= end_dt)
+        .order_by(Mood.htime.desc())
+        .first()
+    )
+    if mood is None:
+        return None
+    return mood.score
+
+
+def _build_dashboard_warnings(
+    db,
+    weight_latest: Optional[float],
+    sleep_hours: Optional[float],
+    exercise_minutes: int,
+    diet_sugar_actual: Optional[float],
+    diet_sugar_goal: Optional[float],
+) -> list[str]:
+    warnings = []
+    # 体重连续偏高（最近 3 天均值高于计划 0.5kg）
+    if weight_latest is not None:
+        plan = _get_active_weight_plan(db)
+        if plan is not None:
+            now = datetime.now().timestamp()
+            three_days_ago = now - 3 * 86400
+            weights = read_weights_impl(db, 0, -1, three_days_ago, now, "raw")
+            if weights:
+                avg = sum(float(w.value) for w in weights) / len(weights)
+                expected = target_weight_impl(db, date.today())
+                expected_value = expected.get("value") if expected else None
+                if expected_value is not None and avg > expected_value + 0.5:
+                    warnings.append("近 3 天体重高于计划，建议减少精制碳水")
+    # 睡眠不足
+    sleep_goal = None
+    goal = read_sleep_schedule_goal_impl(db, date.today())
+    if goal is not None:
+        sleep_goal = goal.target_hours
+    if sleep_hours is not None and sleep_goal is not None and sleep_hours < sleep_goal - 0.5:
+        warnings.append(f"昨日睡眠不足，建议今晚提前 30 分钟就寝")
+    # 运动未达标
+    if exercise_minutes < 30:
+        warnings.append(f"今日运动未达标，还差 {30 - exercise_minutes} 分钟")
+    # 糖分接近上限
+    if diet_sugar_actual is not None and diet_sugar_goal is not None and diet_sugar_goal > 0:
+        if diet_sugar_actual >= diet_sugar_goal * 0.9:
+            warnings.append("今日糖分摄入接近上限，注意晚餐糖分")
+    return warnings
+
+
+def health_dashboard_impl(db, target_date: date = None) -> HealthDashboardResponse:
+    """Build health dashboard overview for a date (default today)"""
+    if target_date is None:
+        target_date = date.today()
+
+    weight_latest = _latest_weight(db)
+    weight_plan = _get_active_weight_plan(db)
+    weight_target = None
+    if weight_plan is not None:
+        try:
+            weight_target = float(weight_plan.target_weight)
+        except (ValueError, TypeError):
+            weight_target = None
+
+    weight_status = "normal"
+    if weight_latest is not None and weight_plan is not None:
+        weight_status = _weight_status(db, weight_latest)
+
+    sleep_hours = _last_night_sleep_hours(db)
+    sleep_goal_obj = read_sleep_schedule_goal_impl(db, target_date)
+    sleep_goal = sleep_goal_obj.target_hours if sleep_goal_obj else 8.0
+    sleep_status = "normal"
+    if sleep_hours is not None and sleep_hours < sleep_goal - 0.5:
+        sleep_status = "below"
+    elif sleep_hours is not None and sleep_hours > sleep_goal + 0.5:
+        sleep_status = "above"
+
+    exercise_minutes = _today_exercise_minutes(db)
+    exercise_goal_minutes = 30  # 默认每日 30 分钟
+
+    med_total, med_taken, med_compliance = _today_medication_stats(db)
+    cal_actual, cal_goal, sugar_actual, sugar_goal = _today_diet_summary(db)
+    mood_score = _today_mood_score(db)
+
+    warnings = _build_dashboard_warnings(
+        db,
+        weight_latest,
+        sleep_hours,
+        exercise_minutes,
+        sugar_actual,
+        sugar_goal,
+    )
+
+    return HealthDashboardResponse(
+        date=target_date.isoformat(),
+        weight=DashboardWeightItem(
+            latest=weight_latest,
+            plan_target=weight_target,
+            status=weight_status,
+        ),
+        sleep=DashboardSleepItem(
+            last_night_hours=sleep_hours,
+            goal=sleep_goal,
+            status=sleep_status,
+        ),
+        exercise=DashboardExerciseItem(
+            today_minutes=exercise_minutes,
+            goal_minutes=exercise_goal_minutes,
+            completed=exercise_minutes >= exercise_goal_minutes,
+        ),
+        medication=DashboardMedicationItem(
+            total=med_total,
+            taken=med_taken,
+            compliance=med_compliance,
+        ),
+        diet=DashboardDietItem(
+            calories_actual=cal_actual,
+            calories_goal=cal_goal,
+            sugar_actual=sugar_actual,
+            sugar_goal=sugar_goal,
+        ),
+        mood=DashboardMoodItem(score=mood_score),
+        warnings=warnings,
+    )

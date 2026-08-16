@@ -63,6 +63,16 @@ class RhythmRepository private constructor(private val context: Context) {
 
     suspend fun serverConfigured(): Boolean = settings.serverUrl().isNotBlank()
 
+    private suspend fun healthApiOrNull(): HealthApi? {
+        val url = settings.serverUrl()
+        if (url.isBlank()) return null
+        return try {
+            ApiClient.healthApi(url, settings.apiToken())
+        } catch (e: Exception) {
+            Log.w(TAG, "health api build failed: ${e.message}")
+            null
+        }
+    }
     private suspend fun apiOrNull(): RhythmApi? {
         val url = settings.serverUrl()
         if (url.isBlank()) return null
@@ -354,6 +364,21 @@ class RhythmRepository private constructor(private val context: Context) {
                     )
                     "health_checkin" -> api.healthCheckin(
                         ApiClient.json.decodeFromString<HealthCheckinRequest>(item.payloadJson),
+                    )
+                    "health_weight" -> healthApiOrNull()?.createWeight(
+                        ApiClient.json.decodeFromString<WeightCreateRequest>(item.payloadJson),
+                    )
+                    "health_exercise" -> healthApiOrNull()?.createExercise(
+                        ApiClient.json.decodeFromString<ExerciseCreateRequest>(item.payloadJson),
+                    )
+                    "health_sleep" -> healthApiOrNull()?.createSleep(
+                        ApiClient.json.decodeFromString<SleepCreateRequest>(item.payloadJson),
+                    )
+                    "health_medication" -> healthApiOrNull()?.createMedication(
+                        ApiClient.json.decodeFromString<MedicationCreateRequest>(item.payloadJson),
+                    )
+                    "health_diet" -> healthApiOrNull()?.createDiet(
+                        ApiClient.json.decodeFromString<DietCreateRequest>(item.payloadJson),
                     )
                     "defer" -> api.transit(
                         item.targetId,

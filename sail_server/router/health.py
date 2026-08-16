@@ -8,7 +8,16 @@
 
 from litestar import Router
 from litestar.di import Provide
-from sail_server.controller.health import WeightController, WeightPlanController, ExerciseController
+from sail_server.controller.health import (
+    WeightController,
+    WeightPlanController,
+    ExerciseController,
+    SleepController,
+    SleepScheduleController,
+    MedicationController,
+    DietController,
+    HealthDashboardController,
+)
 from sail_server.db import get_db_dependency
 
 
@@ -19,5 +28,10 @@ router = Router(
         WeightController,
         WeightPlanController,
         ExerciseController,
+        SleepController,
+        SleepScheduleController,
+        MedicationController,
+        DietController,
+        HealthDashboardController,
     ],
 )

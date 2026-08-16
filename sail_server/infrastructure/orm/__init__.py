@@ -19,6 +19,14 @@ from sail_server.infrastructure.orm.health import (
     BodySize,
     Exercise,
     WeightPlan,
+    Sleep,
+    EnergyLevel,
+    Mood,
+    HealthSignal,
+    Medication,
+    DietLog,
+    NutritionGoal,
+    SleepScheduleGoal,
 )
 
 # Text Models
@@ -89,6 +97,14 @@ __all__ = [
     "BodySize",
     "Exercise",
     "WeightPlan",
+    "Sleep",
+    "EnergyLevel",
+    "Mood",
+    "HealthSignal",
+    "Medication",
+    "DietLog",
+    "NutritionGoal",
+    "SleepScheduleGoal",
     # Text
     "Work",
     "Edition",

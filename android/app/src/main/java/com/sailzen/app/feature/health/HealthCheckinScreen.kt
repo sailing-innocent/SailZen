@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -85,71 +86,122 @@ fun HealthCheckinScreen(
                 }
             }
 
+            Row {
+                OutlinedTextField(
+                    value = state.date.toString(),
+                    onValueChange = { },
+                    label = { Text("日期") },
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    readOnly = true,
+                )
+                OutlinedTextField(
+                    value = state.time,
+                    onValueChange = { viewModel.setTime(it) },
+                    label = { Text("时间") },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
             when (state.selectedType) {
                 InfoCollectionType.weight -> {
                     OutlinedTextField(
-                        value = state.value,
-                        onValueChange = { viewModel.setValue(it) },
+                        value = state.weight,
+                        onValueChange = { viewModel.setWeight(it) },
                         label = { Text("体重 (kg)") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 InfoCollectionType.exercise -> {
                     OutlinedTextField(
-                        value = state.activity,
-                        onValueChange = { viewModel.setActivity(it) },
-                        label = { Text("运动项目") },
+                        value = state.exerciseType,
+                        onValueChange = { viewModel.setExerciseType(it) },
+                        label = { Text("运动类型") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
-                        value = state.duration,
-                        onValueChange = { viewModel.setDuration(it) },
+                        value = state.exerciseMinutes,
+                        onValueChange = { viewModel.setExerciseMinutes(it) },
                         label = { Text("时长 (分钟)") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = state.exerciseCalories,
+                        onValueChange = { viewModel.setExerciseCalories(it) },
+                        label = { Text("热量 (千卡)") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 InfoCollectionType.meal -> {
                     OutlinedTextField(
-                        value = state.note,
-                        onValueChange = { viewModel.setNote(it) },
+                        value = state.mealType,
+                        onValueChange = { viewModel.setMealType(it) },
+                        label = { Text("餐次 (breakfast/lunch/dinner/snack)") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = state.mealDescription,
+                        onValueChange = { viewModel.setMealDescription(it) },
                         label = { Text("饮食内容") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = state.mealCalories,
+                        onValueChange = { viewModel.setMealCalories(it) },
+                        label = { Text("热量 (kcal)") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 InfoCollectionType.medication -> {
                     OutlinedTextField(
-                        value = state.activity,
-                        onValueChange = { viewModel.setActivity(it) },
+                        value = state.medicationName,
+                        onValueChange = { viewModel.setMedicationName(it) },
                         label = { Text("药品名") },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedTextField(
+                        value = state.medicationDosage,
+                        onValueChange = { viewModel.setMedicationDosage(it) },
+                        label = { Text("剂量") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = state.medicationTaken,
+                            onCheckedChange = { viewModel.setMedicationTaken(it) },
+                        )
+                        Text("已服用")
+                    }
                 }
                 InfoCollectionType.sleep -> {
                     OutlinedTextField(
-                        value = state.value,
-                        onValueChange = { viewModel.setValue(it) },
+                        value = state.sleepHours,
+                        onValueChange = { viewModel.setSleepHours(it) },
                         label = { Text("睡眠时长 (小时)") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = state.sleepQuality,
+                        onValueChange = { viewModel.setSleepQuality(it) },
+                        label = { Text("睡眠质量 (1-5)") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
                 InfoCollectionType.mood -> {
                     OutlinedTextField(
-                        value = state.value,
-                        onValueChange = { viewModel.setValue(it) },
+                        value = state.moodScore,
+                        onValueChange = { viewModel.setMoodScore(it) },
                         label = { Text("心情评分 (1-5)") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
 
-            if (state.selectedType != InfoCollectionType.meal) {
-                OutlinedTextField(
-                    value = state.note,
-                    onValueChange = { viewModel.setNote(it) },
-                    label = { Text("备注") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            OutlinedTextField(
+                value = state.note,
+                onValueChange = { viewModel.setNote(it) },
+                label = { Text("备注") },
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Spacer(Modifier.height(8.dp))
 

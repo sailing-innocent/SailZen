@@ -74,7 +74,19 @@ from sail_server.application.dto.rhythm import (
     resolve_transition,
     validate_kind_meta,
 )
-from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Weight
+from sail_server.application.dto.health import (
+    DietCreateRequest,
+    MedicationCreateRequest,
+    MoodCreateRequest,
+    SleepCreateRequest,
+)
+from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Medication, DietLog, Weight
+from sail_server.model.health import (
+    create_diet_impl,
+    create_medication_impl,
+    create_mood_impl,
+    create_sleep_impl,
+)
 from sail_server.infrastructure.orm.life import Day, TimeSpan
 from sail_server.infrastructure.orm.project import Mission, Project
 from sail_server.infrastructure.orm.rhythm import (
@@ -163,6 +175,15 @@ def _get_or_create_day(db: Session, d: date) -> Day:
 
 def get_day_id_impl(db: Session, d: date) -> int:
     return _get_or_create_day(db, d).id
+
+
+def _opt_float(value) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return None
 
 
 #: confirm 时按 kind 推断默认 domain（分拣后必填，这里兜底）
@@ -1079,56 +1100,125 @@ def health_checkin_impl(db: Session, request: HealthCheckinRequest) -> HealthChe
             )
 
         elif collection_type == InfoCollectionType.MEAL.value:
+            meal_type = request.payload.get("meal_type", "snack")
+            try:
+                from sail_server.application.dto.health import MealType
+                meal_type = MealType(meal_type).value
+            except ValueError:
+                meal_type = "snack"
+            htime = None
+            if request.payload.get("htime"):
+                htime = float(request.payload.get("htime"))
+            diet = create_diet_impl(
+                db,
+                DietCreateRequest(
+                    meal_type=MealType(meal_type),
+                    description=str(request.payload.get("description", "")),
+                    calories=_opt_float(request.payload.get("calories")),
+                    carbs=_opt_float(request.payload.get("carbs")),
+                    sugar=_opt_float(request.payload.get("sugar")),
+                    protein=_opt_float(request.payload.get("protein")),
+                    fat=_opt_float(request.payload.get("fat")),
+                    fiber=_opt_float(request.payload.get("fiber")),
+                    sodium=_opt_float(request.payload.get("sodium")),
+                    htime=htime,
+                ),
+            )
+            ref_id = diet.id
             db.add(
                 HealthSignal(
                     signal_type="meal",
-                    ref_id=0,
+                    ref_id=diet.id,
                     day_id=day.id,
                     htime=now,
                     value_json=dict(request.payload),
                 )
             )
-            db.flush()
-            ref_id = 0
 
         elif collection_type == InfoCollectionType.MEDICATION.value:
+            planned_date = request.log_date
+            if request.payload.get("planned_date"):
+                planned_date = datetime.fromisoformat(str(request.payload.get("planned_date"))).date()
+            htime = None
+            if request.payload.get("htime"):
+                htime = float(request.payload.get("htime"))
+            taken_at = None
+            if request.payload.get("taken_at"):
+                taken_at = float(request.payload.get("taken_at"))
+            medication = create_medication_impl(
+                db,
+                MedicationCreateRequest(
+                    name=str(request.payload.get("name", "")),
+                    dosage=str(request.payload.get("dosage", "")),
+                    frequency=str(request.payload.get("frequency", "daily")),
+                    schedule_times=list(request.payload.get("schedule_times", [])) if request.payload.get("schedule_times") else [],
+                    planned_date=planned_date,
+                    taken=bool(request.payload.get("taken", False)),
+                    note=request.note,
+                    is_supplement=bool(request.payload.get("is_supplement", False)),
+                    htime=htime,
+                    taken_at=taken_at,
+                ),
+            )
+            ref_id = medication.id
             db.add(
                 HealthSignal(
                     signal_type="medication",
-                    ref_id=0,
+                    ref_id=medication.id,
                     day_id=day.id,
                     htime=now,
                     value_json=dict(request.payload),
                 )
             )
-            db.flush()
-            ref_id = 0
 
         elif collection_type == InfoCollectionType.SLEEP.value:
+            htime = None
+            if request.payload.get("htime"):
+                htime = float(request.payload.get("htime"))
+            sleep = create_sleep_impl(
+                db,
+                SleepCreateRequest(
+                    hours=float(request.payload.get("hours", 0)),
+                    quality=int(request.payload.get("quality", 3)),
+                    description=str(request.payload.get("description", "")),
+                    day_id=day.id,
+                    htime=htime,
+                ),
+            )
+            ref_id = sleep.id
             db.add(
                 HealthSignal(
                     signal_type="sleep",
-                    ref_id=0,
+                    ref_id=sleep.id,
                     day_id=day.id,
                     htime=now,
                     value_json=dict(request.payload),
                 )
             )
-            db.flush()
-            ref_id = 0
 
         elif collection_type == InfoCollectionType.MOOD.value:
+            htime = None
+            if request.payload.get("htime"):
+                htime = float(request.payload.get("htime"))
+            mood = create_mood_impl(
+                db,
+                MoodCreateRequest(
+                    score=int(request.payload.get("score", 3)),
+                    description=str(request.payload.get("description", "")),
+                    day_id=day.id,
+                    htime=htime,
+                ),
+            )
+            ref_id = mood.id
             db.add(
                 HealthSignal(
                     signal_type="mood",
-                    ref_id=0,
+                    ref_id=mood.id,
                     day_id=day.id,
                     htime=now,
                     value_json=dict(request.payload),
                 )
             )
-            db.flush()
-            ref_id = 0
 
         else:
             raise RhythmBadRequestError(f"未知 collection_type: {collection_type}")

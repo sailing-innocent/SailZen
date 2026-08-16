@@ -17,8 +17,8 @@ object ApiClient {
 
     private var cachedKey: String? = null
     private var cachedApi: ReminderApi? = null
-    private var cachedRhythmKey: String? = null
-    private var cachedRhythmApi: RhythmApi? = null
+    private var cachedHealthKey: String? = null
+    private var cachedHealthApi: HealthApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -67,7 +67,19 @@ object ApiClient {
         }
     }
 
-    /** Rhythm API（M3，缓存键与 ReminderApi 独立） */
+    /** Health API（缓存键独立） */
+    @Synchronized
+    fun healthApi(baseUrl: String, token: String): HealthApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedHealthApi?.let { if (cachedHealthKey == key) return it }
+        return buildRetrofit(normalized, token).create(HealthApi::class.java).also {
+            cachedHealthKey = key
+            cachedHealthApi = it
+        }
+    }
+
+    /** Rhythm API（M3，缓存键与 ReminderApi/HealthApi 独立） */
     @Synchronized
     fun rhythmApi(baseUrl: String, token: String): RhythmApi {
         val normalized = normalizeBaseUrl(baseUrl)
