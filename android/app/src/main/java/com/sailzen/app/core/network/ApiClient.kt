@@ -21,6 +21,8 @@ object ApiClient {
     private var cachedHealthApi: HealthApi? = null
     private var cachedRhythmKey: String? = null
     private var cachedRhythmApi: RhythmApi? = null
+    private var cachedProjectKey: String? = null
+    private var cachedProjectApi: ProjectApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -90,6 +92,18 @@ object ApiClient {
         return buildRetrofit(normalized, token).create(RhythmApi::class.java).also {
             cachedRhythmKey = key
             cachedRhythmApi = it
+        }
+    }
+
+    /** Project API（缓存键独立） */
+    @Synchronized
+    fun projectApi(baseUrl: String, token: String): ProjectApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedProjectApi?.let { if (cachedProjectKey == key) return it }
+        return buildRetrofit(normalized, token).create(ProjectApi::class.java).also {
+            cachedProjectKey = key
+            cachedProjectApi = it
         }
     }
 

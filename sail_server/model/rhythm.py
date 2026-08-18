@@ -1063,9 +1063,13 @@ def health_checkin_impl(db: Session, request: HealthCheckinRequest) -> HealthChe
     try:
         if collection_type == InfoCollectionType.WEIGHT.value:
             value_kg = float(request.payload.get("value_kg", 0))
-            measured_at = request.payload.get("measured_at")
-            if measured_at:
-                measured_at = datetime.fromisoformat(str(measured_at))
+            measured_at_raw = request.payload.get("measured_at")
+            measured_at = None
+            if measured_at_raw:
+                try:
+                    measured_at = datetime.fromtimestamp(float(measured_at_raw))
+                except (ValueError, TypeError, OSError):
+                    measured_at = datetime.fromisoformat(str(measured_at_raw))
             record = Weight(
                 value=str(value_kg),
                 htime=measured_at or now,

@@ -21,6 +21,11 @@ class ReminderActionReceiver : BroadcastReceiver() {
         const val ACTION_SNOOZE = "com.sailzen.app.action.SNOOZE"
         const val ACTION_DISMISS = "com.sailzen.app.action.DISMISS"
         const val EXTRA_REMINDER_ID = "reminder_id"
+        const val EXTRA_MISSION_ID = "mission_id"
+        const val EXTRA_PROJECT_ID = "project_id"
+        const val EXTRA_DESTINATION = "destination"
+        const val DESTINATION_MISSION_BOARD = "mission_board"
+        const val DESTINATION_MISSION_DETAIL = "mission_detail"
     }
 
     override fun onReceive(context: Context, intent: Intent) {

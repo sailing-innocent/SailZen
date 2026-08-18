@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.health.HealthDateUtils
+import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.rhythm.RhythmRepository
@@ -47,6 +48,7 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
     )
 
     private val repository = RhythmRepository.get(application)
+    private val healthRepository = HealthRepository.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -80,11 +82,51 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
     fun submit() {
         val state = _uiState.value
         val htime = timestampSeconds()
-        val payload = when (state.selectedType) {
-            InfoCollectionType.weight -> mapOf(
-                "value_kg" to state.weight.toDoubleOrNull().orZero(),
-                "measured_at" to htime,
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(submitting = true, error = null) }
+            val result: HealthCheckinResponse? = if (state.selectedType == InfoCollectionType.weight) {
+                submitWeight(state, htime)
+            } else {
+                submitRhythmHealth(state, htime)
+            }
+            _uiState.update {
+                if (result != null) {
+                    it.copy(submitting = false, submitted = result)
+                } else {
+                    it.copy(submitting = false, error = "提交失败，请检查网络或服务器配置")
+                }
+            }
+        }
+    }
+
+    private suspend fun submitWeight(state: UiState, htime: Double): HealthCheckinResponse? {
+        val weightDto = healthRepository.createWeight(
+            value = state.weight.toDoubleOrNull().orZero(),
+            htime = htime,
+            note = state.note,
+        )
+        return weightDto?.let {
+            HealthCheckinResponse(
+                id = it.id,
+                collectionType = "weight",
+                logDate = state.date.toString(),
+                refId = it.id,
+                note = state.note,
             )
+        } ?: run {
+            // 降级到 Rhythm 健康打卡离线队列（服务端已兼容时间戳格式）
+            repository.healthCheckin(
+                collectionType = state.selectedType,
+                payload = mapOf("value_kg" to state.weight.toDoubleOrNull().orZero(), "measured_at" to htime),
+                note = state.note,
+                date = state.date,
+            )
+        }
+    }
+
+    private suspend fun submitRhythmHealth(state: UiState, htime: Double): HealthCheckinResponse? {
+        val payload = when (state.selectedType) {
             InfoCollectionType.exercise -> mapOf(
                 "exercise_type" to state.exerciseType,
                 "duration_minutes" to state.exerciseMinutes.toIntOrNull().orZero(),
@@ -114,24 +156,14 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
                 "score" to state.moodScore.toIntOrNull().orZero(),
                 "htime" to htime,
             )
+            else -> emptyMap()
         }
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(submitting = true, error = null) }
-            val result = repository.healthCheckin(
-                collectionType = state.selectedType,
-                payload = payload,
-                note = state.note,
-                date = state.date,
-            )
-            _uiState.update {
-                if (result != null) {
-                    it.copy(submitting = false, submitted = result)
-                } else {
-                    it.copy(submitting = false, error = "提交失败，请检查网络或服务器配置")
-                }
-            }
-        }
+        return repository.healthCheckin(
+            collectionType = state.selectedType,
+            payload = payload,
+            note = state.note,
+            date = state.date,
+        )
     }
 
     private fun Double?.orZero() = this ?: 0.0

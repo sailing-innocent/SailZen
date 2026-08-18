@@ -56,6 +56,18 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        unitTests {
+            all {
+                it.jvmArgs(
+                    "-XX:+IgnoreUnrecognizedVMOptions",
+                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
+                    "--add-opens=java.base/java.util=ALL-UNNAMED",
+                )
+            }
+        }
+    }
 }
 
 // 按构建类型输出带版本、构建类型的 APK 文件名，方便复制到开发机真机验证

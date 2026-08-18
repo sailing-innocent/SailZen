@@ -25,6 +25,11 @@ class MainActivity : ComponentActivity() {
     /** 通知跳入的 reminder_id（-1 表示无） */
     private val reminderIdState = mutableIntStateOf(-1)
 
+    /** Mission 通知跳入目标 */
+    private val missionIdState = mutableIntStateOf(-1)
+    private val projectIdState = mutableIntStateOf(-1)
+    private val destinationState = mutableStateOf<String?>(null)
+
     /** 快速捕获磁贴跳入标记 */
     private val openCaptureState = mutableStateOf(false)
 
@@ -56,6 +61,21 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Mission 通知跳入：导航到任务看板/详情
+                val missionId by missionIdState
+                val projectId by projectIdState
+                val destination by destinationState
+                LaunchedEffect(missionId, destination) {
+                    if (missionId > 0) {
+                        when (destination) {
+                            ReminderActionReceiver.DESTINATION_MISSION_DETAIL ->
+                                navController.navigate(Routes.missionDetail(missionId))
+                            else -> navController.navigate(Routes.projectMissionBoard(projectId, missionId))
+                        }
+                        destinationState.value = null
+                    }
+                }
+
                 SailZenNavGraph(
                     navController = navController,
                     openCapture = openCaptureState.value,
@@ -73,6 +93,12 @@ class MainActivity : ComponentActivity() {
         val reminderId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, -1) ?: -1
         if (reminderId > 0) {
             reminderIdState.intValue = reminderId
+        }
+        val missionId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_MISSION_ID, -1) ?: -1
+        if (missionId > 0) {
+            missionIdState.intValue = missionId
+            projectIdState.intValue = intent?.getIntExtra(ReminderActionReceiver.EXTRA_PROJECT_ID, -1) ?: -1
+            destinationState.value = intent?.getStringExtra(ReminderActionReceiver.EXTRA_DESTINATION)
         }
         if (intent?.getBooleanExtra(QuickCaptureTileService.EXTRA_OPEN_CAPTURE, false) == true) {
             openCaptureState.value = true

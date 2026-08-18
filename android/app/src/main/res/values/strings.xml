@@ -14,6 +14,8 @@
     <string name="channel_service_desc">保持与服务器长连接的常驻通知</string>
     <string name="channel_health_name">健康提醒</string>
     <string name="channel_health_desc">用药、就寝、起床等本地健康提醒</string>
+    <string name="channel_mission_name">任务提醒</string>
+    <string name="channel_mission_desc">项目任务逾期/临近提醒</string>
 
     <!-- 通知动作 -->
     <string name="action_handle">处理</string>
@@ -95,4 +97,42 @@
     <string name="health_checkin_exercise">记录运动</string>
     <string name="health_checkin_meal">记录饮食</string>
     <string name="health_signals_title">健康信号</string>
+
+    <!-- 项目/任务模块 -->
+    <string name="project_tab">项目</string>
+    <string name="project_list_title">项目列表</string>
+    <string name="project_mission_board">任务看板</string>
+    <string name="mission_state_pending">待处理</string>
+    <string name="mission_state_ready">就绪</string>
+    <string name="mission_state_doing">进行中</string>
+    <string name="mission_state_done">已完成</string>
+    <string name="mission_state_canceled">已取消</string>
+    <string name="mission_overdue">已逾期</string>
+    <string name="mission_upcoming">即将到期</string>
+    <string name="mission_no_deadline">无截止日期</string>
+    <string name="mission_project_label">项目 #%1$d</string>
+    <string name="action_start">开始</string>
+    <string name="action_complete">完成</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_reopen">重新打开</string>
+    <string name="action_postpone">延期</string>
+    <string name="action_postpone_days">延期 %1$d 天</string>
+    <string name="action_view_detail">查看详情</string>
+    <string name="mission_filter_all">全部</string>
+    <string name="mission_filter_urgent">紧急</string>
+    <string name="mission_filter_doing">进行中</string>
+    <string name="mission_overdue_title">任务已逾期</string>
+    <string name="mission_upcoming_title">任务即将到期</string>
+    <string name="project_create_title">创建项目</string>
+    <string name="project_name_hint">项目名称</string>
+    <string name="project_description_hint">项目描述</string>
+    <string name="project_start_qbw_hint">开始 QBW</string>
+    <string name="project_end_qbw_hint">结束 QBW</string>
+    <string name="mission_create_title">创建任务</string>
+    <string name="mission_name_hint">任务名称</string>
+    <string name="mission_description_hint">任务描述</string>
+    <string name="mission_deadline_hint">截止日期（秒级时间戳）</string>
+    <string name="mission_planned_minutes_hint">预计耗时（分钟）</string>
+    <string name="dialog_confirm">确定</string>
+    <string name="dialog_cancel">取消</string>
 </resources>

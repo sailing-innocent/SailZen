@@ -50,9 +50,13 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun weightLabelRes(status: String): Int = when (status) {
-        "above" -> R.string.health_weight_status_above
-        "below" -> R.string.health_weight_status_below
-        else -> R.string.health_weight_status_normal
+    fun weightLabelRes(status: String): Int = Companion.weightLabelRes(status)
+
+    companion object {
+        fun weightLabelRes(status: String): Int = when (status) {
+            "above" -> R.string.health_weight_status_above
+            "below" -> R.string.health_weight_status_below
+            else -> R.string.health_weight_status_normal
+        }
     }
 }

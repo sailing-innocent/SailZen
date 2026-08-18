@@ -31,6 +31,9 @@ import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
 import com.sailzen.app.feature.health.weight.WeightCurveScreen
 import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
+import com.sailzen.app.feature.project.MissionDetailScreen
+import com.sailzen.app.feature.project.ProjectListScreen
+import com.sailzen.app.feature.project.ProjectMissionScreen
 import com.sailzen.app.feature.settings.SettingsScreen
 import com.sailzen.app.feature.timeline.TimelineScreen
 import com.sailzen.app.feature.venture.VentureScreen
@@ -48,10 +51,16 @@ object Routes {
     const val HEALTH_EXERCISE = "health_exercise"
     const val HEALTH_CHECKIN = "health_checkin?type={type}"
     const val INBOX = "inbox?reminder_id={reminder_id}"
+    const val PROJECT = "project"
+    const val PROJECT_MISSION_BOARD = "project_mission_board?project_id={project_id}&highlight_mission_id={highlight_mission_id}"
+    const val MISSION_DETAIL = "mission_detail?mission_id={mission_id}"
     const val SETTINGS = "settings"
 
     fun inbox(reminderId: Int = -1) = "inbox?reminder_id=$reminderId"
     fun healthCheckin(type: String = "weight") = "health_checkin?type=$type"
+    fun projectMissionBoard(projectId: Int = -1, highlightMissionId: Int = -1) =
+        "project_mission_board?project_id=$projectId&highlight_mission_id=$highlightMissionId"
+    fun missionDetail(missionId: Int) = "mission_detail?mission_id=$missionId"
 }
 
 private data class TabItem(
@@ -63,7 +72,8 @@ private data class TabItem(
 private val TABS = listOf(
     TabItem(Routes.TIMELINE, "时间线", Icons.Default.DateRange),
     TabItem(Routes.CHECKIN, "打卡", Icons.Default.CheckCircle),
-    TabItem(Routes.VENTURE, "事业", Icons.Default.Star),
+    TabItem(Routes.PROJECT, "项目", Icons.Default.Star),
+    TabItem(Routes.VENTURE, "事业", Icons.Default.CheckCircle),
     TabItem("inbox_tab", "收件箱", Icons.Default.Email),
     TabItem(Routes.HEALTH, "健康", Icons.Default.Favorite),
 )
@@ -123,6 +133,43 @@ fun SailZenNavGraph(
                 )
             }
             composable(Routes.VENTURE) { VentureScreen() }
+            composable(Routes.PROJECT) {
+                ProjectListScreen(
+                    onOpenProject = { projectId ->
+                        navController.navigate(Routes.projectMissionBoard(projectId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.PROJECT_MISSION_BOARD,
+                arguments = listOf(
+                    navArgument("project_id") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("highlight_mission_id") { type = NavType.IntType; defaultValue = -1 },
+                ),
+            ) { entry ->
+                val projectId = entry.arguments?.getInt("project_id") ?: -1
+                val highlightMissionId = entry.arguments?.getInt("highlight_mission_id") ?: -1
+                ProjectMissionScreen(
+                    projectId = projectId,
+                    highlightMissionId = highlightMissionId,
+                    onBack = { navController.popBackStack() },
+                    onOpenMissionDetail = { missionId ->
+                        navController.navigate(Routes.missionDetail(missionId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.MISSION_DETAIL,
+                arguments = listOf(
+                    navArgument("mission_id") { type = NavType.IntType },
+                ),
+            ) { entry ->
+                val missionId = entry.arguments?.getInt("mission_id") ?: -1
+                MissionDetailScreen(
+                    missionId = missionId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
             composable(Routes.HEALTH) {
                 HealthHomeScreen(
                     onNavigate = { route -> navController.navigate(route) },
