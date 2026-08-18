@@ -1,13 +1,13 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
-import type { ProjectData, MissionData } from '@lib/data/project'
-import { isMissionActive } from '@lib/data/project'
-import { isChallengeProject } from '@lib/data/challenge'
+import React, { useMemo, useState, useEffect } from 'react'
+import type { AffairData } from '@lib/data/affair'
+import { AffairState, isAffairActive, getDdlTimestamp, isAffairOverdue } from '@lib/data/affair'
+import { isChallengeAffair } from '@lib/data/challenge'
 import ProjectMissionColumn from './project_mission_column'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
+import {
     LayoutGrid,
     LayoutList,
     ChevronDown,
@@ -16,7 +16,7 @@ import {
     ListTodo
 } from 'lucide-react'
 import { cn } from '@lib/utils'
-import { type ProjectsState, useProjectsStore, type MissionsState, useMissionsStore } from '@lib/store/project'
+import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useServerStore } from '@lib/store'
 import {
     Select,
@@ -26,8 +26,8 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 
-interface ProjectWithStats extends ProjectData {
-    missionCount: number
+interface VentureWithStats extends AffairData {
+    taskCount: number
     activeCount: number
     hasOverdue: boolean
 }
@@ -36,14 +36,14 @@ interface ProjectWithStats extends ProjectData {
 type ViewMode = 'grid' | 'list' | 'focused'
 
 const ProjectMissionBoard: React.FC = () => {
-    const projects = useProjectsStore((state: ProjectsState) => state.projects)
-    const missions = useMissionsStore((state: MissionsState) => state.missions)
-    const fetchProjects = useProjectsStore((state: ProjectsState) => state.fetchProjects)
-    const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
+    const ventures = useAffairsStore((state: AffairsState) => state.ventures)
+    const tasks = useAffairsStore((state: AffairsState) => state.tasks)
+    const fetchVentures = useAffairsStore((state: AffairsState) => state.fetchVentures)
+    const fetchTasks = useAffairsStore((state: AffairsState) => state.fetchTasks)
     
     const isMobile = useIsMobile()
     const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'list' : 'grid')
-    const [focusedProjectId, setFocusedProjectId] = useState<number | null>(null)
+    const [focusedVentureId, setFocusedVentureId] = useState<number | null>(null)
     const [collapsedProjects, setCollapsedProjects] = useState<Set<number>>(new Set())
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'overdue'>('all')
 
@@ -52,105 +52,122 @@ const ProjectMissionBoard: React.FC = () => {
     // Data fetching
     useEffect(() => {
         if (!serverHealth) return
-        fetchProjects()
-        fetchMissions()
-    }, [serverHealth, fetchProjects, fetchMissions])
+        fetchVentures()
+        fetchTasks()
+    }, [serverHealth, fetchVentures, fetchTasks])
 
-    // NullProject represents missions not belonging to any project
-    const NullProject: ProjectData = {
+    // NullVenture represents tasks not belonging to any venture
+    const NullVenture: AffairData = {
         id: 0,
-        state: 0,
-        name: '未分类任务',
-        description: '不属于任何项目的任务',
-        start_time_qbw: 0,
-        end_time_qbw: 0,
+        title: '未分类任务',
+        description: '不属于任何事业的任务',
+        kind: 'venture',
+        domain: 'career',
+        state: AffairState.INBOX,
+        kind_meta: {},
+        importance: 3,
+        urgency_ddl: null,
+        energy_cost: 0,
+        money_cost: 0,
+        budget_id: null,
+        est_minutes: 0,
+        splittable: false,
+        min_chunk_minutes: 30,
+        fallback_plan: '',
+        recurrence_rule_id: null,
+        mission_id: null,
+        day_id: null,
+        timespan_id: null,
+        parent_id: null,
+        info_collection_type: null,
+        ai_hint: {},
+        score: 0,
+        ref: {},
     }
 
-    // Filter out Challenge-related projects
-    const regularProjects = useMemo(() => {
-        return projects.filter(p => !isChallengeProject(p.name))
-    }, [projects])
+    // Filter out Challenge-related ventures
+    const regularVentures = useMemo(() => {
+        return ventures.filter(v => !isChallengeAffair(v.title))
+    }, [ventures])
 
-    // Filter out Challenge-related missions
-    const regularMissions = useMemo(() => {
-        const challengeProjectIds = new Set(
-            projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
+    // Filter out Challenge-related tasks
+    const regularTasks = useMemo(() => {
+        const challengeVentureIds = new Set(
+            ventures.filter(v => isChallengeAffair(v.title)).map(v => v.id)
         )
-        return missions.filter(m => !challengeProjectIds.has(m.project_id))
-    }, [missions, projects])
+        return tasks.filter(t => t.parent_id === null || !challengeVentureIds.has(t.parent_id))
+    }, [tasks, ventures])
 
-    // Group missions by project
-    const groupedMissions = useMemo(() => {
-        return regularMissions.reduce((acc, mission) => {
-            acc[mission.project_id] = acc[mission.project_id] || []
-            acc[mission.project_id].push(mission)
+    // Group tasks by parent venture (parent_id === null → unclassified)
+    const groupedTasks = useMemo(() => {
+        return regularTasks.reduce((acc, task) => {
+            const parentId = task.parent_id ?? NullVenture.id
+            acc[parentId] = acc[parentId] || []
+            acc[parentId].push(task)
             return acc
-        }, {} as Record<number, MissionData[]>)
-    }, [regularMissions])
+        }, {} as Record<number, AffairData[]>)
+    }, [regularTasks])
 
-    // Calculate project stats
-    const projectsWithStats: ProjectWithStats[] = useMemo(() => {
-        const allProjects = [
-            ...(groupedMissions[NullProject.id]?.length ? [NullProject] : []),
-            ...regularProjects
+    // Calculate venture stats
+    const venturesWithStats: VentureWithStats[] = useMemo(() => {
+        const allVentures = [
+            ...(groupedTasks[NullVenture.id]?.length ? [NullVenture] : []),
+            ...regularVentures
         ]
-        return allProjects.map(p => {
-            const projectMissions = groupedMissions[p.id] || []
-            const activeMissions = projectMissions.filter(m => isMissionActive(m.state))
-            const hasOverdue = activeMissions.some(m => {
-                const ddl = typeof m.ddl === 'string' ? new Date(m.ddl).getTime() / 1000 : m.ddl
-                return ddl && ddl < Date.now() / 1000
-            })
+        return allVentures.map(v => {
+            const ventureTasks = groupedTasks[v.id] || []
+            const activeTasks = ventureTasks.filter(t => isAffairActive(t.state))
+            const hasOverdue = activeTasks.some(t => isAffairOverdue(t.urgency_ddl, t.state))
             return {
-                ...p,
-                missionCount: projectMissions.length,
-                activeCount: activeMissions.length,
+                ...v,
+                taskCount: ventureTasks.length,
+                activeCount: activeTasks.length,
                 hasOverdue
             }
         })
-    }, [regularProjects, groupedMissions])
+    }, [regularVentures, groupedTasks])
 
-    // Filter projects based on status
-    const filteredProjects = useMemo(() => {
-        if (filterStatus === 'all') return projectsWithStats
-        if (filterStatus === 'active') return projectsWithStats.filter(p => p.activeCount > 0)
-        if (filterStatus === 'overdue') return projectsWithStats.filter(p => p.hasOverdue)
-        return projectsWithStats
-    }, [projectsWithStats, filterStatus])
+    // Filter ventures based on status
+    const filteredVentures = useMemo(() => {
+        if (filterStatus === 'all') return venturesWithStats
+        if (filterStatus === 'active') return venturesWithStats.filter(v => v.activeCount > 0)
+        if (filterStatus === 'overdue') return venturesWithStats.filter(v => v.hasOverdue)
+        return venturesWithStats
+    }, [venturesWithStats, filterStatus])
 
-    // Auto-collapse if too many projects in grid mode
+    // Auto-collapse if too many ventures in grid mode
     useEffect(() => {
-        if (viewMode === 'grid' && filteredProjects.length > 6 && collapsedProjects.size === 0) {
+        if (viewMode === 'grid' && filteredVentures.length > 6 && collapsedProjects.size === 0) {
             // Keep first 4 expanded, collapse the rest
-            const toCollapse = filteredProjects.slice(4).map(p => p.id)
+            const toCollapse = filteredVentures.slice(4).map(v => v.id)
             setCollapsedProjects(new Set(toCollapse))
         }
-    }, [filteredProjects.length, viewMode, collapsedProjects.size])
+    }, [filteredVentures.length, viewMode, collapsedProjects.size])
 
     // Collapse/Expand handlers
     const collapseAll = () => {
-        setCollapsedProjects(new Set(filteredProjects.map(p => p.id)))
+        setCollapsedProjects(new Set(filteredVentures.map(v => v.id)))
     }
 
     const expandAll = () => {
         setCollapsedProjects(new Set())
     }
 
-    const toggleProject = (projectId: number) => {
+    const toggleVenture = (ventureId: number) => {
         const newCollapsed = new Set(collapsedProjects)
-        if (newCollapsed.has(projectId)) {
-            newCollapsed.delete(projectId)
+        if (newCollapsed.has(ventureId)) {
+            newCollapsed.delete(ventureId)
         } else {
-            newCollapsed.add(projectId)
+            newCollapsed.add(ventureId)
         }
         setCollapsedProjects(newCollapsed)
     }
 
-    // Focused project data
-    const focusedProject = useMemo(() => {
-        if (!focusedProjectId) return null
-        return filteredProjects.find(p => p.id === focusedProjectId) || null
-    }, [focusedProjectId, filteredProjects])
+    // Focused venture data
+    const focusedVenture = useMemo(() => {
+        if (!focusedVentureId) return null
+        return filteredVentures.find(v => v.id === focusedVentureId) || null
+    }, [focusedVentureId, filteredVentures])
 
     // Get grid columns based on screen size and view mode
     const getGridColumns = () => {
@@ -162,11 +179,11 @@ const ProjectMissionBoard: React.FC = () => {
 
     // Calculate stats
     const totalStats = useMemo(() => {
-        const total = filteredProjects.length
-        const withActive = filteredProjects.filter(p => p.activeCount > 0).length
-        const withOverdue = filteredProjects.filter(p => p.hasOverdue).length
+        const total = filteredVentures.length
+        const withActive = filteredVentures.filter(v => v.activeCount > 0).length
+        const withOverdue = filteredVentures.filter(v => v.hasOverdue).length
         return { total, withActive, withOverdue }
-    }, [filteredProjects])
+    }, [filteredVentures])
 
     return (
         <Card className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -178,7 +195,7 @@ const ProjectMissionBoard: React.FC = () => {
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <CardTitle className={isMobile ? 'text-lg' : 'text-lg'}>
-                            项目任务看板
+                            事业任务看板
                         </CardTitle>
                         <Badge variant="outline" className="text-xs">
                             {totalStats.withActive}/{totalStats.total}
@@ -216,7 +233,7 @@ const ProjectMissionBoard: React.FC = () => {
                         >
                             <LayoutList className="h-4 w-4" />
                         </Button>
-                        {focusedProjectId && (
+                        {focusedVentureId && (
                             <Button
                                 variant={viewMode === 'focused' ? 'default' : 'ghost'}
                                 size="sm"
@@ -242,7 +259,7 @@ const ProjectMissionBoard: React.FC = () => {
                             <SelectItem value="all">
                                 <span className="flex items-center gap-2">
                                     <ListTodo className="h-3 w-3" />
-                                    全部项目
+                                    全部事业
                                 </span>
                             </SelectItem>
                             <SelectItem value="active">
@@ -278,7 +295,7 @@ const ProjectMissionBoard: React.FC = () => {
                                 size="sm"
                                 className="h-8 text-xs"
                                 onClick={collapseAll}
-                                disabled={collapsedProjects.size === filteredProjects.length}
+                                disabled={collapsedProjects.size === filteredVentures.length}
                             >
                                 <ChevronUp className="h-3 w-3 mr-1" />
                                 全部折叠
@@ -288,12 +305,12 @@ const ProjectMissionBoard: React.FC = () => {
                 </div>
 
                 {/* Focused View Header */}
-                {viewMode === 'focused' && focusedProject && (
+                {viewMode === 'focused' && focusedVenture && (
                     <div className="flex items-center justify-between bg-muted/50 rounded-lg p-2">
                         <div className="flex items-center gap-2">
-                            <h3 className="font-medium">{focusedProject.name}</h3>
-                            <Badge variant={focusedProject.activeCount > 0 ? "default" : "outline"} className="text-xs">
-                                {focusedProject.activeCount}/{focusedProject.missionCount}
+                            <h3 className="font-medium">{focusedVenture.title}</h3>
+                            <Badge variant={focusedVenture.activeCount > 0 ? "default" : "outline"} className="text-xs">
+                                {focusedVenture.activeCount}/{focusedVenture.taskCount}
                             </Badge>
                         </div>
                         <div className="flex items-center gap-1">
@@ -302,11 +319,11 @@ const ProjectMissionBoard: React.FC = () => {
                                 size="sm"
                                 className="h-7 text-xs"
                                 onClick={() => {
-                                    const currentIndex = filteredProjects.findIndex(p => p.id === focusedProjectId)
-                                    const prevProject = filteredProjects[currentIndex - 1]
-                                    if (prevProject) setFocusedProjectId(prevProject.id)
+                                    const currentIndex = filteredVentures.findIndex(v => v.id === focusedVentureId)
+                                    const prevVenture = filteredVentures[currentIndex - 1]
+                                    if (prevVenture) setFocusedVentureId(prevVenture.id)
                                 }}
-                                disabled={filteredProjects.findIndex(p => p.id === focusedProjectId) === 0}
+                                disabled={filteredVentures.findIndex(v => v.id === focusedVentureId) === 0}
                             >
                                 上一个
                             </Button>
@@ -315,11 +332,11 @@ const ProjectMissionBoard: React.FC = () => {
                                 size="sm"
                                 className="h-7 text-xs"
                                 onClick={() => {
-                                    const currentIndex = filteredProjects.findIndex(p => p.id === focusedProjectId)
-                                    const nextProject = filteredProjects[currentIndex + 1]
-                                    if (nextProject) setFocusedProjectId(nextProject.id)
+                                    const currentIndex = filteredVentures.findIndex(v => v.id === focusedVentureId)
+                                    const nextVenture = filteredVentures[currentIndex + 1]
+                                    if (nextVenture) setFocusedVentureId(nextVenture.id)
                                 }}
-                                disabled={filteredProjects.findIndex(p => p.id === focusedProjectId) === filteredProjects.length - 1}
+                                disabled={filteredVentures.findIndex(v => v.id === focusedVentureId) === filteredVentures.length - 1}
                             >
                                 下一个
                             </Button>
@@ -328,11 +345,11 @@ const ProjectMissionBoard: React.FC = () => {
                                 size="sm"
                                 className="h-7 text-xs"
                                 onClick={() => {
-                                    setFocusedProjectId(null)
+                                    setFocusedVentureId(null)
                                     setViewMode('grid')
                                 }}
                             >
-                                退出专注
+                                返回
                             </Button>
                         </div>
                     </div>
@@ -343,12 +360,12 @@ const ProjectMissionBoard: React.FC = () => {
                 "flex-1 min-h-0 overflow-auto",
                 isMobile ? 'px-2' : 'px-4 pb-4'
             )}>
-                {viewMode === 'focused' && focusedProject ? (
-                    // Focused View - Single Project
+                {viewMode === 'focused' && focusedVenture ? (
+                    // Focused View - Single Venture
                     <div className="h-full">
                         <ProjectMissionColumn
-                            project={focusedProject}
-                            missions={groupedMissions[focusedProject.id] || []}
+                            project={focusedVenture}
+                            missions={groupedTasks[focusedVenture.id] || []}
                             defaultCollapsed={false}
                         />
                     </div>
@@ -358,16 +375,16 @@ const ProjectMissionBoard: React.FC = () => {
                         "grid gap-3",
                         getGridColumns()
                     )}>
-                        {filteredProjects.map((project) => (
-                            <div 
-                                key={project.id}
+                        {filteredVentures.map((venture) => (
+                            <div
+                                key={venture.id}
                                 className={cn(
                                     "relative",
                                     viewMode === 'list' && "border rounded-lg hover:border-primary/50 transition-colors"
                                 )}
                                 onClick={() => {
                                     if (viewMode === 'list') {
-                                        setFocusedProjectId(project.id)
+                                        setFocusedVentureId(venture.id)
                                         setViewMode('focused')
                                     }
                                 }}
@@ -376,23 +393,23 @@ const ProjectMissionBoard: React.FC = () => {
                                     <div className="absolute inset-0 cursor-pointer" />
                                 )}
                                 <ProjectMissionColumn
-                                    project={project}
-                                    missions={groupedMissions[project.id] || []}
-                                    defaultCollapsed={collapsedProjects.has(project.id)}
+                                    project={venture}
+                                    missions={groupedTasks[venture.id] || []}
+                                    defaultCollapsed={collapsedProjects.has(venture.id)}
                                     viewMode={viewMode}
                                     onFocus={() => {
-                                        setFocusedProjectId(project.id)
+                                        setFocusedVentureId(venture.id)
                                         setViewMode('focused')
                                     }}
                                 />
                             </div>
                         ))}
-                        
-                        {filteredProjects.length === 0 && (
+
+                        {filteredVentures.length === 0 && (
                             <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground">
                                 <FolderKanban className="h-12 w-12 mb-4 opacity-30" />
-                                <p className="text-sm">暂无项目</p>
-                                <p className="text-xs mt-1">点击右上角添加项目</p>
+                                <p className="text-sm">暂无事业</p>
+                                <p className="text-xs mt-1">点击右上角添加事业</p>
                             </div>
                         )}
                     </div>

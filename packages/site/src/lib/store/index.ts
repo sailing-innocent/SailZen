@@ -6,7 +6,7 @@
  */
 
 export * from './money'
-export * from './project'
+export * from './affair'
 export * from './pems'
 
 export { useBudgetsStore, useFinanceTagsStore } from './money'

@@ -3,51 +3,41 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Label } from '@components/ui/label'
 import { Input } from '@components/ui/input'
 import { Button } from '@components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@components/ui/select'
-import { QBWDate } from '@lib/utils/qbw_date'
-import { type ProjectCreateProps } from '@lib/data/project'
-import { type ProjectsState, useProjectsStore } from '@lib/store/project'
+import { type AffairCreateProps } from '@lib/data/affair'
+import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { Calendar } from '@components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@components/ui/popover'
+import { CalendarIcon } from 'lucide-react'
+import { format } from 'date-fns'
+import { cn } from '@lib/utils'
 
 const AddProjectDialog: React.FC = () => {
-    const createProject = useProjectsStore((state: ProjectsState) => state.createProject)
+    const createVenture = useAffairsStore((state: AffairsState) => state.createVenture)
     const isMobile = useIsMobile()
     const [open, setOpen] = useState(false)
     const [name, setName] = useState<string>('')
     const [description, setDescription] = useState<string>('')
-    const now = new Date()
-    const initialYear = now.getFullYear()
-    const initialQuarter = Math.floor(now.getMonth() / 3) + 1
-    const [startYear, setStartYear] = useState<number>(initialYear)
-    const [startQuarter, setStartQuarter] = useState<number>(initialQuarter)
-    const [startIndex, setStartIndex] = useState<number>(1)
-    const [endYear, setEndYear] = useState<number>(initialYear)
-    const [endQuarter, setEndQuarter] = useState<number>(initialQuarter)
-    const [endIndex, setEndIndex] = useState<number>(1)
+    const [targetDate, setTargetDate] = useState<Date | undefined>(undefined)
     const [submitting, setSubmitting] = useState<boolean>(false)
 
     const handleSubmit = async () => {
         if (!name.trim()) {
             return
         }
-        const start_time_qbw = new QBWDate(startYear, startQuarter, startIndex).to_int()
-        const end_time_qbw = new QBWDate(endYear, endQuarter, endIndex).to_int()
-        if (end_time_qbw < start_time_qbw) {
-            return
-        }
-        const payload: ProjectCreateProps = {
-            name: name.trim(),
+        const payload: AffairCreateProps = {
+            title: name.trim(),
             description: description.trim(),
-            start_time_qbw,
-            end_time_qbw,
+            kind_meta: targetDate ? { target_date: targetDate.toISOString().split('T')[0] } : {},
         }
         try {
             setSubmitting(true)
-            await createProject(payload)
+            await createVenture(payload)
             setSubmitting(false)
             setOpen(false)
             setName('')
             setDescription('')
+            setTargetDate(undefined)
         } catch (e) {
             setSubmitting(false)
         }
@@ -60,102 +50,53 @@ const AddProjectDialog: React.FC = () => {
             </DialogTrigger>
             <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
                 <DialogHeader>
-                    <DialogTitle>新增项目</DialogTitle>
-                    <DialogDescription>输入项目信息后创建</DialogDescription>
+                    <DialogTitle>新增事业</DialogTitle>
+                    <DialogDescription>输入长期事业信息后创建</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="project-name">项目名称</Label>
-                        <Input id="project-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入项目名称" />
+                        <Label htmlFor="project-name">事业名称</Label>
+                        <Input id="project-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入事业名称" />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="project-desc">项目描述</Label>
-                        <Input id="project-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="请输入项目描述" />
+                        <Label htmlFor="project-desc">事业描述</Label>
+                        <Input id="project-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="请输入事业描述" />
                     </div>
-                    <div className="flex flex-col gap-3">
-                        <span className="text-sm text-muted-foreground">开始时间（季度/双周）</span>
-                        <div className="flex flex-row gap-4 items-center">
-                            <Select value={String(startYear)} onValueChange={(v) => setStartYear(parseInt(v))}>
-                                <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="年份" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 21 }).map((_, idx) => {
-                                        const y = initialYear - 10 + idx
-                                        return (
-                                            <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
-                                        )
-                                    })}
-                                </SelectContent>
-                            </Select>
-                            <Select value={String(startQuarter)} onValueChange={(v) => setStartQuarter(parseInt(v))}>
-                                <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="季度" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="1">第 1 季度</SelectItem>
-                                    <SelectItem value="2">第 2 季度</SelectItem>
-                                    <SelectItem value="3">第 3 季度</SelectItem>
-                                    <SelectItem value="4">第 4 季度</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={String(startIndex)} onValueChange={(v) => setStartIndex(parseInt(v))}>
-                                <SelectTrigger className="w-32">
-                                    <SelectValue placeholder="双周序号" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 6 }).map((_, idx) => (
-                                        <SelectItem key={idx + 1} value={String(idx + 1)}>双周 {idx + 1}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        <span className="text-sm text-muted-foreground">结束时间（季度/双周）</span>
-                        <div className="flex flex-row gap-4 items-center">
-                            <Select value={String(endYear)} onValueChange={(v) => setEndYear(parseInt(v))}>
-                                <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="年份" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 21 }).map((_, idx) => {
-                                        const y = initialYear - 10 + idx
-                                        return (
-                                            <SelectItem key={y} value={String(y)}>{y} 年</SelectItem>
-                                        )
-                                    })}
-                                </SelectContent>
-                            </Select>
-                            <Select value={String(endQuarter)} onValueChange={(v) => setEndQuarter(parseInt(v))}>
-                                <SelectTrigger className="w-28">
-                                    <SelectValue placeholder="季度" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="1">第 1 季度</SelectItem>
-                                    <SelectItem value="2">第 2 季度</SelectItem>
-                                    <SelectItem value="3">第 3 季度</SelectItem>
-                                    <SelectItem value="4">第 4 季度</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={String(endIndex)} onValueChange={(v) => setEndIndex(parseInt(v))}>
-                                <SelectTrigger className="w-32">
-                                    <SelectValue placeholder="双周序号" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {Array.from({ length: 6 }).map((_, idx) => (
-                                        <SelectItem key={idx + 1} value={String(idx + 1)}>双周 {idx + 1}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    <div className="flex flex-col gap-2">
+                        <Label>目标日（可选）</Label>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    className={cn(
+                                        'w-full justify-start text-left font-normal',
+                                        !targetDate && 'text-muted-foreground'
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {targetDate ? (
+                                        format(targetDate, 'yyyy年MM月dd日')
+                                    ) : (
+                                        <span>选择目标日</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={targetDate}
+                                    onSelect={(date) => setTargetDate(date)}
+                                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="ghost">取消</Button>
                     </DialogClose>
-                <Button onClick={handleSubmit} disabled={submitting || !name.trim()}>创建</Button>
+                    <Button onClick={handleSubmit} disabled={submitting || !name.trim()}>创建</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -163,5 +104,3 @@ const AddProjectDialog: React.FC = () => {
 }
 
 export default AddProjectDialog
-
-

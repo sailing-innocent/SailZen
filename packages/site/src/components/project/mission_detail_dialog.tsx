@@ -8,19 +8,19 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Calendar, Clock, CheckCircle2, Circle, PlayCircle, XCircle, Folder } from 'lucide-react'
-import type { MissionData, ProjectData } from '@lib/data/project'
+import type { AffairData } from '@lib/data/affair'
 import {
-  MissionStateLabels,
-  MissionState,
+  AffairStateLabels,
+  AffairState,
   parseDdl,
-  isMissionActive,
-  isMissionOverdue,
-} from '@lib/data/project'
+  isAffairActive,
+  isAffairOverdue,
+} from '@lib/data/affair'
 import { cn } from '@lib/utils'
 
 export interface MissionDetailDialogProps {
-  mission: MissionData | null
-  project?: ProjectData | null
+  mission: AffairData | null
+  project?: AffairData | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
@@ -33,34 +33,33 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
 }) => {
   if (!mission) return null
 
-  const isActive = isMissionActive(mission.state)
-  const isOverdue = isMissionOverdue(mission.ddl, mission.state)
-  const deadline = parseDdl(mission.ddl)
+  const isActive = isAffairActive(mission.state)
+  const isOverdue = isAffairOverdue(mission.urgency_ddl, mission.state)
+  const deadline = parseDdl(mission.urgency_ddl)
 
-  // Get state icon
   const getStateIcon = () => {
     switch (mission.state) {
-      case MissionState.DONE:
+      case AffairState.DONE:
         return <CheckCircle2 className="h-5 w-5 text-green-500" />
-      case MissionState.DOING:
+      case AffairState.DOING:
         return <PlayCircle className="h-5 w-5 text-yellow-500" />
-      case MissionState.CANCELED:
+      case AffairState.CANCELED:
         return <XCircle className="h-5 w-5 text-red-500" />
-      case MissionState.READY:
+      case AffairState.PLANNED:
+      case AffairState.SCHEDULED:
         return <Circle className="h-5 w-5 text-blue-500" />
       default:
         return <Circle className="h-5 w-5 text-gray-500" />
     }
   }
 
-  // Get state badge variant
   const getStateBadgeVariant = (): 'default' | 'secondary' | 'destructive' | 'outline' => {
     switch (mission.state) {
-      case MissionState.DOING:
+      case AffairState.DOING:
         return 'default'
-      case MissionState.DONE:
+      case AffairState.DONE:
         return 'secondary'
-      case MissionState.CANCELED:
+      case AffairState.CANCELED:
         return 'destructive'
       default:
         return 'outline'
@@ -78,23 +77,21 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
-          {/* Task Name */}
           <div className="space-y-2">
             <Label className="text-muted-foreground">任务名称</Label>
             <p className={cn(
               "text-lg font-medium",
-              mission.state === MissionState.DONE && "line-through text-muted-foreground"
+              mission.state === AffairState.DONE && "line-through text-muted-foreground"
             )}>
-              {mission.name}
+              {mission.title}
             </p>
           </div>
 
-          {/* Task State */}
           <div className="space-y-2">
             <Label className="text-muted-foreground">任务状态</Label>
             <div className="flex items-center gap-2">
               <Badge variant={getStateBadgeVariant()}>
-                {MissionStateLabels[mission.state ?? 0]}
+                {AffairStateLabels[mission.state]}
               </Badge>
               {isOverdue && (
                 <Badge variant="destructive" className="gap-1">
@@ -105,18 +102,16 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
             </div>
           </div>
 
-          {/* Project Info */}
           {project && project.id > 0 && (
             <div className="space-y-2">
-              <Label className="text-muted-foreground">所属项目</Label>
+              <Label className="text-muted-foreground">所属事业</Label>
               <div className="flex items-center gap-2 text-sm">
                 <Folder className="h-4 w-4 text-muted-foreground" />
-                <span>{project.name}</span>
+                <span>{project.title}</span>
               </div>
             </div>
           )}
 
-          {/* Deadline */}
           <div className="space-y-2">
             <Label className="text-muted-foreground">截止日期</Label>
             <div className="flex items-center gap-2">
@@ -139,19 +134,13 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
             </div>
           </div>
 
-          {/* PEMS fields */}
-          {(mission.planned_minutes !== undefined || mission.energy_cost !== undefined || mission.health_constraint) && (
+          {(mission.est_minutes !== undefined || mission.energy_cost !== undefined) && (
             <div className="space-y-2">
               <Label className="text-muted-foreground">精力与耗时</Label>
               <div className="flex flex-wrap gap-2">
-                {mission.planned_minutes !== undefined && mission.planned_minutes > 0 && (
+                {mission.est_minutes !== undefined && mission.est_minutes > 0 && (
                   <Badge variant="outline" className="text-xs">
-                    预计 {mission.planned_minutes} 分钟
-                  </Badge>
-                )}
-                {mission.actual_minutes !== undefined && mission.actual_minutes > 0 && (
-                  <Badge variant="outline" className="text-xs">
-                    实际 {mission.actual_minutes} 分钟
+                    预计 {mission.est_minutes} 分钟
                   </Badge>
                 )}
                 {mission.energy_cost !== undefined && mission.energy_cost > 0 && (
@@ -159,16 +148,10 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
                     精力 {mission.energy_cost}
                   </Badge>
                 )}
-                {mission.health_constraint && mission.health_constraint !== 'normal' && (
-                  <Badge variant="outline" className="text-xs">
-                    {mission.health_constraint === 'high_energy' ? '高精力' : '低精力可'}
-                  </Badge>
-                )}
               </div>
             </div>
           )}
 
-          {/* Description */}
           {mission.description && (
             <div className="space-y-2">
               <Label className="text-muted-foreground">任务描述</Label>
@@ -178,7 +161,6 @@ const MissionDetailDialog: React.FC<MissionDetailDialogProps> = ({
             </div>
           )}
 
-          {/* Task ID (for reference) */}
           <div className="pt-4 border-t">
             <p className="text-xs text-muted-foreground">
               任务 ID: {mission.id}

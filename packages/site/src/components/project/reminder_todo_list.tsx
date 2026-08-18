@@ -14,18 +14,18 @@ import {
 } from 'lucide-react'
 import MissionCard from './mission_card'
 import AddMissionDialog from './mission_add_dialog'
-import { useMissionsStore, type MissionsState, useProjectsStore, type ProjectsState } from '@lib/store/project'
+import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useServerStore } from '@lib/store'
-import { isChallengeProject } from '@lib/data/challenge'
+import { isChallengeAffair } from '@lib/data/challenge'
 import {
-  type MissionData,
-  MissionState,
-  isMissionActive,
-  isMissionOverdue,
+  type AffairData,
+  AffairState,
+  isAffairActive,
+  isAffairOverdue,
   parseDdl,
   getHoursUntilDeadline,
   getDdlTimestamp,
-} from '@lib/data/project'
+} from '@lib/data/affair'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 export interface ReminderTodoListProps {
@@ -42,135 +42,118 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   const isMobile = useIsMobile()
   const serverHealth = useServerStore((state) => state.serverHealth)
 
-  const missions = useMissionsStore((state: MissionsState) => state.missions)
-  const upcomingMissions = useMissionsStore((state: MissionsState) => state.upcomingMissions)
-  const overdueMissions = useMissionsStore((state: MissionsState) => state.overdueMissions)
-  const isMissionsLoading = useMissionsStore((state: MissionsState) => state.isLoading)
-  const fetchMissions = useMissionsStore((state: MissionsState) => state.fetchMissions)
-  const fetchUpcomingMissions = useMissionsStore((state: MissionsState) => state.fetchUpcomingMissions)
-  const fetchOverdueMissions = useMissionsStore((state: MissionsState) => state.fetchOverdueMissions)
-  
-  // Get projects to filter out Challenge-related missions
-  const projects = useProjectsStore((state: ProjectsState) => state.projects)
-  const isProjectsLoading = useProjectsStore((state: ProjectsState) => state.isLoading)
-  const fetchProjects = useProjectsStore((state: ProjectsState) => state.fetchProjects)
-  
-  // Filter out Challenge-related missions
-  const regularMissions = useMemo(() => {
-    const challengeProjectIds = new Set(
-      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
-    )
-    return missions.filter(m => !challengeProjectIds.has(m.project_id))
-  }, [missions, projects])
-  
-  const regularUpcomingMissions = useMemo(() => {
-    const challengeProjectIds = new Set(
-      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
-    )
-    return upcomingMissions.filter(m => !challengeProjectIds.has(m.project_id))
-  }, [upcomingMissions, projects])
-  
-  const regularOverdueMissions = useMemo(() => {
-    const challengeProjectIds = new Set(
-      projects.filter(p => isChallengeProject(p.name)).map(p => p.id)
-    )
-    return overdueMissions.filter(m => !challengeProjectIds.has(m.project_id))
-  }, [overdueMissions, projects])
+  const tasks = useAffairsStore((state: AffairsState) => state.tasks)
+  const upcomingTasks = useAffairsStore((state: AffairsState) => state.upcomingTasks)
+  const overdueTasks = useAffairsStore((state: AffairsState) => state.overdueTasks)
+  const isLoading = useAffairsStore((state: AffairsState) => state.isLoading)
+  const fetchTasks = useAffairsStore((state: AffairsState) => state.fetchTasks)
+  const fetchUpcomingTasks = useAffairsStore((state: AffairsState) => state.fetchUpcomingTasks)
+  const fetchOverdueTasks = useAffairsStore((state: AffairsState) => state.fetchOverdueTasks)
 
-  // Helper function to get project by ID
-  const getProjectById = (projectId: number) => {
-    return projects.find(p => p.id === projectId)
+  const ventures = useAffairsStore((state: AffairsState) => state.ventures)
+  const fetchVentures = useAffairsStore((state: AffairsState) => state.fetchVentures)
+
+  const regularTasks = useMemo(() => {
+    const challengeVentureIds = new Set(
+      ventures.filter(v => isChallengeAffair(v.title)).map(v => v.id)
+    )
+    return tasks.filter(t => t.parent_id === null || !challengeVentureIds.has(t.parent_id))
+  }, [tasks, ventures])
+
+  const regularUpcomingTasks = useMemo(() => {
+    const challengeVentureIds = new Set(
+      ventures.filter(v => isChallengeAffair(v.title)).map(v => v.id)
+    )
+    return upcomingTasks.filter(t => t.parent_id === null || !challengeVentureIds.has(t.parent_id))
+  }, [upcomingTasks, ventures])
+
+  const regularOverdueTasks = useMemo(() => {
+    const challengeVentureIds = new Set(
+      ventures.filter(v => isChallengeAffair(v.title)).map(v => v.id)
+    )
+    return overdueTasks.filter(t => t.parent_id === null || !challengeVentureIds.has(t.parent_id))
+  }, [overdueTasks, ventures])
+
+  const getVentureById = (parentId: number | null) => {
+    if (!parentId) return undefined
+    return ventures.find(v => v.id === parentId)
   }
 
   const [activeTab, setActiveTab] = useState('all')
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Combined loading state for initial data fetch
-  const isInitialLoading = isMissionsLoading || isProjectsLoading
-
-  // Fetch data on mount - load both projects and missions in parallel
   useEffect(() => {
     if (!serverHealth) return
-    
-    // Load projects first, then missions (missions need projects for filtering)
     const loadData = async () => {
-      await fetchProjects()
+      await fetchVentures()
       await Promise.all([
-        fetchMissions(),
-        fetchUpcomingMissions(72), // Get missions due in next 72 hours
-        fetchOverdueMissions(),
+        fetchTasks(),
+        fetchUpcomingTasks(72),
+        fetchOverdueTasks(),
       ])
     }
-    
     loadData()
 
-    // Auto-refresh every 5 minutes
     const interval = setInterval(() => {
-      fetchUpcomingMissions(72)
-      fetchOverdueMissions()
+      fetchUpcomingTasks(72)
+      fetchOverdueTasks()
     }, 5 * 60 * 1000)
 
     return () => clearInterval(interval)
-  }, [serverHealth, fetchProjects, fetchMissions, fetchUpcomingMissions, fetchOverdueMissions])
+  }, [serverHealth, fetchVentures, fetchTasks, fetchUpcomingTasks, fetchOverdueTasks])
 
-  // Filter active missions (excluding Challenge-related)
-  const activeMissions = regularMissions.filter((m) => isMissionActive(m.state))
+  const activeTasks = regularTasks.filter((t) => isAffairActive(t.state))
 
-  // Sort by priority (overdue first, then by deadline)
-  const sortedMissions = [...activeMissions].sort((a, b) => {
-    const aOverdue = isMissionOverdue(a.ddl, a.state)
-    const bOverdue = isMissionOverdue(b.ddl, b.state)
+  const sortedTasks = [...activeTasks].sort((a, b) => {
+    const aOverdue = isAffairOverdue(a.urgency_ddl, a.state)
+    const bOverdue = isAffairOverdue(b.urgency_ddl, b.state)
 
-    // Overdue missions first
     if (aOverdue && !bOverdue) return -1
     if (!aOverdue && bOverdue) return 1
 
-    // Then by deadline (earliest first)
-    const aDdl = getDdlTimestamp(a.ddl) ?? Infinity
-    const bDdl = getDdlTimestamp(b.ddl) ?? Infinity
+    const aDdl = getDdlTimestamp(a.urgency_ddl) ?? Infinity
+    const bDdl = getDdlTimestamp(b.urgency_ddl) ?? Infinity
     return aDdl - bDdl
   })
 
-  // Get missions for each tab
-  const getTabMissions = (): MissionData[] => {
+  const getTabTasks = (): AffairData[] => {
     switch (activeTab) {
       case 'urgent':
-        return sortedMissions.filter(
-          (m) => isMissionOverdue(m.ddl, m.state) || getHoursUntilDeadline(m.ddl) <= 24
+        return sortedTasks.filter(
+          (t) => isAffairOverdue(t.urgency_ddl, t.state) || getHoursUntilDeadline(t.urgency_ddl) <= 24
         )
       case 'today':
-        return sortedMissions.filter((m) => {
-          const ddlDate = parseDdl(m.ddl)
+        return sortedTasks.filter((t) => {
+          const ddlDate = parseDdl(t.urgency_ddl)
           if (!ddlDate) return false
           const today = new Date()
           return ddlDate.toDateString() === today.toDateString()
         })
       case 'doing':
-        return sortedMissions.filter((m) => m.state === MissionState.DOING)
+        return sortedTasks.filter((t) => t.state === AffairState.DOING)
       default:
-        return sortedMissions
+        return sortedTasks
     }
   }
 
-  const displayMissions = maxItems
-    ? getTabMissions().slice(0, maxItems)
-    : getTabMissions()
+  const displayTasks = maxItems
+    ? getTabTasks().slice(0, maxItems)
+    : getTabTasks()
 
-  // Counts (excluding Challenge-related)
-  const urgentCount = sortedMissions.filter(
-    (m) => isMissionOverdue(m.ddl, m.state) || getHoursUntilDeadline(m.ddl) <= 24
+  const urgentCount = sortedTasks.filter(
+    (t) => isAffairOverdue(t.urgency_ddl, t.state) || getHoursUntilDeadline(t.urgency_ddl) <= 24
   ).length
-  const doingCount = sortedMissions.filter((m) => m.state === MissionState.DOING).length
-  const overdueCount = regularOverdueMissions.length
+  const doingCount = sortedTasks.filter((t) => t.state === AffairState.DOING).length
+  const overdueCount = regularOverdueTasks.length
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await fetchProjects()
+      await fetchVentures()
       await Promise.all([
-        fetchMissions(),
-        fetchUpcomingMissions(72),
-        fetchOverdueMissions(),
+        fetchTasks(),
+        fetchUpcomingTasks(72),
+        fetchOverdueTasks(),
       ])
     } finally {
       setIsRefreshing(false)
@@ -198,7 +181,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
             <CardTitle className={isMobile ? 'text-base' : 'text-lg'}>{title}</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">
-                {activeMissions.length} 待办
+                {activeTasks.length} 待办
               </Badge>
               {overdueCount > 0 && (
                 <Badge variant="destructive">
@@ -229,7 +212,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
               <TabsTrigger value="all" className="gap-1">
                 全部
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5">
-                  {activeMissions.length}
+                  {activeTasks.length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="urgent" className="gap-1">
@@ -253,13 +236,13 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
             </TabsList>
 
             <TabsContent value={activeTab} className="mt-0">
-              {isInitialLoading ? (
+              {isLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-20 w-full" />
                   ))}
                 </div>
-              ) : displayMissions.length === 0 ? (
+              ) : displayTasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <CheckCircle2 className="h-12 w-12 mb-4 text-green-500" />
                   <p className="text-lg font-medium">暂无待办任务</p>
@@ -273,19 +256,18 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Overdue section */}
-                  {activeTab === 'all' && overdueMissions.length > 0 && (
+                  {activeTab === 'all' && overdueTasks.length > 0 && (
                     <div className="mb-4">
                       <h4 className="text-sm font-medium text-red-600 mb-2 flex items-center gap-1">
                         <AlertTriangle className="h-4 w-4" />
                         已逾期（需要立即处理）
                       </h4>
                       <div className="space-y-2">
-                        {regularOverdueMissions.map((mission) => (
+                        {regularOverdueTasks.map((task) => (
                           <MissionCard
-                            key={mission.id}
-                            mission={mission}
-                            project={getProjectById(mission.project_id)}
+                            key={task.id}
+                            mission={task}
+                            project={getVentureById(task.parent_id)}
                             compact
                             showProject
                           />
@@ -294,23 +276,21 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                     </div>
                   )}
 
-                  {/* Regular missions */}
-                  {displayMissions
-                    .filter((m) => !isMissionOverdue(m.ddl, m.state) || activeTab !== 'all')
-                    .map((mission) => (
+                  {displayTasks
+                    .filter((t) => !isAffairOverdue(t.urgency_ddl, t.state) || activeTab !== 'all')
+                    .map((task) => (
                       <MissionCard
-                        key={mission.id}
-                        mission={mission}
-                        project={getProjectById(mission.project_id)}
+                        key={task.id}
+                        mission={task}
+                        project={getVentureById(task.parent_id)}
                         compact
                         showProject
                       />
                     ))}
 
-                  {/* Show more button */}
-                  {maxItems && getTabMissions().length > maxItems && (
+                  {maxItems && getTabTasks().length > maxItems && (
                     <Button variant="ghost" className="w-full">
-                      查看全部 {getTabMissions().length} 项
+                      查看全部 {getTabTasks().length} 项
                     </Button>
                   )}
                 </div>
@@ -321,23 +301,23 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
 
         {!showFilters && (
           <>
-            {isInitialLoading ? (
+            {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-16 w-full" />
                 ))}
               </div>
-            ) : displayMissions.length === 0 ? (
+            ) : displayTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
                 <p className="font-medium">暂无待办任务</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {displayMissions.map((mission) => (
+                {displayTasks.map((task) => (
                   <MissionCard
-                    key={mission.id}
-                    mission={mission}
+                    key={task.id}
+                    mission={task}
                     compact
                     showProject
                   />

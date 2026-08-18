@@ -208,7 +208,7 @@ const ChallengeView: React.FC<ChallengeViewProps> = () => {
     if (selectedDay && selectedChallengeId) {
       const checkIn = currentCheckIns.find(c => c.day === selectedDay.day)
       if (checkIn) {
-        const resultChallengeId = await resetCheckIn(checkIn.mission.id, selectedChallengeId)
+        const resultChallengeId = await resetCheckIn(checkIn.affair.id, selectedChallengeId)
         // 刷新挑战列表中的进度显示
         if (resultChallengeId) {
           await loadSingleChallengeStats(resultChallengeId)

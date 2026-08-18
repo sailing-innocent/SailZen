@@ -8,7 +8,7 @@
 export * from './config'
 export * from './money'
 export * from './health'
-export * from './project'
+export * from './affair'
 export * from './pems'
 
 import { SERVER_URL, API_BASE } from './config'

@@ -5,54 +5,50 @@ import { Input } from '@components/ui/input'
 import { Button } from '@components/ui/button'
 import DatePicker from '@components/date_picker'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@components/ui/select'
-import { type ProjectData, type MissionCreateProps } from '@lib/data/project'
-import { isChallengeProject } from '@lib/data/challenge'
-import { type ProjectsState, useProjectsStore, type MissionsState, useMissionsStore } from '@lib/store/project'
+import { type AffairData, type AffairCreateProps } from '@lib/data/affair'
+import { isChallengeAffair } from '@lib/data/challenge'
+import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 export interface AddMissionDialogProps {
-    projects?: ProjectData[]
+    ventures?: AffairData[]
 }
 
 const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
-    const projects = useProjectsStore((state: ProjectsState) => state.projects)
-    const createMission = useMissionsStore((state: MissionsState) => state.createMission)
+    const ventures = useAffairsStore((state: AffairsState) => state.ventures)
+    const createTask = useAffairsStore((state: AffairsState) => state.createTask)
     const isMobile = useIsMobile()
 
     const [open, setOpen] = useState(false)
     const [name, setName] = useState<string>('')
     const [description, setDescription] = useState<string>('')
-    const [projectId, setProjectId] = useState<number>(0)
     const [parentId, setParentId] = useState<number>(0)
     const [ddl, setDdl] = useState<number>(Math.floor(Date.now() / 1000))
     const [submitting, setSubmitting] = useState<boolean>(false)
 
-    // Filter out Challenge-related projects
-    const projectOptions = useMemo(() => {
-        return projects
-            .filter(p => !isChallengeProject(p.name))
+    const ventureOptions = useMemo(() => {
+        return ventures
+            .filter(v => !isChallengeAffair(v.title))
             .sort((a, b) => a.id - b.id)
-    }, [projects])
+    }, [ventures])
 
     const handleSubmit = async () => {
         if (!name.trim()) {
             return
         }
-        const payload: MissionCreateProps = {
-            name: name.trim(),
+        const payload: AffairCreateProps = {
+            title: name.trim(),
             description: description.trim(),
-            parent_id: parentId,
-            project_id: projectId,
-            ddl: ddl,
+            parent_id: parentId > 0 ? parentId : null,
+            urgency_ddl: ddl,
         }
         try {
             setSubmitting(true)
-            await createMission(payload)
+            await createTask(payload)
             setSubmitting(false)
             setOpen(false)
             setName('')
             setDescription('')
-            setProjectId(0)
             setParentId(0)
         } catch (e) {
             setSubmitting(false)
@@ -67,7 +63,7 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
             <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
                 <DialogHeader>
                     <DialogTitle>新增任务</DialogTitle>
-                    <DialogDescription>选择项目并填写任务信息后创建</DialogDescription>
+                    <DialogDescription>选择事业并填写任务信息后创建</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <div className="flex flex-col gap-2">
@@ -80,24 +76,20 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
                     </div>
                     <div className="flex flex-row gap-6">
                         <div className="flex flex-col gap-2">
-                            <Label>所属项目</Label>
-                            <Select onValueChange={(v) => setProjectId(parseInt(v))}>
+                            <Label>所属事业</Label>
+                            <Select onValueChange={(v) => setParentId(parseInt(v))}>
                                 <SelectTrigger className="w-56">
-                                    <SelectValue placeholder="选择项目" />
+                                    <SelectValue placeholder="选择事业" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectGroup>
-                                        <SelectLabel>项目列表</SelectLabel>
-                                        {projectOptions.map((p) => (
-                                            <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+                                        <SelectLabel>事业列表</SelectLabel>
+                                        {ventureOptions.map((v) => (
+                                            <SelectItem key={v.id} value={v.id.toString()}>{v.title}</SelectItem>
                                         ))}
                                     </SelectGroup>
                                 </SelectContent>
                             </Select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <Label>父任务ID（可选）</Label>
-                            <Input type="number" placeholder="父任务ID" value={parentId} onChange={(e) => setParentId(parseInt(e.target.value || '0'))} className="w-56" />
                         </div>
                     </div>
                     <div className="flex flex-row gap-6">
@@ -108,7 +100,7 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
                     <DialogClose asChild>
                         <Button variant="ghost">取消</Button>
                     </DialogClose>
-                    <Button onClick={handleSubmit} disabled={submitting || !name.trim() || projectId === 0}>创建</Button>
+                    <Button onClick={handleSubmit} disabled={submitting || !name.trim() || parentId === 0}>创建</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -116,5 +108,3 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
 }
 
 export default AddMissionDialog
-
-

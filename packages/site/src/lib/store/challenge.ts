@@ -12,10 +12,9 @@ import {
   ChallengeStatus,
   CheckInStatus,
   calculateChallengeStats,
-  getTodayMissionId,
+  getTodayAffairId,
   isTodayDay,
 } from '@lib/data/challenge'
-
 import {
   api_get_challenges,
   api_get_challenge_detail,
@@ -69,6 +68,7 @@ export interface ChallengeActions {
   
   // 快捷操作
   getTodayMissionId: () => number | null
+  getTodayAffairId: () => number | null
   isTodayChecked: () => boolean
   canCheckInToday: () => boolean
   
@@ -301,7 +301,15 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     if (!currentChallenge) {
       return null
     }
-    return getTodayMissionId(currentCheckIns, currentChallenge.startDate)
+    return getTodayAffairId(currentCheckIns, currentChallenge.startDate)
+  },
+
+  getTodayAffairId: (): number | null => {
+    const { currentChallenge, currentCheckIns } = get()
+    if (!currentChallenge) {
+      return null
+    }
+    return getTodayAffairId(currentCheckIns, currentChallenge.startDate)
   },
 
   isTodayChecked: (): boolean => {
