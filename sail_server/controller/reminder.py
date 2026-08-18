@@ -53,6 +53,9 @@ from sail_server.application.dto.reminder import (
     ReminderRuleCreateRequest,
     ReminderRuleResponse,
     ReminderRuleUpdateRequest,
+    ReminderSourceConfigCreateRequest,
+    ReminderSourceConfigResponse,
+    ReminderSourceConfigUpdateRequest,
     ReminderSummaryResponse,
     _to_naive_local,
 )
@@ -70,8 +73,11 @@ from sail_server.model.reminder import (
     list_history_impl,
     list_pending_impl,
     list_rules_impl,
+    list_source_configs_impl,
     register_device_impl,
     update_rule_impl,
+    update_source_config_impl,
+    upsert_source_config_impl,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,3 +298,56 @@ class ReminderController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return update_rule_impl(db, rule_id, data)
+
+    # ------------------------------------------------------------------
+    # 提醒来源配置
+    # ------------------------------------------------------------------
+
+    @get("/sources")
+    async def get_sources(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> List[ReminderSourceConfigResponse]:
+        """列出所有提醒来源配置"""
+        _check_auth(request)
+        db = next(router_dependency)
+        return list_source_configs_impl(db)
+
+    @get("/source-configs")
+    async def get_source_configs(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> List[ReminderSourceConfigResponse]:
+        """列出所有提醒来源配置（别名）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        return list_source_configs_impl(db)
+
+    @post("/source-configs")
+    async def create_or_update_source_config(
+        self,
+        data: ReminderSourceConfigCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ReminderSourceConfigResponse:
+        """创建或更新提醒来源配置（按 source upsert）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return upsert_source_config_impl(db, data)
+
+    @put("/source-configs/{id:int}")
+    async def update_source_config(
+        self,
+        id: int,
+        data: ReminderSourceConfigUpdateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ReminderSourceConfigResponse:
+        """按 id 更新提醒来源配置"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return update_source_config_impl(db, id, data)

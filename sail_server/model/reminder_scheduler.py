@@ -135,7 +135,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
             is not None
         )
 
-    def _create(type_: str, title: str, body: str, trigger: datetime, payload: Dict[str, Any]) -> None:
+    def _create(type_: str, title: str, body: str, trigger: datetime, payload: Dict[str, Any], source: str = "rhythm") -> None:
         nonlocal created
         if _today_exists(type_):
             return
@@ -147,7 +147,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
             title=title,
             body=body,
             priority="normal",
-            source="rhythm",
+            source=source,
             state=STATE_PENDING,
             trigger_time=trigger,
             expire_after_minutes=120,
@@ -164,7 +164,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
     # 起床提醒：sleep_end
     sleep_end = str(profile.sleep_end or "07:00")
     h, m = int(sleep_end.split(":")[0]), int(sleep_end.split(":")[1])
-    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _make_time(h, m), {"sub_type": "wake_up"})
+    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _make_time(h, m), {"sub_type": "wake_up"}, source="rhythm.daily_brief")
 
     # 三餐提醒
     for label, hh, mm in [("早餐", 8, 0), ("午餐", 12, 0), ("晚餐", 18, 30)]:
@@ -174,6 +174,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
             f"记录{label}",
             _make_time(hh, mm),
             {"meal_type": label, "collection_type": "meal"},
+            source="rhythm.meal",
         )
 
     def _today_plan_reminder_exists(plan_id: int) -> bool:
@@ -253,6 +254,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
             "早起体重打卡",
             _make_time(8, 30),
             {"collection_type": "weight"},
+            source="rhythm.weight",
         )
 
     # 工作焦点
@@ -260,8 +262,9 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         "rhythm.work_focus",
         "进入工作焦点",
         "查看今日 focus 块并开始执行",
-                    _make_time(9, 30),
+        _make_time(9, 30),
         {"sub_type": "morning_focus"},
+        source="rhythm.work_focus",
     )
 
     # 运动习惯：若存在 habit 且今日无完成记录
@@ -292,6 +295,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
                 exercise_habit.title,
                 _make_time(19, 0),
                 {"collection_type": "exercise", "affair_id": exercise_habit.id},
+                source="rhythm.exercise",
             )
 
     # 睡眠提醒：sleep_start 前 30 分钟
@@ -303,6 +307,7 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
         f"{sleep_start} 睡眠窗即将开始",
         _make_time(h, m) - timedelta(minutes=30),
         {"sub_type": "sleep_prep"},
+        source="rhythm.daily_brief",
     )
 
     db.commit()

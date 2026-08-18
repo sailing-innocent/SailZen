@@ -141,3 +141,25 @@ class Device(ORMBase):
     # 预留（FCM 等），M1 不使用
     push_token = Column(String, nullable=True)
     last_seen_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+
+class ReminderSourceConfig(ORMBase):
+    """提醒来源配置（Rhythm / Agent / 业务模块可独立配置通道、优先级、免打扰覆盖）"""
+
+    __tablename__ = "reminder_source_configs"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String, unique=True, index=True, nullable=False)
+    source_type = Column(String, default="")
+    enabled = Column(Boolean, default=True)
+    # low | normal | high | urgent
+    default_priority = Column(String, default="normal")
+    allowed_channels = Column(JSONB, default=dict)
+    quiet_hours_override = Column(JSONB, nullable=True)
+    description = Column(String, default="")
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+    updated_at = Column(
+        TIMESTAMP,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )

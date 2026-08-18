@@ -6,11 +6,13 @@ import com.sailzen.app.core.network.dto.DeviceRegisterRequest
 import com.sailzen.app.core.network.dto.FeedbackRequest
 import com.sailzen.app.core.network.dto.OkResponse
 import com.sailzen.app.core.network.dto.ReminderDto
+import com.sailzen.app.core.network.dto.SourceConfigDto
 import com.sailzen.app.core.network.dto.SummaryDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -45,4 +47,16 @@ interface ReminderApi {
 
     @DELETE("api/v1/reminder/{id}")
     suspend fun cancel(@Path("id") id: Int): ReminderDto
+
+    @GET("api/v1/reminder/source-configs")
+    suspend fun sourceConfigs(): List<SourceConfigDto>
+
+    @POST("api/v1/reminder/source-configs")
+    suspend fun upsertSourceConfig(@Body body: SourceConfigDto): SourceConfigDto
+
+    @PUT("api/v1/reminder/source-configs/{id}")
+    suspend fun updateSourceConfig(
+        @Path("id") id: Int,
+        @Body body: SourceConfigDto,
+    ): SourceConfigDto
 }

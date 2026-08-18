@@ -81,3 +81,21 @@ interface RhythmActionDao {
     @Query("SELECT COUNT(*) FROM pending_rhythm_action")
     fun observeCount(): Flow<Int>
 }
+
+@Dao
+interface SourceConfigDao {
+    @Upsert
+    suspend fun upsert(item: CachedSourceConfig)
+
+    @Upsert
+    suspend fun upsertAll(items: List<CachedSourceConfig>)
+
+    @Query("SELECT * FROM source_config_cache WHERE source = :source")
+    suspend fun bySource(source: String): CachedSourceConfig?
+
+    @Query("SELECT * FROM source_config_cache ORDER BY source ASC")
+    fun observeAll(): Flow<List<CachedSourceConfig>>
+
+    @Query("DELETE FROM source_config_cache")
+    suspend fun clear()
+}

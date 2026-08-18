@@ -85,3 +85,17 @@ data class WsMessage(
     val data: JsonElement? = null,
     val timestamp: String? = null,
 )
+
+@Serializable
+data class SourceConfigDto(
+    val id: Int? = null,
+    val source: String,
+    @SerialName("source_type") val sourceType: String = "",
+    val enabled: Boolean = true,
+    @SerialName("default_priority") val defaultPriority: String = "normal",
+    @SerialName("allowed_channels") val allowedChannels: Map<String, Boolean> = emptyMap(),
+    @SerialName("quiet_hours_override") val quietHoursOverride: Map<String, JsonElement>? = null,
+    val description: String = "",
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null,
+)

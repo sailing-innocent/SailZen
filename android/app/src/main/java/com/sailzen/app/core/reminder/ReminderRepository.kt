@@ -6,6 +6,7 @@ import android.util.Log
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.data.db.AppDatabase
 import com.sailzen.app.core.data.db.CachedReminder
+import com.sailzen.app.core.data.db.CachedSourceConfig
 import com.sailzen.app.core.data.db.PendingFeedback
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.ReminderApi
@@ -13,11 +14,14 @@ import com.sailzen.app.core.network.dto.AckRequest
 import com.sailzen.app.core.network.dto.DeviceRegisterRequest
 import com.sailzen.app.core.network.dto.FeedbackRequest
 import com.sailzen.app.core.network.dto.ReminderDto
+import com.sailzen.app.core.network.dto.SourceConfigDto
 import com.sailzen.app.core.network.dto.SummaryDto
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * 提醒核心协调者：
@@ -81,10 +85,22 @@ class ReminderRepository private constructor(private val context: Context) {
             payloadJson = payload.toString(),
             updatedAt = updatedAt ?: nowIso(),
         )
+
+        fun SourceConfigDto.toCached(): CachedSourceConfig = CachedSourceConfig(
+            source = source,
+            sourceType = sourceType,
+            enabled = enabled,
+            defaultPriority = defaultPriority,
+            allowedChannelsJson = Json.Default.encodeToString(allowedChannels),
+            quietHoursOverrideJson = quietHoursOverride?.let { Json.Default.encodeToString(it) },
+            description = description,
+            updatedAt = updatedAt ?: nowIso(),
+        )
     }
 
     private val settings = SettingsManager.get(context)
     private val db = AppDatabase.get(context)
+    private val json = Json { ignoreUnknownKeys = true }
 
     // ------------------------------------------------------------------
     // 订阅（UI）
@@ -93,6 +109,62 @@ class ReminderRepository private constructor(private val context: Context) {
     fun observeActive(): Flow<List<CachedReminder>> = db.reminderDao().observeActive()
 
     fun observeQueuedFeedbackCount(): Flow<Int> = db.feedbackDao().observeCount()
+
+    fun observeSourceConfigs(): Flow<List<CachedSourceConfig>> = db.sourceConfigDao().observeAll()
+
+    suspend fun getSourceConfig(source: String): CachedSourceConfig? = db.sourceConfigDao().bySource(source)
+
+    /** 从服务端拉取全部 source-config，覆盖本地缓存，返回拉取条数 */
+    suspend fun syncSourceConfigs(): Int {
+        val api = apiOrNull() ?: return 0
+        return try {
+            val list = api.sourceConfigs()
+            db.sourceConfigDao().upsertAll(list.map { it.toCached() })
+            list.size
+        } catch (e: Exception) {
+            Log.w(TAG, "syncSourceConfigs failed: ${e.message}")
+            0
+        }
+    }
+
+    suspend fun upsertSourceConfig(dto: SourceConfigDto): SourceConfigDto? {
+        val api = apiOrNull() ?: return null
+        return try {
+            val result = api.upsertSourceConfig(dto)
+            db.sourceConfigDao().upsert(result.toCached())
+            result
+        } catch (e: Exception) {
+            Log.w(TAG, "upsertSourceConfig failed: ${e.message}")
+            null
+        }
+    }
+
+    /** 服务端没有配置时的兜底规则 */
+    suspend fun defaultSourceConfig(source: String): CachedSourceConfig {
+        val isRhythm = source.startsWith("rhythm.")
+        val allowed = if (isRhythm) {
+            mapOf("notification" to true, "popup" to false, "alarm" to false, "aod" to true)
+        } else {
+            mapOf("notification" to true, "popup" to true, "alarm" to true, "aod" to true)
+        }
+        return CachedSourceConfig(
+            source = source,
+            sourceType = if (isRhythm) "rhythm" else "",
+            enabled = true,
+            defaultPriority = "normal",
+            allowedChannelsJson = json.encodeToString(allowed),
+            quietHoursOverrideJson = null,
+            description = "",
+            updatedAt = nowIso(),
+        )
+    }
+
+    /** 同步提醒 + 来源配置，返回 pending 条数 */
+    suspend fun syncAll(): Int {
+        val n = syncPending()
+        syncSourceConfigs()
+        return n
+    }
 
     // ------------------------------------------------------------------
     // 基础
@@ -142,7 +214,8 @@ class ReminderRepository private constructor(private val context: Context) {
         db.reminderDao().upsert(dto.toCached())
         // 已投递：取消该提醒的本地兜底闹钟
         AlarmScheduler.cancel(context, dto.id)
-        notifyFor(dto.id, dto.title, dto.body, dto.priority)
+        val sourceConfig = getSourceConfig(dto.source) ?: defaultSourceConfig(dto.source)
+        notifyFor(dto.id, dto.title, dto.body, dto.priority, dto.source, sourceConfig)
         // 投递确认（失败不阻塞：服务端由轮询 /pending 兜回）
         try {
             apiOrNull()?.ack(
@@ -157,9 +230,25 @@ class ReminderRepository private constructor(private val context: Context) {
         }
     }
 
-    private suspend fun notifyFor(reminderId: Int, title: String, body: String, priority: String) {
+    private suspend fun notifyFor(
+        reminderId: Int,
+        title: String,
+        body: String,
+        priority: String,
+        source: String,
+        sourceConfig: CachedSourceConfig? = null,
+    ) {
         val quiet = priority != "urgent" && settings.isQuietNow()
-        NotificationHelper.notifyReminder(context, reminderId, title, body, priority, quiet)
+        NotificationHelper.notifyReminder(
+            context,
+            reminderId,
+            title,
+            body,
+            priority,
+            quiet,
+            source,
+            sourceConfig,
+        )
     }
 
     // ------------------------------------------------------------------

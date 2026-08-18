@@ -37,6 +37,8 @@ from sail_server.application.dto.reminder import (
     FeedbackRequest,
     ReminderCreateRequest,
     ReminderRuleCreateRequest,
+    ReminderSourceConfigCreateRequest,
+    ReminderSourceConfigUpdateRequest,
 )
 from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm.reminder import (
@@ -44,19 +46,26 @@ from sail_server.infrastructure.orm.reminder import (
     Reminder,
     ReminderEvent,
     ReminderRule,
+    ReminderSourceConfig,
 )
 from sail_server.model import reminder as reminder_model
 from sail_server.model.reminder import (
+    ReminderBadRequestError,
     ReminderStateConflictError,
     ack_reminder_impl,
     cancel_reminder_impl,
     create_reminder_impl,
     create_rule_impl,
+    create_source_config_impl,
     feedback_reminder_impl,
+    get_source_config_impl,
     get_summary_today_impl,
     list_events_impl,
     list_pending_impl,
+    list_source_configs_impl,
     register_device_impl,
+    update_source_config_impl,
+    upsert_source_config_impl,
 )
 from sail_server.model import reminder_scheduler
 from sail_server.model.reminder_scheduler import scan_once
@@ -95,6 +104,12 @@ def reminder_engine():
 def db(reminder_engine) -> Generator[Session, None, None]:
     SessionLocal = sessionmaker(bind=reminder_engine)
     session = SessionLocal()
+    # 默认屏蔽 rhythm 自动生成，避免 scan_once 相关测试因真实时间不同而产生数量抖动
+    from sail_server.model.rhythm import get_or_create_profile
+
+    profile = get_or_create_profile(session)
+    profile.spare_time_windows = {"start": "00:00", "end": "23:59"}
+    session.commit()
     try:
         yield session
     finally:
@@ -499,3 +514,107 @@ def test_push_manager_broadcast():
         assert mgr.online_count() == 0
 
     asyncio.run(run())
+
+
+# ============================================================================
+# 17. 提醒来源配置 CRUD
+# ============================================================================
+
+
+def test_create_source_config(db):
+    cfg = create_source_config_impl(
+        db,
+        ReminderSourceConfigCreateRequest(
+            source="rhythm.daily_brief",
+            source_type="rhythm",
+            default_priority="high",
+            allowed_channels={"notification": True, "popup": False},
+            quiet_hours_override={"enabled": False},
+            description="早安简报",
+        ),
+    )
+    assert cfg.id is not None
+    assert cfg.source == "rhythm.daily_brief"
+    assert cfg.source_type == "rhythm"
+    assert cfg.enabled is True
+    assert cfg.default_priority == "high"
+    assert cfg.allowed_channels == {"notification": True, "popup": False}
+    assert cfg.quiet_hours_override == {"enabled": False}
+    assert cfg.description == "早安简报"
+
+
+def test_create_source_config_duplicate_source(db):
+    create_source_config_impl(
+        db, ReminderSourceConfigCreateRequest(source="rhythm.daily_brief")
+    )
+    with pytest.raises(ReminderBadRequestError):
+        create_source_config_impl(
+            db, ReminderSourceConfigCreateRequest(source="rhythm.daily_brief")
+        )
+
+
+def test_update_source_config(db):
+    cfg = create_source_config_impl(
+        db, ReminderSourceConfigCreateRequest(source="rhythm.meal")
+    )
+    updated = update_source_config_impl(
+        db,
+        cfg.id,
+        ReminderSourceConfigUpdateRequest(
+            default_priority="urgent", allowed_channels={"notification": True}
+        ),
+    )
+    assert updated.default_priority == "urgent"
+    assert updated.allowed_channels == {"notification": True}
+
+
+def test_list_source_configs_returns_inserted_rows(db):
+    create_source_config_impl(
+        db, ReminderSourceConfigCreateRequest(source="rhythm.daily_brief")
+    )
+    create_source_config_impl(
+        db, ReminderSourceConfigCreateRequest(source="rhythm.meal")
+    )
+    rows = list_source_configs_impl(db)
+    assert len(rows) == 2
+    assert {r.source for r in rows} == {"rhythm.daily_brief", "rhythm.meal"}
+
+
+def test_invalid_priority_on_create_raises_error(db):
+    with pytest.raises(ReminderBadRequestError):
+        create_source_config_impl(
+            db,
+            ReminderSourceConfigCreateRequest(
+                source="rhythm.test", default_priority="invalid"
+            ),
+        )
+
+
+# ============================================================================
+# 18. rhythm 提醒来源细分
+# ============================================================================
+
+
+def test_scan_once_uses_rhythm_reminders_with_expected_source(db, db_factory):
+    from datetime import time as _time
+
+    from sail_server.model.rhythm import get_or_create_profile
+
+    profile = get_or_create_profile(db)
+    profile.sleep_end = "07:00"
+    profile.sleep_start = "23:30"
+    profile.spare_time_windows = {}
+    db.commit()
+
+    now = datetime.combine(datetime.now().date(), _time(12, 0))
+    stats = scan_once(db_factory, now=now)
+    assert stats["rhythm_brief_created"] > 0
+
+    rhythm_sources = {
+        r.source for r in db.query(Reminder).filter(Reminder.type.like("rhythm.%")).all()
+    }
+    assert "rhythm.daily_brief" in rhythm_sources or "rhythm.meal" in rhythm_sources
+    # 确保 wake_up 简报使用细分来源
+    daily_brief = db.query(Reminder).filter(Reminder.type == "rhythm.daily_brief").first()
+    if daily_brief is not None:
+        assert daily_brief.source == "rhythm.daily_brief"

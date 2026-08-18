@@ -15,6 +15,8 @@ import androidx.core.content.ContextCompat
 import com.sailzen.app.MainActivity
 import com.sailzen.app.R
 import com.sailzen.app.core.health.HealthAlarmActionReceiver
+import com.sailzen.app.core.data.SettingsManager
+import com.sailzen.app.core.data.db.CachedSourceConfig
 
 /**
  * 通知构建器（设计文档 §6.2 / 附录 C）。
@@ -90,6 +92,8 @@ object NotificationHelper {
     /**
      * 弹出提醒通知。
      * @param isQuiet 当前处于安静时段（仅影响非 urgent 的渠道选择）
+     * @param source 提醒来源，用于匹配来源配置
+     * @param sourceConfig 服务端来源配置缓存（为空时使用默认规则）
      */
     fun notifyReminder(
         context: Context,
@@ -98,6 +102,8 @@ object NotificationHelper {
         body: String,
         priority: String,
         isQuiet: Boolean,
+        source: String = "",
+        sourceConfig: CachedSourceConfig? = null,
     ) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -105,13 +111,47 @@ object NotificationHelper {
         ) {
             return
         }
-        val channel = when {
-            priority == "urgent" -> CHANNEL_URGENT
-            isQuiet -> CHANNEL_SILENT
-            else -> CHANNEL_REMINDER
+        val settings = SettingsManager.get(context)
+        val decision = NotificationDecisionEngine(settings).decide(sourceConfig, priority, isQuiet, source)
+        ensureChannel(context, decision.channelId, decision.importance)
+        if (!decision.shouldNotify && !decision.useAlarm) {
+            return
         }
-        val notification = buildReminderNotification(context, channel, reminderId, title, body)
+        val notification = buildReminderNotification(
+            context,
+            decision.channelId,
+            reminderId,
+            title,
+            body,
+            decision.useFullScreenIntent,
+        )
         NotificationManagerCompat.from(context).notify(reminderId, notification)
+    }
+
+    private fun ensureChannel(context: Context, channelId: String, importance: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(channelId) != null) return
+        val (name, description) = when (channelId) {
+            CHANNEL_URGENT -> context.getString(R.string.channel_urgent_name) to context.getString(
+                R.string.channel_urgent_desc
+            )
+            CHANNEL_REMINDER -> context.getString(R.string.channel_reminder_name) to context.getString(
+                R.string.channel_reminder_desc
+            )
+            CHANNEL_SILENT -> context.getString(R.string.channel_silent_name) to context.getString(
+                R.string.channel_silent_desc
+            )
+            CHANNEL_SERVICE -> context.getString(R.string.channel_service_name) to context.getString(
+                R.string.channel_service_desc
+            )
+            else -> channelId to ""
+        }
+        manager.createNotificationChannel(
+            NotificationChannel(channelId, name, importance).apply {
+                this.description = description
+            }
+        )
     }
 
     private fun buildReminderNotification(
@@ -120,6 +160,7 @@ object NotificationHelper {
         reminderId: Int,
         title: String,
         body: String,
+        useFullScreen: Boolean = false,
     ): Notification {
         // 点击通知本体 = 处理（打开 App 并定位该提醒）
         val contentIntent = PendingIntent.getActivity(

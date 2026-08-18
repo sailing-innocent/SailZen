@@ -55,6 +55,9 @@ from sail_server.application.dto.reminder import (
     ReminderRuleCreateRequest,
     ReminderRuleResponse,
     ReminderRuleUpdateRequest,
+    ReminderSourceConfigCreateRequest,
+    ReminderSourceConfigResponse,
+    ReminderSourceConfigUpdateRequest,
     ReminderSummaryResponse,
 )
 from sail_server.infrastructure.orm.reminder import (
@@ -62,6 +65,7 @@ from sail_server.infrastructure.orm.reminder import (
     Reminder,
     ReminderEvent,
     ReminderRule,
+    ReminderSourceConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -237,6 +241,26 @@ def read_from_rule(rule: ReminderRule) -> ReminderRuleResponse:
         created_at=rule.created_at,
         updated_at=rule.updated_at,
     )
+
+
+def read_from_source_config(cfg: ReminderSourceConfig) -> ReminderSourceConfigResponse:
+    return ReminderSourceConfigResponse(
+        id=cfg.id,
+        source=cfg.source,
+        source_type=cfg.source_type or "",
+        enabled=bool(cfg.enabled),
+        default_priority=cfg.default_priority or "normal",
+        allowed_channels=cfg.allowed_channels or {},
+        quiet_hours_override=cfg.quiet_hours_override,
+        description=cfg.description or "",
+        created_at=cfg.created_at,
+        updated_at=cfg.updated_at,
+    )
+
+
+def _validate_priority(priority: Optional[str]) -> None:
+    if priority is not None and priority not in PRIORITY_ORDER:
+        raise ReminderBadRequestError(f"invalid priority: {priority!r}")
 
 
 def _parse_hhmm(value: Any) -> Optional[tuple]:
@@ -637,3 +661,91 @@ def register_device_impl(db: Session, req: DeviceRegisterRequest) -> DeviceRespo
         push_token=device.push_token,
         last_seen_at=device.last_seen_at,
     )
+
+
+# ============================================================================
+# Reminder Source Config
+# ============================================================================
+
+
+def list_source_configs_impl(db: Session) -> List[ReminderSourceConfigResponse]:
+    """列出所有提醒来源配置"""
+    rows = db.query(ReminderSourceConfig).order_by(ReminderSourceConfig.id).all()
+    return [read_from_source_config(r) for r in rows]
+
+
+def get_source_config_impl(
+    db: Session, source: str
+) -> Optional[ReminderSourceConfigResponse]:
+    """按 source 查找单个配置"""
+    cfg = db.query(ReminderSourceConfig).filter(ReminderSourceConfig.source == source).first()
+    if cfg is None:
+        return None
+    return read_from_source_config(cfg)
+
+
+def create_source_config_impl(
+    db: Session, req: ReminderSourceConfigCreateRequest
+) -> ReminderSourceConfigResponse:
+    """创建新的提醒来源配置"""
+    _validate_priority(req.default_priority)
+    existing = (
+        db.query(ReminderSourceConfig)
+        .filter(ReminderSourceConfig.source == req.source)
+        .first()
+    )
+    if existing is not None:
+        raise ReminderBadRequestError(f"source config {req.source!r} already exists")
+    cfg = ReminderSourceConfig(
+        source=req.source,
+        source_type=req.source_type,
+        enabled=req.enabled,
+        default_priority=req.default_priority,
+        allowed_channels=req.allowed_channels or {},
+        quiet_hours_override=req.quiet_hours_override,
+        description=req.description,
+    )
+    db.add(cfg)
+    db.commit()
+    db.refresh(cfg)
+    return read_from_source_config(cfg)
+
+
+def update_source_config_impl(
+    db: Session, id: int, req: ReminderSourceConfigUpdateRequest
+) -> ReminderSourceConfigResponse:
+    """按 id 更新提醒来源配置"""
+    cfg = db.query(ReminderSourceConfig).filter(ReminderSourceConfig.id == id).first()
+    if cfg is None:
+        raise ReminderNotFoundError(f"reminder source config {id} not found")
+    data = req.model_dump(exclude_unset=True)
+    _validate_priority(data.get("default_priority"))
+    for key, value in data.items():
+        setattr(cfg, key, value)
+    db.commit()
+    db.refresh(cfg)
+    return read_from_source_config(cfg)
+
+
+def upsert_source_config_impl(
+    db: Session, req: ReminderSourceConfigCreateRequest
+) -> ReminderSourceConfigResponse:
+    """按 source 创建或更新提醒来源配置"""
+    _validate_priority(req.default_priority)
+    cfg = (
+        db.query(ReminderSourceConfig)
+        .filter(ReminderSourceConfig.source == req.source)
+        .first()
+    )
+    if cfg is None:
+        cfg = ReminderSourceConfig(source=req.source)
+        db.add(cfg)
+    cfg.source_type = req.source_type
+    cfg.enabled = req.enabled
+    cfg.default_priority = req.default_priority
+    cfg.allowed_channels = req.allowed_channels or {}
+    cfg.quiet_hours_override = req.quiet_hours_override
+    cfg.description = req.description
+    db.commit()
+    db.refresh(cfg)
+    return read_from_source_config(cfg)

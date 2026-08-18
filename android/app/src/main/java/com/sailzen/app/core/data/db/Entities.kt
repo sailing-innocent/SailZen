@@ -45,7 +45,22 @@ data class PendingRhythmAction(
     @PrimaryKey(autoGenerate = true) val autoId: Long = 0,
     val actionType: String, // block_done | block_skip | block_move | checkin | capture | defer
     val targetId: Int = 0, // block_id / affair_id（capture 为 0）
-    val payloadJson: String = "{}", // 请求体 JSON
+    val payloadJson: String,
     val clientEventTs: String,
     val retryCount: Int = 0,
+)
+
+/**
+ * 提醒来源配置本地缓存（服务端 source_config 表）。
+ */
+@Entity(tableName = "source_config_cache")
+data class CachedSourceConfig(
+    @PrimaryKey val source: String,
+    val sourceType: String,
+    val enabled: Boolean,
+    val defaultPriority: String,
+    val allowedChannelsJson: String,
+    val quietHoursOverrideJson: String?,
+    val description: String,
+    val updatedAt: String,
 )

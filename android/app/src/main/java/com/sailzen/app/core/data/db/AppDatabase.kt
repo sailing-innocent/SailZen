@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [CachedReminder::class, PendingFeedback::class, PendingRhythmAction::class],
-    version = 2,
+    entities = [CachedReminder::class, PendingFeedback::class, PendingRhythmAction::class, CachedSourceConfig::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -17,6 +17,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun feedbackDao(): FeedbackDao
 
     abstract fun rhythmActionDao(): RhythmActionDao
+
+    abstract fun sourceConfigDao(): SourceConfigDao
 
     companion object {
         @Volatile

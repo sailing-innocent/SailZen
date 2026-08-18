@@ -184,6 +184,63 @@ class ReminderRuleResponse(BaseModel):
 
 
 # ============================================================================
+# Reminder Source Config DTOs
+# ============================================================================
+
+
+class ReminderSourceConfigCreateRequest(BaseModel):
+    """创建提醒来源配置请求"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str = Field(description="来源标识，如 rhythm.daily_brief")
+    source_type: str = Field(default="", description="来源分组类型")
+    enabled: bool = Field(default=True, description="是否启用")
+    default_priority: str = Field(
+        default="normal", description="默认优先级 low|normal|high|urgent"
+    )
+    allowed_channels: Dict[str, bool] = Field(
+        default_factory=dict,
+        description="允许通道，如 notification/popup/alarm/aod",
+    )
+    quiet_hours_override: Optional[Dict[str, Any]] = Field(
+        default=None, description="安静时段覆盖"
+    )
+    description: str = Field(default="", description="描述")
+
+
+class ReminderSourceConfigUpdateRequest(BaseModel):
+    """更新提醒来源配置请求（仅更新出现的字段）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    source: Optional[str] = None
+    source_type: Optional[str] = None
+    enabled: Optional[bool] = None
+    default_priority: Optional[str] = None
+    allowed_channels: Optional[Dict[str, bool]] = None
+    quiet_hours_override: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
+
+
+class ReminderSourceConfigResponse(BaseModel):
+    """提醒来源配置响应"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: Optional[int] = None
+    source: str = Field(description="来源标识")
+    source_type: str = ""
+    enabled: bool = True
+    default_priority: str = "normal"
+    allowed_channels: Dict[str, bool] = Field(default_factory=dict)
+    quiet_hours_override: Optional[Dict[str, Any]] = None
+    description: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+# ============================================================================
 # Device DTOs
 # ============================================================================
 
