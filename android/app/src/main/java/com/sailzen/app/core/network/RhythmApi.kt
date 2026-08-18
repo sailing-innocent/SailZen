@@ -4,6 +4,7 @@ import com.sailzen.app.core.network.dto.AffairCreateRequest
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.AffairListResponse
 import com.sailzen.app.core.network.dto.AffairStateRequest
+import com.sailzen.app.core.network.dto.AffairUpdateRequest
 import com.sailzen.app.core.network.dto.BlockMoveRequest
 import com.sailzen.app.core.network.dto.BlockStatusRequest
 import com.sailzen.app.core.network.dto.CheckinLogDto
@@ -11,6 +12,7 @@ import com.sailzen.app.core.network.dto.CheckinRequest
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.ConfirmHintRequest
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.DeleteResponse
 import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.PlanDayDto
@@ -20,8 +22,10 @@ import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.ReviewTimespanDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
+import com.sailzen.app.core.network.dto.VentureMilestoneRequest
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -42,12 +46,22 @@ interface RhythmApi {
     @GET("api/v1/rhythm/affair/")
     suspend fun listAffairs(
         @Query("state") state: String? = null,
+        @Query("domain") domain: String? = null,
         @Query("kind") kinds: List<String>? = null,
+        @Query("parent_id") parentId: Int? = null,
+        @Query("urgency_ddl_before") urgencyDdlBefore: String? = null,
+        @Query("urgency_ddl_after") urgencyDdlAfter: String? = null,
         @Query("limit") limit: Int = -1,
     ): AffairListResponse
 
     @GET("api/v1/rhythm/affair/{id}")
     suspend fun getAffair(@Path("id") id: Int): AffairDto
+
+    @PUT("api/v1/rhythm/affair/{id}")
+    suspend fun updateAffair(@Path("id") id: Int, @Body body: AffairUpdateRequest): AffairDto
+
+    @DELETE("api/v1/rhythm/affair/{id}")
+    suspend fun deleteAffair(@Path("id") id: Int): DeleteResponse
 
     @POST("api/v1/rhythm/affair/{id}/state")
     suspend fun transit(@Path("id") id: Int, @Body body: AffairStateRequest): AffairDto
@@ -81,6 +95,12 @@ interface RhythmApi {
 
     @GET("api/v1/rhythm/venture/{id}/progress")
     suspend fun ventureProgress(@Path("id") id: Int): VentureProgressDto
+
+    @POST("api/v1/rhythm/venture/{id}/milestone")
+    suspend fun addMilestone(
+        @Path("id") id: Int,
+        @Body body: VentureMilestoneRequest,
+    ): AffairDto
 
     @POST("api/v1/rhythm/venture/milestone/{id}/done")
     suspend fun milestoneDone(@Path("id") id: Int): AffairDto

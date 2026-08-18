@@ -50,6 +50,41 @@ data class AffairCreateRequest(
     val kind: String = "generic",
     val domain: String? = null,
     val description: String = "",
+    @SerialName("kind_meta") val kindMeta: JsonObject = JsonObject(emptyMap()),
+    val importance: Int = 3,
+    @SerialName("urgency_ddl") val urgencyDdl: String? = null,
+    @SerialName("energy_cost") val energyCost: Int = 10,
+    @SerialName("est_minutes") val estMinutes: Int = 30,
+    @SerialName("parent_id") val parentId: Int? = null,
+)
+
+@Serializable
+data class AffairUpdateRequest(
+    val title: String? = null,
+    val description: String? = null,
+    val domain: String? = null,
+    val kind: String? = null,
+    @SerialName("kind_meta") val kindMeta: JsonObject? = null,
+    val importance: Int? = null,
+    @SerialName("urgency_ddl") val urgencyDdl: String? = null,
+    @SerialName("energy_cost") val energyCost: Int? = null,
+    @SerialName("est_minutes") val estMinutes: Int? = null,
+    @SerialName("parent_id") val parentId: Int? = null,
+)
+
+@Serializable
+data class VentureMilestoneRequest(
+    val title: String,
+    @SerialName("urgency_ddl") val urgencyDdl: String? = null,
+    @SerialName("est_minutes") val estMinutes: Int? = null,
+    val description: String = "",
+)
+
+@Serializable
+data class DeleteResponse(
+    val id: Int,
+    val status: String,
+    val message: String? = null,
 )
 
 @Serializable
@@ -293,6 +328,64 @@ val CAPTURE_KINDS = listOf(
     "generic", "habit", "precept", "task_oneoff", "fixed_plan",
     "task_maintenance", "venture", "base_rhythm",
 )
+
+/** 事务状态常量（与服务端 AffairState 对齐） */
+object AffairStates {
+    const val INBOX = "INBOX"
+    const val PLANNED = "PLANNED"
+    const val SCHEDULED = "SCHEDULED"
+    const val DOING = "DOING"
+    const val DONE = "DONE"
+    const val DEFERRED = "DEFERRED"
+    const val CANCELED = "CANCELED"
+    const val ACTIVE = "ACTIVE"
+    const val PAUSED = "PAUSED"
+    const val ARCHIVED = "ARCHIVED"
+
+    val TERMINAL = setOf(DONE, CANCELED, ARCHIVED, "COMPLETED")
+}
+
+/** 状态转移动作（与服务端 AffairAction 对齐） */
+object AffairActions {
+    const val CONFIRM = "confirm"
+    const val START = "start"
+    const val FINISH = "finish"
+    const val CANCEL = "cancel"
+    const val DEFER = "defer"
+    const val REPLAN = "replan"
+    const val PAUSE = "pause"
+    const val RESUME = "resume"
+    const val ARCHIVE = "archive"
+    const val GRADUATE = "graduate"
+}
+
+/** 长期流 kind（状态走 ACTIVE/PAUSED/ARCHIVED） */
+val LONGTERM_KINDS = setOf(
+    "base_rhythm", "precept", "habit", "task_maintenance", "venture", "async_callback",
+)
+
+/** state → 中文标签 */
+fun stateLabel(state: String): String = when (state) {
+    "INBOX" -> "待分拣"
+    "PLANNED" -> "已规划"
+    "SCHEDULED" -> "已排程"
+    "DOING" -> "进行中"
+    "DONE" -> "已完成"
+    "DEFERRED" -> "已推迟"
+    "CANCELED" -> "已取消"
+    "ACTIVE" -> "进行中"
+    "PAUSED" -> "已暂停"
+    "ARCHIVED" -> "已归档"
+    else -> state
+}
+
+/** domain → 中文标签 */
+fun domainLabel(domain: String?): String = when (domain) {
+    "life" -> "生活"
+    "work" -> "工作"
+    "career" -> "事业"
+    else -> "未分域"
+}
 
 /** kind → 中文标签（UI 展示） */
 fun kindLabel(kind: String): String = when (kind) {

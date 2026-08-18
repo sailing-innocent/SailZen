@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -44,7 +45,9 @@ fun HealthCheckinScreen(
     viewModel: HealthCheckinViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    initialType?.let { viewModel.selectType(it) }
+    LaunchedEffect(initialType) {
+        initialType?.let { viewModel.selectType(it) }
+    }
 
     Scaffold(
         topBar = {

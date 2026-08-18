@@ -9,7 +9,6 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.sailzen.app.core.health.HealthRepository
-import com.sailzen.app.core.project.ProjectRepository
 import com.sailzen.app.core.reminder.ReminderRepository
 import com.sailzen.app.core.rhythm.RhythmRepository
 import java.util.concurrent.TimeUnit
@@ -53,8 +52,8 @@ class SyncWorker(
                 RhythmRepository.get(applicationContext).flushPending()
                 // 健康数据周期同步：刷新首页概览缓存
                 HealthRepository.get(applicationContext).loadDashboard()
-                // 项目任务逾期/临近提醒同步
-                ProjectRepository.get(applicationContext).syncMissionReminders()
+                // 事务逾期/临近提醒同步
+                RhythmRepository.get(applicationContext).syncAffairReminders()
                 Result.success()
             }
         } catch (e: Exception) {

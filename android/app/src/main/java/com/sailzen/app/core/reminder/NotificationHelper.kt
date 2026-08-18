@@ -30,10 +30,10 @@ object NotificationHelper {
     const val CHANNEL_SERVICE = "service"
 
     const val CHANNEL_HEALTH = "health"
-    const val CHANNEL_MISSION = "mission"
+    const val CHANNEL_AFFAIR = "affair"
 
     const val SERVICE_NOTIFICATION_ID = 1
-    const val MISSION_NOTIFICATION_ID_OFFSET = 10_000
+    const val AFFAIR_NOTIFICATION_ID_OFFSET = 10_000
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -69,11 +69,11 @@ object NotificationHelper {
                     description = context.getString(R.string.channel_health_desc)
                 },
                 NotificationChannel(
-                    CHANNEL_MISSION,
-                    context.getString(R.string.channel_mission_name),
+                    CHANNEL_AFFAIR,
+                    context.getString(R.string.channel_affair_name),
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ).apply {
-                    description = context.getString(R.string.channel_mission_desc)
+                    description = context.getString(R.string.channel_affair_desc)
                 },
                 NotificationChannel(
                     CHANNEL_SERVICE,
@@ -231,12 +231,11 @@ object NotificationHelper {
     }
 
     /**
-     * Mission 逾期/临近提醒通知。
+     * 事务逾期/临近提醒通知。
      */
-    fun notifyMissionReminder(
+    fun notifyAffairReminder(
         context: Context,
-        missionId: Int,
-        projectId: Int?,
+        affairId: Int,
         title: String,
         body: String,
         isOverdue: Boolean,
@@ -247,15 +246,13 @@ object NotificationHelper {
         ) {
             return
         }
-        val notificationId = MISSION_NOTIFICATION_ID_OFFSET + missionId
-        val channel = if (isOverdue) CHANNEL_URGENT else CHANNEL_MISSION
+        val notificationId = AFFAIR_NOTIFICATION_ID_OFFSET + affairId
+        val channel = if (isOverdue) CHANNEL_URGENT else CHANNEL_AFFAIR
         val contentIntent = PendingIntent.getActivity(
             context,
             notificationId,
             Intent(context, MainActivity::class.java)
-                .putExtra(ReminderActionReceiver.EXTRA_MISSION_ID, missionId)
-                .putExtra(ReminderActionReceiver.EXTRA_PROJECT_ID, projectId ?: -1)
-                .putExtra(ReminderActionReceiver.EXTRA_DESTINATION, ReminderActionReceiver.DESTINATION_MISSION_BOARD),
+                .putExtra(ReminderActionReceiver.EXTRA_AFFAIR_ID, affairId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, channel)

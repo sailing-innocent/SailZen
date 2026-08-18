@@ -1,6 +1,7 @@
 package com.sailzen.app.feature.health
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,7 @@ import com.sailzen.app.core.network.dto.DashboardMedicationItemDto
 import com.sailzen.app.core.network.dto.DashboardSleepItemDto
 import com.sailzen.app.core.network.dto.DashboardWeightItemDto
 import com.sailzen.app.core.network.dto.HealthDashboardDto
+import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.ui.components.SectionCard
 import com.sailzen.app.ui.navigation.Routes
 import java.time.LocalDate
@@ -59,7 +61,7 @@ import java.time.LocalDate
 @Composable
 fun HealthHomeScreen(
     onNavigate: (String) -> Unit,
-    onOpenHealthCheckin: () -> Unit,
+    onOpenHealthCheckin: (InfoCollectionType) -> Unit,
     viewModel: HealthHomeViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -77,35 +79,39 @@ fun HealthHomeScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { menuExpanded = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.health_quick_record)) },
-            )
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-            ) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.health_checkin_weight)) },
-                    onClick = { menuExpanded = false; onOpenHealthCheckin() },
+            // 注意：DropdownMenu 必须挂在非零尺寸的 FAB 容器内，
+            // 否则 M3 ScaffoldLayout 会过滤掉 0 尺寸 placeable 导致菜单永远不显示。
+            Box {
+                ExtendedFloatingActionButton(
+                    onClick = { menuExpanded = true },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text(stringResource(R.string.health_quick_record)) },
                 )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.health_checkin_medication)) },
-                    onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_MEDICATION) },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.health_checkin_sleep)) },
-                    onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_SLEEP) },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.health_checkin_exercise)) },
-                    onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_EXERCISE) },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.health_checkin_meal)) },
-                    onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_DIET) },
-                )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.health_checkin_weight)) },
+                        onClick = { menuExpanded = false; onOpenHealthCheckin(InfoCollectionType.weight) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.health_checkin_medication)) },
+                        onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_MEDICATION) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.health_checkin_sleep)) },
+                        onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_SLEEP) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.health_checkin_exercise)) },
+                        onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_EXERCISE) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.health_checkin_meal)) },
+                        onClick = { menuExpanded = false; onOpenHealthCheckin(InfoCollectionType.meal) },
+                    )
+                }
             }
         },
     ) { padding ->

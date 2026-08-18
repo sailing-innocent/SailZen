@@ -2,6 +2,7 @@ package com.sailzen.app.core.rhythm
 
 import android.content.Context
 import android.util.Log
+import com.sailzen.app.R
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.data.db.AppDatabase
 import com.sailzen.app.core.data.db.PendingRhythmAction
@@ -11,6 +12,9 @@ import com.sailzen.app.core.network.RhythmApi
 import com.sailzen.app.core.network.dto.AffairCreateRequest
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.AffairStateRequest
+import com.sailzen.app.core.network.dto.AffairStates
+import com.sailzen.app.core.network.dto.AffairUpdateRequest
+import com.sailzen.app.core.network.dto.VentureMilestoneRequest
 import com.sailzen.app.core.network.dto.BlockMoveRequest
 import com.sailzen.app.core.network.dto.BlockStatusRequest
 import com.sailzen.app.core.network.dto.CheckinRequest
@@ -33,8 +37,10 @@ import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.ReviewTimespanDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
+import com.sailzen.app.core.reminder.NotificationHelper
 import com.sailzen.app.core.reminder.ReminderRepository.Companion.nowIso
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -151,6 +157,58 @@ class RhythmRepository private constructor(private val context: Context) {
     }
 
     // ------------------------------------------------------------------
+    // 事务 CRUD（统一 Affair 模型：长期事业 = kind=venture，任务 = 其余 kind）
+    // ------------------------------------------------------------------
+
+    suspend fun listAffairs(
+        state: String? = null,
+        domain: String? = null,
+        kinds: List<String>? = null,
+        parentId: Int? = null,
+        limit: Int = -1,
+    ): List<AffairDto> = try {
+        apiOrNull()?.listAffairs(
+            state = state,
+            domain = domain,
+            kinds = kinds,
+            parentId = parentId,
+            limit = limit,
+        )?.affairs ?: emptyList()
+    } catch (e: Exception) {
+        Log.w(TAG, "listAffairs failed: ${e.message}")
+        emptyList()
+    }
+
+    suspend fun createAffair(body: AffairCreateRequest): AffairDto? = try {
+        apiOrNull()?.capture(body)
+    } catch (e: Exception) {
+        Log.w(TAG, "createAffair failed: ${e.message}")
+        null
+    }
+
+    suspend fun updateAffair(affairId: Int, body: AffairUpdateRequest): AffairDto? = try {
+        apiOrNull()?.updateAffair(affairId, body)
+    } catch (e: Exception) {
+        Log.w(TAG, "updateAffair failed: ${e.message}")
+        null
+    }
+
+    suspend fun deleteAffair(affairId: Int): Boolean = try {
+        apiOrNull()?.deleteAffair(affairId)?.status == "success"
+    } catch (e: Exception) {
+        Log.w(TAG, "deleteAffair failed: ${e.message}")
+        false
+    }
+
+    /** 状态转移：confirm/start/finish/cancel/pause/resume/archive/graduate/replan */
+    suspend fun transit(affairId: Int, action: String): AffairDto? = try {
+        apiOrNull()?.transit(affairId, AffairStateRequest(action = action))
+    } catch (e: Exception) {
+        Log.w(TAG, "transit $action failed: ${e.message}")
+        null
+    }
+
+    // ------------------------------------------------------------------
     // 时间线 / 计划
     // ------------------------------------------------------------------
 
@@ -260,11 +318,47 @@ class RhythmRepository private constructor(private val context: Context) {
         null
     }
 
+    suspend fun addMilestone(ventureId: Int, body: VentureMilestoneRequest): AffairDto? = try {
+        apiOrNull()?.addMilestone(ventureId, body)
+    } catch (e: Exception) {
+        Log.w(TAG, "addMilestone failed: ${e.message}")
+        null
+    }
+
     suspend fun milestoneDone(milestoneId: Int): Boolean = try {
         apiOrNull()?.milestoneDone(milestoneId) != null
     } catch (e: Exception) {
         Log.w(TAG, "milestoneDone failed: ${e.message}")
         false
+    }
+
+    /**
+     * 事务提醒同步：逾期与 24h 内到期的未完成事务转本地通知。
+     */
+    suspend fun syncAffairReminders(withinHours: Int = 24) {
+        val api = apiOrNull() ?: return
+        val now = LocalDateTime.now()
+        val affairs = try {
+            api.listAffairs(
+                urgencyDdlBefore = RhythmTime.format(now.plusHours(withinHours.toLong())),
+            ).affairs
+        } catch (e: Exception) {
+            Log.w(TAG, "syncAffairReminders failed: ${e.message}")
+            return
+        }
+        affairs.filter { it.state !in AffairStates.TERMINAL && it.urgencyDdl != null }
+            .forEach { affair ->
+                val overdue = RhythmTime.hoursUntil(affair.urgencyDdl, now) < 0
+                NotificationHelper.notifyAffairReminder(
+                    context = context,
+                    affairId = affair.id,
+                    title = context.getString(
+                        if (overdue) R.string.affair_overdue_title else R.string.affair_upcoming_title,
+                    ),
+                    body = affair.title,
+                    isOverdue = overdue,
+                )
+            }
     }
 
     suspend fun reviewWeek(span: String? = null): ReviewDto? = try {

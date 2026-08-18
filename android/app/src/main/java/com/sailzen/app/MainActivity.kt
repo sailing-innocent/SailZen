@@ -25,10 +25,8 @@ class MainActivity : ComponentActivity() {
     /** 通知跳入的 reminder_id（-1 表示无） */
     private val reminderIdState = mutableIntStateOf(-1)
 
-    /** Mission 通知跳入目标 */
-    private val missionIdState = mutableIntStateOf(-1)
-    private val projectIdState = mutableIntStateOf(-1)
-    private val destinationState = mutableStateOf<String?>(null)
+    /** 事务通知跳入目标 */
+    private val affairIdState = mutableIntStateOf(-1)
 
     /** 快速捕获磁贴跳入标记 */
     private val openCaptureState = mutableStateOf(false)
@@ -61,18 +59,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Mission 通知跳入：导航到任务看板/详情
-                val missionId by missionIdState
-                val projectId by projectIdState
-                val destination by destinationState
-                LaunchedEffect(missionId, destination) {
-                    if (missionId > 0) {
-                        when (destination) {
-                            ReminderActionReceiver.DESTINATION_MISSION_DETAIL ->
-                                navController.navigate(Routes.missionDetail(missionId))
-                            else -> navController.navigate(Routes.projectMissionBoard(projectId, missionId))
-                        }
-                        destinationState.value = null
+                // 事务通知跳入：导航到事务详情
+                val affairId by affairIdState
+                LaunchedEffect(affairId) {
+                    if (affairId > 0) {
+                        navController.navigate(Routes.affairDetail(affairId))
+                        affairIdState.intValue = -1
                     }
                 }
 
@@ -94,11 +86,9 @@ class MainActivity : ComponentActivity() {
         if (reminderId > 0) {
             reminderIdState.intValue = reminderId
         }
-        val missionId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_MISSION_ID, -1) ?: -1
-        if (missionId > 0) {
-            missionIdState.intValue = missionId
-            projectIdState.intValue = intent?.getIntExtra(ReminderActionReceiver.EXTRA_PROJECT_ID, -1) ?: -1
-            destinationState.value = intent?.getStringExtra(ReminderActionReceiver.EXTRA_DESTINATION)
+        val affairId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_AFFAIR_ID, -1) ?: -1
+        if (affairId > 0) {
+            affairIdState.intValue = affairId
         }
         if (intent?.getBooleanExtra(QuickCaptureTileService.EXTRA_OPEN_CAPTURE, false) == true) {
             openCaptureState.value = true
