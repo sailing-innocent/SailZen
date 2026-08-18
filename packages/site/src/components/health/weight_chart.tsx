@@ -148,30 +148,40 @@ const WeightChart: React.FC = () => {
   // Custom tooltip content
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
     if (!active || !payload || payload.length === 0) return null
-    
-    const data = payload[0]?.payload as ChartDataPoint
+
+    // All series share the same underlying data item, but pick one defensively
+    const data = payload.find((p) => p && p.payload)?.payload as ChartDataPoint | undefined
     if (!data) return null
-    
+
+    // Read values from payload entries so order does not hide actual weight behind plan line
+    const actualEntry = payload.find((p) => p.dataKey === 'value' || p.name === 'Actual')
+    const predictedEntry = payload.find((p) => p.dataKey === 'predicted' || p.name === 'Predicted')
+    const planEntry = payload.find((p) => p.dataKey === 'planExpected' || p.name === 'Plan Target')
+
+    const actualValue = (actualEntry?.value as number | undefined) ?? data.value
+    const predictedValue = (predictedEntry?.value as number | undefined) ?? data.predicted
+    const planValue = (planEntry?.value as number | undefined) ?? data.planExpected
+
     const date = new Date(data.timestamp).toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     })
-    
+
     const statusText: Record<string, string> = {
       above: ' (Above expected)',
       below: ' (Below expected)',
       normal: '',
     }
-    
+
     return (
       <div className="bg-white dark:bg-gray-800 border rounded-lg p-3 shadow-lg">
         <div className="text-muted-foreground text-xs mb-1">{date}</div>
-        
+
         {/* Actual Weight */}
-        {data.value !== undefined && (
+        {actualValue !== undefined && (
           <div className="font-semibold">
-            Actual: {data.value.toFixed(1)} kg
+            Actual: {actualValue.toFixed(1)} kg
             {data.status && (
               <span className={`text-xs ml-1 ${data.status === 'above' ? 'text-red-500' : data.status === 'below' ? 'text-green-500' : 'text-blue-500'}`}>
                 {statusText[data.status]}
@@ -179,7 +189,7 @@ const WeightChart: React.FC = () => {
             )}
           </div>
         )}
-        
+
         {/* Expected Value */}
         {data.expectedValue !== undefined && data.expectedValue > 0 && (
           <div className="text-xs text-gray-500 mt-1">
@@ -191,18 +201,18 @@ const WeightChart: React.FC = () => {
             )}
           </div>
         )}
-        
+
         {/* Predicted */}
-        {data.predicted !== undefined && (
+        {predictedValue !== undefined && (
           <div className="text-xs text-green-600 mt-1">
-            Predicted: {data.predicted.toFixed(1)} kg
+            Predicted: {predictedValue.toFixed(1)} kg
           </div>
         )}
-        
+
         {/* Plan Target */}
-        {data.planExpected !== undefined && (
+        {planValue !== undefined && (
           <div className="text-xs text-amber-600 mt-1">
-            Plan Target: {data.planExpected.toFixed(1)} kg
+            Plan Target: {planValue.toFixed(1)} kg
           </div>
         )}
       </div>
@@ -354,35 +364,27 @@ const WeightChart: React.FC = () => {
                   name="Predicted"
                 />
 
-                {/* Actual Weight Points with status-based colors */}
-                {chartData.map((point, index) => {
-                  if (point.value === undefined) return null
-                  const color = getStatusColor(point.status)
-                  return (
-                    <Line
-                      key={`point-${index}`}
-                      data={[point]}
-                      type="monotone"
-                      dataKey="value"
-                      stroke="transparent"
-                      dot={{
-                        r: isMobile ? 4 : 5,
-                        fill: color,
-                        stroke: color,
-                        strokeWidth: 2,
-                      }}
-                      isAnimationActive={false}
-                    />
-                  )
-                })}
-
-                {/* Connect points with a line (use blue as default line color) */}
+                {/* Actual Weight Line with status-based dots */}
                 <Line
                   type="monotone"
                   dataKey="value"
                   stroke="#2563eb"
                   strokeWidth={isMobile ? 1.5 : 2}
-                  dot={false}
+                  dot={(dotProps: any) => {
+                    const point = dotProps.payload as ChartDataPoint | undefined
+                    if (!point || point.value === undefined) return null
+                    const color = getStatusColor(point.status)
+                    return (
+                      <circle
+                        cx={dotProps.cx}
+                        cy={dotProps.cy}
+                        r={isMobile ? 4 : 5}
+                        fill={color}
+                        stroke={color}
+                        strokeWidth={2}
+                      />
+                    )
+                  }}
                   name="Actual"
                 />
 
