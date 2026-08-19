@@ -28,6 +28,7 @@ import logging
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.rhythm import (
@@ -59,13 +60,17 @@ from sail_server.application.dto.rhythm import (
     HealthCheckinRequest,
     HealthCheckinResponse,
     InfoCollectionType,
+    LONGTERM_KINDS,
     PolicyCreateRequest,
     PolicyResponse,
     PolicyUpdateRequest,
     PRECEPT_RESULTS,
+    PriorityAffairItem,
     ProjectTimelineResponse,
     ReviewTimespanResponse,
+    RhythmDayDashboardResponse,
     RhythmDayViewResponse,
+    TERMINAL_STATES,
     TimeBlockCreateRequest,
     TimeBlockResponse,
     VentureMilestoneRequest,
@@ -1826,6 +1831,93 @@ def get_rhythm_day_view_impl(db: Session, d: date) -> RhythmDayViewResponse:
         health_signals=[_health_signal_item(s) for s in health_signals],
         insights=insights,
         warnings=timeline.warnings,
+    )
+
+
+def _format_time(t: Optional[datetime]) -> str:
+    if t is None:
+        return ""
+    return t.strftime("%H:%M")
+
+
+def _build_priority_reason(a: AffairResponse, d: date) -> str:
+    reasons: List[str] = []
+    if a.urgency_ddl is not None and a.urgency_ddl.date() == d:
+        reasons.append("今日到期")
+    if (a.energy_cost or 0) > 25:
+        reasons.append("建议放在精力充沛时段")
+    if a.domain == AffairDomain.CAREER:
+        reasons.append("业余时间推进")
+    if a.state == AffairState.INBOX:
+        reasons.append("待分拣确认")
+    if not reasons:
+        reasons.append("高优先级")
+    return " / ".join(reasons)
+
+
+def _suggested_slot_for(a: AffairResponse) -> Optional[str]:
+    if a.window_start and a.window_end:
+        return f"{_format_time(a.window_start)}-{_format_time(a.window_end)}"
+    if a.window_start:
+        return _format_time(a.window_start)
+    return None
+
+
+def get_day_dashboard_impl(db: Session, d: date) -> RhythmDayDashboardResponse:
+    """统一日仪表板：时间线 + 精力 + 打卡 + 优先级事务。"""
+    day_view = get_rhythm_day_view_impl(db, d)
+
+    day = _get_or_create_day(db, d)
+    terminal_values = {s.value for s in TERMINAL_STATES}
+    longterm_values = {k.value for k in LONGTERM_KINDS}
+
+    start_dt = datetime.combine(d, time.min)
+    end_dt = datetime.combine(d + timedelta(days=1), time.max)
+
+    query = db.query(RhythmAffair).filter(
+        or_(
+            ~RhythmAffair.state.in_(terminal_values),
+            RhythmAffair.day_id == day.id,
+            (RhythmAffair.urgency_ddl >= start_dt) & (RhythmAffair.urgency_ddl <= end_dt),
+            RhythmAffair.kind.in_(longterm_values) & (RhythmAffair.state == AffairState.ACTIVE.value),
+        )
+    )
+    affairs = [affair_to_response(a) for a in query.all()]
+
+    def sort_key(a: AffairResponse) -> tuple:
+        urgency = a.urgency_ddl
+        return (
+            -(a.score or 0),
+            -(a.importance or 0),
+            (0, urgency) if urgency is not None else (1, datetime.max),
+        )
+
+    affairs.sort(key=sort_key)
+    priorities: List[PriorityAffairItem] = []
+    for a in affairs[:10]:
+        priorities.append(
+            PriorityAffairItem(
+                affair=a,
+                reason=_build_priority_reason(a, d),
+                suggested_slot=_suggested_slot_for(a),
+            )
+        )
+
+    return RhythmDayDashboardResponse(
+        date=d,
+        day_id=day_view.day_id,
+        plan_version=day_view.plan_version,
+        blocks=day_view.blocks,
+        domain_minutes=day_view.domain_minutes,
+        energy_budget=day_view.energy_budget,
+        energy_consumed=day_view.energy_consumed,
+        energy_available=day_view.energy_available,
+        buffer_total_minutes=day_view.buffer_total_minutes,
+        buffer_free_minutes=day_view.buffer_free_minutes,
+        checkins=day_view.checkins,
+        priorities=priorities,
+        insights=day_view.insights,
+        warnings=day_view.warnings,
     )
 
 

@@ -31,6 +31,26 @@ import { stringifyError } from "@saili/common-all";
   }
 
   try {
+    const { createRhythmCore } = await import(
+      "./features/pageElements/rhythmCore"
+    );
+    const { getDefaultPageElementRegistry, renderPageElementHelp } =
+      await import("@saili/unified");
+    createRhythmCore({
+      resolveBaseUrl: () =>
+        process.env.SAIL_SERVER_URL ?? "http://localhost:1974",
+      renderPrefixHelp: (ctx) =>
+        renderPageElementHelp({
+          key: "RHYTHM_PREFIX",
+          raw: ctx.raw,
+          providers: getDefaultPageElementRegistry().list(),
+        }),
+    }).register(getDefaultPageElementRegistry());
+  } catch {
+    // ignore: rhythm elements degrade to the built-in help content
+  }
+
+  try {
     // run forever
     await ServerUtils.startServerNode(ServerUtils.prepareServerArgs());
   } catch (err: any) {

@@ -69,6 +69,7 @@ from sail_server.application.dto.rhythm import (
     ReviewResponse,
     ReviewSummaryUpdateRequest,
     ReviewTimespanResponse,
+    RhythmDayDashboardResponse,
     RhythmDayViewResponse,
     TimeBlockCreateRequest,
     TimeBlockResponse,
@@ -90,6 +91,7 @@ from sail_server.model.rhythm import (
     delete_template_impl,
     get_active_template_impl,
     get_affair_impl,
+    get_day_dashboard_impl,
     get_energy_profile_impl,
     get_rhythm_day_view_impl,
     get_template_impl,
@@ -100,7 +102,6 @@ from sail_server.model.rhythm import (
     list_templates_impl,
     milestone_done_impl,
     move_block_impl,
-    project_timeline_impl,
     review_timespan_impl,
     set_block_status_impl,
     split_affair_impl,
@@ -544,6 +545,19 @@ class TimelineController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return get_rhythm_day_view_impl(db, date)
+
+    @get("/day-dashboard")
+    async def day_dashboard(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        date: date_type,
+    ) -> RhythmDayDashboardResponse:
+        """统一日仪表板：时间线 + 精力 + 打卡 + 优先级事务"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_day_dashboard_impl(db, date)
 
     @post("/block")
     async def create_block(

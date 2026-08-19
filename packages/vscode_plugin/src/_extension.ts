@@ -44,7 +44,10 @@ import { PreviewPanelFactory } from "./components/views/PreviewViewFactory";
 import { SchemaGraphViewFactory } from "./components/views/SchemaGraphViewFactory";
 import { SAIL_COMMANDS, SailContext, WORKSPACE_STATE } from "./constants";
 import { codeActionProvider } from "./features/codeActionProvider";
-import { registerWeatherPageElementProviders } from "./features/pageElements";
+import {
+  registerRhythmPageElementProviders,
+  registerWeatherPageElementProviders,
+} from "./features/pageElements";
 import { completionProvider } from "./features/completionProvider";
 import DefinitionProvider from "./features/DefinitionProvider";
 import FrontmatterFoldingRangeProvider from "./features/FrontmatterFoldingRangeProvider";
@@ -185,10 +188,11 @@ export async function _activate(
       _setupLanguageFeatures(context);
     }
 
-    // Register demo page element providers (weather for daily journal notes).
+    // Register demo page element providers (weather / rhythm for daily journal notes).
     // Render-side infrastructure: runs regardless of language features so the
     // Note Preview can resolve <sail-elem key="..."/> markers.
     registerWeatherPageElementProviders();
+    registerRhythmPageElementProviders();
 
     // Need to recompute this for tests, because the instance of SailExtension doesn't get re-created.
     // Probably also needed if the user switches from one workspace to the other.

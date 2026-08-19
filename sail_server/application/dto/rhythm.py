@@ -822,6 +822,33 @@ class RhythmDayViewResponse(BaseModel):
     note: Optional[str] = Field(default=None, description="日复盘备注")
 
 
+class PriorityAffairItem(BaseModel):
+    """日仪表板优先级事务项"""
+
+    affair: AffairResponse
+    reason: str = Field(default="", description="入选原因，如 '高优先级 / 今日到期 / 精力充沛时'")
+    suggested_slot: Optional[str] = Field(default=None, description="建议时段，如 09:00-10:30")
+
+
+class RhythmDayDashboardResponse(BaseModel):
+    """统一日仪表板：时间线 + 精力 + 打卡 + 优先级事务"""
+
+    date: date_type
+    day_id: int
+    plan_version: int = 0
+    blocks: List[TimeBlockResponse] = Field(default_factory=list)
+    domain_minutes: DomainMinutes = Field(default_factory=DomainMinutes)
+    energy_budget: int = 100
+    energy_consumed: int = 0
+    energy_available: int = 100
+    buffer_total_minutes: int = 0
+    buffer_free_minutes: int = 0
+    checkins: Optional[CheckinTodayResponse] = None
+    priorities: List[PriorityAffairItem] = Field(default_factory=list)
+    insights: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
 # ============================================================================
 # Plan DTOs
 # ============================================================================
