@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { useAffairsStore, type AffairsState } from '@lib/store/affair'
 import type { AffairData } from '@lib/data/affair'
-import { parseDdl } from '@lib/data/affair'
+import { AffairState, getAffairDeadline, parseDdl } from '@lib/data/affair'
 
 export interface MissionPostponeDialogProps {
   mission: AffairData
@@ -29,9 +29,10 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   const [isLoading, setIsLoading] = useState(false)
 
   const deferTask = useAffairsStore((state: AffairsState) => state.deferTask)
+  const confirmTask = useAffairsStore((state: AffairsState) => state.confirmTask)
 
   const getNewDeadlinePreview = (): string => {
-    const currentDdl = parseDdl(mission.urgency_ddl)
+    const currentDdl = parseDdl(getAffairDeadline(mission))
     if (!currentDdl) return '未设置'
     const newDdl = new Date(currentDdl.getTime() + days * 24 * 60 * 60 * 1000)
     return newDdl.toLocaleDateString('zh-CN', {
@@ -43,7 +44,7 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   }
 
   const getCurrentDeadline = (): string => {
-    const currentDdl = parseDdl(mission.urgency_ddl)
+    const currentDdl = parseDdl(getAffairDeadline(mission))
     if (!currentDdl) return '未设置'
     return currentDdl.toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -57,6 +58,10 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
     if (days <= 0) return
     setIsLoading(true)
     try {
+      // defer 只允许 PLANNED/SCHEDULED；INBOX 需要先 confirm 到 PLANNED
+      if (mission.state === AffairState.INBOX) {
+        await confirmTask(mission.id)
+      }
       const deferTo = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
       await deferTask(mission.id, deferTo)
       onOpenChange(false)

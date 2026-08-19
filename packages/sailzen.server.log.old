@@ -1,0 +1,122 @@
+{"level":30,"time":1787144146646,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"appModule:start","dirPath":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1787144146653,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"launch","msg":"exit","port":59084,"LOG_DST":"d:\\ws\\repos\\SailZen\\packages\\sailzen.server.log","root":"D:\\ws\\repos\\SailZen\\packages\\vscode_plugin\\dist"}
+{"level":30,"time":1787144146679,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"WorkspaceController:init","msg":"enter","uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+{"level":30,"time":1787144146681,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"createRenderedCache","msg":"Creating rendered preview cache set to hold maximum of '10' items."}
+{"level":30,"time":1787144146682,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","msg":"enter"}
+{"level":30,"time":1787144146685,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1787144146685,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+{"level":30,"time":1787144146685,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1787144146685,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1787144146687,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml","sail.schema.yml"]}
+{"level":30,"time":1787144146687,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml","sail.schema.yml"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1787144146690,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","schemaFiles":["book.schema.yml","data.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","sail.schema.yml","untyped_template.schema.yml"]}
+{"level":30,"time":1787144146690,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parse","msg":"enter","fpaths":["book.schema.yml","data.schema.yml","journal.schema.yml","person.schema.yml","recipe.schema.yml","root.schema.yml","sail.schema.yml","untyped_template.schema.yml"],"vault":{"fsPath":"vault"}}
+{"level":30,"time":1787144146690,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initSchema","schemaFiles":["root.schema.yml"]}
+{"level":30,"time":1787144146690,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parse","msg":"enter","fpaths":["root.schema.yml"],"vault":{"fsPath":"assets"}}
+{"level":30,"time":1787144146716,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","msg":"enter"}
+{"level":30,"time":1787144146724,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"}}
+POST /api/workspace/initialize 200 150.390 ms - 427097 - 361
+{"level":30,"time":1787144146726,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1787144146726,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1787144146738,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1787144146739,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1787144146739,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"numEntries":21,"numCacheUpdates":1}
+{"level":30,"time":1787144146747,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"}}
+{"level":30,"time":1787144146748,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1787144146749,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1787144146750,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1787144146750,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1787144146750,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","vault":{"fsPath":"dependencies/localhost/vault3","selfContained":true,"name":"vault3"},"numEntries":11,"numCacheUpdates":0}
+{"level":30,"time":1787144146759,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"}}
+{"level":30,"time":1787144146761,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1787144146761,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1787144146777,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1787144146778,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1787144146778,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"numEntries":80,"numCacheUpdates":2}
+{"level":30,"time":1787144146791,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"vault"}}
+{"level":30,"time":1787144146792,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1787144146793,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1787144146804,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1787144146805,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1787144146805,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","vault":{"fsPath":"vault"},"numEntries":155,"numCacheUpdates":0}
+{"level":30,"time":1787144146821,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"enter","vault":{"fsPath":"assets"}}
+{"level":30,"time":1787144146822,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseRootNote"}
+{"level":30,"time":1787144146822,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseDomainNotes"}
+{"level":30,"time":1787144146822,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:parseAllNotes"}
+{"level":30,"time":1787144146822,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"parseFiles","msg":"post:matchSchemas"}
+{"level":30,"time":1787144146822,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","vault":{"fsPath":"assets"},"numEntries":1,"numCacheUpdates":0}
+{"level":30,"time":1787144146823,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:initNotes","msg":"time to init notes: \"107\" ms"}
+{"level":30,"time":1787144146826,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"init:ext","storeError":[],"hookErrors":[]}
+{"level":30,"time":1787144146826,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"WorkspaceController:init","msg":"finish init","duration":147,"uri":"d:\\ws\\repos\\SailZen\\assets\\test-workspace"}
+POST /api/note/findMeta 200 5.480 ms - 350349 - 75
+{"level":30,"time":1787144146956,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:querySchema","msg":"exit"}
+POST /api/schema/query 200 1.098 ms - 7945 - 64
+POST /api/note/find 200 0.413 ms - 11 - 188
+GET /api/schema/get?id=journal&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 1.043 ms - 93 - -
+{"level":30,"time":1787144156128,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with undefined","note":{"fname":"journal.daily.2026.08.19","id":"6irh7prjc1oqm7l65szi9ri","children":[],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":null}}
+{"level":30,"time":1787144156130,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"fin:RunHooks"}
+{"level":30,"time":1787144156135,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"journal.daily.2026.08","id":"hh9jqx69an055m2pxehb9cx","children":["6irh7prjc1oqm7l65szi9ri"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":"oy0ddoj316hxjx2lu12vzzx"},{"fname":"journal.daily.2026","id":"oy0ddoj316hxjx2lu12vzzx","children":["3qylmju28gmstd439ftsecv","hh9jqx69an055m2pxehb9cx"],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":"kj1r6trv4t3dii7rq4o4vk2"},{"fname":"journal.daily.2026.08.19","id":"6irh7prjc1oqm7l65szi9ri","children":[],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":"hh9jqx69an055m2pxehb9cx"}]}
+POST /api/note/write 200 7.679 ms - 1713 - 437
+POST /api/note/find 200 13.144 ms - 406 - 188
+GET /api/note/get?id=6irh7prjc1oqm7l65szi9ri&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 14.678 ms - 404 - -
+POST /api/note/find 200 9.522 ms - 406 - 188
+POST /api/note/find 200 9.024 ms - 406 - 188
+POST /api/note/find 200 8.551 ms - 406 - 188
+POST /api/note/find 200 8.353 ms - 406 - 188
+POST /api/note/find 200 24.683 ms - 406 - 188
+POST /api/note/find 200 5.597 ms - 406 - 188
+POST /api/note/find 200 1.289 ms - 406 - 188
+POST /api/note/decorations 200 9.763 ms - 287 - 486
+POST /api/note/find 200 0.874 ms - 406 - 188
+GET /api/note/query?qs=journal.daily.2026.08.19&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22dependencies%2Flocalhost%2Flocal-vault%22%2C%22selfContained%22%3Atrue%2C%22name%22%3A%22local-vault%22%7D 200 4.817 ms - 11 - -
+POST /api/note/find 200 0.602 ms - 406 - 188
+POST /api/note/find 200 1.372 ms - 406 - 188
+POST /api/note/find 200 4.912 ms - 406 - 188
+{"level":30,"time":1787144158039,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:renderNote","id":"6irh7prjc1oqm7l65szi9ri","msg":"Did not find usable cached rendered preview. Starting to render."}
+POST /api/note/render? 200 7.177 ms - 48 - 533
+{"level":30,"time":1787144158045,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:renderNote","id":"6irh7prjc1oqm7l65szi9ri","duration":6,"msg":"Render preview finished."}
+{"level":30,"time":1787144180797,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"sail.hist.2026.08.19","id":"0ozro3xb9qofcsonnh1w70v","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1787144180801,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+{"level":30,"time":1787144180803,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"sail.hist.2026.08","id":"tcm39h1flyg1x5ue200uaze","children":["0ozro3xb9qofcsonnh1w70v"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":"c5ojsbb80d3dreaztevv3st"},{"fname":"sail.hist.2026","id":"c5ojsbb80d3dreaztevv3st","children":["fh0ub7ma161s16ovri6tg99","lfoz9t1ajp03upiygefwpmy","t0ivi0p30stb3nt9imjtvg3","zc0in19poqoud35w1j5aiit","pa1tdat6nb6o29w7cos47vz","9xeg4kwrn4cpxn5hioc1gaf","tcm39h1flyg1x5ue200uaze"],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":"f429i5mz5qf8fixdr08fr5x"},{"fname":"sail.hist.2026.08.19","id":"0ozro3xb9qofcsonnh1w70v","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":"tcm39h1flyg1x5ue200uaze"}]}
+POST /api/note/write 200 5.986 ms - 1860 - 410
+{"level":30,"time":1787144182837,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"sail.hist.2026.08.19","id":"rcbmsrp9ianq3ahpjpafv4q","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1787144182839,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+POST /api/note/write 500 8.141 ms - 521 - 410
+{"level":30,"time":1787144185707,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"sail.hist.2026.08.19","id":"04qsosdi720ib6ed9khve7b","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1787144185709,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+POST /api/note/write 500 5.007 ms - 521 - 410
+POST /api/note/find 200 3.259 ms - 406 - 188
+POST /api/note/find 200 3.011 ms - 406 - 188
+POST /api/note/find 200 2.188 ms - 406 - 188
+POST /api/note/find 200 2.817 ms - 406 - 188
+POST /api/note/find 200 1.945 ms - 406 - 188
+POST /api/note/find 200 1.356 ms - 406 - 188
+POST /api/note/find 200 1.379 ms - 406 - 188
+GET /api/note/query?qs=journal.daily.2026.08.19&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22dependencies%2Flocalhost%2Flocal-vault%22%2C%22selfContained%22%3Atrue%2C%22name%22%3A%22local-vault%22%7D 304 2.405 ms - - - -
+POST /api/note/find 200 0.596 ms - 406 - 188
+POST /api/note/decorations 200 3.381 ms - 287 - 486
+POST /api/note/find 200 1.607 ms - 406 - 188
+POST /api/note/find 200 5.045 ms - 406 - 188
+POST /api/note/find 200 3.984 ms - 406 - 188
+POST /api/note/find 200 0.602 ms - 406 - 188
+GET /api/note/query?qs=journal.daily.2026.08.19&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22dependencies%2Flocalhost%2Flocal-vault%22%2C%22selfContained%22%3Atrue%2C%22name%22%3A%22local-vault%22%7D 304 1.701 ms - - - -
+{"level":30,"time":1787144191662,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:renderNote","id":"6irh7prjc1oqm7l65szi9ri","msg":"Will use cached rendered preview."}
+POST /api/note/render? 200 0.435 ms - 48 - 533
+POST /api/note/find 200 1.292 ms - 406 - 188
+POST /api/note/find 200 2.042 ms - 406 - 188
+POST /api/note/find 200 3.479 ms - 406 - 188
+POST /api/note/find 200 0.758 ms - 406 - 188
+{"level":30,"time":1787144195603,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:renderNote","id":"6irh7prjc1oqm7l65szi9ri","msg":"Will use cached rendered preview."}
+POST /api/note/render? 200 0.445 ms - 48 - 533
+GET /api/note/query?qs=journal.daily.2026.08.19&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace&vault=%7B%22fsPath%22%3A%22dependencies%2Flocalhost%2Flocal-vault%22%2C%22selfContained%22%3Atrue%2C%22name%22%3A%22local-vault%22%7D 304 1.912 ms - - - -
+POST /api/note/find 200 0.915 ms - 406 - 188
+POST /api/note/find 200 1.653 ms - 406 - 188
+POST /api/note/find 200 4.157 ms - 406 - 188
+GET /api/note/get?id=6irh7prjc1oqm7l65szi9ri&ws=d%3A%5Cws%5Crepos%5CSailZen%5Cassets%5Ctest-workspace 200 4.801 ms - 404 - -
+{"level":30,"time":1787144197434,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"journal.daily.2026.08.19","id":"6irh7prjc1oqm7l65szi9ri","children":[],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":"hh9jqx69an055m2pxehb9cx"}}
+{"level":30,"time":1787144197436,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"fin:RunHooks"}
+{"level":30,"time":1787144197437,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"enter with [object Object]","note":{"fname":"sail.hist.2026.08.19","id":"zqo6yn58yknwhvhfrj6r40h","children":[],"vault":{"fsPath":"vault2","visibility":"private","siteUrl":"https://vault2.com"},"parent":null}}
+{"level":30,"time":1787144197439,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"hooks disabled for write"}
+{"level":30,"time":1787144197440,"pid":33520,"hostname":"saili","name":"sail.server","ctx":"DEngine:writeNewNote","msg":"exit","changed":[{"fname":"journal.daily.2026.08.19","id":"6irh7prjc1oqm7l65szi9ri","children":[],"vault":{"fsPath":"dependencies/localhost/local-vault","selfContained":true,"name":"local-vault"},"parent":"hh9jqx69an055m2pxehb9cx"}]}
+POST /api/note/write 200 5.563 ms - 884 - 527
+POST /api/note/write 500 4.082 ms - 521 - 410

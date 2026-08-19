@@ -32,6 +32,7 @@ import {
   getHoursUntilDeadline,
   formatDeadline,
   getAffairPriority,
+  getAffairDeadline,
 } from '@lib/data/affair'
 import { cn } from '@/lib/utils'
 import MissionPostponeDialog from './mission_postpone_dialog'
@@ -61,9 +62,10 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const cancelTask = useAffairsStore((state: AffairsState) => state.cancelTask)
   const reopenTask = useAffairsStore((state: AffairsState) => state.reopenTask)
 
-  const isOverdue = isAffairOverdue(mission.urgency_ddl, mission.state)
+  const displayDeadline = getAffairDeadline(mission)
+  const isOverdue = isAffairOverdue(displayDeadline, mission.state)
   const isActive = isAffairActive(mission.state)
-  const hoursUntilDeadline = getHoursUntilDeadline(mission.urgency_ddl)
+  const hoursUntilDeadline = getHoursUntilDeadline(displayDeadline)
 
   // Check if this mission belongs to a Challenge venture
   const challengeInfo = useMemo(() => {
@@ -81,7 +83,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
     }
   }, [project])
 
-  const priority = getAffairPriority(mission.urgency_ddl, mission.state)
+  const priority = getAffairPriority(displayDeadline, mission.state)
 
   // State badge color
   const getStateBadgeVariant = (): 'default' | 'secondary' | 'destructive' | 'outline' => {
@@ -212,7 +214,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
                   {AffairStateLabels[mission.state]}
                 </Badge>
 
-                {mission.urgency_ddl && isActive && (
+                {displayDeadline && isActive && (
                   <span
                     className={cn(
                       'flex items-center gap-1',
@@ -220,7 +222,9 @@ const MissionCard: React.FC<MissionCardProps> = ({
                     )}
                   >
                     <Clock className="h-3 w-3" />
-                    {formatDeadline(mission.urgency_ddl)}
+                    {mission.state === AffairState.DEFERRED
+                      ? `延期至 ${formatDeadline(displayDeadline)}`
+                      : formatDeadline(displayDeadline)}
                   </span>
                 )}
 
@@ -266,7 +270,9 @@ const MissionCard: React.FC<MissionCardProps> = ({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {isActive && (
+                  {(mission.state === AffairState.INBOX ||
+                    mission.state === AffairState.PLANNED ||
+                    mission.state === AffairState.SCHEDULED) && (
                     <>
                       <DropdownMenuItem onClick={() => setIsPostponeOpen(true)}>
                         <Calendar className="h-4 w-4 mr-2" />

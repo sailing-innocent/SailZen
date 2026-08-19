@@ -229,6 +229,8 @@ export const getDdlTimestamp = (ddl: string | number | Date | null | undefined):
 
 export const isAffairOverdue = (ddl: string | number | Date | null | undefined, state?: AffairStateValue): boolean => {
   if (!state || TerminalAffairStates.includes(state)) return false
+  // DEFERRED 已明确延期，不再按旧 deadline 显示逾期
+  if (state === AffairState.DEFERRED) return false
   const ddlTimestamp = getDdlTimestamp(ddl)
   if (ddlTimestamp === null) return false
   const now = Math.floor(Date.now() / 1000)
@@ -272,6 +274,19 @@ export const formatDeadline = (ddl: string | number | Date | null | undefined): 
 export const isAffairActive = (state: AffairStateValue | undefined): boolean => {
   if (!state) return true
   return !TerminalAffairStates.includes(state) && state !== AffairState.ARCHIVED
+}
+
+/**
+ * 获取事务用于展示和判断逾期的有效截止时间。
+ * DEFERRED 状态优先使用 window_start（延期后的新窗口）。
+ */
+export const getAffairDeadline = (
+  affair: AffairData
+): string | number | Date | null | undefined => {
+  if (affair.state === AffairState.DEFERRED && affair.window_start) {
+    return affair.window_start
+  }
+  return affair.urgency_ddl
 }
 
 export type AffairPriority = 'urgent' | 'high' | 'normal' | 'low'

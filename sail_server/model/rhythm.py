@@ -711,6 +711,8 @@ def transit_affair_state_impl(
         if request.defer_to is None:
             raise RhythmBadRequestError("defer 必须携带 defer_to（新窗口起点）")
         affair.window_start = request.defer_to
+        # 延期同时把截止时间移到新窗口起点，避免前端仍按旧 deadline 显示逾期
+        affair.urgency_ddl = request.defer_to
         if request.defer_end is not None:
             affair.window_end = request.defer_end
 

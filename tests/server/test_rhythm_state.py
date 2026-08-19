@@ -96,6 +96,7 @@ class TestOneoffFlow:
         deferred = _transit(db, affair_id, AffairAction.DEFER, defer_to=new_start)
         assert deferred.state == AffairState.DEFERRED
         assert deferred.window_start == new_start
+        assert deferred.urgency_ddl == new_start
         replanned = _transit(db, affair_id, AffairAction.REPLAN)
         assert replanned.state == AffairState.PLANNED
 

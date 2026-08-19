@@ -1,6 +1,6 @@
 {
   "name": "@saili/unified",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "Unified parser utilities for Sail",
   "license": "MIT",

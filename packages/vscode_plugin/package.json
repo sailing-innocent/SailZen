@@ -5,7 +5,7 @@
   "displayName": "SailZen",
   "description": "Sailing-Innocent's vscode extension based on Sail",
   "publisher": "SailingInnocent",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "repository": {
     "type": "git",
     "url": "https://github.com/sailzen/sailzen"
@@ -1117,23 +1117,23 @@
           "default": "http://localhost:1974",
           "description": "sail_server 远端接口地址（weather 等页面元素数据源）。例如 http://192.168.1.100:1974"
         },
-      "sailzen.sailServer.weatherCacheTtlMinutes": {
-        "type": "number",
-        "default": 30,
-        "description": "天气页面元素的客户端缓存时间（分钟）。"
-      },
-      "sailzen.sailServer.rhythmCacheTtlMinutes": {
-        "type": "number",
-        "default": 5,
-        "description": "Rhythm 日程页面元素的客户端缓存时间（分钟）。"
-      },
-      "sailzen.rhythm.showInJournalPrefix": {
-        "type": "boolean",
-        "default": false,
-        "description": "是否在 Daily Journal 笔记顶部自动显示 Rhythm 日程卡片（与天气 PREFIX 独立）。"
+        "sailzen.sailServer.weatherCacheTtlMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "天气页面元素的客户端缓存时间（分钟）。"
+        },
+        "sailzen.sailServer.rhythmCacheTtlMinutes": {
+          "type": "number",
+          "default": 5,
+          "description": "Rhythm 日程页面元素的客户端缓存时间（分钟）。"
+        },
+        "sailzen.rhythm.showInJournalPrefix": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否在 Daily Journal 笔记顶部自动显示 Rhythm 日程卡片（与天气 PREFIX 独立）。"
+        }
       }
-    }
-  },
+    },
     "keybindings": [
       {
         "command": "sail.zotero.CitationPicker",

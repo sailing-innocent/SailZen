@@ -19,11 +19,20 @@ import { toIsoDdl } from '@lib/data/affair'
 
 const RHYTHM_API_BASE = API_BASE + '/rhythm'
 
-const buildUrl = (path: string, query?: Record<string, string | number | undefined>): string => {
+type QueryValue = string | number | undefined | (string | number)[]
+
+const buildUrl = (path: string, query?: Record<string, QueryValue>): string => {
   const url = new URL(`${SERVER_URL}/${RHYTHM_API_BASE}${path}`)
   if (query) {
     Object.entries(query).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
+      if (v === undefined || v === null) return
+      if (Array.isArray(v)) {
+        v.forEach((item) => {
+          if (item !== undefined && item !== null && item !== '') {
+            url.searchParams.append(k, String(item))
+          }
+        })
+      } else if (v !== '') {
         url.searchParams.set(k, String(v))
       }
     })
@@ -103,7 +112,7 @@ const normalizeUpdateProps = (props: AffairUpdateProps): Record<string, unknown>
 // ---------------------------------------------------------------------------
 
 const fetchAffairsSingle = async (
-  filters: Record<string, string | number | undefined>
+  filters: Record<string, QueryValue>
 ): Promise<AffairData[]> => {
   const response = await fetch(buildUrl('/affair/', filters))
   await checkOk(response, 'fetching affairs')
@@ -131,11 +140,11 @@ export const api_get_affairs = async (filters?: {
   skip?: number
   limit?: number
 }): Promise<AffairData[]> => {
-  const base: Record<string, string | number | undefined> = {}
+  const base: Record<string, QueryValue> = {}
   if (filters) {
-    // 后端 list_affairs_impl 的 kind 支持 List[str]
-    if (filters.kind !== undefined) {
-      base.kind = Array.isArray(filters.kind) ? filters.kind.join(',') : filters.kind
+    // 后端 list_affairs_impl 的 kind 支持 List[str]，用重复 query param 传递
+    if (filters.kind !== undefined && filters.kind !== '') {
+      base.kind = Array.isArray(filters.kind) ? filters.kind : [filters.kind]
     }
     if (filters.day_id !== undefined) base.day_id = filters.day_id
     if (filters.parent_id !== undefined && filters.parent_id !== null) base.parent_id = filters.parent_id
@@ -155,7 +164,7 @@ export const api_get_affairs = async (filters?: {
   const all: AffairData[] = []
   for (const state of states) {
     for (const domain of domains) {
-      const query: Record<string, string | number | undefined> = { ...base }
+      const query: Record<string, QueryValue> = { ...base }
       if (state) query.state = state
       if (domain) query.domain = domain
       const affairs = await fetchAffairsSingle(query)
@@ -290,13 +299,13 @@ export const api_get_venture_progress = async (id: number): Promise<Record<strin
 // ---------------------------------------------------------------------------
 
 export const api_get_ventures = async (): Promise<AffairData[]> => {
-  return api_get_affairs({ kind: 'venture', state: 'INBOX,ACTIVE,PAUSED' })
+  return api_get_affairs({ kind: 'venture', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
 }
 
 export const api_get_tasks = async (parentId?: number | null): Promise<AffairData[]> => {
   const filters: Parameters<typeof api_get_affairs>[0] = {
     kind: 'task_oneoff',
-    domain: 'work,career',
+    domain: ['work', 'career'],
   }
   if (parentId !== undefined) filters.parent_id = parentId
   return api_get_affairs(filters)

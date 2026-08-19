@@ -74,7 +74,7 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
   fetchVentures: async (): Promise<void> => {
     set({ isLoading: true })
     try {
-      const ventures = await api_get_affairs({ kind: 'venture', state: 'INBOX,ACTIVE,PAUSED' })
+      const ventures = await api_get_affairs({ kind: 'venture', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
       set({ ventures, isLoading: false })
     } catch (error) {
       set({ isLoading: false })
@@ -87,7 +87,7 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
     try {
       const tasks = await api_get_affairs({
         kind: 'task_oneoff',
-        domain: 'work,career',
+        domain: ['work', 'career'],
         parent_id: parentId,
       })
       set({ tasks, isLoading: false })
@@ -242,8 +242,8 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
     try {
       const tasks = await api_get_affairs({
         kind: 'task_oneoff',
-        domain: 'work,career',
-        state: 'INBOX,PLANNED,DOING',
+        domain: ['work', 'career'],
+        state: ['INBOX', 'PLANNED', 'DOING'],
         urgency_ddl_before: before,
       })
       set({ upcomingTasks: tasks })
@@ -257,8 +257,8 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
     try {
       const tasks = await api_get_affairs({
         kind: 'task_oneoff',
-        domain: 'work,career',
-        state: 'INBOX,PLANNED,DOING',
+        domain: ['work', 'career'],
+        state: ['INBOX', 'PLANNED', 'DOING'],
         urgency_ddl_before: now,
       })
       set({ overdueTasks: tasks })
