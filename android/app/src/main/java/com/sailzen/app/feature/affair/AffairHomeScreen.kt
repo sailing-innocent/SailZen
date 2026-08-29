@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sailzen.app.core.network.dto.AffairActions
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import com.sailzen.app.core.network.dto.kindLabel
@@ -68,16 +69,16 @@ fun AffairHomeScreen(
     var showCreate by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("事业") },
-                actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
-                    }
-                },
-            )
-        },
+            topBar = {
+                TopAppBar(
+                    title = { Text("任务") },
+                    actions = {
+                        IconButton(onClick = { viewModel.refresh() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                        }
+                    },
+                )
+            },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreate = true }) {
                 Icon(Icons.Default.Add, contentDescription = "新建")
@@ -87,14 +88,14 @@ fun AffairHomeScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             TabRow(selectedTabIndex = state.tab.ordinal) {
                 Tab(
-                    selected = state.tab == AffairHomeViewModel.Tab.VENTURE,
-                    onClick = { viewModel.selectTab(AffairHomeViewModel.Tab.VENTURE) },
-                    text = { Text("事业") },
-                )
-                Tab(
                     selected = state.tab == AffairHomeViewModel.Tab.TASK,
                     onClick = { viewModel.selectTab(AffairHomeViewModel.Tab.TASK) },
                     text = { Text("任务") },
+                )
+                Tab(
+                    selected = state.tab == AffairHomeViewModel.Tab.VENTURE,
+                    onClick = { viewModel.selectTab(AffairHomeViewModel.Tab.VENTURE) },
+                    text = { Text("事业") },
                 )
             }
 
@@ -110,9 +111,11 @@ fun AffairHomeScreen(
             when (state.tab) {
                 AffairHomeViewModel.Tab.VENTURE -> VentureList(
                     ventures = state.ventures,
+                    inboxVentures = state.inboxVentures,
                     loading = state.loading,
                     onOpenDetail = onOpenDetail,
                     onMilestoneDone = { viewModel.milestoneDone(it) },
+                    onConfirmVenture = { viewModel.transit(it, AffairActions.CONFIRM) },
                 )
 
                 AffairHomeViewModel.Tab.TASK -> TaskList(
@@ -162,9 +165,11 @@ fun AffairHomeScreen(
 @Composable
 private fun VentureList(
     ventures: List<VentureProgressDto>,
+    inboxVentures: List<AffairDto>,
     loading: Boolean,
     onOpenDetail: (Int) -> Unit,
     onMilestoneDone: (Int) -> Unit,
+    onConfirmVenture: (Int) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
@@ -173,15 +178,40 @@ private fun VentureList(
         if (loading && ventures.isEmpty()) {
             item { LoadingRow() }
         }
-        if (!loading && ventures.isEmpty()) {
+        if (!loading && ventures.isEmpty() && inboxVentures.isEmpty()) {
             item {
                 Card {
                     Text(
-                        "暂无进行中的长期事业。点右下角 + 新建，设定目标日与每周投入预算即可开始倒排。",
+                        "暂无长期事业。点右下角 + 新建，或在下方待分拣中确认已有的事业。",
                         modifier = Modifier.padding(16.dp),
                         color = Color.Gray,
                     )
                 }
+            }
+        }
+        if (inboxVentures.isNotEmpty()) {
+            item {
+                Text(
+                    "待分拣事业",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
+            }
+            items(inboxVentures, key = { it.id }) { venture ->
+                InboxVentureCard(
+                    venture = venture,
+                    onOpenDetail = { onOpenDetail(venture.id) },
+                    onConfirm = { onConfirmVenture(venture.id) },
+                )
+            }
+        }
+        if (ventures.isNotEmpty()) {
+            item {
+                Text(
+                    "进行中",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                )
             }
         }
         items(ventures, key = { it.affairId }) { progress ->
@@ -283,6 +313,37 @@ private fun VentureCard(
 }
 
 @Composable
+private fun InboxVentureCard(
+    venture: AffairDto,
+    onOpenDetail: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    Card(
+        onClick = onOpenDetail,
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        venture.title,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "待分拣 · ${kindLabel(venture.kind)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                    )
+                }
+                TextButton(onClick = onConfirm) { Text("启动") }
+            }
+        }
+    }
+}
+
+@Composable
 fun MilestoneRow(milestone: AffairDto, onDone: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -319,8 +380,8 @@ fun MilestoneRow(milestone: AffairDto, onDone: () -> Unit) {
 private fun TaskList(
     tasks: List<AffairDto>,
     loading: Boolean,
-    stateFilter: String?,
-    onSelectFilter: (String?) -> Unit,
+    stateFilter: String,
+    onSelectFilter: (String) -> Unit,
     onOpenDetail: (Int) -> Unit,
     onAction: (Int, String) -> Unit,
 ) {
@@ -336,7 +397,7 @@ private fun TaskList(
                 FilterChip(
                     selected = stateFilter == filter,
                     onClick = { onSelectFilter(filter) },
-                    label = { Text(filter?.let { stateLabel(it) } ?: "全部") },
+                    label = { Text(stateLabel(filter)) },
                 )
             }
         }

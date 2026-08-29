@@ -24,13 +24,14 @@ import kotlinx.coroutines.launch
  */
 class AffairHomeViewModel(application: Application) : AndroidViewModel(application) {
 
-    enum class Tab { VENTURE, TASK }
+    enum class Tab { TASK, VENTURE }
 
     data class UiState(
-        val tab: Tab = Tab.VENTURE,
+        val tab: Tab = Tab.TASK,
         val ventures: List<VentureProgressDto> = emptyList(),
+        val inboxVentures: List<AffairDto> = emptyList(),
         val tasks: List<AffairDto> = emptyList(),
-        val stateFilter: String? = null,
+        val stateFilter: String = AffairStates.ACTIVE,
         val loading: Boolean = false,
         val configured: Boolean = true,
         val message: String? = null,
@@ -50,7 +51,7 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
         refresh()
     }
 
-    fun selectStateFilter(state: String?) {
+    fun selectStateFilter(state: String) {
         _uiState.update { it.copy(stateFilter = state) }
         refresh()
     }
@@ -63,11 +64,17 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
             val configured = repository.serverConfigured()
             when (_uiState.value.tab) {
                 Tab.VENTURE -> {
-                    val progress = repository
-                        .listAffairs(state = AffairStates.ACTIVE, kinds = listOf(VENTURE_KIND))
-                        .mapNotNull { repository.ventureProgress(it.id) }
+                    val all = repository.listAffairs(kinds = listOf(VENTURE_KIND))
+                    val activeIds = all.filter { it.state == AffairStates.ACTIVE }
+                    val progress = activeIds.mapNotNull { repository.ventureProgress(it.id) }
+                    val inbox = all.filter { it.state == AffairStates.INBOX }
                     _uiState.update {
-                        it.copy(loading = false, configured = configured, ventures = progress)
+                        it.copy(
+                            loading = false,
+                            configured = configured,
+                            ventures = progress,
+                            inboxVentures = inbox,
+                        )
                     }
                 }
 
@@ -75,7 +82,13 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
                     val filter = _uiState.value.stateFilter
                     val tasks = repository.listAffairs(state = filter)
                         .filter { it.kind != VENTURE_KIND && it.kind != "buffer" }
-                        .sortedWith(compareBy({ RhythmTime.hoursUntil(it.urgencyDdl) }, { -it.importance }))
+                        .sortedWith(
+                            compareBy(
+                                { if (RhythmTime.hoursUntil(it.urgencyDdl) < 0) -1 else 0 },
+                                { RhythmTime.hoursUntil(it.urgencyDdl) },
+                                { -it.importance },
+                            ),
+                        )
                     _uiState.update {
                         it.copy(loading = false, configured = configured, tasks = tasks)
                     }
@@ -149,7 +162,7 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
 
         /** 任务视图可筛选的状态 */
         val TASK_STATE_FILTERS = listOf(
-            null,
+            AffairStates.ACTIVE,
             AffairStates.INBOX,
             AffairStates.PLANNED,
             AffairStates.SCHEDULED,
