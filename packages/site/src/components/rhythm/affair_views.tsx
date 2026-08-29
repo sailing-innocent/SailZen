@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import type { AffairData, AffairCreateProps, AffairUpdateProps } from '@lib/data/affair'
 import { AffairKind, AffairDomain, AffairState, AffairStateLabels, getAffairPriority, getAffairDeadline, formatDeadline, getDefaultKindMeta } from '@lib/data/affair'
+import { DateTimePicker } from '@/components/ui/datetime-picker'
 import type { AffairAction } from '@lib/api/affair'
 import { useRhythmStore } from '@lib/store/rhythm'
 import { Plus, Edit2, Trash2, Play, Check, X, Archive, Pause, RotateCcw, Calendar, Clock } from 'lucide-react'
@@ -395,15 +396,10 @@ const AffairForm = ({
           />
         </div>
         <div className="space-y-2">
-          <Label>截止时间</Label>
-          <Input
-            type="datetime-local"
-            value={
-              data.urgency_ddl
-                ? new Date(data.urgency_ddl).toISOString().slice(0, 16)
-                : ''
-            }
-            onChange={(e) => onChange({ urgency_ddl: e.target.value ? new Date(e.target.value).toISOString() : undefined })}
+          <DateTimePicker
+            label="截止时间"
+            value={data.urgency_ddl}
+            onChange={(v) => onChange({ urgency_ddl: v })}
           />
         </div>
       </div>

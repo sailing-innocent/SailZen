@@ -99,6 +99,7 @@ export interface DayTimelineData {
   buffer_free_minutes: number
   checkins?: CheckinTodayData
   warnings: string[]
+  unplaced?: UnplacedItemData[]
 }
 
 // ============================================================================

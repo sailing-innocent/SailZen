@@ -48,7 +48,12 @@ export interface PemsState {
   fetchWeeklyInsights: (date?: Date | string) => Promise<void>
 }
 
-const getTodayString = (): string => new Date().toISOString().split('T')[0]
+const toLocalISODate = (d: Date): string => {
+  const localMs = d.getTime() - d.getTimezoneOffset() * 60 * 1000
+  return new Date(localMs).toISOString().split('T')[0]
+}
+
+const getTodayString = (): string => toLocalISODate(new Date())
 
 export const usePemsStore: UseBoundStore<StoreApi<PemsState>> = create<PemsState>((set, get) => ({
   dayView: null,
@@ -57,7 +62,7 @@ export const usePemsStore: UseBoundStore<StoreApi<PemsState>> = create<PemsState
 
   fetchDayView: async (date?: Date | string) => {
     const targetDate = date || get().selectedDate
-    set({ isLoading: true, selectedDate: typeof targetDate === 'string' ? targetDate : targetDate.toISOString().split('T')[0] })
+    set({ isLoading: true, selectedDate: typeof targetDate === 'string' ? targetDate : toLocalISODate(targetDate) })
     try {
       const dayView = await api_get_day_view(targetDate)
       set({ dayView, isLoading: false })

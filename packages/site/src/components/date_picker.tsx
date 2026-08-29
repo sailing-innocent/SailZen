@@ -54,6 +54,8 @@ const DatePicker: React.FC<DatePickerProps> = (props: DatePickerProps) => {
             month={month}
             onMonthChange={setMonth}
             captionLayout="dropdown"
+            startMonth={new Date(1900, 0)}
+            endMonth={new Date(2100, 11)}
             onSelect={(date) => {
               setDate(date)
               if (date) {

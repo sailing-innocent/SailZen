@@ -37,6 +37,7 @@ import {
   DomainTrendChart,
   EnergyActualChart,
 } from '@components/rhythm/review_views'
+import { EnergyTab } from '@components/rhythm/energy_tab'
 import type { AffairData } from '@lib/data/affair'
 import {
   LayoutDashboard,
@@ -52,11 +53,13 @@ import {
   Sparkles,
   AlertCircle,
   CheckCircle2,
+  Zap,
 } from 'lucide-react'
 
 const tabDefs = [
   { value: 'overview', label: '概览', icon: LayoutDashboard },
   { value: 'timeline', label: '时间线', icon: Clock },
+  { value: 'energy', label: '精力', icon: Zap },
   { value: 'affairs', label: '事务中心', icon: Briefcase },
   { value: 'ventures', label: '事业', icon: Target },
   { value: 'discipline', label: '戒律/习惯', icon: CheckCircle2 },
@@ -184,6 +187,9 @@ const RhythmPage = () => {
         </TabsContent>
         <TabsContent value="timeline" className="mt-4">
           <TimelineTab />
+        </TabsContent>
+        <TabsContent value="energy" className="mt-4">
+          <EnergyTab />
         </TabsContent>
         <TabsContent value="affairs" className="mt-4">
           <AffairsTab />

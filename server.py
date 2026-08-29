@@ -41,7 +41,7 @@ class SailServer:
             "/energy",
             "/health",
             "/money",
-            "/project",
+            "/rhythm",
             "/text",
             "/analysis",
             "/necessity",

@@ -155,7 +155,9 @@ export interface RhythmState {
 
 const toISODate = (d: string | Date): string => {
   if (typeof d === 'string') return d.split('T')[0]
-  return d.toISOString().split('T')[0]
+  // 转成当地日期字符串，避免 toISOString() 返回 UTC 日期导致东八区等地区日期回退一天
+  const localMs = d.getTime() - d.getTimezoneOffset() * 60 * 1000
+  return new Date(localMs).toISOString().split('T')[0]
 }
 
 const updateAffairInList = (list: AffairData[], updated: AffairData): AffairData[] => {

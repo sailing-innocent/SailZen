@@ -128,11 +128,11 @@ export const TimelineView = () => {
             <TimeBlockItem key={block.id} block={block} />
           ))}
         </div>
-        {timeline.unplaced.length > 0 && (
+        {(timeline.unplaced ?? []).length > 0 && (
           <div className="mt-4 p-3 border rounded-md bg-muted">
             <div className="font-medium mb-2">未放置事务</div>
             <div className="space-y-1">
-              {timeline.unplaced.map((item) => (
+              {(timeline.unplaced ?? []).map((item) => (
                 <div key={item.affair_id} className="text-sm text-muted-foreground">
                   {item.title} — {item.reason}
                 </div>

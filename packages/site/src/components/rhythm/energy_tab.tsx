@@ -1,6 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import PageLayout from '@components/page_layout'
-import { usePemsStore } from '@lib/store/'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,6 +12,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useRhythmStore } from '@lib/store/rhythm'
+import { usePemsStore } from '@lib/store/'
+import type {
+  DayViewData,
+  RhythmAffairBriefData,
+  InsightData,
+  HealthSignalSummaryData,
+  HealthQuickLogProps,
+} from '@lib/data/pems'
+import { RhythmLabels, RhythmColors } from '@lib/data/pems'
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,20 +31,26 @@ import {
   Smile,
   Activity,
 } from 'lucide-react'
-import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns'
+import { format, addDays, startOfWeek, isSameDay, parse } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { RhythmLabels, RhythmColors } from '@lib/data/pems'
 
-const EnergyPage = () => {
+export const EnergyTab = () => {
   const isMobile = useIsMobile()
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }))
-  const {
-    dayView,
-    selectedDate,
-    isLoading,
-    fetchDayView,
-    logHealthOnDay,
-  } = usePemsStore()
+  const selectedDate = useRhythmStore((s) => s.selectedDate)
+  const setSelectedDate = useRhythmStore((s) => s.setSelectedDate)
+  const { dayView, isLoading, fetchDayView, logHealthOnDay } = usePemsStore()
+
+  const selected = useMemo(
+    () => (selectedDate ? parse(selectedDate, 'yyyy-MM-dd', new Date()) : new Date()),
+    [selectedDate]
+  )
+  const [weekStart, setWeekStart] = useState(() =>
+    startOfWeek(selected, { weekStartsOn: 1 })
+  )
+
+  useEffect(() => {
+    setWeekStart(startOfWeek(selected, { weekStartsOn: 1 }))
+  }, [selected])
 
   useEffect(() => {
     fetchDayView(selectedDate)
@@ -46,97 +60,85 @@ const EnergyPage = () => {
     return Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i))
   }, [weekStart])
 
-  const selected = useMemo(() => {
-    return selectedDate ? parseISO(selectedDate) : new Date()
-  }, [selectedDate])
-
   const handlePrevWeek = () => setWeekStart((d) => addDays(d, -7))
   const handleNextWeek = () => setWeekStart((d) => addDays(d, 7))
-  const handleSelectDay = (d: Date) => fetchDayView(d.toISOString())
+  const handleSelectDay = (d: Date) => setSelectedDate(format(d, 'yyyy-MM-dd'))
 
   return (
-    <PageLayout>
-      <div className={`space-y-6 ${isMobile ? 'p-4' : 'p-6'}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className={`font-bold ${isMobile ? 'text-xl' : 'text-2xl'}`}>
-              精力 / 日程
-            </h1>
-            <p className="text-muted-foreground text-sm">
-              以日为单位、以周为视图的精力管理
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={handlePrevWeek}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="text-sm font-medium min-w-[120px] text-center">
-              {format(weekStart, 'yyyy年MM月dd日', { locale: zhCN })} 起
-            </span>
-            <Button variant="outline" size="icon" onClick={handleNextWeek}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+    <div className={`space-y-6 ${isMobile ? '' : ''}`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className={`font-bold ${isMobile ? 'text-lg' : 'text-xl'}`}>精力 / 日程</h2>
+          <p className="text-muted-foreground text-sm">以日为单位、以周为视图的精力管理</p>
         </div>
-
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((d) => {
-            const isSelected = isSameDay(d, selected)
-            return (
-              <button
-                key={d.toISOString()}
-                onClick={() => handleSelectDay(d)}
-                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-colors ${
-                  isSelected ? 'border-primary bg-primary/5' : 'hover:bg-accent'
-                }`}
-              >
-                <span className="text-xs text-muted-foreground">
-                  {format(d, 'EEE', { locale: zhCN })}
-                </span>
-                <span className={`text-lg font-semibold ${isSelected ? 'text-primary' : ''}`}>
-                  {format(d, 'd')}
-                </span>
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={handlePrevWeek}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium min-w-[120px] text-center">
+            {format(weekStart, 'yyyy年MM月dd日', { locale: zhCN })} 起
+          </span>
+          <Button variant="outline" size="icon" onClick={handleNextWeek}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-
-        {isLoading && <p className="text-sm text-muted-foreground">加载中...</p>}
-
-        {dayView && (
-          <div className={`grid gap-6 ${isMobile ? 'grid-cols-1' : 'md:grid-cols-3'}`}>
-            <div className={isMobile ? '' : 'md:col-span-2 space-y-6'}>
-              <DaySummaryCard dayView={dayView} />
-              <AffairListCard
-                title="今日安排"
-                affairs={dayView.planned_affairs}
-                emptyText="今日暂无安排事务"
-              />
-              <AffairListCard
-                title="已完成"
-                affairs={dayView.completed_affairs}
-                emptyText="今日暂无完成事务"
-              />
-              <InsightList insights={dayView.insights} />
-            </div>
-
-            <div className="space-y-6">
-              <HealthQuickLogCard
-                date={selected}
-                health={dayView.health_signals}
-                onSubmit={(log) => logHealthOnDay(log, selected.toISOString())}
-              />
-            </div>
-          </div>
-        )}
       </div>
-    </PageLayout>
+
+      <div className="grid grid-cols-7 gap-2">
+        {weekDays.map((d) => {
+          const isSelected = isSameDay(d, selected)
+          return (
+            <button
+              key={d.toISOString()}
+              onClick={() => handleSelectDay(d)}
+              className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-colors ${
+                isSelected ? 'border-primary bg-primary/5' : 'hover:bg-accent'
+              }`}
+            >
+              <span className="text-xs text-muted-foreground">
+                {format(d, 'EEE', { locale: zhCN })}
+              </span>
+              <span className={`text-lg font-semibold ${isSelected ? 'text-primary' : ''}`}>
+                {format(d, 'd')}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground">加载中...</p>}
+
+      {dayView && (
+        <div className={`grid gap-6 ${isMobile ? 'grid-cols-1' : 'md:grid-cols-3'}`}>
+          <div className={isMobile ? '' : 'md:col-span-2 space-y-6'}>
+            <DaySummaryCard dayView={dayView} />
+            <AffairListCard
+              title="今日安排"
+              affairs={dayView.planned_affairs}
+              emptyText="今日暂无安排事务"
+            />
+            <AffairListCard
+              title="已完成"
+              affairs={dayView.completed_affairs}
+              emptyText="今日暂无完成事务"
+            />
+            <InsightList insights={dayView.insights} />
+          </div>
+
+          <div className="space-y-6">
+              <HealthQuickLogCard
+              date={selected}
+              health={dayView.health_signals}
+              onSubmit={(log) => logHealthOnDay(log, format(selected, 'yyyy-MM-dd'))}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
-const DaySummaryCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData }> = ({
-  dayView,
-}) => {
+const DaySummaryCard: React.FC<{ dayView: DayViewData }> = ({ dayView }) => {
   const budget = dayView.energy_budget
   const usedPercent = Math.min(
     100,
@@ -169,9 +171,7 @@ const DaySummaryCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData }
           </div>
           <div className="h-2 rounded-full bg-secondary overflow-hidden">
             <div
-              className={`h-full rounded-full ${
-                usedPercent > 100 ? 'bg-red-500' : 'bg-primary'
-              }`}
+              className={`h-full rounded-full ${usedPercent > 100 ? 'bg-red-500' : 'bg-primary'}`}
               style={{ width: `${usedPercent}%` }}
             />
           </div>
@@ -194,7 +194,7 @@ const DaySummaryCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData }
 
 const AffairListCard: React.FC<{
   title: string
-  affairs: import('@lib/data/pems').RhythmAffairBriefData[]
+  affairs: RhythmAffairBriefData[]
   emptyText: string
 }> = ({ title, affairs, emptyText }) => {
   return (
@@ -231,9 +231,7 @@ const AffairListCard: React.FC<{
   )
 }
 
-const InsightList: React.FC<{ insights: import('@lib/data/pems').InsightData[] }> = ({
-  insights,
-}) => {
+const InsightList: React.FC<{ insights: InsightData[] }> = ({ insights }) => {
   if (insights.length === 0) return null
   return (
     <Card>
@@ -266,9 +264,9 @@ const InsightList: React.FC<{ insights: import('@lib/data/pems').InsightData[] }
 
 const HealthQuickLogCard: React.FC<{
   date: Date
-  health: import('@lib/data/pems').HealthSignalSummaryData
-  onSubmit: (log: import('@lib/data/pems').HealthQuickLogProps) => void
-}> = ({ date, health, onSubmit }) => {
+  health: HealthSignalSummaryData
+  onSubmit: (log: HealthQuickLogProps) => void
+}> = ({ health, onSubmit }) => {
   const [sleepHours, setSleepHours] = useState(health.sleep_hours ?? 7)
   const [sleepQuality, setSleepQuality] = useState(health.sleep_quality ?? 3)
   const [energyLevel, setEnergyLevel] = useState(health.energy_level ?? 3)
@@ -385,5 +383,3 @@ const HealthQuickLogCard: React.FC<{
     </Card>
   )
 }
-
-export default EnergyPage

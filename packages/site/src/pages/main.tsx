@@ -85,7 +85,7 @@ const MainPage = () => {
                 <QuickAccessCard
                   icon={<Zap className="h-5 w-5" />}
                   label="精力"
-                  href="/energy"
+                  href="/rhythm"
                   color="text-yellow-500"
                 />
                 <QuickAccessCard
@@ -126,7 +126,7 @@ const MainPage = () => {
                 <ul className="text-sm text-muted-foreground space-y-2">
                   <li className="flex items-start gap-2">
                     <span className="text-primary">•</span>
-                    <span>精力页面可查看整周精力分布与健康快拍</span>
+                    <span>在 Rhythm 页面查看整周精力分布与健康快拍</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-primary">•</span>
@@ -223,7 +223,7 @@ const EnergyTodayCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData 
         )}
 
         <a
-          href="/energy"
+          href="/rhythm"
           className="inline-flex items-center text-sm text-primary hover:underline"
         >
           查看精力详情
