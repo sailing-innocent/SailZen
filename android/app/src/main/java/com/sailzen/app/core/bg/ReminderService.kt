@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * 前台 Service（设计文档通道 1 载体）：
+ * 前台 Service：
  * 持有 WebSocket 长连接，收到 reminder.delivered → Repository.processDelivered；
  * 常驻通知显示今日待办数；START_STICKY 被杀后由系统拉起。
  */
