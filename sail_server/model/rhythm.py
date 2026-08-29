@@ -86,7 +86,7 @@ from sail_server.application.dto.health import (
     MoodCreateRequest,
     SleepCreateRequest,
 )
-from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Medication, DietLog, Weight
+from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Medication, DietLog, Weight, WeightPlan
 from sail_server.model.health import (
     create_diet_impl,
     create_energy_level_impl,
@@ -464,6 +464,18 @@ def update_affair_impl(
     return affair_to_response(affair)
 
 
+def _collect_affair_descendant_ids(db: Session, root_id: int) -> List[int]:
+    """自顶向下收集 root_id 及其所有后代 affair id（含自身）。"""
+    ids: List[int] = [root_id]
+    i = 0
+    while i < len(ids):
+        current = ids[i]
+        children = db.query(RhythmAffair.id).filter(RhythmAffair.parent_id == current).all()
+        ids.extend(child_id for (child_id,) in children)
+        i += 1
+    return ids
+
+
 def delete_affair_impl(db: Session, affair_id: int) -> Optional[AffairResponse]:
     affair = db.query(RhythmAffair).filter(RhythmAffair.id == affair_id).first()
     if affair is None:
@@ -471,7 +483,30 @@ def delete_affair_impl(db: Session, affair_id: int) -> Optional[AffairResponse]:
     if affair.kind == AffairKind.BUFFER.value:
         raise RhythmBadRequestError("buffer 为系统事务，禁止删除")
     response = affair_to_response(affair)
-    db.delete(affair)
+
+    ids = _collect_affair_descendant_ids(db, affair_id)
+
+    # 清理关联表，避免外键约束冲突
+    db.query(RhythmTimeBlock).filter(RhythmTimeBlock.affair_id.in_(ids)).delete(
+        synchronize_session=False,
+    )
+    db.query(RhythmDisciplineLog).filter(RhythmDisciplineLog.affair_id.in_(ids)).delete(
+        synchronize_session=False,
+    )
+    db.query(WeightPlan).filter(WeightPlan.rhythm_affair_id.in_(ids)).update(
+        {"rhythm_affair_id": None},
+        synchronize_session=False,
+    )
+
+    # 先删后代再删自身，避免 rhythm_affairs.parent_id 自引用 FK 冲突
+    child_ids = [i for i in ids if i != affair_id]
+    if child_ids:
+        db.query(RhythmAffair).filter(RhythmAffair.id.in_(child_ids)).delete(
+            synchronize_session=False,
+        )
+    db.query(RhythmAffair).filter(RhythmAffair.id == affair_id).delete(
+        synchronize_session=False,
+    )
     db.commit()
     return response
 
