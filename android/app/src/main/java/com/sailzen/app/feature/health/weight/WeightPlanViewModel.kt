@@ -3,6 +3,10 @@ package com.sailzen.app.feature.health.weight
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.WeightPlanCheckinStatusDto
 import com.sailzen.app.core.network.dto.WeightPlanCreateRequest
@@ -40,11 +44,17 @@ class WeightPlanViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.WeightChanged) load()
+            }
+        }
         load()
     }
 
@@ -73,7 +83,7 @@ class WeightPlanViewModel(application: Application) : AndroidViewModel(applicati
     fun createPlan() {
         val form = _uiState.value.form
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true) }
+            _uiState.update { it.copy(loading = true, message = null) }
             val request = WeightPlanCreateRequest(
                 targetWeight = form.targetWeight,
                 initialWeight = form.initialWeight.takeIf { it.isNotBlank() },
@@ -83,16 +93,27 @@ class WeightPlanViewModel(application: Application) : AndroidViewModel(applicati
                 notifyEnabled = form.notifyEnabled,
                 feedbackEnabled = form.feedbackEnabled,
             )
-            val plan = repository.createWeightPlan(request)
-            _uiState.update {
-                it.copy(
-                    loading = false,
-                    plan = plan,
-                    showForm = plan == null,
-                    message = if (plan != null) "计划创建成功" else "创建失败",
-                )
-            }
-            if (plan != null) load()
+            repository.createWeightPlan(request)
+                .onSuccess { plan ->
+                    _uiState.update {
+                        it.copy(
+                            loading = false,
+                            plan = plan,
+                            showForm = false,
+                            message = "计划创建成功",
+                        )
+                    }
+                    load()
+                }
+                .onFailure { failure ->
+                    _uiState.update {
+                        it.copy(
+                            loading = false,
+                            showForm = true,
+                            message = failure.message,
+                        )
+                    }
+                }
         }
     }
 }

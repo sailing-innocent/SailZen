@@ -3,6 +3,10 @@ package com.sailzen.app.feature.diet
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.DietCreateRequest
 import com.sailzen.app.core.network.dto.DietDto
@@ -29,11 +33,17 @@ class DietViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.HealthSignalChanged && event.collectionType == "meal") load()
+            }
+        }
         load()
     }
 
@@ -55,16 +65,19 @@ class DietViewModel(application: Application) : AndroidViewModel(application) {
     fun saveDiet() {
         val form = _uiState.value.editForm
         viewModelScope.launch {
+            _uiState.update { it.copy(loading = true) }
             repository.createDiet(form.copy(htime = System.currentTimeMillis() / 1000.0))
-            dismissEdit()
-            load()
+                .onSuccess { dismissEdit(); load() }
+                .onFailure { _uiState.update { it.copy(loading = false) } }
         }
     }
 
     fun saveGoal(goal: NutritionGoalCreateRequest) {
         viewModelScope.launch {
+            _uiState.update { it.copy(loading = true) }
             repository.createOrUpdateNutritionGoal(goal)
-            load()
+                .onSuccess { load() }
+                .onFailure { _uiState.update { it.copy(loading = false) } }
         }
     }
 }

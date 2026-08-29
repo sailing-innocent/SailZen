@@ -4,7 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.bg.ReminderService
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
 import com.sailzen.app.core.data.SettingsManager
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
@@ -43,6 +47,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
 
     private val repository = RhythmRepository.get(application)
     private val settings = SettingsManager.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -61,6 +66,17 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             ReminderService.connectedState.collect { connected ->
                 _uiState.update { it.copy(connected = connected) }
+            }
+        }
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                when (event) {
+                    is DataChangeEvent.AffairChanged,
+                    is DataChangeEvent.DayViewChanged,
+                    is DataChangeEvent.CheckinChanged,
+                    -> refresh()
+                    else -> {}
+                }
             }
         }
         refresh()
@@ -113,19 +129,19 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.update { it.copy(planning = true) }
             repository.planDay(_uiState.value.date)
-            val timeline = repository.timeline(_uiState.value.date)
-            _uiState.update { it.copy(timeline = timeline, planning = false) }
+                .onSuccess { refresh() }
+                .onFailure { _uiState.update { it.copy(planning = false) } }
         }
     }
 
     fun doneBlock(blockId: Int) = viewModelScope.launch {
         repository.blockDone(blockId)
-        refresh()
+            .onSuccess { refresh() }
     }
 
     fun skipBlock(blockId: Int) = viewModelScope.launch {
         repository.blockSkip(blockId)
-        refresh()
+            .onSuccess { refresh() }
     }
 
     /** 右滑 defer：推迟到明天 09:00（fixed 块 UI 层不出现该操作） */
@@ -133,7 +149,7 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         val affairId = block.affairId ?: return@launch
         val tomorrow = LocalDate.now().plusDays(1).atTime(9, 0)
         repository.deferAffair(affairId, tomorrow.withNano(0).toString())
-        refresh()
+            .onSuccess { refresh() }
     }
 
     /** 长按查看 Plan B（取 affair.fallback_plan） */
@@ -156,19 +172,21 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
     fun capture(title: String, kind: String) = viewModelScope.launch {
         if (title.isBlank()) return@launch
         repository.capture(title.trim(), kind)
-        _uiState.update { it.copy(captureOpen = false) }
-        refresh()
+            .onSuccess {
+                _uiState.update { it.copy(captureOpen = false) }
+                refresh()
+            }
     }
 
     // ---------------- AI 建议采纳 ----------------
 
     fun acceptHint(affairId: Int) = viewModelScope.launch {
         repository.acceptHintAndConfirm(affairId)
-        refresh()
+            .onSuccess { refresh() }
     }
 
     fun rejectHint(affairId: Int) = viewModelScope.launch {
         repository.confirmHint(affairId, accept = false)
-        refresh()
+            .onSuccess { refresh() }
     }
 }

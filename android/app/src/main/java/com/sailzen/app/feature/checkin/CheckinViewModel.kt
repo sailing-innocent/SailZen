@@ -3,6 +3,9 @@ package com.sailzen.app.feature.checkin
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.CheckinTodayItemDto
 import com.sailzen.app.core.rhythm.RhythmRepository
@@ -24,6 +27,7 @@ class CheckinViewModel(application: Application) : AndroidViewModel(application)
     )
 
     private val repository = RhythmRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -32,6 +36,13 @@ class CheckinViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             repository.observeQueuedCount().collect { count ->
                 _uiState.update { it.copy(queuedCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.CheckinChanged || event is DataChangeEvent.AffairChanged) {
+                    refresh()
+                }
             }
         }
         refresh()
@@ -74,6 +85,6 @@ class CheckinViewModel(application: Application) : AndroidViewModel(application)
     private fun checkin(affairId: Int, result: String, note: String = "") =
         viewModelScope.launch {
             repository.checkin(affairId, result, note)
-            refresh()
+                .onSuccess { refresh() }
         }
 }

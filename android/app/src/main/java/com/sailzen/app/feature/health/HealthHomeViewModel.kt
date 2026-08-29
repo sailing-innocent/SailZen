@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sailzen.app.R
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.HealthDashboardDto
 import java.time.LocalDate
@@ -23,11 +25,22 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                when (event) {
+                    is DataChangeEvent.WeightChanged,
+                    is DataChangeEvent.HealthSignalChanged,
+                    -> refresh()
+                    else -> {}
+                }
+            }
+        }
         refresh()
     }
 

@@ -3,6 +3,9 @@ package com.sailzen.app.feature.health
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.OperationResult
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
@@ -85,47 +88,59 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
 
         viewModelScope.launch {
             _uiState.update { it.copy(submitting = true, error = null) }
-            val result: HealthCheckinResponse? = if (state.selectedType == InfoCollectionType.weight) {
+            val result: OperationResult<HealthCheckinResponse?> = if (state.selectedType == InfoCollectionType.weight) {
                 submitWeight(state, htime)
             } else {
                 submitRhythmHealth(state, htime)
             }
-            _uiState.update {
-                if (result != null) {
-                    it.copy(submitting = false, submitted = result)
-                } else {
-                    it.copy(submitting = false, error = "提交失败，请检查网络或服务器配置")
+            result
+                .onSuccess { response ->
+                    _uiState.update {
+                        it.copy(
+                            submitting = false,
+                            submitted = response ?: syntheticResponse(state),
+                        )
+                    }
                 }
-            }
+                .onFailure { failure ->
+                    _uiState.update {
+                        it.copy(
+                            submitting = false,
+                            error = failure.message,
+                        )
+                    }
+                }
         }
     }
 
-    private suspend fun submitWeight(state: UiState, htime: Double): HealthCheckinResponse? {
-        val weightDto = healthRepository.createWeight(
+    private suspend fun submitWeight(state: UiState, htime: Double): OperationResult<HealthCheckinResponse?> {
+        val weightResult = healthRepository.createWeight(
             value = state.weight.toDoubleOrNull().orZero(),
             htime = htime,
             note = state.note,
         )
-        return weightDto?.let {
-            HealthCheckinResponse(
-                id = it.id,
-                collectionType = "weight",
-                logDate = state.date.toString(),
-                refId = it.id,
-                note = state.note,
-            )
-        } ?: run {
-            // 降级到 Rhythm 健康打卡离线队列（服务端已兼容时间戳格式）
-            repository.healthCheckin(
-                collectionType = state.selectedType,
-                payload = mapOf("value_kg" to state.weight.toDoubleOrNull().orZero(), "measured_at" to htime),
-                note = state.note,
-                date = state.date,
+        if (weightResult is OperationResult.Success) {
+            val weightDto = weightResult.data
+            return OperationResult.Success(
+                HealthCheckinResponse(
+                    id = weightDto.id,
+                    collectionType = "weight",
+                    logDate = state.date.toString(),
+                    refId = weightDto.id,
+                    note = state.note,
+                )
             )
         }
+        // 在线失败时降级到 Rhythm 健康打卡离线队列（服务端已兼容时间戳格式）
+        return repository.healthCheckin(
+            collectionType = state.selectedType,
+            payload = mapOf("value_kg" to state.weight.toDoubleOrNull().orZero(), "measured_at" to htime),
+            note = state.note,
+            date = state.date,
+        )
     }
 
-    private suspend fun submitRhythmHealth(state: UiState, htime: Double): HealthCheckinResponse? {
+    private suspend fun submitRhythmHealth(state: UiState, htime: Double): OperationResult<HealthCheckinResponse?> {
         val payload = when (state.selectedType) {
             InfoCollectionType.exercise -> mapOf(
                 "exercise_type" to state.exerciseType,
@@ -168,4 +183,12 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
 
     private fun Double?.orZero() = this ?: 0.0
     private fun Int?.orZero() = this ?: 0
+
+    private fun syntheticResponse(state: UiState): HealthCheckinResponse = HealthCheckinResponse(
+        id = -1,
+        collectionType = state.selectedType.name,
+        logDate = state.date.toString(),
+        refId = -1,
+        note = state.note,
+    )
 }

@@ -3,6 +3,10 @@ package com.sailzen.app.feature.health.medication
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthAlarmScheduler
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.MedicationCreateRequest
@@ -27,11 +31,17 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.HealthSignalChanged && event.collectionType == "medication") load()
+            }
+        }
         load()
     }
 
@@ -47,8 +57,10 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
 
     fun take(medicationId: Int) {
         viewModelScope.launch {
+            _uiState.update { it.copy(loading = true) }
             repository.takeMedication(medicationId)
-            load()
+                .onSuccess { load() }
+                .onFailure { _uiState.update { it.copy(loading = false) } }
         }
     }
 
@@ -60,9 +72,10 @@ class MedicationViewModel(application: Application) : AndroidViewModel(applicati
         val form = _uiState.value.editForm
         if (form.name.isBlank()) return
         viewModelScope.launch {
+            _uiState.update { it.copy(loading = true) }
             repository.createMedication(form.copy(plannedDate = _uiState.value.selectedDate.toString()))
-            dismissEdit()
-            load()
+                .onSuccess { dismissEdit(); load() }
+                .onFailure { _uiState.update { it.copy(loading = false) } }
         }
     }
 }

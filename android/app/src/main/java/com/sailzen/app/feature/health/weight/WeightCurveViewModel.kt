@@ -3,6 +3,8 @@ package com.sailzen.app.feature.health.weight
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.WeightDto
 import com.sailzen.app.core.network.dto.WeightExpectedRangeDto
@@ -25,6 +27,7 @@ class WeightCurveViewModel(application: Application) : AndroidViewModel(applicat
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -36,6 +39,11 @@ class WeightCurveViewModel(application: Application) : AndroidViewModel(applicat
     )
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.WeightChanged) load()
+            }
+        }
         load()
     }
 

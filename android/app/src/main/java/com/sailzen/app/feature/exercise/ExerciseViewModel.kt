@@ -3,6 +3,10 @@ package com.sailzen.app.feature.exercise
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.ExerciseCreateRequest
 import com.sailzen.app.core.network.dto.ExerciseDto
@@ -23,11 +27,17 @@ class ExerciseViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val repository = HealthRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.HealthSignalChanged && event.collectionType == "exercise") load()
+            }
+        }
         load()
     }
 
@@ -43,6 +53,7 @@ class ExerciseViewModel(application: Application) : AndroidViewModel(application
 
     fun recordExercise(type: String, minutes: Int, calories: Int) {
         viewModelScope.launch {
+            _uiState.update { it.copy(loading = true) }
             repository.createExercise(
                 ExerciseCreateRequest(
                     exerciseType = type,
@@ -51,7 +62,8 @@ class ExerciseViewModel(application: Application) : AndroidViewModel(application
                     htime = System.currentTimeMillis() / 1000.0,
                 ),
             )
-            load()
+                .onSuccess { load() }
+                .onFailure { _uiState.update { it.copy(loading = false) } }
         }
     }
 }

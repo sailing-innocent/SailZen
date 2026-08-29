@@ -3,9 +3,13 @@ package com.sailzen.app.core.rhythm
 import android.content.Context
 import android.util.Log
 import com.sailzen.app.R
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.data.db.AppDatabase
 import com.sailzen.app.core.data.db.PendingRhythmAction
+import com.sailzen.app.core.data.runOperation
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.HealthApi
 import com.sailzen.app.core.network.RhythmApi
@@ -14,7 +18,6 @@ import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.AffairStateRequest
 import com.sailzen.app.core.network.dto.AffairStates
 import com.sailzen.app.core.network.dto.AffairUpdateRequest
-import com.sailzen.app.core.network.dto.VentureMilestoneRequest
 import com.sailzen.app.core.network.dto.BlockMoveRequest
 import com.sailzen.app.core.network.dto.BlockStatusRequest
 import com.sailzen.app.core.network.dto.CheckinRequest
@@ -23,25 +26,26 @@ import com.sailzen.app.core.network.dto.ConfirmHintRequest
 import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.DietCreateRequest
 import com.sailzen.app.core.network.dto.ExerciseCreateRequest
-import com.sailzen.app.core.network.dto.MedicationCreateRequest
-import com.sailzen.app.core.network.dto.SleepCreateRequest
-import com.sailzen.app.core.network.dto.WeightCreateRequest
 import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
-import kotlinx.serialization.encodeToString
+import com.sailzen.app.core.network.dto.MedicationCreateRequest
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
 import com.sailzen.app.core.network.dto.ProjectTimelineDto
 import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.ReviewTimespanDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
+import com.sailzen.app.core.network.dto.SleepCreateRequest
+import com.sailzen.app.core.network.dto.VentureMilestoneRequest
 import com.sailzen.app.core.network.dto.VentureProgressDto
+import com.sailzen.app.core.network.dto.WeightCreateRequest
 import com.sailzen.app.core.reminder.NotificationHelper
 import com.sailzen.app.core.reminder.ReminderRepository.Companion.nowIso
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
@@ -49,7 +53,8 @@ import kotlinx.serialization.json.jsonObject
  * 节奏（Rhythm）数据层（M3）：
  * - 在线直发；失败入 pending_rhythm_action 离线队列（done/defer/checkin/capture）
  * - flushPending：SyncWorker 周期补传
- * - 服务端为唯一事实源，UI 动作后重新拉取 timeline/checkins 对齐
+ * - 服务端为唯一事实源，操作成功后通过 [DataChangeBus] 广播领域事件，
+ *   让事务首页、详情、时间线、打卡等页面自动刷新到最新状态。
  */
 class RhythmRepository private constructor(private val context: Context) {
 
@@ -67,6 +72,7 @@ class RhythmRepository private constructor(private val context: Context) {
 
     private val settings = SettingsManager.get(context)
     private val db = AppDatabase.get(context)
+    private val bus = DataChangeBus.get()
     private val json = Json { ignoreUnknownKeys = true }
 
     // ------------------------------------------------------------------
@@ -85,6 +91,7 @@ class RhythmRepository private constructor(private val context: Context) {
             null
         }
     }
+
     private suspend fun apiOrNull(): RhythmApi? {
         val url = settings.serverUrl()
         if (url.isBlank()) return null
@@ -98,16 +105,31 @@ class RhythmRepository private constructor(private val context: Context) {
 
     fun observeQueuedCount(): Flow<Int> = db.rhythmActionDao().observeCount()
 
+    /**
+     * 通用原子写操作封装：在线成功后发射 [DataChangeEvent] 驱动跨页面刷新。
+     * 写操作失败（网络/服务端异常）返回 [OperationResult.Failure]，调用方提示用户。
+     */
+    private suspend fun <T> write(
+        block: suspend () -> T,
+        event: (T) -> DataChangeEvent,
+    ): OperationResult<T> = runOperation(bus, block, onSuccess = { event(it) })
+
     // ------------------------------------------------------------------
     // 快速捕获
     // ------------------------------------------------------------------
 
-    suspend fun capture(title: String, kind: String = "generic", domain: String? = null): Boolean {
+    /**
+     * 快速捕获一条事务。
+     * @return Success(true) 服务端确认；Success(false) 离线已入队；Failure 发生错误。
+     */
+    suspend fun capture(title: String, kind: String = "generic", domain: String? = null): OperationResult<Boolean> {
         val api = apiOrNull()
         if (api != null) {
             try {
                 api.capture(AffairCreateRequest(title = title, kind = kind, domain = domain))
-                return true
+                bus.emit(DataChangeEvent.AffairChanged(action = "capture"))
+                bus.emit(DataChangeEvent.DayViewChanged())
+                return OperationResult.Success(true)
             } catch (e: Exception) {
                 Log.w(TAG, "capture failed, queue offline: ${e.message}")
             }
@@ -119,8 +141,11 @@ class RhythmRepository private constructor(private val context: Context) {
             if (domain != null) o.put("domain", domain)
             o.toString()
         }
-        enqueue("capture", 0, payload)
-        return false
+        return if (enqueue("capture", 0, payload)) {
+            OperationResult.Success(false)
+        } else {
+            OperationResult.Failure("捕获失败，无法保存到本地队列")
+        }
     }
 
     /** 待分拣 INBOX（含 AI 建议卡） */
@@ -131,12 +156,14 @@ class RhythmRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun confirmHint(affairId: Int, accept: Boolean): Boolean = try {
-        apiOrNull()?.confirmHint(affairId, ConfirmHintRequest(accept)) != null
-    } catch (e: Exception) {
-        Log.w(TAG, "confirmHint failed: ${e.message}")
-        false
-    }
+    suspend fun confirmHint(affairId: Int, accept: Boolean): OperationResult<Boolean> = write(
+        block = {
+            apiOrNull()?.confirmHint(affairId, ConfirmHintRequest(accept))
+                ?: error("采纳 AI 建议失败")
+            true
+        },
+        event = { DataChangeEvent.AffairChanged(affairId = affairId, action = if (accept) "hint_accept" else "hint_reject") },
+    )
 
     suspend fun affairDetail(affairId: Int): AffairDto? = try {
         apiOrNull()?.getAffair(affairId)
@@ -146,15 +173,16 @@ class RhythmRepository private constructor(private val context: Context) {
     }
 
     /** 一键采纳 AI 建议并确认（confirm-hint → confirm，对齐 CLI `confirm --accept-hint`） */
-    suspend fun acceptHintAndConfirm(affairId: Int): Boolean {
-        if (!confirmHint(affairId, accept = true)) return false
-        return try {
-            apiOrNull()?.transit(affairId, AffairStateRequest(action = "confirm")) != null
-        } catch (e: Exception) {
-            Log.w(TAG, "confirm after hint failed: ${e.message}")
-            false
-        }
-    }
+    suspend fun acceptHintAndConfirm(affairId: Int): OperationResult<Boolean> = write(
+        block = {
+            apiOrNull()?.confirmHint(affairId, ConfirmHintRequest(accept = true))
+                ?: error("采纳 AI 建议失败")
+            apiOrNull()?.transit(affairId, AffairStateRequest(action = "confirm"))
+                ?: error("确认事务失败")
+            true
+        },
+        event = { DataChangeEvent.AffairChanged(affairId = affairId, action = "confirm") },
+    )
 
     // ------------------------------------------------------------------
     // 事务 CRUD（统一 Affair 模型：长期事业 = kind=venture，任务 = 其余 kind）
@@ -179,34 +207,35 @@ class RhythmRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun createAffair(body: AffairCreateRequest): AffairDto? = try {
-        apiOrNull()?.capture(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createAffair failed: ${e.message}")
-        null
-    }
+    suspend fun createAffair(body: AffairCreateRequest): OperationResult<AffairDto> = write(
+        block = { apiOrNull()?.capture(body) ?: error("创建事务失败") },
+        event = {
+            DataChangeEvent.AffairChanged(
+                affairId = it.id,
+                parentId = it.parentId,
+                action = "create",
+            )
+        },
+    )
 
-    suspend fun updateAffair(affairId: Int, body: AffairUpdateRequest): AffairDto? = try {
-        apiOrNull()?.updateAffair(affairId, body)
-    } catch (e: Exception) {
-        Log.w(TAG, "updateAffair failed: ${e.message}")
-        null
-    }
+    suspend fun updateAffair(affairId: Int, body: AffairUpdateRequest): OperationResult<AffairDto> = write(
+        block = { apiOrNull()?.updateAffair(affairId, body) ?: error("更新事务失败") },
+        event = { DataChangeEvent.AffairChanged(affairId = it.id, parentId = it.parentId, action = "update") },
+    )
 
-    suspend fun deleteAffair(affairId: Int): Boolean = try {
-        apiOrNull()?.deleteAffair(affairId)?.status == "success"
-    } catch (e: Exception) {
-        Log.w(TAG, "deleteAffair failed: ${e.message}")
-        false
-    }
+    suspend fun deleteAffair(affairId: Int): OperationResult<Boolean> = write(
+        block = {
+            val resp = apiOrNull()?.deleteAffair(affairId)
+            if (resp?.status == "success") true else error("删除事务失败")
+        },
+        event = { DataChangeEvent.AffairChanged(affairId = affairId, action = "delete") },
+    )
 
     /** 状态转移：confirm/start/finish/cancel/pause/resume/archive/graduate/replan */
-    suspend fun transit(affairId: Int, action: String): AffairDto? = try {
-        apiOrNull()?.transit(affairId, AffairStateRequest(action = action))
-    } catch (e: Exception) {
-        Log.w(TAG, "transit $action failed: ${e.message}")
-        null
-    }
+    suspend fun transit(affairId: Int, action: String): OperationResult<AffairDto> = write(
+        block = { apiOrNull()?.transit(affairId, AffairStateRequest(action = action)) ?: error("状态转移失败") },
+        event = { DataChangeEvent.AffairChanged(affairId = it.id, parentId = it.parentId, action = action) },
+    )
 
     // ------------------------------------------------------------------
     // 时间线 / 计划
@@ -219,64 +248,76 @@ class RhythmRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun planDay(date: LocalDate = LocalDate.now(), force: Boolean = false): PlanDayDto? = try {
-        apiOrNull()?.planDay(PlanDayRequest(date = date.toString(), force = force))
-    } catch (e: Exception) {
-        Log.w(TAG, "planDay failed: ${e.message}")
-        null
-    }
+    suspend fun planDay(date: LocalDate = LocalDate.now(), force: Boolean = false): OperationResult<PlanDayDto> = write(
+        block = { apiOrNull()?.planDay(PlanDayRequest(date = date.toString(), force = force)) ?: error("生成日计划失败") },
+        event = { DataChangeEvent.DayViewChanged(date = date) },
+    )
 
     // ------------------------------------------------------------------
     // 块反馈（done/skip/move，离线入队）
     // ------------------------------------------------------------------
 
-    suspend fun blockDone(blockId: Int) = blockStatus(blockId, "DONE")
+    suspend fun blockDone(blockId: Int): OperationResult<Boolean> = blockStatus(blockId, "DONE")
 
-    suspend fun blockSkip(blockId: Int) = blockStatus(blockId, "SKIPPED")
+    suspend fun blockSkip(blockId: Int): OperationResult<Boolean> = blockStatus(blockId, "SKIPPED")
 
-    private suspend fun blockStatus(blockId: Int, status: String): Boolean {
+    private suspend fun blockStatus(blockId: Int, status: String): OperationResult<Boolean> {
         val api = apiOrNull()
         if (api != null) {
             try {
                 api.blockStatus(blockId, BlockStatusRequest(status))
-                return true
+                bus.emit(DataChangeEvent.DayViewChanged())
+                bus.emit(DataChangeEvent.CheckinChanged())
+                return OperationResult.Success(true)
             } catch (e: Exception) {
                 Log.w(TAG, "blockStatus failed, queue offline: ${e.message}")
             }
         }
-        enqueue(
+        val enqueued = enqueue(
             if (status == "DONE") "block_done" else "block_skip",
             blockId,
             """{"status":"$status"}""",
         )
-        return false
+        return if (enqueued) OperationResult.Success(false) else OperationResult.Failure("块状态保存失败")
     }
 
     /** defer：事务级推迟（服务端 409 对 fixed_plan 拒绝） */
-    suspend fun deferAffair(affairId: Int, deferToIso: String): Boolean {
+    suspend fun deferAffair(affairId: Int, deferToIso: String): OperationResult<Boolean> {
         val api = apiOrNull()
         if (api != null) {
             try {
                 api.transit(affairId, AffairStateRequest(action = "defer", deferTo = deferToIso))
-                return true
+                bus.emit(DataChangeEvent.AffairChanged(affairId = affairId, action = "defer"))
+                bus.emit(DataChangeEvent.DayViewChanged())
+                return OperationResult.Success(true)
             } catch (e: Exception) {
                 Log.w(TAG, "defer failed, queue offline: ${e.message}")
             }
         }
-        enqueue("defer", affairId, """{"action":"defer","defer_to":"$deferToIso"}""")
-        return false
+        val enqueued = enqueue(
+            "defer",
+            affairId,
+            """{"action":"defer","defer_to":"$deferToIso"}""",
+        )
+        return if (enqueued) OperationResult.Success(false) else OperationResult.Failure("推迟保存失败")
     }
 
     // ------------------------------------------------------------------
     // 打卡（离线入队）
     // ------------------------------------------------------------------
 
-    suspend fun checkin(affairId: Int, result: String, note: String = ""): Boolean {
+    /**
+     * 打卡。
+     * @return Success(true) 服务端确认；Success(false) 离线已入队；Failure 发生错误。
+     */
+    suspend fun checkin(affairId: Int, result: String, note: String = ""): OperationResult<Boolean> {
         val api = apiOrNull()
         if (api != null) {
             try {
                 api.checkin(CheckinRequest(affairId = affairId, result = result, note = note))
-                return true
+                bus.emit(DataChangeEvent.CheckinChanged(affairId = affairId))
+                bus.emit(DataChangeEvent.AffairChanged(affairId = affairId, action = "checkin"))
+                return OperationResult.Success(true)
             } catch (e: Exception) {
                 Log.w(TAG, "checkin failed, queue offline: ${e.message}")
             }
@@ -288,8 +329,11 @@ class RhythmRepository private constructor(private val context: Context) {
             o.put("note", note)
             o.toString()
         }
-        enqueue("checkin", affairId, payload)
-        return false
+        return if (enqueue("checkin", affairId, payload)) {
+            OperationResult.Success(false)
+        } else {
+            OperationResult.Failure("打卡保存失败")
+        }
     }
 
     suspend fun checkinToday(): CheckinTodayDto? = try {
@@ -318,19 +362,18 @@ class RhythmRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun addMilestone(ventureId: Int, body: VentureMilestoneRequest): AffairDto? = try {
-        apiOrNull()?.addMilestone(ventureId, body)
-    } catch (e: Exception) {
-        Log.w(TAG, "addMilestone failed: ${e.message}")
-        null
-    }
+    suspend fun addMilestone(ventureId: Int, body: VentureMilestoneRequest): OperationResult<AffairDto> = write(
+        block = { apiOrNull()?.addMilestone(ventureId, body) ?: error("添加里程碑失败") },
+        event = { DataChangeEvent.AffairChanged(affairId = it.id, parentId = ventureId, action = "milestone") },
+    )
 
-    suspend fun milestoneDone(milestoneId: Int): Boolean = try {
-        apiOrNull()?.milestoneDone(milestoneId) != null
-    } catch (e: Exception) {
-        Log.w(TAG, "milestoneDone failed: ${e.message}")
-        false
-    }
+    suspend fun milestoneDone(milestoneId: Int): OperationResult<Boolean> = write(
+        block = {
+            apiOrNull()?.milestoneDone(milestoneId) ?: error("里程碑完成失败")
+            true
+        },
+        event = { DataChangeEvent.AffairChanged(affairId = milestoneId, action = "milestone_done") },
+    )
 
     /**
      * 事务提醒同步：逾期与 24h 内到期的未完成事务转本地通知。
@@ -398,7 +441,7 @@ class RhythmRepository private constructor(private val context: Context) {
         payload: Map<String, Any?>,
         note: String = "",
         date: LocalDate = LocalDate.now(),
-    ): HealthCheckinResponse? {
+    ): OperationResult<HealthCheckinResponse?> {
         val jsonPayload = org.json.JSONObject(payload).toString()
         val body = HealthCheckinRequest(
             collectionType = collectionType,
@@ -409,27 +452,44 @@ class RhythmRepository private constructor(private val context: Context) {
         val api = apiOrNull()
         if (api != null) {
             try {
-                return api.healthCheckin(body)
+                val response = api.healthCheckin(body)
+                emitHealthEvent(collectionType)
+                return OperationResult.Success(response)
             } catch (e: Exception) {
                 Log.w(TAG, "healthCheckin failed, queue offline: ${e.message}")
             }
         }
-        enqueue(
-            "health_checkin",
-            0,
-            ApiClient.json.encodeToString(body),
-        )
-        return null
+        return if (enqueue(
+                "health_checkin",
+                0,
+                ApiClient.json.encodeToString(body),
+            )
+        ) {
+            OperationResult.Success(null)
+        } else {
+            OperationResult.Failure("健康速记保存失败")
+        }
+    }
+
+    private suspend fun emitHealthEvent(collectionType: InfoCollectionType) {
+        when (collectionType) {
+            InfoCollectionType.weight -> bus.emit(DataChangeEvent.WeightChanged())
+            InfoCollectionType.meal -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "meal"))
+            InfoCollectionType.exercise -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "exercise"))
+            InfoCollectionType.medication -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "medication"))
+            InfoCollectionType.sleep -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "sleep"))
+            InfoCollectionType.mood -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "mood"))
+        }
     }
 
     // ------------------------------------------------------------------
     // 离线队列
     // ------------------------------------------------------------------
 
-    private suspend fun enqueue(actionType: String, targetId: Int, payloadJson: String) {
+    private suspend fun enqueue(actionType: String, targetId: Int, payloadJson: String): Boolean {
         // 校验 payload JSON 合法性（避免补传时炸队列）
         runCatching { json.parseToJsonElement(payloadJson).jsonObject }
-            .onFailure { Log.e(TAG, "invalid payload json: $payloadJson"); return }
+            .onFailure { Log.e(TAG, "invalid payload json: $payloadJson"); return false }
         db.rhythmActionDao().insert(
             PendingRhythmAction(
                 actionType = actionType,
@@ -438,6 +498,7 @@ class RhythmRepository private constructor(private val context: Context) {
                 clientEventTs = nowIso(),
             )
         )
+        return true
     }
 
     /** 冲刷离线动作队列，返回成功补传条数 */
@@ -487,6 +548,7 @@ class RhythmRepository private constructor(private val context: Context) {
                     else -> error("unknown actionType ${item.actionType}")
                 }
                 db.rhythmActionDao().delete(item.autoId)
+                emitEventForFlushed(item.actionType)
                 flushed++
             } catch (e: Exception) {
                 Log.w(TAG, "flush ${item.actionType}#${item.autoId} failed: ${e.message}")
@@ -494,5 +556,28 @@ class RhythmRepository private constructor(private val context: Context) {
             }
         }
         return flushed
+    }
+
+    private suspend fun emitEventForFlushed(actionType: String) {
+        when (actionType) {
+            "block_done", "block_skip", "block_move" -> {
+                bus.emit(DataChangeEvent.DayViewChanged())
+                bus.emit(DataChangeEvent.CheckinChanged())
+            }
+            "checkin" -> {
+                bus.emit(DataChangeEvent.CheckinChanged())
+                bus.emit(DataChangeEvent.AffairChanged(action = "checkin"))
+            }
+            "capture" -> bus.emit(DataChangeEvent.AffairChanged(action = "capture"))
+            "health_checkin", "health_weight" -> bus.emit(DataChangeEvent.WeightChanged())
+            "health_exercise" -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "exercise"))
+            "health_sleep" -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "sleep"))
+            "health_medication" -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "medication"))
+            "health_diet" -> bus.emit(DataChangeEvent.HealthSignalChanged(collectionType = "meal"))
+            "defer" -> {
+                bus.emit(DataChangeEvent.AffairChanged(action = "defer"))
+                bus.emit(DataChangeEvent.DayViewChanged())
+            }
+        }
     }
 }

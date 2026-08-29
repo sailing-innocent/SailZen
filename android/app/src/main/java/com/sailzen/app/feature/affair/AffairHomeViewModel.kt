@@ -3,6 +3,10 @@ package com.sailzen.app.feature.affair
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.onFailure
+import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.network.dto.AffairActions
 import com.sailzen.app.core.network.dto.AffairCreateRequest
 import com.sailzen.app.core.network.dto.AffairDto
@@ -38,11 +42,19 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
     )
 
     private val repository = RhythmRepository.get(application)
+    private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            bus.events.collect { event ->
+                if (event is DataChangeEvent.AffairChanged || event is DataChangeEvent.CheckinChanged) {
+                    refresh()
+                }
+            }
+        }
         refresh()
     }
 
@@ -103,7 +115,7 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
                 if (!targetDate.isNullOrBlank()) put("target_date", targetDate)
                 put("weekly_budget_hours", weeklyBudgetHours)
             }
-            val created = repository.createAffair(
+            repository.createAffair(
                 AffairCreateRequest(
                     title = title,
                     kind = VENTURE_KIND,
@@ -111,19 +123,18 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
                     kindMeta = jsonObjectOf(meta),
                 ),
             )
-            if (created == null) {
-                _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") }
-            } else {
-                // venture 为长期流：捕获后置 ACTIVE 才会进入事业视图
-                repository.transit(created.id, AffairActions.CONFIRM)
-                refresh()
-            }
+                .onSuccess { created ->
+                    // venture 为长期流：捕获后置 ACTIVE 才会进入事业视图
+                    repository.transit(created.id, AffairActions.CONFIRM)
+                    refresh()
+                }
+                .onFailure { _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") } }
         }
     }
 
     fun createTask(title: String, kind: String, domain: String?, estMinutes: Int, ddlIso: String?) {
         viewModelScope.launch {
-            val created = repository.createAffair(
+            repository.createAffair(
                 AffairCreateRequest(
                     title = title,
                     kind = kind,
@@ -132,28 +143,24 @@ class AffairHomeViewModel(application: Application) : AndroidViewModel(applicati
                     urgencyDdl = ddlIso,
                 ),
             )
-            if (created == null) {
-                _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") }
-            } else {
-                refresh()
-            }
+                .onSuccess { refresh() }
+                .onFailure { _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") } }
         }
     }
 
     fun transit(affairId: Int, action: String) {
         viewModelScope.launch {
-            val result = repository.transit(affairId, action)
-            if (result == null) {
-                _uiState.update { it.copy(message = "操作失败：当前状态不允许该动作") }
-            }
-            refresh()
+            repository.transit(affairId, action)
+                .onSuccess { refresh() }
+                .onFailure { _uiState.update { it.copy(message = "操作失败：当前状态不允许该动作") } }
         }
     }
 
     fun milestoneDone(milestoneId: Int) {
         viewModelScope.launch {
             repository.milestoneDone(milestoneId)
-            refresh()
+                .onSuccess { refresh() }
+                .onFailure { _uiState.update { it.copy(message = "操作失败") } }
         }
     }
 

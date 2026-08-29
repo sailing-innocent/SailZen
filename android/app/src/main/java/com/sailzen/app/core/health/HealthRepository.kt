@@ -2,7 +2,11 @@ package com.sailzen.app.core.health
 
 import android.content.Context
 import android.util.Log
+import com.sailzen.app.core.data.DataChangeBus
+import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.data.SettingsManager
+import com.sailzen.app.core.data.runOperation
 import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.HealthApi
@@ -40,6 +44,9 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * 健康模块数据仓库（M1）：封装 HealthApi，提供在线直读/直写能力。
  * 离线队列在后续迭代中由 RhythmRepository / SyncWorker 统一补传。
+ *
+ * 写操作统一返回 [OperationResult]，成功后通过 [DataChangeBus] 广播领域事件，
+ * 让健康首页、体重曲线、体重计划等页面自动刷新到最新状态。
  */
 class HealthRepository private constructor(private val context: Context) {
 
@@ -56,9 +63,13 @@ class HealthRepository private constructor(private val context: Context) {
     }
 
     private val settings = SettingsManager.get(context)
+    private val bus = DataChangeBus.get()
 
     private val _dashboard = MutableStateFlow<HealthDashboardDto?>(null)
     val dashboard: StateFlow<HealthDashboardDto?> = _dashboard.asStateFlow()
+
+    private suspend fun <T> write(block: suspend () -> T, event: (T) -> DataChangeEvent): OperationResult<T> =
+        runOperation(bus, block, onSuccess = { event(it) })
 
     private suspend fun apiOrNull(): HealthApi? {
         val url = settings.serverUrl()
@@ -109,14 +120,18 @@ class HealthRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun createWeight(value: Double, htime: Double? = null, note: String = ""): WeightDto? = try {
-        apiOrNull()?.createWeight(
-            WeightCreateRequest(value = value, htime = htime, description = note),
-        )
-    } catch (e: Exception) {
-        Log.w(TAG, "createWeight failed: ${e.message}")
-        null
-    }
+    suspend fun createWeight(
+        value: Double,
+        htime: Double? = null,
+        note: String = "",
+    ): OperationResult<WeightDto> = write(
+        block = {
+            apiOrNull()?.createWeight(
+                WeightCreateRequest(value = value, htime = htime, description = note),
+            ) ?: error("创建体重记录失败")
+        },
+        event = { DataChangeEvent.WeightChanged() },
+    )
 
     suspend fun activeWeightPlan(): WeightPlanDto? = try {
         apiOrNull()?.activeWeightPlan()
@@ -125,12 +140,10 @@ class HealthRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun createWeightPlan(body: WeightPlanCreateRequest): WeightPlanDto? = try {
-        apiOrNull()?.createWeightPlan(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createWeightPlan failed: ${e.message}")
-        null
-    }
+    suspend fun createWeightPlan(body: WeightPlanCreateRequest): OperationResult<WeightPlanDto> = write(
+        block = { apiOrNull()?.createWeightPlan(body) ?: error("创建体重计划失败") },
+        event = { DataChangeEvent.WeightChanged() },
+    )
 
     suspend fun weightPlanProgress(): WeightPlanProgressDto? = try {
         apiOrNull()?.weightPlanProgress()
@@ -186,12 +199,10 @@ class HealthRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun createExercise(body: ExerciseCreateRequest): ExerciseDto? = try {
-        apiOrNull()?.createExercise(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createExercise failed: ${e.message}")
-        null
-    }
+    suspend fun createExercise(body: ExerciseCreateRequest): OperationResult<ExerciseDto> = write(
+        block = { apiOrNull()?.createExercise(body) ?: error("创建运动记录失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "exercise") },
+    )
 
     // ------------------------------------------------------------------
     // Sleep
@@ -210,12 +221,10 @@ class HealthRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun createSleep(body: SleepCreateRequest): SleepDto? = try {
-        apiOrNull()?.createSleep(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createSleep failed: ${e.message}")
-        null
-    }
+    suspend fun createSleep(body: SleepCreateRequest): OperationResult<SleepDto> = write(
+        block = { apiOrNull()?.createSleep(body) ?: error("创建睡眠记录失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "sleep") },
+    )
 
     suspend fun sleepScheduleGoal(date: LocalDate): SleepScheduleGoalDto? = try {
         apiOrNull()?.sleepScheduleGoal(isoDate(date))
@@ -224,12 +233,12 @@ class HealthRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun createOrUpdateSleepScheduleGoal(body: SleepScheduleGoalCreateRequest): SleepScheduleGoalDto? = try {
-        apiOrNull()?.createOrUpdateSleepScheduleGoal(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createOrUpdateSleepScheduleGoal failed: ${e.message}")
-        null
-    }
+    suspend fun createOrUpdateSleepScheduleGoal(
+        body: SleepScheduleGoalCreateRequest,
+    ): OperationResult<SleepScheduleGoalDto> = write(
+        block = { apiOrNull()?.createOrUpdateSleepScheduleGoal(body) ?: error("保存睡眠目标失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "sleep") },
+    )
 
     // ------------------------------------------------------------------
     // Medication
@@ -256,22 +265,20 @@ class HealthRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun createMedication(body: MedicationCreateRequest): MedicationDto? = try {
-        apiOrNull()?.createMedication(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createMedication failed: ${e.message}")
-        null
-    }
+    suspend fun createMedication(body: MedicationCreateRequest): OperationResult<MedicationDto> = write(
+        block = { apiOrNull()?.createMedication(body) ?: error("创建用药记录失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "medication") },
+    )
 
-    suspend fun takeMedication(id: Int): MedicationDto? = try {
-        apiOrNull()?.updateMedication(
-            id,
-            MedicationUpdateRequest(taken = true, takenAt = System.currentTimeMillis() / 1000.0),
-        )
-    } catch (e: Exception) {
-        Log.w(TAG, "takeMedication failed: ${e.message}")
-        null
-    }
+    suspend fun takeMedication(id: Int): OperationResult<MedicationDto> = write(
+        block = {
+            apiOrNull()?.updateMedication(
+                id,
+                MedicationUpdateRequest(taken = true, takenAt = System.currentTimeMillis() / 1000.0),
+            ) ?: error("标记用药失败")
+        },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "medication") },
+    )
 
     // ------------------------------------------------------------------
     // Diet
@@ -284,12 +291,10 @@ class HealthRepository private constructor(private val context: Context) {
         emptyList()
     }
 
-    suspend fun createDiet(body: DietCreateRequest): DietDto? = try {
-        apiOrNull()?.createDiet(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createDiet failed: ${e.message}")
-        null
-    }
+    suspend fun createDiet(body: DietCreateRequest): OperationResult<DietDto> = write(
+        block = { apiOrNull()?.createDiet(body) ?: error("创建饮食记录失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "meal") },
+    )
 
     suspend fun dietSummary(date: LocalDate): DietSummaryDto? = try {
         apiOrNull()?.dietSummary(isoDate(date))
@@ -305,10 +310,10 @@ class HealthRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun createOrUpdateNutritionGoal(body: NutritionGoalCreateRequest): NutritionGoalDto? = try {
-        apiOrNull()?.createOrUpdateNutritionGoal(body)
-    } catch (e: Exception) {
-        Log.w(TAG, "createOrUpdateNutritionGoal failed: ${e.message}")
-        null
-    }
+    suspend fun createOrUpdateNutritionGoal(
+        body: NutritionGoalCreateRequest,
+    ): OperationResult<NutritionGoalDto> = write(
+        block = { apiOrNull()?.createOrUpdateNutritionGoal(body) ?: error("保存营养目标失败") },
+        event = { DataChangeEvent.HealthSignalChanged(collectionType = "meal") },
+    )
 }
