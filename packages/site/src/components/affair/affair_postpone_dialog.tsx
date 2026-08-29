@@ -14,14 +14,14 @@ import { useAffairsStore, type AffairsState } from '@lib/store/affair'
 import type { AffairData } from '@lib/data/affair'
 import { AffairState, getAffairDeadline, parseDdl } from '@lib/data/affair'
 
-export interface MissionPostponeDialogProps {
-  mission: AffairData
+export interface AffairPostponeDialogProps {
+  affair: AffairData
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
-  mission,
+const AffairPostponeDialog: React.FC<AffairPostponeDialogProps> = ({
+  affair,
   open,
   onOpenChange,
 }) => {
@@ -32,7 +32,7 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   const confirmTask = useAffairsStore((state: AffairsState) => state.confirmTask)
 
   const getNewDeadlinePreview = (): string => {
-    const currentDdl = parseDdl(getAffairDeadline(mission))
+    const currentDdl = parseDdl(getAffairDeadline(affair))
     if (!currentDdl) return '未设置'
     const newDdl = new Date(currentDdl.getTime() + days * 24 * 60 * 60 * 1000)
     return newDdl.toLocaleDateString('zh-CN', {
@@ -44,7 +44,7 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   }
 
   const getCurrentDeadline = (): string => {
-    const currentDdl = parseDdl(getAffairDeadline(mission))
+    const currentDdl = parseDdl(getAffairDeadline(affair))
     if (!currentDdl) return '未设置'
     return currentDdl.toLocaleDateString('zh-CN', {
       year: 'numeric',
@@ -59,11 +59,11 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
     setIsLoading(true)
     try {
       // defer 只允许 PLANNED/SCHEDULED；INBOX 需要先 confirm 到 PLANNED
-      if (mission.state === AffairState.INBOX) {
-        await confirmTask(mission.id)
+      if (affair.state === AffairState.INBOX) {
+        await confirmTask(affair.id)
       }
       const deferTo = new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-      await deferTask(mission.id, deferTo)
+      await deferTask(affair.id, deferTo)
       onOpenChange(false)
     } finally {
       setIsLoading(false)
@@ -82,9 +82,9 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>延期任务</DialogTitle>
+          <DialogTitle>延期事务</DialogTitle>
           <DialogDescription>
-            将任务「{mission.title}」的截止日期延后
+            将事务「{affair.title}」的截止日期延后
           </DialogDescription>
         </DialogHeader>
 
@@ -145,4 +145,4 @@ const MissionPostponeDialog: React.FC<MissionPostponeDialogProps> = ({
   )
 }
 
-export default MissionPostponeDialog
+export default AffairPostponeDialog

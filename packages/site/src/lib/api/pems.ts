@@ -4,20 +4,17 @@
  * @author sailing-innocent
  * @date 2026-03-01
  *
- * PEMS 已合并进 Rhythm 模块。本文件保留 PEMS 语义的前端封装，
- * 底层调用 /api/v1/rhythm/* 系列接口，并在必要时把 Rhythm DTO
- * 转回站点已有的 PEMS view model。
+ * PEMS 已合并进 Rhythm 模块。本文件保留站点 view model 的前端封装，
+ * 底层调用 /api/v1/rhythm/* 系列接口。
  */
 
 import { SERVER_URL, API_BASE } from './config'
 import type {
   DayViewData,
   TimeSpanViewData,
-  ProjectTimelineData,
   EnergyBudgetData,
   InsightData,
   HealthQuickLogProps,
-  PlanMissionProps,
   TimeSpanReviewProps,
   RhythmDayViewData,
   HealthCheckinRequestData,
@@ -66,12 +63,9 @@ export const api_get_day_view = async (date: Date | string): Promise<DayViewData
   return transformRhythmDayView(raw)
 }
 
-export const api_plan_mission_on_day = async (
-  date: Date | string,
-  _plan: PlanMissionProps
+export const api_plan_day = async (
+  date: Date | string
 ): Promise<DayViewData> => {
-  // PEMS 的 "plan mission on day" 在 Rhythm 中对应：重新生成当日计划。
-  // 如需把指定 mission 排入某日，应先 POST /rhythm/affair/ 再 POST /rhythm/plan/day。
   const response = await fetch(buildUrl('/plan/day'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -140,7 +134,6 @@ export const api_get_timespan_view = async (spanId: number): Promise<TimeSpanVie
   const response = await fetch(buildUrl(`/review/timespan/${spanId}`))
   await checkOk(response, 'fetching timespan view')
   const data = (await response.json()) as Record<string, unknown>
-  // 兼容旧 PEMS view model（当前站点未使用本接口，保留基础字段）
   return {
     id: (data.timespan_id as number) || spanId,
     class_: (data.scope as string) || '',
@@ -150,7 +143,7 @@ export const api_get_timespan_view = async (spanId: number): Promise<TimeSpanVie
     theme: null,
     energy_capacity: 0,
     energy_consumed: 0,
-    project_ids: [],
+    venture_ids: [],
     health_goals: {},
     review_note: (data.ai_summary as string) || null,
     focus_areas: [],
@@ -162,7 +155,6 @@ export const api_review_timespan = async (
   spanId: number,
   review: TimeSpanReviewProps
 ): Promise<TimeSpanViewData> => {
-  // Rhythm 的复盘 summary 更新使用 scope/period_key 路径参数
   const viewResp = await fetch(buildUrl(`/review/timespan/${spanId}`))
   await checkOk(viewResp, 'fetching timespan view')
   const view = (await viewResp.json()) as Record<string, unknown>
@@ -180,29 +172,6 @@ export const api_review_timespan = async (
   })
   await checkOk(response, 'reviewing timespan')
   return api_get_timespan_view(spanId)
-}
-
-export const api_get_project_timeline = async (
-  projectId: number
-): Promise<ProjectTimelineData> => {
-  const response = await fetch(buildUrl(`/review/project/${projectId}`))
-  await checkOk(response, 'fetching project timeline')
-  const data = (await response.json()) as Record<string, unknown>
-  return {
-    project_id: (data.project_id as number) || projectId,
-    project_name: (data.project_name as string) || '',
-    timespan_id: (data.timespan_id as number) || null,
-    energy_budget: (data.energy_budget as number) || 0,
-    milestones: ((data.milestones as Record<string, unknown>[]) || []).map((m) => ({
-      id: (m.id as number) || 0,
-      name: (m.title as string) || '',
-      date: (m.date as string) || null,
-      state: (m.state as number) || 0,
-      energy_weight: (m.energy_weight as number) || 0,
-    })),
-    missions: [],
-    timelogs: [],
-  }
 }
 
 export const api_get_energy_budget = async (

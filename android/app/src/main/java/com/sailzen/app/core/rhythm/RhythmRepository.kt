@@ -32,7 +32,6 @@ import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.network.dto.MedicationCreateRequest
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
-import com.sailzen.app.core.network.dto.ProjectTimelineDto
 import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.ReviewTimespanDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
@@ -418,12 +417,6 @@ class RhythmRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun projectTimeline(projectId: Int): ProjectTimelineDto? = try {
-        apiOrNull()?.projectTimeline(projectId)
-    } catch (e: Exception) {
-        Log.w(TAG, "projectTimeline failed: ${e.message}")
-        null
-    }
 
     // ------------------------------------------------------------------
     // 统一日视图 / 健康速记

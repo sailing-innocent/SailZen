@@ -17,8 +17,10 @@ from litestar import Router
 from litestar.di import Provide
 
 from sail_server.controller.rhythm import (
+    AdminController,
     AffairController,
     CheckinController,
+    DashboardController,
     EnergyController,
     PlanController,
     PolicyController,
@@ -34,6 +36,8 @@ router = Router(
     path="/rhythm",
     dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
+        DashboardController,
+        AdminController,
         AffairController,
         TimelineController,
         TemplateController,

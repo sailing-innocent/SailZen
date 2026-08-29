@@ -21,7 +21,7 @@ import {
   ExternalLink,
   Target,
 } from 'lucide-react'
-import MissionDetailDialog from './mission_detail_dialog'
+import AffairDetailDialog from './affair_detail_dialog'
 import { useAffairsStore, type AffairsState } from '@lib/store/affair'
 import {
   type AffairData,
@@ -35,22 +35,22 @@ import {
   getAffairDeadline,
 } from '@lib/data/affair'
 import { cn } from '@/lib/utils'
-import MissionPostponeDialog from './mission_postpone_dialog'
+import AffairPostponeDialog from './affair_postpone_dialog'
 import { isChallengeAffair, parseChallengeName, ChallengeTypeIcons, ChallengeTypeLabels } from '@lib/data/challenge'
 
-export interface MissionCardProps {
-  mission: AffairData
+export interface AffairCardProps {
+  affair: AffairData
   compact?: boolean
-  showProject?: boolean
-  project?: AffairData
+  showVenture?: boolean
+  venture?: AffairData
   onComplete?: () => void
 }
 
-const MissionCard: React.FC<MissionCardProps> = ({
-  mission,
+const AffairCard: React.FC<AffairCardProps> = ({
+  affair,
   compact = false,
-  showProject = false,
-  project,
+  showVenture = false,
+  venture,
   onComplete,
 }) => {
   const [isPostponeOpen, setIsPostponeOpen] = useState(false)
@@ -62,17 +62,17 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const cancelTask = useAffairsStore((state: AffairsState) => state.cancelTask)
   const reopenTask = useAffairsStore((state: AffairsState) => state.reopenTask)
 
-  const displayDeadline = getAffairDeadline(mission)
-  const isOverdue = isAffairOverdue(displayDeadline, mission.state)
-  const isActive = isAffairActive(mission.state)
+  const displayDeadline = getAffairDeadline(affair)
+  const isOverdue = isAffairOverdue(displayDeadline, affair.state)
+  const isActive = isAffairActive(affair.state)
   const hoursUntilDeadline = getHoursUntilDeadline(displayDeadline)
 
-  // Check if this mission belongs to a Challenge venture
+  // Check if this affair belongs to a Challenge venture
   const challengeInfo = useMemo(() => {
-    if (!project || !isChallengeAffair(project.title)) {
+    if (!venture || !isChallengeAffair(venture.title)) {
       return null
     }
-    const parsed = parseChallengeName(project.title)
+    const parsed = parseChallengeName(venture.title)
     if (!parsed) return null
     return {
       type: parsed.type,
@@ -81,13 +81,13 @@ const MissionCard: React.FC<MissionCardProps> = ({
       title: parsed.title,
       days: parsed.days,
     }
-  }, [project])
+  }, [venture])
 
-  const priority = getAffairPriority(displayDeadline, mission.state)
+  const priority = getAffairPriority(displayDeadline, affair.state)
 
   // State badge color
   const getStateBadgeVariant = (): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    switch (mission.state) {
+    switch (affair.state) {
       case AffairState.DOING:
         return 'default'
       case AffairState.DONE:
@@ -103,7 +103,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const handleStartDoing = async () => {
     setIsLoading(true)
     try {
-      await startTask(mission.id)
+      await startTask(affair.id)
     } finally {
       setIsLoading(false)
     }
@@ -112,7 +112,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const handleComplete = async () => {
     setIsLoading(true)
     try {
-      await finishTask(mission.id)
+      await finishTask(affair.id)
       onComplete?.()
     } finally {
       setIsLoading(false)
@@ -122,7 +122,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const handleCancel = async () => {
     setIsLoading(true)
     try {
-      await cancelTask(mission.id)
+      await cancelTask(affair.id)
     } finally {
       setIsLoading(false)
     }
@@ -131,7 +131,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
   const handleReopen = async () => {
     setIsLoading(true)
     try {
-      await reopenTask(mission.id)
+      await reopenTask(affair.id)
     } finally {
       setIsLoading(false)
     }
@@ -154,8 +154,8 @@ const MissionCard: React.FC<MissionCardProps> = ({
         <CardContent className={cn('p-4', compact && 'p-3')}>
           <div className="flex items-start gap-3">
             <Checkbox
-              checked={mission.state === AffairState.DONE}
-              disabled={isLoading || mission.state === AffairState.CANCELED}
+              checked={affair.state === AffairState.DONE}
+              disabled={isLoading || affair.state === AffairState.CANCELED}
               onCheckedChange={(checked) => {
                 if (checked) {
                   handleComplete()
@@ -181,19 +181,19 @@ const MissionCard: React.FC<MissionCardProps> = ({
                 <span
                   className={cn(
                     'font-medium truncate',
-                    mission.state === AffairState.DONE && 'line-through text-muted-foreground'
+                    affair.state === AffairState.DONE && 'line-through text-muted-foreground'
                   )}
                 >
-                  {mission.title}
+                  {affair.title}
                 </span>
                 {isOverdue && isActive && (
                   <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />
                 )}
               </div>
 
-              {!compact && mission.description && !challengeInfo && (
+              {!compact && affair.description && !challengeInfo && (
                 <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                  {mission.description}
+                  {affair.description}
                 </p>
               )}
 
@@ -211,7 +211,7 @@ const MissionCard: React.FC<MissionCardProps> = ({
 
               <div className="flex items-center gap-2 flex-wrap text-xs">
                 <Badge variant={getStateBadgeVariant()} className="text-xs">
-                  {AffairStateLabels[mission.state]}
+                  {AffairStateLabels[affair.state]}
                 </Badge>
 
                 {displayDeadline && isActive && (
@@ -222,22 +222,22 @@ const MissionCard: React.FC<MissionCardProps> = ({
                     )}
                   >
                     <Clock className="h-3 w-3" />
-                    {mission.state === AffairState.DEFERRED
+                    {affair.state === AffairState.DEFERRED
                       ? `延期至 ${formatDeadline(displayDeadline)}`
                       : formatDeadline(displayDeadline)}
                   </span>
                 )}
 
-                {showProject && mission.parent_id && mission.parent_id > 0 && (
+                {showVenture && affair.parent_id && affair.parent_id > 0 && (
                   <span className="text-muted-foreground">
-                    事业 #{mission.parent_id}
+                    事业 #{affair.parent_id}
                   </span>
                 )}
               </div>
             </div>
 
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {isActive && mission.state !== AffairState.DOING && (
+              {isActive && affair.state !== AffairState.DOING && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -270,9 +270,9 @@ const MissionCard: React.FC<MissionCardProps> = ({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {(mission.state === AffairState.INBOX ||
-                    mission.state === AffairState.PLANNED ||
-                    mission.state === AffairState.SCHEDULED) && (
+                  {(affair.state === AffairState.INBOX ||
+                    affair.state === AffairState.PLANNED ||
+                    affair.state === AffairState.SCHEDULED) && (
                     <>
                       <DropdownMenuItem onClick={() => setIsPostponeOpen(true)}>
                         <Calendar className="h-4 w-4 mr-2" />
@@ -313,15 +313,15 @@ const MissionCard: React.FC<MissionCardProps> = ({
         </CardContent>
       </Card>
 
-      <MissionPostponeDialog
-        mission={mission}
+      <AffairPostponeDialog
+        affair={affair}
         open={isPostponeOpen}
         onOpenChange={setIsPostponeOpen}
       />
 
-      <MissionDetailDialog
-        mission={mission}
-        project={project}
+      <AffairDetailDialog
+        affair={affair}
+        venture={venture}
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
       />
@@ -329,4 +329,4 @@ const MissionCard: React.FC<MissionCardProps> = ({
   )
 }
 
-export default MissionCard
+export default AffairCard

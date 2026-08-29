@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import PageLayout from '@components/page_layout'
-import ReminderTodoList from '@components/project/reminder_todo_list'
+import AffairTodoList from '@components/affair/affair_todo_list'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,7 +70,7 @@ const MainPage = () => {
           {/* Left column */}
           <div className={isMobile ? 'space-y-6' : 'md:col-span-2 space-y-6'}>
             {dayView && <EnergyTodayCard dayView={dayView} />}
-            <ReminderTodoList title="待办任务" showFilters={true} />
+            <AffairTodoList title="待办事务" showFilters={true} />
             {dayView && <InsightList insights={dayView.insights} />}
           </div>
 
@@ -99,12 +99,6 @@ const MainPage = () => {
                   label="健康"
                   href="/health"
                   color="text-red-500"
-                />
-                <QuickAccessCard
-                  icon={<FolderKanban className="h-5 w-5" />}
-                  label="项目"
-                  href="/project"
-                  color="text-blue-600"
                 />
                 <QuickAccessCard
                   icon={<Package className="h-5 w-5" />}
@@ -211,17 +205,17 @@ const EnergyTodayCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData 
           </ul>
         )}
 
-        {dayView.planned_missions.length > 0 && (
+        {dayView.planned_affairs.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium">今日重点任务</p>
             <div className="space-y-1">
-              {dayView.planned_missions.slice(0, 3).map((m) => (
+              {dayView.planned_affairs.slice(0, 3).map((a) => (
                 <div
-                  key={m.id}
+                  key={a.id}
                   className="flex items-center justify-between text-sm p-2 rounded-lg border"
                 >
-                  <span>{m.name}</span>
-                  <span className="text-xs text-muted-foreground">{m.energy_cost} 精力</span>
+                  <span>{a.name}</span>
+                  <span className="text-xs text-muted-foreground">{a.energy_cost} 精力</span>
                 </div>
               ))}
             </div>

@@ -107,15 +107,15 @@ const EnergyPage = () => {
           <div className={`grid gap-6 ${isMobile ? 'grid-cols-1' : 'md:grid-cols-3'}`}>
             <div className={isMobile ? '' : 'md:col-span-2 space-y-6'}>
               <DaySummaryCard dayView={dayView} />
-              <MissionListCard
+              <AffairListCard
                 title="今日安排"
-                missions={dayView.planned_missions}
-                emptyText="今日暂无安排任务"
+                affairs={dayView.planned_affairs}
+                emptyText="今日暂无安排事务"
               />
-              <MissionListCard
+              <AffairListCard
                 title="已完成"
-                missions={dayView.completed_missions}
-                emptyText="今日暂无完成任务"
+                affairs={dayView.completed_affairs}
+                emptyText="今日暂无完成事务"
               />
               <InsightList insights={dayView.insights} />
             </div>
@@ -192,38 +192,35 @@ const DaySummaryCard: React.FC<{ dayView: import('@lib/data/pems').DayViewData }
   )
 }
 
-const MissionListCard: React.FC<{
+const AffairListCard: React.FC<{
   title: string
-  missions: import('@lib/data/pems').PemsMissionBriefData[]
+  affairs: import('@lib/data/pems').RhythmAffairBriefData[]
   emptyText: string
-}> = ({ title, missions, emptyText }) => {
+}> = ({ title, affairs, emptyText }) => {
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        {missions.length === 0 ? (
+        {affairs.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyText}</p>
         ) : (
           <ul className="space-y-2">
-            {missions.map((m) => (
+            {affairs.map((a) => (
               <li
-                key={m.id}
+                key={a.id}
                 className="flex items-center justify-between p-2 rounded-lg border"
               >
                 <div>
-                  <p className="text-sm font-medium">{m.name}</p>
-                  {m.project_name && (
-                    <p className="text-xs text-muted-foreground">{m.project_name}</p>
-                  )}
+                  <p className="text-sm font-medium">{a.name}</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Zap className="h-3 w-3" />
-                    {m.energy_cost}
+                    {a.energy_cost}
                   </span>
-                  <span>{m.planned_minutes}min</span>
+                  <span>{a.planned_minutes}min</span>
                 </div>
               </li>
             ))}

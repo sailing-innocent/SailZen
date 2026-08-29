@@ -295,18 +295,6 @@ data class HealthCheckinResponse(
 )
 
 @Serializable
-data class ProjectTimelineDto(
-    @SerialName("project_id") val projectId: Int,
-    @SerialName("project_name") val projectName: String,
-    @SerialName("start_date") val startDate: String? = null,
-    @SerialName("end_date") val endDate: String? = null,
-    val blocks: List<TimeBlockDto> = emptyList(),
-    @SerialName("domain_minutes") val domainMinutes: DomainMinutesDto = DomainMinutesDto(),
-    @SerialName("energy_consumed") val energyConsumed: Int = 0,
-    @SerialName("energy_budget") val energyBudget: Int = 100,
-)
-
-@Serializable
 data class ReviewTimespanDto(
     val id: Int? = null,
     val scope: String,

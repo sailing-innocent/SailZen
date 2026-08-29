@@ -13,7 +13,7 @@ sail_server/
 │   ├── health.py             # 健康管理路由
 │   ├── history.py            # 历史记录路由
 │   ├── necessity.py          # 物资管理路由
-│   ├── project.py            # 项目管理路由
+
 │   ├── text.py               # 文本管理路由
 │
 ├── controller/                # 控制器层 (Application Layer)
@@ -27,7 +27,7 @@ sail_server/
 │   ├── necessity.py          # 物资控制器
 │   ├── outline.py            # 大纲控制器
 │   ├── outline_extraction.py # 大纲提取控制器
-│   ├── project.py            # 项目控制器
+
 │   ├── setting.py            # 设定控制器
 │   ├── setting_extraction.py # 设定提取控制器
 │   └── text.py               # 文本控制器
@@ -41,7 +41,7 @@ sail_server/
 │   │   ├── history.py        # 历史模块 DTOs
 │   │   ├── life.py           # 生活模块 DTOs
 │   │   ├── necessity.py      # 物资模块 DTOs
-│   │   ├── project.py        # 项目模块 DTOs
+
 │   │   ├── text.py           # 文本模块 DTOs
 │   └── service/              # [预留] 应用服务层
 │       └── __init__.py
@@ -67,7 +67,7 @@ sail_server/
 │   │   └── residence.py      # 住所模型
 │   ├── health.py             # 健康模型
 │   ├── history.py            # 历史模型
-│   ├── project.py            # 项目模型
+
 │   ├── service.py            # 服务模型
 │   ├── text.py               # 文本模型
 │
@@ -90,7 +90,7 @@ sail_server/
 │       ├── history.py        # 历史模块 DAO
 │       ├── life.py           # 生活模块 DAO
 │       ├── necessity.py      # 物资模块 DAO
-│       ├── project.py        # 项目模块 DAO
+
 │       ├── text.py           # 文本模块 DAO
 │
 ├── infrastructure/            # 基础设施层 (Infrastructure Layer)
@@ -104,7 +104,7 @@ sail_server/
 │   │   ├── history.py        # 历史模块 ORM
 │   │   ├── life.py           # 生活模块 ORM
 │   │   ├── necessity.py      # 物资模块 ORM
-│   │   ├── project.py        # 项目模块 ORM
+
 │   │   ├── text.py           # 文本模块 ORM
 │   └── external/             # [预留] 外部服务集成
 │       └── __init__.py
@@ -392,7 +392,6 @@ HTTP Response
 | text (文本管理) | ✅ 完整 | Work/Edition/DocumentNode CRUD, 文本导入 |
 | finance (财务管理) | ✅ 完整 | 账户、交易、预算管理 |
 | necessity (物资管理) | ✅ 完整 | 物品、库存、住所、行程 |
-| project (项目管理) | ✅ 完整 | 任务板、任务管理 |
 | health (健康管理) | 🔶 部分 | 体重追踪基础功能 |
 | history (历史记录) | ✅ 完整 | 时间线事件追踪 |
 

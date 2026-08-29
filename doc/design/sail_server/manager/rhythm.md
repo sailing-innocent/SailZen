@@ -340,3 +340,59 @@ token 取 `SAILZEN_API_TOKEN`。
 | plan_day 贪心次优 | 预留 strategy 参数，后续可换 CP-SAT（scipy 已在栈内） |
 | 隐私 | 全部本地/局域网；SAILZEN_API_TOKEN 复用 reminder 鉴权 |
 | 时间口径 | 全链路 naive local（对齐 reminder `_now()` 约定） |
+
+## 11. Dashboard 后台（M5）
+
+### 11.1 共享聚合入口 `/dashboard`
+
+`GET /api/v1/rhythm/dashboard?date=YYYY-MM-DD` 是 PC Dashboard 与 Android 提醒端唯一的共享数据入口，一次性返回当日全部数据：
+
+- `timeline`: 当日时间线（blocks + 三域分钟 + 缓冲 + 未放置 + warnings）
+- `day_review`: 当日节奏评分（即时计算并落库）
+- `week_review`: 本周节奏评分
+- `today_checkins`: 今日 precept/habit 待打卡清单
+- `energy_profile`: 当前精力画像（`is_default=true` 表示默认导入未校准）
+- `policies`: 启用的守护策略列表
+- `conflicts`: 今日冲突/侵占报告
+- `inbox_summary`: INBOX 优先级事务摘要
+- `overdue_summary`: 逾期事务摘要
+- `today_due_summary`: 今日截止事务摘要
+
+所有字段同时服务于 Dashboard 可视化与 Android 提醒通知，新增字段需评估双端影响。
+
+### 11.2 Dashboard 页面结构
+
+`/rhythm` 页面使用 Tabs 组织：
+
+1. **概览**: 今日节奏分、精力预算、三域饼图、告警、待处理计数。
+2. **时间线**: 时间块列表、块状态反馈（DONE/SKIPPED/DOING）、非 pinned 块手动拖拽移动、未放置事务。
+3. **事务中心**: 按 kind 分组 Kanban / 列表视图、事务创建/编辑、状态转移、删除。
+4. **事业**: 事业列表、里程碑树、倒排进度、燃尽图。
+5. **戒律/习惯**: 今日待打卡、历史打卡、habit 热力图、precept 合规率。
+6. **基础配置**: 精力画像编辑器、DayTemplate 管理、守护策略 CRUD。
+7. **复盘统计**: 日/周评分卡片、encroachment 列表、三域时长趋势、精力预算 vs 实际。
+
+### 11.3 旧数据校准与迁移
+
+首次进入 Dashboard 时，若 `energy_profile.is_default=true` 或缺少 templates，顶部 Banner 提示校准：
+
+- `POST /api/v1/rhythm/admin/recalibrate-profile`: 覆盖/创建默认精力画像。
+- `POST /api/v1/rhythm/admin/ensure-default-templates`: 幂等生成 weekday/weekend/travel_day 三套默认模板。
+- `POST /api/v1/rhythm/admin/migrate-legacy-missions`: 将旧 `project.projects` / `project.missions` 映射为 `rhythm_affairs`（venture / task_oneoff），按 `mission_id` 与 `ref.legacy_id` 幂等去重。
+
+### 11.4 统计增强端点
+
+- `GET /api/v1/rhythm/checkin/heatmap?affair_id=&start_date=&end_date=`: habit/precept 每日打卡矩阵。
+- `GET /api/v1/rhythm/review/domain-trend?start_date=&end_date=`: 按天返回 life/work/career 投入分钟数。
+- `GET /api/v1/rhythm/venture/{id}/burndown`: 事业每周计划/实际投入小时 + 里程碑完成数。
+
+### 11.5 前端实现文件
+
+| 文件 | 职责 |
+|------|------|
+| `packages/site/src/pages/rhythm.tsx` | Dashboard 页面入口 |
+| `packages/site/src/lib/api/rhythm.ts` | Dashboard API 客户端 |
+| `packages/site/src/lib/data/rhythm.ts` | Dashboard DTO 类型 |
+| `packages/site/src/lib/store/rhythm.ts` | 统一 Rhythm Zustand store |
+| `packages/site/src/components/rhythm/*.tsx` | Dashboard 各视图组件 |
+

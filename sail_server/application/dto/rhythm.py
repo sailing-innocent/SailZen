@@ -430,7 +430,6 @@ class AffairCreateRequest(BaseModel):
     min_chunk_minutes: int = Field(default=30, ge=0, description="最小连续块（分钟）")
     fallback_plan: str = Field(default="", description="备用方案（Plan B）")
     recurrence_rule_id: Optional[int] = Field(default=None, description="关联 reminder 规则")
-    mission_id: Optional[int] = Field(default=None, description="关联 project mission")
     day_id: Optional[int] = Field(default=None, description="目标日锚点（life.days）")
     timespan_id: Optional[int] = Field(default=None, description="目标 TimeSpan")
     parent_id: Optional[int] = Field(default=None, description="父事务（拆分树/里程碑链）")
@@ -460,7 +459,6 @@ class AffairUpdateRequest(BaseModel):
     min_chunk_minutes: Optional[int] = Field(default=None, ge=0, description="最小连续块")
     fallback_plan: Optional[str] = Field(default=None, description="备用方案")
     recurrence_rule_id: Optional[int] = Field(default=None, description="关联 reminder 规则")
-    mission_id: Optional[int] = Field(default=None, description="关联 mission")
     day_id: Optional[int] = Field(default=None, description="目标日锚点")
     timespan_id: Optional[int] = Field(default=None, description="目标 TimeSpan")
     parent_id: Optional[int] = Field(default=None, description="父事务")
@@ -495,7 +493,6 @@ class AffairResponse(BaseModel):
     min_chunk_minutes: int = 30
     fallback_plan: str = ""
     recurrence_rule_id: Optional[int] = None
-    mission_id: Optional[int] = None
     day_id: Optional[int] = None
     timespan_id: Optional[int] = None
     parent_id: Optional[int] = None
@@ -907,6 +904,12 @@ class ConflictReportResponse(BaseModel):
     encroachments: List[EncroachmentItem] = Field(default_factory=list)
 
 
+class EnsureTemplatesResponse(BaseModel):
+    created: int = 0
+    updated: int = 0
+    templates: List[DayTemplateResponse] = Field(default_factory=list)
+
+
 # ============================================================================
 # EnergyProfile / Policy DTOs
 # ============================================================================
@@ -934,6 +937,7 @@ class EnergyProfileResponse(BaseModel):
 
     id: int
     name: str = "default"
+    is_default: bool = Field(default=True, description="是否为首次导入的默认画像，未校准")
     daily_energy_budget: int = 100
     curve_template: Dict[str, Any] = Field(default_factory=dict)
     sleep_start: str = "23:30"
@@ -1011,6 +1015,60 @@ class ReviewSummaryUpdateRequest(BaseModel):
     ai_summary: str
 
 
+class RhythmDashboardResponse(BaseModel):
+    """Dashboard 与 Android 提醒端共享的唯一聚合入口"""
+
+    date: date_type
+    timeline: DayTimelineResponse
+    day_review: ReviewResponse
+    week_review: ReviewResponse
+    today_checkins: CheckinTodayResponse
+    energy_profile: EnergyProfileResponse
+    policies: List[PolicyResponse] = Field(default_factory=list)
+    conflicts: ConflictReportResponse
+    inbox_summary: List[PriorityAffairItem] = Field(default_factory=list)
+    overdue_summary: List[PriorityAffairItem] = Field(default_factory=list)
+    today_due_summary: List[PriorityAffairItem] = Field(default_factory=list)
+
+
+class HabitHeatmapItem(BaseModel):
+    """habit 热力图单日项"""
+
+    date: date_type
+    cycle_key: str
+    result: Optional[CheckinResult] = None
+    done: bool = Field(default=False, description="是否已打卡完成")
+
+
+class HabitHeatmapResponse(BaseModel):
+    affair_id: int
+    start_date: date_type
+    end_date: date_type
+    days: List[HabitHeatmapItem] = Field(default_factory=list)
+
+
+class DomainTrendItem(BaseModel):
+    date: date_type
+    life: int = 0
+    work: int = 0
+    career: int = 0
+
+
+class DomainTrendResponse(BaseModel):
+    start_date: date_type
+    end_date: date_type
+    days: List[DomainTrendItem] = Field(default_factory=list)
+
+
+class VentureBurndownResponse(BaseModel):
+    affair_id: int
+    title: str
+    weeks: List[str] = Field(default_factory=list)
+    planned: List[float] = Field(default_factory=list)
+    actual: List[float] = Field(default_factory=list)
+    milestones_done: List[int] = Field(default_factory=list)
+
+
 # ============================================================================
 # HealthCheckin DTOs
 # ============================================================================
@@ -1061,21 +1119,8 @@ class HealthCheckinResponse(BaseModel):
 
 
 # ============================================================================
-# Project Timeline / Timespan Review DTOs
+# Timespan Review DTOs
 # ============================================================================
-
-
-class ProjectTimelineResponse(BaseModel):
-    """项目时间线（PEMS project timeline 合并进 Rhythm）"""
-
-    project_id: int
-    project_name: str
-    start_date: Optional[date_type] = None
-    end_date: Optional[date_type] = None
-    blocks: List[TimeBlockResponse] = Field(default_factory=list)
-    domain_minutes: DomainMinutes = Field(default_factory=DomainMinutes)
-    energy_consumed: int = 0
-    energy_budget: int = 100
 
 
 class ReviewTimespanResponse(ReviewResponse):

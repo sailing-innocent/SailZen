@@ -17,7 +17,6 @@ import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.PlanDayDto
 import com.sailzen.app.core.network.dto.PlanDayRequest
-import com.sailzen.app.core.network.dto.ProjectTimelineDto
 import com.sailzen.app.core.network.dto.ReviewDto
 import com.sailzen.app.core.network.dto.ReviewTimespanDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
@@ -116,8 +115,7 @@ interface RhythmApi {
     @GET("api/v1/rhythm/review/timespan/{id}")
     suspend fun reviewTimespan(@Path("id") id: Int): ReviewTimespanDto
 
-    @GET("api/v1/rhythm/review/project/{project_id}")
-    suspend fun projectTimeline(@Path("project_id") projectId: Int): ProjectTimelineDto
+}
 
     // ---------------- Day View / Health ----------------
 

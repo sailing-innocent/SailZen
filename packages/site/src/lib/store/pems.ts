@@ -9,20 +9,17 @@ import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type {
   DayViewData,
   TimeSpanViewData,
-  ProjectTimelineData,
   EnergyBudgetData,
   InsightData,
   HealthQuickLogProps,
-  PlanMissionProps,
   TimeSpanReviewProps,
 } from '@lib/data/pems'
 import {
   api_get_day_view,
-  api_plan_mission_on_day,
+  api_plan_day,
   api_log_health_on_day,
   api_get_timespan_view,
   api_review_timespan,
-  api_get_project_timeline,
   api_get_energy_budget,
   api_get_daily_insights,
   api_get_weekly_insights,
@@ -34,17 +31,13 @@ export interface PemsState {
   selectedDate: string
   isLoading: boolean
   fetchDayView: (date?: Date | string) => Promise<void>
-  planMissionOnDay: (missionId: number, date?: Date | string) => Promise<void>
+  planDay: (date?: Date | string) => Promise<void>
   logHealthOnDay: (log: HealthQuickLogProps, date?: Date | string) => Promise<void>
 
   // Timespan view
   timespanView: TimeSpanViewData | null
   fetchTimespanView: (spanId: number) => Promise<void>
   reviewTimespan: (spanId: number, review: TimeSpanReviewProps) => Promise<void>
-
-  // Project timeline
-  projectTimeline: ProjectTimelineData | null
-  fetchProjectTimeline: (projectId: number) => Promise<void>
 
   // Energy & insights
   energyBudget: EnergyBudgetData | null
@@ -75,13 +68,13 @@ export const usePemsStore: UseBoundStore<StoreApi<PemsState>> = create<PemsState
     }
   },
 
-  planMissionOnDay: async (missionId: number, date?: Date | string) => {
+  planDay: async (date?: Date | string) => {
     const targetDate = date || get().selectedDate
     try {
-      const dayView = await api_plan_mission_on_day(targetDate, { mission_id: missionId })
+      const dayView = await api_plan_day(targetDate)
       set({ dayView })
     } catch (error) {
-      console.error('Failed to plan mission:', error)
+      console.error('Failed to plan day:', error)
       throw error
     }
   },
@@ -113,17 +106,6 @@ export const usePemsStore: UseBoundStore<StoreApi<PemsState>> = create<PemsState
       set({ timespanView })
     } catch (error) {
       console.error('Failed to review timespan:', error)
-      throw error
-    }
-  },
-
-  projectTimeline: null,
-  fetchProjectTimeline: async (projectId: number) => {
-    try {
-      const projectTimeline = await api_get_project_timeline(projectId)
-      set({ projectTimeline })
-    } catch (error) {
-      console.error('Failed to fetch project timeline:', error)
       throw error
     }
   },

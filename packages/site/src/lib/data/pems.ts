@@ -26,11 +26,9 @@ export interface HealthSignalSummaryData {
   exercise_count: number
 }
 
-export interface PemsMissionBriefData {
+export interface RhythmAffairBriefData {
   id: number
   name: string
-  project_id: number | null
-  project_name: string | null
   state: number
   energy_cost: number
   planned_minutes: number
@@ -50,8 +48,8 @@ export interface DayViewData {
   rhythm: string
   energy_budget: EnergyBudgetData
   health_signals: HealthSignalSummaryData
-  planned_missions: PemsMissionBriefData[]
-  completed_missions: PemsMissionBriefData[]
+  planned_affairs: RhythmAffairBriefData[]
+  completed_affairs: RhythmAffairBriefData[]
   challenge_checkins: Record<string, string>
   insights: InsightData[]
   note: string | null
@@ -66,34 +64,11 @@ export interface TimeSpanViewData {
   theme: string | null
   energy_capacity: number
   energy_consumed: number
-  project_ids: number[]
+  venture_ids: number[]
   health_goals: Record<string, unknown>
   review_note: string | null
   focus_areas: string[]
   day_count: number
-}
-
-export interface ProjectTimelineData {
-  project_id: number
-  project_name: string
-  timespan_id: number | null
-  energy_budget: number
-  milestones: Array<{
-    id: number
-    name: string
-    date: string | null
-    state: number
-    energy_weight: number
-  }>
-  missions: PemsMissionBriefData[]
-  timelogs: Array<{
-    id: number
-    mission_id: number
-    day_id: number
-    duration_minutes: number
-    energy_cost: number
-    description: string
-  }>
 }
 
 export interface HealthQuickLogProps {
@@ -102,10 +77,6 @@ export interface HealthQuickLogProps {
   energy_level?: number
   mood?: number
   note?: string
-}
-
-export interface PlanMissionProps {
-  mission_id: number
 }
 
 export interface TimeSpanReviewProps {
@@ -249,7 +220,7 @@ export interface ReviewData {
 }
 
 // ============================================================================
-// Transformers: Rhythm DTO -> legacy PEMS view model (used by site UI)
+// Transformers: Rhythm DTO -> site view model
 // ============================================================================
 
 function blockStatusToState(status: string): number {
@@ -265,25 +236,23 @@ function deriveRhythm(date: string): string {
 }
 
 export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
-  const planned_missions: PemsMissionBriefData[] = []
-  const completed_missions: PemsMissionBriefData[] = []
+  const planned_affairs: RhythmAffairBriefData[] = []
+  const completed_affairs: RhythmAffairBriefData[] = []
 
   for (const b of raw.blocks) {
     if (!b.affair_id) continue
-    const mission: PemsMissionBriefData = {
+    const affair: RhythmAffairBriefData = {
       id: b.id,
       name: b.affair_title || '未命名',
-      project_id: null,
-      project_name: null,
       state: blockStatusToState(b.status),
       energy_cost: b.energy_cost,
       planned_minutes: 0,
       health_constraint: '',
     }
     if (b.status === 'done' || b.status === 'skipped') {
-      completed_missions.push(mission)
+      completed_affairs.push(affair)
     } else {
-      planned_missions.push(mission)
+      planned_affairs.push(affair)
     }
   }
 
@@ -345,8 +314,8 @@ export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
     rhythm,
     energy_budget: energyBudget,
     health_signals: health,
-    planned_missions,
-    completed_missions,
+    planned_affairs,
+    completed_affairs,
     challenge_checkins: {},
     insights,
     note: raw.note,

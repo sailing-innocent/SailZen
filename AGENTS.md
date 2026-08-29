@@ -359,7 +359,6 @@ works = db.query(Work).all()
 | --------- | ------------ | ------------------------ |
 | Finance   | `/money`     | 账户管理、交易、预算     |
 | Health    | `/health`    | 体重追踪、健康指标       |
-| Project   | `/project`   | 任务板、任务管理         |
 | Text      | `/text`      | 文本导入、章节管理、阅读 |
 | Analysis  | `/analysis`  | 角色档案、大纲、设定提取 |
 | Necessity | `/necessity` | 库存、住所、行程追踪           |

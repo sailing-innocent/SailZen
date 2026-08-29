@@ -52,9 +52,12 @@ from sail_server.application.dto.rhythm import (
     DayTemplateResponse,
     DayTemplateUpsertRequest,
     DayTimelineResponse,
+    DomainTrendResponse,
     EncroachmentItem,
     EnergyProfileResponse,
     EnergyProfileUpsertRequest,
+    EnsureTemplatesResponse,
+    HabitHeatmapResponse,
     HealthCheckinRequest,
     HealthCheckinResponse,
     InfoCollectionType,
@@ -64,15 +67,16 @@ from sail_server.application.dto.rhythm import (
     PolicyListResponse,
     PolicyResponse,
     PolicyUpdateRequest,
-    ProjectTimelineResponse,
     RebalanceRequest,
     ReviewResponse,
     ReviewSummaryUpdateRequest,
     ReviewTimespanResponse,
+    RhythmDashboardResponse,
     RhythmDayDashboardResponse,
     RhythmDayViewResponse,
     TimeBlockCreateRequest,
     TimeBlockResponse,
+    VentureBurndownResponse,
     VentureMilestoneRequest,
     VentureProgressResponse,
 )
@@ -89,6 +93,7 @@ from sail_server.model.rhythm import (
     delete_affair_impl,
     delete_policy_impl,
     delete_template_impl,
+    ensure_default_templates_impl,
     get_active_template_impl,
     get_affair_impl,
     get_day_dashboard_impl,
@@ -102,6 +107,7 @@ from sail_server.model.rhythm import (
     list_templates_impl,
     milestone_done_impl,
     move_block_impl,
+    recalibrate_profile_impl,
     review_timespan_impl,
     set_block_status_impl,
     split_affair_impl,
@@ -115,8 +121,12 @@ from sail_server.model.rhythm import (
 )
 from sail_server.model.rhythm_planner import (
     detect_conflicts_impl,
+    get_dashboard_impl,
     get_day_review_impl,
     get_day_timeline_impl,
+    get_domain_trend_impl,
+    get_habit_heatmap_impl,
+    get_venture_burndown_impl,
     get_week_review_impl,
     list_encroachments_impl,
     plan_day_impl,
@@ -155,6 +165,65 @@ def _map_errors():
         raise ClientException(status_code=400, detail=str(e)) from e
     except ValueError as e:
         raise ClientException(status_code=400, detail=str(e)) from e
+
+
+# ============================================================================
+# Dashboard Controller（PC Dashboard / Android 提醒端共享聚合入口）
+# ============================================================================
+
+
+class DashboardController(Controller):
+    path = "/dashboard"
+
+    @get("/")
+    async def dashboard(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        date: date_type,
+    ) -> RhythmDashboardResponse:
+        """GET /api/v1/rhythm/dashboard?date=YYYY-MM-DD
+
+        一次性聚合 Dashboard 与 Android 提醒端所需的当日全部数据。
+        """
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_dashboard_impl(db, date)
+
+
+# ============================================================================
+# Admin Controller（旧数据校准 / 默认模板 / 精力画像）
+# ============================================================================
+
+
+class AdminController(Controller):
+    path = "/admin"
+
+    @post("/recalibrate-profile")
+    async def recalibrate_profile(
+        self,
+        data: EnergyProfileUpsertRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> EnergyProfileResponse:
+        """覆盖/创建默认精力画像（首次引导校准）。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return recalibrate_profile_impl(db, data)
+
+    @post("/ensure-default-templates")
+    async def ensure_default_templates(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> EnsureTemplatesResponse:
+        """幂等生成 weekday/weekend/travel_day 三套默认模板。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        return ensure_default_templates_impl(db)
+
 
 
 # ============================================================================
@@ -449,6 +518,21 @@ class CheckinController(Controller):
         db = next(router_dependency)
         return today_checkins_impl(db, date)
 
+    @get("/heatmap")
+    async def heatmap(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        affair_id: int,
+        start_date: date_type,
+        end_date: date_type,
+    ) -> HabitHeatmapResponse:
+        """habit/precept 打卡热力图"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_habit_heatmap_impl(db, affair_id, start_date, end_date)
+
     @post("/health")
     async def health_checkin(
         self,
@@ -483,6 +567,19 @@ class VentureController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return venture_progress_impl(db, venture_id)
+
+    @get("/{venture_id:int}/burndown")
+    async def burndown(
+        self,
+        venture_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> VentureBurndownResponse:
+        """事业燃尽图"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_venture_burndown_impl(db, venture_id)
 
     @post("/{venture_id:int}/milestone")
     async def add_milestone(
@@ -815,6 +912,20 @@ class ReviewController(Controller):
         _check_auth(request)
         db = next(router_dependency)
         return list_encroachments_impl(db, start_date, end_date)
+
+    @get("/domain-trend")
+    async def domain_trend(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        start_date: date_type,
+        end_date: date_type,
+    ) -> DomainTrendResponse:
+        """三域时长趋势"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_domain_trend_impl(db, start_date, end_date)
 
     @get("/timespan/{timespan_id:int}")
     async def timespan_review(

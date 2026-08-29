@@ -22,10 +22,9 @@
 时间戳统一 naive TIMESTAMP（服务器本地时间，与 reminder 等现有模块一致）；
 JSON 字段使用 sail_server.data.types.JSONB（PG 原生 / SQLite Text+JSON）。
 
-不修改 life/project/reminder/finance 既有表语义，仅以外键引用：
+不修改 life/reminder/finance 既有表语义，仅以外键引用：
 - day_id          → life.days(id)
 - timespan_id     → life.timespans(id)
-- mission_id      → project.missions(id)（逻辑引用，不建硬外键）
 - recurrence_rule_id → reminder.reminder_rules(id)（逻辑引用，不建硬外键）
 - budget_id       → finance.budgets(id)（逻辑引用，不建硬外键）
 """
@@ -95,8 +94,6 @@ class RhythmAffair(ORMBase):
     fallback_plan = Column(Text, default="")
     # 关联 reminder.rules（周期提醒复用 reminder cron 基础设施，逻辑引用）
     recurrence_rule_id = Column(Integer, nullable=True)
-    # 关联 project.missions（工作域子项落地，逻辑引用）
-    mission_id = Column(Integer, nullable=True)
     # 目标日锚点（一次性事务用）
     day_id = Column(Integer, ForeignKey("days.id"), nullable=True, index=True)
     # venture 挂靠的目标 TimeSpan（季度/双周）

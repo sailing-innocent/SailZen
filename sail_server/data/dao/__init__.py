@@ -29,9 +29,6 @@ from .finance import AccountDAO, TransactionDAO, BudgetDAO, BudgetItemDAO
 # Health
 from .health import WeightDAO, BodySizeDAO, ExerciseDAO, WeightPlanDAO
 
-# Project
-from .project import ProjectDAO, MissionDAO
-
 # Necessity
 from .necessity import (
     ResidenceDAO,
@@ -67,9 +64,6 @@ __all__ = [
     "EditionDAO",
     "DocumentNodeDAO",
     "NoteItemDAO",
-    # Project
-    "ProjectDAO",
-    "MissionDAO",
     # Necessity
     "ResidenceDAO",
     "ContainerDAO",

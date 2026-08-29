@@ -45,6 +45,7 @@ from sail_server.application.dto.rhythm import (
     BlockStatus,
     BlockStatusRequest,
     BlockMoveRequest,
+    BlockType,
     CheckinRequest,
     CheckinLogResponse,
     CheckinResult,
@@ -56,6 +57,7 @@ from sail_server.application.dto.rhythm import (
     DomainMinutes,
     EnergyProfileResponse,
     EnergyProfileUpsertRequest,
+    EnsureTemplatesResponse,
     HABIT_RESULTS,
     HealthCheckinRequest,
     HealthCheckinResponse,
@@ -66,13 +68,13 @@ from sail_server.application.dto.rhythm import (
     PolicyUpdateRequest,
     PRECEPT_RESULTS,
     PriorityAffairItem,
-    ProjectTimelineResponse,
     ReviewTimespanResponse,
     RhythmDayDashboardResponse,
     RhythmDayViewResponse,
     TERMINAL_STATES,
     TimeBlockCreateRequest,
     TimeBlockResponse,
+    TemplateSlot,
     VentureMilestoneRequest,
     VentureProgressResponse,
     is_longterm_kind,
@@ -232,7 +234,6 @@ def affair_to_response(a: RhythmAffair) -> AffairResponse:
         min_chunk_minutes=a.min_chunk_minutes or 30,
         fallback_plan=a.fallback_plan or "",
         recurrence_rule_id=a.recurrence_rule_id,
-        mission_id=a.mission_id,
         day_id=a.day_id,
         timespan_id=a.timespan_id,
         parent_id=a.parent_id,
@@ -307,6 +308,7 @@ def _profile_to_response(p: RhythmEnergyProfile) -> EnergyProfileResponse:
     return EnergyProfileResponse(
         id=p.id,
         name=p.name,
+        is_default=(p.name == "default"),
         daily_energy_budget=p.daily_energy_budget or 100,
         curve_template=p.curve_template or {},
         sleep_start=p.sleep_start or "23:30",
@@ -366,7 +368,6 @@ def create_affair_impl(db: Session, request: AffairCreateRequest) -> AffairRespo
         min_chunk_minutes=request.min_chunk_minutes,
         fallback_plan=request.fallback_plan,
         recurrence_rule_id=request.recurrence_rule_id,
-        mission_id=request.mission_id,
         day_id=request.day_id,
         timespan_id=request.timespan_id,
         parent_id=request.parent_id,
@@ -446,8 +447,8 @@ def update_affair_impl(
     simple_fields = [
         "title", "description", "importance", "urgency_ddl", "energy_cost",
         "money_cost", "budget_id", "est_minutes", "window_start", "window_end",
-        "splittable", "min_chunk_minutes", "fallback_plan", "recurrence_rule_id",
-        "mission_id", "day_id", "timespan_id", "parent_id", "ai_hint", "ref",
+"splittable", "min_chunk_minutes", "fallback_plan", "recurrence_rule_id",
+    "day_id", "timespan_id", "parent_id", "ai_hint", "ref",
     ]
     if request.info_collection_type is not None:
         affair.info_collection_type = request.info_collection_type.value
@@ -2010,3 +2011,88 @@ def review_timespan_impl(db: Session, timespan_id: int) -> ReviewTimespanRespons
         encroachments=all_encroachments,
         ai_summary="",
     )
+
+
+# ============================================================================
+# Admin / calibration
+# ============================================================================
+
+
+#: 默认 weekday 模板槽位
+_DEFAULT_WEEKDAY_SLOTS = [
+    TemplateSlot(label="通勤", start="08:20", end="09:00", block_type=BlockType.COMMUTE),
+    TemplateSlot(
+        label="上午工作窗",
+        start="09:00",
+        end="12:00",
+        block_type=BlockType.WORK_WINDOW,
+        micro_cycle={"work_min": 90, "rest_min": 15},
+    ),
+    TemplateSlot(label="午休", start="12:00", end="14:00", block_type=BlockType.REST),
+    TemplateSlot(
+        label="下午工作窗",
+        start="14:00",
+        end="18:00",
+        block_type=BlockType.WORK_WINDOW,
+        micro_cycle={"work_min": 90, "rest_min": 15},
+    ),
+    TemplateSlot(label="晚间", start="19:30", end="22:30", block_type=BlockType.LIGHT),
+]
+
+_DEFAULT_WEEKEND_SLOTS = [
+    TemplateSlot(label="上午", start="09:00", end="12:00", block_type=BlockType.LIGHT),
+    TemplateSlot(label="下午", start="14:00", end="18:00", block_type=BlockType.LIGHT),
+    TemplateSlot(label="晚间", start="19:30", end="22:30", block_type=BlockType.LIGHT),
+]
+
+_DEFAULT_TRAVEL_SLOTS = [
+    TemplateSlot(label="休息", start="08:00", end="10:00", block_type=BlockType.REST),
+    TemplateSlot(label="通勤/移动", start="10:00", end="14:00", block_type=BlockType.COMMUTE),
+    TemplateSlot(label="休息", start="14:00", end="16:00", block_type=BlockType.REST),
+    TemplateSlot(label="晚间", start="19:30", end="22:30", block_type=BlockType.LIGHT),
+]
+
+
+def recalibrate_profile_impl(
+    db: Session, request: EnergyProfileUpsertRequest
+) -> EnergyProfileResponse:
+    """Dashboard 首次校准：覆盖默认精力画像；若不存在则创建。"""
+    # 强制写入 default 画像
+    req = EnergyProfileUpsertRequest(**request.model_dump(exclude_unset=True))
+    req.name = "default"
+    return upsert_energy_profile_impl(db, req)
+
+
+def ensure_default_templates_impl(db: Session) -> EnsureTemplatesResponse:
+    """幂等生成 weekday/weekend/travel_day 三套默认模板。"""
+    created = 0
+    updated = 0
+    templates: List[DayTemplateResponse] = []
+
+    defs = [
+        ("weekday", "工作日默认模板", [1, 1, 1, 1, 1, 0, 0], _DEFAULT_WEEKDAY_SLOTS),
+        ("weekend", "周末默认模板", [0, 0, 0, 0, 0, 1, 1], _DEFAULT_WEEKEND_SLOTS),
+        ("travel_day", "出行日模板", [1, 1, 1, 1, 1, 1, 1], _DEFAULT_TRAVEL_SLOTS),
+    ]
+
+    for name, description, mask, slots in defs:
+        existing = db.query(RhythmDayTemplate).filter(RhythmDayTemplate.name == name).first()
+        req = DayTemplateUpsertRequest(
+            name=name,
+            description=description,
+            weekday_mask=mask,
+            slots=[s.model_dump(mode="json") for s in slots],
+            enabled=True,
+            priority=0,
+        )
+        resp = upsert_template_impl(db, req)
+        templates.append(resp)
+        if existing is None:
+            created += 1
+        else:
+            updated += 1
+
+    return EnsureTemplatesResponse(created=created, updated=updated, templates=templates)
+
+
+

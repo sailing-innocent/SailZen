@@ -53,7 +53,6 @@ splittable
 min_chunk_minutes
 fallback_plan
 recurrence_rule_id
-mission_id
 day_id
 timespan_id
 parent_id
@@ -61,14 +60,8 @@ info_collection_type
 ai_hint
 score
 ref
-- legacy_id
-- legacy_state
-- migrated_from: missions
 - actual_minutes
-- legacy_parent_id
 - health_constraint
-- legacy_project_id
-- legacy_milestone_id
 
 直接创建
 - title

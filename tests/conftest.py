@@ -34,7 +34,7 @@ os.environ["PGCLIENTENCODING"] = "UTF8"
 # 导入 ORM Base 和所有模型
 from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm import (
-    health, finance, life, project, history, text, necessity, reminder, rhythm
+    health, finance, life, history, text, necessity, reminder, rhythm
 )
 
 # 确保 NoteItem 表被加载

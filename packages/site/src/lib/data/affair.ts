@@ -3,8 +3,9 @@
  * @brief Rhythm Affair data types and helpers
  * @description
  *   统一事务模型 `rhythm_affairs` 的数据类型、状态常量与工具函数。
- *   本文件取代旧的 `project.ts` 中 Project/Mission 类型，作为 site 端
- *   任务看板、待办列表、打卡挑战的唯一数据源。
+ * 统一事务模型 `rhythm_affairs` 的数据类型、状态常量与工具函数。
+ * 作为 site 端任务看板、待办列表、打卡挑战的唯一数据源。
+
  */
 
 // ============================================================================
@@ -123,7 +124,6 @@ export interface AffairCreateProps {
   min_chunk_minutes?: number
   fallback_plan?: string
   recurrence_rule_id?: number | null
-  mission_id?: number | null
   day_id?: number | null
   timespan_id?: number | null
   parent_id?: number | null
@@ -153,7 +153,6 @@ export interface AffairData extends AffairCreateProps {
   min_chunk_minutes: number
   fallback_plan: string
   recurrence_rule_id: number | null
-  mission_id: number | null
   day_id: number | null
   timespan_id: number | null
   parent_id: number | null
@@ -163,39 +162,6 @@ export interface AffairData extends AffairCreateProps {
   ref: Record<string, unknown>
   ctime?: string | number
   mtime?: string | number
-}
-
-// ============================================================================
-// 状态映射（旧 Project/Mission → Affair）
-// ============================================================================
-
-/** projects.state（旧数字枚举） → AffairState */
-export function projectStateToAffairState(state: number | undefined): AffairStateValue {
-  switch (state) {
-    case 3: return AffairState.ACTIVE
-    case 4: return AffairState.PAUSED
-    case 5: return AffairState.DONE
-    case 0:
-    case 6:
-      return AffairState.ARCHIVED
-    case 1:
-    case 2:
-    default:
-      return AffairState.INBOX
-  }
-}
-
-/** missions.state（旧数字枚举） → AffairState */
-export function missionStateToAffairState(state: number | undefined): AffairStateValue {
-  switch (state) {
-    case 1: return AffairState.PLANNED
-    case 2: return AffairState.DOING
-    case 3: return AffairState.DONE
-    case 4: return AffairState.CANCELED
-    case 0:
-    default:
-      return AffairState.INBOX
-  }
 }
 
 // ============================================================================
@@ -214,7 +180,6 @@ export const parseDdl = (ddl: string | number | Date | null | undefined): Date |
     return isValidDate(date) ? date : null
   }
   if (typeof ddl === 'number') {
-    // 秒级时间戳（兼容旧 missions.ddl）
     const date = ddl < 946684800000 ? new Date(ddl * 1000) : new Date(ddl)
     return isValidDate(date) ? date : null
   }
@@ -289,6 +254,164 @@ export const getAffairDeadline = (
   return affair.urgency_ddl
 }
 
+// ============================================================================
+// kind_meta 分类型强类型辅助
+// ============================================================================
+
+export interface PreceptMeta {
+  rule_text: string
+  cycle: 'daily' | 'weekly'
+  weekday_mask: number[]
+  check_time: string
+  severity: 'hard' | 'soft'
+  block_minutes: number
+}
+
+export interface HabitMeta {
+  freq_per_week: number
+  min_session_minutes: number
+  preferred_slots: string[]
+  streak: number
+  best_streak: number
+  last_done_date?: string | null
+}
+
+export interface MaintenanceMeta {
+  interval_days: number
+  last_done_at?: string | number | null
+  session_minutes: number
+}
+
+export interface VentureMeta {
+  target_date?: string | null
+  weekly_budget_hours: number
+  spare_time_only: boolean
+  total_est_hours: number
+}
+
+export interface FixedPlanMeta {
+  immovable: boolean
+  fixed_start?: string | number | null
+  fixed_end?: string | number | null
+  legs: number[]
+}
+
+export interface AsyncCallbackPhase {
+  name: string
+  est_minutes: number
+  energy_cost: number
+}
+
+export interface AsyncCallbackMeta {
+  phases: AsyncCallbackPhase[]
+  current_phase: string
+  round: number
+  max_rounds: number
+  work_hours_only: boolean
+  delegate_to: string
+  est_wait_hours: number
+  last_handoff_at?: string | null
+  last_return_at?: string | null
+  next_review_at?: string | null
+  revision_history?: unknown[]
+}
+
+export type KindMetaMap = {
+  base_rhythm: Record<string, unknown>
+  precept: PreceptMeta
+  habit: HabitMeta
+  fixed_plan: FixedPlanMeta
+  task_oneoff: Record<string, unknown>
+  task_maintenance: MaintenanceMeta
+  venture: VentureMeta
+  async_callback: AsyncCallbackMeta
+  buffer: Record<string, unknown>
+  generic: Record<string, unknown>
+}
+
+export function getKindMeta<T extends AffairKindValue>(
+  affair: AffairData,
+  kind: T
+): KindMetaMap[T] | undefined {
+  if (affair.kind !== kind) return undefined
+  return (affair.kind_meta ?? {}) as KindMetaMap[T]
+}
+
+export const defaultPreceptMeta = (): PreceptMeta => ({
+  rule_text: '',
+  cycle: 'daily',
+  weekday_mask: [1, 1, 1, 1, 1, 1, 1],
+  check_time: '22:30',
+  severity: 'soft',
+  block_minutes: 0,
+})
+
+export const defaultHabitMeta = (): HabitMeta => ({
+  freq_per_week: 3,
+  min_session_minutes: 30,
+  preferred_slots: [],
+  streak: 0,
+  best_streak: 0,
+  last_done_date: null,
+})
+
+export const defaultVentureMeta = (): VentureMeta => ({
+  target_date: null,
+  weekly_budget_hours: 6,
+  spare_time_only: true,
+  total_est_hours: 0,
+})
+
+export const defaultMaintenanceMeta = (): MaintenanceMeta => ({
+  interval_days: 7,
+  last_done_at: null,
+  session_minutes: 60,
+})
+
+export const defaultFixedPlanMeta = (): FixedPlanMeta => ({
+  immovable: true,
+  fixed_start: null,
+  fixed_end: null,
+  legs: [],
+})
+
+export const defaultAsyncCallbackMeta = (): AsyncCallbackMeta => ({
+  phases: [
+    { name: 'kickoff', est_minutes: 30, energy_cost: 25 },
+    { name: 'delegated', est_minutes: 0, energy_cost: 0 },
+    { name: 'review', est_minutes: 20, energy_cost: 15 },
+  ],
+  current_phase: 'kickoff',
+  round: 1,
+  max_rounds: 3,
+  work_hours_only: false,
+  delegate_to: 'ai',
+  est_wait_hours: 24,
+  last_handoff_at: null,
+  last_return_at: null,
+  next_review_at: null,
+  revision_history: [],
+})
+
+export function getDefaultKindMeta(kind: AffairKindValue): Record<string, unknown> {
+  switch (kind) {
+    case AffairKind.PRECEPT:
+      return defaultPreceptMeta() as unknown as Record<string, unknown>
+    case AffairKind.HABIT:
+      return defaultHabitMeta() as unknown as Record<string, unknown>
+    case AffairKind.VENTURE:
+      return defaultVentureMeta() as unknown as Record<string, unknown>
+    case AffairKind.TASK_MAINTENANCE:
+      return defaultMaintenanceMeta() as unknown as Record<string, unknown>
+    case AffairKind.FIXED_PLAN:
+      return defaultFixedPlanMeta() as unknown as Record<string, unknown>
+    case AffairKind.ASYNC_CALLBACK:
+      return defaultAsyncCallbackMeta() as unknown as Record<string, unknown>
+    default:
+      return {}
+  }
+}
+
 export type AffairPriority = 'urgent' | 'high' | 'normal' | 'low'
 
 export const getAffairPriority = (
@@ -330,10 +453,3 @@ export const toIsoDdl = (ddl: Date | string | number | null | undefined): string
   return date.toISOString()
 }
 
-// ============================================================================
-// 兼容性类型别名（供部分旧组件名平滑过渡，不新增运行时依赖）
-// ============================================================================
-
-/** 旧组件中 mission/project 的 `name` 语义等价于 Affair `title` */
-export type VentureData = AffairData
-export type TaskData = AffairData

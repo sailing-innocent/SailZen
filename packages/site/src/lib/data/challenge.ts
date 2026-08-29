@@ -147,13 +147,10 @@ export function parseChallengeName(name: string): { type: ChallengeTypeValue; da
   }
 }
 
-/** 判断 affair title 是否为 Challenge 根（兼容旧 isChallengeProject 语义） */
+/** 判断 affair title 是否为 Challenge 根 */
 export function isChallengeAffair(name: string): boolean {
   return name.startsWith(CHALLENGE_PREFIX)
 }
-
-/** 旧名别名，供尚未改名的过渡代码使用 */
-export const isChallengeProject = isChallengeAffair
 
 export function affairStateToCheckInStatus(
   state: AffairState | undefined,
@@ -320,7 +317,6 @@ function makePlaceholderChild(rootId: number, day: number, startDate: Date): Aff
     min_chunk_minutes: 30,
     fallback_plan: '',
     recurrence_rule_id: null,
-    mission_id: null,
     day_id: null,
     timespan_id: null,
     parent_id: rootId,

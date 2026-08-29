@@ -62,12 +62,12 @@ export interface ChallengeActions {
   abortChallenge: (challengeId: number) => Promise<boolean>
   
   // 打卡操作
-  checkInSuccess: (missionId: number, challengeId: number) => Promise<number | null>
-  checkInFailed: (missionId: number, challengeId: number) => Promise<number | null>
-  resetCheckIn: (missionId: number, challengeId: number) => Promise<number | null>
-  
+  checkInSuccess: (affairId: number, challengeId: number) => Promise<number | null>
+  checkInFailed: (affairId: number, challengeId: number) => Promise<number | null>
+  resetCheckIn: (affairId: number, challengeId: number) => Promise<number | null>
+  getTodayAffairId: () => number | null
+
   // 快捷操作
-  getTodayMissionId: () => number | null
   getTodayAffairId: () => number | null
   isTodayChecked: () => boolean
   canCheckInToday: () => boolean
@@ -244,10 +244,12 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
   // 打卡操作
   // ==========================================
 
-  checkInSuccess: async (missionId: number, challengeId: number): Promise<number | null> => {
-    set({ isCheckingIn: true, error: null })
+  checkInFailed: async (affairId: number, challengeId: number): Promise<number | null> => {
     try {
-      await api_check_in_success(missionId)
+      set({ isLoading: true })
+      await api_check_in_failed(affairId)
+
+
       // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
@@ -260,10 +262,10 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     }
   },
 
-  checkInFailed: async (missionId: number, challengeId: number): Promise<number | null> => {
+  checkInFailed: async (affairId: number, challengeId: number): Promise<number | null> => {
     set({ isCheckingIn: true, error: null })
     try {
-      await api_check_in_failed(missionId)
+      await api_check_in_failed(affairId)
       // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
@@ -276,10 +278,11 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
     }
   },
 
-  resetCheckIn: async (missionId: number, challengeId: number): Promise<number | null> => {
-    set({ isCheckingIn: true, error: null })
+  resetCheckIn: async (affairId: number, challengeId: number): Promise<number | null> => {
     try {
-      await api_reset_check_in(missionId)
+      set({ isLoading: true })
+      await api_reset_check_in(affairId)
+
       // 刷新详情和挑战列表（以更新进度显示）
       await get().fetchChallengeDetail(challengeId)
       await get().fetchActiveChallenges()
@@ -296,7 +299,7 @@ export const useChallengeStore: UseBoundStore<StoreApi<ChallengeStore>> = create
   // 快捷查询
   // ==========================================
 
-  getTodayMissionId: (): number | null => {
+  getTodayAffairId: (): number | null => {
     const { currentChallenge, currentCheckIns } = get()
     if (!currentChallenge) {
       return null

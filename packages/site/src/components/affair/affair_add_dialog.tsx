@@ -10,11 +10,11 @@ import { isChallengeAffair } from '@lib/data/challenge'
 import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-export interface AddMissionDialogProps {
+export interface AddAffairDialogProps {
     ventures?: AffairData[]
 }
 
-const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
+const AddAffairDialog: React.FC<AddAffairDialogProps> = () => {
     const ventures = useAffairsStore((state: AffairsState) => state.ventures)
     const createTask = useAffairsStore((state: AffairsState) => state.createTask)
     const isMobile = useIsMobile()
@@ -58,21 +58,21 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="outline">Add Mission</Button>
+                <Button variant="outline">Add Affair</Button>
             </DialogTrigger>
             <DialogContent className={isMobile ? 'max-w-[95vw] max-h-[85vh] overflow-y-auto' : ''}>
                 <DialogHeader>
-                    <DialogTitle>新增任务</DialogTitle>
-                    <DialogDescription>选择事业并填写任务信息后创建</DialogDescription>
+                    <DialogTitle>新增事务</DialogTitle>
+                    <DialogDescription>选择事业并填写事务信息后创建</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-2">
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="mission-name">任务名称</Label>
-                        <Input id="mission-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入任务名称" />
+                        <Label htmlFor="affair-name">事务名称</Label>
+                        <Input id="affair-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="请输入事务名称" />
                     </div>
                     <div className="flex flex-col gap-2">
-                        <Label htmlFor="mission-desc">任务描述</Label>
-                        <Input id="mission-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="请输入任务描述" />
+                        <Label htmlFor="affair-desc">事务描述</Label>
+                        <Input id="affair-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="请输入事务描述" />
                     </div>
                     <div className="flex flex-row gap-6">
                         <div className="flex flex-col gap-2">
@@ -107,4 +107,4 @@ const AddMissionDialog: React.FC<AddMissionDialogProps> = () => {
     )
 }
 
-export default AddMissionDialog
+export default AddAffairDialog

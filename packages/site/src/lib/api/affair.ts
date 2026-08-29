@@ -17,6 +17,30 @@ import type {
 } from '@lib/data/affair'
 import { toIsoDdl } from '@lib/data/affair'
 
+export interface ConfirmHintOptions {
+  accept: boolean
+  overrides?: Record<string, unknown>
+}
+
+export interface AffairSplitChildProps {
+  title: string
+  kind?: AffairKindValue | null
+  domain?: AffairDomainValue | null
+  kind_meta?: Record<string, unknown>
+  importance?: number | null
+  est_minutes?: number | null
+  energy_cost?: number | null
+  urgency_ddl?: string | Date | number | null
+  window_start?: string | Date | null
+  window_end?: string | Date | null
+  timespan_id?: number | null
+  description?: string
+}
+
+export interface SplitAffairOptions {
+  children: AffairSplitChildProps[]
+}
+
 const RHYTHM_API_BASE = API_BASE + '/rhythm'
 
 type QueryValue = string | number | undefined | (string | number)[]
@@ -67,8 +91,7 @@ const normalizeCreateProps = (props: AffairCreateProps): Record<string, unknown>
   if (props.state) body.state = props.state
   if (props.parent_id !== undefined) body.parent_id = props.parent_id
   if (props.urgency_ddl !== undefined) body.urgency_ddl = toIsoDdl(props.urgency_ddl)
-  if (props.budget_id !== undefined) body.budget_id = props.budget_id
-  if (props.mission_id !== undefined) body.mission_id = props.mission_id
+  if (props.recurrence_rule_id !== undefined) body.recurrence_rule_id = props.recurrence_rule_id
   if (props.day_id !== undefined) body.day_id = props.day_id
   if (props.timespan_id !== undefined) body.timespan_id = props.timespan_id
   if (props.info_collection_type !== undefined) body.info_collection_type = props.info_collection_type
@@ -95,8 +118,7 @@ const normalizeUpdateProps = (props: AffairUpdateProps): Record<string, unknown>
   if (props.fallback_plan !== undefined) body.fallback_plan = props.fallback_plan
   if (props.parent_id !== undefined) body.parent_id = props.parent_id
   if (props.urgency_ddl !== undefined) body.urgency_ddl = toIsoDdl(props.urgency_ddl)
-  if (props.budget_id !== undefined) body.budget_id = props.budget_id
-  if (props.mission_id !== undefined) body.mission_id = props.mission_id
+  if (props.recurrence_rule_id !== undefined) body.recurrence_rule_id = props.recurrence_rule_id
   if (props.day_id !== undefined) body.day_id = props.day_id
   if (props.timespan_id !== undefined) body.timespan_id = props.timespan_id
   if (props.info_collection_type !== undefined) body.info_collection_type = props.info_collection_type
@@ -298,6 +320,65 @@ export const api_get_venture_progress = async (id: number): Promise<Record<strin
 // Convenience: scoped venture / task helpers used by stores
 // ---------------------------------------------------------------------------
 
+export const api_confirm_hint = async (id: number, options: ConfirmHintOptions): Promise<AffairData> => {
+  const response = await fetch(buildUrl(`/affair/${id}/confirm-hint`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accept: options.accept, overrides: options.overrides ?? {} }),
+  })
+  await checkOk(response, `confirming hint for affair ${id}`)
+  return response.json()
+}
+
+export const api_split_affair = async (id: number, options: SplitAffairOptions): Promise<{ affairs: AffairData[]; total: number }> => {
+  const response = await fetch(buildUrl(`/affair/${id}/split`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ children: options.children }),
+  })
+  await checkOk(response, `splitting affair ${id}`)
+  return response.json()
+}
+
+export const api_get_all_affairs = async (
+  filters: Omit<Parameters<typeof api_get_affairs>[0], 'state' | 'domain' | 'kind'> & {
+    state?: AffairStateValue | AffairStateValue[]
+    domain?: AffairDomainValue | AffairDomainValue[]
+    kind?: AffairKindValue | AffairKindValue[]
+  } = {}
+): Promise<AffairData[]> => {
+  return api_get_affairs(filters)
+}
+
+export const api_get_affairs_by_kind = async (
+  kind: AffairKindValue | AffairKindValue[],
+  state?: AffairStateValue | AffairStateValue[]
+): Promise<AffairData[]> => {
+  return api_get_affairs({ kind, state })
+}
+
+export const api_batch_transit_affairs = async (
+  ids: number[],
+  action: AffairAction,
+  options: TransitAffairOptions = {}
+): Promise<AffairData[]> => {
+  const results: AffairData[] = []
+  for (const id of ids) {
+    const updated = await api_transit_affair_state(id, action, options)
+    results.push(updated)
+  }
+  return results
+}
+
+export const api_batch_delete_affairs = async (ids: number[]): Promise<{ id: number; status: string }[]> => {
+  const results: { id: number; status: string }[] = []
+  for (const id of ids) {
+    const resp = await api_delete_affair(id)
+    results.push(resp)
+  }
+  return results
+}
+
 export const api_get_ventures = async (): Promise<AffairData[]> => {
   return api_get_affairs({ kind: 'venture', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
 }
@@ -309,4 +390,20 @@ export const api_get_tasks = async (parentId?: number | null): Promise<AffairDat
   }
   if (parentId !== undefined) filters.parent_id = parentId
   return api_get_affairs(filters)
+}
+
+export const api_get_habits = async (): Promise<AffairData[]> => {
+  return api_get_affairs({ kind: 'habit', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
+}
+
+export const api_get_precepts = async (): Promise<AffairData[]> => {
+  return api_get_affairs({ kind: 'precept', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
+}
+
+export const api_get_maintenance_tasks = async (): Promise<AffairData[]> => {
+  return api_get_affairs({ kind: 'task_maintenance', state: ['INBOX', 'ACTIVE', 'PAUSED'] })
+}
+
+export const api_get_async_callbacks = async (): Promise<AffairData[]> => {
+  return api_get_affairs({ kind: 'async_callback', state: ['INBOX', 'ACTIVE', 'PAUSED', 'KICKOFF', 'DELEGATED', 'REVIEWING'] })
 }

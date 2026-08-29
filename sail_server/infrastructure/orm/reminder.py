@@ -43,7 +43,7 @@ class Reminder(ORMBase):
     __tablename__ = "reminders"
 
     id = Column(Integer, primary_key=True)
-    # 提醒类型：attendance.checkin / diet.log / mission.due / agent.message / test.ping ...
+    # 提醒类型：attendance.checkin / diet.log / affair.due / agent.message / test.ping ...
     type = Column(String, index=True)
     title = Column(String)
     body = Column(String, default="")
@@ -63,7 +63,7 @@ class Reminder(ORMBase):
     next_trigger_time = Column(TIMESTAMP, nullable=True)
     # 最近一次投递时间（EXPIRED / OPENED 回落判定依据）
     last_delivered_at = Column(TIMESTAMP, nullable=True)
-    # 业务负载：{"mission_id": 3} / {"meal_type": "lunch"} ...
+    # 业务负载：{"affair_id": 3} / {"meal_type": "lunch"} ...
     payload = Column(JSONB, default=dict)
     rule_id = Column(Integer, ForeignKey("reminder_rules.id"), nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())

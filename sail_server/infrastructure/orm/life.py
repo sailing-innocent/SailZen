@@ -124,9 +124,6 @@ class TimeLog(ORMBase):
     __tablename__ = "timelogs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    mission_id = Column(
-        Integer, ForeignKey("missions.id"), nullable=False, index=True
-    )
     day_id = Column(
         Integer, ForeignKey("days.id"), nullable=False, index=True
     )

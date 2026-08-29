@@ -22,23 +22,33 @@
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.rhythm import (
     AffairKind,
     AffairState,
+    CheckinResult,
     CheckinTodayResponse,
+    ConflictReportResponse,
     DayTimelineResponse,
     DomainMinutes,
+    DomainTrendItem,
+    DomainTrendResponse,
     EncroachmentItem,
+    HabitHeatmapItem,
+    HabitHeatmapResponse,
     PlanDayRequest,
     PlanDayResponse,
     PlanWarning,
+    PriorityAffairItem,
     RebalanceRequest,
     ReviewResponse,
+    RhythmDashboardResponse,
+    TERMINAL_STATES,
     UnplacedItem,
+    VentureBurndownResponse,
 )
 from sail_server.infrastructure.orm.finance import Budget, Transaction
 from sail_server.infrastructure.orm.life import Day
@@ -56,9 +66,13 @@ from sail_server.model.rhythm import (
     _kind_of,
     _now,
     _today,
+    affair_to_response,
     blocks_to_response,
     get_active_template_for_date,
+    get_energy_profile_impl,
     get_or_create_profile,
+    list_affairs_impl,
+    list_policies_impl,
     today_checkins_impl,
     week_cycle_key,
     week_range,
@@ -1649,27 +1663,109 @@ def get_day_review_impl(db: Session, d: date, persist: bool = True) -> ReviewRes
     return resp
 
 
+def _to_priority_items(
+    affairs: List[Any], reason_template: str
+) -> List[PriorityAffairItem]:
+    """将 AffairResponse 列表包装为 PriorityAffairItem（兼容 ORM/Response 对象）"""
+    out: List[PriorityAffairItem] = []
+    for a in affairs:
+        resp = affair_to_response(a) if isinstance(a, RhythmAffair) else a
+        suggested: Optional[str] = None
+        meta = resp.kind_meta or {}
+        if resp.kind == AffairKind.HABIT.value and meta.get("preferred_slots"):
+            suggested = meta["preferred_slots"][0]
+        out.append(
+            PriorityAffairItem(
+                affair=resp,
+                reason=reason_template,
+                suggested_slot=suggested,
+            )
+        )
+    return out
+
+
+def get_dashboard_impl(db: Session, d: date) -> RhythmDashboardResponse:
+    """Dashboard 与 Android 提醒端共享的聚合入口。
+
+    一次性返回当日时间线、日/周评分、待打卡、精力画像、策略、冲突、
+    以及 INBOX / 逾期 / 今日截止三类优先级事务摘要。
+    """
+    timeline = get_day_timeline_impl(db, d)
+    day_review = get_day_review_impl(db, d)
+    week_review = get_week_review_impl(db, d)
+    checkins = today_checkins_impl(db, d)
+    profile = get_energy_profile_impl(db)
+    policies = list_policies_impl(db, enabled_only=True)
+    conflicts = ConflictReportResponse(date=d, encroachments=detect_conflicts_impl(db, d))
+
+    # INBOX 摘要：所有 kind 的 INBOX 非终态事务
+    inbox_affairs = list_affairs_impl(
+        db, state=AffairState.INBOX.value, limit=50
+    )
+    inbox_summary = _to_priority_items(inbox_affairs, "INBOX 待分拣")
+
+    # 逾期摘要：ddl < now 且未终态
+    now = _now()
+    overdue_affairs = list_affairs_impl(
+        db,
+        urgency_ddl_before=now,
+        limit=50,
+    )
+    overdue_summary = [
+        item
+        for item in _to_priority_items(overdue_affairs, "已逾期")
+        if item.affair.state not in TERMINAL_STATES
+    ]
+
+    # 今日截止摘要：ddl 落在当日内
+    day_start = datetime.combine(d, time.min)
+    day_end = day_start + timedelta(days=1)
+    today_due_affairs = list_affairs_impl(
+        db,
+        urgency_ddl_after=day_start,
+        urgency_ddl_before=day_end,
+        limit=50,
+    )
+    today_due_summary = _to_priority_items(today_due_affairs, "今日截止")
+
+    return RhythmDashboardResponse(
+        date=d,
+        timeline=timeline,
+        day_review=day_review,
+        week_review=week_review,
+        today_checkins=checkins,
+        energy_profile=profile,
+        policies=policies,
+        conflicts=conflicts,
+        inbox_summary=inbox_summary,
+        overdue_summary=overdue_summary,
+        today_due_summary=today_due_summary,
+    )
 def get_week_review_impl(
-    db: Session, span: Optional[str] = None, persist: bool = True
+    db: Session, span: Optional[Union[str, date]] = None, persist: bool = True
 ) -> ReviewResponse:
     """周评分。span 支持 W2026-44 或日期（取所在周）；缺省为本周。"""
     if span:
-        s = span.strip()
-        if s.upper().startswith("W") and "-" in s:
-            try:
-                year = int(s[1:].split("-")[0])
-                week = int(s.split("-")[1])
-                monday = date.fromisocalendar(year, week, 1)
-                period_key = f"W{year}-{week:02d}"
-            except (ValueError, IndexError) as e:
-                raise RhythmBadRequestError(f"非法周键 {span!r}，应为 W2026-44 格式: {e}")
+        if isinstance(span, date):
+            monday, _ = week_range(span)
+            period_key = week_cycle_key(span)
         else:
-            try:
-                d = date.fromisoformat(s[:10])
-            except ValueError as e:
-                raise RhythmBadRequestError(f"非法日期 {span!r}: {e}")
-            monday, _ = week_range(d)
-            period_key = week_cycle_key(d)
+            s = span.strip()
+            if s.upper().startswith("W") and "-" in s:
+                try:
+                    year = int(s[1:].split("-")[0])
+                    week = int(s.split("-")[1])
+                    monday = date.fromisocalendar(year, week, 1)
+                    period_key = f"W{year}-{week:02d}"
+                except (ValueError, IndexError) as e:
+                    raise RhythmBadRequestError(f"非法周键 {span!r}，应为 W2026-44 格式: {e}")
+            else:
+                try:
+                    d = date.fromisoformat(s[:10])
+                except ValueError as e:
+                    raise RhythmBadRequestError(f"非法日期 {span!r}: {e}")
+                monday, _ = week_range(d)
+                period_key = week_cycle_key(d)
     else:
         monday, _ = week_range(_today())
         period_key = week_cycle_key(_today())
@@ -1730,3 +1826,156 @@ def list_encroachments_impl(
         out.extend(detect_conflicts_impl(db, cursor))
         cursor += timedelta(days=1)
     return out
+def get_habit_heatmap_impl(
+    db: Session, affair_id: int, start_date: date, end_date: date
+) -> HabitHeatmapResponse:
+    """habit/precept 在日期范围内的每日打卡结果矩阵。"""
+    from sail_server.infrastructure.orm.rhythm import RhythmDisciplineLog
+
+    if start_date > end_date:
+        raise RhythmBadRequestError("start_date 不能晚于 end_date")
+
+    logs = (
+        db.query(RhythmDisciplineLog)
+        .filter(
+            RhythmDisciplineLog.affair_id == affair_id,
+            RhythmDisciplineLog.log_date >= start_date,
+            RhythmDisciplineLog.log_date <= end_date,
+        )
+        .order_by(RhythmDisciplineLog.log_date)
+        .all()
+    )
+    log_by_date = {log.log_date: log for log in logs}
+
+    days: List[HabitHeatmapItem] = []
+    cursor = start_date
+    while cursor <= end_date:
+        log = log_by_date.get(cursor)
+        days.append(
+            HabitHeatmapItem(
+                date=cursor,
+                cycle_key=log.cycle_key if log else cursor.isoformat(),
+                result=CheckinResult(log.result) if log else None,
+                done=log is not None and log.result == CheckinResult.DONE.value,
+            )
+        )
+        cursor += timedelta(days=1)
+
+    return HabitHeatmapResponse(
+        affair_id=affair_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+    )
+
+
+def get_domain_trend_impl(
+    db: Session, start_date: date, end_date: date
+) -> DomainTrendResponse:
+    """按天返回三域投入分钟数（最近 N 天趋势）。"""
+    if start_date > end_date:
+        raise RhythmBadRequestError("start_date 不能晚于 end_date")
+
+    days_map: Dict[date, DomainTrendItem] = {}
+    cursor = start_date
+    while cursor <= end_date:
+        days_map[cursor] = DomainTrendItem(date=cursor)
+        cursor += timedelta(days=1)
+
+    day_rows = (
+        db.query(Day)
+        .filter(Day.date >= start_date, Day.date <= end_date)
+        .all()
+    )
+    day_ids = [d.id for d in day_rows]
+
+    if day_ids:
+        blocks = (
+            db.query(RhythmTimeBlock)
+            .filter(
+                RhythmTimeBlock.day_id.in_(day_ids),
+                RhythmTimeBlock.status.in_(["PLANNED", "DOING", "DONE"]),
+            )
+            .all()
+        )
+        block_day_ids = {b.day_id for b in blocks}
+        date_by_day_id = {d.id: d.date for d in day_rows if d.id in block_day_ids}
+        affair_ids = {b.affair_id for b in blocks if b.affair_id}
+        affairs: Dict[int, RhythmAffair] = {}
+        if affair_ids:
+            for a in db.query(RhythmAffair).filter(RhythmAffair.id.in_(affair_ids)).all():
+                affairs[a.id] = a
+
+        for b in blocks:
+            d = date_by_day_id.get(b.day_id)
+            if d is None:
+                continue
+            dom = _block_domain(b, affairs.get(b.affair_id) if b.affair_id else None)
+            item = days_map.get(d)
+            if item is not None:
+                setattr(item, dom, getattr(item, dom) + _minutes((b.start_time, b.end_time)))
+
+    return DomainTrendResponse(
+        start_date=start_date,
+        end_date=end_date,
+        days=list(days_map.values()),
+    )
+
+
+def get_venture_burndown_impl(
+    db: Session, venture_id: int
+) -> VentureBurndownResponse:
+    """长期事业燃尽图：每周计划/实际投入小时 + 里程碑完成数。"""
+    from sail_server.model.rhythm import _get_affair_or_404, _kind_of
+
+    venture = _get_affair_or_404(db, venture_id)
+    if _kind_of(venture) != AffairKind.VENTURE:
+        raise RhythmBadRequestError("仅 venture 支持燃尽图")
+
+    child_ids = [
+        x.id for x in db.query(RhythmAffair.id).filter(RhythmAffair.parent_id == venture_id).all()
+    ]
+    affair_ids = [venture_id, *child_ids]
+    blocks = (
+        db.query(RhythmTimeBlock)
+        .filter(
+            RhythmTimeBlock.affair_id.in_(affair_ids),
+            RhythmTimeBlock.status != "MOVED",
+        )
+        .order_by(RhythmTimeBlock.start_time)
+        .all()
+    )
+
+    weekly_planned: Dict[str, float] = {}
+    weekly_actual: Dict[str, float] = {}
+    for b in blocks:
+        if b.start_time is None:
+            continue
+        iso = b.start_time.isocalendar()
+        week_key = f"W{iso[0]}-{iso[1]:02d}"
+        hours = _minutes((b.start_time, b.end_time)) / 60.0
+        weekly_planned[week_key] = weekly_planned.get(week_key, 0.0) + hours
+        if b.status == "DONE":
+            weekly_actual[week_key] = weekly_actual.get(week_key, 0.0) + hours
+
+    milestones = (
+        db.query(RhythmAffair)
+        .filter(RhythmAffair.parent_id == venture_id)
+        .all()
+    )
+    weekly_milestones: Dict[str, int] = {}
+    for m in milestones:
+        if m.state == AffairState.DONE.value and m.mtime:
+            iso = m.mtime.isocalendar()
+            week_key = f"W{iso[0]}-{iso[1]:02d}"
+            weekly_milestones[week_key] = weekly_milestones.get(week_key, 0) + 1
+
+    weeks = sorted(set(weekly_planned.keys()) | set(weekly_actual.keys()) | set(weekly_milestones.keys()))
+    return VentureBurndownResponse(
+        affair_id=venture_id,
+        title=venture.title,
+        weeks=weeks,
+        planned=[round(weekly_planned.get(w, 0.0), 2) for w in weeks],
+        actual=[round(weekly_actual.get(w, 0.0), 2) for w in weeks],
+        milestones_done=[weekly_milestones.get(w, 0) for w in weeks],
+    )

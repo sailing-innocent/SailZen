@@ -5,8 +5,6 @@
 
 import {
   AffairState,
-  projectStateToAffairState,
-  missionStateToAffairState,
   parseDdl,
   getDdlTimestamp,
   isAffairOverdue,
@@ -14,28 +12,6 @@ import {
   formatDeadline,
   getAffairPriority,
 } from './affair'
-
-describe('Affair state mapping', () => {
-  it('maps project states correctly', () => {
-    expect(projectStateToAffairState(0)).toBe(AffairState.ARCHIVED)
-    expect(projectStateToAffairState(1)).toBe(AffairState.INBOX)
-    expect(projectStateToAffairState(2)).toBe(AffairState.INBOX)
-    expect(projectStateToAffairState(3)).toBe(AffairState.ACTIVE)
-    expect(projectStateToAffairState(4)).toBe(AffairState.PAUSED)
-    expect(projectStateToAffairState(5)).toBe(AffairState.DONE)
-    expect(projectStateToAffairState(6)).toBe(AffairState.ARCHIVED)
-    expect(projectStateToAffairState(undefined)).toBe(AffairState.INBOX)
-  })
-
-  it('maps mission states correctly', () => {
-    expect(missionStateToAffairState(0)).toBe(AffairState.INBOX)
-    expect(missionStateToAffairState(1)).toBe(AffairState.PLANNED)
-    expect(missionStateToAffairState(2)).toBe(AffairState.DOING)
-    expect(missionStateToAffairState(3)).toBe(AffairState.DONE)
-    expect(missionStateToAffairState(4)).toBe(AffairState.CANCELED)
-    expect(missionStateToAffairState(undefined)).toBe(AffairState.INBOX)
-  })
-})
 
 describe('Affair DDL helpers', () => {
   it('parses ISO datetime', () => {

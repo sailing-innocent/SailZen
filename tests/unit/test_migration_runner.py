@@ -45,23 +45,6 @@ def test_migration_schema_matches_orm(sqlite_db):
     engine = sqlite_db.get_bind()
     inspector = inspect(engine)
 
-    mission_cols = {c["name"] for c in inspector.get_columns("missions")}
-    project_cols = {c["name"] for c in inspector.get_columns("projects")}
-
-    # missions 原生字段保留
-    assert "planned_minutes" in mission_cols
-    assert "actual_minutes" in mission_cols
-    assert "energy_cost" in mission_cols
-    assert "day_id" in mission_cols
-    assert "milestone_id" in mission_cols
-    assert "health_constraint" in mission_cols
-
-    # projects 原生字段保留；PEMS 新增字段已移除
-    assert "timespan_id" in project_cols
-    assert "energy_budget" not in project_cols
-    assert "priority" not in project_cols
-    assert "tags" not in project_cols
-
     # rhythm_affairs 新增字段
     rhythm_cols = {c["name"] for c in inspector.get_columns("rhythm_affairs")}
     assert "info_collection_type" in rhythm_cols
@@ -76,7 +59,7 @@ def test_migration_is_idempotent(sqlite_db):
     sqlite_db.commit()
 
     # 验证仍能正常查询
-    result = sqlite_db.execute(text("SELECT COUNT(*) FROM missions")).scalar()
+    result = sqlite_db.execute(text("SELECT COUNT(*) FROM rhythm_affairs")).scalar()
     assert result == 0
 
 

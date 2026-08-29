@@ -6,14 +6,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   RefreshCw,
-  Plus,
   CheckCircle2,
   AlertCircle,
   Clock,
   AlertTriangle,
 } from 'lucide-react'
-import MissionCard from './mission_card'
-import AddMissionDialog from './mission_add_dialog'
+import AffairCard from './affair_card'
+import AddAffairDialog from './affair_add_dialog'
 import { type AffairsState, useAffairsStore } from '@lib/store/affair'
 import { useServerStore } from '@lib/store'
 import { isChallengeAffair } from '@lib/data/challenge'
@@ -28,14 +27,14 @@ import {
 } from '@lib/data/affair'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-export interface ReminderTodoListProps {
+export interface AffairTodoListProps {
   title?: string
   showFilters?: boolean
   maxItems?: number
 }
 
-const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
-  title = '待办任务',
+const AffairTodoList: React.FC<AffairTodoListProps> = ({
+  title = '待办事务',
   showFilters = true,
   maxItems,
 }) => {
@@ -200,7 +199,7 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </Button>
-            <AddMissionDialog />
+            <AddAffairDialog />
           </div>
         </div>
       </CardHeader>
@@ -245,13 +244,13 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
               ) : displayTasks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <CheckCircle2 className="h-12 w-12 mb-4 text-green-500" />
-                  <p className="text-lg font-medium">暂无待办任务</p>
+                  <p className="text-lg font-medium">暂无待办事务</p>
                   <p className="text-sm">
                     {activeTab === 'urgent'
-                      ? '没有紧急任务，继续保持！'
+                      ? '没有紧急事务，继续保持！'
                       : activeTab === 'doing'
-                      ? '没有正在进行的任务'
-                      : '所有任务都已完成！'}
+                      ? '没有正在进行的事务'
+                      : '所有事务都已完成！'}
                   </p>
                 </div>
               ) : (
@@ -264,12 +263,12 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                       </h4>
                       <div className="space-y-2">
                         {regularOverdueTasks.map((task) => (
-                          <MissionCard
+                          <AffairCard
                             key={task.id}
-                            mission={task}
-                            project={getVentureById(task.parent_id)}
+                            affair={task}
+                            venture={getVentureById(task.parent_id)}
                             compact
-                            showProject
+                            showVenture
                           />
                         ))}
                       </div>
@@ -279,12 +278,12 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
                   {displayTasks
                     .filter((t) => !isAffairOverdue(t.urgency_ddl, t.state) || activeTab !== 'all')
                     .map((task) => (
-                      <MissionCard
+                      <AffairCard
                         key={task.id}
-                        mission={task}
-                        project={getVentureById(task.parent_id)}
+                        affair={task}
+                        venture={getVentureById(task.parent_id)}
                         compact
-                        showProject
+                        showVenture
                       />
                     ))}
 
@@ -310,16 +309,16 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
             ) : displayTasks.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <CheckCircle2 className="h-10 w-10 mb-3 text-green-500" />
-                <p className="font-medium">暂无待办任务</p>
+                <p className="font-medium">暂无待办事务</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {displayTasks.map((task) => (
-                  <MissionCard
+                  <AffairCard
                     key={task.id}
-                    mission={task}
+                    affair={task}
                     compact
-                    showProject
+                    showVenture
                   />
                 ))}
               </div>
@@ -331,4 +330,4 @@ const ReminderTodoList: React.FC<ReminderTodoListProps> = ({
   )
 }
 
-export default ReminderTodoList
+export default AffairTodoList

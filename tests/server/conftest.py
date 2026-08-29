@@ -30,7 +30,6 @@ from sail_server.infrastructure.orm import (  # noqa: F401
     history,
     life,
     necessity,
-    project,
     reminder,
     rhythm,
     text,
