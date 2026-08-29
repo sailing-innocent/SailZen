@@ -828,16 +828,3 @@ class ReviewController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return review_timespan_impl(db, timespan_id)
-
-    @get("/review/project/{project_id:int}")
-    async def project_timeline(
-        self,
-        project_id: int,
-        request: Request,
-        router_dependency: Generator[Session, None, None],
-    ) -> ProjectTimelineResponse:
-        """项目时间线（PEMS 合并）"""
-        _check_auth(request)
-        db = next(router_dependency)
-        with _map_errors():
-            return project_timeline_impl(db, project_id)

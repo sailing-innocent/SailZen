@@ -2,7 +2,7 @@
  * @file affair.ts
  * @brief Rhythm Affair API client
  * @description
- *   封装 `/api/v1/rhythm/*` 的 REST 调用，取代旧的 `/api/v1/project/*`。
+ *   封装 `/api/v1/rhythm/*` 的 REST 调用
  *   提供事务 CRUD、状态转移、事业里程碑与进度查询。
  */
 

@@ -95,7 +95,6 @@ from sail_server.model.health import (
     create_sleep_impl,
 )
 from sail_server.infrastructure.orm.life import Day, TimeSpan
-from sail_server.infrastructure.orm.project import Mission, Project
 from sail_server.infrastructure.orm.rhythm import (
     RhythmAffair,
     RhythmDayTemplate,
@@ -1920,79 +1919,6 @@ def get_day_dashboard_impl(db: Session, d: date) -> RhythmDayDashboardResponse:
         priorities=priorities,
         insights=day_view.insights,
         warnings=day_view.warnings,
-    )
-
-
-def project_timeline_impl(db: Session, project_id: int) -> ProjectTimelineResponse:
-    """项目时间线：聚合该项目下所有 mission 关联的 rhythm 事务块。"""
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if project is None:
-        raise RhythmNotFoundError(f"Project {project_id} not found")
-
-    missions = db.query(Mission).filter(Mission.project_id == project_id).all()
-    mission_ids = {m.id for m in missions}
-
-    affairs = (
-        db.query(RhythmAffair)
-        .filter(
-            (RhythmAffair.mission_id.in_(mission_ids) if mission_ids else False)
-            | (RhythmAffair.ref.op("->>")("project_id").cast(Integer) == project_id)
-        )
-        .all()
-    )
-    affair_ids = {a.id for a in affairs}
-
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    if project.start_time_qbw:
-        from sail_server.utils.time_utils import QuarterBiWeekTime
-        start_date = QuarterBiWeekTime.from_qbw(project.start_time_qbw).to_date()
-    if project.end_time_qbw:
-        from sail_server.utils.time_utils import QuarterBiWeekTime
-        end_date = QuarterBiWeekTime.from_qbw(project.end_time_qbw).to_date()
-
-    blocks: List[RhythmTimeBlock] = []
-    if affair_ids:
-        blocks = (
-            db.query(RhythmTimeBlock)
-            .filter(
-                RhythmTimeBlock.affair_id.in_(affair_ids),
-                RhythmTimeBlock.status.in_(["PLANNED", "DOING", "DONE"]),
-            )
-            .order_by(RhythmTimeBlock.start_time)
-            .all()
-        )
-
-    domain_minutes = DomainMinutes()
-    energy_consumed = 0
-    for b in blocks:
-        if b.status not in ("PLANNED", "DOING", "DONE"):
-            continue
-        duration = int((b.end_time - b.start_time).total_seconds() // 60)
-        if b.affair_id and b.affair_id in affair_ids:
-            a = next((x for x in affairs if x.id == b.affair_id), None)
-            if a and a.domain:
-                if a.domain == "life":
-                    domain_minutes.life += duration
-                elif a.domain == "work":
-                    domain_minutes.work += duration
-                elif a.domain == "career":
-                    domain_minutes.career += duration
-        if b.status == "DONE":
-            a = next((x for x in affairs if x.id == b.affair_id), None)
-            if a:
-                energy_consumed += a.energy_cost or 0
-
-    profile = get_or_create_profile(db)
-    return ProjectTimelineResponse(
-        project_id=project.id,
-        project_name=project.name or "",
-        start_date=start_date,
-        end_date=end_date,
-        blocks=blocks_to_response(db, blocks),
-        domain_minutes=domain_minutes,
-        energy_consumed=energy_consumed,
-        energy_budget=int(profile.daily_energy_budget or 100),
     )
 
 

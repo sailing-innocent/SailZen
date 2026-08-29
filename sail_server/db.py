@@ -20,7 +20,6 @@ from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm import health
 from sail_server.infrastructure.orm import finance
 from sail_server.infrastructure.orm import life
-from sail_server.infrastructure.orm import project
 from sail_server.infrastructure.orm import history
 from sail_server.infrastructure.orm import text
 from sail_server.infrastructure.orm import necessity

@@ -43,7 +43,6 @@
 | 健康管理 | [api/health.md](./api/health.md) | 体重、运动、计划 API |
 | 文本管理 | [api/text.md](./api/text.md) | 作品、版本、章节 API |
 | AI 分析 | [api/analysis.md](./api/analysis.md) | 大纲、人物、设定 API |
-| 项目管理 | [api/project.md](./api/project.md) | 项目、任务 API |
 | 物资管理 | [api/necessity.md](./api/necessity.md) | 库存、住所、行程 API |
 
 ### 业务模块设计

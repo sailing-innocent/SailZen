@@ -105,7 +105,6 @@ class SailServer:
         )
         from sail_server.router.health import router as health_router
         from sail_server.router.finance import router as finance_router
-        from sail_server.router.project import router as project_router
         from sail_server.router.history import router as history_router
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
@@ -120,7 +119,6 @@ class SailServer:
                 health_check,
                 health_router,
                 finance_router,
-                project_router,
                 history_router,
                 text_router,
                 necessity_router,

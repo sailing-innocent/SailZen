@@ -53,10 +53,6 @@ SCOPE = {
         "rhythm_impl": "review_timespan_impl",
         "note": "周期复盘聚合",
     },
-    "get_project_timeline_impl": {
-        "rhythm_impl": "project_timeline_impl",
-        "note": "GET /api/v1/rhythm/review/project/{project_id}",
-    },
     "get_energy_budget_impl": {
         "rhythm_impl": "get_energy_profile_impl",
         "note": "GET /api/v1/rhythm/energy/profile",

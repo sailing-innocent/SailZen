@@ -32,12 +32,6 @@ from sail_server.infrastructure.orm.health import (
 # Text Models
 from sail_server.infrastructure.orm.text import Work, Edition, DocumentNode
 
-# Project Models
-from sail_server.infrastructure.orm.project import (
-    Project,
-    Mission,
-)
-
 # Necessity Models
 from sail_server.infrastructure.orm.necessity import (
     ResidenceType,
@@ -109,9 +103,6 @@ __all__ = [
     "Work",
     "Edition",
     "DocumentNode",
-    # Project
-    "Project",
-    "Mission",
     # Necessity Enums
     "ResidenceType",
     "ContainerType",

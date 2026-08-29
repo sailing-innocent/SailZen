@@ -63,24 +63,6 @@
 | `day_id` | FK → days nullable | 绑定某日 |
 | `timespan_id` | FK → timespans nullable | 周期复盘绑定 |
 
----
-
-## 3. PEMS → Rhythm 功能映射
-
-| PEMS 功能 | 对应 Rhythm 功能 | 实现位置 |
-|-----------|------------------|----------|
-| `_compute_energy_budget` | `get_or_create_profile` + planner energy budget | `model/rhythm.py`、`model/rhythm_planner.py` |
-| `get_day_view_impl` | `get_rhythm_day_view_impl` | `model/rhythm.py` |
-| `plan_mission_on_day_impl` | 创建 `task_oneoff` 并设置 `day_id` + `confirm`/`plan_day` | `controller/rhythm.py` |
-| `log_health_on_day_impl` | `health_checkin_impl`（双写 `health.*` + `rhythm_discipline_log`） | `model/rhythm.py` |
-| `get_timespan_view_impl` | `review_timespan_impl` + `ReviewController` | `model/rhythm.py`、`controller/rhythm.py` |
-| `get_project_timeline_impl` | `project_timeline_impl` | `model/rhythm.py` |
-| `get_energy_budget_impl` | `get_energy_profile_impl` | `model/rhythm.py` |
-| `get_insight_daily_impl` | `get_day_review_impl` | `model/rhythm_planner.py` |
-| `get_insight_weekly_impl` | `get_week_review_impl` | `model/rhythm_planner.py` |
-| `_challenge_checkins` | `precept`/`habit` affairs + `RhythmDisciplineLog` | `model/rhythm.py` |
-
----
 
 ## 4. Schema 变更
 

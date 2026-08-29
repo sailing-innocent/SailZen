@@ -27,7 +27,6 @@ SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。�
 | 模块 | 状态 | 文档 |
 |------|------|------|
 | 财务管理 | ✅ 已实现 | [设计文档](./doc/design/manager/life_budget.md) |
-| 项目管理 | ✅ 已实现 | [设计文档](./doc/design/manager/project.md) |
 | 健康管理 | 🔶 部分实现 | [设计文档](./doc/design/manager/health.md) |
 | 物资管理 | ✅ 已实现 | [设计文档](./doc/design/manager/necessity.md) |
 | 文本管理 | ✅ 已实现 | [设计文档](./doc/design/manager/text.md) |
