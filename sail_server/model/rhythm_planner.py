@@ -187,6 +187,8 @@ def compute_urgency(affair: RhythmAffair, ctx: ScoreContext) -> float:
         weekly_budget = float(meta.get("weekly_budget_hours") or 0.0)
         total_est = float(meta.get("total_est_hours") or 0.0)
         target = meta.get("target_date")
+        if not target and affair.urgency_ddl:
+            target = affair.urgency_ddl.date().isoformat()
         # 配置缺失兜底：无目标日/预算/总估 → 中性紧迫度，进入排程竞争
         if not target or weekly_budget <= 0 or total_est <= 0:
             return 0.5

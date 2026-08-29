@@ -330,3 +330,100 @@ class TestMergedPEMSFeatures:
         assert data["energy_budget"] == 100
         assert data["energy_available"] >= 0
         assert any(s["signal_type"] == "exercise" for s in data["health_signals"])
+
+
+class TestVentureTargetDateSync:
+    def test_create_venture_with_urgency_ddl_syncs_target_date(self, client: TestClient):
+        """仅传 urgency_ddl 时，kind_meta.target_date 自动补全"""
+        resp = client.post(
+            f"{BASE}/affair/",
+            json={
+                "title": "RoboCute",
+                "kind": "venture",
+                "domain": "career",
+                "urgency_ddl": "2028-04-19T00:00:00",
+                "kind_meta": {"weekly_budget_hours": 6, "total_est_hours": 120},
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["kind_meta"]["target_date"] == "2028-04-19"
+        assert data["urgency_ddl"].startswith("2028-04-19")
+
+        vid = data["id"]
+        progress = client.get(f"{BASE}/venture/{vid}/progress").json()
+        assert progress["target_date"] == "2028-04-19"
+        assert progress["weeks_left"] is not None
+        assert progress["weeks_left"] > 0
+
+    def test_create_venture_with_target_date_syncs_urgency_ddl(self, client: TestClient):
+        """仅传 kind_meta.target_date 时，urgency_ddl 自动同步"""
+        resp = client.post(
+            f"{BASE}/affair/",
+            json={
+                "title": "Write Book",
+                "kind": "venture",
+                "domain": "career",
+                "kind_meta": {
+                    "target_date": "2028-04-19",
+                    "weekly_budget_hours": 6,
+                    "total_est_hours": 120,
+                },
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["kind_meta"]["target_date"] == "2028-04-19"
+        assert data["urgency_ddl"] is not None
+        assert data["urgency_ddl"].startswith("2028-04-19")
+
+    def test_update_venture_target_date_syncs_urgency_ddl(self, client: TestClient):
+        """PUT 修改 target_date 后 urgency_ddl 同步刷新"""
+        resp = client.post(
+            f"{BASE}/affair/",
+            json={
+                "title": "Learn AI",
+                "kind": "venture",
+                "domain": "career",
+                "kind_meta": {
+                    "target_date": "2028-04-19",
+                    "weekly_budget_hours": 6,
+                    "total_est_hours": 120,
+                },
+            },
+        )
+        assert resp.status_code == 201
+        vid = resp.json()["id"]
+
+        resp = client.put(
+            f"{BASE}/affair/{vid}",
+            json={
+                "kind_meta": {
+                    "target_date": "2028-12-31",
+                    "weekly_budget_hours": 8,
+                    "total_est_hours": 200,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["kind_meta"]["target_date"] == "2028-12-31"
+        assert data["urgency_ddl"].startswith("2028-12-31")
+
+        progress = client.get(f"{BASE}/venture/{vid}/progress").json()
+        assert progress["target_date"] == "2028-12-31"
+
+    def test_non_venture_urgency_ddl_untouched(self, client: TestClient):
+        """非 venture 事务的 urgency_ddl 不会被同步函数改写 kind_meta"""
+        resp = client.post(
+            f"{BASE}/affair/",
+            json={
+                "title": "Task only ddl",
+                "kind": "task_oneoff",
+                "urgency_ddl": "2028-04-19T00:00:00",
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["kind_meta"] == {}
+        assert data["urgency_ddl"].startswith("2028-04-19")

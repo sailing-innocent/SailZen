@@ -208,6 +208,43 @@ _DEFAULT_DOMAIN_BY_KIND: Dict[AffairKind, AffairDomain] = {
 }
 
 
+def _sync_venture_target_date(affair: RhythmAffair) -> None:
+    """对 kind==venture 的事务保持 urgency_ddl 与 kind_meta.target_date 一致。
+
+    规则：
+    1. 若 kind_meta.target_date 已设置，以其为准同步到 urgency_ddl。
+    2. 若 kind_meta.target_date 为空但 urgency_ddl 有值，反向补全 target_date。
+    3. 两者都为空时保持不变。
+    4. 仅在 kind==venture 时生效。
+    """
+    if _kind_of(affair) != AffairKind.VENTURE:
+        return
+    meta = dict(affair.kind_meta or {})
+    target_date = meta.get("target_date")
+    urgency = affair.urgency_ddl
+
+    if target_date:
+        target_dt = None
+        if isinstance(target_date, datetime):
+            target_dt = target_date
+        elif isinstance(target_date, date) and not isinstance(target_date, datetime):
+            target_dt = datetime.combine(target_date, datetime.min.time())
+        elif isinstance(target_date, str) and target_date.strip():
+            try:
+                target_dt = datetime.fromisoformat(str(target_date).strip())
+            except ValueError:
+                target_dt = datetime.combine(
+                    date.fromisoformat(str(target_date)[:10]), datetime.min.time()
+                )
+        if target_dt is not None:
+            target_dt = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            if urgency is None or urgency.date() != target_dt.date():
+                affair.urgency_ddl = target_dt
+    elif urgency is not None:
+        meta["target_date"] = urgency.date().isoformat()
+        affair.kind_meta = meta
+
+
 # ============================================================================
 # DTO 转换
 # ============================================================================
@@ -374,6 +411,7 @@ def create_affair_impl(db: Session, request: AffairCreateRequest) -> AffairRespo
         info_collection_type=request.info_collection_type.value if request.info_collection_type else None,
         ref=request.ref or {},
     )
+    _sync_venture_target_date(affair)
     db.add(affair)
     db.commit()
     db.refresh(affair)
@@ -459,6 +497,7 @@ def update_affair_impl(
     if request.domain is not None:
         affair.domain = request.domain.value
 
+    _sync_venture_target_date(affair)
     db.commit()
     db.refresh(affair)
     logger.info(f"[rhythm] affair updated: #{affair.id}")
@@ -1482,6 +1521,8 @@ def venture_progress_impl(db: Session, venture_id: int) -> VentureProgressRespon
     target_date: Optional[date] = None
     if meta.get("target_date"):
         target_date = date.fromisoformat(str(meta["target_date"])[:10])
+    elif venture.urgency_ddl:
+        target_date = venture.urgency_ddl.date()
     weekly_budget = float(meta.get("weekly_budget_hours") or 0.0)
     total_est = float(meta.get("total_est_hours") or 0.0)
 

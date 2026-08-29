@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -12,14 +13,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import type { AffairData } from '@lib/data/affair'
-import { getKindMeta } from '@lib/data/affair'
-import { useRhythmStore } from '@lib/store/rhythm'
-import { api_add_milestone, api_get_venture_progress } from '@lib/api/affair'
+import type { AffairData, VentureMeta } from '@lib/data/affair'
+import { defaultVentureMeta, getKindMeta } from '@lib/data/affair'
+import { api_add_milestone, api_get_venture_progress, api_update_affair } from '@lib/api/affair'
 import { api_get_venture_burndown } from '@lib/api/rhythm'
+import { syncPlanAfterVentureChange } from './venture_plan_sync'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { formatDate } from './utils'
-import { Check, Plus, Target } from 'lucide-react'
+import { Check, Plus, Target, Pencil } from 'lucide-react'
 
 interface VentureCardProps {
   venture: AffairData
@@ -179,24 +180,104 @@ export const VentureDetail = ({
 }) => {
   const meta = getKindMeta(venture, 'venture')
   const [progress, setProgress] = useState<Awaited<ReturnType<typeof api_get_venture_progress>> | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState<VentureMeta>(defaultVentureMeta())
 
   useEffect(() => {
     api_get_venture_progress(venture.id).then(setProgress)
   }, [venture.id])
 
+  useEffect(() => {
+    const current = meta ?? defaultVentureMeta()
+    setForm({ ...current })
+  }, [meta])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await api_update_affair(venture.id, {
+        kind_meta: { ...venture.kind_meta, ...form },
+        urgency_ddl: form.target_date ? new Date(`${form.target_date}T00:00:00`) : null,
+      })
+      const fresh = await api_get_venture_progress(venture.id)
+      setProgress(fresh as Awaited<ReturnType<typeof api_get_venture_progress>>)
+      await syncPlanAfterVentureChange(new Date(), 1)
+      setEditing(false)
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5" />
-            {venture.title}
-          </CardTitle>
-          <CardDescription>
-            目标日: {meta?.target_date ? formatDate(meta.target_date) : '未设置'} · 周预算: {meta?.weekly_budget_hours ?? 0} h
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              {venture.title}
+            </CardTitle>
+            <CardDescription>
+              目标日: {meta?.target_date ? formatDate(meta.target_date) : '未设置'} · 周预算: {meta?.weekly_budget_hours ?? 0} h
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)} disabled={saving}>
+            <Pencil className="h-4 w-4 mr-1" />
+            {editing ? '取消' : '编辑目标'}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
+          {editing && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border rounded-lg p-4 bg-muted/30">
+              <div className="space-y-2">
+                <Label htmlFor="target_date">目标日</Label>
+                <Input
+                  id="target_date"
+                  type="date"
+                  value={form.target_date ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, target_date: e.target.value || null }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="weekly_budget_hours">每周预算小时</Label>
+                <Input
+                  id="weekly_budget_hours"
+                  type="number"
+                  step="0.5"
+                  value={form.weekly_budget_hours}
+                  onChange={(e) => setForm((f) => ({ ...f, weekly_budget_hours: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="total_est_hours">总预估小时</Label>
+                <Input
+                  id="total_est_hours"
+                  type="number"
+                  step="0.5"
+                  value={form.total_est_hours}
+                  onChange={(e) => setForm((f) => ({ ...f, total_est_hours: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="flex items-center justify-between md:pt-6">
+                <Label htmlFor="spare_time_only">仅业余时间</Label>
+                <Switch
+                  id="spare_time_only"
+                  checked={form.spare_time_only}
+                  onCheckedChange={(checked) => setForm((f) => ({ ...f, spare_time_only: checked }))}
+                />
+              </div>
+              <div className="md:col-span-2 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditing(false)} disabled={saving}>
+                  取消
+                </Button>
+                <Button onClick={handleSave} disabled={saving}>
+                  保存
+                </Button>
+              </div>
+            </div>
+          )}
           {progress && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

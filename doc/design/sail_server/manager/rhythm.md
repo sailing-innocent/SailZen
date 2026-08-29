@@ -59,6 +59,24 @@
 校验策略：M1 宽松（缺字段补默认值；类型错误 400），M2 起 CLI `hint`/`capture`/`split`
 与服务端写入共用 `sail_server.application.dto.rhythm.validate_kind_meta` 同源校验。
 
+### venture 目标日同步约定
+
+`venture` 的目标日同时存在于两个字段：
+
+- `kind_meta.target_date`：venture 专属目标日，排程器与进度统计消费它。
+- `urgency_ddl`：通用截止时间，列表过滤、逾期检测、DDL 范围查询消费它。
+
+为保证两端一致，写入时（`create_affair_impl` / `update_affair_impl`）会调用
+`_sync_venture_target_date`：
+
+1. 若 `kind_meta.target_date` 有值，以其为准同步到 `urgency_ddl`（取当天 00:00:00）。
+2. 若 `kind_meta.target_date` 为空但 `urgency_ddl` 有值，反向补全 `target_date`。
+3. 两者皆空则保持不变。
+4. 仅对 `kind==venture` 生效。
+
+读取侧（`venture_progress_impl`、`compute_urgency` 的 VENTURE 分支）对旧数据做
+兜底回退：当 `kind_meta.target_date` 缺失时，使用 `urgency_ddl` 的日期部分。
+
 ## 2. 双生命周期状态机
 
 **一次性流**（fixed_plan / task_oneoff / generic / venture 里程碑子项）:
