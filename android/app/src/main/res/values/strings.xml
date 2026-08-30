@@ -102,6 +102,29 @@
     <string name="affair_tab">事业</string>
     <string name="affair_overdue_title">事务已逾期</string>
     <string name="affair_upcoming_title">事务即将到期</string>
+
+    <!-- 阅读模块 -->
+    <string name="reader_title">阅读</string>
+    <string name="reader_empty_works">暂无作品，下拉刷新</string>
+    <string name="reader_not_configured">请先配置服务器地址</string>
+    <string name="reader_prev_chapter">上一章</string>
+    <string name="reader_next_chapter">下一章</string>
+    <string name="reader_empty_chapter">章节内容为空</string>
+    <string name="reader_toc_title">目录</string>
+    <string name="reader_settings_title">阅读设置</string>
+    <string name="reader_font_size">字号</string>
+    <string name="reader_line_height">行距</string>
+    <string name="reader_theme">主题</string>
+    <string name="reader_theme_light">日间</string>
+    <string name="reader_theme_dark">夜间</string>
+    <string name="reader_mode">阅读模式</string>
+    <string name="reader_mode_page">翻页</string>
+    <string name="reader_mode_scroll">滚动</string>
+    <string name="action_annotate">批注</string>
+    <string name="annotation_title">批注</string>
+    <string name="annotation_empty">暂无批注</string>
+    <string name="annotation_dialog_title">编辑批注</string>
+    <string name="annotation_hint">写下你的想法…</string>
     <string name="dialog_confirm">确定</string>
     <string name="dialog_cancel">取消</string>
 </resources>

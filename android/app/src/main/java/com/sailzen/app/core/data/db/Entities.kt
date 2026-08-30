@@ -64,3 +64,62 @@ data class CachedSourceConfig(
     val description: String,
     val updatedAt: String,
 )
+
+// ------------------------------------------------------------------
+// 文本阅读模块本地缓存
+// ------------------------------------------------------------------
+
+@Entity(tableName = "cached_work")
+data class CachedWork(
+    @PrimaryKey val id: Int,
+    val slug: String,
+    val title: String,
+    val author: String?,
+    val synopsis: String?,
+    val updatedAt: String,
+)
+
+@Entity(tableName = "cached_chapter")
+data class CachedChapter(
+    @PrimaryKey val id: Int,
+    val editionId: Int,
+    val sortIndex: Int,
+    val label: String,
+    val title: String,
+    val rawText: String,
+    val charCount: Int?,
+    val updatedAt: String,
+)
+
+@Entity(tableName = "reading_progress")
+data class ReadingProgress(
+    @PrimaryKey val workId: Int,
+    val editionId: Int,
+    val nodeId: Int,
+    val sortIndex: Int,
+    val mode: String, // "page" | "scroll"
+    val pageIndex: Int = 0,
+    val scrollOffset: Int = 0,
+    val fontSize: Int = 18,
+    val lineHeight: Float = 1.5f,
+    val theme: String = "light",
+    val updatedAt: String,
+)
+
+@Entity(tableName = "cached_annotation")
+data class CachedAnnotation(
+    @PrimaryKey(autoGenerate = true) val localId: Long = 0,
+    val workId: Int,
+    val editionId: Int,
+    val nodeId: Int,
+    val startOffset: Int,
+    val endOffset: Int,
+    val selectedText: String,
+    val note: String,
+    val color: String,
+    val createdAt: String,
+    val updatedAt: String,
+    val synced: Boolean = false,
+    val remoteId: Int? = null,
+    val deleted: Boolean = false,
+)

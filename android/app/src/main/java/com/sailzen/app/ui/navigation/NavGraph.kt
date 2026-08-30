@@ -21,6 +21,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
+import androidx.compose.material.icons.filled.Book
 import com.sailzen.app.feature.affair.AffairDetailScreen
 import com.sailzen.app.feature.affair.AffairHomeScreen
 import com.sailzen.app.feature.checkin.CheckinScreen
@@ -33,6 +34,8 @@ import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
 import com.sailzen.app.feature.health.weight.WeightCurveScreen
 import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
+import com.sailzen.app.feature.reader.ReaderHomeScreen
+import com.sailzen.app.feature.reader.ReaderScreen
 import com.sailzen.app.feature.settings.SettingsScreen
 import com.sailzen.app.feature.timeline.TimelineScreen
 
@@ -51,6 +54,10 @@ object Routes {
     const val HEALTH_CHECKIN = "health_checkin?type={type}"
     const val INBOX = "inbox?reminder_id={reminder_id}"
     const val SETTINGS = "settings"
+    const val READER = "reader"
+    const val READER_WORK = "reader_work/{work_id}"
+
+    fun readerWork(workId: Int) = "reader_work/$workId"
 
     fun inbox(reminderId: Int = -1) = "inbox?reminder_id=$reminderId"
     fun healthCheckin(type: String = "weight") = "health_checkin?type=$type"
@@ -69,6 +76,7 @@ private val TABS = listOf(
     TabItem(Routes.AFFAIR, "事业", Icons.Default.Star),
     TabItem("inbox_tab", "收件箱", Icons.Default.Email),
     TabItem(Routes.HEALTH, "健康", Icons.Default.Favorite),
+    TabItem(Routes.READER, "阅读", Icons.Filled.Book),
 )
 
 @Composable
@@ -194,6 +202,26 @@ fun SailZenNavGraph(
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.READER) {
+                ReaderHomeScreen(
+                    onOpenWork = { workId ->
+                        navController.navigate(Routes.readerWork(workId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.READER_WORK,
+                arguments = listOf(
+                    navArgument("work_id") { type = NavType.IntType },
+                ),
+            ) { entry ->
+                val workId = entry.arguments?.getInt("work_id") ?: 0
+                ReaderScreen(
+                    workId = workId,
+                    workTitle = "作品",
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
     }

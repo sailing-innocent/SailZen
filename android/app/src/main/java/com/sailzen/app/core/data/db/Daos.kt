@@ -99,3 +99,61 @@ interface SourceConfigDao {
     @Query("DELETE FROM source_config_cache")
     suspend fun clear()
 }
+
+@Dao
+interface ReaderDao {
+
+    @Upsert
+    suspend fun upsertWork(item: CachedWork)
+
+    @Upsert
+    suspend fun upsertWorks(items: List<CachedWork>)
+
+    @Query("SELECT * FROM cached_work ORDER BY updatedAt DESC")
+    fun observeWorks(): Flow<List<CachedWork>>
+
+    @Query("SELECT * FROM cached_work WHERE id = :workId")
+    suspend fun workById(workId: Int): CachedWork?
+
+    @Upsert
+    suspend fun upsertChapter(item: CachedChapter)
+
+    @Query("SELECT * FROM cached_chapter WHERE editionId = :editionId ORDER BY sortIndex ASC")
+    suspend fun chaptersByEdition(editionId: Int): List<CachedChapter>
+
+    @Query("SELECT * FROM cached_chapter WHERE editionId = :editionId AND sortIndex = :sortIndex LIMIT 1")
+    suspend fun chapterByIndex(editionId: Int, sortIndex: Int): CachedChapter?
+
+    @Upsert
+    suspend fun upsertProgress(item: ReadingProgress)
+
+    @Query("SELECT * FROM reading_progress WHERE workId = :workId LIMIT 1")
+    suspend fun progressByWork(workId: Int): ReadingProgress?
+
+    @Insert
+    suspend fun insertAnnotation(item: CachedAnnotation): Long
+
+    @Upsert
+    suspend fun upsertAnnotation(item: CachedAnnotation)
+
+    @Query("SELECT * FROM cached_annotation WHERE nodeId = :nodeId AND deleted = 0 ORDER BY startOffset ASC")
+    suspend fun annotationsByNode(nodeId: Int): List<CachedAnnotation>
+
+    @Query("SELECT * FROM cached_annotation WHERE editionId = :editionId AND deleted = 0 ORDER BY updatedAt DESC")
+    suspend fun annotationsByEdition(editionId: Int): List<CachedAnnotation>
+
+    @Query("SELECT * FROM cached_annotation WHERE synced = 0 AND deleted = 0 ORDER BY updatedAt ASC")
+    suspend fun pendingAnnotations(): List<CachedAnnotation>
+
+    @Query("SELECT * FROM cached_annotation WHERE deleted = 1 AND remoteId IS NOT NULL ORDER BY updatedAt ASC")
+    suspend fun pendingDeletions(): List<CachedAnnotation>
+
+    @Query("UPDATE cached_annotation SET synced = 1, remoteId = :remoteId, updatedAt = :updatedAt WHERE localId = :localId")
+    suspend fun markAnnotationSynced(localId: Long, remoteId: Int, updatedAt: String)
+
+    @Query("DELETE FROM cached_annotation WHERE localId = :localId")
+    suspend fun deleteAnnotationByLocalId(localId: Long)
+
+    @Query("UPDATE cached_annotation SET deleted = 1, synced = 0, updatedAt = :updatedAt WHERE localId = :localId")
+    suspend fun markAnnotationDeleted(localId: Long, updatedAt: String)
+}

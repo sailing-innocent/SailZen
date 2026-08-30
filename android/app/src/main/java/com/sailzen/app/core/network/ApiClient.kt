@@ -21,6 +21,8 @@ object ApiClient {
     private var cachedHealthApi: HealthApi? = null
     private var cachedRhythmKey: String? = null
     private var cachedRhythmApi: RhythmApi? = null
+    private var cachedTextKey: String? = null
+    private var cachedTextApi: TextApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -90,6 +92,18 @@ object ApiClient {
         return buildRetrofit(normalized, token).create(RhythmApi::class.java).also {
             cachedRhythmKey = key
             cachedRhythmApi = it
+        }
+    }
+
+    /** Text 阅读 API */
+    @Synchronized
+    fun textApi(baseUrl: String, token: String): TextApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedTextApi?.let { if (cachedTextKey == key) return it }
+        return buildRetrofit(normalized, token).create(TextApi::class.java).also {
+            cachedTextKey = key
+            cachedTextApi = it
         }
     }
 

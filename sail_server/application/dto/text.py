@@ -205,6 +205,7 @@ NOTE_CATEGORIES = [
     "timeline",
     "relationship",
     "misc",
+    "annotation",
 ]
 
 
@@ -227,11 +228,21 @@ class NoteItemCreateRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     category: str = Field(description="笔记分类")
-    setting_file: str = Field(description="Markdown 文件相对 workspace 路径")
+    setting_file: Optional[str] = Field(
+        default=None, description="Markdown 文件相对 workspace 路径"
+    )
     work_id: Optional[int] = Field(default=None, description="关联作品 ID")
     edition_id: Optional[int] = Field(default=None, description="关联版本 ID")
     title: Optional[str] = Field(default=None, description="标题缓存")
     slug: Optional[str] = Field(default=None, description="URL/文件名友好标识")
+    content: Optional[str] = Field(
+        default=None, description="Markdown 原始内容，创建时直接写入文件"
+    )
+    node_id: Optional[int] = Field(default=None, description="锚点：章节节点 ID")
+    start_offset: Optional[int] = Field(default=None, description="锚点：选中起始偏移")
+    end_offset: Optional[int] = Field(default=None, description="锚点：选中结束偏移")
+    selected_text: Optional[str] = Field(default=None, description="锚点：选中原文片段")
+    color: Optional[str] = Field(default=None, description="锚点：高亮颜色标识")
     meta_data: Optional[Dict[str, Any]] = Field(
         default_factory=dict, description="扩展元数据"
     )

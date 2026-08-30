@@ -10,8 +10,11 @@ import re
 from typing import Optional, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+
+from sail_server.config.paths import SERVER_DATA_DIR
 
 from sail_server.infrastructure.orm.text import (
     Work,
@@ -684,20 +687,61 @@ def _note_to_response(note: NoteItem) -> NoteItemResponse:
 def create_note_item_impl(
     db: Session, data: NoteItemCreateRequest
 ) -> NoteItemResponse:
-    """创建笔记索引"""
+    """创建笔记索引，支持自动生成文件路径并写入 Markdown 内容"""
+    # 标准化锚点元数据
+    meta = dict(data.meta_data or {})
+    if data.node_id is not None:
+        meta["node_id"] = data.node_id
+    if data.start_offset is not None:
+        meta["start_offset"] = data.start_offset
+    if data.end_offset is not None:
+        meta["end_offset"] = data.end_offset
+    if data.selected_text is not None:
+        meta["selected_text"] = data.selected_text
+    if data.color is not None:
+        meta["color"] = data.color
+
+    # 生成/校验文件路径
+    setting_file = data.setting_file
+    if not setting_file:
+        work_id = data.work_id or 0
+        base_slug = data.slug or _make_slug(data.title or "annotation")
+        setting_file = f"notes/annotations/{work_id}/{base_slug}.md"
+
     note = NoteItem(
         category=data.category,
-        setting_file=data.setting_file,
+        setting_file=setting_file,
         work_id=data.work_id,
         edition_id=data.edition_id,
         title=data.title,
         slug=data.slug,
-        meta_data=data.meta_data or {},
+        meta_data=meta,
     )
     db.add(note)
     db.commit()
     db.refresh(note)
+
+    # 若请求携带 Markdown 内容，直接写入文件（限制在 workspace 内）
+    if data.content is not None and data.content:
+        file_path = _resolve_annotation_file_path(note.setting_file)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(sanitize_text(data.content), encoding="utf-8")
+
     return _note_to_response(note)
+
+
+def _resolve_annotation_file_path(setting_file: str) -> Path:
+    """解析 note 文件绝对路径，限制在 workspace 内防止路径遍历"""
+    rel = setting_file
+    if rel.startswith("/"):
+        rel = rel.lstrip("/")
+    target = (SERVER_DATA_DIR / rel).resolve()
+    base_resolved = SERVER_DATA_DIR.resolve()
+    try:
+        target.relative_to(base_resolved)
+    except ValueError:
+        raise ValueError(f"Invalid note file path (outside workspace): {setting_file}")
+    return target
 
 
 def get_note_item_impl(db: Session, note_id: int) -> Optional[NoteItemResponse]:
