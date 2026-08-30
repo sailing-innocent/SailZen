@@ -115,8 +115,6 @@ interface RhythmApi {
     @GET("api/v1/rhythm/review/timespan/{id}")
     suspend fun reviewTimespan(@Path("id") id: Int): ReviewTimespanDto
 
-}
-
     // ---------------- Day View / Health ----------------
 
     @GET("api/v1/rhythm/timeline/day-view")

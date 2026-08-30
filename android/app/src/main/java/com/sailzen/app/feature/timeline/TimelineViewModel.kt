@@ -129,7 +129,10 @@ class TimelineViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             _uiState.update { it.copy(planning = true) }
             repository.planDay(_uiState.value.date)
-                .onSuccess { refresh() }
+                .onSuccess {
+                    refresh()
+                    _uiState.update { it.copy(planning = false) }
+                }
                 .onFailure { _uiState.update { it.copy(planning = false) } }
         }
     }
