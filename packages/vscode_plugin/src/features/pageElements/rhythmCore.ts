@@ -100,6 +100,22 @@ export type RhythmLogFn = (
   msg: string
 ) => void;
 
+export type WorkFocusItem = {
+  id: number;
+  title: string;
+  kind: string;
+  domain?: "work" | "career";
+  state?: string;
+  startTime?: string;
+  endTime?: string;
+  energyCost?: number;
+  importance?: number;
+  score?: number;
+  urgencyDdl?: string;
+  blockType?: string;
+  reason?: string;
+};
+
 export type RhythmCoreDeps = {
   /** 解析 sail_server 地址，例如 http://localhost:1974（每次查询时调用）。 */
   resolveBaseUrl: () => string;
@@ -353,6 +369,10 @@ function normalizeDomainMinutes(raw: any): DomainMinutes {
   };
 }
 
+export function normalizeAffairList(json: any): RhythmAffair[] {
+  return arrOrEmpty(json).filter((a) => a && typeof a === "object").map(normalizeAffair);
+}
+
 export function normalizeDayDashboard(
   json: any,
   fallbackDate?: string
@@ -415,6 +435,11 @@ export function normalizeDayDashboard(
 
 export type SailServerRhythmClient = {
   getDayDashboard(dateStr: string): Promise<RhythmDashboard>;
+  listAffairs(query: {
+    domain?: string[];
+    state?: string[];
+    kind?: string[];
+  }): Promise<RhythmAffair[]>;
 };
 
 function unavailableDashboard(dateStr: string, error?: string): RhythmDashboard {
@@ -443,26 +468,64 @@ export function createSailServerRhythmClient(deps: {
 }): SailServerRhythmClient {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_RHYTHM_FETCH_TIMEOUT_MS;
+
+  async function doFetch<T>(
+    path: string,
+    query: Record<string, string | string[] | undefined>,
+    normalize: (json: any) => T
+  ): Promise<T> {
+    const baseUrl = deps.resolveBaseUrl().replace(/\/+$/, "");
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        for (const v of value) {
+          if (v !== undefined && v !== null && v !== "") {
+            params.append(key, v);
+          }
+        }
+      } else if (value !== "") {
+        params.set(key, value);
+      }
+    }
+    const qs = params.toString();
+    const url = `${baseUrl}/api/v1/rhythm${path}${qs ? `?${qs}` : ""}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const resp = await fetchImpl(url, { signal: controller.signal });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const json = await resp.json();
+      return normalize(json);
+    } catch (err: any) {
+      const msg = err?.name === "AbortError" ? "请求超时" : err?.message ?? String(err);
+      throw new Error(msg);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return {
     async getDayDashboard(dateStr: string): Promise<RhythmDashboard> {
-      const baseUrl = deps.resolveBaseUrl().replace(/\/+$/, "");
-      const url = `${baseUrl}/api/v1/rhythm/timeline/day-dashboard?date=${encodeURIComponent(dateStr)}`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const resp = await fetchImpl(url, { signal: controller.signal });
-        if (!resp.ok) {
-          return unavailableDashboard(dateStr, `HTTP ${resp.status}`);
-        }
-        const json = await resp.json();
-        return normalizeDayDashboard(json, dateStr);
+        return await doFetch(
+          "/timeline/day-dashboard",
+          { date: dateStr },
+          (json) => normalizeDayDashboard(json, dateStr)
+        );
       } catch (err: any) {
-        const msg =
-          err?.name === "AbortError" ? "请求超时" : err?.message ?? String(err);
-        return unavailableDashboard(dateStr, msg);
-      } finally {
-        clearTimeout(timer);
+        return unavailableDashboard(dateStr, err.message);
       }
+    },
+
+    async listAffairs(query: {
+      domain?: string[];
+      state?: string[];
+      kind?: string[];
+    }): Promise<RhythmAffair[]> {
+      return doFetch("/affair/", query, normalizeAffairList);
     },
   };
 }
@@ -780,6 +843,270 @@ function renderFetchError(dateStr: string, error: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Work focus card
+// ---------------------------------------------------------------------------
+
+const WORK_FOCUS_BLOCK_TYPES = new Set([
+  "work_window",
+  "focus",
+  "career",
+  "async_kickoff",
+  "async_review",
+  "async_wait",
+]);
+
+const WORK_FOCUS_DOMAINS = new Set(["work", "career"]);
+
+const LONGTERM_KINDS = new Set([
+  "venture",
+  "async_callback",
+  "task_maintenance",
+  "fixed_plan",
+]);
+
+const LONGTERM_KIND_EMOJI: Record<string, string> = {
+  venture: "🚀",
+  async_callback: "🔄",
+  task_maintenance: "🛠",
+  fixed_plan: "📌",
+};
+
+const ACTIVE_LONGTERM_STATES = [
+  "ACTIVE",
+  "PLANNED",
+  "SCHEDULED",
+  "DOING",
+  "KICKOFF",
+  "DELEGATED",
+  "REVIEWING",
+];
+
+function _domainFromBlockType(blockType: string): "work" | "career" | undefined {
+  if (blockType === "career") return "career";
+  if (
+    blockType === "work_window" ||
+    blockType === "focus" ||
+    blockType.startsWith("async_")
+  ) {
+    return "work";
+  }
+  return undefined;
+}
+
+export function filterWorkCareerBlocks(dashboard: RhythmDashboard): WorkFocusItem[] {
+  return dashboard.blocks
+    .filter(
+      (b) =>
+        WORK_FOCUS_BLOCK_TYPES.has(b.block_type) &&
+        b.status !== "DONE" &&
+        b.status !== "SKIPPED"
+    )
+    .map((b) => ({
+      id: b.affair_id || b.id,
+      title: b.affair_title || BLOCK_TYPE_LABELS[b.block_type] || b.block_type,
+      kind: b.affair_kind || b.block_type,
+      domain: _domainFromBlockType(b.block_type),
+      state: b.status,
+      startTime: b.start_time,
+      endTime: b.end_time,
+      energyCost: b.energy_cost,
+      blockType: b.block_type,
+    }));
+}
+
+export function filterWorkCareerPriorities(
+  dashboard: RhythmDashboard
+): WorkFocusItem[] {
+  return dashboard.priorities
+    .filter((p) => WORK_FOCUS_DOMAINS.has(p.affair.domain || ""))
+    .map((p) => ({
+      id: p.affair.id,
+      title: p.affair.title,
+      kind: p.affair.kind || "task_oneoff",
+      domain: p.affair.domain as "work" | "career",
+      state: p.affair.state,
+      startTime: p.suggested_slot
+        ? _slotStartToIso(dashboard.date, p.suggested_slot)
+        : undefined,
+      endTime: undefined,
+      energyCost: p.affair.energy_cost,
+      importance: p.affair.importance,
+      score: p.affair.score,
+      urgencyDdl: p.affair.urgency_ddl,
+      reason: p.reason,
+    }));
+}
+
+function _slotStartToIso(dateStr: string, slot: string): string | undefined {
+  // slot like "09:00-10:30" or "09:00"
+  const start = slot.split("-")[0]?.trim();
+  if (!start) return undefined;
+  const [h, m] = start.split(":").map((s) => Number(s));
+  if (Number.isNaN(h) || Number.isNaN(m)) return undefined;
+  return `${dateStr}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+}
+
+export function buildTodaySchedule(
+  dashboard: RhythmDashboard,
+  maxItems = 5
+): WorkFocusItem[] {
+  const blocks = filterWorkCareerBlocks(dashboard);
+  const priorities = filterWorkCareerPriorities(dashboard);
+  // Merge and deduplicate by id; blocks take precedence for the same affair.
+  const seen = new Set<number>();
+  const merged: WorkFocusItem[] = [];
+  for (const item of blocks) {
+    if (item.id) seen.add(item.id);
+    merged.push(item);
+  }
+  for (const item of priorities) {
+    if (!seen.has(item.id)) {
+      merged.push(item);
+    }
+  }
+  merged.sort((a, b) => {
+    const aStart = a.startTime || a.urgencyDdl || "Z";
+    const bStart = b.startTime || b.urgencyDdl || "Z";
+    return aStart.localeCompare(bStart);
+  });
+  return merged.slice(0, maxItems);
+}
+
+export function buildLongTermAffairs(
+  affairs: RhythmAffair[],
+  maxItems = 5
+): WorkFocusItem[] {
+  const items = affairs
+    .filter(
+      (a) =>
+        WORK_FOCUS_DOMAINS.has(a.domain || "") &&
+        LONGTERM_KINDS.has(a.kind || "")
+    )
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      kind: a.kind || "",
+      domain: a.domain as "work" | "career",
+      state: a.state,
+      importance: a.importance,
+      score: a.score,
+      urgencyDdl: a.urgency_ddl,
+    }));
+
+  items.sort((a, b) => {
+    const impA = a.importance ?? 0;
+    const impB = b.importance ?? 0;
+    if (impB !== impA) return impB - impA;
+    const scoreA = a.score ?? 0;
+    const scoreB = b.score ?? 0;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    const ddlA = a.urgencyDdl || "Z";
+    const ddlB = b.urgencyDdl || "Z";
+    return ddlA.localeCompare(ddlB);
+  });
+  return items.slice(0, maxItems);
+}
+
+function renderWorkFocusItem(item: WorkFocusItem): string {
+  const time =
+    item.startTime || item.urgencyDdl
+      ? `${timeLabel(item.startTime ?? item.urgencyDdl) ?? "--:--"}`
+      : "";
+  let emoji = BLOCK_TYPE_EMOJI[item.blockType || item.kind || ""];
+  if (!emoji) {
+    emoji = LONGTERM_KIND_EMOJI[item.kind || ""] ?? "📋";
+  }
+  const title = escapeHtml(item.title);
+  const state = stateBadge(item.state);
+  const energy = item.energyCost ? ` · ${item.energyCost}⚡` : "";
+  const reason = item.reason ? escapeHtml(item.reason) : "";
+  const timePart = time ? `<span style="${MUTED_STYLE};font-variant-numeric:tabular-nums;margin-right:8px;">${time}</span>` : "";
+  return [
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vscode-panel-border,#d0d7de);border-bottom-style:dashed;font-size:0.9em;">`,
+    `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">`,
+    `${timePart}`,
+    `${emoji} ${title}`,
+    `</span>`,
+    `<span style="display:flex;align-items:center;white-space:nowrap;flex-shrink:0;">${state}${energy ? `<span style="${MUTED_STYLE};font-size:0.8em;margin-left:4px;">${energy}</span>` : ""}</span>`,
+    `</div>`,
+    reason ? `<div style="${MUTED_STYLE};font-size:0.8em;margin:-2px 0 2px 0;padding-left:0;">💡 ${reason}</div>` : "",
+  ].join("");
+}
+
+function renderLongTermItem(item: WorkFocusItem): string {
+  const emoji = LONGTERM_KIND_EMOJI[item.kind || ""] ?? "📋";
+  const title = escapeHtml(item.title);
+  const state = stateBadge(item.state);
+  const domain = domainBadge(item.domain);
+  const ddl = item.urgencyDdl
+    ? `<span style="${MUTED_STYLE};font-size:0.8em;">⏰ ${escapeHtml(item.urgencyDdl.slice(0, 10))}</span>`
+    : "";
+  const stars = item.importance ? ` · ${importanceStars(item.importance)}` : "";
+  return [
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--vscode-panel-border,#d0d7de);border-bottom-style:dashed;font-size:0.9em;">`,
+    `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">`,
+    `${emoji} ${title}`,
+    `</span>`,
+    `<span style="display:flex;align-items:center;white-space:nowrap;flex-shrink:0;gap:4px;">${domain}${state}${ddl}${stars ? `<span style="${MUTED_STYLE};font-size:0.8em;">${stars}</span>` : ""}</span>`,
+    `</div>`,
+  ].join("");
+}
+
+export function renderWorkFocusCard(props: {
+  dateStr: string;
+  todaySchedule: WorkFocusItem[];
+  longTerm: WorkFocusItem[];
+  fallback?: string;
+  error?: string;
+}): string {
+  const dateLabel = formatDateLabel(props.dateStr);
+  const title = `💼 工作/事业焦点 · ${escapeHtml(dateLabel)}`;
+
+  if (props.error) {
+    return [
+      `<div class="sail-rhythm-work-focus" style="${CARD_STYLE}">`,
+      `<div style="${CARD_TITLE_STYLE}">${title}</div>`,
+      `<div style="${MUTED_STYLE}">获取失败：${escapeHtml(props.error)}</div>`,
+      `</div>`,
+    ].join("");
+  }
+
+  const hasSchedule = props.todaySchedule.length > 0;
+  const hasLongTerm = props.longTerm.length > 0;
+
+  if (!hasSchedule && !hasLongTerm) {
+    if (props.fallback) {
+      return `<div style="${MUTED_STYLE}">${escapeHtml(props.fallback)}</div>`;
+    }
+    return [
+      `<div class="sail-rhythm-work-focus" style="${CARD_STYLE}">`,
+      `<div style="${CARD_TITLE_STYLE}">${title}</div>`,
+      `<div style="${MUTED_STYLE}">暂无工作/事业相关提醒</div>`,
+      `</div>`,
+    ].join("");
+  }
+
+  const parts: string[] = [];
+  parts.push(`<div style="${CARD_TITLE_STYLE}">${title}</div>`);
+
+  if (hasSchedule) {
+    parts.push(`<div style="${SECTION_TITLE_STYLE}">今日工作/事业排程</div>`);
+    parts.push(...props.todaySchedule.map(renderWorkFocusItem));
+  }
+
+  if (hasLongTerm) {
+    parts.push(`<div style="${SECTION_TITLE_STYLE};margin-top:10px;">长期工作/事业重点</div>`);
+    parts.push(...props.longTerm.map(renderLongTermItem));
+  }
+
+  return [
+    `<div class="sail-rhythm-work-focus" style="${CARD_STYLE}">`,
+    ...parts,
+    `</div>`,
+  ].join("");
+}
+
+// ---------------------------------------------------------------------------
 // Providers
 // ---------------------------------------------------------------------------
 
@@ -817,6 +1144,47 @@ async function renderRhythmForDate(
   return renderRhythmDashboardCard(dashboard);
 }
 
+async function queryWorkFocusAffairs(
+  deps: RhythmProviderDeps
+): Promise<{ affairs: RhythmAffair[]; error?: string }> {
+  try {
+    const affairs = await deps.client.listAffairs({
+      domain: ["work", "career"],
+      state: ACTIVE_LONGTERM_STATES,
+      kind: ["venture", "async_callback", "task_maintenance", "fixed_plan"],
+    });
+    return { affairs };
+  } catch (err: any) {
+    const msg = err?.message ?? String(err);
+    deps.log?.("warn", `[rhythm] list affairs failed: ${msg}`);
+    return { affairs: [], error: msg };
+  }
+}
+
+async function renderWorkFocusForDate(
+  deps: RhythmProviderDeps,
+  dateStr: string,
+  fallback?: string
+): Promise<string> {
+  const [dashboard, longTermResult] = await Promise.all([
+    queryDayDashboard(deps, dateStr),
+    queryWorkFocusAffairs(deps),
+  ]);
+
+  if (dashboard.error) {
+    return renderWorkFocusCard({ dateStr, todaySchedule: [], longTerm: [], fallback, error: dashboard.error });
+  }
+
+  const todaySchedule = buildTodaySchedule(dashboard);
+  const longTerm = buildLongTermAffairs(longTermResult.affairs);
+
+  if (todaySchedule.length === 0 && longTerm.length === 0) {
+    return renderWorkFocusCard({ dateStr, todaySchedule: [], longTerm: [], fallback });
+  }
+
+  return renderWorkFocusCard({ dateStr, todaySchedule, longTerm });
+}
+
 function resolveCacheTtlMs(deps: RhythmCoreDeps): number {
   return deps.resolveCacheTtlMs?.() ?? DEFAULT_RHYTHM_CACHE_TTL_MS;
 }
@@ -842,6 +1210,27 @@ export function createRhythmDashboardProvider(
   };
 }
 
+export function createRhythmWorkFocusProvider(
+  deps: RhythmProviderDeps
+): NotePageElementProvider {
+  return {
+    key: "RHYTHM_WORK_FOCUS",
+    title: "Rhythm Work Focus",
+    description:
+      "显示指定日期（date 参数 / 笔记日期 / 今天）的工作/事业焦点提醒卡片，数据来自 sail_server",
+    usage: '<sail-elem key="RHYTHM_WORK_FOCUS" date="2026-07-18" />',
+    cacheTtlMs: resolveCacheTtlMs(deps),
+    render: async (ctx: PageElementRenderContext) => {
+      const dateArg = ctx.args?.date;
+      const dateStr =
+        typeof dateArg === "string" && DATE_ARG_REGEX.test(dateArg)
+          ? dateArg
+          : journalDateStr(ctx.fname) ?? todayDateStr();
+      return renderWorkFocusForDate(deps, dateStr);
+    },
+  };
+}
+
 export function createRhythmJournalPrefixProvider(
   deps: RhythmProviderDeps
 ): NotePageElementProvider {
@@ -849,13 +1238,13 @@ export function createRhythmJournalPrefixProvider(
     key: "RHYTHM_PREFIX",
     title: "Rhythm Journal Prefix",
     description:
-      "Daily Journal 笔记顶部自动显示该日 Rhythm 日程卡片，其他笔记显示帮助",
+      "Daily Journal 笔记顶部自动显示该日工作/事业焦点卡片，其他笔记显示帮助",
     usage: '<sail-elem key="RHYTHM_PREFIX" />',
     cacheTtlMs: resolveCacheTtlMs(deps),
     render: async (ctx: PageElementRenderContext) => {
       const dateStr = journalDateStr(ctx.fname);
       if (dateStr) {
-        return renderRhythmForDate(deps, dateStr, ctx.fallback);
+        return renderWorkFocusForDate(deps, dateStr, ctx.fallback);
       }
       if (deps.renderPrefixHelp) {
         return deps.renderPrefixHelp(ctx);
@@ -877,6 +1266,7 @@ export type RhythmCore = {
   client: SailServerRhythmClient;
   cache: RhythmCache;
   createRhythmDashboardProvider: () => NotePageElementProvider;
+  createRhythmWorkFocusProvider: () => NotePageElementProvider;
   createRhythmJournalPrefixProvider: () => NotePageElementProvider;
   clearCache: () => void;
   register: (registry: PageElementRegistry) => void;
@@ -896,11 +1286,16 @@ export function createRhythmCore(deps: RhythmCoreDeps): RhythmCore {
     cache,
     createRhythmDashboardProvider: () =>
       createRhythmDashboardProvider(providerDeps),
+    createRhythmWorkFocusProvider: () =>
+      createRhythmWorkFocusProvider(providerDeps),
     createRhythmJournalPrefixProvider: () =>
       createRhythmJournalPrefixProvider(providerDeps),
     clearCache: () => cache.clear(),
     register: (registry: PageElementRegistry) => {
       registry.register(createRhythmDashboardProvider(providerDeps), {
+        override: true,
+      });
+      registry.register(createRhythmWorkFocusProvider(providerDeps), {
         override: true,
       });
       registry.register(createRhythmJournalPrefixProvider(providerDeps), {

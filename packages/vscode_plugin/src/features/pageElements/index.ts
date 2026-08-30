@@ -10,6 +10,7 @@ export type { CityWeather } from "./weatherPageElement";
 export {
   registerRhythmPageElementProviders,
   createRhythmDashboardProvider,
+  createRhythmWorkFocusProvider,
   createRhythmJournalPrefixProvider,
   clearRhythmCache,
 } from "./rhythmPageElement";

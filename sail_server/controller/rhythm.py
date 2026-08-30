@@ -252,8 +252,8 @@ class AffairController(Controller):
         self,
         request: Request,
         router_dependency: Generator[Session, None, None],
-        state_: Optional[str] = Parameter(query="state", default=None),
-        domain: Optional[str] = None,
+        state_: Optional[List[str]] = Parameter(query="state", default=None),
+        domain: Optional[List[str]] = Parameter(query="domain", default=None),
         kind: Optional[List[str]] = Parameter(query="kind", default=None),
         day_id: Optional[int] = None,
         parent_id: Optional[int] = None,
@@ -262,7 +262,7 @@ class AffairController(Controller):
         skip: int = 0,
         limit: int = -1,
     ) -> AffairListResponse:
-        """事务列表（state/domain/kind[多值]/day_id/urgency_ddl 范围过滤）"""
+        """事务列表（state/domain/kind 多值/day_id/urgency_ddl 范围过滤）"""
         _check_auth(request)
         db = next(router_dependency)
         affairs = list_affairs_impl(

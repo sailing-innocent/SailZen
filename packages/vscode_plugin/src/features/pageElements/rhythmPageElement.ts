@@ -104,8 +104,16 @@ export function createRhythmDashboardProvider(): NotePageElementProvider {
 }
 
 /**
- * Note-aware `RHYTHM_PREFIX`: daily journal notes get the rhythm dashboard of
- * their date in the top area; other notes keep the built-in help.
+ * Explicit `<sail-elem key="RHYTHM_WORK_FOCUS" />` element: compact work/career
+ * reminder card for a given date.
+ */
+export function createRhythmWorkFocusProvider(): NotePageElementProvider {
+  return getCore().createRhythmWorkFocusProvider();
+}
+
+/**
+ * Note-aware `RHYTHM_PREFIX`: daily journal notes get the work/career focus card
+ * of their date in the top area; other notes keep the built-in help.
  */
 export function createRhythmJournalPrefixProvider(): NotePageElementProvider {
   return getCore().createRhythmJournalPrefixProvider();

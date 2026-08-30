@@ -9,13 +9,19 @@
  */
 import type { PageElementRenderContext } from "@saili/unified";
 import {
+  buildLongTermAffairs,
+  buildTodaySchedule,
   createRhythmCache,
   createRhythmCore,
   createSailServerRhythmClient,
+  filterWorkCareerBlocks,
+  filterWorkCareerPriorities,
   formatDateLabel,
+  normalizeAffairList,
   normalizeDayDashboard,
   parseDailyJournalDate,
   renderRhythmDashboardCard,
+  renderWorkFocusCard,
   todayDateStr,
 } from "../rhythmCore";
 
@@ -123,6 +129,21 @@ function jsonResponse(json: any, status = 200): any {
     status,
     json: async () => json,
   };
+}
+
+function mockFetchRouter(opts: {
+  dashboard?: any;
+  affairs?: any[];
+  status?: number;
+}) {
+  return jest.fn((url: string) => {
+    if (url.includes("/affair/")) {
+      return Promise.resolve(jsonResponse(opts.affairs ?? [], opts.status ?? 200));
+    }
+    return Promise.resolve(
+      jsonResponse(opts.dashboard ?? SERVER_RESPONSE, opts.status ?? 200)
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +310,28 @@ describe("createSailServerRhythmClient", () => {
     const d = await client.getDayDashboard("2026-07-18");
     expect(d.error).toBe("请求超时");
   });
+
+  it("listAffairs composes multi-value query params", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse([]));
+    const client = createSailServerRhythmClient({
+      resolveBaseUrl: () => "http://localhost:1974",
+      fetchImpl: fetchImpl as any,
+    });
+    await client.listAffairs({
+      domain: ["work", "career"],
+      state: ["ACTIVE", "PLANNED"],
+      kind: ["venture", "async_callback"],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url] = fetchImpl.mock.calls[0];
+    expect(url).toContain("/api/v1/rhythm/affair/");
+    expect(url).toContain("domain=work");
+    expect(url).toContain("domain=career");
+    expect(url).toContain("state=ACTIVE");
+    expect(url).toContain("state=PLANNED");
+    expect(url).toContain("kind=venture");
+    expect(url).toContain("kind=async_callback");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -393,9 +436,7 @@ function makeCoreWithFetch(fetchImpl: any) {
 
 describe("rhythm providers", () => {
   it("RHYTHM_DASHBOARD accepts explicit date argument", async () => {
-    const fetchImpl = jest
-      .fn()
-      .mockResolvedValue(jsonResponse(SERVER_RESPONSE));
+    const fetchImpl = mockFetchRouter({});
     const core = makeCoreWithFetch(fetchImpl);
     const provider = core.createRhythmDashboardProvider();
     const html = (await provider.render(
@@ -404,23 +445,53 @@ describe("rhythm providers", () => {
         args: { _: [], date: "2026-07-18" },
       })
     )) as string;
-    const [url] = fetchImpl.mock.calls[0];
-    expect(url).toContain("date=2026-07-18");
+    const dashboardCall = fetchImpl.mock.calls.find((c) =>
+      (c[0] as string).includes("/timeline/day-dashboard")
+    );
+    expect(dashboardCall?.[0]).toContain("date=2026-07-18");
     expect(html).toContain("📅 2026-07-18 周六 · ⚡ Rhythm 日程");
   });
 
-  it("journal RHYTHM_PREFIX auto-derives date from fname", async () => {
-    const fetchImpl = jest
-      .fn()
-      .mockResolvedValue(jsonResponse(SERVER_RESPONSE));
+  it("RHYTHM_WORK_FOCUS accepts explicit date argument and queries affairs", async () => {
+    const fetchImpl = mockFetchRouter({});
+    const core = makeCoreWithFetch(fetchImpl);
+    const provider = core.createRhythmWorkFocusProvider();
+    const html = (await provider.render(
+      makeCtx({
+        fname: "plain.note",
+        key: "RHYTHM_WORK_FOCUS",
+        args: { _: [], date: "2026-07-18" },
+      })
+    )) as string;
+    const dashboardCall = fetchImpl.mock.calls.find((c) =>
+      (c[0] as string).includes("/timeline/day-dashboard")
+    );
+    const affairCall = fetchImpl.mock.calls.find((c) =>
+      (c[0] as string).includes("/affair/")
+    );
+    expect(dashboardCall?.[0]).toContain("date=2026-07-18");
+    expect(affairCall?.[0]).toContain("domain=work");
+    expect(affairCall?.[0]).toContain("domain=career");
+    expect(html).toContain("💼 工作/事业焦点 · 2026-07-18 周六");
+    expect(html).toContain("深度工作");
+  });
+
+  it("journal RHYTHM_PREFIX auto-derives date and renders compact work focus", async () => {
+    const fetchImpl = mockFetchRouter({});
     const core = makeCoreWithFetch(fetchImpl);
     const provider = core.createRhythmJournalPrefixProvider();
     const html = (await provider.render(
       makeCtx({ fname: "journal.daily.2026.07.18", key: "RHYTHM_PREFIX" })
     )) as string;
-    const [url] = fetchImpl.mock.calls[0];
-    expect(url).toContain("date=2026-07-18");
-    expect(html).toContain("⚡ Rhythm 日程");
+    const dashboardCall = fetchImpl.mock.calls.find((c) =>
+      (c[0] as string).includes("/timeline/day-dashboard")
+    );
+    expect(dashboardCall?.[0]).toContain("date=2026-07-18");
+    expect(html).toContain("💼 工作/事业焦点 · 2026-07-18 周六");
+    expect(html).toContain("今日工作/事业排程");
+    expect(html).toContain("深度工作");
+    expect(html).toContain("重点项目评审");
+    expect(html).not.toContain("⚡ Rhythm 日程");
   });
 
   it("non-journal RHYTHM_PREFIX renders help", async () => {
@@ -434,9 +505,9 @@ describe("rhythm providers", () => {
     expect(html).toContain("sail-page-element-help");
   });
 
-  it("renders a soft notice when no data is available", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(
-      jsonResponse({
+  it("renders a soft notice when no work/career data is available", async () => {
+    const fetchImpl = mockFetchRouter({
+      dashboard: {
         date: "2026-07-18",
         day_id: 1,
         plan_version: 0,
@@ -450,20 +521,21 @@ describe("rhythm providers", () => {
         priorities: [],
         insights: [],
         warnings: [],
-      })
-    );
+      },
+      affairs: [],
+    });
     const core = makeCoreWithFetch(fetchImpl);
     const provider = core.createRhythmJournalPrefixProvider();
     const html = (await provider.render(
       makeCtx({ fname: "journal.daily.2026.07.18", key: "RHYTHM_PREFIX" })
     )) as string;
-    expect(html).toContain("暂无 Rhythm 日程数据");
+    expect(html).toContain("暂无工作/事业相关提醒");
     expect(html).not.toContain("sail-page-element-error");
   });
 
-  it("prefers paired-marker fallback content when no data", async () => {
-    const fetchImpl = jest.fn().mockResolvedValue(
-      jsonResponse({
+  it("prefers paired-marker fallback content when no work/career data", async () => {
+    const fetchImpl = mockFetchRouter({
+      dashboard: {
         date: "2026-07-18",
         day_id: 1,
         plan_version: 0,
@@ -477,8 +549,9 @@ describe("rhythm providers", () => {
         priorities: [],
         insights: [],
         warnings: [],
-      })
-    );
+      },
+      affairs: [],
+    });
     const core = makeCoreWithFetch(fetchImpl);
     const provider = core.createRhythmJournalPrefixProvider();
     const html = (await provider.render(
@@ -489,7 +562,7 @@ describe("rhythm providers", () => {
       })
     )) as string;
     expect(html).toContain("自定义占位");
-    expect(html).not.toContain("暂无 Rhythm 日程数据");
+    expect(html).not.toContain("暂无工作/事业相关提醒");
   });
 
   it("renders a soft fetch-failure card on network errors", async () => {
@@ -503,20 +576,37 @@ describe("rhythm providers", () => {
     expect(html).not.toContain("sail-page-element-error");
   });
 
-  it("caches per date so two journals never share dashboards", async () => {
+  it("caches per date so two journals never share work-focus cards", async () => {
     const byDate: Record<string, any> = {
       "2026-07-18": {
         ...SERVER_RESPONSE,
         date: "2026-07-18",
-        insights: ["18号"],
+        blocks: [
+          {
+            ...SERVER_RESPONSE.blocks[0],
+            start_time: "2026-07-18T09:00:00",
+            affair_title: "18号工作",
+          },
+        ],
+        priorities: [],
       },
       "2026-07-19": {
         ...SERVER_RESPONSE,
         date: "2026-07-19",
-        insights: ["19号"],
+        blocks: [
+          {
+            ...SERVER_RESPONSE.blocks[0],
+            start_time: "2026-07-19T09:00:00",
+            affair_title: "19号工作",
+          },
+        ],
+        priorities: [],
       },
     };
     const fetchImpl = jest.fn((url: string) => {
+      if (url.includes("/affair/")) {
+        return Promise.resolve(jsonResponse([]));
+      }
       const date = /date=(\d{4}-\d{2}-\d{2})/.exec(url)![1];
       return Promise.resolve(jsonResponse(byDate[date]));
     });
@@ -533,9 +623,119 @@ describe("rhythm providers", () => {
       makeCtx({ fname: "journal.daily.2026.07.18", key: "RHYTHM_PREFIX" })
     )) as string;
 
-    expect(html18).toContain("18号");
-    expect(html19).toContain("19号");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(html18).toContain("18号工作");
+    expect(html19).toContain("19号工作");
+    // 2 dashboards + 1 cached dashboard + 3 affair lists (uncached)
+    expect(fetchImpl).toHaveBeenCalledTimes(5);
     expect(html18Again).toBe(html18);
+  });
+
+  it("RHYTHM_WORK_FOCUS renders long-term work/career affairs", async () => {
+    const fetchImpl = mockFetchRouter({
+      affairs: [
+        {
+          id: 100,
+          title: "RoboCute",
+          domain: "career",
+          kind: "venture",
+          state: "ACTIVE",
+          importance: 5,
+          score: 88,
+          urgency_ddl: "2028-04-19T00:00:00",
+        },
+        {
+          id: 101,
+          title: "等待审阅",
+          domain: "work",
+          kind: "async_callback",
+          state: "REVIEWING",
+          importance: 4,
+          score: 70,
+        },
+        {
+          id: 102,
+          title: "生活习惯",
+          domain: "life",
+          kind: "habit",
+          state: "ACTIVE",
+        },
+      ],
+    });
+    const core = makeCoreWithFetch(fetchImpl);
+    const provider = core.createRhythmWorkFocusProvider();
+    const html = (await provider.render(
+      makeCtx({
+        fname: "journal.daily.2026.07.18",
+        key: "RHYTHM_WORK_FOCUS",
+      })
+    )) as string;
+    expect(html).toContain("长期工作/事业重点");
+    expect(html).toContain("RoboCute");
+    expect(html).toContain("等待审阅");
+    expect(html).not.toContain("生活习惯");
+  });
+
+  it("filters life-only dashboard to work/career schedule items", () => {
+    const dashboard = normalizeDayDashboard(SERVER_RESPONSE);
+    const blocks = filterWorkCareerBlocks(dashboard);
+    const priorities = filterWorkCareerPriorities(dashboard);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].title).toBe("深度工作");
+    expect(priorities).toHaveLength(1);
+    expect(priorities[0].title).toBe("重点项目评审");
+  });
+
+  it("buildTodaySchedule merges blocks and priorities up to max items", () => {
+    const dashboard = normalizeDayDashboard(SERVER_RESPONSE);
+    const schedule = buildTodaySchedule(dashboard);
+    expect(schedule).toHaveLength(2);
+    expect(schedule[0].title).toBe("深度工作");
+    expect(schedule[1].title).toBe("重点项目评审");
+  });
+
+  it("buildLongTermAffairs filters and sorts long-term work/career affairs", () => {
+    const affairs = normalizeAffairList([
+      {
+        id: 1,
+        title: "低优先级",
+        domain: "work",
+        kind: "task_maintenance",
+        state: "ACTIVE",
+        importance: 2,
+        score: 50,
+        urgency_ddl: "2028-04-19T00:00:00",
+      },
+      {
+        id: 2,
+        title: "高优先级",
+        domain: "career",
+        kind: "venture",
+        state: "ACTIVE",
+        importance: 5,
+        score: 90,
+        urgency_ddl: "2027-04-19T00:00:00",
+      },
+      {
+        id: 3,
+        title: "生活",
+        domain: "life",
+        kind: "habit",
+        state: "ACTIVE",
+      },
+    ]);
+    const items = buildLongTermAffairs(affairs);
+    expect(items).toHaveLength(2);
+    expect(items[0].title).toBe("高优先级");
+    expect(items[1].title).toBe("低优先级");
+  });
+
+  it("renderWorkFocusCard shows empty state", () => {
+    const html = renderWorkFocusCard({
+      dateStr: "2026-07-18",
+      todaySchedule: [],
+      longTerm: [],
+    });
+    expect(html).toContain("💼 工作/事业焦点 · 2026-07-18 周六");
+    expect(html).toContain("暂无工作/事业相关提醒");
   });
 });

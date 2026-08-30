@@ -26,7 +26,7 @@
 
 import logging
 from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -426,8 +426,8 @@ def get_affair_impl(db: Session, affair_id: int) -> Optional[AffairResponse]:
 
 def list_affairs_impl(
     db: Session,
-    state: Optional[str] = None,
-    domain: Optional[str] = None,
+    state: Optional[Union[str, List[str]]] = None,
+    domain: Optional[Union[str, List[str]]] = None,
     kinds: Optional[List[str]] = None,
     day_id: Optional[int] = None,
     parent_id: Optional[int] = None,
@@ -438,9 +438,11 @@ def list_affairs_impl(
 ) -> List[AffairResponse]:
     query = db.query(RhythmAffair)
     if state:
-        query = query.filter(RhythmAffair.state == state)
+        states = [state] if isinstance(state, str) else state
+        query = query.filter(RhythmAffair.state.in_(states))
     if domain:
-        query = query.filter(RhythmAffair.domain == domain)
+        domains = [domain] if isinstance(domain, str) else domain
+        query = query.filter(RhythmAffair.domain.in_(domains))
     if kinds:
         query = query.filter(RhythmAffair.kind.in_(kinds))
     if day_id is not None:

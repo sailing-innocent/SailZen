@@ -270,6 +270,36 @@ class TestEndToEnd:
 
 
 class TestMergedPEMSFeatures:
+    def test_multi_domain_state_query(self, client: TestClient):
+        """list_affairs 支持 state / domain 多值过滤"""
+        client.post(
+            f"{BASE}/affair/",
+            json={"title": "工作 A", "kind": "task_oneoff", "domain": "work"},
+        )
+        client.post(
+            f"{BASE}/affair/",
+            json={"title": "事业 B", "kind": "venture", "domain": "career"},
+        )
+        client.post(
+            f"{BASE}/affair/",
+            json={"title": "生活 C", "kind": "habit", "domain": "life"},
+        )
+
+        # 创建时 state 固定为 INBOX；按 INBOX 与多 domain 过滤
+        resp = client.get(
+            f"{BASE}/affair/",
+            params={
+                "domain": ["work", "career"],
+                "state": ["INBOX", "PLANNED"],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = {a["title"] for a in data["affairs"]}
+        assert "工作 A" in titles
+        assert "事业 B" in titles
+        assert "生活 C" not in titles
+
     def test_urgency_ddl_range_query(self, client: TestClient):
         """list_affairs 支持 urgency_ddl 范围过滤"""
         resp = client.post(
