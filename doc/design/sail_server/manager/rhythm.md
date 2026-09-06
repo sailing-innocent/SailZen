@@ -412,9 +412,9 @@ token 取 `SAILZEN_API_TOKEN`。
 
 | 文件 | 职责 |
 |------|------|
-| `packages/site/src/pages/rhythm.tsx` | Dashboard 页面入口 |
-| `packages/site/src/lib/api/rhythm.ts` | Dashboard API 客户端 |
-| `packages/site/src/lib/data/rhythm.ts` | Dashboard DTO 类型 |
-| `packages/site/src/lib/store/rhythm.ts` | 统一 Rhythm Zustand store |
-| `packages/site/src/components/rhythm/*.tsx` | Dashboard 各视图组件 |
+| `site/src/pages/rhythm.tsx` | Dashboard 页面入口 |
+| `site/src/lib/api/rhythm.ts` | Dashboard API 客户端 |
+| `site/src/lib/data/rhythm.ts` | Dashboard DTO 类型 |
+| `site/src/lib/store/rhythm.ts` | 统一 Rhythm Zustand store |
+| `site/src/components/rhythm/*.tsx` | Dashboard 各视图组件 |
 

@@ -22,7 +22,7 @@ const PACKAGES = [
   'packages/engine-server/package.json',
   'packages/api_server/package.json',
   'packages/sail_plugin_views/package.json',
-  'packages/site/package.json',
+  'site/package.json',
 ];
 
 function parseVersion(version) {

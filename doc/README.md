@@ -133,7 +133,7 @@ doc/
 1. 阅读 [dev/README.md](./dev/README.md) 搭建开发环境
 2. 查看 [PRD.md](./PRD.md) 了解功能需求
 3. 参考各模块 [API 文档](./api/) 了解接口调用
-4. 查看前端 API 客户端代码 `packages/site/src/lib/api/`
+4. 查看前端 API 客户端代码 `site/src/lib/api/`
 5. 参考各模块设计文档了解UI设计
 
 ### 如果你是测试工程师

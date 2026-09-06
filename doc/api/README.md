@@ -83,7 +83,7 @@ SailZen 提供 RESTful API 供前端调用，所有 API 都以 `/api/v1` 为前�
 
 ## 📦 前端 API 客户端
 
-前端使用 TypeScript 封装了 API 调用，位于 `packages/site/src/lib/api/` 目录。
+前端使用 TypeScript 封装了 API 调用，位于 `site/src/lib/api/` 目录。
 
 ### 使用示例
 
@@ -119,7 +119,7 @@ const transaction = await api_create_transaction({
 
 ## 🔌 配置
 
-API 配置位于 `packages/site/src/lib/api/config.ts`：
+API 配置位于 `site/src/lib/api/config.ts`：
 
 ```typescript
 export const SERVER_URL = process.env.SERVER_URL  // 后端服务器地址

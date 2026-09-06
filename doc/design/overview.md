@@ -34,7 +34,7 @@ data/          # 数据访问层 (DAO)
 utils/         # 工具函数
 ```
 
-### Frontend (packages/site)
+### Frontend (site)
 
 ```
 app/           # 页面路由

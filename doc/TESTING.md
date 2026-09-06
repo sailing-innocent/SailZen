@@ -53,7 +53,7 @@ uv run tests/llm_integration/run_validation.py connection --real-connection --pr
 1. 启动服务
    ```bash
    uv run server.py          # 后端
-   cd packages/site && pnpm dev  # 前端
+   cd site && pnpm dev  # 前端
    ```
 
 2. 测试流程
