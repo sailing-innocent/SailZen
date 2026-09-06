@@ -49,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -382,6 +385,11 @@ private fun PageReader(
     }
 }
 
+/**
+ * 滚动模式：与翻页模式共用 ParagraphSplitter 的段落切分与全局偏移体系，
+ * 批注高亮用 AnnotatedString + LinkAnnotation 就地点击查看/编辑，
+ * 阅读进度以首个可见段落的首字符偏移（全局）持久化。
+ */
 @Composable
 private fun ScrollReader(
     state: ReaderViewModel.UiState,
@@ -391,20 +399,62 @@ private fun ScrollReader(
 ) {
     val text = state.currentChapter?.rawText ?: ""
     val listState = rememberLazyListState()
-    val paragraphs = remember(text) { text.split("\n") }
+    val paragraphs = remember(text) { ParagraphSplitter.split(text) }
+    val fontSize = state.settings.fontSize
+    val lineHeight = state.settings.lineHeight
+
+    // 进度上报：首个可见段落的全局起始偏移
+    LaunchedEffect(listState, paragraphs) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            paragraphs.getOrNull(index)?.let { viewModel.onScrollCharOffset(it.startOffset) }
+        }
+    }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
     ) {
         itemsIndexed(paragraphs, key = { index, _ -> index }) { _, paragraph ->
+            val annotated = remember(
+                paragraph.text,
+                paragraph.startOffset,
+                state.annotations,
+            ) {
+                buildAnnotatedString {
+                    append(paragraph.text)
+                    val overlaps = state.annotations.filter {
+                        it.startOffset < paragraph.endOffset && it.endOffset > paragraph.startOffset
+                    }
+                    for (anno in overlaps) {
+                        val s = (anno.startOffset - paragraph.startOffset)
+                            .coerceIn(0, paragraph.text.length)
+                        val e = (anno.endOffset - paragraph.startOffset)
+                            .coerceIn(s, paragraph.text.length)
+                        if (s >= e) continue
+                        addStyle(
+                            SpanStyle(background = Color(annotationColorArgb(anno.color, 0xFFFFFFE0.toInt()))),
+                            s,
+                            e,
+                        )
+                        addLink(
+                            LinkAnnotation.Clickable(
+                                tag = "anno_${anno.localId}_${anno.hashCode()}",
+                                linkInteractionListener = { onDraftAnnotation(anno) },
+                            ),
+                            s,
+                            e,
+                        )
+                    }
+                }
+            }
             Text(
-                text = paragraph,
+                text = annotated,
                 color = textColor,
-                fontSize = state.settings.fontSize.sp,
-                lineHeight = (state.settings.fontSize * state.settings.lineHeight).sp,
+                fontSize = fontSize.sp,
+                lineHeight = (fontSize * lineHeight).sp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
     }

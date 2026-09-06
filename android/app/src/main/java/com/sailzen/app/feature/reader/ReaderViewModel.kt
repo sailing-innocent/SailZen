@@ -57,6 +57,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var saveProgressJob: Job? = null
+
+    /** 当前阅读位置的全局字符偏移（跨模式复用 scrollOffset 列持久化） */
+    private var currentCharOffset: Int = 0
     private var specJob: Job? = null
     private var pageSpec: ReaderTextEngine.LayoutSpec? = null
     private val textMeasurer = ReaderTextEngine.StaticLayoutMeasurer()
@@ -91,6 +94,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             } ?: ReaderSettings()
 
             val pageIdx = progress?.pageIndex?.coerceAtLeast(0) ?: 0
+            // 滚动模式：scrollOffset 列复用为字符偏移，用于恢复到上次阅读位置
+            val charOffset = progress?.scrollOffset?.takeIf {
+                it > 0 && (progress.mode == "scroll")
+            }
             _uiState.update {
                 it.copy(
                     workTitle = displayTitle,
@@ -103,7 +110,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     loading = false,
                 )
             }
-            chapter?.let { loadChapter(it, pageIdx) }
+            chapter?.let { loadChapter(it, pageIdx, charOffset = charOffset) }
         }
     }
 
@@ -129,6 +136,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 else -> 0
             }
             _uiState.update { it.copy(pages = pages, currentPage = target) }
+            currentCharOffset = pages.getOrNull(target)?.startOffset ?: 0
             saveProgressDebounced()
         }
     }
@@ -147,6 +155,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
  fun goToPage(pageIndex: Int) {
  if (pageIndex in 0 until _uiState.value.pages.size) {
  _uiState.update { it.copy(currentPage = pageIndex) }
+ currentCharOffset = _uiState.value.pages.getOrNull(pageIndex)?.startOffset ?: 0
+ saveProgressDebounced()
+ }
+ }
+
+ /** 滚动模式：上报当前首个可见段落的首字符偏移（全局） */
+ fun onScrollCharOffset(charOffset: Int) {
+ if (currentCharOffset != charOffset) {
+ currentCharOffset = charOffset
  saveProgressDebounced()
  }
  }
@@ -196,6 +213,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 currentPage = ReaderTextEngine.findPageForOffset(pages, anchor),
             )
         }
+        currentCharOffset = anchor
     }
 
     fun onSelection(
@@ -290,9 +308,12 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * 设置更新：仅更新状态并持久化。翻页模式的重排版由 setPageSpec 防抖驱动，
+     * 不再整章重载（避免章节内容闪烁与批注重拉）。
+     */
     fun updateSettings(settings: ReaderSettings) {
         _uiState.update { it.copy(settings = settings) }
-        _uiState.value.currentChapter?.let { loadChapter(it, _uiState.value.currentPage) }
         saveProgressDebounced()
     }
 
@@ -315,6 +336,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 sortIndex = chapter.sortIndex,
                 mode = if (state.settings.mode == ReaderMode.SCROLL) "scroll" else "page",
                 pageIndex = state.currentPage,
+                // 翻页模式存当前页首字符偏移，滚动模式存首个可见段落偏移；
+                // 切模式后旧值自然失效，由新模式的首次上报覆盖
+                scrollOffset = currentCharOffset,
                 fontSize = state.settings.fontSize,
                 lineHeight = state.settings.lineHeight,
                 theme = if (state.settings.theme == ReaderTheme.DARK) "dark" else "light",
