@@ -22,6 +22,7 @@ from sail_server.controller.rhythm import (
     CheckinController,
     DashboardController,
     EnergyController,
+    OccupancyController,
     PlanController,
     PolicyController,
     ReviewController,
@@ -47,5 +48,6 @@ router = Router(
         PolicyController,
         PlanController,
         ReviewController,
+        OccupancyController,
     ],
 )

@@ -61,6 +61,9 @@ from sail_server.application.dto.rhythm import (
     HealthCheckinRequest,
     HealthCheckinResponse,
     InfoCollectionType,
+    OccupancyCreateRequest,
+    OccupancyListResponse,
+    OccupancyResponse,
     PlanDayRequest,
     PlanDayResponse,
     PolicyCreateRequest,
@@ -89,8 +92,10 @@ from sail_server.model.rhythm import (
     confirm_hint_impl,
     create_affair_impl,
     create_block_impl,
+    create_occupancy_impl,
     create_policy_impl,
     delete_affair_impl,
+    delete_occupancy_impl,
     delete_policy_impl,
     delete_template_impl,
     ensure_default_templates_impl,
@@ -103,6 +108,7 @@ from sail_server.model.rhythm import (
     health_checkin_impl,
     list_affairs_impl,
     list_checkins_impl,
+    list_occupancies_impl,
     list_policies_impl,
     list_templates_impl,
     milestone_done_impl,
@@ -749,6 +755,55 @@ class PlanController(Controller):
         db = next(router_dependency)
         items = detect_conflicts_impl(db, date)
         return ConflictReportResponse(date=date, encroachments=items)
+
+
+# ============================================================================
+# Occupancy Controller（特殊占用：请假/会议/预约/出行）
+# ============================================================================
+
+
+class OccupancyController(Controller):
+    path = "/occupancy"
+
+    @post("/")
+    async def create_occupancy(
+        self,
+        data: OccupancyCreateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> OccupancyResponse:
+        """创建特殊占用（幂等：同日同起止同类型直接返回已有块）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return create_occupancy_impl(db, data)
+
+    @get("/")
+    async def list_occupancies(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        date: date_type,
+    ) -> OccupancyListResponse:
+        """查询某日特殊占用列表"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return list_occupancies_impl(db, date)
+
+    @delete("/{block_id:int}", status_code=200)
+    async def delete_occupancy(
+        self,
+        block_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """删除特殊占用块（仅 occupancy_api 来源的 occupied 块可删）"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            delete_occupancy_impl(db, block_id)
+        return {"id": block_id, "status": "success"}
 
 
 # ============================================================================
