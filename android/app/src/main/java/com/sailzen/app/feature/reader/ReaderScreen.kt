@@ -209,9 +209,10 @@ private fun PageReader(
             val spec = ReaderTextEngine.LayoutSpec(
                 widthPx = context.resources.displayMetrics.widthPixels - 48,
                 heightPx = context.resources.displayMetrics.heightPixels - 300,
-                fontSizeSp = state.settings.fontSize.toFloat(),
-                lineSpacing = state.settings.lineHeight,
+                fontSizePx = state.settings.fontSize.sp.toPx(),
+                lineSpacingMult = state.settings.lineHeight,
                 paragraphSpacingPx = (8.dp.toPx()).toInt(),
+                paddingPx = (16.dp.toPx()).toInt(),
             )
             viewModel.setPageSpec(spec)
         }

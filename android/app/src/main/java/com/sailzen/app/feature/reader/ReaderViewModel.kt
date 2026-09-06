@@ -10,8 +10,10 @@ import com.sailzen.app.core.data.db.ReadingProgress
 import com.sailzen.app.core.network.dto.EditionDto
 import com.sailzen.app.core.text.TextRepository
 import java.time.LocalDateTime
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,7 +57,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var saveProgressJob: Job? = null
+    private var specJob: Job? = null
     private var pageSpec: ReaderTextEngine.LayoutSpec? = null
+    private val textMeasurer = ReaderTextEngine.StaticLayoutMeasurer()
 
     fun loadWork(workId: Int, workTitle: String, editionId: Int? = null) {
         viewModelScope.launch {
@@ -103,7 +107,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun loadChapter(chapter: CachedChapter, pageIndex: Int = 0) {
+    fun loadChapter(chapter: CachedChapter, pageIndex: Int = 0, charOffset: Int? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true) }
             val full = repository.chapterContent(chapter.editionId, chapter.sortIndex)
@@ -118,12 +122,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     loading = false,
                 )
             }
-            buildPages(full.rawText)
-            if (pageIndex in 0 until _uiState.value.pages.size) {
-                _uiState.update { it.copy(currentPage = pageIndex) }
-            } else {
-                _uiState.update { it.copy(currentPage = 0) }
+            val pages = paginateNow(full.rawText)
+            val target = when {
+                charOffset != null -> ReaderTextEngine.findPageForOffset(pages, charOffset)
+                pageIndex in pages.indices -> pageIndex
+                else -> 0
             }
+            _uiState.update { it.copy(pages = pages, currentPage = target) }
             saveProgressDebounced()
         }
     }
@@ -147,24 +152,38 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * 布局参数变化（字号/行距/可用宽高）：300ms 防抖后重建分页，
+     * 并以当前页首字符偏移重定位页码，避免简单回第 0 页。
+     */
     fun setPageSpec(spec: ReaderTextEngine.LayoutSpec) {
-        if (pageSpec != spec) {
-            pageSpec = spec
-            val text = _uiState.value.currentChapter?.rawText ?: return
-            buildPages(text)
+        if (spec == pageSpec) return
+        pageSpec = spec
+        specJob?.cancel()
+        specJob = viewModelScope.launch {
+            delay(300)
+            rebuildPages()
         }
     }
 
-    private fun buildPages(text: String) {
+    private suspend fun paginateNow(text: String): List<ReaderTextEngine.Page> =
+        withContext(Dispatchers.Default) {
+            ReaderTextEngine.paginate(text, ParagraphSplitter.split(text), textMeasurer)
+        }
+
+    private suspend fun rebuildPages() {
+        val state = _uiState.value
+        val text = state.currentChapter?.rawText ?: return
         val spec = pageSpec ?: return
-        viewModelScope.launch {
-            val pages = ReaderTextEngine.paginate(text, spec)
-            _uiState.update {
-                it.copy(
-                    pages = pages,
-                    currentPage = it.currentPage.coerceIn(0, (pages.size - 1).coerceAtLeast(0)),
-                )
-            }
+        val anchor = state.pages.getOrNull(state.currentPage)?.startOffset ?: 0
+        val pages = withContext(Dispatchers.Default) {
+            ReaderTextEngine.paginate(text, ParagraphSplitter.split(text), spec, textMeasurer)
+        }
+        _uiState.update {
+            it.copy(
+                pages = pages,
+                currentPage = ReaderTextEngine.findPageForOffset(pages, anchor),
+            )
         }
     }
 
