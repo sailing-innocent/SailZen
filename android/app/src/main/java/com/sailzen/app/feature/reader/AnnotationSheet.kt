@@ -49,7 +49,11 @@ fun AnnotationSheet(
             )
         } else {
             LazyColumn {
-                items(annotations, key = { it.localId }) { annotation ->
+                // 未落库的草稿 localId 均为 0，key 冲突会导致 LazyColumn 崩溃；用 hash 兜底
+                items(
+                    annotations,
+                    key = { it.localId.takeIf { id -> id != 0L } ?: -it.hashCode() },
+                ) { annotation ->
                     AnnotationRow(
                         annotation = annotation,
                         onEdit = { onEdit(annotation) },

@@ -11,8 +11,14 @@ from typing import Optional, List, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
+import logging
+
+from litestar.exceptions import ClientException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+
+logger = logging.getLogger(__name__)
 
 from sail_server.config.paths import SERVER_DATA_DIR
 
@@ -706,7 +712,11 @@ def create_note_item_impl(
     if not setting_file:
         work_id = data.work_id or 0
         base_slug = data.slug or _make_slug(data.title or "annotation")
-        setting_file = f"notes/annotations/{work_id}/{base_slug}.md"
+        # 追加短 uuid 后缀，避免同作品下同标题/空标题批注相互覆盖文件（S3）
+        setting_file = (
+            f"notes/annotations/{work_id}/{base_slug}-{uuid4().hex[:8]}.md"
+        )
+
 
     note = NoteItem(
         category=data.category,
@@ -740,7 +750,9 @@ def _resolve_annotation_file_path(setting_file: str) -> Path:
     try:
         target.relative_to(base_resolved)
     except ValueError:
-        raise ValueError(f"Invalid note file path (outside workspace): {setting_file}")
+        raise ClientException(
+            detail=f"Invalid note file path (outside workspace): {setting_file}"
+        )
     return target
 
 
@@ -794,18 +806,37 @@ def update_note_item_impl(
         note.slug = data.slug
     if data.meta_data is not None:
         note.meta_data = data.meta_data
-
     db.commit()
     db.refresh(note)
+    # S2：索引更新可携带正文，直接写文件（与 create 路径一致，限制在 workspace 内）
+    if data.content is not None and data.content:
+        file_path = _resolve_annotation_file_path(note.setting_file)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(sanitize_text(data.content), encoding="utf-8")
     return _note_to_response(note)
 
 
+
 def delete_note_item_impl(db: Session, note_id: int) -> Optional[NoteItemResponse]:
-    """删除笔记索引"""
+    """删除笔记索引，并清理 notes/annotations/ 下的正文文件（S3）"""
     note = db.query(NoteItem).filter(NoteItem.id == note_id).first()
     if not note:
         return None
     note_data = _note_to_response(note)
+    _remove_annotation_file(note.setting_file)
     db.delete(note)
     db.commit()
     return note_data
+
+
+def _remove_annotation_file(setting_file: str) -> None:
+    """尽力清理批注正文文件；任何异常都不阻塞索引删除"""
+    rel = (setting_file or "").lstrip("/")
+    if not rel.startswith("notes/annotations/"):
+        return
+    try:
+        file_path = _resolve_annotation_file_path(rel)
+        if file_path.exists():
+            file_path.unlink()
+    except (OSError, ClientException):
+        logger.warning(f"Failed to remove annotation file: {setting_file}")
