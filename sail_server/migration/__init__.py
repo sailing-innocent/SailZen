@@ -35,12 +35,15 @@ logger = logging.getLogger(__name__)
 MIGRATION_DIR = Path(__file__).parent
 
 # Python 迁移脚本（跨后端，通常用于给已有表添加列）
+# 注意：Python 迁移方式已被实践证明不可靠（如触发器函数引用不存在的列时，
+# 报错信息被 SQLAlchemy 层层包装，难以定位；且与 PG 原生 DDL 行为差异大），
+# 后续迁移统一走 SQL_MIGRATIONS。此列表保留为空，仅作历史兼容。
 PYTHON_MIGRATIONS: List[Path] = [
-    MIGRATION_DIR / "20260906_add_rhythm_is_default.py",
 ]
 
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）
 SQL_MIGRATIONS: List[Path] = [
+    MIGRATION_DIR / "20260906_add_rhythm_is_default.sql",
 ]
 
 

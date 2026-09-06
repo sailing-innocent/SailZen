@@ -156,34 +156,32 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val next = state.chapters.getOrNull(state.currentSortIndex + 1) ?: return
         loadChapter(next, 0)
     }
- fun goToPage(pageIndex: Int) {
- if (pageIndex in 0 until _uiState.value.pages.size) {
- _uiState.update { it.copy(currentPage = pageIndex) }
- currentCharOffset = _uiState.value.pages.getOrNull(pageIndex)?.startOffset ?: 0
- _uiState.update { it.copy(charOffset = currentCharOffset) }
- saveProgressDebounced()
- }
- }
+    fun goToPage(pageIndex: Int) {
+        if (pageIndex in 0 until _uiState.value.pages.size) {
+            _uiState.update { it.copy(currentPage = pageIndex) }
+            currentCharOffset = _uiState.value.pages.getOrNull(pageIndex)?.startOffset ?: 0
+            _uiState.update { it.copy(charOffset = currentCharOffset) }
+            saveProgressDebounced()
+        }
+    }
 
- /** 滚动模式：上报当前首个可见段落的首字符偏移（全局） */
- fun onScrollCharOffset(charOffset: Int) {
- if (currentCharOffset != charOffset) {
- currentCharOffset = charOffset
- _uiState.update { it.copy(charOffset = charOffset) }
- saveProgressDebounced()
- }
- }
+    /** 滚动模式：上报当前首个可见段落的首字符偏移（全局） */
+    fun onScrollCharOffset(charOffset: Int) {
+        if (currentCharOffset != charOffset) {
+            currentCharOffset = charOffset
+            _uiState.update { it.copy(charOffset = charOffset) }
+            saveProgressDebounced()
+        }
+    }
 
- /**
- * pager 滑动落定后的回写入口（由 snapshotFlow{settledPage} 驱动）。
- * 在 ViewModel 内做页码比较，避免组合期捕获的 state 过期造成回环。
- */
- fun onPageSettled(pageIndex: Int) {
- if (_uiState.value.currentPage != pageIndex) {
- goToPage(pageIndex)
- }
- }
-
+    /**
+     * pager 滑动落定后的回写入口（由 snapshotFlow{settledPage} 驱动）。
+     * 在 ViewModel 内做页码比较，避免组合期捕获的 state 过期造成回环。
+     */
+    fun onPageSettled(pageIndex: Int) {
+        if (_uiState.value.currentPage != pageIndex) {
+            goToPage(pageIndex)
+        }
     }
 
     /**
@@ -202,7 +200,14 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     private suspend fun paginateNow(text: String): List<ReaderTextEngine.Page> =
         withContext(Dispatchers.Default) {
-            ReaderTextEngine.paginate(text, ParagraphSplitter.split(text), textMeasurer)
+            val spec = pageSpec
+            if (spec == null) {
+                // 布局尚未测量完成（首帧竞态）：整章单页兜底，
+                // setPageSpec 到达后经 rebuildPages 重新分页
+                listOf(ReaderTextEngine.Page(text, 0, text.length))
+            } else {
+                ReaderTextEngine.paginate(text, ParagraphSplitter.split(text), spec, textMeasurer)
+            }
         }
 
     private suspend fun rebuildPages() {

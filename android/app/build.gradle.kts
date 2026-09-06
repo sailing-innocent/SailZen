@@ -59,6 +59,8 @@ android {
 
     testOptions {
         unitTests {
+            // android.util.Log 等桩方法在 JVM 单测中返回默认值而非抛异常
+            isReturnDefaultValues = true
             all {
                 it.jvmArgs(
                     "-XX:+IgnoreUnrecognizedVMOptions",
