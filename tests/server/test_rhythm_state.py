@@ -298,11 +298,11 @@ class TestAsyncCallbackStateMachine:
         assert resp.state == AffairState.DELEGATED
         assert resp.kind_meta["current_phase"] == "delegated"
         assert resp.kind_meta["next_review_at"] is not None
-        # work_hours_only 时 next_review_at 应落在工作窗（工作日 09-12/14-18）
+        # work_hours_only 时 next_review_at 应落在工作窗（工作日 10-13/14-19，v2 口径）
         from datetime import datetime
         nxt = datetime.fromisoformat(resp.kind_meta["next_review_at"])
         assert nxt.weekday() < 5
-        assert 9 <= nxt.hour < 12 or 14 <= nxt.hour < 18
+        assert 10 <= nxt.hour < 13 or 14 <= nxt.hour < 19
         # DELEGATED 阶段 energy_cost 归零
         assert resp.energy_cost == 0
 

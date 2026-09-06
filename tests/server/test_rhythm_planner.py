@@ -290,22 +290,22 @@ class TestLifeFloor:
         resp = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
         focus = [b for b in resp.blocks if b.block_type == "focus"]
         assert len(focus) == 1
-        # 应落在某个工作窗内
+        # 应落在某个工作窗内（v2 工作窗 10:00-13:00 / 14:00-19:00）
         in_morning = (
-            dt(TEST_DATE, "09:00") <= focus[0].start_time
-            and focus[0].end_time <= dt(TEST_DATE, "12:00")
+            dt(TEST_DATE, "10:00") <= focus[0].start_time
+            and focus[0].end_time <= dt(TEST_DATE, "13:00")
         )
         in_afternoon = (
-            dt(TEST_DATE, "13:00") <= focus[0].start_time
-            and focus[0].end_time <= dt(TEST_DATE, "18:00")
+            dt(TEST_DATE, "14:00") <= focus[0].start_time
+            and focus[0].end_time <= dt(TEST_DATE, "19:00")
         )
         assert in_morning or in_afternoon
         assert not (focus[0].ref or {}).get("overtime")
 
     def test_overtime_warning_when_work_window_full(self, db: Session):
-        """工作窗放不下 → 超窗排程 + overtime warning"""
+        """v2：工作窗放不下 → 默认不再超窗，unplaced + work_window_full warning"""
         _setup_template(db)
-        # 塞满工作窗：8 小时工作窗（09-12, 13-18）放 9 个 60min 任务
+        # 塞满工作窗：8 小时工作窗（10-13, 14-19，片段内 15min gap）放 9 个 60min 任务
         for i in range(9):
             task = create_affair_impl(
                 db,
@@ -318,11 +318,17 @@ class TestLifeFloor:
             )
             _confirm(db, task.id)
         resp = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
-        overtime_blocks = [b for b in resp.blocks if (b.ref or {}).get("overtime")]
-        overtime_warnings = [w for w in resp.warnings if w.code == "overtime"]
-        assert overtime_blocks or overtime_warnings or resp.unplaced, (
-            "工作窗满时应加班/告警/搁置之一"
-        )
+        focus = [b for b in resp.blocks if b.block_type == "focus"]
+        unplaced = [u for u in resp.unplaced if u.reason == "工作窗放不下"]
+        full_warnings = [w for w in resp.warnings if w.code == "work_window_full"]
+        assert unplaced, "工作窗满时溢出的任务应 unplaced"
+        assert full_warnings, "应产生 work_window_full 警告"
+        assert all(
+            (dt(TEST_DATE, "10:00") <= b.start_time and b.end_time <= dt(TEST_DATE, "13:00"))
+            or (dt(TEST_DATE, "14:00") <= b.start_time and b.end_time <= dt(TEST_DATE, "19:00"))
+            for b in focus
+        ), "默认（force=false）所有 focus 块都在有效工作窗内"
+        assert not any((b.ref or {}).get("overtime") for b in focus), "默认不允许超窗"
 
 
 # ============================================================================
@@ -602,9 +608,9 @@ class TestAsyncCallbackPlan:
         plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
         kickoff = [b for b in plan.blocks if b.block_type == "async_kickoff"]
         assert len(kickoff) == 1
-        # work_hours_only=False 时仍优先排工作窗（09-12/13-18）
+        # work_hours_only=False 时仍排工作窗（v2 口径 10:00-13:00/14:00-19:00）
         s, e = kickoff[0].start_time, kickoff[0].end_time
-        assert s.hour >= 9 and (s.hour < 12 or 13 <= s.hour < 18)
+        assert s.hour >= 10 and (s.hour < 13 or 14 <= s.hour < 19)
         assert kickoff[0].ref.get("phase") == "kickoff"
         assert kickoff[0].ref.get("round") == 1
 
@@ -654,15 +660,19 @@ class TestAsyncCallbackPlan:
         assert review[0].ref.get("phase") == "review"
 
     def test_work_hours_only_blocks_outside_work_window_unplaced(self, db: Session):
-        """work_hours_only=true 且无工作窗模板 → async_kickoff 排不下（unplaced）"""
-        # 不建模板 → 无 work_window
+        """无有效工作窗（周末 + 无模板 + profile weekend 未配置）→ async_kickoff unplaced"""
+        # v2：工作日默认 profile.work_windows 提供 10:00-19:00 有效工作窗，
+        # 因此该用例改在周六验证 unplaced 路径（weekend 工作窗为空且无模板）
+        from datetime import timedelta
+        sat = TEST_DATE + timedelta(days=5)
         aid = self._create_async(db, work_hours_only=True)
         _confirm(db, aid)
-        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        plan = plan_day_impl(db, PlanDayRequest(date=sat))
         kickoff = [b for b in plan.blocks if b.block_type == "async_kickoff"]
         assert len(kickoff) == 0
         unplaced_async = [u for u in plan.unplaced if u.affair_id == aid]
         assert len(unplaced_async) == 1
+        assert unplaced_async[0].reason == "无有效工作窗"
 
     def test_paused_async_no_blocks(self, db: Session):
         """PAUSED 的 async_callback 不生成块"""

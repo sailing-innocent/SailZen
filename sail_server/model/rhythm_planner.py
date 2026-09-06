@@ -14,9 +14,11 @@
 - §5.1 统一优先级评分（分类紧迫度 + 三域平衡加成 + 精力匹配 + 连续激励 + 生活地板）
 - §5.2 精力模型（曲线匹配 + 过载告警）
 - §5.3 财力校验（finance 预算剩余）
-- §5.4 plan_day 八步铺底（睡眠→骨架→刚性钉→戒律→缓冲→事业→习惯/工作竞争）
+- §5.4 plan_day 铺底（v2：睡眠→骨架→占用扣除→刚性钉→戒律→缓冲→事业→习惯/工作竞争）
 - §5.5 侵占检测与再平衡
 - §5.6 节奏评分（Review）
+
+排程内核（有效工作窗/gap 预留/best-fit/拆分）见 model/rhythm_scheduler.py。
 """
 
 import logging
@@ -78,6 +80,7 @@ from sail_server.model.rhythm import (
     week_cycle_key,
     week_range,
 )
+from sail_server.model import rhythm_scheduler as sched
 
 logger = logging.getLogger(__name__)
 
@@ -366,9 +369,13 @@ class _PlanCtx:
         pinned: bool = False,
         ref: Optional[Dict[str, Any]] = None,
         status: str = "PLANNED",
+        multi: bool = False,
     ) -> Optional[RhythmTimeBlock]:
-        """创建块（对 affair 块按 day+affair+type 幂等去重）"""
-        if affair is not None:
+        """创建块（对 affair 块按 day+affair+type 幂等去重）
+
+        multi=True 时跳过去重（可拆分任务的多个 chunk 共用 affair+type）。
+        """
+        if affair is not None and not multi:
             dup = (
                 self.db.query(RhythmTimeBlock)
                 .filter(
@@ -599,6 +606,23 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                     idx += 1
     live_blocks = _existing_blocks(db, day.id)
 
+    # ---- Step 2.5: 特殊占用扣除 → 有效工作窗（v2）----
+    # 有效工作窗权威: profile.work_windows > 模板 work_window 槽位 > 空
+    occupancy_blocks = [b for b in live_blocks if b.block_type == "occupied"]
+    base_work_windows = sched.resolve_work_windows(
+        getattr(profile, "work_windows", None), work_windows, d
+    )
+    occupancy_ivs = [(b.start_time, b.end_time) for b in occupancy_blocks]
+    effective_work_windows = sched.compute_effective_windows(
+        base_work_windows, occupancy_ivs
+    )
+    # 整日请假/占用语义：占用清空全部有效工作窗且含 leave/whole_day
+    day_leave = sched.is_full_day_leave(occupancy_blocks, effective_work_windows)
+    # 早间健康窗（健康类 habit 第一候选，见 Step 7a）
+    morning_windows = sched.resolve_morning_window(
+        getattr(profile, "morning_health_window", None), sleep_end_t, d
+    )
+
     # ---- Step 3: 刚性钉（fixed_plan，冲突只报警不移动）----
     fixed_affairs = (
         db.query(RhythmAffair)
@@ -657,7 +681,7 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
         check_t = _parse_hhmm(meta.get("check_time", "22:30"), "22:30")
         start = datetime.combine(d, check_t)
         occupied = _occupied_intervals(live_blocks)
-        free = _free_intervals(awake, occupied, extra_busy=work_windows)
+        free = _free_intervals(awake, occupied, extra_busy=base_work_windows)
         placed = _place_in_free(free, block_minutes, candidates=[(start, start + timedelta(minutes=block_minutes))])
         if placed is None:
             placed = _place_in_free(free, block_minutes)
@@ -676,17 +700,18 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
     )
     buffer_remaining = max(buffer_target - existing_buffer, 0)
     if buffer_remaining > 0:
-        # 两个锚点：最后一个工作窗结束后、晚间睡前
+        # 两个锚点：最后一个（有效）工作窗结束后、晚间睡前
         anchors: List[datetime] = []
-        if work_windows:
-            anchors.append(max(we for _, we in work_windows))
+        anchor_windows = effective_work_windows or base_work_windows
+        if anchor_windows:
+            anchors.append(max(we for _, we in anchor_windows))
         anchors.append(datetime.combine(d, sleep_start_t) - timedelta(hours=1))
         for anchor in anchors:
             if buffer_remaining < 15:
                 break
             chunk = min(buffer_remaining, 60)
             occupied = _occupied_intervals(live_blocks)
-            free = _free_intervals(awake, occupied, extra_busy=work_windows)
+            free = _free_intervals(awake, occupied, extra_busy=base_work_windows)
             placed = _place_in_free(
                 free, chunk, candidates=[(anchor, anchor + timedelta(hours=2))]
             )
@@ -725,6 +750,14 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
             st = _parse_hhmm(rng[0], "19:30")
             et = _parse_hhmm(rng[1], "22:30")
             spare_windows.append((datetime.combine(d, st), datetime.combine(d, et)))
+    # v2：事业块 end ≤ sleep_start - career_buffer_minutes（默认 45 → 22:45）
+    career_buffer_min = int(getattr(profile, "career_buffer_minutes", None) or 45)
+    spare_clipped = sched.clip_by_career_buffer(
+        spare_windows, datetime.combine(d, sleep_start_t), career_buffer_min
+    )
+    clipped_away = sum(_minutes(w) for w in spare_windows) > sum(
+        _minutes(w) for w in spare_clipped
+    )
 
     for v in ventures:
         meta = v.kind_meta or {}
@@ -741,22 +774,44 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                 UnplacedItem(affair_id=v.id, title=v.title, reason="业余时间区未配置")
             )
             continue
+        min_chunk = int(v.min_chunk_minutes or 30)
         duration = min(int(v.est_minutes or 60), remaining)
-        duration = max(duration, int(v.min_chunk_minutes or 30))
+        duration = max(duration, min_chunk)
         if duration > remaining:
             duration = remaining
         occupied = _occupied_intervals(live_blocks)
-        free = _free_intervals(awake, occupied, extra_busy=work_windows)
-        placed = _place_in_free(free, duration, candidates=spare_windows)
+        free = _free_intervals(awake, occupied, extra_busy=base_work_windows)
+        placed = _place_in_free(free, duration, candidates=spare_clipped)
+        if placed is None:
+            # v2：睡前缓冲约束下放不下 → 先尝试缩短（≥ min_chunk），再 unplaced
+            short = min(min_chunk, remaining)
+            if short < duration:
+                placed = _place_in_free(free, short, candidates=spare_clipped)
+                if placed is not None:
+                    duration = short
         if placed is None and not meta.get("spare_time_only", True):
             placed = _place_in_free(free, duration)
         if placed is not None:
             ctx.add_block("career", placed[0], placed[1], affair=v, ref={"label": v.title})
             live_blocks = _existing_blocks(db, day.id)
         else:
-            ctx.unplaced.append(
-                UnplacedItem(affair_id=v.id, title=v.title, reason="业余时间区窗口冲突")
+            reason = (
+                "睡前缓冲不足/业余时间区窗口冲突"
+                if clipped_away
+                else "业余时间区窗口冲突"
             )
+            ctx.unplaced.append(
+                UnplacedItem(affair_id=v.id, title=v.title, reason=reason)
+            )
+            if clipped_away:
+                ctx.warnings.append(
+                    PlanWarning(
+                        code="career_buffer_insufficient",
+                        message=f"事业「{v.title}」受睡前缓冲 {career_buffer_min}min "
+                        "约束，业余区截断后放不下（已尝试缩短至最小块）",
+                        affair_id=v.id,
+                    )
+                )
 
     # ---- Step 6.5: async_callback DELEGATED 阶段 informational 提醒块 ----
     # DELEGATED 阶段不占实时窗，仅在 next_review_at 落点画一个 informational 块提醒"去 review"。
@@ -833,6 +888,11 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
         if freq - done - planned <= 0:
             continue
         duration = int(meta.get("min_session_minutes") or 30)
+        # v2：健康类 habit（category=health / info_collection_type=exercise）
+        is_health = (
+            meta.get("category") == "health"
+            or h.info_collection_type == "exercise"
+        )
         preferred: List[Interval] = []
         for slot in meta.get("preferred_slots") or []:
             if isinstance(slot, str) and "-" in slot:
@@ -844,10 +904,36 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                     )
                 )
         occupied = _occupied_intervals(live_blocks)
-        free = _free_intervals(awake, occupied, extra_busy=work_windows)
-        placed = _place_in_free(free, duration, candidates=preferred or None)
+        free = _free_intervals(awake, occupied, extra_busy=base_work_windows)
+        placed = None
+        if is_health:
+            # 第一候选窗 = 早间健康窗 ∩ 自由区（[sleep_end, 10:00)）
+            placed = _place_in_free(free, duration, candidates=morning_windows)
+        if placed is None and not is_health and morning_windows:
+            # 普通 habit 不抢占早间健康窗（除非无其他位置）
+            free_ex_morning = _free_intervals(
+                awake, occupied, extra_busy=base_work_windows + morning_windows
+            )
+            placed = _place_in_free(free_ex_morning, duration, candidates=preferred or None)
+            if placed is None:
+                placed = _place_in_free(free_ex_morning, duration)
         if placed is None:
-            placed = _place_in_free(free, duration)
+            placed = _place_in_free(free, duration, candidates=preferred or None)
+            if placed is None:
+                placed = _place_in_free(free, duration)
+        if is_health and morning_windows:
+            in_morning = placed is not None and any(
+                placed[0] >= m[0] and placed[1] <= m[1] for m in morning_windows
+            )
+            if not in_morning:
+                ctx.warnings.append(
+                    PlanWarning(
+                        code="morning_health_unplaced",
+                        message=f"健康习惯「{h.title}」未能落入早间健康窗 "
+                        f"({morning_windows[0][0]:%H:%M}-{morning_windows[0][1]:%H:%M})",
+                        affair_id=h.id,
+                    )
+                )
         if placed is not None:
             hour = placed[0].hour
             h.score = compute_score(h, score_ctx, hour=hour)
@@ -859,7 +945,12 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
             ctx.unplaced.append(UnplacedItem(affair_id=h.id, title=h.title, reason="窗口冲突"))
 
     # 7b. 工作任务（task_oneoff PLANNED + task_maintenance due，按 score 降序）
+    # v2：work 域任务只能排入有效工作窗（best-fit + 片段内 gap 预留 + 可拆分跨片段）
     day_tasks = _collect_competing_tasks(db, d, score_ctx)
+    work_gap_min = max(int(getattr(profile, "work_gap_minutes", None) or 15), 0)
+    timeline = sched.DayTimeline(
+        awake, _occupied_intervals(live_blocks), gap_min=work_gap_min
+    )
     # 生活地板已完成（habit 先排），这里按分数贪心
     for task, score in day_tasks:
         task.score = score
@@ -880,12 +971,10 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
                 )
                 continue
         duration = int(task.est_minutes or 30)
-        occupied = _occupied_intervals(live_blocks)
-        # async_callback: kickoff/review 阶段专用 block_type，work_hours_only 时仅进 work_window
+        # async_callback: kickoff/review 阶段专用 block_type（work 域，同受有效工作窗约束）
         task_kind = _kind_of(task)
         is_async = task_kind == AffairKind.ASYNC_CALLBACK
         async_meta = task.kind_meta or {} if is_async else {}
-        work_only = bool(async_meta.get("work_hours_only", False)) if is_async else False
         cur_phase = async_meta.get("current_phase") if is_async else None
         if is_async:
             # DELEGATED 阶段不排实时窗（应由 informational 块处理，这里跳过）
@@ -894,67 +983,112 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
             block_type = "async_review" if cur_phase == "review" else "async_kickoff"
         else:
             block_type = "focus"
-        # 工作窗内部的可排空间（work_window 是容器，focus 排入其中）
-        free_in_work = _free_intervals(awake, occupied)
-        # work_hours_only 时禁止超窗（async 对外业务回调必须工作时间内进行）
-        # work_only 且无工作窗 → 直接 unplaced（不进任意自由区、不超窗）
-        if work_only and not work_windows:
-            ctx.unplaced.append(
-                UnplacedItem(
-                    affair_id=task.id, title=task.title,
-                    reason="无工作窗模板（work_hours_only 禁止超窗）",
-                )
-            )
-            continue
-        candidates = work_windows or None
-        placed = _place_in_free(free_in_work, duration, candidates=candidates)
+        ref: Dict[str, Any] = {"label": task.title}
+        if is_async:
+            ref["phase"] = cur_phase
+            ref["round"] = async_meta.get("round", 1)
+
+        work_task = (task.domain or "work") == "work"
+        placed_chunks: Optional[List[Tuple[Interval, Interval]]] = None
         overtime = False
-        if placed is None and work_windows and not work_only:
-            # 工作窗放不下 → 超窗排程（侵占可视化）
-            free_outside = _free_intervals(awake, occupied, extra_busy=work_windows)
-            placed = _place_in_free(free_outside, duration)
-            overtime = placed is not None
-        elif placed is None and not work_only:
-            # 无工作窗模板：清醒窗内任意自由区
-            placed = _place_in_free(free_in_work, duration)
-        # work_hours_only 且无工作窗/工作窗放不下 → unplaced（不超窗）
-        if placed is None and work_only:
-            ctx.unplaced.append(
-                UnplacedItem(affair_id=task.id, title=task.title, reason="工作窗放不下（work_hours_only 禁止超窗）")
-            )
+        if work_task and effective_work_windows and not day_leave:
+            # 有效工作片段（已扣除占用/刚性钉/习惯等，且扣除 gap 预留）
+            segments = timeline.focus_free(candidates=effective_work_windows)
+            ordered = sched.order_segments_by_curve(segments, score_ctx.curve)
+            single = sched.place_single(ordered, duration)
+            if single is not None:
+                placed_chunks = [single]
+            elif task.splittable:
+                # 可拆分：跨片段拆分（每段 ≥ min_chunk，段内 gap 生效）
+                placed_chunks = sched.plan_split(
+                    segments, duration, work_gap_min, int(task.min_chunk_minutes or 30)
+                )
+        elif not work_task:
+            # 非 work 域任务（如 life 一次性事务）：清醒窗任意自由区
+            single = sched.place_single(sorted(timeline.general_free()), duration)
+            if single is not None:
+                placed_chunks = [single]
+        if placed_chunks is None and request.force and not day_leave:
+            # force 逃生舱：超窗排程（侵占可视化，标记 overtime）
+            esc = sched.place_single(sorted(timeline.general_free()), duration)
+            if esc is not None:
+                placed_chunks = [esc]
+                overtime = True
+        if placed_chunks is None:
+            if work_task:
+                if day_leave:
+                    reason = "当日请假/占用"
+                elif not effective_work_windows:
+                    reason = "无有效工作窗"
+                else:
+                    reason = "工作窗放不下"
+                ctx.unplaced.append(
+                    UnplacedItem(affair_id=task.id, title=task.title, reason=reason)
+                )
+                if reason == "工作窗放不下":
+                    ctx.warnings.append(
+                        PlanWarning(
+                            code="work_window_full",
+                            message=f"「{task.title}」有效工作窗放不下（est {duration}min），"
+                            "已 unplaced；可 defer/拆分/force 超窗",
+                            affair_id=task.id,
+                        )
+                    )
+                elif reason == "无有效工作窗":
+                    ctx.warnings.append(
+                        PlanWarning(
+                            code="work_window_full",
+                            message=f"「{task.title}」当日无有效工作窗"
+                            "（未配置 profile.work_windows 且无模板骨架）",
+                            affair_id=task.id,
+                        )
+                    )
+            else:
+                ctx.unplaced.append(
+                    UnplacedItem(affair_id=task.id, title=task.title, reason="窗口冲突/精力不足")
+                )
             continue
-        if placed is not None:
-            ref: Dict[str, Any] = {"label": task.title}
+        # 物化块（拆分任务多 chunk，各 ≥ min_chunk，段内 gap 已登记）
+        for idx, (iv, seg) in enumerate(placed_chunks):
+            chunk_ref = dict(ref)
             if overtime:
-                ref["overtime"] = True
-                ctx.warnings.append(
-                    PlanWarning(
-                        code="overtime",
-                        message=f"「{task.title}」工作窗放不下，超窗排程（侵占可视化）",
-                        affair_id=task.id,
-                    )
+                chunk_ref["overtime"] = True
+            if len(placed_chunks) > 1:
+                chunk_ref["chunk_index"] = idx + 1
+                chunk_ref["chunks_total"] = len(placed_chunks)
+            ctx.add_block(
+                block_type, iv[0], iv[1], affair=task, ref=chunk_ref,
+                multi=len(placed_chunks) > 1,
+            )
+            timeline.place_focus(iv, seg, after_label=task.title)
+        if overtime:
+            ctx.warnings.append(
+                PlanWarning(
+                    code="overtime",
+                    message=f"「{task.title}」工作窗放不下，force 超窗排程（侵占可视化）",
+                    affair_id=task.id,
                 )
-            if is_async:
-                ref["phase"] = cur_phase
-                ref["round"] = async_meta.get("round", 1)
-            ctx.add_block(block_type, placed[0], placed[1], affair=task, ref=ref)
-            live_blocks = _existing_blocks(db, day.id)
-            # 连续专注上限：超长 focus 后强制插 rest（max_consecutive_focus policy）
-            if max_focus_min is not None and duration >= max_focus_min:
-                occupied = _occupied_intervals(live_blocks)
-                free = _free_intervals(awake, occupied)
-                rest_placed = _place_in_free(
-                    free, 15,
-                    candidates=[(placed[1], placed[1] + timedelta(minutes=60))],
+            )
+        placed_end = placed_chunks[-1][0][1]
+        # 连续专注上限：超长 focus 后强制插 rest（max_consecutive_focus policy）
+        if max_focus_min is not None and duration >= max_focus_min:
+            rest_placed = _place_in_free(
+                timeline.general_free(), 15,
+                candidates=[(placed_end, placed_end + timedelta(minutes=60))],
+            )
+            if rest_placed is not None:
+                ctx.add_block(
+                    "rest", rest_placed[0], rest_placed[1],
+                    ref={"label": "强制休息(连续专注上限)"},
                 )
-                if rest_placed is not None:
-                    ctx.add_block(
-                        "rest", rest_placed[0], rest_placed[1],
-                        ref={"label": "强制休息(连续专注上限)"},
-                    )
-                    live_blocks = _existing_blocks(db, day.id)
-        else:
-            ctx.unplaced.append(UnplacedItem(affair_id=task.id, title=task.title, reason="窗口冲突/精力不足"))
+                timeline.subtract(rest_placed)
+
+    # 7c. 物化 focus 间隙：仍空闲的 gap（≥10min）→ 任务间缓冲 rest 块
+    for spec in timeline.materialize_gaps(min_minutes=10):
+        ctx.add_block(
+            "rest", spec.start, spec.end,
+            ref={"label": "任务间缓冲", "gap_of": spec.gap_of},
+        )
 
     # ---- domain_cap 校验（域时长上限，如 work≤8h/日；容器块 work_window 不计）----
     if domain_caps:
@@ -1326,6 +1460,45 @@ def detect_conflicts_impl(db: Session, d: date) -> List[EncroachmentItem]:
                     date=d,
                 )
             )
+    # 5. 占用穿透睡眠窗（API 已拒绝，此处兜底历史/绕过数据）
+    sleep_blocks = [b for b in blocks if b.block_type == "sleep"]
+    occupied_blocks = [b for b in blocks if b.block_type == "occupied"]
+    for ob in occupied_blocks:
+        for sb in sleep_blocks:
+            if _overlap((ob.start_time, ob.end_time), (sb.start_time, sb.end_time)):
+                out.append(
+                    EncroachmentItem(
+                        type="occupied_overlap_sleep",
+                        message=f"占用「{(ob.ref or {}).get('label', '')}」"
+                        f"({ob.start_time:%H:%M}-{ob.end_time:%H:%M}) 穿透睡眠守护窗",
+                        block_id=ob.id,
+                        date=d,
+                    )
+                )
+    # 6. 工作块压占用（force 超窗块压到占用上 / 历史数据）
+    for ob in occupied_blocks:
+        for b in blocks:
+            if b.id == ob.id or b.pinned:
+                continue
+            if b.block_type in (
+                "work_window", "micro_rest", "sleep", "rest", "buffer",
+            ) or (b.ref or {}).get("informational"):
+                continue
+            affair = affairs.get(b.affair_id) if b.affair_id else None
+            if _block_domain(b, affair) != "work":
+                continue
+            if _overlap((b.start_time, b.end_time), (ob.start_time, ob.end_time)):
+                out.append(
+                    EncroachmentItem(
+                        type="work_overlap_occupancy",
+                        message=f"「{(b.ref or {}).get('label', b.block_type)}」"
+                        f"({b.start_time:%H:%M}-{b.end_time:%H:%M}) 与占用"
+                        f"「{(ob.ref or {}).get('label', '')}」重叠",
+                        block_id=b.id,
+                        affair_id=b.affair_id,
+                        date=d,
+                    )
+                )
     return out
 
 
@@ -1367,12 +1540,22 @@ def get_day_timeline_impl(db: Session, d: date, with_checkins: bool = True) -> D
         if b.status == "DONE" and affair is not None:
             energy_consumed += affair.energy_cost or 0
 
-    buffer_blocks = [b for b in blocks if b.block_type == "buffer" and b.status != "MOVED"]
+    # v2：buffer 块 + focus 间隙物化的"任务间缓冲"rest 块（ref.gap_of）统一计入缓冲
+    buffer_block_ids = {
+        b.id
+        for b in blocks
+        if b.status != "MOVED"
+        and (
+            b.block_type == "buffer"
+            or (b.block_type == "rest" and (b.ref or {}).get("gap_of") is not None)
+        )
+    }
+    buffer_blocks = [b for b in blocks if b.id in buffer_block_ids]
     buffer_total = sum(_minutes((b.start_time, b.end_time)) for b in buffer_blocks)
     others = [
         (b.start_time, b.end_time)
         for b in blocks
-        if b.block_type != "buffer" and not (b.ref or {}).get("informational")
+        if b.id not in buffer_block_ids and not (b.ref or {}).get("informational")
     ]
     buffer_free = 0
     for bb in buffer_blocks:
