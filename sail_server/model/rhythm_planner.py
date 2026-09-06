@@ -781,14 +781,18 @@ def plan_day_impl(db: Session, request: PlanDayRequest) -> PlanDayResponse:
             duration = remaining
         occupied = _occupied_intervals(live_blocks)
         free = _free_intervals(awake, occupied, extra_busy=base_work_windows)
-        placed = _place_in_free(free, duration, candidates=spare_clipped)
-        if placed is None:
-            # v2：睡前缓冲约束下放不下 → 先尝试缩短（≥ min_chunk），再 unplaced
-            short = min(min_chunk, remaining)
-            if short < duration:
-                placed = _place_in_free(free, short, candidates=spare_clipped)
-                if placed is not None:
-                    duration = short
+        # 空截断窗（整段业余区被睡前缓冲吃掉）不允许回退到全天自由区，
+        # 否则 spare_time_only 语义被绕过（bug：career 块落进早晨）
+        placed = None
+        if spare_clipped:
+            placed = _place_in_free(free, duration, candidates=spare_clipped)
+            if placed is None:
+                # v2：睡前缓冲约束下放不下 → 先尝试缩短（≥ min_chunk），再 unplaced
+                short = min(min_chunk, remaining)
+                if short < duration:
+                    placed = _place_in_free(free, short, candidates=spare_clipped)
+                    if placed is not None:
+                        duration = short
         if placed is None and not meta.get("spare_time_only", True):
             placed = _place_in_free(free, duration)
         if placed is not None:

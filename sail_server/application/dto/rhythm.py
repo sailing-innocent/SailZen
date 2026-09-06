@@ -217,9 +217,12 @@ class PreceptMeta(BaseModel):
 
 class HabitMeta(BaseModel):
     """habit 习惯元数据"""
-
     freq_per_week: int = Field(default=3, description="每周目标次数")
     min_session_minutes: int = Field(default=30, description="单次最小时长（分钟）")
+    category: str = Field(
+        default="",
+        description="习惯分类，health=健康类（v2 优先落早间健康窗，见 planner Step 7a）",
+    )
     preferred_slots: List[str] = Field(
         default_factory=list, description="偏好时段，如 ['19:00-21:00']"
     )

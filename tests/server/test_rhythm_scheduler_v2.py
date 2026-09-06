@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 # @file test_rhythm_scheduler_v2.py
-# @brief Rhythm 排程内核 v2 纯算法测试（区间工具 / 工作窗解析 / 占用扣除 / best-fit / 拆分 / DayTimeline）
+# @brief Rhythm 排程 v2 测试（纯算法内核 + plan_day 端到端集成矩阵）
 # @author sailing-innocent
 # @date 2026-09-06
 # @version 1.0
 # ---------------------------------
 
 """
-排程器 v2 纯算法层测试（设计文档 §4.4 ADR）
+排程器 v2 测试（设计文档 §4.4 ADR；分两层）
 
-sail_server.model.rhythm_scheduler 不触 DB、不 import model 层，
-本文件直接对纯函数与 DayTimeline 分配器做确定性断言：
-
+一、纯算法层（不触 DB）：sail_server.model.rhythm_scheduler 直接确定性断言
 - 区间基础工具（overlap / subtract / minutes_of / parse_hhmm / clip_to_candidates）
 - 工作窗权威解析（profile > 模板 > 空）与早间健康窗
 - 职业缓冲截断（end ≤ sleep_start - buffer）
@@ -19,15 +17,39 @@ sail_server.model.rhythm_scheduler 不触 DB、不 import model 层，
 - focus 落位：best-fit 精力曲线排序 + 最早落位
 - 可拆分任务跨片段规划（chunk_min / 片段内 gap / 放不下返回 None）
 - DayTimeline：gap 预留只挡 focus、收尾物化 ≥10min 任务间缓冲
+
+二、plan_day 端到端集成（SQLite 内存库，复用 conftest fixtures）
+覆盖计划 §4.4.1 典型用例矩阵：force 超窗、focus 间隙、跨窗免隙、
+早间健康 habit、睡前副业缓冲、拆分跨窗、占用幂等重排等。
 """
 
 from datetime import date, datetime, time, timedelta
 
 import pytest
+from sqlalchemy.orm import Session
 
+from sail_server.application.dto.rhythm import (
+    AffairAction,
+    AffairCreateRequest,
+    AffairKind,
+    AffairStateRequest,
+    DayTemplateUpsertRequest,
+    EnergyProfileUpsertRequest,
+    OccupancyCreateRequest,
+    OccupancyType,
+    PlanDayRequest,
+)
 from sail_server.model import rhythm_scheduler as sched
+from sail_server.model.rhythm import (
+    create_affair_impl,
+    create_occupancy_impl,
+    transit_affair_state_impl,
+    upsert_energy_profile_impl,
+    upsert_template_impl,
+)
+from sail_server.model.rhythm_planner import get_day_timeline_impl, plan_day_impl
 
-from .conftest import TEST_DATE, dt
+from .conftest import TEST_DATE, dt, make_template_payload
 
 pytestmark = pytest.mark.server
 
@@ -353,3 +375,302 @@ class TestDayTimeline:
         tl.place_focus(_iv(TEST_DATE, "13:00", "14:00"), seg, after_label="任务E")
         specs = tl.materialize_gaps(min_minutes=10)
         assert specs == []  # gap 仅 5min < 10min
+
+
+# ============================================================================
+# plan_day v2 端到端集成（计划 §4.4.1 典型用例矩阵）
+# ============================================================================
+
+
+def _setup_template(db: Session) -> None:
+    upsert_template_impl(db, DayTemplateUpsertRequest(**make_template_payload()))
+
+
+def _confirm(db: Session, affair_id: int):
+    return transit_affair_state_impl(
+        db, affair_id, AffairStateRequest(action=AffairAction.CONFIRM)
+    )
+
+
+def _task(db: Session, title: str, est_minutes: int, *, importance: int = 3, **kw) -> int:
+    t = create_affair_impl(
+        db,
+        AffairCreateRequest(
+            title=title,
+            kind=AffairKind.TASK_ONEOFF,
+            domain="work",
+            importance=importance,
+            est_minutes=est_minutes,
+            **kw,
+        ),
+    )
+    _confirm(db, t.id)
+    return t.id
+
+
+def _focus_of(plan, aid: int):
+    return sorted(
+        [b for b in plan.blocks if b.block_type == "focus" and b.affair_id == aid],
+        key=lambda b: b.start_time,
+    )
+
+
+def _gap_rests(plan):
+    return sorted(
+        [
+            b
+            for b in plan.blocks
+            if b.block_type == "rest" and (b.ref or {}).get("label") == "任务间缓冲"
+        ],
+        key=lambda b: b.start_time,
+    )
+
+
+class TestForceEscapeHatch:
+    def _fill_both_windows(self, db: Session) -> int:
+        """8h 可拆分任务占满上午+下午有效工作窗（180+300，贪心按能量曲线序）"""
+        return _task(db, "占满窗", 480, splittable=True, min_chunk_minutes=60)
+
+    def test_work_window_full_unplaced_by_default(self, db: Session):
+        _setup_template(db)
+        self._fill_both_windows(db)
+        aid = _task(db, "塞不下", 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        unplaced = [u for u in plan.unplaced if u.affair_id == aid]
+        assert len(unplaced) == 1 and unplaced[0].reason == "工作窗放不下"
+        assert _focus_of(plan, aid) == []
+        assert any(w.code == "work_window_full" for w in plan.warnings)
+
+    def test_force_true_places_overtime_marked(self, db: Session):
+        _setup_template(db)
+        filler = self._fill_both_windows(db)
+        aid = _task(db, "塞不下", 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE, force=True))
+        focus = _focus_of(plan, aid)
+        assert len(focus) == 1
+        assert focus[0].ref.get("overtime") is True
+        # 逃生舱块不与已占窗块重叠（落自由区，如午休/晚间）
+        filler_blocks = _focus_of(plan, filler)
+        for fb in filler_blocks:
+            assert fb.end_time <= focus[0].start_time or focus[0].end_time <= fb.start_time
+        assert any(w.code == "overtime" for w in plan.warnings)
+
+
+class TestFocusGap:
+    def test_gap_between_focus_blocks_materialized(self, db: Session):
+        _setup_template(db)
+        a = _task(db, "任务A", 60)
+        b = _task(db, "任务B", 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        fa, fb = _focus_of(plan, a), _focus_of(plan, b)
+        assert len(fa) == 1 and len(fb) == 1
+        first, second = sorted(fa + fb, key=lambda x: x.start_time)
+        # 两块 focus 之间恰好物化一个 gap 休息（尾部 gap 在窗内也会物化，另计）
+        between = [
+            r
+            for r in _gap_rests(plan)
+            if r.start_time == first.end_time and r.end_time == second.start_time
+        ]
+        assert len(between) == 1
+        r = between[0]
+        assert (r.end_time - r.start_time) >= timedelta(minutes=10)
+        assert r.ref.get("gap_of") == first.ref.get("label")
+        # gap 休息计入任务间缓冲统计（经当日时间线统计核对）
+        timeline = get_day_timeline_impl(db, TEST_DATE)
+        assert timeline.buffer_total_minutes >= 15
+        tl = get_day_timeline_impl(db, TEST_DATE)
+        assert tl.buffer_total_minutes >= 15
+
+    def test_gap_not_required_across_work_windows(self, db: Session):
+        _setup_template(db)
+        a = _task(db, "填满上午", 180, importance=5)
+        b = _task(db, "下午任务", 60, importance=1)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        fa, fb = _focus_of(plan, a), _focus_of(plan, b)
+        assert len(fa) == 1 and len(fb) == 1
+        assert fa[0].end_time <= dt(TEST_DATE, "13:00")
+        # 跨工作窗（午休分隔）不要求 gap：下午任务直接从 14:00 起
+        assert fb[0].start_time == dt(TEST_DATE, "14:00")
+        # 午休边界 13:00-14:00 之间不物化任何任务间缓冲
+        lunch = (dt(TEST_DATE, "13:00"), dt(TEST_DATE, "14:00"))
+        assert all(
+            not (r.start_time < lunch[1] and r.end_time > lunch[0])
+            for r in _gap_rests(plan)
+        )
+
+
+class TestMorningHealthHabit:
+    def _habit(self, db: Session, title: str, *, category: str = "life") -> int:
+        h = create_affair_impl(
+            db,
+            AffairCreateRequest(
+                title=title,
+                kind=AffairKind.HABIT,
+                domain="life",
+                importance=2,
+                kind_meta={
+                    "freq_per_week": 3,
+                    "min_session_minutes": 30,
+                    "category": category,
+                    "preferred_slots": ["19:00-21:00"],
+                },
+            ),
+        )
+        _confirm(db, h.id)
+        return h.id
+
+    def test_health_habit_lands_in_morning_window(self, db: Session):
+        _setup_template(db)
+        aid = self._habit(db, "晨练", category="health")
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        habits = [b for b in plan.blocks if b.block_type == "habit" and b.affair_id == aid]
+        assert len(habits) == 1
+        assert habits[0].start_time >= dt(TEST_DATE, "07:00")
+        assert habits[0].end_time <= dt(TEST_DATE, "10:00")
+
+    def test_normal_habit_avoids_morning_window(self, db: Session):
+        _setup_template(db)
+        aid = self._habit(db, "读书", category="mind")
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        habits = [b for b in plan.blocks if b.block_type == "habit" and b.affair_id == aid]
+        assert len(habits) == 1
+        # 不抢占早间健康窗：要么完全在 10:00 前结束不可能（窗在 07-10），要么 10:00 后
+        assert habits[0].start_time >= dt(TEST_DATE, "10:00")
+        assert not any(w.code == "morning_health_unplaced" for w in plan.warnings)
+
+
+class TestCareerSleepBuffer:
+    def _venture(self, db: Session, est_minutes: int, **meta) -> int:
+        v = create_affair_impl(
+            db,
+            AffairCreateRequest(
+                title="独立游戏开发",
+                kind=AffairKind.VENTURE,
+                domain="career",
+                est_minutes=est_minutes,
+                kind_meta={
+                    "target_date": "2027-04-01",
+                    "weekly_budget_hours": 8,
+                    "total_est_hours": 300,
+                    **meta,
+                },
+            ),
+        )
+        _confirm(db, v.id)
+        return v.id
+
+    def test_career_block_ends_before_sleep_buffer(self, db: Session):
+        _setup_template(db)
+        aid = self._venture(db, 120)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        career = [b for b in plan.blocks if b.block_type == "career" and b.affair_id == aid]
+        assert len(career) == 1
+        # sleep_start 23:30 - career_buffer 45min → end ≤ 22:45
+        assert career[0].end_time <= dt(TEST_DATE, "22:45")
+
+    def test_career_shortens_to_min_chunk_when_window_small(self, db: Session):
+        _setup_template(db)
+        # 业余区 22:00-22:45（其中 22:30-22:45 落在弹性缓冲已占区之外、且 end 被
+        # 睡前缓冲截到 22:45）→ 自由部分仅 30min，60min 放不下，
+        # 缩短至 min_chunk 30min 后落位
+        upsert_energy_profile_impl(
+            db,
+            EnergyProfileUpsertRequest(
+                spare_time_windows={"weekday": [["22:00", "22:45"]], "weekend": []},
+                career_buffer_minutes=45,
+            ),
+        )
+        aid = self._venture(db, 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        career = [b for b in plan.blocks if b.block_type == "career" and b.affair_id == aid]
+        assert len(career) == 1
+        assert (career[0].end_time - career[0].start_time).total_seconds() == 30 * 60
+        assert career[0].end_time <= dt(TEST_DATE, "22:45")
+
+    def test_career_buffer_insufficient_unplaced(self, db: Session):
+        _setup_template(db)
+        # 业余区整段落在缓冲带内 → 截断为空 → unplaced + warning
+        upsert_energy_profile_impl(
+            db,
+            EnergyProfileUpsertRequest(
+                spare_time_windows={"weekday": [["23:00", "23:30"]], "weekend": []},
+                career_buffer_minutes=45,
+            ),
+        )
+        aid = self._venture(db, 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        assert [b for b in plan.blocks if b.block_type == "career" and b.affair_id == aid] == []
+        unplaced = [u for u in plan.unplaced if u.affair_id == aid]
+        assert len(unplaced) == 1
+        assert unplaced[0].reason == "睡前缓冲不足/业余时间区窗口冲突"
+        assert any(w.code == "career_buffer_insufficient" for w in plan.warnings)
+
+
+class TestSplittableTask:
+    def test_split_across_work_windows_with_chunk_refs(self, db: Session):
+        _setup_template(db)
+        aid = _task(db, "大任务", 360, splittable=True, min_chunk_minutes=60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        chunks = _focus_of(plan, aid)
+        assert len(chunks) == 2
+        sizes = sorted(
+            int((c.end_time - c.start_time).total_seconds() // 60) for c in chunks
+        )
+        assert sizes == [180, 180]  # 上午窗 + 下午窗，各 ≥ min_chunk 60
+        for c in chunks:
+            assert c.ref.get("chunk_index") in (1, 2)
+            assert c.ref.get("chunks_total") == 2
+            assert c.ref.get("overtime") is not True
+        # 两 chunk 各自落在不同的有效工作窗内
+        assert all(
+            (c.end_time <= dt(TEST_DATE, "13:00")) or (c.start_time >= dt(TEST_DATE, "14:00"))
+            for c in chunks
+        )
+
+
+class TestBestFitByCurve:
+    def test_task_placed_in_higher_energy_segment(self, db: Session):
+        _setup_template(db)
+        # 构造能量曲线：14 点高峰、10 点低谷 → 60min 任务应落下午窗
+        weekday = [0.5] * 24
+        weekday[10] = 0.1
+        weekday[14] = 0.95
+        upsert_energy_profile_impl(
+            db,
+            EnergyProfileUpsertRequest(
+                curve_template={"weekday": weekday, "weekend": list(weekday)}
+            ),
+        )
+        aid = _task(db, "高优任务", 60)
+        plan = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        focus = _focus_of(plan, aid)
+        assert len(focus) == 1
+        assert dt(TEST_DATE, "14:00") <= focus[0].start_time
+        assert focus[0].end_time <= dt(TEST_DATE, "19:00")
+
+
+class TestReplanWithOccupancy:
+    def test_replan_idempotent_occupancy_and_skeleton(self, db: Session):
+        _setup_template(db)
+        aid = _task(db, "写总结", 60)
+        create_occupancy_impl(
+            db,
+            OccupancyCreateRequest(
+                date=TEST_DATE, start="10:00", end="12:00", occupancy_type=OccupancyType.MEETING
+            ),
+        )
+        plan1 = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        plan2 = plan_day_impl(db, PlanDayRequest(date=TEST_DATE))
+        # 占用块不重复（幂等 + pinned 冻结）
+        occ1 = [b for b in plan1.blocks if b.block_type == "occupied"]
+        occ2 = [b for b in plan2.blocks if b.block_type == "occupied"]
+        assert len(occ1) == 1 and len(occ2) == 1
+        assert occ1[0].id == occ2[0].id
+        # 骨架（通勤/午餐）不重复实例化
+        for bt in ("commute", "meal"):
+            assert len([b for b in plan2.blocks if b.block_type == bt]) == 1
+        # 重排后任务仍避开占用段，且块数稳定（无泄漏增长）
+        focus2 = _focus_of(plan2, aid)
+        assert len(focus2) == 1
+        assert focus2[0].start_time >= dt(TEST_DATE, "12:00")
+        assert plan2.plan_version > plan1.plan_version
