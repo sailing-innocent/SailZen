@@ -131,7 +131,7 @@ class AffairAction(str, Enum):
 
 
 class BlockType(str, Enum):
-    """时间线块类型（13 类）"""
+    """时间线块类型（14 类）"""
 
     SLEEP = "sleep"
     COMMUTE = "commute"
@@ -150,6 +150,8 @@ class BlockType(str, Enum):
     ASYNC_KICKOFF = "async_kickoff"  # 构思/沟通阶段块（占实时窗，进 work_window 或业余区）
     ASYNC_REVIEW = "async_review"  # 审阅阶段块（占实时窗）
     ASYNC_WAIT = "async_wait"  # DELEGATED 等待期提示块（informational，0 精力，不占实时窗）
+    # 特殊占用块（occupancy_api 来源，pinned，见 §4.4 Step 2.5 扣除）
+    OCCUPIED = "occupied"
 
 
 class BlockStatus(str, Enum):
