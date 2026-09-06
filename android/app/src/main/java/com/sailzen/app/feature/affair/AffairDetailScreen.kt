@@ -48,7 +48,9 @@ import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.domainLabel
 import com.sailzen.app.core.network.dto.kindLabel
 import com.sailzen.app.core.network.dto.stateLabel
+import com.sailzen.app.core.rhythm.AffairRules
 import com.sailzen.app.core.rhythm.RhythmTime
+import com.sailzen.app.feature.plan.components.MilestoneRow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,7 +111,7 @@ fun AffairDetailScreen(
 
             item { MetaCard(affair) }
 
-            val actions = AffairHomeViewModel.availableActions(affair.kind, affair.state)
+            val actions = AffairRules.availableActions(affair.kind, affair.state)
             if (actions.isNotEmpty()) {
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -277,7 +279,7 @@ private fun ChildCard(child: AffairDto, onClick: () -> Unit, onAction: (String) 
                     color = Color.Gray,
                 )
             }
-            val actions = AffairHomeViewModel.availableActions(child.kind, child.state)
+            val actions = AffairRules.availableActions(child.kind, child.state)
             if (actions.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     actions.forEach { (action, label) ->

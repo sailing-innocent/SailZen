@@ -327,11 +327,15 @@ token 取 `SAILZEN_API_TOKEN`。
 
 ## 8. Android 端（M3）
 
-- `feature/timeline/`（今日时间线：块按 block_type 着色、滑动 done/defer、长按 Plan B、顶部周节奏卡片 rhythm_score 环形图 + 三指标点击看周报）
-- `feature/checkin/`（打卡中心：戒律 kept/violated + 备注、习惯 done/missed、streak 火焰、周进度环）
-- `feature/venture/`（事业看板：倒计时、周预算进度条、里程碑、倒排压力灯）
-- 快速捕获（可选 kind，默认 generic 交 AI 分拣）+ AI 建议采纳卡
-- `core/network/RhythmApi`（Retrofit，仿 ReminderApi）；done/defer/checkin 离线排队补传
+> M3.5 起三页合并为统一规划页 `feature/plan/`（原 timeline/checkin/affair-home 三个底部 Tab 合并，底部导航 6→4：规划/收件箱/健康/阅读），页内 PrimaryTabRow 对齐本文档 §11.2「时间线/事务中心/事业」信息架构。捕获 → 分拣 → 排程 → 打卡 → 复盘同页闭环；单 ViewModel 走 dayView 聚合接口 + DataChangeBus 统一刷新。详见 `doc/design/android_app/README.md` §3.7。
+
+- `feature/plan/`（规划页三合一）
+  - 今日：吸顶 CaptureBar 快速捕获（可选 kind，默认 generic 交 AI 分拣）、待分拣 INBOX + AI 建议采纳/驳回卡、周节奏卡（rhythm_score 环形图 + 三指标点击看周报）、紧凑打卡（戒律 kept/violated + 备注、习惯 done/missed、streak 火焰，数据来自 dayView.checkins）、时间线块（按 block_type 着色、滑动 done/defer、长按 Plan B）
+  - 事务：状态筛选 chips + 逾期优先排序 + 状态机动作（`core/rhythm/AffairRules`）
+  - 事业：待分拣启动 + 进行中事业卡（倒计时、周预算进度条、里程碑、倒排压力灯）
+- `feature/affair/AffairDetailScreen`（事务详情，共享 AffairRules 状态机动作）
+- `core/rhythm/AffairRules.kt`（VENTURE_KIND / TASK_STATE_FILTERS / isTerminal / isOverdue / availableActions / jsonObjectOf 纯函数）
+- `core/network/RhythmApi`（Retrofit，仿 ReminderApi）；done/defer/checkin/capture 离线排队补传（flushPending）
 
 ## 9. Agent 管线（M4，sailzen/autonomous_agent/pipelines/rhythm_*.yaml）
 

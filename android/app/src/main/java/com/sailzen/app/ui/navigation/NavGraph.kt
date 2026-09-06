@@ -2,11 +2,10 @@ package com.sailzen.app.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,10 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
-import androidx.compose.material.icons.filled.Book
 import com.sailzen.app.feature.affair.AffairDetailScreen
-import com.sailzen.app.feature.affair.AffairHomeScreen
-import com.sailzen.app.feature.checkin.CheckinScreen
 import com.sailzen.app.feature.diet.DietScreen
 import com.sailzen.app.feature.exercise.ExerciseScreen
 import com.sailzen.app.feature.health.HealthCheckinScreen
@@ -34,15 +30,13 @@ import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
 import com.sailzen.app.feature.health.weight.WeightCurveScreen
 import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
+import com.sailzen.app.feature.plan.PlanScreen
 import com.sailzen.app.feature.reader.ReaderHomeScreen
 import com.sailzen.app.feature.reader.ReaderScreen
 import com.sailzen.app.feature.settings.SettingsScreen
-import com.sailzen.app.feature.timeline.TimelineScreen
 
 object Routes {
-    const val TIMELINE = "timeline"
-    const val CHECKIN = "checkin"
-    const val AFFAIR = "affair"
+    const val PLAN = "plan"
     const val AFFAIR_DETAIL = "affair_detail/{affair_id}"
     const val HEALTH = "health"
     const val HEALTH_WEIGHT_CURVE = "health_weight_curve"
@@ -71,9 +65,7 @@ private data class TabItem(
 )
 
 private val TABS = listOf(
-    TabItem(Routes.TIMELINE, "时间线", Icons.Default.DateRange),
-    TabItem(Routes.CHECKIN, "打卡", Icons.Default.CheckCircle),
-    TabItem(Routes.AFFAIR, "事业", Icons.Default.Star),
+    TabItem(Routes.PLAN, "规划", Icons.Default.DateRange),
     TabItem("inbox_tab", "收件箱", Icons.Default.Email),
     TabItem(Routes.HEALTH, "健康", Icons.Default.Favorite),
     TabItem(Routes.READER, "阅读", Icons.Filled.Book),
@@ -102,7 +94,7 @@ fun SailZenNavGraph(
                             onClick = {
                                 val target = if (tab.route == "inbox_tab") Routes.inbox() else tab.route
                                 navController.navigate(target) {
-                                    popUpTo(Routes.TIMELINE) { saveState = true }
+                                    popUpTo(Routes.PLAN) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -117,27 +109,16 @@ fun SailZenNavGraph(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.TIMELINE,
+            startDestination = Routes.PLAN,
             modifier = Modifier.padding(padding),
         ) {
-            composable(Routes.TIMELINE) {
-                TimelineScreen(
+            composable(Routes.PLAN) {
+                PlanScreen(
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    openCapture = openCapture,
-                )
-            }
-            composable(Routes.CHECKIN) {
-                CheckinScreen(
-                    onOpenHealthCheckin = {
-                        navController.navigate(Routes.healthCheckin())
-                    },
-                )
-            }
-            composable(Routes.AFFAIR) {
-                AffairHomeScreen(
                     onOpenDetail = { affairId ->
                         navController.navigate(Routes.affairDetail(affairId))
                     },
+                    openCapture = openCapture,
                 )
             }
             composable(

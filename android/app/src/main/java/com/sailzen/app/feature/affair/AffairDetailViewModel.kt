@@ -11,6 +11,7 @@ import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.AffairUpdateRequest
 import com.sailzen.app.core.network.dto.VentureMilestoneRequest
 import com.sailzen.app.core.network.dto.VentureProgressDto
+import com.sailzen.app.core.rhythm.AffairRules
 import com.sailzen.app.core.rhythm.RhythmRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -69,7 +70,7 @@ class AffairDetailViewModel(
             _uiState.update { it.copy(loading = true) }
             val affair = repository.affairDetail(affairId)
             val children = repository.listAffairs(parentId = affairId)
-            val progress = if (affair?.kind == AffairHomeViewModel.VENTURE_KIND) {
+            val progress = if (affair?.kind == AffairRules.VENTURE_KIND) {
                 repository.ventureProgress(affairId)
             } else {
                 null

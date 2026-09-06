@@ -1,11 +1,7 @@
-package com.sailzen.app.feature.affair
+package com.sailzen.app.core.rhythm
 
 import com.sailzen.app.core.network.dto.AffairActions
 import com.sailzen.app.core.network.dto.AffairStates
-import com.sailzen.app.core.rhythm.RhythmTime
-import com.sailzen.app.feature.affair.AffairHomeViewModel.Companion.availableActions
-import com.sailzen.app.feature.affair.AffairHomeViewModel.Companion.isOverdue
-import com.sailzen.app.feature.affair.AffairHomeViewModel.Companion.isTerminal
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,40 +9,40 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AffairHomeViewModelTest {
+class AffairRulesTest {
 
     @Test
     fun isTerminal_coversDoneCanceledArchived() {
-        assertTrue(isTerminal(AffairStates.DONE))
-        assertTrue(isTerminal(AffairStates.CANCELED))
-        assertTrue(isTerminal(AffairStates.ARCHIVED))
-        assertFalse(isTerminal(AffairStates.DOING))
-        assertFalse(isTerminal(AffairStates.ACTIVE))
+        assertTrue(AffairRules.isTerminal(AffairStates.DONE))
+        assertTrue(AffairRules.isTerminal(AffairStates.CANCELED))
+        assertTrue(AffairRules.isTerminal(AffairStates.ARCHIVED))
+        assertFalse(AffairRules.isTerminal(AffairStates.DOING))
+        assertFalse(AffairRules.isTerminal(AffairStates.ACTIVE))
     }
 
     @Test
     fun isOverdue_pastDdlOnActiveAffair() {
         val past = RhythmTime.format(LocalDateTime.now().minusHours(2))
-        assertTrue(isOverdue(past, AffairStates.PLANNED))
-        assertFalse(isOverdue(past, AffairStates.DONE))
+        assertTrue(AffairRules.isOverdue(past, AffairStates.PLANNED))
+        assertFalse(AffairRules.isOverdue(past, AffairStates.DONE))
     }
 
     @Test
     fun isOverdue_futureOrMissingDdlIsNotOverdue() {
         val future = RhythmTime.format(LocalDateTime.now().plusHours(2))
-        assertFalse(isOverdue(future, AffairStates.PLANNED))
-        assertFalse(isOverdue(null, AffairStates.PLANNED))
+        assertFalse(AffairRules.isOverdue(future, AffairStates.PLANNED))
+        assertFalse(AffairRules.isOverdue(null, AffairStates.PLANNED))
     }
 
     @Test
     fun availableActions_ventureUsesLongtermFlow() {
-        val actions = availableActions("venture", AffairStates.ACTIVE).map { it.first }
+        val actions = AffairRules.availableActions("venture", AffairStates.ACTIVE).map { it.first }
         assertEquals(listOf(AffairActions.PAUSE, AffairActions.GRADUATE, AffairActions.ARCHIVE), actions)
     }
 
     @Test
     fun availableActions_habitHasNoGraduate() {
-        val actions = availableActions("habit", AffairStates.ACTIVE).map { it.first }
+        val actions = AffairRules.availableActions("habit", AffairStates.ACTIVE).map { it.first }
         assertEquals(listOf(AffairActions.PAUSE, AffairActions.ARCHIVE), actions)
     }
 
@@ -54,18 +50,18 @@ class AffairHomeViewModelTest {
     fun availableActions_oneoffTaskFlow() {
         assertEquals(
             listOf(AffairActions.CONFIRM, AffairActions.CANCEL),
-            availableActions("task_oneoff", AffairStates.INBOX).map { it.first },
+            AffairRules.availableActions("task_oneoff", AffairStates.INBOX).map { it.first },
         )
         assertEquals(
             listOf(AffairActions.FINISH),
-            availableActions("task_oneoff", AffairStates.DOING).map { it.first },
+            AffairRules.availableActions("task_oneoff", AffairStates.DOING).map { it.first },
         )
     }
 
     @Test
     fun availableActions_terminalStateHasNoAction() {
-        assertTrue(availableActions("task_oneoff", AffairStates.DONE).isEmpty())
-        assertTrue(availableActions("venture", AffairStates.ARCHIVED).isEmpty())
+        assertTrue(AffairRules.availableActions("task_oneoff", AffairStates.DONE).isEmpty())
+        assertTrue(AffairRules.availableActions("venture", AffairStates.ARCHIVED).isEmpty())
     }
 
     @Test

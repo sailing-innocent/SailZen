@@ -260,6 +260,35 @@ App 的首页，所有提醒的收件箱视图：
 
 ---
 
+### 3.7 规划页 (Plan) — M3.5 三合一合并
+
+> 需求来源：原「时间线 / 打卡 / 事业」三个底部 Tab 的信息架构缺陷——一句话事务捕获入口在时间线页，但捕获后事务落入 INBOX，必须切到事业页才能分拣。M3.5 将三个 Tab 合并为统一**规划页**（`feature/plan/`），捕获 → 分拣 → 排程 → 打卡 → 复盘在同一页面内闭环。
+
+底部导航 6 → 4：**规划** / 收件箱 / 健康 / 阅读。规划页为默认起始页，页内以 PrimaryTabRow 组织三段（对齐服务端 Dashboard §11.2 的「时间线 / 事务中心 / 事业」信息架构）：
+
+```
+TopAppBar: ◀ 日期 ▶ · 连接状态 · ▶生成日计划 / 刷新 / 设置
+[ 今日(徽标=待分拣数) ] [ 事务(徽标=筛选数) ] [ 事业(徽标=进行中数) ]
+▼ 今日（默认）
+  CaptureBar（吸顶常驻：一句话事务 + 类型下拉 + 捕获）
+  待分拣（INBOX：AI 建议卡采纳/驳回；普通卡启动/取消；空态引导捕获）
+  周节奏卡（rhythm_score 环 + 三指标 → 周报弹窗）
+  打卡速览（戒律 守住/破戒·备注弹窗；习惯 达成/缺卡·streak；数据来自 dayView.checkins，checkinToday 兜底）
+  当日时间线（块滑动 done/defer、长按 Plan B、三域分钟页头、缓冲/精力页脚）
+▼ 事务：状态筛选 chips（含待分拣）→ 逾期优先排序列表 + 状态机动作
+▼ 事业：待分拣事业（启动）+ 进行中事业卡（倒排灯 / 周预算进度 / 里程碑前三条）
+```
+
+**核心体验修复**：捕获一句话事务后，DataChangeBus 驱动「待分拣」分区原地刷新出现新卡片，用户原地完成分拣，无需任何页面切换。
+
+技术要点：
+
+- 单 `PlanViewModel` + 单 refresh 管道：`dayView(date)` 一次聚合请求同时携带 blocks + checkins + healthSignals；`inbox()` / `reviewWeek()` 轻量并发；事务 / 事业列表懒加载（首次切入拉取，切回今日不重复拉）。
+- 订阅 `DataChangeEvent.AffairChanged / DayViewChanged / CheckinChanged` 统一刷新，天然消除三页各自 refresh 造成的闪烁与请求放大。
+- 状态机纯函数抽至 `core/rhythm/AffairRules.kt`（VENTURE_KIND / TASK_STATE_FILTERS / isTerminal / isOverdue / availableActions / jsonObjectOf），供规划页、事务详情页与单测共享。
+- 离线队列（capture / checkin / block done / defer 失败入队 + flushPending 补传）与徽标提示保留，数据层零改动。
+- 深链：磁贴快速捕获（QuickCaptureTileService）→ 规划页弹捕获对话框；事务通知 → 事务详情（`affair_detail/{id}`）不变。
+
 ## 4. App 端技术设计
 
 ### 4.1 技术选型

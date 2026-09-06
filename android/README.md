@@ -18,16 +18,31 @@ app/src/main/java/com/sailzen/app/
 ├── SailZenApp.kt            # Application：通知渠道、周期同步、按需启动前台服务
 ├── MainActivity.kt          # 单 Activity + Navigation Compose + 通知权限
 ├── core/
-│   ├── data/                # DataStore 设置 + Room（reminder_cache / pending_feedback）
+│   ├── data/                # DataStore 设置 + Room（reminder_cache / pending_feedback）+ DataChangeBus
 │   ├── network/             # Retrofit API + OkHttp WebSocket 长连接（指数退避重连）
 │   ├── reminder/            # 通知构建、动作路由、延后弹窗、AlarmManager 兜底
+│   ├── rhythm/              # Rhythm 数据层 + AffairRules 状态机纯函数 + RhythmTime
 │   ├── bg/                  # 前台 Service（WS 保活 + 常驻通知）+ BootReceiver
 │   └── sync/                # WorkManager 15min 补偿轮询 + 离线反馈冲刷
 ├── feature/
+│   ├── plan/                # 规划页（M3.5 合并：今日时间线 + 打卡 + 事务/事业 三合一）
+│   │   ├── PlanScreen.kt / PlanViewModel.kt
+│   │   └── components/      # CaptureBar / InboxSection / WeekRhythmCard / CheckinSection / TimelineBlocks / TodayTab / AffairsTab / VenturesTab
+│   ├── affair/              # 事务详情（AffairDetailScreen / ViewModel）
 │   ├── inbox/               # 待处理列表 + 今日小结 + 历史
 │   └── settings/            # 服务器/Token/安静时段/连接状态
-└── ui/                      # Material3 主题 + 导航
+└── ui/                      # Material3 主题 + 导航（底部 4 Tab：规划 / 收件箱 / 健康 / 阅读）
 ```
+
+## 规划页（M3.5 三合一）
+
+底部 Tab 由 6 合并为 4：「规划」页内以 今日 / 事务 / 事业 三个页内 Tab 承载原时间线、打卡、事业视图：
+
+- **今日**：吸顶 CaptureBar 一句话捕获 → 待分拣（AI 建议采纳/驳回、INBOX 启动/取消）→ 周节奏卡 → 紧凑打卡（戒律/习惯，数据来自 dayView.checkins）→ 当日时间线（滑动 done/defer、长按 Plan B）→ 缓冲/精力页脚。
+- **事务**：状态筛选 chips + 逾期优先排序任务列表 + 状态机动作（AffairRules.availableActions）。
+- **事业**：待分拣事业启动 + 进行中事业卡（倒排灯 / 周预算 / 里程碑勾选）。
+
+单一 PlanViewModel 订阅 DataChangeBus（AffairChanged / DayViewChanged / CheckinChanged）统一 refresh；事务/事业 Tab 懒加载；离线队列徽标保留在今日 Tab 顶部。
 
 ## 健康管理模块（M1 升级）
 
