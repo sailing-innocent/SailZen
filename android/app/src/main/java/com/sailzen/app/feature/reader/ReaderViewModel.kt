@@ -43,8 +43,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val chapters: List<CachedChapter> = emptyList(),
         val currentChapter: CachedChapter? = null,
         val currentSortIndex: Int = 0,
-        val pages: List<ReaderTextEngine.Page> = emptyList(),
-        val currentPage: Int = 0,
+            val pages: List<ReaderTextEngine.Page> = emptyList(),
+            val currentPage: Int = 0,
+            /** 当前阅读位置的全局字符偏移（跨模式持久化到 scrollOffset 列） */
+            val charOffset: Int = 0,
         val annotations: List<CachedAnnotation> = emptyList(),
         val settings: ReaderSettings = ReaderSettings(),
         val loading: Boolean = false,
@@ -135,8 +137,10 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                 pageIndex in pages.indices -> pageIndex
                 else -> 0
             }
-            _uiState.update { it.copy(pages = pages, currentPage = target) }
             currentCharOffset = pages.getOrNull(target)?.startOffset ?: 0
+            _uiState.update {
+                it.copy(pages = pages, currentPage = target, charOffset = currentCharOffset)
+            }
             saveProgressDebounced()
         }
     }
@@ -156,6 +160,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
  if (pageIndex in 0 until _uiState.value.pages.size) {
  _uiState.update { it.copy(currentPage = pageIndex) }
  currentCharOffset = _uiState.value.pages.getOrNull(pageIndex)?.startOffset ?: 0
+ _uiState.update { it.copy(charOffset = currentCharOffset) }
  saveProgressDebounced()
  }
  }
@@ -164,6 +169,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
  fun onScrollCharOffset(charOffset: Int) {
  if (currentCharOffset != charOffset) {
  currentCharOffset = charOffset
+ _uiState.update { it.copy(charOffset = charOffset) }
  saveProgressDebounced()
  }
  }
@@ -211,6 +217,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 pages = pages,
                 currentPage = ReaderTextEngine.findPageForOffset(pages, anchor),
+                charOffset = anchor,
             )
         }
         currentCharOffset = anchor

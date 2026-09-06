@@ -403,6 +403,15 @@ private fun ScrollReader(
     val fontSize = state.settings.fontSize
     val lineHeight = state.settings.lineHeight
 
+    // 章节切换恢复阅读位置：charOffset 所属段落（最后一个 startOffset <= 目标偏移的段）
+    LaunchedEffect(state.currentChapter?.id, paragraphs) {
+        if (paragraphs.isEmpty()) return@LaunchedEffect
+        val charOffset = viewModel.uiState.value.charOffset
+        val index = paragraphs.indexOfLast { it.startOffset <= charOffset }
+            .coerceIn(0, paragraphs.lastIndex)
+        listState.scrollToItem(index)
+    }
+
     // 进度上报：首个可见段落的全局起始偏移
     LaunchedEffect(listState, paragraphs) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->

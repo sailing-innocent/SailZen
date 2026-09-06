@@ -54,6 +54,33 @@ class TestNoteCreate:
         assert note.setting_file == "notes/annotations/9/custom.md"
         assert (data_dir / "notes/annotations/9/custom.md").exists()
 
+    def test_meta_anchor_readback(self, db, data_dir):
+        """锚点字段（node_id/offset/selected_text/color）写入 meta_data 并可回读"""
+        note = text_model.create_note_item_impl(
+            db,
+            _create(
+                node_id=42,
+                start_offset=100,
+                end_offset=120,
+                selected_text="选中的原文",
+                color="green",
+            ),
+        )
+        meta = note.meta_data
+        assert meta["node_id"] == 42
+        assert meta["start_offset"] == 100
+        assert meta["end_offset"] == 120
+        assert meta["selected_text"] == "选中的原文"
+        assert meta["color"] == "green"
+
+    def test_same_title_generates_unique_paths(self, db, data_dir):
+        """S3：同作品同标题（slug 相同前缀）两次创建不得互相覆盖文件"""
+        first = text_model.create_note_item_impl(db, _create(content="第一批注"))
+        second = text_model.create_note_item_impl(db, _create(content="第二批注"))
+        assert first.setting_file != second.setting_file
+        assert (data_dir / first.setting_file).exists()
+        assert (data_dir / second.setting_file).exists()
+
     def test_path_traversal_raises_client_exception(self, db, data_dir):
         with pytest.raises(ClientException):
             text_model.create_note_item_impl(
