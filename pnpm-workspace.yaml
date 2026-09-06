@@ -45,6 +45,3 @@ onlyBuiltDependencies:
   - prisma
   - sqlite3
   - unrs-resolver
-
-patchedDependencies:
-  remark-variables@1.4.9: patches/remark-variables@1.4.9.patch

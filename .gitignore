@@ -57,3 +57,4 @@ bot.yaml
 ./*.png
 
 *.egg-info
+pnpm-lock.yaml
