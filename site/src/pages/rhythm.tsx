@@ -90,6 +90,8 @@ const RhythmPage = () => {
   const error = useRhythmStore((s) => s.error)
   const degraded = useRhythmStore((s) => s.degraded)
   const fetchDashboard = useRhythmStore((s) => s.fetchDashboard)
+  const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
+  const fetchTodayCheckins = useRhythmStore((s) => s.fetchTodayCheckins)
   const retrySection = useRhythmStore((s) => s.retrySection)
   const planDay = useRhythmStore((s) => s.planDay)
   const rebalanceDay = useRhythmStore((s) => s.rebalanceDay)
@@ -97,6 +99,18 @@ const RhythmPage = () => {
   useEffect(() => {
     fetchDashboard(selectedDate).catch(() => {})
   }, [selectedDate, fetchDashboard])
+
+  // 分片数据在 tab 激活时由父组件拉取，而不是在子组件 mount 时拉取：
+  // SectionGuard 会在 loading 时卸载 children，若由被卸载的子组件自身发起拉取，
+  // 响应到达后子组件重挂载会再次触发拉取，形成每轮一次 HTTP 请求的死循环。
+  const handleTabChange = (v: TabValue) => {
+    setActiveTab(v)
+    if (v === 'affairs' || v === 'ventures') {
+      fetchAffairsByKind().catch(() => {})
+    } else if (v === 'discipline') {
+      fetchTodayCheckins().catch(() => {})
+    }
+  }
 
   const handlePrevDay = () => {
     const d = new Date(selectedDate)
@@ -203,7 +217,7 @@ const RhythmPage = () => {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as TabValue)} className="w-full">
         <TabsList className="flex w-full flex-wrap h-auto gap-1 justify-start">
           {tabDefs.map((tab) => {
             const Icon = tab.icon
@@ -272,22 +286,31 @@ const SectionGuard = ({
 }) => {
   const status = useRhythmStore((s) => s.sections[section])
   const retrySection = useRhythmStore((s) => s.retrySection)
+  // 首次成功渲染 children 后锁定：之后刷新导致的 loading 切换不再卸载子树。
+  // 否则「子组件 mount 拉取 → guard 切 loading 分支卸载子组件 → 响应到达重挂载 →
+  // 再次拉取」会形成每轮一次 HTTP 请求的死循环（事务中心卡死、后端日志刷屏的根因）。
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    if (!status.loading && !status.error) setSettled(true)
+  }, [status.loading, status.error])
 
-  if (status.loading && status.error === null) {
-    return <div className="p-6 text-sm text-muted-foreground">加载中...</div>
-  }
+  if (!settled) {
+    if (status.loading && status.error === null) {
+      return <div className="p-6 text-sm text-muted-foreground">加载中...</div>
+    }
 
-  if (status.error) {
-    return (
-      <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-        <AlertCircle className="h-4 w-4 shrink-0" />
-        <span className="flex-1">{status.error}</span>
-        <Button variant="outline" size="sm" onClick={() => retrySection(section).catch(() => {})}>
-          <RotateCcw className="h-3 w-3 mr-1" />
-          重试
-        </Button>
-      </div>
-    )
+    if (status.error) {
+      return (
+        <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{status.error}</span>
+          <Button variant="outline" size="sm" onClick={() => retrySection(section).catch(() => {})}>
+            <RotateCcw className="h-3 w-3 mr-1" />
+            重试
+          </Button>
+        </div>
+      )
+    }
   }
 
   return <>{children}</>
@@ -407,16 +430,13 @@ const AffairsFilterBar = () => {
   )
 }
 
+// 数据由 RhythmPage 在 tab 激活时拉取（见 handleTabChange），本组件仅消费 store，
+// 不在 mount 时发起拉取（否则会被 SectionGuard 的 loading 分支卸载后重挂载，造成请求死循环）。
 const AffairsTab = () => {
   const allAffairs = useRhythmStore((s) => s.allAffairs)
   const affairFilters = useRhythmStore((s) => s.affairFilters)
-  const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [editing, setEditing] = useState<AffairData | null>(null)
-
-  useEffect(() => {
-    fetchAffairsByKind()
-  }, [fetchAffairsByKind])
 
   const hasFilters =
     affairFilters.search.trim() !== '' ||
@@ -457,10 +477,6 @@ const VenturesTab = () => {
   const ventures = useRhythmStore((s) => s.ventures)
   const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
   const [selected, setSelected] = useState<AffairData | null>(null)
-
-  useEffect(() => {
-    fetchAffairsByKind()
-  }, [fetchAffairsByKind])
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

@@ -21,6 +21,8 @@ import {
   Type,
   Package,
   BookOpen,
+  HardDrive,
+  RefreshCw
 } from 'lucide-react'
 
 // 图标映射
@@ -28,11 +30,13 @@ const iconMap: Record<string, React.ReactNode> = {
   Home: <Home className="h-4 w-4" />,
   Wallet: <Wallet className="h-4 w-4" />,
   Heart: <Heart className="h-4 w-4" />,
+  RefreshCw: <RefreshCw className="h-4 w-4" />,
   FolderKanban: <FolderKanban className="h-4 w-4" />,
   FileText: <FileText className="h-4 w-4" />,
   Type: <Type className="h-4 w-4" />,
   Package: <Package className="h-4 w-4" />,
   BookOpen: <BookOpen className="h-4 w-4" />,
+  HardDrive: <HardDrive className="h-4 w-4" />
 }
 
 const Pagebar: React.FC = () => {

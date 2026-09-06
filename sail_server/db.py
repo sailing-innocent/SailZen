@@ -41,6 +41,21 @@ def _get_db_backend() -> str:
     return os.environ.get("DB_BACKEND", "postgres").lower().strip()
 
 
+def _mask_db_uri(uri: str) -> str:
+    """打码 URI 中的密码，避免日志/终端输出泄露凭证"""
+    if "@" not in uri or "://" not in uri:
+        return uri
+    try:
+        head, tail = uri.rsplit("@", 1)
+        scheme, rest = head.split("://", 1)
+        if ":" in rest:
+            user, _pwd = rest.split(":", 1)
+            return f"{scheme}://{user}:***@{tail}"
+    except ValueError:
+        pass
+    return uri
+
+
 def _get_db_uri() -> str:
     """根据 DB_BACKEND 环境变量构建数据库 URI"""
     backend = _get_db_backend()
@@ -90,7 +105,7 @@ class Database:
         self.__uri = _get_db_uri()
 
         print(f"[Database] Backend: {self.__backend}")
-        print(f"[Database] Connecting to: {self.__uri}")
+        print(f"[Database] Connecting to: {_mask_db_uri(self.__uri)}")
 
         if self.__backend == "sqlite":
             # SQLite: 启用 WAL 模式以获得更好的并发性能
@@ -108,18 +123,42 @@ class Database:
                 cursor.close()
         else:
             # PostgreSQL: psycopg3 对编码处理更好，不需要额外的 client_encoding 参数
-            self.__engine = create_engine(self.__uri)
+            # connect_timeout 避免数据库不可达时连接无限阻塞（可用 DB_CONNECT_TIMEOUT 调整）
+            connect_timeout = int(os.environ.get("DB_CONNECT_TIMEOUT", "10"))
+            self.__engine = create_engine(
+                self.__uri, connect_args={"connect_timeout": connect_timeout}
+            )
 
         self.SessionLocal = sessionmaker(
             autocommit=False, autoflush=False, bind=self.__engine
         )
-        self.create_all()
+
+        try:
+            self.create_all()
+        except KeyboardInterrupt:
+            # 数据库不可达时 psycopg 连接会长时间阻塞，此时用户 Ctrl+C
+            # 属于主动放弃启动，打印一行提示并优雅退出，而不是抛一长串 traceback
+            Database.__instance = None
+            print("\n[Database] Database connection interrupted by user (Ctrl+C)")
+            raise SystemExit(130) from None
+        except Exception as e:
+            # 连接失败（拒绝/超时/认证等）：给出可操作的提示后再抛出
+            Database.__instance = None
+            raise RuntimeError(
+                f"Cannot connect to database ({_mask_db_uri(self.__uri)}). "
+                "Please check that the database server is running and reachable, "
+                "or set DB_BACKEND=sqlite in your .env file to use SQLite instead."
+            ) from e
 
         # 自动运行迁移脚本，保证 schema 与 ORM 模型一致（无痛迁移）
         try:
             from sail_server.migration import run_migrations
 
             run_migrations()
+        except KeyboardInterrupt:
+            Database.__instance = None
+            print("\n[Database] Database migration interrupted by user (Ctrl+C)")
+            raise SystemExit(130) from None
         except Exception as e:
             print(f"[Database] Migration failed: {e}")
             raise

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
@@ -73,11 +74,17 @@ export const OverviewCard = ({ dashboard }: OverviewCardProps) => {
 }
 
 export const DomainPieChart = ({ minutes, profile }: { minutes: DomainMinutesData; profile: EnergyProfileData | null }) => {
-  const data = [
-    { name: 'life', value: minutes.life },
-    { name: 'work', value: minutes.work },
-    { name: 'career', value: minutes.career },
-  ].filter((d) => d.value > 0)
+  // 以三域分钟数值为 memo 依赖（而非对象引用）：重复请求返回新 dashboard 对象、
+  // 但数值未变时保持 data 引用稳定，避免 Recharts Pie 因 data 引用变化重播生长动画。
+  const data = useMemo(
+    () =>
+      [
+        { name: 'life', value: minutes.life },
+        { name: 'work', value: minutes.work },
+        { name: 'career', value: minutes.career },
+      ].filter((d) => d.value > 0),
+    [minutes.life, minutes.work, minutes.career]
+  )
 
   return (
     <Card>

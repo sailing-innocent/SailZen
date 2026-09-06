@@ -12,6 +12,8 @@ import {
   Type,
   Package,
   BookOpen,
+  HardDrive,
+  RefreshCw
 } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { PAGE_ROUTES } from '@/config/basic'
@@ -21,11 +23,13 @@ const iconMap: Record<string, React.ReactNode> = {
   Home: <Home className="h-5 w-5" />,
   Wallet: <Wallet className="h-5 w-5" />,
   Heart: <Heart className="h-5 w-5" />,
+  RefreshCw: <RefreshCw className="h-5 w-5" />,
   FolderKanban: <FolderKanban className="h-5 w-5" />,
   FileText: <FileText className="h-5 w-5" />,
   Type: <Type className="h-5 w-5" />,
   Package: <Package className="h-5 w-5" />,
   BookOpen: <BookOpen className="h-5 w-5" />,
+  HardDrive: <HardDrive className="h-5 w-5" />
 }
 
 interface MobileNavProps {
@@ -61,9 +65,8 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
                 <Link
                   key={route.path}
                   to={route.path}
-                  className={`flex items-center gap-3 w-full p-3 text-left rounded-md transition-colors ${
-                    location.pathname === route.path ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                  }`}
+                  className={`flex items-center gap-3 w-full p-3 text-left rounded-md transition-colors ${location.pathname === route.path ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    }`}
                   onClick={() => setOpen(false)}
                 >
                   {route.icon && iconMap[route.icon]}

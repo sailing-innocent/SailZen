@@ -169,6 +169,60 @@ describe('rhythm store fetchDashboard aggregation', () => {
   })
 })
 
+describe('rhythm store fetchDashboard in-flight coalescing', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    useRhythmStore.getState().clearError()
+    useRhythmStore.setState({ dashboard: null, isLoading: false, error: null })
+  })
+
+  it('concurrent same-date calls share one backend request', async () => {
+    // 模拟 StrictMode 双调用 mount effect：两次调用几乎同时发起
+    let resolveRequest!: (value: unknown) => void
+    rhythmApi.api_get_dashboard.mockImplementation(
+      () => new Promise((resolve) => (resolveRequest = resolve))
+    )
+    const first = useRhythmStore.getState().fetchDashboard('2026-10-26')
+    const second = useRhythmStore.getState().fetchDashboard('2026-10-26')
+    resolveRequest(makeDashboard())
+    await Promise.all([first, second])
+    expect(rhythmApi.api_get_dashboard).toHaveBeenCalledTimes(1)
+    expect(useRhythmStore.getState().dashboard).not.toBeNull()
+  })
+
+  it('concurrent different-date calls issue separate requests', async () => {
+    rhythmApi.api_get_dashboard.mockImplementation((date: string) =>
+      Promise.resolve(makeDashboard({ date }))
+    )
+    await Promise.all([
+      useRhythmStore.getState().fetchDashboard('2026-10-26'),
+      useRhythmStore.getState().fetchDashboard('2026-10-27'),
+    ])
+    expect(rhythmApi.api_get_dashboard).toHaveBeenCalledTimes(2)
+  })
+
+  it('sequential calls after resolution are not deduped', async () => {
+    rhythmApi.api_get_dashboard.mockResolvedValue(makeDashboard())
+    await useRhythmStore.getState().fetchDashboard('2026-10-26')
+    await useRhythmStore.getState().fetchDashboard('2026-10-26')
+    expect(rhythmApi.api_get_dashboard).toHaveBeenCalledTimes(2)
+  })
+
+  it('concurrent same-date failure rejects all callers and sets shard error once', async () => {
+    let rejectRequest!: (reason: unknown) => void
+    rhythmApi.api_get_dashboard.mockImplementation(
+      () => new Promise((_, reject) => (rejectRequest = reject))
+    )
+    const first = useRhythmStore.getState().fetchDashboard('2026-10-26')
+    const second = useRhythmStore.getState().fetchDashboard('2026-10-26')
+    rejectRequest(new Error('dashboard boom'))
+    await expect(first).rejects.toThrow('dashboard boom')
+    await expect(second).rejects.toThrow('dashboard boom')
+    expect(rhythmApi.api_get_dashboard).toHaveBeenCalledTimes(1)
+    expect(useRhythmStore.getState().sections.dashboard.error).toContain('dashboard boom')
+  })
+})
+
 describe('rhythm store fetchAffairsByKind', () => {
   beforeEach(() => {
     jest.clearAllMocks()

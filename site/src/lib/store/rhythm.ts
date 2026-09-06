@@ -290,6 +290,14 @@ const removeAffairFromLists = (state: RhythmState, id: number): Partial<RhythmSt
   asyncCallbacks: state.asyncCallbacks.filter((a) => a.id !== id),
 })
 
+/**
+ * fetchDashboard 在途请求表（按日期键合并）。
+ * React StrictMode 会双调用 mount effect；若无合并，一次进入概览页会发出 2 次相同请求、
+ * 触发 2 次 dashboard 全量替换（三域时间等图表动画重复播放），后端日志表现为成对请求。
+ * 同一日期的并发调用共享同一 Promise；不同日期或前序请求已结束则正常发起新请求。
+ */
+let dashboardInflight: { date: string; promise: Promise<void> } | null = null
+
 export const useRhythmStore: UseBoundStore<StoreApi<RhythmState>> = create<RhythmState>((set, get) => {
   /** 更新单个分片状态 */
   const setSection = (section: RhythmSection, patch: Partial<SectionStatus>): void => {
@@ -367,31 +375,45 @@ export const useRhythmStore: UseBoundStore<StoreApi<RhythmState>> = create<Rhyth
 
     fetchDashboard: async (date?: string | Date) => {
       const d = toISODate(date ?? get().selectedDate)
-      set({ isLoading: true, error: null })
-      setSection('dashboard', { loading: true, error: null })
+      // 在途合并：同日期并发调用（StrictMode 双调用 effect / 并发级联刷新）共享一次请求
+      const inflight = dashboardInflight
+      if (inflight && inflight.date === d) return inflight.promise
+
+      const promise = (async () => {
+        set({ isLoading: true, error: null })
+        setSection('dashboard', { loading: true, error: null })
+        try {
+          const dashboard = await api_get_dashboard(d)
+          set({
+            dashboard,
+            dayTimeline: dashboard.timeline,
+            dayReview: dashboard.day_review,
+            weekReview: dashboard.week_review,
+            todayCheckins: dashboard.today_checkins,
+            conflicts: dashboard.conflicts,
+            energyProfile: dashboard.energy_profile,
+            policies: dashboard.policies,
+            inbox: dashboard.inbox_summary.map((i) => i.affair),
+            inboxSummary: dashboard.inbox_summary,
+            overdueSummary: dashboard.overdue_summary,
+            todayDueSummary: dashboard.today_due_summary,
+            degraded: dashboard.degraded ?? [],
+            isLoading: false,
+          })
+          setSection('dashboard', { loading: false, error: null })
+        } catch (error) {
+          set({ isLoading: false, error: errorMessage(error) })
+          setSection('dashboard', { loading: false, error: errorMessage(error) })
+          throw error
+        }
+      })()
+
+      dashboardInflight = { date: d, promise }
       try {
-        const dashboard = await api_get_dashboard(d)
-        set({
-          dashboard,
-          dayTimeline: dashboard.timeline,
-          dayReview: dashboard.day_review,
-          weekReview: dashboard.week_review,
-          todayCheckins: dashboard.today_checkins,
-          conflicts: dashboard.conflicts,
-          energyProfile: dashboard.energy_profile,
-          policies: dashboard.policies,
-          inbox: dashboard.inbox_summary.map((i) => i.affair),
-          inboxSummary: dashboard.inbox_summary,
-          overdueSummary: dashboard.overdue_summary,
-          todayDueSummary: dashboard.today_due_summary,
-          degraded: dashboard.degraded ?? [],
-          isLoading: false,
-        })
-        setSection('dashboard', { loading: false, error: null })
-      } catch (error) {
-        set({ isLoading: false, error: errorMessage(error) })
-        setSection('dashboard', { loading: false, error: errorMessage(error) })
-        throw error
+        await promise
+      } finally {
+        // 仅清理仍指向本次请求的表项（期间可能已有新日期请求取代）
+        if (dashboardInflight?.promise === promise) dashboardInflight = null
       }
     },
 

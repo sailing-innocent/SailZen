@@ -64,13 +64,10 @@ const CheckinItem = ({ item }: { item: CheckinTodayItemData }) => {
   )
 }
 
+// 数据由 RhythmPage 在 tab 激活时拉取（handleTabChange → fetchTodayCheckins），
+// 本组件仅消费 store；不在 mount 时拉取，避免被 SectionGuard 卸载-重挂载形成请求死循环。
 export const CheckinPanel = () => {
   const todayCheckins = useRhythmStore((s) => s.todayCheckins)
-  const fetchTodayCheckins = useRhythmStore((s) => s.fetchTodayCheckins)
-
-  useEffect(() => {
-    fetchTodayCheckins()
-  }, [fetchTodayCheckins])
 
   if (!todayCheckins) {
     return (

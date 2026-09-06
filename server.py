@@ -332,6 +332,10 @@ def main():
         server = SailServer(host, port)
         server.init()
         server.run()
+    except KeyboardInterrupt:
+        # Ctrl+C 是正常停止信号（如等待数据库连接时用户主动中断），
+        # 打印简洁日志即可，不要打印 traceback
+        logger.info("Interrupted by user (Ctrl+C)")
     except Exception as e:
         logger.error(f"Error starting server: {e}")
         raise
