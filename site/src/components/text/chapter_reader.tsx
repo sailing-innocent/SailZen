@@ -38,6 +38,7 @@ import {
   api_get_chapter_content,
   api_update_node,
   api_get_edition,
+  api_get_editions_by_work,
 } from '@lib/api/text'
 
 import { formatCharCount } from '@lib/data/text'
@@ -87,7 +88,6 @@ export default function ChapterReader({ work, onBack }: ChapterReaderProps) {
       setError(null)
       try {
         // 获取第一个版本
-        const { api_get_editions_by_work } = await import('@lib/api/text')
         const editions = await api_get_editions_by_work(work.id)
         if (editions.length === 0) {
           setError('该作品没有可用版本')

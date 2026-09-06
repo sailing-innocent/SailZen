@@ -11,12 +11,12 @@ export default defineConfig(({ mode }) => {
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": resolve(__dirname, 'src'),
-      '@lib': resolve(__dirname, 'src/lib'),
-      '@components': resolve(__dirname, 'src/components'),
-      '@pages': resolve(__dirname, 'src/pages'),
-      '@shaders': resolve(__dirname, 'src/shaders'),
-      '@hooks': resolve(__dirname, 'src/hooks'),
+      "@": resolve(import.meta.dirname, 'src'),
+      '@lib': resolve(import.meta.dirname, 'src/lib'),
+      '@components': resolve(import.meta.dirname, 'src/components'),
+      '@pages': resolve(import.meta.dirname, 'src/pages'),
+      '@shaders': resolve(import.meta.dirname, 'src/shaders'),
+      '@hooks': resolve(import.meta.dirname, 'src/hooks'),
     },
   },
   define: {
