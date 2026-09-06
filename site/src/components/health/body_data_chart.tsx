@@ -1,13 +1,27 @@
-import React, { useMemo, useEffect } from 'react'
-import { type HealthState, useHealthStore } from '@lib/store/health'
+/**
+ * @file body_data_chart.tsx
+ * @brief Generic single-metric body data chart (通用身体数据曲线)
+ * @author sailing-innocent
+ * @date 2026-09-06
+ *
+ * 数据源: body_data store 的 /series + /analysis（按选中指标）。
+ * metric == 'weight' 时额外叠加体重计划信息（planExpected 线 + above/below 状态点），
+ * 数据来自 health store（/weight-plan/expected 与 /weight/with-status），计划逻辑不动。
+ */
+
+import React, { useMemo, useEffect, useState } from 'react'
 import { Line, CartesianGrid, XAxis, YAxis, ResponsiveContainer, ComposedChart } from 'recharts'
 import { type ChartConfig, ChartContainer, ChartTooltip } from '@components/ui/chart'
+import { type HealthState, useHealthStore } from '@lib/store/health'
+import { type BodyDataState, useBodyDataStore } from '@lib/store/body_data'
+import { formatMetricValue } from '@lib/data/body_data'
+import BodyMetricPicker from '@components/health/body_metric_picker'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 // Chart configuration
 const chartConfig: ChartConfig = {
   actual: {
-    label: 'Actual Weight',
+    label: 'Actual',
     color: '#2563eb',
   },
   predicted: {
@@ -38,110 +52,138 @@ interface ChartDataPoint {
   planExpected?: number
 }
 
-const WeightChart: React.FC = () => {
-  const isLoading = useHealthStore((state: HealthState) => state.isLoading)
-  const analysisResult = useHealthStore((state: HealthState) => state.analysisResult)
+const startOfDayMs = (ts: number): number => {
+  const d = new Date(ts)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+const dayMs = 24 * 60 * 60 * 1000
 
-  const weightPlan = useHealthStore((state: HealthState) => state.weightPlan)
-  const isOnTrack = useHealthStore((state: HealthState) => state.isOnTrack)
-  const controlRate = useHealthStore((state: HealthState) => state.controlRate)
-  const weightsWithStatus = useHealthStore((state: HealthState) => state.weightsWithStatus)
-  const planExpectedPoints = useHealthStore((state: HealthState) => state.planExpectedPoints)
-  const currentStartTime = useHealthStore((state: HealthState) => state.currentStartTime)
-  const currentEndTime = useHealthStore((state: HealthState) => state.currentEndTime)
-  const fetchWeightAnalysis = useHealthStore((state: HealthState) => state.fetchWeightAnalysis)
-  const fetchPlanProgress = useHealthStore((state: HealthState) => state.fetchPlanProgress)
+interface BodyDataChartProps {
+  /** 时间范围（Unix 秒），与页面日期选择联动 */
+  startTime: number
+  endTime: number
+}
+
+const BodyDataChart: React.FC<BodyDataChartProps> = ({ startTime, endTime }) => {
+  const [metric, setMetric] = useState<string>('weight')
   const isMobile = useIsMobile()
 
-  const startOfDayMs = (ts: number): number => {
-    const d = new Date(ts)
-    d.setHours(0, 0, 0, 0)
-    return d.getTime()
-  }
-  const dayMs = 24 * 60 * 60 * 1000
+  // body_data store
+  const seriesCache = useBodyDataStore((state: BodyDataState) => state.seriesCache)
+  const analysisResult = useBodyDataStore((state: BodyDataState) => state.analysisResult)
+  const analysisMetric = useBodyDataStore((state: BodyDataState) => state.analysisMetric)
+  const fetchSeries = useBodyDataStore((state: BodyDataState) => state.fetchSeries)
+  const fetchAnalysis = useBodyDataStore((state: BodyDataState) => state.fetchAnalysis)
+  const getMetricDef = useBodyDataStore((state: BodyDataState) => state.getMetricDef)
 
-  // Fetch plan progress on mount
+  // health store: only used for the weight plan overlay (metric == 'weight')
+  const isLoading = useHealthStore((state: HealthState) => state.isLoading)
+  const weightPlan = useHealthStore((state: HealthState) => state.weightPlan)
+  const weightsWithStatus = useHealthStore((state: HealthState) => state.weightsWithStatus)
+  const planExpectedPoints = useHealthStore((state: HealthState) => state.planExpectedPoints)
+
+  const metricDef = getMetricDef(metric)
+  const unit = metricDef?.unit ?? ''
+
+  // Fetch series + analysis when metric or range changes
   useEffect(() => {
-    fetchPlanProgress()
-  }, [])
+    fetchSeries(metric, startTime, endTime)
+    fetchAnalysis(metric, 'linear', startTime, endTime)
+  }, [metric, startTime, endTime, fetchSeries, fetchAnalysis])
 
-  // Fetch analysis when weights change
-  useEffect(() => {
-    if (weightsWithStatus.length > 0) {
-      const startTime = weightsWithStatus[0]?.htime
-      const endTime = weightsWithStatus[weightsWithStatus.length - 1]?.htime
-      fetchWeightAnalysis(startTime, endTime, 'linear')
-    }
-  }, [weightsWithStatus.length])
+  const isWeight = metric === 'weight'
 
-  // Build chart data with a fixed daily skeleton aligned to the selected date range
+  // Build chart data. Weight keeps the daily skeleton with plan overlay;
+  // other metrics plot measured days + future predictions only.
   const chartData = useMemo(() => {
-    const rangeStart = currentStartTime ? startOfDayMs(currentStartTime * 1000) : null
-    const rangeEnd = currentEndTime ? startOfDayMs(currentEndTime * 1000) : null
-
     const data: ChartDataPoint[] = []
-    if (rangeStart !== null && rangeEnd !== null && rangeEnd >= rangeStart) {
-      for (let t = rangeStart; t <= rangeEnd; t += dayMs) {
-        data.push({ timestamp: t })
-      }
-    }
-
-    // Fill actual weights keyed by day
-    const weightByDay = new Map<number, typeof weightsWithStatus[0]>()
-    weightsWithStatus.forEach((w) => {
-      weightByDay.set(startOfDayMs(w.htime * 1000), w)
-    })
-    data.forEach((p) => {
-      const w = weightByDay.get(p.timestamp)
-      if (w) {
-        p.value = w.value
-        p.status = w.status
-        p.expectedValue = w.expected_value
-        p.diff = w.diff
-      }
-    })
-
-    // Fill plan expected weights keyed by day
-    const expectedByDay = new Map<number, number>()
-    planExpectedPoints.forEach((ep) => {
-      expectedByDay.set(startOfDayMs(ep.htime * 1000), ep.expected_weight)
-    })
-    data.forEach((p) => {
-      const expected = expectedByDay.get(p.timestamp)
-      if (expected !== undefined) {
-        p.planExpected = expected
-      }
-    })
-
-    // Fill predicted points from analysis (future predictions)
-    if (analysisResult?.predicted_weights) {
-      const predictedByDay = new Map<number, number>()
-      analysisResult.predicted_weights.forEach((p) => {
+    const predictedByDay = new Map<number, number>()
+    if (analysisMetric === metric && analysisResult?.predicted_points) {
+      analysisResult.predicted_points.forEach((p) => {
         if (!p.is_actual) {
           predictedByDay.set(startOfDayMs(p.htime * 1000), p.value)
         }
       })
+    }
+
+    if (isWeight) {
+      const rangeStart = startOfDayMs(startTime * 1000)
+      const rangeEnd = startOfDayMs(endTime * 1000)
+      if (rangeEnd >= rangeStart) {
+        for (let t = rangeStart; t <= rangeEnd; t += dayMs) {
+          data.push({ timestamp: t })
+        }
+      }
+
+      const weightByDay = new Map<number, typeof weightsWithStatus[0]>()
+      weightsWithStatus.forEach((w) => {
+        weightByDay.set(startOfDayMs(w.htime * 1000), w)
+      })
+      data.forEach((p) => {
+        const w = weightByDay.get(p.timestamp)
+        if (w) {
+          p.value = w.value
+          p.status = w.status
+          p.expectedValue = w.expected_value
+          p.diff = w.diff
+        }
+      })
+
+      const expectedByDay = new Map<number, number>()
+      planExpectedPoints.forEach((ep) => {
+        expectedByDay.set(startOfDayMs(ep.htime * 1000), ep.expected_weight)
+      })
+      data.forEach((p) => {
+        const expected = expectedByDay.get(p.timestamp)
+        if (expected !== undefined) {
+          p.planExpected = expected
+        }
+      })
+
       data.forEach((p) => {
         const predicted = predictedByDay.get(p.timestamp)
         if (predicted !== undefined) {
           p.predicted = predicted
         }
       })
+      return data
     }
 
-    return data
-  }, [weightsWithStatus, analysisResult, planExpectedPoints, currentStartTime, currentEndTime])
+    // Generic metric: measured days from the series endpoint
+    const series = seriesCache[metric]
+    const valueByDay = new Map<number, number>()
+    series?.points.forEach((point) => {
+      valueByDay.set(startOfDayMs(point.htime * 1000), point.value)
+    })
 
-  // Get color based on status
+    const timestamps = new Set<number>([...valueByDay.keys(), ...predictedByDay.keys()])
+    ;[...timestamps].sort((a, b) => a - b).forEach((t) => {
+      const point: ChartDataPoint = { timestamp: t }
+      const value = valueByDay.get(t)
+      if (value !== undefined) point.value = value
+      const predicted = predictedByDay.get(t)
+      if (predicted !== undefined) point.predicted = predicted
+      data.push(point)
+    })
+    return data
+  }, [metric, isWeight, seriesCache, analysisMetric, analysisResult, weightsWithStatus, planExpectedPoints, startTime, endTime])
+
+  const hasActualValues = chartData.some((d) => d.value !== undefined)
+
+  const formatValue = (value: number): string =>
+    unit ? `${formatMetricValue(metric, value)} ${unit}` : formatMetricValue(metric, value)
+
+  // Get color based on status (weight plan overlay only)
   const getStatusColor = (status?: string) => {
     switch (status) {
       case 'above':
-        return '#ef4444' // Red - above expected
+        return '#ef4444'
       case 'below':
-        return '#22c55e' // Green - below expected
+        return '#22c55e'
       case 'normal':
       default:
-        return '#2563eb' // Blue - within tolerance
+        return '#2563eb'
     }
   }
 
@@ -149,11 +191,9 @@ const WeightChart: React.FC = () => {
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: any[] }) => {
     if (!active || !payload || payload.length === 0) return null
 
-    // All series share the same underlying data item, but pick one defensively
     const data = payload.find((p) => p && p.payload)?.payload as ChartDataPoint | undefined
     if (!data) return null
 
-    // Read values from payload entries so order does not hide actual weight behind plan line
     const actualEntry = payload.find((p) => p.dataKey === 'value' || p.name === 'Actual')
     const predictedEntry = payload.find((p) => p.dataKey === 'predicted' || p.name === 'Predicted')
     const planEntry = payload.find((p) => p.dataKey === 'planExpected' || p.name === 'Plan Target')
@@ -173,16 +213,16 @@ const WeightChart: React.FC = () => {
       below: ' (Below expected)',
       normal: '',
     }
+    const metricName = metricDef?.labelEn ?? metric
 
     return (
       <div className="bg-white dark:bg-gray-800 border rounded-lg p-3 shadow-lg">
         <div className="text-muted-foreground text-xs mb-1">{date}</div>
 
-        {/* Actual Weight */}
         {actualValue !== undefined && (
           <div className="font-semibold">
-            Actual: {actualValue.toFixed(1)} kg
-            {data.status && (
+            {metricName}: {formatValue(actualValue)}
+            {isWeight && data.status && (
               <span className={`text-xs ml-1 ${data.status === 'above' ? 'text-red-500' : data.status === 'below' ? 'text-green-500' : 'text-blue-500'}`}>
                 {statusText[data.status]}
               </span>
@@ -190,10 +230,9 @@ const WeightChart: React.FC = () => {
           </div>
         )}
 
-        {/* Expected Value */}
-        {data.expectedValue !== undefined && data.expectedValue > 0 && (
+        {isWeight && data.expectedValue !== undefined && data.expectedValue > 0 && (
           <div className="text-xs text-gray-500 mt-1">
-            Expected: {data.expectedValue.toFixed(1)} kg
+            Expected: {formatValue(data.expectedValue)}
             {data.diff !== undefined && (
               <span className={data.diff > 0 ? 'text-red-500' : 'text-green-500'}>
                 {' '}({data.diff > 0 ? '+' : ''}{data.diff.toFixed(1)})
@@ -202,17 +241,15 @@ const WeightChart: React.FC = () => {
           </div>
         )}
 
-        {/* Predicted */}
         {predictedValue !== undefined && (
           <div className="text-xs text-green-600 mt-1">
-            Predicted: {predictedValue.toFixed(1)} kg
+            Predicted: {formatValue(predictedValue)}
           </div>
         )}
 
-        {/* Plan Target */}
         {planValue !== undefined && (
           <div className="text-xs text-amber-600 mt-1">
-            Plan Target: {planValue.toFixed(1)} kg
+            Plan Target: {formatValue(planValue)}
           </div>
         )}
       </div>
@@ -222,58 +259,54 @@ const WeightChart: React.FC = () => {
   // Calculate Y domain
   const yDomain = useMemo(() => {
     if (chartData.length === 0) return ['auto', 'auto']
-    
+
     const allValues = chartData.flatMap((d) => [
       d.value,
       d.predicted,
       d.planExpected,
     ]).filter((v): v is number => v !== undefined)
-    
+
     if (allValues.length === 0) return ['auto', 'auto']
-    
+
     const min = Math.min(...allValues)
     const max = Math.max(...allValues)
-    return [min - 5, max + 5]
-  }, [chartData])
+    const pad = Math.max((max - min) * 0.1, isWeight ? 5 : 1)
+    return [min - pad, max + pad]
+  }, [chartData, isWeight])
 
-  // Trend info
   const trendInfo = useMemo(() => {
-    if (!analysisResult) return null
+    if (analysisMetric !== metric || !analysisResult) return null
     const { slope, current_trend, r_squared } = analysisResult
-    const dailyChange = Math.abs(slope)
-    const weeklyChange = dailyChange * 7
-    
+    const weeklyChange = Math.abs(slope) * 7
+
     return {
       direction: current_trend,
       weeklyChange,
       rSquared: r_squared,
     }
-  }, [analysisResult])
+  }, [metric, analysisMetric, analysisResult])
+
+  const xDomain: [number, number] = [
+    startOfDayMs(startTime * 1000),
+    startOfDayMs(endTime * 1000),
+  ]
 
   return (
     <div className="flex flex-col items-center justify-center w-full">
-      <div className="flex items-center justify-between w-full mb-4">
-        <h2 className={`font-bold ${isMobile ? 'text-lg' : 'text-xl'}`}>Weight Chart</h2>
-        
-        {/* Analysis Summary */}
-        {weightPlan && (
-          <div className={`text-right ${isMobile ? 'text-xs' : 'text-sm'}`}>
-            <div className="flex items-center gap-2">
-              <span>Plan Control:</span>
-              <span className={`font-semibold ${isOnTrack ? 'text-green-500' : 'text-red-500'}`}>
-                {controlRate.toFixed(0)}%
-              </span>
-            </div>
-            <div className="text-gray-500">
-              Target: {weightPlan.targetWeight}kg by {new Date(weightPlan.targetTime * 1000).toLocaleDateString()}
-            </div>
-          </div>
-        )}
+      <div className="flex items-center justify-between w-full mb-4 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h2 className={`font-bold ${isMobile ? 'text-lg' : 'text-xl'}`}>Body Data Chart</h2>
+          <BodyMetricPicker
+            value={metric}
+            onChange={setMetric}
+            className={isMobile ? 'w-36' : 'w-44'}
+          />
+        </div>
       </div>
 
-      {/* Trend Badge */}
+      {/* Analysis Summary */}
       {trendInfo && (
-        <div className={`flex gap-4 mb-4 ${isMobile ? 'text-xs' : 'text-sm'}`}>
+        <div className={`flex gap-4 mb-4 ${isMobile ? 'text-xs' : 'text-sm'} flex-wrap`}>
           <div className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900">
             <span className="text-blue-800 dark:text-blue-200">
               Trend: {trendInfo.direction}
@@ -281,7 +314,7 @@ const WeightChart: React.FC = () => {
           </div>
           <div className="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900">
             <span className="text-green-800 dark:text-green-200">
-              Weekly Δ: {trendInfo.weeklyChange.toFixed(2)} kg
+              Weekly Δ: {trendInfo.weeklyChange.toFixed(2)} {unit}
             </span>
           </div>
           <div className="px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800">
@@ -294,7 +327,7 @@ const WeightChart: React.FC = () => {
 
       {isLoading ? (
         <div className="w-full space-y-3">Loading...</div>
-      ) : weightsWithStatus.length > 0 ? (
+      ) : hasActualValues ? (
         <div className="w-full">
           <ChartContainer
             config={chartConfig}
@@ -313,10 +346,7 @@ const WeightChart: React.FC = () => {
                 <XAxis
                   dataKey="timestamp"
                   type="number"
-                  domain={[
-                    currentStartTime ? startOfDayMs(currentStartTime * 1000) : 'dataMin',
-                    currentEndTime ? startOfDayMs(currentEndTime * 1000) : 'dataMax',
-                  ]}
+                  domain={xDomain}
                   tickLine={false}
                   axisLine={false}
                   minTickGap={isMobile ? 50 : 32}
@@ -339,8 +369,8 @@ const WeightChart: React.FC = () => {
                   width={isMobile ? 35 : 45}
                 />
 
-                {/* Plan Target Line */}
-                {planExpectedPoints.length > 0 && (
+                {/* Plan Target Line (weight only) */}
+                {isWeight && planExpectedPoints.length > 0 && (
                   <Line
                     type="monotone"
                     dataKey="planExpected"
@@ -364,7 +394,7 @@ const WeightChart: React.FC = () => {
                   name="Predicted"
                 />
 
-                {/* Actual Weight Line with status-based dots */}
+                {/* Actual Line with status-based dots (weight) or plain dots */}
                 <Line
                   type="monotone"
                   dataKey="value"
@@ -373,7 +403,7 @@ const WeightChart: React.FC = () => {
                   dot={(dotProps: any) => {
                     const point = dotProps.payload as ChartDataPoint | undefined
                     if (!point || point.value === undefined) return null
-                    const color = getStatusColor(point.status)
+                    const color = isWeight ? getStatusColor(point.status) : '#2563eb'
                     return (
                       <circle
                         cx={dotProps.cx}
@@ -397,21 +427,25 @@ const WeightChart: React.FC = () => {
           <div className={`flex flex-wrap justify-center gap-3 mt-4 ${isMobile ? 'text-xs' : 'text-sm'}`}>
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <span>On Target</span>
+              <span>Measured</span>
             </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span>Above Expected</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span>Below Expected</span>
-            </div>
+            {isWeight && (
+              <>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  <span>Above Expected</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded-full bg-green-500" />
+                  <span>Below Expected</span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-1">
               <div className="w-3 h-3 rounded-full bg-green-500 opacity-50" style={{ background: '#10b981' }} />
               <span>Predicted</span>
             </div>
-            {planExpectedPoints.length > 0 && (
+            {isWeight && planExpectedPoints.length > 0 && (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full bg-amber-500" />
                 <span>Plan Target</span>
@@ -420,10 +454,10 @@ const WeightChart: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div>No weight data available.</div>
+        <div>No {metricDef?.labelEn ?? metric} data available for this date range.</div>
       )}
     </div>
   )
 }
 
-export default WeightChart
+export default BodyDataChart

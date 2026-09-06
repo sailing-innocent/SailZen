@@ -60,7 +60,16 @@
     <!-- 健康模块 -->
     <string name="health_tab">健康</string>
     <string name="health_home_title">健康</string>
-    <string name="health_weight_curve">体重曲线</string>
+    <string name="health_body_data_curve">身体曲线</string>
+    <string name="health_body_data_record_title">记录身体数据</string>
+    <string name="health_body_data_quick_record">记录身体数据</string>
+    <string name="health_body_data_actual">实际记录</string>
+    <string name="health_body_data_plan_expected">计划预期</string>
+    <string name="health_body_data_empty">暂无记录</string>
+    <string name="health_body_data_saved">已保存</string>
+    <string name="health_body_data_save">保存</string>
+    <string name="health_body_data_metric_label">%1$s（%2$s）</string>
+    <string name="health_body_data_custom_key_hint">自定义指标键（x_ 前缀）</string>
     <string name="health_weight_plan">体重计划</string>
     <string name="health_medication">用药节律</string>
     <string name="health_sleep_schedule">作息节律</string>

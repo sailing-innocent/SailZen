@@ -91,10 +91,14 @@ fun HealthHomeScreen(
                     expanded = menuExpanded,
                     onDismissRequest = { menuExpanded = false },
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.health_checkin_weight)) },
-                        onClick = { menuExpanded = false; onOpenHealthCheckin(InfoCollectionType.weight) },
-                    )
+                      DropdownMenuItem(
+                          text = { Text(stringResource(R.string.health_checkin_weight)) },
+                          onClick = { menuExpanded = false; onOpenHealthCheckin(InfoCollectionType.weight) },
+                      )
+                      DropdownMenuItem(
+                          text = { Text(stringResource(R.string.health_body_data_quick_record)) },
+                          onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_BODY_DATA_RECORD) },
+                      )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.health_checkin_medication)) },
                         onClick = { menuExpanded = false; onNavigate(Routes.HEALTH_MEDICATION) },
@@ -135,7 +139,7 @@ fun HealthHomeScreen(
                 }
             }
 
-            item { SectionCard(title = stringResource(R.string.health_weight_curve), onClick = { onNavigate(Routes.HEALTH_WEIGHT_CURVE) }) {} }
+                          item { SectionCard(title = stringResource(R.string.health_body_data_curve), onClick = { onNavigate(Routes.HEALTH_BODY_DATA_CURVE) }) {} }
             item { SectionCard(title = stringResource(R.string.health_weight_plan), onClick = { onNavigate(Routes.HEALTH_WEIGHT_PLAN) }) {} }
             item { SectionCard(title = stringResource(R.string.health_medication), onClick = { onNavigate(Routes.HEALTH_MEDICATION) }) {} }
             item { SectionCard(title = stringResource(R.string.health_sleep_schedule), onClick = { onNavigate(Routes.HEALTH_SLEEP) }) {} }

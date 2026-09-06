@@ -8,6 +8,7 @@ import com.sailzen.app.core.data.onFailure
 import com.sailzen.app.core.data.onSuccess
 import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.health.HealthRepository
+import com.sailzen.app.core.network.dto.BodyDataCreateRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.rhythm.RhythmRepository
@@ -114,19 +115,22 @@ class HealthCheckinViewModel(application: Application) : AndroidViewModel(applic
     }
 
     private suspend fun submitWeight(state: UiState, htime: Double): OperationResult<HealthCheckinResponse?> {
-        val weightResult = healthRepository.createWeight(
-            value = state.weight.toDoubleOrNull().orZero(),
-            htime = htime,
-            note = state.note,
+        // 在线路径走通用身体数据接口（体重作为 body-data 记录 dual-write 到体重表）
+        val bodyResult = healthRepository.createBodyData(
+            BodyDataCreateRequest(
+                htime = htime,
+                data = mapOf("weight" to state.weight.toDoubleOrNull().orZero()),
+                description = state.note,
+            )
         )
-        if (weightResult is OperationResult.Success) {
-            val weightDto = weightResult.data
+        if (bodyResult is OperationResult.Success) {
+            val bodyDto = bodyResult.data
             return OperationResult.Success(
                 HealthCheckinResponse(
-                    id = weightDto.id,
+                    id = bodyDto.weightId ?: bodyDto.id,
                     collectionType = "weight",
                     logDate = state.date.toString(),
-                    refId = weightDto.id,
+                    refId = bodyDto.id,
                     note = state.note,
                 )
             )

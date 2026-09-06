@@ -1,5 +1,11 @@
 package com.sailzen.app.core.network
 
+import com.sailzen.app.core.network.dto.BodyDataCreateRequest
+import com.sailzen.app.core.network.dto.BodyDataDeleteResponse
+import com.sailzen.app.core.network.dto.BodyDataDto
+import com.sailzen.app.core.network.dto.BodyDataSeriesResponse
+import com.sailzen.app.core.network.dto.BodyDataUpdateRequest
+import com.sailzen.app.core.network.dto.BodyMetricDefDto
 import com.sailzen.app.core.network.dto.DietCreateRequest
 import com.sailzen.app.core.network.dto.DietDto
 import com.sailzen.app.core.network.dto.DietSummaryDto
@@ -26,6 +32,7 @@ import com.sailzen.app.core.network.dto.WeightPlanProgressDto
 import com.sailzen.app.core.network.dto.WeightExpectedRangeDto
 import com.sailzen.app.core.network.dto.WeightWithStatusDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -97,6 +104,49 @@ interface HealthApi {
         @Query("end") end: Double,
         @Query("plan_id") planId: Int? = null,
     ): WeightExpectedRangeDto?
+
+    // ---------------- Body Data ----------------
+
+    @GET("api/v1/health/body-data")
+    suspend fun bodyData(
+        @Query("skip") skip: Int = 0,
+        @Query("limit") limit: Int = -1,
+        @Query("start") start: Double? = null,
+        @Query("end") end: Double? = null,
+    ): List<BodyDataDto>
+
+    @POST("api/v1/health/body-data")
+    suspend fun createBodyData(@Body body: BodyDataCreateRequest): BodyDataDto
+
+    @GET("api/v1/health/body-data/metrics")
+    suspend fun bodyDataMetrics(): List<BodyMetricDefDto>
+
+    @GET("api/v1/health/body-data/series")
+    suspend fun bodyDataSeries(
+        @Query("metric") metric: String,
+        @Query("start") start: Double? = null,
+        @Query("end") end: Double? = null,
+    ): BodyDataSeriesResponse
+
+    @GET("api/v1/health/body-data/analysis")
+    suspend fun bodyDataAnalysis(
+        @Query("metric") metric: String,
+        @Query("start") start: Double? = null,
+        @Query("end") end: Double? = null,
+        @Query("model_type") modelType: String = "linear",
+    ): Map<String, Any>
+
+    @GET("api/v1/health/body-data/{id}")
+    suspend fun bodyDataRecord(@Path("id") id: Int): BodyDataDto
+
+    @PUT("api/v1/health/body-data/{id}")
+    suspend fun updateBodyData(
+        @Path("id") id: Int,
+        @Body body: BodyDataUpdateRequest,
+    ): BodyDataDto
+
+    @DELETE("api/v1/health/body-data/{id}")
+    suspend fun deleteBodyData(@Path("id") id: Int): BodyDataDeleteResponse
 
     // ---------------- Exercise ----------------
 

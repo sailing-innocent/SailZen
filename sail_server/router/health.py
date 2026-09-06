@@ -19,6 +19,7 @@ from sail_server.controller.health import (
     HealthDashboardController,
     MoodController,
 )
+from sail_server.controller.body_data import BodyDataController
 from sail_server.db import get_db_dependency
 
 
@@ -28,6 +29,7 @@ router = Router(
     route_handlers=[
         WeightController,
         WeightPlanController,
+        BodyDataController,
         ExerciseController,
         SleepController,
         SleepScheduleController,

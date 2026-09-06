@@ -10,6 +10,11 @@ import com.sailzen.app.core.data.runOperation
 import com.sailzen.app.core.health.HealthDateUtils
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.HealthApi
+import com.sailzen.app.core.network.dto.BodyDataCreateRequest
+import com.sailzen.app.core.network.dto.BodyDataDto
+import com.sailzen.app.core.network.dto.BodyDataSeriesResponse
+import com.sailzen.app.core.network.dto.BodyDataUpdateRequest
+import com.sailzen.app.core.network.dto.BodyMetricDefDto
 import com.sailzen.app.core.network.dto.DietCreateRequest
 import com.sailzen.app.core.network.dto.DietDto
 import com.sailzen.app.core.network.dto.DietSummaryDto
@@ -185,7 +190,109 @@ class HealthRepository private constructor(private val context: Context) {
         null
     }
 
+    // Body Data
+    suspend fun bodyData(
+        start: LocalDate? = null,
+        end: LocalDate? = null,
+        skip: Int = 0,
+        limit: Int = -1,
+    ): List<BodyDataDto> = try {
+        apiOrNull()?.bodyData(
+            skip = skip,
+            limit = limit,
+            start = start?.let { epochSeconds(it) },
+            end = end?.let { epochSecondsEnd(it) },
+        ) ?: emptyList()
+    } catch (e: Exception) {
+        Log.w(TAG, "bodyData failed: ${e.message}")
+        emptyList()
+    }
 
+    suspend fun createBodyData(body: BodyDataCreateRequest): OperationResult<BodyDataDto> {
+        val result = write(
+            block = { apiOrNull()?.createBodyData(body) ?: error("创建身体数据记录失败") },
+            event = { DataChangeEvent.BodyDataChanged() },
+        )
+        // data 含 weight 时 dual-write 已同步体重表，额外广播 WeightChanged 保持计划/首页刷新
+        if (result is OperationResult.Success && result.data.data.containsKey("weight")) {
+            bus.emit(DataChangeEvent.WeightChanged())
+        }
+        return result
+    }
+
+    suspend fun updateBodyData(id: Int, body: BodyDataUpdateRequest): OperationResult<BodyDataDto> {
+        val result = write(
+            block = { apiOrNull()?.updateBodyData(id, body) ?: error("更新身体数据记录失败") },
+            event = { DataChangeEvent.BodyDataChanged() },
+        )
+        if (result is OperationResult.Success && result.data.data.containsKey("weight")) {
+            bus.emit(DataChangeEvent.WeightChanged())
+        }
+        return result
+    }
+
+    suspend fun deleteBodyData(id: Int): OperationResult<Boolean> {
+        // 预取记录以判断是否存在 dual-write 的体重行，供事件精准广播
+        val existing = try {
+            apiOrNull()?.bodyDataRecord(id)
+        } catch (e: Exception) {
+            Log.w(TAG, "deleteBodyData prefetch failed: ${e.message}")
+            null
+        }
+        val result = write(
+            block = {
+                val resp = apiOrNull()?.deleteBodyData(id) ?: error("删除身体数据记录失败")
+                if (!resp.deleted) error("身体数据记录不存在: $id")
+                true
+            },
+            event = { DataChangeEvent.BodyDataChanged() },
+        )
+        if (result is OperationResult.Success && existing?.weightId != null) {
+            bus.emit(DataChangeEvent.WeightChanged())
+        }
+        return result
+    }
+
+    suspend fun bodyDataMetrics(): List<BodyMetricDefDto> = try {
+        apiOrNull()?.bodyDataMetrics() ?: emptyList()
+    } catch (e: Exception) {
+        Log.w(TAG, "bodyDataMetrics failed: ${e.message}")
+        emptyList()
+    }
+
+    suspend fun bodyDataSeries(
+        metric: String,
+        start: LocalDate? = null,
+        end: LocalDate? = null,
+    ): BodyDataSeriesResponse? = try {
+        apiOrNull()?.bodyDataSeries(
+            metric = metric,
+            start = start?.let { epochSeconds(it) },
+            end = end?.let { epochSecondsEnd(it) },
+        )
+    } catch (e: Exception) {
+        Log.w(TAG, "bodyDataSeries failed: ${e.message}")
+        null
+    }
+
+    suspend fun bodyDataAnalysis(
+        metric: String,
+        start: LocalDate? = null,
+        end: LocalDate? = null,
+        modelType: String = "linear",
+    ): Map<String, Any>? = try {
+        apiOrNull()?.bodyDataAnalysis(
+            metric = metric,
+            start = start?.let { epochSeconds(it) },
+            end = end?.let { epochSecondsEnd(it) },
+            modelType = modelType,
+        )
+    } catch (e: Exception) {
+        Log.w(TAG, "bodyDataAnalysis failed: ${e.message}")
+        null
+    }
+
+    // Exercise
     suspend fun exercises(
         start: LocalDate? = null,
         end: LocalDate? = null,

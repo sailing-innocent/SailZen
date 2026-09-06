@@ -336,95 +336,21 @@ def analyze_weight_trend_impl(
     # Get weights in time range
     weights = read_weights_impl(db, 0, -1, start_time, end_time, "raw")
 
-    if len(weights) < 2:
-        return {
-            "model_type": model_type,
-            "slope": 0.0,
-            "intercept": 0.0,
-            "r_squared": 0.0,
-            "current_weight": 0.0,
-            "current_trend": "stable",
-            "predicted_weights": [],
-        }
+    # 回归核心与 body_data 任意指标分析共用（避免逻辑漂移）
+    from sail_server.model.body_data import _analyze_series
 
-    # Convert to numpy arrays
-    # Use days since first measurement as x
-    first_time = weights[0].htime
-    x = np.array([(w.htime - first_time) / 86400 for w in weights])  # days
-    y = np.array([float(w.value) for w in weights])
+    points = [(w.htime, float(w.value)) for w in weights]
+    result = _analyze_series(points, model_type)
 
-    # Linear regression
-    if model_type == "linear":
-        coeffs = np.polyfit(x, y, 1)
-        slope, intercept = coeffs[0], coeffs[1]
-
-        # Calculate R-squared
-        y_pred = slope * x + intercept
-        ss_res = np.sum((y - y_pred) ** 2)
-        ss_tot = np.sum((y - np.mean(y)) ** 2)
-        r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
-    else:
-        # Polynomial regression (degree 2)
-        coeffs = np.polyfit(x, y, 2)
-        slope = coeffs[0]  # Store leading coefficient
-        intercept = coeffs[2]  # Store constant term
-
-        # Calculate R-squared for polynomial
-        y_pred = np.polyval(coeffs, x)
-        ss_res = np.sum((y - y_pred) ** 2)
-        ss_tot = np.sum((y - np.mean(y)) ** 2)
-        r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
-
-    # Determine trend
-    if slope < -0.05:
-        trend = "decreasing"
-    elif slope > 0.05:
-        trend = "increasing"
-    else:
-        trend = "stable"
-
-    # Generate predicted weights for visualization (actual + 30 days prediction)
-    predicted_weights = []
-
-    # Add actual data points
-    for w in weights:
-        predicted_weights.append(
-            {
-                "htime": w.htime,
-                "value": float(w.value),
-                "is_actual": True,
-            }
-        )
-
-    # Add prediction points for next 30 days
-    last_time = weights[-1].htime
-    last_day = (last_time - first_time) / 86400
-
-    for day in range(1, 31):
-        future_day = last_day + day
-        future_time = last_time + day * 86400
-
-        if model_type == "linear":
-            pred_value = slope * future_day + intercept
-        else:
-            pred_value = np.polyval(coeffs, future_day)
-
-        predicted_weights.append(
-            {
-                "htime": future_time,
-                "value": float(pred_value),
-                "is_actual": False,
-            }
-        )
-
+    # 保持原输出字段名（current_weight / predicted_weights）兼容前端与 Android
     return {
-        "model_type": model_type,
-        "slope": float(slope),
-        "intercept": float(intercept),
-        "r_squared": float(r_squared),
-        "current_weight": float(weights[-1].value),
-        "current_trend": trend,
-        "predicted_weights": predicted_weights,
+        "model_type": result["model_type"],
+        "slope": result["slope"],
+        "intercept": result["intercept"],
+        "r_squared": result["r_squared"],
+        "current_weight": result["current_value"],
+        "current_trend": result["current_trend"],
+        "predicted_weights": result["predicted_points"],
     }
 
 

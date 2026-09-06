@@ -1,15 +1,17 @@
 import React from 'react'
 import {
-  type WeightCreateProps,
   type ExerciseCreateProps,
   type WeightPlanCreateProps,
   type WeightPlanCurveType,
-  type WeightRecordWithStatus,
 } from '@lib/data'
 import { type HealthState, useHealthStore } from '@lib/store/health'
+import { type BodyDataState, useBodyDataStore } from '@lib/store/body_data'
+import { type BodyDataRecord } from '@lib/data/body_data'
 
 import PageLayout from '@components/page_layout'
-import WeightChart from '@components/health/weight_chart'
+import BodyDataChart from '@components/health/body_data_chart'
+import BodyDataRecordDialog from '@components/health/body_data_record_dialog'
+import BodyDataHistoryList from '@components/health/body_data_history_list'
 import DatePicker from '@components/date_picker'
 
 import {
@@ -64,9 +66,6 @@ const curveLabel: Record<WeightPlanCurveType, string> = {
 
 const HealthPage = () => {
   const fetchWeights = useHealthStore((state: HealthState) => state.fetchWeights)
-  const createWeight = useHealthStore((state: HealthState) => state.createWeight)
-  const deleteWeight = useHealthStore((state: HealthState) => state.deleteWeight)
-  const weightsWithStatus = useHealthStore((state: HealthState) => state.weightsWithStatus)
   const exercises = useHealthStore((state: HealthState) => state.exercises)
   const fetchExercises = useHealthStore((state: HealthState) => state.fetchExercises)
   const createExercise = useHealthStore((state: HealthState) => state.createExercise)
@@ -80,10 +79,14 @@ const HealthPage = () => {
   const updateWeightPlan = useHealthStore((state: HealthState) => state.updateWeightPlan)
   const deleteWeightPlan = useHealthStore((state: HealthState) => state.deleteWeightPlan)
   const planCheckinStatus = useHealthStore((state: HealthState) => state.planCheckinStatus)
-  const weightSaveMessage = useHealthStore((state: HealthState) => state.weightSaveMessage)
   const fetchPlanCheckinStatus = useHealthStore((state: HealthState) => state.fetchPlanCheckinStatus)
   const fetchWeightsWithStatus = useHealthStore((state: HealthState) => state.fetchWeightsWithStatus)
   const fetchPlanExpected = useHealthStore((state: HealthState) => state.fetchPlanExpected)
+  const fetchWeightAnalysis = useHealthStore((state: HealthState) => state.fetchWeightAnalysis)
+  const fetchPlanProgress = useHealthStore((state: HealthState) => state.fetchPlanProgress)
+
+  const fetchMetrics = useBodyDataStore((state: BodyDataState) => state.fetchMetrics)
+  const fetchRecords = useBodyDataStore((state: BodyDataState) => state.fetchRecords)
   const isMobile = useIsMobile()
 
   const selectItems = dateSpanSelectOptions.map((option) => (
@@ -96,10 +99,7 @@ const HealthPage = () => {
   const [endDate, setEndDate] = React.useState<Date>(new Date()) // Default to today
   const [startDate, setStartDate] = React.useState<Date>(new Date(new Date().setDate(new Date().getDate() - 90)))
 
-  const [createDate, setCreateDate] = React.useState<Date>(new Date()) // Default to today
-  const [createWeightValue, setCreateWeightValue] = React.useState<string>('')
-  const [createWeightTag, setCreateWeightTag] = React.useState<string>('raw')
-  const [createWeightDescription, setCreateWeightDescription] = React.useState<string>('')
+  const [bodySaveMessage, setBodySaveMessage] = React.useState<string | null>(null)
 
   // Exercise form state
   const [exerciseDate, setExerciseDate] = React.useState<Date>(new Date())
@@ -119,27 +119,32 @@ const HealthPage = () => {
   const [planDescription, setPlanDescription] = React.useState<string>('')
   const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState<boolean>(false)
 
-  // Fetch plan on mount
+  const startDateUnix = Math.floor(startDate.getTime() / 1000)
+  const endDateUnix = Math.floor(endDate.getTime() / 1000)
+
+  // Fetch metric registry + plan on mount
   React.useEffect(() => {
+    fetchMetrics()
     fetchWeightPlan().then(() => {
       fetchPlanCheckinStatus()
+      fetchPlanProgress()
     })
-  }, [fetchWeightPlan, fetchPlanCheckinStatus])
+  }, [fetchMetrics, fetchWeightPlan, fetchPlanCheckinStatus, fetchPlanProgress])
 
   React.useEffect(() => {
-    const startDateUnix = Math.floor(startDate.getTime() / 1000)
-    const endDateUnix = Math.floor(endDate.getTime() / 1000)
     fetchWeights(0, 4096, startDateUnix, endDateUnix)
-    // Also fetch weights with status for the chart and list
+    // Also fetch weights with status for the chart plan overlay
     fetchWeightsWithStatus(startDateUnix, endDateUnix)
     // Fetch plan expected points aligned to current date range
     fetchPlanExpected(startDateUnix, endDateUnix)
-  }, [fetchWeights, fetchWeightsWithStatus, fetchPlanExpected, startDate, endDate])
+    // Fetch weight trend analysis for the overview cards
+    fetchWeightAnalysis(startDateUnix, endDateUnix, 'linear')
+    // Fetch body data records for the history list
+    fetchRecords(0, -1, startDateUnix, endDateUnix)
+  }, [fetchWeights, fetchWeightsWithStatus, fetchPlanExpected, fetchWeightAnalysis, fetchRecords, startDate, endDate])
 
   // Fetch exercises on mount and when date range changes
   React.useEffect(() => {
-    const startDateUnix = Math.floor(startDate.getTime() / 1000)
-    const endDateUnix = Math.floor(endDate.getTime() / 1000)
     fetchExercises(0, 100, startDateUnix, endDateUnix)
   }, [fetchExercises, startDate, endDate])
 
@@ -157,9 +162,35 @@ const HealthPage = () => {
     setEndDate(now)
   }, [dateSpan])
 
-  const sortedWeights = React.useMemo(() => {
-    return [...weightsWithStatus].sort((a, b) => b.htime - a.htime)
-  }, [weightsWithStatus])
+  // Refresh weight-plan derived state after body-data create/delete touched weight.
+  // The backend dual-writes/cascades the weight row, so the health store must re-sync.
+  const refreshWeightDerived = React.useCallback(async () => {
+    await fetchWeights(0, 4096, startDateUnix, endDateUnix)
+    await fetchWeightsWithStatus(startDateUnix, endDateUnix)
+    await fetchPlanExpected(startDateUnix, endDateUnix)
+    await fetchPlanProgress()
+    await fetchPlanCheckinStatus()
+  }, [fetchWeights, fetchWeightsWithStatus, fetchPlanExpected, fetchPlanProgress, fetchPlanCheckinStatus, startDateUnix, endDateUnix])
+
+  const showBodySaveMessage = (message: string) => {
+    setBodySaveMessage(message)
+    setTimeout(() => setBodySaveMessage(null), 3000)
+  }
+
+  const handleBodyDataSaved = (record: BodyDataRecord) => {
+    if (record.data['weight'] !== undefined) {
+      refreshWeightDerived()
+      if (weightPlan?.feedbackEnabled) {
+        showBodySaveMessage('已记录体重并同步 Rhythm 打卡')
+      }
+    }
+  }
+
+  const handleBodyDataChanged = ({ hadWeight }: { hadWeight: boolean }) => {
+    if (hadWeight) {
+      refreshWeightDerived()
+    }
+  }
 
   const handleCreateExercise = async () => {
     const props: ExerciseCreateProps = {
@@ -174,10 +205,6 @@ const HealthPage = () => {
 
   const handleDeleteExercise = async (id: number) => {
     await deleteExercise(id)
-  }
-
-  const handleDeleteWeight = async (id: number) => {
-    await deleteWeight(id)
   }
 
   // Populate plan dialog when opening or when existing plan changes
@@ -258,17 +285,6 @@ const HealthPage = () => {
     }
   }
 
-  const getStatusBadge = (record: WeightRecordWithStatus) => {
-    switch (record.status) {
-      case 'above':
-        return <Badge variant="destructive">Above +{record.diff.toFixed(1)} kg</Badge>
-      case 'below':
-        return <Badge className="bg-green-500 hover:bg-green-600">Below {record.diff.toFixed(1)} kg</Badge>
-      default:
-        return <Badge variant="secondary">On Target</Badge>
-    }
-  }
-
   const daysRemaining = React.useMemo(() => {
     if (!weightPlan) return null
     const end = new Date(weightPlan.targetTime * 1000)
@@ -279,10 +295,10 @@ const HealthPage = () => {
   return (
     <>
       <PageLayout>
-        {/* 体重管理部分 */}
-        <div className={isMobile ? 'text-lg px-2' : 'text-xl'}>体重管理</div>
+        {/* 身体数据部分 */}
+        <div className={isMobile ? 'text-lg px-2' : 'text-xl'}>身体数据</div>
 
-        {/* 趋势和控制率概览 */}
+        {/* 趋势和控制率概览（体重指标） */}
         {analysisResult && (
           <div className={`grid gap-4 ${isMobile ? 'grid-cols-2 px-2' : 'grid-cols-4'} mb-4`}>
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
@@ -312,10 +328,10 @@ const HealthPage = () => {
         )}
 
         {/* Rhythm 反馈 Toast */}
-        {weightSaveMessage && (
+        {bodySaveMessage && (
           <div className={`mb-4 ${isMobile ? 'px-2' : ''}`}>
             <div className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-4 py-2 rounded-lg text-sm font-medium">
-              {weightSaveMessage}
+              {bodySaveMessage}
             </div>
           </div>
         )}
@@ -356,93 +372,15 @@ const HealthPage = () => {
               </SelectContent>
             </Select>
           </div>
-          {/* 添加体重按钮 */}
+          {/* 添加身体数据按钮 */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="add-weight" className="px-1 text-sm">
-              Add Weight
+            <Label htmlFor="add-body-data" className="px-1 text-sm">
+              Add Body Data
             </Label>
-            <Dialog>
-              <DialogTrigger className={isMobile ? 'w-full' : 'w-48'}>
-                <Input id="add-weight" placeholder="Add Weight" />
-              </DialogTrigger>
-              <DialogContent className={isMobile ? 'w-[95vw] max-w-[95vw]' : ''}>
-                <DialogHeader>
-                  <DialogTitle>Add Weight</DialogTitle>
-                  <DialogDescription>Enter your weight data below.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
-                    <Label htmlFor="weight" className={isMobile ? '' : 'text-right'}>
-                      Weight
-                    </Label>
-                    <Input
-                      id="weight"
-                      className={isMobile ? 'w-full' : 'col-span-3'}
-                      placeholder="e.g., 70.5"
-                      onChange={(e) => setCreateWeightValue(e.target.value)}
-                    />
-                  </div>
-                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
-                    <Label htmlFor="weight-date" className={isMobile ? '' : 'text-right'}>
-                      Date
-                    </Label>
-                    <DatePicker
-                      label=""
-                      placeholder="Select date"
-                      onChange={(date: Date) => {
-                        setCreateDate(date)
-                      }}
-                    />
-                  </div>
-                  <div className={`grid items-center gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
-                    <Label htmlFor="weight-tag" className={isMobile ? '' : 'text-right'}>
-                      Tag
-                    </Label>
-                    <Input
-                      id="weight-tag"
-                      className={isMobile ? 'w-full' : 'col-span-3'}
-                      placeholder="e.g., morning / raw"
-                      value={createWeightTag}
-                      onChange={(e) => setCreateWeightTag(e.target.value)}
-                    />
-                  </div>
-                  <div className={`grid items-start gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-4'}`}>
-                    <Label htmlFor="weight-description" className={isMobile ? '' : 'text-right pt-2'}>
-                      Description
-                    </Label>
-                    <Textarea
-                      id="weight-description"
-                      className={isMobile ? 'w-full' : 'col-span-3'}
-                      placeholder="Optional note..."
-                      value={createWeightDescription}
-                      onChange={(e) => setCreateWeightDescription(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose
-                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-400"
-                    onClick={async () => {
-                      const props: WeightCreateProps = {
-                        value: createWeightValue,
-                        htime: Math.floor(createDate.getTime() / 1000),
-                        tag: createWeightTag || 'raw',
-                        description: createWeightDescription,
-                      }
-                      await createWeight(props)
-                      setCreateWeightValue('')
-                      setCreateWeightTag('raw')
-                      setCreateWeightDescription('')
-                      setCreateDate(new Date())
-                    }}
-                    disabled={!createWeightValue.trim() || isNaN(parseFloat(createWeightValue))}
-                  >
-                    Save
-                  </DialogClose>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <BodyDataRecordDialog
+              triggerClassName={isMobile ? 'w-full' : 'w-48'}
+              onSaved={handleBodyDataSaved}
+            />
           </div>
           {/* 设置体重计划按钮 */}
           <div className="flex flex-col gap-2">
@@ -688,49 +626,13 @@ const HealthPage = () => {
               </div>
             </div>
           )}
-          <WeightChart />
+          <BodyDataChart startTime={startDateUnix} endTime={endDateUnix} />
         </div>
 
-        {/* 体重记录列表 */}
-        <div className={`${isMobile ? 'text-lg px-2 mt-8' : 'text-xl mt-10'} border-t pt-6`}>体重记录</div>
+        {/* 身体数据记录列表 */}
+        <div className={`${isMobile ? 'text-lg px-2 mt-8' : 'text-xl mt-10'} border-t pt-6`}>身体数据记录</div>
         <div className={`${isMobile ? 'px-2' : ''} mt-4`}>
-          {sortedWeights.length === 0 ? (
-            <div className="text-gray-500 text-sm">No weight records yet.</div>
-          ) : (
-            <div className="space-y-2">
-              {sortedWeights.map((record) => (
-                <div
-                  key={record.id}
-                  className="border rounded-lg p-3 bg-white dark:bg-gray-800 flex justify-between items-start gap-2"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <div className="text-xs text-gray-500">{formatDate(record.htime)}</div>
-                      {record.tag && record.tag !== 'raw' && (
-                        <Badge variant="outline" className="text-xs">
-                          {record.tag}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-semibold">{record.value.toFixed(1)} kg</span>
-                      {getStatusBadge(record)}
-                    </div>
-                    {record.description && (
-                      <div className="text-xs text-gray-500 mt-1 break-words">{record.description}</div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDeleteWeight(record.id)}
-                    className="text-red-500 hover:text-red-700 p-1 flex-shrink-0"
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          <BodyDataHistoryList onChanged={handleBodyDataChanged} />
         </div>
 
         {/* 运动记录部分 */}

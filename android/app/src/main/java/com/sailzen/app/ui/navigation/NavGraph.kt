@@ -25,9 +25,10 @@ import com.sailzen.app.feature.diet.DietScreen
 import com.sailzen.app.feature.exercise.ExerciseScreen
 import com.sailzen.app.feature.health.HealthCheckinScreen
 import com.sailzen.app.feature.health.HealthHomeScreen
+import com.sailzen.app.feature.health.bodydata.BodyDataCurveScreen
+import com.sailzen.app.feature.health.bodydata.BodyDataRecordScreen
 import com.sailzen.app.feature.health.medication.MedicationScreen
 import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
-import com.sailzen.app.feature.health.weight.WeightCurveScreen
 import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
 import com.sailzen.app.feature.plan.PlanScreen
@@ -39,7 +40,8 @@ object Routes {
     const val PLAN = "plan"
     const val AFFAIR_DETAIL = "affair_detail/{affair_id}"
     const val HEALTH = "health"
-    const val HEALTH_WEIGHT_CURVE = "health_weight_curve"
+    const val HEALTH_BODY_DATA_CURVE = "health_body_data_curve"
+    const val HEALTH_BODY_DATA_RECORD = "health_body_data_record"
     const val HEALTH_WEIGHT_PLAN = "health_weight_plan"
     const val HEALTH_MEDICATION = "health_medication"
     const val HEALTH_SLEEP = "health_sleep"
@@ -144,7 +146,8 @@ fun SailZenNavGraph(
                     },
                 )
             }
-            composable(Routes.HEALTH_WEIGHT_CURVE) { WeightCurveScreen(onBack = { navController.popBackStack() }) }
+                          composable(Routes.HEALTH_BODY_DATA_CURVE) { BodyDataCurveScreen(onBack = { navController.popBackStack() }) }
+              composable(Routes.HEALTH_BODY_DATA_RECORD) { BodyDataRecordScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.HEALTH_WEIGHT_PLAN) { WeightPlanScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.HEALTH_MEDICATION) { MedicationScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.HEALTH_SLEEP) { SleepScheduleScreen(onBack = { navController.popBackStack() }) }

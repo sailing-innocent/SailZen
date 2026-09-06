@@ -2,13 +2,14 @@
 
 ## 📋 功能概述
 
-健康管理模块提供体重记录追踪、运动记录、体重计划与预测等功能。
+健康管理模块提供通用身体数据记录与趋势分析、体重记录追踪、运动记录、体重计划与预测等功能。
 
 ### 核心功能
 
 | 功能 | 说明 |
 |------|------|
-| **体重记录** | 记录每日体重，支持时间范围查询 |
+| **身体数据** | 多指标记录（体重/BMI/体脂等），指标定义动态下发，单指标曲线与趋势分析 |
+| **体重记录** | 记录每日体重，支持时间范围查询（由身体数据 dual-write 兼容维护） |
 | **体重分析** | 趋势线分析、目标预测 |
 | **体重计划** | 制定减重/增重计划，追踪进度 |
 | **运动记录** | 记录运动类型、时长、消耗 |
@@ -278,6 +279,90 @@ GET /api/v1/health/weight/plan/weights-with-status
 
 ---
 
+## 📊 身体数据 API
+
+通用身体数据记录：一次打卡可携带多个指标，指标定义由服务端动态下发。`data` 含 `weight` 且 `source=manual` 时服务端 dual-write 到体重记录表，体重计划与旧体重端点保持兼容；删除记录时级联清理关联体重记录。
+
+### 获取身体数据记录列表
+```http
+GET /api/v1/health/body-data
+```
+**参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| skip | int | 否 | 跳过记录数（默认 0） |
+| limit | int | 否 | 返回记录数（默认 10，-1 表示全部） |
+| start | float | 否 | 开始时间戳（秒） |
+| end | float | 否 | 结束时间戳（秒） |
+
+**响应:** `BodyDataResponse[]`（按时间降序）
+---
+### 创建身体数据记录
+```http
+POST /api/v1/health/body-data
+```
+**请求体:**
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| htime | float | 否 | 发生时间戳（秒），None 为当前时间 |
+| data | object | 是 | 指标集合，如 `{"weight": 70.5, "body_fat": 18.2}`；缺失字段视为未测量 |
+| tag | string | 否 | 记录标签（默认 `raw`） |
+| description | string | 否 | 记录描述 |
+
+**校验：** 未知指标 key 拒绝（自定义 key 须 `x_` 前缀）；内置指标做 min/max 范围校验（越界 422）。`data` 含 `weight` 时同步写体重记录。
+---
+### 获取指标定义列表
+```http
+GET /api/v1/health/body-data/metrics
+```
+返回内置指标 + 历史记录中发现的自定义指标，含中文标签、单位、分类、小数位与合法范围。
+
+**响应:** `BodyMetricDefinition[]`
+---
+### 获取单指标时序
+```http
+GET /api/v1/health/body-data/series?metric=weight
+```
+**参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| metric | string | 是 | 指标 key |
+| start | float | 否 | 开始时间戳（秒） |
+| end | float | 否 | 结束时间戳（秒） |
+
+**响应:** `{ "metric": "weight", "unit": "kg", "points": [{ "id": 1, "htime": 1700000000, "value": 70.5 }] }`（按时间升序）
+---
+### 获取单指标趋势分析
+```http
+GET /api/v1/health/body-data/analysis?metric=weight
+```
+**参数:**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| metric | string | 是 | 指标 key |
+| model_type | string | 否 | 拟合模型（默认线性） |
+| start | float | 否 | 开始时间戳（秒） |
+| end | float | 否 | 结束时间戳（秒） |
+
+**响应:** `{ "current_value": 70.5, "slope": -0.05, "r_squared": 0.92, "predicted_points": [...] }`
+---
+### 获取单条身体数据记录
+```http
+GET /api/v1/health/body-data/{record_id}
+```
+---
+### 更新身体数据记录
+```http
+PUT /api/v1/health/body-data/{record_id}
+```
+**请求体:** 同创建，字段均可选；`weight` 变化会同步更新关联体重记录。
+---
+### 删除身体数据记录
+```http
+DELETE /api/v1/health/body-data/{record_id}
+```
+**响应:** `{ "deleted": true, "id": 1 }`；若 dual-write 产生过体重记录则级联删除。
+---
 ## 🏃 运动记录 API
 
 ### 获取运动记录列表
@@ -535,9 +620,48 @@ interface ExerciseCreateProps {
 
 ---
 
-*本文档由 AI Agent 维护，如有疑问请参考源代码或联系开发团队。*
-
+### BodyDataResponse
+```typescript
+interface BodyDataResponse {
+  id: number
+  htime: number          // 发生时间戳（秒）
+  data: Record<string, number>  // 本次测量的指标集合
+  tag: string
+  description: string
+  source: string         // 记录来源（manual 等）
+  weight_id?: number     // dual-write 关联的体重记录 ID
+}
+```
 ---
+### BodyDataCreateRequest
+```typescript
+interface BodyDataCreateRequest {
+  htime?: number
+  data: Record<string, number>
+  tag?: string
+  description?: string
+}
+```
+---
+### BodyMetricDefinition
+```typescript
+interface BodyMetricDefinition {
+  key: string            // 唯一标识，自定义指标以 x_ 开头
+  label_zh: string
+  label_en: string
+  unit: string           // kg / cm / % 等
+  category: string       // 体成分/围度/生命体征/... 
+  precision: number
+  min?: number
+  max?: number
+  higher_is_better: boolean
+  builtin: boolean
+}
+```
+---
+*本文档由 AI Agent 维护，如有疑问请参考源代码或联系开发团队。*
+---
+## 💊 用药记录 API
 
 ## 💊 用药记录 API
 

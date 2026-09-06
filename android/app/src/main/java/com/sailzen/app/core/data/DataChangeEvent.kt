@@ -26,6 +26,11 @@ sealed class DataChangeEvent {
         override val timestamp: Long = System.currentTimeMillis(),
     ) : DataChangeEvent()
 
+    /** 身体数据记录发生变化（创建/更新/删除；含对体重 dual-write 的级联影响）。 */
+    data class BodyDataChanged(
+        override val timestamp: Long = System.currentTimeMillis(),
+    ) : DataChangeEvent()
+
     /** 健康首页 dashboard 依赖的其它指标发生变化（运动、睡眠、用药、饮食、心情）。 */
     data class HealthSignalChanged(
         val collectionType: String? = null,

@@ -26,11 +26,11 @@ SailZen 是一个基于 VSCode 扩展的个人知识管理与生产力工具。�
 
 | 模块 | 状态 | 文档 |
 |------|------|------|
-| 财务管理 | ✅ 已实现 | [设计文档](./doc/design/manager/life_budget.md) |
-| 健康管理 | 🔶 部分实现 | [设计文档](./doc/design/manager/health.md) |
-| 物资管理 | ✅ 已实现 | [设计文档](./doc/design/manager/necessity.md) |
-| 文本管理 | ✅ 已实现 | [设计文档](./doc/design/manager/text.md) |
-| 节奏管理(Rhythm) | ✅ M1/M2 已实现 | [设计文档](./doc/design/manager/rhythm.md) |
+| 财务管理 | ✅ 已实现 | [设计文档](./doc/design/sail_server/manager/life_budget.md) |
+| 健康管理 | ✅ 已实现（身体数据/体重/运动/睡眠/用药） | [设计文档](./doc/design/sail_server/manager/health.md) |
+| 物资管理 | ✅ 已实现 | [设计文档](./doc/design/sail_server/manager/necessity.md) |
+| 文本管理 | ✅ 已实现 | [设计文档](./doc/design/sail_server/manager/text.md) |
+| 节奏管理(Rhythm) | ✅ M1/M2 已实现 | [设计文档](./doc/design/sail_server/manager/rhythm.md) |
 | AI文本分析 | ✅ 已实现 | 分析产物输出为 Markdown 笔记 + 双向链接 |
 | 历史/人物档案 | ✅ 已实现 | 已迁移至 NoteItem + Markdown 笔记体系 |
 
@@ -358,7 +358,7 @@ works = db.query(Work).all()
 | 领域      | 路由         | 功能                     |
 | --------- | ------------ | ------------------------ |
 | Finance   | `/money`     | 账户管理、交易、预算     |
-| Health    | `/health`    | 体重追踪、健康指标       |
+| Health | `/health` | 身体数据记录、体重追踪、健康指标 |
 | Text      | `/text`      | 文本导入、章节管理、阅读 |
 | Analysis  | `/analysis`  | 角色档案、大纲、设定提取 |
 | Necessity | `/necessity` | 库存、住所、行程追踪           |

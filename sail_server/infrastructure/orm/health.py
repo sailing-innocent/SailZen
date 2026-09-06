@@ -46,6 +46,27 @@ class BodySize(ORMBase):
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
 
 
+class BodyData(ORMBase):
+    """通用身体数据记录
+
+    每行 = 一次"记录会话"：data JSON 中只存本次实际测量/记录的指标。
+    核心语义：JSON 中不存在某 key = 本次未测量（与 null/0 严格区分）。
+
+    当 data 含 weight 且 source=manual 时，dual-write 同步一条 weights 表记录
+    （体重计划/预测/dashboard 依赖 weights 表），weight_id 回存关联 ID。
+    """
+
+    __tablename__ = "body_data"
+    id = Column(Integer, primary_key=True)
+    htime = Column(TIMESTAMP, server_default=func.current_timestamp(), index=True)  # happen time
+    data = Column(JSONB, default=dict)  # {metric_key: number}，仅含本次实际测量/记录的指标
+    tag = Column(String, default="raw", index=True)  # 记录标签，如 raw / daily / weekly
+    description = Column(String, default="")  # 记录描述
+    source = Column(String, default="manual")  # 来源：manual / weight_backfill / body_size_backfill
+    weight_id = Column(Integer, ForeignKey("weights.id"), nullable=True)  # dual-write 关联
+    created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+
+
 class Exercise(ORMBase):
     """运动记录"""
 

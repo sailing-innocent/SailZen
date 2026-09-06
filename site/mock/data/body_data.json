@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "htime": 1754913352,
+    "data": {
+      "weight": 70.5,
+      "waist": 85
+    },
+    "tag": "",
+    "description": "",
+    "source": "manual",
+    "weightId": null,
+    "created_at": 1754913352
+  },
+  {
+    "id": 2,
+    "htime": 1754956552,
+    "data": {
+      "weight": 70.2,
+      "waist": 84.5,
+      "water": 2000
+    },
+    "tag": "",
+    "description": "",
+    "source": "manual",
+    "weightId": null,
+    "created_at": 1754956552
+  },
+  {
+    "id": 3,
+    "htime": 1754999752,
+    "data": {
+      "weight": 70.8,
+      "protein_powder": 30
+    },
+    "tag": "",
+    "description": "",
+    "source": "manual",
+    "weightId": null,
+    "created_at": 1754999752
+  }
+]

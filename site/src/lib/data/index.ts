@@ -7,6 +7,7 @@
 
 export * from './money'
 export * from './health'
+export * from './body_data'
 export * from './content'
 export * from './affair'
 export * from './pems'

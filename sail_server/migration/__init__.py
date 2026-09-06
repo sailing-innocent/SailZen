@@ -34,11 +34,14 @@ logger = logging.getLogger(__name__)
 
 MIGRATION_DIR = Path(__file__).parent
 
-# Python 迁移脚本（跨后端，通常用于给已有表添加列）
+# Python 迁移脚本（跨后端）
 # 注意：Python 迁移方式已被实践证明不可靠（如触发器函数引用不存在的列时，
 # 报错信息被 SQLAlchemy 层层包装，难以定位；且与 PG 原生 DDL 行为差异大），
-# 后续迁移统一走 SQL_MIGRATIONS。此列表保留为空，仅作历史兼容。
+# 因此 schema 变更（加列/触发器/索引）统一走 SQL_MIGRATIONS。
+# 例外：跨 PG/SQLite 双后端的数据 backfill/数据修正，SQL 不可移植
+# （SQLite 下 JSONB 退化为 Text），可使用 Python 脚本，脚本必须幂等可重入。
 PYTHON_MIGRATIONS: List[Path] = [
+    MIGRATION_DIR / "20260906_backfill_body_data.py",
 ]
 
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）

@@ -12,11 +12,12 @@
 从 sail_server/data/health.py 迁移数据访问逻辑
 """
 
+from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.health import Weight, BodySize, Exercise, WeightPlan
+from sail_server.infrastructure.orm.health import Weight, BodySize, BodyData, Exercise, WeightPlan
 from sail_server.data.dao.base import BaseDAO
 
 
@@ -58,6 +59,39 @@ class BodySizeDAO(BaseDAO[BodySize]):
     def get_latest(self) -> Optional[BodySize]:
         """获取最新身体尺寸记录"""
         return self.db.query(BodySize).order_by(BodySize.htime.desc()).first()
+
+
+class BodyDataDAO(BaseDAO[BodyData]):
+    """通用身体数据 DAO"""
+
+    def __init__(self, db: Session):
+        super().__init__(db, BodyData)
+
+    def get_by_tag(self, tag: str) -> List[BodyData]:
+        """通过标签获取身体数据记录（按时间升序）"""
+        return (
+            self.db.query(BodyData)
+            .filter(BodyData.tag == tag)
+            .order_by(BodyData.htime.asc())
+            .all()
+        )
+
+    def get_latest(self) -> Optional[BodyData]:
+        """获取最新一条身体数据记录"""
+        return self.db.query(BodyData).order_by(BodyData.htime.desc()).first()
+
+    def get_range(
+        self,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> List[BodyData]:
+        """按时间范围获取身体数据记录（按时间升序）"""
+        query = self.db.query(BodyData)
+        if start_time is not None:
+            query = query.filter(BodyData.htime >= start_time)
+        if end_time is not None:
+            query = query.filter(BodyData.htime <= end_time)
+        return query.order_by(BodyData.htime.asc()).all()
 
 
 class ExerciseDAO(BaseDAO[Exercise]):

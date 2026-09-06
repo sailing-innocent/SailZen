@@ -17,6 +17,7 @@ from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm.health import (
     Weight,
     BodySize,
+    BodyData,
     Exercise,
     WeightPlan,
     Sleep,
@@ -89,6 +90,7 @@ __all__ = [
     # Health
     "Weight",
     "BodySize",
+    "BodyData",
     "Exercise",
     "WeightPlan",
     "Sleep",

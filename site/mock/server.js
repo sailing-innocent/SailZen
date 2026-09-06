@@ -26,6 +26,23 @@ const DATA_DIR = join(__dirname, 'data')
 const ACCOUNTS_FILE = join(DATA_DIR, 'accounts.json')
 const TRANSACTIONS_FILE = join(DATA_DIR, 'transactions.json')
 const WEIGHTS_FILE = join(DATA_DIR, 'weights.json')
+const BODY_DATA_FILE = join(DATA_DIR, 'body_data.json')
+
+// Builtin body metric registry mirror（与 site/src/lib/data/body_data.ts 及
+// 后端 sail_server/application/dto/body_data.py 保持三端同步；mock 仅开发用）
+const BODY_METRICS = [
+  { key: 'weight', labelZh: '体重', labelEn: 'Weight', unit: 'kg', category: 'body', precision: 1, min: 20, max: 300, higherIsBetter: false, builtin: true },
+  { key: 'height', labelZh: '身高', labelEn: 'Height', unit: 'cm', category: 'body', precision: 1, min: 100, max: 250, higherIsBetter: true, builtin: true },
+  { key: 'chest', labelZh: '胸围', labelEn: 'Chest', unit: 'cm', category: 'body', precision: 1, min: 40, max: 200, higherIsBetter: true, builtin: true },
+  { key: 'waist', labelZh: '腰围', labelEn: 'Waist', unit: 'cm', category: 'body', precision: 1, min: 40, max: 200, higherIsBetter: false, builtin: true },
+  { key: 'hip', labelZh: '臀围', labelEn: 'Hip', unit: 'cm', category: 'body', precision: 1, min: 40, max: 250, higherIsBetter: false, builtin: true },
+  { key: 'body_fat_pct', labelZh: '体脂率', labelEn: 'Body Fat', unit: '%', category: 'body', precision: 1, min: 1, max: 70, higherIsBetter: false, builtin: true },
+  { key: 'muscle_mass', labelZh: '肌肉量', labelEn: 'Muscle Mass', unit: 'kg', category: 'body', precision: 1, min: 5, max: 150, higherIsBetter: true, builtin: true },
+  { key: 'protein_powder', labelZh: '蛋白粉', labelEn: 'Protein Powder', unit: 'g', category: 'intake', precision: 0, min: 0, max: 300, higherIsBetter: true, builtin: true },
+  { key: 'creatine', labelZh: '肌酸', labelEn: 'Creatine', unit: 'g', category: 'intake', precision: 1, min: 0, max: 50, higherIsBetter: true, builtin: true },
+  { key: 'water', labelZh: '饮水量', labelEn: 'Water', unit: 'ml', category: 'intake', precision: 0, min: 0, max: 8000, higherIsBetter: true, builtin: true },
+  { key: 'caffeine', labelZh: '咖啡因', labelEn: 'Caffeine', unit: 'mg', category: 'intake', precision: 0, min: 0, max: 1000, higherIsBetter: false, builtin: true },
+]
 
 // Ensure data directory and files exist
 async function initializeData() {
@@ -81,6 +98,19 @@ async function initializeData() {
         { id: 3, value: "70.8", htime: Date.now() }
       ]
       await fs.writeFile(WEIGHTS_FILE, JSON.stringify(defaultWeights, null, 2))
+    }
+
+    // Initialize body data (htime in Unix seconds, matching the real backend;
+    // fixed timestamps consistent with the committed seed data/body_data.json)
+    try {
+      await fs.access(BODY_DATA_FILE)
+    } catch {
+      const defaultBodyData = [
+        { id: 1, htime: 1754913352, data: { weight: 70.5, waist: 85.0 }, tag: '', description: '', source: 'manual', weightId: null, created_at: 1754913352 },
+        { id: 2, htime: 1754956552, data: { weight: 70.2, waist: 84.5, water: 2000 }, tag: '', description: '', source: 'manual', weightId: null, created_at: 1754956552 },
+        { id: 3, htime: 1754999752, data: { weight: 70.8, protein_powder: 30 }, tag: '', description: '', source: 'manual', weightId: null, created_at: 1754999752 },
+      ]
+      await fs.writeFile(BODY_DATA_FILE, JSON.stringify(defaultBodyData, null, 2))
     }
   } catch (error) {
     console.error('Error initializing data:', error)
@@ -408,6 +438,252 @@ app.post('/api/v1/health/weight/', async (req, res) => {
   }
 })
 
+// ===================
+// BODY DATA API ROUTES
+// ===================
+
+// NOTE: static segments (/metrics, /series, /analysis) are registered BEFORE /:id
+// so express does not treat them as an id parameter.
+
+// GET /api/v1/health/body-data/metrics — builtin + discovered custom metrics
+app.get('/api/v1/health/body-data/metrics', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const seen = new Set(BODY_METRICS.map((m) => m.key))
+    const custom = []
+    for (const record of records) {
+      for (const key of Object.keys(record.data || {})) {
+        if (!seen.has(key)) {
+          seen.add(key)
+          custom.push({ key, labelZh: key, labelEn: key, unit: '', category: 'body', precision: 1, higherIsBetter: true, builtin: false })
+        }
+      }
+    }
+    custom.sort((a, b) => a.key.localeCompare(b.key))
+    res.json([...BODY_METRICS, ...custom])
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch body metrics' })
+  }
+})
+
+// GET /api/v1/health/body-data/series?metric=<key> — points only from records that measured the metric
+app.get('/api/v1/health/body-data/series', async (req, res) => {
+  try {
+    const metric = req.query.metric
+    if (!metric) {
+      return res.status(422).json({ detail: 'metric query parameter is required' })
+    }
+    const records = await readData(BODY_DATA_FILE)
+    const start = parseInt(req.query.start) || -1
+    const end = parseInt(req.query.end) || -1
+    const unit = BODY_METRICS.find((m) => m.key === metric)?.unit || ''
+    const points = records
+      .filter((r) => r.data && typeof r.data[metric] === 'number')
+      .filter((r) => (start === -1 || r.htime >= start) && (end === -1 || r.htime <= end))
+      .map((r) => ({ id: r.id, htime: r.htime, value: r.data[metric] }))
+      .sort((a, b) => a.htime - b.htime)
+    res.json({ metric, unit, points })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch body series' })
+  }
+})
+
+// GET /api/v1/health/body-data/analysis?metric=<key>&model_type=linear
+app.get('/api/v1/health/body-data/analysis', async (req, res) => {
+  try {
+    const metric = req.query.metric
+    if (!metric) {
+      return res.status(422).json({ detail: 'metric query parameter is required' })
+    }
+    const records = await readData(BODY_DATA_FILE)
+    const unit = BODY_METRICS.find((m) => m.key === metric)?.unit || ''
+    const points = records
+      .filter((r) => r.data && typeof r.data[metric] === 'number')
+      .map((r) => ({ htime: r.htime, value: r.data[metric] }))
+      .sort((a, b) => a.htime - b.htime)
+
+    const zero = {
+      metric,
+      unit,
+      model_type: req.query.model_type || 'linear',
+      slope: 0,
+      intercept: 0,
+      r_squared: 0,
+      current_value: 0,
+      current_trend: 'stable',
+      predicted_points: [],
+    }
+    if (points.length < 2) {
+      return res.json(zero)
+    }
+
+    const firstTime = points[0].htime
+    const x = points.map((p) => (p.htime - firstTime) / 86400)
+    const y = points.map((p) => p.value)
+    const n = points.length
+    const sumX = x.reduce((a, b) => a + b, 0)
+    const sumY = y.reduce((a, b) => a + b, 0)
+    const sumXX = x.reduce((a, b) => a + b * b, 0)
+    const sumXY = x.reduce((a, b, i) => a + b * y[i], 0)
+    const denom = n * sumXX - sumX * sumX
+    const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0
+    const intercept = (sumY - slope * sumX) / n
+    const meanY = sumY / n
+    const ssRes = y.reduce((a, b, i) => a + (b - (slope * x[i] + intercept)) ** 2, 0)
+    const ssTot = y.reduce((a, b) => a + (b - meanY) ** 2, 0)
+    const rSquared = ssTot !== 0 ? 1 - ssRes / ssTot : 0
+
+    const lastTime = points[points.length - 1].htime
+    const lastDay = (lastTime - firstTime) / 86400
+    const predictedPoints = points.map((p) => ({ htime: p.htime, value: p.value, is_actual: true }))
+    for (let day = 1; day <= 30; day++) {
+      predictedPoints.push({
+        htime: lastTime + day * 86400,
+        value: slope * (lastDay + day) + intercept,
+        is_actual: false,
+      })
+    }
+
+    const trend = slope > 1e-9 ? 'increasing' : slope < -1e-9 ? 'decreasing' : 'stable'
+    res.json({
+      metric,
+      unit,
+      model_type: req.query.model_type || 'linear',
+      slope,
+      intercept,
+      r_squared: rSquared,
+      current_value: points[points.length - 1].value,
+      current_trend: trend,
+      predicted_points: predictedPoints,
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to analyze body metric' })
+  }
+})
+
+// GET /api/v1/health/body-data/ — list with skip/limit/start/end/metric
+app.get('/api/v1/health/body-data/', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const skip = parseInt(req.query.skip) || 0
+    const limit = parseInt(req.query.limit) || -1
+    const start = parseInt(req.query.start) || -1
+    const end = parseInt(req.query.end) || -1
+    const metric = req.query.metric || ''
+
+    let filtered = records
+    if (metric) {
+      filtered = filtered.filter((r) => r.data && typeof r.data[metric] === 'number')
+    }
+    if (start !== -1) {
+      filtered = filtered.filter((r) => r.htime >= start)
+    }
+    if (end !== -1) {
+      filtered = filtered.filter((r) => r.htime <= end)
+    }
+
+    // Sort by htime descending (most recent first), then apply skip/limit
+    filtered.sort((a, b) => b.htime - a.htime)
+    const endIndex = limit === -1 ? filtered.length : skip + limit
+    res.json(filtered.slice(skip, endIndex))
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch body data list' })
+  }
+})
+
+// POST /api/v1/health/body-data/ — create; dual-writes to weights.json when data.weight present
+app.post('/api/v1/health/body-data/', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const now = Math.floor(Date.now() / 1000)
+    const newRecord = {
+      id: getNextId(records),
+      htime: req.body.htime || now,
+      data: req.body.data || {},
+      tag: req.body.tag || '',
+      description: req.body.description || '',
+      source: req.body.source || 'manual',
+      // camelCase to match the real backend DTO (BodyDataResponse.weightId)
+      weightId: null,
+      created_at: now,
+    }
+
+    // Dual-write to weights.json to mimic the real backend (plan/dashboard compatibility)
+    if (newRecord.source === 'manual' && typeof newRecord.data.weight === 'number') {
+      const weights = await readData(WEIGHTS_FILE)
+      const newWeight = {
+        id: getNextId(weights),
+        value: newRecord.data.weight.toString(),
+        htime: newRecord.htime * 1000, // weights.json uses ms timestamps in this mock
+        tag: newRecord.tag,
+        description: newRecord.description,
+      }
+      weights.push(newWeight)
+      await writeData(WEIGHTS_FILE, weights)
+      newRecord.weightId = newWeight.id
+    }
+
+    records.push(newRecord)
+    await writeData(BODY_DATA_FILE, records)
+    res.json(newRecord)
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create body data' })
+  }
+})
+
+// GET /api/v1/health/body-data/:id
+app.get('/api/v1/health/body-data/:id', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const record = records.find((r) => r.id === parseInt(req.params.id))
+    if (!record) {
+      return res.status(404).json({ error: 'Body data record not found' })
+    }
+    res.json(record)
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch body data' })
+  }
+})
+
+// PUT /api/v1/health/body-data/:id
+app.put('/api/v1/health/body-data/:id', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const index = records.findIndex((r) => r.id === parseInt(req.params.id))
+    if (index === -1) {
+      return res.status(404).json({ error: 'Body data record not found' })
+    }
+    const updated = { ...records[index], ...req.body, id: records[index].id }
+    records[index] = updated
+    await writeData(BODY_DATA_FILE, records)
+    res.json(updated)
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update body data' })
+  }
+})
+
+// DELETE /api/v1/health/body-data/:id
+app.delete('/api/v1/health/body-data/:id', async (req, res) => {
+  try {
+    const records = await readData(BODY_DATA_FILE)
+    const record = records.find((r) => r.id === parseInt(req.params.id))
+    if (!record) {
+      return res.status(404).json({ error: 'Body data record not found' })
+    }
+    await writeData(BODY_DATA_FILE, records.filter((r) => r.id !== record.id))
+
+    // Cascade: remove the dual-written weight row (mirrors the real backend)
+    if (record.weightId != null) {
+      const weights = await readData(WEIGHTS_FILE)
+      await writeData(WEIGHTS_FILE, weights.filter((w) => w.id !== record.weightId))
+    }
+
+    res.json({ status: 'ok' })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete body data' })
+  }
+})
+
 // Start server
 async function startServer() {
   await initializeData()
@@ -432,6 +708,14 @@ async function startServer() {
     console.log('    - GET    /api/v1/health/weight/')
     console.log('    - GET    /api/v1/health/weight/:id')
     console.log('    - POST   /api/v1/health/weight/')
+    console.log('    - GET    /api/v1/health/body-data/')
+    console.log('    - POST   /api/v1/health/body-data/')
+    console.log('    - GET    /api/v1/health/body-data/metrics')
+    console.log('    - GET    /api/v1/health/body-data/series?metric=')
+    console.log('    - GET    /api/v1/health/body-data/analysis?metric=')
+    console.log('    - GET    /api/v1/health/body-data/:id')
+    console.log('    - PUT    /api/v1/health/body-data/:id')
+    console.log('    - DELETE /api/v1/health/body-data/:id')
   })
 }
 

@@ -72,11 +72,9 @@ from sail_server.infrastructure.orm.orm_base import ORMBase
 from sail_server.infrastructure.orm import health
 from sail_server.infrastructure.orm import finance
 from sail_server.infrastructure.orm import life
-from sail_server.infrastructure.orm import project
 from sail_server.infrastructure.orm import history
 from sail_server.infrastructure.orm import text as text_module
 from sail_server.infrastructure.orm import necessity
-from sail_server.infrastructure.orm import analysis
 
 
 # 配置日志
