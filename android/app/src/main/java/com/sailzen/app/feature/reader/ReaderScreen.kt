@@ -168,7 +168,12 @@ fun ReaderScreen(
         AnnotationEditDialog(
             annotation = annotation,
             onSave = { note ->
-                viewModel.saveAnnotation(annotation, note)
+                val updated = annotation.copy(note = note)
+                if (annotation.localId == 0L) {
+                    viewModel.createAnnotation(updated)
+                } else {
+                    viewModel.updateAnnotation(updated)
+                }
                 draftAnnotation = null
             },
             onDismiss = { draftAnnotation = null },
@@ -245,7 +250,7 @@ private fun PageReader(
                 bgColor = bgColor.toArgbInt(),
                 onSelection = { pIdx, start, end, selectedText ->
                     viewModel.onSelection(pIdx, start, end, selectedText)?.let { annotation ->
-                        viewModel.saveAnnotation(annotation, "")
+                        viewModel.createAnnotation(annotation)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),

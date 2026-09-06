@@ -13,7 +13,9 @@ import com.sailzen.app.core.network.TextApi
 import com.sailzen.app.core.network.dto.ChapterListItemDto
 import com.sailzen.app.core.network.dto.DocumentNodeDto
 import com.sailzen.app.core.network.dto.EditionDto
+import com.sailzen.app.core.network.dto.NoteContentUpdateRequest
 import com.sailzen.app.core.network.dto.NoteItemCreateRequest
+import com.sailzen.app.core.network.dto.NoteItemUpdateRequest
 import com.sailzen.app.core.network.dto.WorkDto
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +23,15 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
 private fun JsonElement?.jsonPrimitive(): JsonPrimitive? = this as? JsonPrimitive
+
+/** 组装批注锚点 meta，与 create 接口的锚点字段保持一致 */
+private fun annotationMeta(item: CachedAnnotation): Map<String, JsonElement?> = mapOf(
+    "node_id" to JsonPrimitive(item.nodeId),
+    "start_offset" to JsonPrimitive(item.startOffset),
+    "end_offset" to JsonPrimitive(item.endOffset),
+    "selected_text" to JsonPrimitive(item.selectedText),
+    "color" to JsonPrimitive(item.color),
+)
 
 /**
  * 阅读模块 Repository：作品/章节缓存、阅读进度、批注同步。
@@ -163,15 +174,26 @@ class TextRepository private constructor(private val context: Context) {
     suspend fun annotationsByNode(nodeId: Int): List<CachedAnnotation> =
         db.readerDao().annotationsByNode(nodeId)
 
-    suspend fun addAnnotation(annotation: CachedAnnotation): Long {
-        val id = db.readerDao().insertAnnotation(annotation.copy(updatedAt = nowIso()))
+    /**
+     * 新建批注：本地 insert 后触发同步。返回落库后的完整记录（含 localId/remoteId）。
+     */
+    suspend fun createAnnotation(annotation: CachedAnnotation): CachedAnnotation {
+        val localId = db.readerDao().insertAnnotation(
+            annotation.copy(updatedAt = nowIso(), synced = false),
+        )
         syncAnnotations()
-        return id
+        return db.readerDao().annotationsByNode(annotation.nodeId).find { it.localId == localId }
+            ?: annotation.copy(localId = localId)
     }
 
-    suspend fun updateAnnotation(annotation: CachedAnnotation) {
+    /**
+     * 更新批注：本地 upsert（@Upsert 按主键更新，已存在记录不会主键冲突）后触发同步。
+     */
+    suspend fun updateAnnotation(annotation: CachedAnnotation): CachedAnnotation {
         db.readerDao().upsertAnnotation(annotation.copy(updatedAt = nowIso(), synced = false))
         syncAnnotations()
+        return db.readerDao().annotationsByNode(annotation.nodeId)
+            .find { it.localId == annotation.localId } ?: annotation
     }
 
     suspend fun deleteAnnotation(annotation: CachedAnnotation) {
@@ -190,29 +212,44 @@ class TextRepository private constructor(private val context: Context) {
         val api = apiOrNull() ?: return 0
         var synced = 0
 
-        // 1. 上传未同步批注
+        // 1. 上传未同步批注：remoteId == null 走新建；已存在（remoteId != null）走更新，
+        //    避免服务端产生重复批注、旧 remoteId 被覆盖成孤儿数据。
         val pending = db.readerDao().pendingAnnotations()
         for (item in pending) {
             try {
-                val remote = api.createNote(
-                    NoteItemCreateRequest(
-                        category = "annotation",
-                        workId = item.workId,
-                        editionId = item.editionId,
-                        title = item.selectedText.take(20),
-                        content = item.note,
-                        nodeId = item.nodeId,
-                        startOffset = item.startOffset,
-                        endOffset = item.endOffset,
-                        selectedText = item.selectedText,
-                        color = item.color,
+                val remoteId = item.remoteId
+                if (remoteId == null) {
+                    val remote = api.createNote(
+                        NoteItemCreateRequest(
+                            category = "annotation",
+                            workId = item.workId,
+                            editionId = item.editionId,
+                            title = item.selectedText.take(20),
+                            content = item.note,
+                            nodeId = item.nodeId,
+                            startOffset = item.startOffset,
+                            endOffset = item.endOffset,
+                            selectedText = item.selectedText,
+                            color = item.color,
+                        )
                     )
-                )
-                db.readerDao().markAnnotationSynced(
-                    item.localId,
-                    remote.id,
-                    nowIso()
-                )
+                    db.readerDao().markAnnotationSynced(item.localId, remote.id, nowIso())
+                } else {
+                    api.updateNote(
+                        remoteId,
+                        NoteItemUpdateRequest(
+                            title = item.selectedText.take(20),
+                            metaData = annotationMeta(item),
+                        ),
+                    )
+                    // 正文更新失败不阻断同步流程，下次 pending 会重试
+                    try {
+                        api.updateNoteContent(remoteId, NoteContentUpdateRequest(content = item.note))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "update note content ${item.localId} failed: ${e.message}")
+                    }
+                    db.readerDao().markAnnotationSynced(item.localId, remoteId, nowIso())
+                }
                 synced++
             } catch (e: Exception) {
                 Log.w(TAG, "sync annotation ${item.localId} failed: ${e.message}")
@@ -246,6 +283,13 @@ class TextRepository private constructor(private val context: Context) {
                     val existing = db.readerDao().annotationsByNode(nodeId)
                         .find { it.remoteId == note.id }
                     if (existing == null) {
+                        // S4：服务端批注正文在 md 文件里，列表接口只返回 meta，需补拉正文
+                        val content = try {
+                            api.noteContent(note.id).content
+                        } catch (e: Exception) {
+                            Log.w(TAG, "pull note content ${note.id} failed: ${e.message}")
+                            ""
+                        }
                         db.readerDao().insertAnnotation(
                             CachedAnnotation(
                                 workId = note.workId ?: 0,
@@ -254,7 +298,7 @@ class TextRepository private constructor(private val context: Context) {
                                 startOffset = startOffset,
                                 endOffset = endOffset,
                                 selectedText = selectedText,
-                                note = "",
+                                note = content,
                                 color = color,
                                 createdAt = note.createdAt ?: nowIso(),
                                 updatedAt = note.updatedAt ?: nowIso(),

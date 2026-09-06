@@ -20,6 +20,10 @@ import kotlinx.coroutines.launch
 
 class ReaderViewModel(application: Application) : AndroidViewModel(application) {
 
+    companion object {
+        private const val TAG = "ReaderViewModel"
+    }
+
     data class ReaderSettings(
         val fontSize: Int = 18,
         val lineHeight: Float = 1.5f,
@@ -190,23 +194,68 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         return annotation
     }
 
-    fun saveAnnotation(annotation: CachedAnnotation, note: String) {
+    /**
+     * 新建批注（localId == 0 的草稿）。任何异常仅回滚 UI，不再向外抛出。
+     */
+    fun createAnnotation(annotation: CachedAnnotation) {
+        if (annotation.localId != 0L) {
+            updateAnnotation(annotation)
+            return
+        }
         viewModelScope.launch {
-            val updated = annotation.copy(note = note, updatedAt = nowIso())
-            val localId = repository.addAnnotation(updated)
-            val withId = updated.copy(localId = localId)
-            _uiState.update { state ->
-                state.copy(annotations = state.annotations.map { if (it === annotation) withId else it })
+            try {
+                val saved = repository.createAnnotation(annotation)
+                _uiState.update { state ->
+                    state.copy(
+                        annotations = state.annotations.map {
+                            if (it.localId == 0L && sameAnchor(it, annotation)) saved else it
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "createAnnotation failed: ${e.message}")
+                _uiState.update { state ->
+                    state.copy(annotations = state.annotations.filterNot {
+                        it.localId == 0L && sameAnchor(it, annotation)
+                    })
+                }
             }
-            saveProgressDebounced()
+        }
+    }
+
+    /**
+     * 更新已落库批注（localId != 0）。写库/同步异常仅记录日志，不再闪退。
+     */
+    fun updateAnnotation(annotation: CachedAnnotation) {
+        if (annotation.localId == 0L) {
+            createAnnotation(annotation)
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val saved = repository.updateAnnotation(annotation.copy(updatedAt = nowIso()))
+                _uiState.update { state ->
+                    state.copy(
+                        annotations = state.annotations.map {
+                            if (it.localId == annotation.localId) saved else it
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "updateAnnotation failed: ${e.message}")
+            }
         }
     }
 
     fun deleteAnnotation(annotation: CachedAnnotation) {
         viewModelScope.launch {
-            repository.deleteAnnotation(annotation)
-            _uiState.update { state ->
-                state.copy(annotations = state.annotations.filter { it.localId != annotation.localId })
+            try {
+                repository.deleteAnnotation(annotation)
+                _uiState.update { state ->
+                    state.copy(annotations = state.annotations.filter { it.localId != annotation.localId })
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteAnnotation failed: ${e.message}")
             }
         }
     }
@@ -250,4 +299,7 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun nowIso(): String = LocalDateTime.now().withNano(0).toString()
+
+    private fun sameAnchor(a: CachedAnnotation, b: CachedAnnotation): Boolean =
+        a.nodeId == b.nodeId && a.startOffset == b.startOffset && a.endOffset == b.endOffset
 }
