@@ -120,10 +120,8 @@
     <string name="reader_mode">阅读模式</string>
     <string name="reader_mode_page">翻页</string>
     <string name="reader_mode_scroll">滚动</string>
-    <string name="action_annotate">批注</string>
     <string name="annotation_title">批注</string>
     <string name="annotation_empty">暂无批注</string>
-    <string name="annotation_dialog_title">编辑批注</string>
     <string name="annotation_hint">写下你的想法…</string>
     <string name="reader_copy">复制</string>
     <string name="reader_annotate">批注</string>
