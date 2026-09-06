@@ -223,6 +223,16 @@ class RhythmEnergyProfile(ORMBase):
     career_weight = Column(Numeric(4, 2), default=0.6)
     # 评分权重（w_i/w_u/w_b/w_e/w_s，见 planner §5.1）
     score_weights = Column(JSONB, default=dict)
+    # 有效工作窗（排程权威配置，优先于模板 work_window 槽位）:
+    # {"weekday": [["10:00","13:00"],["14:00","19:00"]], "weekend": []}
+    work_windows = Column(JSONB, default=dict, nullable=False)
+    # 早间健康窗 {"start": "07:00", "end": "10:00"}
+    # 健康类 habit 第一候选窗 = [sleep_end, end)（见 planner v2 Step 7a）
+    morning_health_window = Column(JSONB, default=dict, nullable=False)
+    # 事业块与睡眠开始的缓冲分钟数（默认 45）
+    career_buffer_minutes = Column(Integer, default=45, nullable=False)
+    # 同一片段内相邻 focus 块之间的最小间隔（默认 15，5-60）
+    work_gap_minutes = Column(Integer, default=15, nullable=False)
     updated_at = Column(
         TIMESTAMP,
         server_default=func.current_timestamp(),

@@ -69,23 +69,23 @@ def db(rhythm_engine) -> Generator[Session, None, None]:
 
 
 def make_template_payload(name="weekday", mask=None, priority=0):
-    """默认骨架：通勤 + 上午工作窗(90/15 微节律) + 午餐 + 下午工作窗"""
+    """默认骨架（v2 工作窗 10:00-13:00 / 14:00-19:00）：通勤 + 上午工作窗(90/15 微节律) + 午餐 + 下午工作窗"""
     return {
         "name": name,
         "description": "测试骨架",
         "weekday_mask": mask or [1, 1, 1, 1, 1, 0, 0],
         "priority": priority,
         "slots": [
-            {"label": "通勤", "start": "08:20", "end": "09:00", "block_type": "commute"},
+            {"label": "通勤", "start": "08:30", "end": "09:30", "block_type": "commute"},
             {
                 "label": "上午工作窗",
-                "start": "09:00",
-                "end": "12:00",
+                "start": "10:00",
+                "end": "13:00",
                 "block_type": "work_window",
                 "micro_cycle": {"work_min": 90, "rest_min": 15},
             },
-            {"label": "午餐", "start": "12:00", "end": "13:00", "block_type": "meal"},
-            {"label": "下午工作窗", "start": "13:00", "end": "18:00", "block_type": "work_window"},
+            {"label": "午餐", "start": "13:00", "end": "14:00", "block_type": "meal"},
+            {"label": "下午工作窗", "start": "14:00", "end": "19:00", "block_type": "work_window"},
         ],
     }
 

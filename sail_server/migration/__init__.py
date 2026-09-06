@@ -47,6 +47,7 @@ PYTHON_MIGRATIONS: List[Path] = [
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）
 SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20260906_add_rhythm_is_default.sql",
+    MIGRATION_DIR / "20260906_add_rhythm_profile_v2.sql",
 ]
 
 

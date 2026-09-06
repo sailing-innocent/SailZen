@@ -63,6 +63,10 @@ from sail_server.application.dto.rhythm import (
     HealthCheckinResponse,
     InfoCollectionType,
     LONGTERM_KINDS,
+    OccupancyCreateRequest,
+    OccupancyListResponse,
+    OccupancyResponse,
+    OccupancyType,
     PolicyCreateRequest,
     PolicyResponse,
     PolicyUpdateRequest,
@@ -379,6 +383,18 @@ def _profile_to_response(p: RhythmEnergyProfile) -> EnergyProfileResponse:
         work_weight=float(p.work_weight or 1.0),
         career_weight=float(p.career_weight or 0.6),
         score_weights=p.score_weights or {},
+        work_windows=getattr(p, "work_windows", None) or {
+            "weekday": [["10:00", "13:00"], ["14:00", "19:00"]],
+            "weekend": [],
+        },
+        morning_health_window=getattr(p, "morning_health_window", None)
+        or dict(_DEFAULT_MORNING_HEALTH),
+        career_buffer_minutes=int(
+            getattr(p, "career_buffer_minutes", None) or _DEFAULT_CAREER_BUFFER_MIN
+        ),
+        work_gap_minutes=int(
+            getattr(p, "work_gap_minutes", None) or _DEFAULT_WORK_GAP_MIN
+        ),
         updated_at=p.updated_at,
     )
 
@@ -636,8 +652,8 @@ def delete_affair_impl(db: Session, affair_id: int) -> Optional[AffairResponse]:
 def _compute_next_review_window(now: datetime, est_wait_hours: float, work_hours_only: bool) -> datetime:
     """计算下次 review 提醒时间：now + est_wait_hours；work_hours_only 时推到下个工作窗内。
 
-    工作窗口径（与 profile 默认一致，简化版）：工作日 09:00-12:00, 14:00-18:00；
-    非工作窗或周末 → 顺延到下个工作日 09:00。仅作提醒锚点，不与排程器耦合。
+    工作窗口径（与 profile 默认一致，简化版）：工作日 10:00-13:00, 14:00-19:00；
+    非工作窗或周末 → 顺延到下个工作日 10:00。仅作提醒锚点，不与排程器耦合。
     """
     from datetime import time as _time
 
@@ -649,18 +665,18 @@ def _compute_next_review_window(now: datetime, est_wait_hours: float, work_hours
         wd = candidate.weekday()
         if wd < 5:  # 周一..周五
             t = candidate.time()
-            if _time(9, 0) <= t < _time(12, 0) or _time(14, 0) <= t < _time(18, 0):
+            if _time(10, 0) <= t < _time(13, 0) or _time(14, 0) <= t < _time(19, 0):
                 return candidate
-            if t < _time(9, 0):
-                return candidate.replace(hour=9, minute=0, second=0, microsecond=0)
-            if _time(12, 0) <= t < _time(14, 0):
+            if t < _time(10, 0):
+                return candidate.replace(hour=10, minute=0, second=0, microsecond=0)
+            if _time(13, 0) <= t < _time(14, 0):
                 return candidate.replace(hour=14, minute=0, second=0, microsecond=0)
-            # 18:00 之后 → 次日 09:00
-            candidate = (candidate + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            # 19:00 之后 → 次日 10:00
+            candidate = (candidate + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
         else:
-            # 周末 → 下周一 09:00
+            # 周末 → 下周一 10:00
             days_to_mon = 7 - wd
-            candidate = (candidate + timedelta(days=days_to_mon)).replace(hour=9, minute=0, second=0, microsecond=0)
+            candidate = (candidate + timedelta(days=days_to_mon)).replace(hour=10, minute=0, second=0, microsecond=0)
     return candidate
 
 
@@ -1698,6 +1714,15 @@ _DEFAULT_SPARE_WINDOWS = {
 #: 默认评分权重（见 planner §5.1）
 DEFAULT_SCORE_WEIGHTS = {"w_i": 0.30, "w_u": 0.30, "w_b": 0.20, "w_e": 0.15, "w_s": 0.05}
 
+#: v2 排程配置默认值（与 ORM 列默认值 / PG 迁移 / DTO 默认值保持一致，见 rhythm.md §4.4）
+_DEFAULT_WORK_WINDOWS = {
+    "weekday": [["10:00", "13:00"], ["14:00", "19:00"]],
+    "weekend": [],
+}
+_DEFAULT_MORNING_HEALTH = {"start": "07:00", "end": "10:00"}
+_DEFAULT_CAREER_BUFFER_MIN = 45
+_DEFAULT_WORK_GAP_MIN = 15
+
 
 def get_or_create_profile(db: Session) -> RhythmEnergyProfile:
     profile = (
@@ -1722,6 +1747,10 @@ def get_or_create_profile(db: Session) -> RhythmEnergyProfile:
             work_weight=1.0,
             career_weight=0.6,
             score_weights=dict(DEFAULT_SCORE_WEIGHTS),
+            work_windows={"weekday": [["10:00", "13:00"], ["14:00", "19:00"]], "weekend": []},
+            morning_health_window=dict(_DEFAULT_MORNING_HEALTH),
+            career_buffer_minutes=_DEFAULT_CAREER_BUFFER_MIN,
+            work_gap_minutes=_DEFAULT_WORK_GAP_MIN,
         )
         db.add(profile)
         db.commit()
@@ -1747,6 +1776,10 @@ def upsert_energy_profile_impl(
             curve_template={"weekday": _DEFAULT_WEEKDAY_CURVE, "weekend": _DEFAULT_WEEKEND_CURVE},
             spare_time_windows=_DEFAULT_SPARE_WINDOWS,
             score_weights=dict(DEFAULT_SCORE_WEIGHTS),
+            work_windows={"weekday": [["10:00", "13:00"], ["14:00", "19:00"]], "weekend": []},
+            morning_health_window=dict(_DEFAULT_MORNING_HEALTH),
+            career_buffer_minutes=_DEFAULT_CAREER_BUFFER_MIN,
+            work_gap_minutes=_DEFAULT_WORK_GAP_MIN,
         )
         db.add(profile)
         db.flush()
@@ -1755,6 +1788,8 @@ def upsert_energy_profile_impl(
         "daily_energy_budget", "curve_template", "sleep_start", "sleep_end",
         "work_hours_cap", "spare_time_windows", "min_buffer_ratio",
         "life_weight", "work_weight", "career_weight", "score_weights",
+        "work_windows", "morning_health_window", "career_buffer_minutes",
+        "work_gap_minutes",
     ):
         value = getattr(request, field, None)
         if value is not None:
@@ -1816,6 +1851,171 @@ def delete_policy_impl(db: Session, policy_id: int) -> Optional[PolicyResponse]:
     db.delete(policy)
     db.commit()
     return resp
+
+
+# ============================================================================
+# Occupancy（特殊占用，排程器 v2 Step 2.5 的扣除来源）
+# ============================================================================
+
+#: 整日占用覆盖的工作时段（与 _DEFAULT_WORK_WINDOWS 的 weekday 合并区间一致）
+_WHOLE_DAY_OCCUPANCY_START = time(10, 0)
+_WHOLE_DAY_OCCUPANCY_END = time(19, 0)
+
+_OCCUPANCY_SOURCE = "occupancy_api"
+
+
+def _parse_hhmm(v: str) -> time:
+    parts = str(v).split(":")
+    if len(parts) != 2:
+        raise RhythmBadRequestError(f"时间格式应为 HH:MM: {v!r}")
+    try:
+        return time(int(parts[0]), int(parts[1]))
+    except ValueError:
+        raise RhythmBadRequestError(f"时间格式应为 HH:MM: {v!r}")
+
+
+def _occupancy_to_response(block: RhythmTimeBlock, d: date) -> OccupancyResponse:
+    ref = block.ref or {}
+    return OccupancyResponse(
+        id=block.id,
+        date=d,
+        start=block.start_time.strftime("%H:%M") if block.start_time else None,
+        end=block.end_time.strftime("%H:%M") if block.end_time else None,
+        whole_day=bool(ref.get("whole_day")),
+        occupancy_type=ref.get("occupancy_type") or "other",
+        label=ref.get("label") or "",
+        note=ref.get("note") or "",
+    )
+
+
+def _iter_occupancy_blocks(db: Session, day_id: int) -> List[RhythmTimeBlock]:
+    """当日全部 occupancy_api 来源的 occupied 块（不含 MOVED）"""
+    blocks = (
+        db.query(RhythmTimeBlock)
+        .filter(
+            RhythmTimeBlock.day_id == day_id,
+            RhythmTimeBlock.block_type == "occupied",
+            RhythmTimeBlock.status != BlockStatus.MOVED.value,
+        )
+        .order_by(RhythmTimeBlock.start_time)
+        .all()
+    )
+    return [b for b in blocks if (b.ref or {}).get("source") == _OCCUPANCY_SOURCE]
+
+
+def create_occupancy_impl(
+    db: Session, request: OccupancyCreateRequest
+) -> OccupancyResponse:
+    """创建特殊占用（幂等：同日同起止同类型直接返回已有块）。
+
+    存储形态：pinned 的 occupied 时间块，affair_id=None，
+    ref={"source": "occupancy_api", "occupancy_type", "label", "note", "whole_day"}。
+    落位校验由排程器 v2 Step 2.5 的占用扣除自然生效。
+    """
+    d = request.date
+    day = _get_or_create_day(db, d)
+    profile = get_or_create_profile(db)
+
+    whole_day = bool(request.whole_day)
+    if whole_day or (
+        request.occupancy_type == OccupancyType.LEAVE
+        and (not request.start or not request.end)
+    ):
+        whole_day = True
+        start_t, end_t = _WHOLE_DAY_OCCUPANCY_START, _WHOLE_DAY_OCCUPANCY_END
+    else:
+        if not request.start or not request.end:
+            raise RhythmBadRequestError(
+                "start/end 必填（whole_day=true 或 leave 未给起止时覆盖整个工作时段）"
+            )
+        start_t = _parse_hhmm(request.start)
+        end_t = _parse_hhmm(request.end)
+        if end_t <= start_t:
+            raise RhythmBadRequestError("end 必须晚于 start")
+
+    start_dt = datetime.combine(d, start_t)
+    end_dt = datetime.combine(d, end_t)
+
+    # 与睡眠窗重叠 → 400（睡眠守护窗 00:00-sleep_end / sleep_start-24:00）
+    day_start = datetime.combine(d, time.min)
+    day_end = day_start + timedelta(days=1)
+    sleep_start_t = _parse_hhmm(profile.sleep_start or "23:30")
+    sleep_end_t = _parse_hhmm(profile.sleep_end or "07:00")
+    sleep_intervals = [
+        (day_start, datetime.combine(d, sleep_end_t)),
+        (datetime.combine(d, sleep_start_t), day_end),
+    ]
+    for s_iv, e_iv in sleep_intervals:
+        if start_dt < e_iv and s_iv < end_dt:
+            raise RhythmBadRequestError(
+                f"占用 {start_t.strftime('%H:%M')}-{end_t.strftime('%H:%M')} 与睡眠窗重叠"
+            )
+
+    # 幂等：同日同起止同类型 → 返回已有块
+    occupancy_type = request.occupancy_type.value
+    for block in _iter_occupancy_blocks(db, day.id):
+        ref = block.ref or {}
+        if (
+            ref.get("occupancy_type") == occupancy_type
+            and block.start_time == start_dt
+            and block.end_time == end_dt
+        ):
+            return _occupancy_to_response(block, d)
+
+    max_version = (
+        db.query(RhythmTimeBlock)
+        .filter(RhythmTimeBlock.day_id == day.id)
+        .order_by(RhythmTimeBlock.plan_version.desc())
+        .first()
+    )
+    plan_version = (max_version.plan_version or 0) + 1 if max_version else 1
+    block = RhythmTimeBlock(
+        day_id=day.id,
+        affair_id=None,
+        block_type="occupied",
+        start_time=start_dt,
+        end_time=end_dt,
+        status="PLANNED",
+        pinned=True,
+        plan_version=plan_version,
+        ref={
+            "source": _OCCUPANCY_SOURCE,
+            "occupancy_type": occupancy_type,
+            "label": request.label or occupancy_type,
+            "note": request.note or "",
+            "whole_day": whole_day,
+        },
+    )
+    db.add(block)
+    db.commit()
+    db.refresh(block)
+    logger.info(
+        f"[rhythm] occupancy created: {d} {start_dt.strftime('%H:%M')}-"
+        f"{end_dt.strftime('%H:%M')} ({occupancy_type})"
+    )
+    return _occupancy_to_response(block, d)
+
+
+def list_occupancies_impl(db: Session, d: date) -> OccupancyListResponse:
+    day = db.query(Day).filter(Day.date == d).first()
+    if day is None:
+        return OccupancyListResponse(date=d, occupancies=[])
+    return OccupancyListResponse(
+        date=d,
+        occupancies=[_occupancy_to_response(b, d) for b in _iter_occupancy_blocks(db, day.id)],
+    )
+
+
+def delete_occupancy_impl(db: Session, block_id: int) -> None:
+    """删除占用块。仅 source=occupancy_api 的 occupied 块允许删除。"""
+    block = db.query(RhythmTimeBlock).filter(RhythmTimeBlock.id == block_id).first()
+    if block is None or block.block_type != "occupied":
+        raise RhythmNotFoundError(f"占用块 {block_id} 不存在")
+    if (block.ref or {}).get("source") != _OCCUPANCY_SOURCE:
+        raise RhythmBadRequestError(f"块 {block_id} 非 occupancy_api 来源，禁止删除")
+    db.delete(block)
+    db.commit()
+    logger.info(f"[rhythm] occupancy deleted: block {block_id}")
 
 
 # ============================================================================
@@ -2136,21 +2336,23 @@ def review_timespan_impl(db: Session, timespan_id: int) -> ReviewTimespanRespons
 # ============================================================================
 
 
-#: 默认 weekday 模板槽位
+#: 默认 weekday 模板槽位（v2：工作窗 10:00-13:00 / 14:00-19:00，早间健康窗可视化）
 _DEFAULT_WEEKDAY_SLOTS = [
-    TemplateSlot(label="通勤", start="08:20", end="09:00", block_type=BlockType.COMMUTE),
+    TemplateSlot(label="晨起", start="07:00", end="07:30", block_type=BlockType.LIGHT),
+    TemplateSlot(label="早间健康窗", start="07:30", end="08:30", block_type=BlockType.LIGHT),
+    TemplateSlot(label="早餐/通勤", start="08:30", end="09:30", block_type=BlockType.COMMUTE),
     TemplateSlot(
         label="上午工作窗",
-        start="09:00",
-        end="12:00",
+        start="10:00",
+        end="13:00",
         block_type=BlockType.WORK_WINDOW,
         micro_cycle={"work_min": 90, "rest_min": 15},
     ),
-    TemplateSlot(label="午休", start="12:00", end="14:00", block_type=BlockType.REST),
+    TemplateSlot(label="午休", start="13:00", end="14:00", block_type=BlockType.MEAL),
     TemplateSlot(
         label="下午工作窗",
         start="14:00",
-        end="18:00",
+        end="19:00",
         block_type=BlockType.WORK_WINDOW,
         micro_cycle={"work_min": 90, "rest_min": 15},
     ),
@@ -2158,6 +2360,7 @@ _DEFAULT_WEEKDAY_SLOTS = [
 ]
 
 _DEFAULT_WEEKEND_SLOTS = [
+    TemplateSlot(label="晨起", start="08:00", end="08:30", block_type=BlockType.LIGHT),
     TemplateSlot(label="上午", start="09:00", end="12:00", block_type=BlockType.LIGHT),
     TemplateSlot(label="下午", start="14:00", end="18:00", block_type=BlockType.LIGHT),
     TemplateSlot(label="晚间", start="19:30", end="22:30", block_type=BlockType.LIGHT),

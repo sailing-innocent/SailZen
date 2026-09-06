@@ -783,7 +783,13 @@ class DomainMinutes(BaseModel):
 class PlanWarning(BaseModel):
     """计划/时间线警告条目（对象结构，与前端 PlanWarningData 对齐）"""
 
-    code: str = Field(description="警告码，如 budget_insufficient / fixed_conflict / overtime")
+    code: str = Field(
+        description=(
+            "警告码，如 budget_insufficient / fixed_conflict / overtime / "
+            "work_window_full / career_buffer_insufficient / "
+            "morning_health_unplaced / occupied_overlap_sleep / work_overlap_occupancy"
+        )
+    )
     message: str
     affair_id: Optional[int] = None
 
@@ -902,7 +908,12 @@ class RebalanceRequest(BaseModel):
 class EncroachmentItem(BaseModel):
     """侵占事件"""
 
-    type: str = Field(description="protect_window_violation / career_out_of_spare / fixed_conflict / overtime ...")
+    type: str = Field(
+        description=(
+            "protect_window_violation / career_out_of_spare / fixed_conflict / "
+            "overtime / occupied_overlap_sleep / work_overlap_occupancy ..."
+        )
+    )
     message: str
     block_id: Optional[int] = None
     affair_id: Optional[int] = None
@@ -918,6 +929,62 @@ class EnsureTemplatesResponse(BaseModel):
     created: int = 0
     updated: int = 0
     templates: List[DayTemplateResponse] = Field(default_factory=list)
+
+
+# ============================================================================
+# Occupancy DTOs（特殊占用，v2 Step 2.5）
+# ============================================================================
+
+
+class OccupancyType(str, Enum):
+    """占用类型"""
+
+    LEAVE = "leave"  # 请假
+    MEETING = "meeting"  # 会议
+    APPOINTMENT = "appointment"  # 预约
+    TRAVEL = "travel"  # 出行
+    OTHER = "other"
+
+
+class OccupancyCreateRequest(BaseModel):
+    """创建特殊占用（幂等：同日同起止同类型返回已有块）"""
+
+    date: date_type = Field(description="目标日期")
+    start: Optional[str] = Field(default=None, description="开始 HH:MM（whole_day 时可省）")
+    end: Optional[str] = Field(default=None, description="结束 HH:MM（whole_day 时可省）")
+    whole_day: bool = Field(
+        default=False,
+        description="整日占用（覆盖整个工作时段 10:00-19:00，清空当日工作窗）",
+    )
+    occupancy_type: OccupancyType = Field(description="占用类型")
+    label: str = Field(default="", description="展示名")
+    note: str = Field(default="", description="备注")
+
+    @field_validator("start", "end")
+    @classmethod
+    def _check_hhmm(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        TemplateSlot._check_hhmm(v)
+        return v
+
+
+class OccupancyResponse(BaseModel):
+    """特殊占用条目（底层为 pinned 的 occupied 时间块）"""
+
+    id: int = Field(description="时间块 id（删除/排程冻结均以此为准）")
+    date: date_type
+    start: Optional[str] = Field(default=None, description="开始 HH:MM")
+    end: Optional[str] = Field(default=None, description="结束 HH:MM")
+    whole_day: bool = False
+    occupancy_type: str = "other"
+    label: str = ""
+    note: str = ""
+
+
+class OccupancyListResponse(BaseModel):
+    date: date_type
+    occupancies: List[OccupancyResponse] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -940,6 +1007,55 @@ class EnergyProfileUpsertRequest(BaseModel):
     work_weight: Optional[float] = Field(default=None, ge=0)
     career_weight: Optional[float] = Field(default=None, ge=0)
     score_weights: Optional[Dict[str, float]] = None
+    # v2 排程配置（见 rhythm.md §4.4 Step 2.5/7a/7b）
+    work_windows: Optional[Dict[str, List[List[str]]]] = Field(
+        default=None,
+        description='有效工作窗 {"weekday": [["10:00","13:00"]], "weekend": []}（HH:MM）',
+    )
+    morning_health_window: Optional[Dict[str, str]] = Field(
+        default=None,
+        description='早间健康窗 {"start": "07:00", "end": "10:00"}（HH:MM）',
+    )
+    career_buffer_minutes: Optional[int] = Field(default=None, ge=0, le=120)
+    work_gap_minutes: Optional[int] = Field(default=None, ge=5, le=60)
+
+    @field_validator("sleep_start", "sleep_end")
+    @classmethod
+    def _validate_sleep_hhmm(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        TemplateSlot._check_hhmm(v)
+        return v
+
+    @field_validator("work_windows")
+    @classmethod
+    def _validate_work_windows(
+        cls, v: Optional[Dict[str, List[List[str]]]]
+    ) -> Optional[Dict[str, List[List[str]]]]:
+        if v is None:
+            return v
+        for key in ("weekday", "weekend"):
+            for rng in v.get(key) or []:
+                if not isinstance(rng, (list, tuple)) or len(rng) != 2:
+                    raise ValueError(f"work_windows[{key}] 元素应为 [start, end] 对: {rng!r}")
+                TemplateSlot._check_hhmm(rng[0])
+                TemplateSlot._check_hhmm(rng[1])
+        return v
+
+    @field_validator("morning_health_window")
+    @classmethod
+    def _validate_morning_health_window(
+        cls, v: Optional[Dict[str, str]]
+    ) -> Optional[Dict[str, str]]:
+        if v is None:
+            return v
+        start = v.get("start")
+        end = v.get("end")
+        if not start or not end:
+            raise ValueError('morning_health_window 需包含 "start" 与 "end"（HH:MM）')
+        TemplateSlot._check_hhmm(start)
+        TemplateSlot._check_hhmm(end)
+        return v
 
 
 class EnergyProfileResponse(BaseModel):
@@ -959,6 +1075,18 @@ class EnergyProfileResponse(BaseModel):
     work_weight: float = 1.0
     career_weight: float = 0.6
     score_weights: Dict[str, Any] = Field(default_factory=dict)
+    # v2 排程配置默认值与 ORM / 迁移 / model 层常量保持一致
+    work_windows: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "weekday": [["10:00", "13:00"], ["14:00", "19:00"]],
+            "weekend": [],
+        }
+    )
+    morning_health_window: Dict[str, Any] = Field(
+        default_factory=lambda: {"start": "07:00", "end": "10:00"}
+    )
+    career_buffer_minutes: int = Field(default=45, ge=0, le=120)
+    work_gap_minutes: int = Field(default=15, ge=5, le=60)
     updated_at: Optional[datetime] = None
 
 
