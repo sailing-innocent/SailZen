@@ -3,10 +3,12 @@ package com.sailzen.app.core.network
 import com.sailzen.app.core.network.dto.ChapterListItemDto
 import com.sailzen.app.core.network.dto.DocumentNodeDto
 import com.sailzen.app.core.network.dto.EditionDto
+import com.sailzen.app.core.network.dto.NoteContentUpdateRequest
 import com.sailzen.app.core.network.dto.NoteItemContentResponse
 import com.sailzen.app.core.network.dto.NoteItemCreateRequest
 import com.sailzen.app.core.network.dto.NoteItemDto
 import com.sailzen.app.core.network.dto.NoteItemListResponse
+import com.sailzen.app.core.network.dto.NoteItemUpdateRequest
 import com.sailzen.app.core.network.dto.WorkDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -60,6 +62,18 @@ interface TextApi {
 
     @POST("api/v1/text/note")
     suspend fun createNote(@Body body: NoteItemCreateRequest): NoteItemDto
+
+    @PUT("api/v1/text/note/{note_id}")
+    suspend fun updateNote(
+        @Path("note_id") noteId: Int,
+        @Body body: NoteItemUpdateRequest,
+    ): NoteItemDto
+
+    @PUT("api/v1/text/note/{note_id}/content")
+    suspend fun updateNoteContent(
+        @Path("note_id") noteId: Int,
+        @Body body: NoteContentUpdateRequest,
+    ): NoteItemContentResponse
 
     @DELETE("api/v1/text/note/{note_id}")
     suspend fun deleteNote(@Path("note_id") noteId: Int): NoteItemDto

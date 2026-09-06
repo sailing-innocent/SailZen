@@ -250,7 +250,6 @@ class NoteItemCreateRequest(BaseModel):
 
 class NoteItemUpdateRequest(BaseModel):
     """更新笔记索引请求"""
-
     model_config = ConfigDict(from_attributes=True)
 
     category: Optional[str] = Field(default=None, description="笔记分类")
@@ -262,6 +261,9 @@ class NoteItemUpdateRequest(BaseModel):
     title: Optional[str] = Field(default=None, description="标题缓存")
     slug: Optional[str] = Field(default=None, description="URL/文件名友好标识")
     meta_data: Optional[Dict[str, Any]] = Field(default=None, description="扩展元数据")
+    content: Optional[str] = Field(
+        default=None, description="Markdown 原始内容（提供时写入/覆盖对应文件）"
+    )
 
 
 class NoteItemResponse(NoteItemBase):

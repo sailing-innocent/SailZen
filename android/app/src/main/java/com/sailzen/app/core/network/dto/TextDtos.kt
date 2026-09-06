@@ -118,3 +118,32 @@ data class NoteItemCreateRequest(
     val color: String? = null,
     @SerialName("meta_data") val metaData: Map<String, JsonElement?> = emptyMap(),
 )
+
+/**
+ * 更新笔记索引请求，字段与 sail_server.application.dto.text.NoteItemUpdateRequest 对齐。
+ * content 非空时服务端会重写对应 Markdown 文件（S1 修复后生效）。
+ */
+@Serializable
+data class NoteItemUpdateRequest(
+    val category: String? = null,
+    @SerialName("setting_file") val settingFile: String? = null,
+    @SerialName("work_id") val workId: Int? = null,
+    @SerialName("edition_id") val editionId: Int? = null,
+    val title: String? = null,
+    val slug: String? = null,
+    val content: String? = null,
+    @SerialName("node_id") val nodeId: Int? = null,
+    @SerialName("start_offset") val startOffset: Int? = null,
+    @SerialName("end_offset") val endOffset: Int? = null,
+    @SerialName("selected_text") val selectedText: String? = null,
+    val color: String? = null,
+    @SerialName("meta_data") val metaData: Map<String, JsonElement?>? = null,
+)
+
+/**
+ * 更新笔记 Markdown 正文请求，对应 PUT /api/v1/text/note/{note_id}/content。
+ */
+@Serializable
+data class NoteContentUpdateRequest(
+    val content: String,
+)
