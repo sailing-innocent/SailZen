@@ -156,17 +156,20 @@ INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED �
 | 表 | 说明 |
 |----|------|
 | `rhythm_affairs` | 统一事务（kind/kind_meta/state/importance/urgency_ddl/energy_cost/money_cost/budget_id/est_minutes/window/splittable/fallback_plan/recurrence_rule_id/mission_id/day_id/timespan_id/parent_id/ai_hint/score） |
-| `rhythm_time_blocks` | 日时间线块（day_id/affair_id?/block_type×13/start/end/status/pinned/plan_version/ref） |
+| `rhythm_time_blocks` | 日时间线块（day_id/affair_id?/block_type×14/start/end/status/pinned/plan_version/ref） |
 | `rhythm_day_templates` | 基础节奏骨架模板（name/weekday_mask/slots[label,start,end,block_type,micro_cycle]/enabled/priority） |
 | `rhythm_discipline_logs` | 戒律/习惯打卡日志（affair_id/log_date/cycle_key/result/note/source） |
-| `rhythm_energy_profiles` | 精力画像（单行：daily_energy_budget/curve_template/sleep_start/end/work_hours_cap/spare_time_windows/min_buffer_ratio/三域权重/score_weights/is_default） |
+| `rhythm_energy_profiles` | 精力画像（单行：daily_energy_budget/curve_template/sleep_start/end/work_hours_cap/spare_time_windows/min_buffer_ratio/三域权重/score_weights/is_default + v2 配置 work_windows/morning_health_window/career_buffer_minutes/work_gap_minutes） |
 | `rhythm_policies` | 守护策略（rule_type×5/params/scope/enabled） |
 | `rhythm_reviews` | 节奏复盘快照（scope/period_key/rhythm_score/domain_minutes/四项明细/encroachments/ai_summary） |
 
-- block_type: `sleep/commute/work_window/micro_rest/meal/precept/habit/fixed/focus/light/career/rest/buffer/async_kickoff/async_review/async_wait`
+- block_type: `sleep/commute/work_window/micro_rest/meal/precept/habit/fixed/focus/light/career/rest/buffer/async_kickoff/async_review/async_wait/occupied`
 - 打卡 result: precept → `kept/violated/exempt`；habit → `done/missed/exempt`
 - cycle_key: daily → `2026-10-26`；weekly → `W2026-44`（ISO 周）
 - 迁移 SQL: `sail_server/migration/20261026_add_rhythm.sql`（PG）；SQLite 由 create_all 自动建表
+- 迁移 SQL `sail_server/migration/20260906_add_rhythm_profile_v2.sql`：幂等 ADD COLUMN IF NOT EXISTS
+  为 `rhythm_energy_profiles` 增加 v2 四列（work_windows/morning_health_window/
+  career_buffer_minutes/work_gap_minutes）并 DEFAULT 回填
 - Python 迁移 `sail_server/migration/20260906_add_rhythm_is_default.py`：幂等为
   `rhythm_energy_profiles` 增加 `is_default` 列并把 `name='default'` 行回填为 true；
   由 `server.py` 启动时 `_ensure_rhythm_schema` 自动执行（7 表存在性检查 + 迁移注册表），
@@ -210,20 +213,38 @@ money_cost>0 且指定 budget_id：查 finance 预算（total_amount − 关联 
 不足 → `budget_insufficient` warning；非 force 时该事务 unplaced(预算不足)；
 fixed_plan 超预算只警告不阻止钉入。
 
-### 4.4 plan_day 八步铺底（顺序即优先级）
+### 4.4 plan_day 八步铺底（顺序即优先级；v2 纯内核见 model/rhythm_scheduler.py）
 
 1. **睡眠守护**：profile 睡眠窗 → 晨/夜两个 pinned sleep 块
 2. **基础节奏骨架**：命中模板（weekday_mask，priority 高者优先）实例化槽位；
-   work_window 是"容器"（不占排程空间，focus 排入其中）；micro_cycle 生成
+   work_window 是“容器”（不占排程空间，focus 排入其中）；micro_cycle 生成
    informational 微休息提示块（允许 focus 跨越）
+2.5 **特殊占用扣除（v2）**：occupancy_api 来源的 occupied 块 → 占用区间；
+   有效工作窗权威：`profile.work_windows[weekday|weekend]` > 模板 work_window 槽位 > 空；
+   有效工作窗 = 基准 − 占用；占用清空全部有效窗且含 leave/whole_day → `day_leave`
+   （当日 work 域任务全部 unplaced「当日请假/占用」，force 不救援）；
+   同时解析早间健康窗 `[max(sleep_end, cfg.start), cfg.end)`（默认 07:00-10:00）
 3. **刚性钉**：fixed_plan 钉入；与骨架/他块冲突 → `fixed_conflict` warning，**不移动**
 4. **戒律打卡块**：soft precept（block_minutes>0）避开工作窗排轻量块
-5. **缓冲扣除**：min_buffer_ratio × 清醒窗，分散插入（工作窗边界/睡前），
+5. **缓冲扣除**：min_buffer_ratio × 清醒窗，锚点取有效工作窗末尾/睡前，
    不足 → `buffer_short` warning
-6. **事业块**：ACTIVE venture 仅排 spare_time_windows；周预算耗尽 → unplaced
-7. **习惯与工作任务竞争**：habit 按周缺口先排（生活地板），task 按 score 降序
-   贪心进工作窗；放不下 → 超窗 `overtime` warning；
+6. **事业块**：ACTIVE venture 仅排 spare_time_windows，且
+   end ≤ sleep_start − career_buffer_minutes（默认 45）；全被缓冲裁掉 →
+   `career_buffer_insufficient` warning + unplaced
+6.5 **异步等待提示**：DELEGATED async_callback 画 informational async_wait 块
+   （0 精力，不占排程空间）
+7a. **habit**：健康类（category=health 或 info_collection_type=exercise）优先落
+   早间健康窗；非健康 habit 避开早间健康窗（无替代位时才落入）
+7b. **task / async kickoff / async review（work 域）**：只能排入有效工作窗
+   （day_leave 除外）；DayTimeline 维护自由区 + focus 间隙预留
+   （work_gap_minutes 默认 15，预留只挡后续 focus，不挡 habit/light/buffer）；
+   多片段按精力曲线 best-fit（同分取最早，保证确定性）；单段放不下且 splittable →
+   跨片段拆分（每段 ≥ min_chunk_minutes）；仍放不下 → unplaced +
+   `work_window_full` warning（v2 默认禁止超窗，不再生成 overtime 块）；
+   force=true 逃生舱可超窗落自由区（块标记 overtime + `overtime` warning）；
    `max_consecutive_focus` policy（params.minutes）超长的 focus 块后强制插 15min rest
+7c. **间隙物化（v2）**：仍空闲的 gap 预留（≥10min）物化为 rest 块
+   （ref.label=任务间缓冲，ref.gap_of=前序任务标题），计入时间线 buffer_total_minutes
 8. **产出** `PlanDayResponse{blocks, warnings, unplaced}`；plan_version+1，
    旧 PLANNED 非 pinned 块置 MOVED（可回滚）；pinned 与 DONE/DOING 冻结；
    `domain_cap` policy（params.domain/hours）按域核算实际占用（容器块不计），
@@ -236,6 +257,8 @@ fixed_plan 超预算只警告不阻止钉入。
 ### 4.5 侵占检测与再平衡
 
 - `GET /plan/conflicts?date=`：protect_window 穿透 / career 越界 / fixed 被挤 / overtime
+  （force 超窗块）/ occupied 穿透睡眠守护窗（`occupied_overlap_sleep`）/
+  work 块压占用（`work_overlap_occupancy`，force 超窗或历史数据）
 - `POST /plan/rebalance`：增量重跑 plan_day（pinned + DONE/DOING 冻结），
   diff 由 plan_version 推导
 
@@ -282,12 +305,19 @@ GET    /timeline/day?date=          日时间线（blocks+三域统计+待打卡
 POST   /timeline/block              手动建块
 POST   /timeline/block/{id}/status  块反馈 {status: DONE|SKIPPED|DOING|PLANNED}
 POST   /timeline/block/{id}/move    手动拖改（pinned → 409）
+# 占用（特殊占用；存储形态 = pinned occupied 时间块，affair_id=None，ref.source=occupancy_api，无新表）
+POST   /occupancy/                  创建 {date, start?, end?, whole_day?, occupancy_type, label?, note?}
+                                    （幂等：同日同起止同类型返回已有块；whole_day 或 leave 未给起止时
+                                     覆盖工作时段 10:00-19:00；与睡眠守护窗重叠 → 400）
+GET    /occupancy/?date=            某日占用列表
+DELETE /occupancy/{block_id}        删除（仅 occupancy_api 来源可删，否则 400；不存在 404）
 # 计划
 POST   /plan/day                    生成/重生成日计划 {date, preserve_done?, force?}
 POST   /plan/rebalance              再平衡 {date, trigger}
 GET    /plan/conflicts?date=        侵占报告
 # 配置
-GET/PUT /energy/profile             精力画像（单行 upsert）
+GET/PUT /energy/profile             精力画像（单行 upsert；含 v2 配置 work_windows /
+                                    morning_health_window / career_buffer_minutes / work_gap_minutes）
 GET/POST/PUT/DELETE /policy/...     守护策略 CRUD + 启停
 # 复盘
 GET    /review/day?date=            日评分（即时计算并落库）
