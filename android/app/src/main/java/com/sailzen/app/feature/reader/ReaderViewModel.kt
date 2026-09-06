@@ -144,12 +144,23 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val next = state.chapters.getOrNull(state.currentSortIndex + 1) ?: return
         loadChapter(next, 0)
     }
+ fun goToPage(pageIndex: Int) {
+ if (pageIndex in 0 until _uiState.value.pages.size) {
+ _uiState.update { it.copy(currentPage = pageIndex) }
+ saveProgressDebounced()
+ }
+ }
 
-    fun goToPage(pageIndex: Int) {
-        if (pageIndex in 0 until _uiState.value.pages.size) {
-            _uiState.update { it.copy(currentPage = pageIndex) }
-            saveProgressDebounced()
-        }
+ /**
+ * pager 滑动落定后的回写入口（由 snapshotFlow{settledPage} 驱动）。
+ * 在 ViewModel 内做页码比较，避免组合期捕获的 state 过期造成回环。
+ */
+ fun onPageSettled(pageIndex: Int) {
+ if (_uiState.value.currentPage != pageIndex) {
+ goToPage(pageIndex)
+ }
+ }
+
     }
 
     /**
@@ -321,4 +332,16 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun sameAnchor(a: CachedAnnotation, b: CachedAnnotation): Boolean =
         a.nodeId == b.nodeId && a.startOffset == b.startOffset && a.endOffset == b.endOffset
+
+    /**
+     * 放弃未保存的批注草稿（localId == 0）：仅回滚 UI 中的临时高亮，不动数据库。
+     */
+    fun discardDraft(annotation: CachedAnnotation) {
+        if (annotation.localId != 0L) return
+        _uiState.update { state ->
+            state.copy(annotations = state.annotations.filterNot {
+                it.localId == 0L && sameAnchor(it, annotation)
+            })
+        }
+    }
 }

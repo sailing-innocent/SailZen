@@ -125,6 +125,15 @@
     <string name="annotation_empty">暂无批注</string>
     <string name="annotation_dialog_title">编辑批注</string>
     <string name="annotation_hint">写下你的想法…</string>
+    <string name="reader_copy">复制</string>
+    <string name="reader_annotate">批注</string>
+    <string name="reader_highlight_color">高亮颜色</string>
+    <string name="annotation_editor_new">新建批注</string>
+    <string name="annotation_editor_edit">编辑批注</string>
+    <string name="annotation_save">保存</string>
+    <string name="annotation_delete">删除</string>
+    <string name="annotation_delete_title">删除批注</string>
+    <string name="annotation_delete_confirm">确定删除这条批注吗？</string>
     <string name="dialog_confirm">确定</string>
     <string name="dialog_cancel">取消</string>
 </resources>
