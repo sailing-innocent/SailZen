@@ -4,11 +4,35 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { useRhythmStore } from '@lib/store/rhythm'
+import { api_update_review_summary } from '@lib/api/rhythm'
+import type { ReviewData } from '@lib/data/rhythm'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar, ResponsiveContainer } from 'recharts'
 import { formatDate } from './utils'
-import { AlertTriangle, Calendar, TrendingUp } from 'lucide-react'
+import { getISOWeek, getISOWeekYear, setISOWeek, setISOWeekYear } from 'date-fns'
+import { AlertTriangle, Calendar, ChevronLeft, ChevronRight, Save, TrendingUp } from 'lucide-react'
 
-export const ReviewCard = ({ review, title }: { review: ReturnType<typeof useRhythmStore.getState>['dayReview']; title: string }) => {
+// ---------------------------------------------------------------------------
+// Week period_key helpers（后端格式 W{iso_year}-{week:02d}）
+// ---------------------------------------------------------------------------
+
+export const parseWeekKey = (key: string): { year: number; week: number } | null => {
+  const m = /^W(\d{4})-(\d{2})$/.exec(key)
+  if (!m) return null
+  return { year: parseInt(m[1], 10), week: parseInt(m[2], 10) }
+}
+
+export const shiftWeekKey = (key: string, delta: number): string | null => {
+  const parsed = parseWeekKey(key)
+  if (!parsed) return null
+  const monday = setISOWeek(setISOWeekYear(new Date(), parsed.year), parsed.week + delta)
+  return `W${getISOWeekYear(monday)}-${String(getISOWeek(monday)).padStart(2, '0')}`
+}
+
+// ---------------------------------------------------------------------------
+// Review cards
+// ---------------------------------------------------------------------------
+
+export const ReviewCard = ({ review, title }: { review: ReviewData | null; title: string }) => {
   if (!review) {
     return (
       <Card>
@@ -58,6 +82,111 @@ export const ReviewCard = ({ review, title }: { review: ReturnType<typeof useRhy
   )
 }
 
+/** AI 评语编辑：调用 PUT /review/{scope}/{period_key}/summary 后刷新对应复盘 */
+export const ReviewSummaryEditor = ({
+  scope,
+  review,
+}: {
+  scope: 'day' | 'week'
+  review: ReviewData | null
+}) => {
+  const fetchReview = useRhythmStore((s) => s.fetchReview)
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setText(review?.ai_summary ?? '')
+    setError(null)
+  }, [review?.period_key, review?.ai_summary])
+
+  const handleSave = async () => {
+    if (!review) return
+    setSaving(true)
+    setError(null)
+    try {
+      await api_update_review_summary(scope, review.period_key, text)
+      await fetchReview(scope, scope === 'week' ? review.period_key : undefined)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!review) return null
+
+  return (
+    <div className="space-y-2">
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="填写本期复盘评语..."
+        className="text-sm"
+      />
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={handleSave} disabled={saving}>
+          <Save className="h-3 w-3 mr-1" />
+          {saving ? '保存中...' : '保存评语'}
+        </Button>
+        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+      </div>
+    </div>
+  )
+}
+
+/** 周复盘卡片：带相邻周导航（period_key 之间直接跳转） */
+export const WeekReviewCard = () => {
+  const weekReview = useRhythmStore((s) => s.weekReview)
+  const fetchReview = useRhythmStore((s) => s.fetchReview)
+  const [navError, setNavError] = useState<string | null>(null)
+
+  const handleShift = async (delta: number) => {
+    if (!weekReview) return
+    const next = shiftWeekKey(weekReview.period_key, delta)
+    if (!next) {
+      setNavError(`无法解析周键: ${weekReview.period_key}`)
+      return
+    }
+    setNavError(null)
+    await fetchReview('week', next).catch((e) => setNavError(e instanceof Error ? e.message : String(e)))
+  }
+
+  const canNav = weekReview ? parseWeekKey(weekReview.period_key) !== null : false
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!canNav}
+          onClick={() => handleShift(-1)}
+          aria-label="上一周"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <ReviewCard review={weekReview} title="周评分" />
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!canNav}
+          onClick={() => handleShift(1)}
+          aria-label="下一周"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+      {navError && <div className="text-xs text-red-600 dark:text-red-400">{navError}</div>}
+      <ReviewSummaryEditor scope="week" review={weekReview} />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Other review widgets
+// ---------------------------------------------------------------------------
+
 export const EncroachmentList = () => {
   const dashboard = useRhythmStore((s) => s.dashboard)
   const encroachments = dashboard?.conflicts.encroachments ?? []
@@ -93,15 +222,18 @@ export const EncroachmentList = () => {
 
 export const DomainTrendChart = () => {
   const [days, setDays] = useState(30)
-  const [data, setData] = useState<{ date: string; life: number; work: number; career: number }[]>([])
+  const domainTrend = useRhythmStore((s) => s.domainTrend)
   const getDomainTrend = useRhythmStore((s) => s.fetchDomainTrend)
 
   useEffect(() => {
     const end = new Date()
     const start = new Date()
     start.setDate(start.getDate() - days)
-    getDomainTrend(start, end).then((res) => setData(res.days))
+    // fetchDomainTrend 将结果写入 store.domainTrend（Promise<void>），这里订阅 store 而非返回值
+    getDomainTrend(start, end).catch(() => {})
   }, [days, getDomainTrend])
+
+  const data = domainTrend?.days ?? []
 
   return (
     <Card>

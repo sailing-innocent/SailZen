@@ -76,10 +76,14 @@ class TestStats:
             }},
         )
         affair_id = create.json()["id"]
-        client.post(
+        # checkin 要求事务处于 ACTIVE/PAUSED 态，先 confirm 再打卡
+        resp = client.post(f"{BASE}/affair/{affair_id}/state", json={"action": "confirm"})
+        assert resp.status_code in (200, 201)
+        resp = client.post(
             f"{BASE}/checkin/",
             json={"affair_id": affair_id, "result": "done", "log_date": str(TEST_DATE)},
         )
+        assert resp.status_code in (200, 201)
 
         resp = client.get(
             f"{BASE}/checkin/heatmap",

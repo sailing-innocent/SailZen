@@ -36,6 +36,7 @@ from sail_server.application.dto.rhythm import (
     DomainMinutes,
     DomainTrendItem,
     DomainTrendResponse,
+    EnergyProfileResponse,
     EncroachmentItem,
     HabitHeatmapItem,
     HabitHeatmapResponse,
@@ -1691,44 +1692,96 @@ def get_dashboard_impl(db: Session, d: date) -> RhythmDashboardResponse:
 
     一次性返回当日时间线、日/周评分、待打卡、精力画像、策略、冲突、
     以及 INBOX / 逾期 / 今日截止三类优先级事务摘要。
+
+    降级策略：任一子模块装配失败不拖垮整体 500，而是回退到空默认值，
+    在响应 ``degraded`` 字段中记录失效子模块名，并写异常日志。
     """
-    timeline = get_day_timeline_impl(db, d)
-    day_review = get_day_review_impl(db, d)
-    week_review = get_week_review_impl(db, d)
-    checkins = today_checkins_impl(db, d)
-    profile = get_energy_profile_impl(db)
-    policies = list_policies_impl(db, enabled_only=True)
-    conflicts = ConflictReportResponse(date=d, encroachments=detect_conflicts_impl(db, d))
+    started = datetime.now()
+    degraded: List[str] = []
+
+    def _safe(name: str, fn, default):
+        try:
+            return fn()
+        except Exception:
+            logger.exception(f"[rhythm] dashboard 子模块降级: {name}")
+            degraded.append(name)
+            return default
+
+    timeline = _safe(
+        "timeline",
+        lambda: get_day_timeline_impl(db, d),
+        DayTimelineResponse(date=d, day_id=0),
+    )
+    day_review = _safe(
+        "day_review",
+        lambda: get_day_review_impl(db, d),
+        ReviewResponse(scope="day", period_key=d.isoformat()),
+    )
+    week_review = _safe(
+        "week_review",
+        lambda: get_week_review_impl(db, d),
+        ReviewResponse(scope="week", period_key=""),
+    )
+    checkins = _safe(
+        "checkins",
+        lambda: today_checkins_impl(db, d),
+        CheckinTodayResponse(date=d),
+    )
+    profile = _safe(
+        "profile",
+        lambda: get_energy_profile_impl(db),
+        EnergyProfileResponse(id=0, name="default"),
+    )
+    policies = _safe("policies", lambda: list_policies_impl(db, enabled_only=True), [])
+    conflicts = _safe(
+        "conflicts",
+        lambda: ConflictReportResponse(date=d, encroachments=detect_conflicts_impl(db, d)),
+        ConflictReportResponse(date=d, encroachments=[]),
+    )
 
     # INBOX 摘要：所有 kind 的 INBOX 非终态事务
-    inbox_affairs = list_affairs_impl(
-        db, state=AffairState.INBOX.value, limit=50
-    )
-    inbox_summary = _to_priority_items(inbox_affairs, "INBOX 待分拣")
+    def _inbox_summary() -> List[PriorityAffairItem]:
+        inbox_affairs = list_affairs_impl(
+            db, state=AffairState.INBOX.value, limit=50
+        )
+        return _to_priority_items(inbox_affairs, "INBOX 待分拣")
+
+    inbox_summary = _safe("inbox_summary", _inbox_summary, [])
 
     # 逾期摘要：ddl < now 且未终态
-    now = _now()
-    overdue_affairs = list_affairs_impl(
-        db,
-        urgency_ddl_before=now,
-        limit=50,
-    )
-    overdue_summary = [
-        item
-        for item in _to_priority_items(overdue_affairs, "已逾期")
-        if item.affair.state not in TERMINAL_STATES
-    ]
+    def _overdue_summary() -> List[PriorityAffairItem]:
+        now = _now()
+        overdue_affairs = list_affairs_impl(
+            db,
+            urgency_ddl_before=now,
+            limit=50,
+        )
+        return [
+            item
+            for item in _to_priority_items(overdue_affairs, "已逾期")
+            if item.affair.state not in TERMINAL_STATES
+        ]
+
+    overdue_summary = _safe("overdue_summary", _overdue_summary, [])
 
     # 今日截止摘要：ddl 落在当日内
-    day_start = datetime.combine(d, time.min)
-    day_end = day_start + timedelta(days=1)
-    today_due_affairs = list_affairs_impl(
-        db,
-        urgency_ddl_after=day_start,
-        urgency_ddl_before=day_end,
-        limit=50,
+    def _today_due_summary() -> List[PriorityAffairItem]:
+        day_start = datetime.combine(d, time.min)
+        day_end = day_start + timedelta(days=1)
+        today_due_affairs = list_affairs_impl(
+            db,
+            urgency_ddl_after=day_start,
+            urgency_ddl_before=day_end,
+            limit=50,
+        )
+        return _to_priority_items(today_due_affairs, "今日截止")
+
+    today_due_summary = _safe("today_due_summary", _today_due_summary, [])
+
+    elapsed_ms = int((datetime.now() - started).total_seconds() * 1000)
+    logger.info(
+        f"[rhythm] dashboard assembled in {elapsed_ms}ms, degraded={degraded or 'none'}"
     )
-    today_due_summary = _to_priority_items(today_due_affairs, "今日截止")
 
     return RhythmDashboardResponse(
         date=d,
@@ -1742,6 +1795,7 @@ def get_dashboard_impl(db: Session, d: date) -> RhythmDashboardResponse:
         inbox_summary=inbox_summary,
         overdue_summary=overdue_summary,
         today_due_summary=today_due_summary,
+        degraded=degraded,
     )
 def get_week_review_impl(
     db: Session, span: Optional[Union[str, date]] = None, persist: bool = True

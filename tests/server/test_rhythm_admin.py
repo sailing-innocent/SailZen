@@ -71,6 +71,11 @@ BASE = "/api/v1/rhythm"
 
 class TestAdminCalibration:
     def test_recalibrate_profile(self, client: TestClient):
+        # 校准前：默认画像 is_default=True（未校准）
+        resp = client.get(f"{BASE}/energy/profile")
+        assert resp.status_code == 200
+        assert resp.json()["is_default"] is True
+
         resp = client.post(
             f"{BASE}/admin/recalibrate-profile",
             json={"daily_energy_budget": 120, "life_weight": 1.2, "work_weight": 1.0, "career_weight": 0.8},
@@ -78,7 +83,13 @@ class TestAdminCalibration:
         assert resp.status_code == 201
         data = resp.json()
         assert data["daily_energy_budget"] == 120
-        assert data["is_default"] is True
+        # 校准成功后清除未校准标记（I-05 修复：is_default 为真实列，校准后置 False）
+        assert data["is_default"] is False
+
+        # 再次校准仍为 False（不会回退为默认画像）
+        resp = client.get(f"{BASE}/energy/profile")
+        assert resp.status_code == 200
+        assert resp.json()["is_default"] is False
 
     def test_ensure_default_templates(self, client: TestClient):
         resp = client.post(f"{BASE}/admin/ensure-default-templates")

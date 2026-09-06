@@ -213,7 +213,64 @@ Reminder payload 支持以下字段，供 Android 路由使用：
 
 ---
 
-## 11. 相关文件
+---
+
+## 11. 修复记录（M3 前端重构 + 契约加固，2026-09-06）
+
+> 配套设计文档：`doc/design/sail_server/manager/rhythm.md` v1.1。
+
+### 11.1 前端类型与契约修复
+
+| 修复 | 说明 |
+|------|------|
+| `AffairAction` 联合类型扩展 | 补齐 `start/finish/pause/resume/archive/graduate/handoff/return_review/approve/request_revision` 等异步回调动作（后端 DTO 早已支持），一次消除 8 处 TS2345；纯 additive |
+| `TransitAffairOptions.revision_note` | 后端 `dto/rhythm.py` 已定义该字段，前端 options 透传补齐 |
+| `api/config.ts` 声明 `process` | tsconfig.app.json 无 node types（TS2591），用模块级 `declare const process` 由 vite define 替换；不用 `import.meta.env`（jest 下 TS1343） |
+| heatmap 测试夹具 | 打卡（checkin）前必须先将事务 `confirm` 出 INBOX（INBOX 不允许打卡）；E2E S7 与测试夹具均按"先 confirm 再 checkin"顺序 |
+| 写端点返回 201 | Litestar POST 默认 201：state 转移、checkin、plan/day、recalibrate 均返回 201（非 200），断言勿写死 |
+
+### 11.2 验证基线（预存在问题，非本次引入）
+
+- **tsc 权威命令**：`cd site && npx tsc --noEmit -p tsconfig.app.json --ignoreDeprecations 6.0`。
+  注意 `site/tsconfig.json` 是 solution stub（仅 references，不检查任何文件）；
+  `node_modules/.tmp/tsconfig.app.tsbuildinfo` 残留会导致增量检查静默跳过——
+  结果异常时先删该文件再重跑。本次触碰文件全部 clean；全量 540 个错误为基线。
+- **540 个 tsc 错误（基线）**：主要是 `*.test.ts` 在 app 配置下缺 jest 全局类型，
+  以及未触碰的 finance/dag/challenge/text/ui 模块。
+- **17 个 jest 失败（基线）**：`utils/money`(1) / `api/money`(3) / `store/money`(9) /
+  `api/health`(4，ECONNREFUSED 集成测试)。修复类型错误后这些套件从"编译失败"
+  变为"运行失败"，失败数 8→17 是基线显形，非劣化。本次触碰套件全绿（67 pass）。
+
+### 11.3 后端契约变更（前后端同迭代发布）
+
+- dashboard 新增 `degraded: string[]`（10 个子装配 `_safe` 降级名单，正常 `[]`）。
+- `warnings` 从 `List[str]` 升级为 `PlanWarning{code,message,affair_id?}[]`——**破坏性**。
+- `AffairUpdateRequest` 新增 `clear_urgency_ddl` / `clear_window`；可空字段三态语义
+  （unset 保留 / null 清空 / 值覆盖）；`kind_meta` 明确整体替换。
+- venture 目标日写时同步（`_sync_venture_target_date` touched/ddl_wins）+ 更新级联清空。
+- `rhythm_energy_profiles.is_default` 真实列 + 迁移 `20260906_add_rhythm_is_default`；
+  recalibrate 采用当前值后置 false。
+- 里程碑单一来源 = progress API 派生，`kind_meta.milestones` 废弃。
+
+### 11.4 验证结果
+
+| 项目 | 命令 | 结果 |
+|------|------|------|
+| 后端 pytest | `uv run pytest tests/server -m server -q` | 138 passed |
+| 前端 jest | `cd site && npx cross-env NODE_ENV=development jest` | 67 pass / 17 基线失败 |
+| 前端构建 | `pnpm run build-site` | PASS（rhythm chunk 128.78 kB） |
+| E2E 冒烟（9 场景 21 断言） | `.kimix_cache/e2e_smoke.py`（stdlib urllib）对 `uv run python server.py`（sqlite 1975 端口） | **21/21 PASS**（fresh DB）：鉴权 401、/rhythm 302→`/?path=rhythm`、degraded=[]、三态清空、venture 双向同步、recalibrate、confirm→checkin、plan/conflicts、周评写回 |
+| 性能门槛 | `.kimix_cache/perf_dashboard.py` 灌 1002 事务后测 dashboard ×10 | **median 52.3ms / max 62.7ms**（门槛 <800ms） |
+| 健康巡检 | `uv run python scripts/rhythm_diagnose.py` | 10/10 OK，累计 297ms，degraded=[] |
+
+### 11.5 发布与回滚
+
+- 不直接 push；变更经 `git format-patch` 输出到 `patches/2026-09-06-SailZen-m3-rhythm-contract.patch`，在其他环境 apply。
+- 回滚：还原工作树即可；`is_default` 列对旧代码无感（Boolean 默认 true，旧代码不读）。
+
+---
+
+## 12. 相关文件
 
 - `sail_server/model/pems_legacy.py`：审计参考（原 PEMS 模型）。
 - `sail_server/model/rhythm.py`：Rhythm 业务模型。

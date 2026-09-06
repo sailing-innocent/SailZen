@@ -47,7 +47,6 @@ class SailServer:
             "/necessity",
             "/file-storage",
             "/dag-pipeline",
-            "/rhythm",
         ]
         self.api_router = None
         self.debug = True
@@ -205,6 +204,12 @@ class SailServer:
         except Exception as e:
             logger.warning(f"[Startup] Failed to initialize time system: {e}")
 
+        # Rhythm schema 自检：确保 rhythm_* 表与迁移列存在（幂等）
+        try:
+            self._ensure_rhythm_schema(logger)
+        except Exception as e:
+            logger.warning(f"[Startup] Rhythm schema self-check failed: {e}")
+
         # 启动天气后台更新循环（失败仅告警，不影响服务启动）
         try:
             if os.environ.get("WEATHER_ENABLED", "true").lower() == "true":
@@ -230,6 +235,44 @@ class SailServer:
                 logger.info("[Startup] Reminder scan loop started")
         except Exception as e:
             logger.warning(f"[Startup] Failed to start reminder scan loop: {e}")
+
+    def _ensure_rhythm_schema(self, logger) -> None:
+        """Rhythm schema 自检（幂等，不抛异常）。
+
+        覆盖两类生产环境 schema 漂移：
+        1. rhythm_* 表整体缺失（老库升级）—— 以 ORM metadata 为口径建表；
+        2. 已存在表缺失新列（如 rhythm_energy_profiles.is_default）—— 走迁移脚本。
+        Database init 阶段已执行 create_all + run_migrations，此处为启动期兜底校验。
+        """
+        from sqlalchemy import inspect
+
+        from sail_server.db import Database
+        from sail_server.migration import run_migrations
+
+        db = Database.get_instance().get_db_session()
+        try:
+            engine = db.bind
+            # 1) 幂等建表（checkfirst=True 语义）
+            run_migrations(db)
+            # 2) 校验核心表确实存在
+            insp = inspect(engine)
+            tables = set(insp.get_table_names())
+            rhythm_tables = {
+                "rhythm_affairs",
+                "rhythm_time_blocks",
+                "rhythm_day_templates",
+                "rhythm_discipline_logs",
+                "rhythm_energy_profiles",
+                "rhythm_policies",
+                "rhythm_reviews",
+            }
+            missing = sorted(rhythm_tables - tables)
+            if missing:
+                logger.warning(f"[Startup] Rhythm tables still missing: {missing}")
+            else:
+                logger.info("[Startup] Rhythm schema self-check passed")
+        finally:
+            db.close()
 
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger

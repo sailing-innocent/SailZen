@@ -37,7 +37,9 @@ describe('api_get_affairs query parameters', () => {
     expect(url).toContain('domain=work')
   })
 
-  test('expands multi-valued state/domain into separate requests', async () => {
+  test('sends multi-valued state/domain as repeated query params in one request', async () => {
+    // 后端 list_affairs_impl 的 state/domain/kind 均支持多值数组，
+    // 无需 state×domain 笛卡尔积循环，单请求即可拿到并集。
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ affairs: [], total: 0 }),
@@ -51,23 +53,15 @@ describe('api_get_affairs query parameters', () => {
       domain: ['work', 'career'],
     })
 
-    expect(fetchMock).toHaveBeenCalledTimes(2 * 2)
-    const urls = fetchMock.mock.calls.map((call) => call[0] as string)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = fetchMock.mock.calls[0][0] as string
 
-    // Each request contains exactly one state and one domain value
-    const stateDomainPairs = urls.map((url) => {
-      const state = new URL(url).searchParams.get('state')
-      const domain = new URL(url).searchParams.get('domain')
-      return `${state}:${domain}`
-    })
-    expect(new Set(stateDomainPairs).size).toBe(4)
-    expect(stateDomainPairs).toEqual(
-      expect.arrayContaining(['INBOX:work', 'INBOX:career', 'ACTIVE:work', 'ACTIVE:career'])
-    )
-
-    // kind is preserved in every request
-    for (const url of urls) {
-      expect(url).toContain('kind=venture')
-    }
+    // state/domain 以重复 query param 传递多值
+    expect(url).toContain('state=INBOX')
+    expect(url).toContain('state=ACTIVE')
+    expect(url).toContain('domain=work')
+    expect(url).toContain('domain=career')
+    expect(url).not.toContain('state=INBOX,ACTIVE')
+    expect(url).toContain('kind=venture')
   })
 })

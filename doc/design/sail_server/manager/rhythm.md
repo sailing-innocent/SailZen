@@ -1,7 +1,12 @@
 # Rhythm — 生活/工作节奏综合优先级调节工具
 
-> **版本**: v1.0 | **更新**: 2026-10-26 | **状态**: ✅ M1(服务端)/M2(CLI) 已实现
-> **实现**: `sail_server/{infrastructure/orm,application/dto,model,controller,router}/rhythm.py` + `sail_server/model/rhythm_planner.py` + `sailzen/cli/rhythm_client.py` + `tests/server/test_rhythm_*.py` + `scripts/rhythm_smoke.py`
+> **版本**: v1.1 | **更新**: 2026-09-06 | **状态**: ✅ M1(服务端)/M2(CLI) 已实现；M3 前端重构 + 契约加固已完成
+> **实现**: `sail_server/{infrastructure/orm,application/dto,model,controller,router}/rhythm.py` + `sail_server/model/rhythm_planner.py` + `sailzen/cli/rhythm_client.py` + `tests/server/test_rhythm_*.py` + `scripts/rhythm_smoke.py` + `scripts/rhythm_diagnose.py`（M3 只读健康巡检）
+>
+> **v1.1 变更摘要**：dashboard 新增 `degraded[]` 降级字段与结构化 `PlanWarning`；
+> `PUT /affair/{id}` 三态更新语义 + `clear_*` 显式清除；`kind_meta` 明确为整体替换；
+> venture 目标日写时同步规则细化（含级联清空）；`rhythm_energy_profiles.is_default`
+> 落为真实列并配 Python 迁移；里程碑单一来源改为 progress API 派生。
 
 生活与工作同等重要。Rhythm 把生活必须项（戒律/习惯/基础节奏/刚性规划）与工作事项
 （一次性任务/长期维护）及个人长期事业（venture）放进**同一优先级坐标系**，
@@ -59,23 +64,47 @@
 校验策略：M1 宽松（缺字段补默认值；类型错误 400），M2 起 CLI `hint`/`capture`/`split`
 与服务端写入共用 `sail_server.application.dto.rhythm.validate_kind_meta` 同源校验。
 
-### venture 目标日同步约定
+### venture 目标日同步约定（写时同步 + 更新级联清空）
 
 `venture` 的目标日同时存在于两个字段：
 
 - `kind_meta.target_date`：venture 专属目标日，排程器与进度统计消费它。
 - `urgency_ddl`：通用截止时间，列表过滤、逾期检测、DDL 范围查询消费它。
 
-为保证两端一致，写入时（`create_affair_impl` / `update_affair_impl`）会调用
-`_sync_venture_target_date`：
+写入侧规则（`create_affair_impl` / `update_affair_impl` 统一经
+`_sync_venture_target_date(affair, touched, ddl_wins)`）：
 
-1. 若 `kind_meta.target_date` 有值，以其为准同步到 `urgency_ddl`（取当天 00:00:00）。
-2. 若 `kind_meta.target_date` 为空但 `urgency_ddl` 有值，反向补全 `target_date`。
-3. 两者皆空则保持不变。
-4. 仅对 `kind==venture` 生效。
+1. 仅对 `kind==venture` 生效；非 venture 不做任何联动。
+2. `touched=True`（本次请求显式携带 `kind_meta` 或 `urgency_ddl`）时：
+   - `kind_meta.target_date` 有值 → 以其为准同步 `urgency_ddl`（当天 00:00:00）。
+   - `target_date` 为空但 `urgency_ddl` 有值 → 反向补全 `target_date`（取 ddl 日期部分）。
+   - 两者皆空 → 保持不变。
+3. `ddl_wins=True`（请求显式携带 `urgency_ddl` 且未整体替换 kind_meta）时方向反转：
+   以 `urgency_ddl` 为准回写 `target_date`。
+4. **级联清空**：`kind_meta` 是整体替换语义（见下节），替换后缺失 `target_date`
+   即视为"目标日已清空"，更新层联动清空 `urgency_ddl` 并输出 WARNING 日志
+   `venture #N: target_date 已清空，联动清空 urgency_ddl`。反向仅补全、不联动清空。
 
 读取侧（`venture_progress_impl`、`compute_urgency` 的 VENTURE 分支）对旧数据做
 兜底回退：当 `kind_meta.target_date` 缺失时，使用 `urgency_ddl` 的日期部分。
+
+### 更新语义（PUT /affair/{id}：三态 + clear_* 显式清除）
+
+`AffairUpdateRequest` 可空字段遵循**三态语义**（按 `model_fields_set` 判定，
+避免 "null 到底是清空还是没传" 的歧义）：
+
+- 字段**未出现**（unset）→ 保留原值；
+- 字段显式为 **null** → 清空该字段；
+- 字段为**具体值** → 覆盖赋值。
+
+对 `urgency_ddl`、`window`（起止窗口）这类语义易混淆的字段，另设显式清除开关
+`clear_urgency_ddl: bool`、`clear_window: bool`：置 `true` 无条件清空对应字段
+并记 WARNING 日志，优先级高于三态赋值。前端 DTO（`AffairUpdateProps`）据此生成
+`clear_*` 标志。
+
+**`kind_meta` 整体替换（wholesale replace）**：请求中给出即全量覆盖，未给出的键
+视为删除；服务端按 kind 分发校验（M1 宽松：缺字段补默认值、类型错误 400），
+`kind` 改判时按新 kind 重新校验。前端编辑表单必须"读全量 → 改局部 → 写全量"。
 
 ## 2. 双生命周期状态机
 
@@ -130,7 +159,7 @@ INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED �
 | `rhythm_time_blocks` | 日时间线块（day_id/affair_id?/block_type×13/start/end/status/pinned/plan_version/ref） |
 | `rhythm_day_templates` | 基础节奏骨架模板（name/weekday_mask/slots[label,start,end,block_type,micro_cycle]/enabled/priority） |
 | `rhythm_discipline_logs` | 戒律/习惯打卡日志（affair_id/log_date/cycle_key/result/note/source） |
-| `rhythm_energy_profiles` | 精力画像（单行：daily_energy_budget/curve_template/sleep_start/end/work_hours_cap/spare_time_windows/min_buffer_ratio/三域权重/score_weights） |
+| `rhythm_energy_profiles` | 精力画像（单行：daily_energy_budget/curve_template/sleep_start/end/work_hours_cap/spare_time_windows/min_buffer_ratio/三域权重/score_weights/is_default） |
 | `rhythm_policies` | 守护策略（rule_type×5/params/scope/enabled） |
 | `rhythm_reviews` | 节奏复盘快照（scope/period_key/rhythm_score/domain_minutes/四项明细/encroachments/ai_summary） |
 
@@ -138,6 +167,11 @@ INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED �
 - 打卡 result: precept → `kept/violated/exempt`；habit → `done/missed/exempt`
 - cycle_key: daily → `2026-10-26`；weekly → `W2026-44`（ISO 周）
 - 迁移 SQL: `sail_server/migration/20261026_add_rhythm.sql`（PG）；SQLite 由 create_all 自动建表
+- Python 迁移 `sail_server/migration/20260906_add_rhythm_is_default.py`：幂等为
+  `rhythm_energy_profiles` 增加 `is_default` 列并把 `name='default'` 行回填为 true；
+  由 `server.py` 启动时 `_ensure_rhythm_schema` 自动执行（7 表存在性检查 + 迁移注册表），
+  失败只记日志、不阻断启动。里程碑不落 kind_meta：单一来源为服务端 progress 派生
+  （子事务行），`kind_meta.milestones` 已废弃
 
 ## 4. 核心算法（model/rhythm_planner.py，服务端确定性）
 
@@ -224,7 +258,7 @@ rhythm_score = 0.25*precept_compliance_rate + 0.20*habit_consistency
 POST   /affair/                     快速捕获（仅 title 即可，kind=generic → INBOX）
 GET    /affair/                     列表（state/domain/kind[多值]/day_id/parent_id）
 GET    /affair/{id}                 详情
-PUT    /affair/{id}                 编辑（kind 改判 + kind_meta 校验 + ai_hint 写回）
+PUT    /affair/{id}                 编辑（三态语义 + clear_urgency_ddl/clear_window + kind_meta 整体替换 + kind 改判重校验 + ai_hint 写回）
 DELETE /affair/{id}                 删除
 POST   /affair/{id}/state           状态转移 {action, defer_to?, defer_end?, force?}
 POST   /affair/{id}/confirm-hint    采纳/驳回 AI 建议 {accept, overrides?}
@@ -240,9 +274,9 @@ POST   /checkin/                    打卡 {affair_id, result, log_date?, note?,
 GET    /checkin/                    日志查询
 GET    /checkin/today?date=         今日待打卡清单
 # 事业
-GET    /venture/{id}/progress       倒排进度
-POST   /venture/{id}/milestone      添加里程碑（timespan_id 锚定）
-POST   /venture/milestone/{mid}/done 勾选里程碑完成
+GET    /venture/{id}/progress       倒排进度（含里程碑列表——里程碑单一来源，前端只经此读写）
+POST   /venture/{id}/milestone      添加里程碑（timespan_id 锚定；落库后由 progress 派生）
+POST   /venture/milestone/{mid}/done  勾选里程碑完成
 # 时间线
 GET    /timeline/day?date=          日时间线（blocks+三域统计+待打卡）
 POST   /timeline/block              手动建块
@@ -369,18 +403,20 @@ token 取 `SAILZEN_API_TOKEN`。
 
 `GET /api/v1/rhythm/dashboard?date=YYYY-MM-DD` 是 PC Dashboard 与 Android 提醒端唯一的共享数据入口，一次性返回当日全部数据：
 
-- `timeline`: 当日时间线（blocks + 三域分钟 + 缓冲 + 未放置 + warnings）
+- `timeline`: 当日时间线（blocks + 三域分钟 + 缓冲 + 未放置 + warnings；`warnings` 为结构化 `PlanWarning{code, message, affair_id?}` 对象数组，不再是字符串）
 - `day_review`: 当日节奏评分（即时计算并落库）
 - `week_review`: 本周节奏评分
 - `today_checkins`: 今日 precept/habit 待打卡清单
-- `energy_profile`: 当前精力画像（`is_default=true` 表示默认导入未校准）
+- `energy_profile`: 当前精力画像（`is_default=true` 表示默认导入未校准；该字段是真实列，由迁移 `20260906_add_rhythm_is_default` 回填，`POST /admin/recalibrate-profile` 采用当前值后将其置 false）
 - `policies`: 启用的守护策略列表
 - `conflicts`: 今日冲突/侵占报告
 - `inbox_summary`: INBOX 优先级事务摘要
 - `overdue_summary`: 逾期事务摘要
 - `today_due_summary`: 今日截止事务摘要
+- `degraded`: 字符串数组——dashboard 的 10 个子装配（timeline/day_review/week_review/today_checkins/energy_profile/policies/conflicts/inbox_summary/overdue_summary/today_due_summary）中 `_safe` 降级兜底的段落名；正常为 `[]`。前端据此显示"部分数据降级"横幅并支持分段重试；Android 端可忽略（additive）。
 
 所有字段同时服务于 Dashboard 可视化与 Android 提醒通知，新增字段需评估双端影响。
+`warnings` 字段从 `List[str]` 升级为 `PlanWarning[]` 是**破坏性变更**，需前后端同迭代发布。
 
 ### 11.2 Dashboard 页面结构
 
@@ -398,7 +434,7 @@ token 取 `SAILZEN_API_TOKEN`。
 
 首次进入 Dashboard 时，若 `energy_profile.is_default=true` 或缺少 templates，顶部 Banner 提示校准：
 
-- `POST /api/v1/rhythm/admin/recalibrate-profile`: 覆盖/创建默认精力画像。
+- `POST /api/v1/rhythm/admin/recalibrate-profile`: 采用当前画像值覆盖/创建 `name='default'` 行，成功后 `is_default=false`（前端不再强制写死 name，直接提交编辑器当前字段）。
 - `POST /api/v1/rhythm/admin/ensure-default-templates`: 幂等生成 weekday/weekend/travel_day 三套默认模板。
 - `POST /api/v1/rhythm/admin/migrate-legacy-missions`: 将旧 `project.projects` / `project.missions` 映射为 `rhythm_affairs`（venture / task_oneoff），按 `mission_id` 与 `ref.legacy_id` 幂等去重。
 
@@ -408,7 +444,19 @@ token 取 `SAILZEN_API_TOKEN`。
 - `GET /api/v1/rhythm/review/domain-trend?start_date=&end_date=`: 按天返回 life/work/career 投入分钟数。
 - `GET /api/v1/rhythm/venture/{id}/burndown`: 事业每周计划/实际投入小时 + 里程碑完成数。
 
-### 11.5 前端实现文件
+### 11.5 健康诊断脚本
+
+`scripts/rhythm_diagnose.py` 以只读方式巡检 10 个 GET 端点（dashboard、timeline、
+day-view、checkin/today、venture progress、plan conflicts、review/day、review/week、
+energy/profile、review/domain-trend 等），逐步输出 `[OK|FAIL] 状态码 耗时 摘要`，
+摘要包含 dashboard degraded/blocks/inbox/overdue/today/profile.is_default 等关键计数；
+任一步非 2xx 即以 exit code 1 结束，可接入定时巡检：
+
+```
+SAILZEN_API_TOKEN=xxx uv run python scripts/rhythm_diagnose.py --url http://127.0.0.1:1974 --date 2026-09-06
+```
+
+### 11.6 前端实现文件
 
 | 文件 | 职责 |
 |------|------|
@@ -417,4 +465,8 @@ token 取 `SAILZEN_API_TOKEN`。
 | `site/src/lib/data/rhythm.ts` | Dashboard DTO 类型 |
 | `site/src/lib/store/rhythm.ts` | 统一 Rhythm Zustand store |
 | `site/src/components/rhythm/*.tsx` | Dashboard 各视图组件 |
+
+前端分层：`pages/rhythm.tsx` → `components/rhythm/*` + `lib/store/rhythm.ts`（7 个
+分片 + 段级 loading/error + `degraded` 状态 + 事务过滤器）→ `lib/api/{rhythm,affair}.ts`
+→ `lib/data/{rhythm,affair}.ts`（DTO 类型 + `syncVentureTargetDate` 目标日联动）。
 

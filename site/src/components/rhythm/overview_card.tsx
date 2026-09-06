@@ -3,7 +3,6 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import type { RhythmDashboardData, EnergyProfileData, DomainMinutesData } from '@lib/data/rhythm'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { minutesToHours } from './utils'
 
 interface OverviewCardProps {
   dashboard: RhythmDashboardData | null
@@ -95,7 +94,7 @@ export const DomainPieChart = ({ minutes, profile }: { minutes: DomainMinutesDat
                   <Cell key={entry.name} fill={domainColors[entry.name] ?? '#8884d8'} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => [`${value} 分钟`, '']} />
+              <Tooltip formatter={(value) => [`${value} 分钟`, '']} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -141,7 +140,8 @@ export const WarningList = ({ dashboard }: OverviewCardProps) => {
         <div className="space-y-2">
           {warnings.map((w, idx) => (
             <div key={idx} className="text-sm p-2 bg-yellow-50 dark:bg-yellow-950 rounded">
-              {typeof w === 'string' ? w : (w as { message?: string }).message ?? JSON.stringify(w)}
+              <span className="text-xs text-muted-foreground mr-1">[{w.code}]</span>
+              {w.message}
             </div>
           ))}
           {encroachments.map((e, idx) => (

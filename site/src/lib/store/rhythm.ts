@@ -2,11 +2,22 @@
  * @file rhythm.ts
  * @brief Rhythm Dashboard Zustand store
  * @description
- *   统一 Rhythm Dashboard 状态管理：聚合数据、时间线、事务、配置、复盘统计。
+ * 统一 Rhythm Dashboard 状态管理：聚合数据、时间线、事务、配置、复盘统计。
+ * 错误分片：dashboard/timeline/affairs/ventures/checkins/review/config 七个分片
+ * 各自维护 {loading, error}，任何分片失败不污染全局，可 retrySection 单分片重试。
  */
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
-import type { AffairData, AffairCreateProps, AffairUpdateProps } from '@lib/data/affair'
+import {
+  AffairKind,
+  AffairState,
+  type AffairData,
+  type AffairCreateProps,
+  type AffairUpdateProps,
+  type AffairKindValue,
+  type AffairDomainValue,
+  type AffairStateValue,
+} from '@lib/data/affair'
 import type { AffairAction } from '@lib/api/affair'
 import {
   api_get_dashboard,
@@ -16,7 +27,6 @@ import {
   api_get_conflicts,
   api_get_day_review,
   api_get_week_review,
-  api_update_review_summary,
   api_get_encroachments,
   api_get_domain_trend,
   api_get_today_checkins,
@@ -46,7 +56,7 @@ import {
   api_transit_affair_state,
   api_confirm_hint,
   api_split_affair,
-  api_get_affairs_by_kind,
+  api_get_affairs,
 } from '@lib/api/affair'
 import type {
   RhythmDashboardData,
@@ -70,7 +80,89 @@ import type {
   PlanOptions,
   BlockStatusValue,
   CheckinResultValue,
+  PriorityAffairItemData,
 } from '@lib/data/rhythm'
+
+// ============================================================================
+// 错误分片
+// ============================================================================
+
+/** 状态分片键：每个分片独立维护 loading/error */
+export type RhythmSection =
+  | 'dashboard'
+  | 'timeline'
+  | 'affairs'
+  | 'ventures'
+  | 'checkins'
+  | 'review'
+  | 'config'
+
+export interface SectionStatus {
+  loading: boolean
+  error: string | null
+}
+
+const EMPTY_SECTION: SectionStatus = { loading: false, error: null }
+
+const initialSections = (): Record<RhythmSection, SectionStatus> => ({
+  dashboard: { ...EMPTY_SECTION },
+  timeline: { ...EMPTY_SECTION },
+  affairs: { ...EMPTY_SECTION },
+  ventures: { ...EMPTY_SECTION },
+  checkins: { ...EMPTY_SECTION },
+  review: { ...EMPTY_SECTION },
+  config: { ...EMPTY_SECTION },
+})
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+// ============================================================================
+// 事务过滤器（事务中心工具栏）
+// ============================================================================
+
+export interface AffairFilterState {
+  search: string
+  states: AffairStateValue[]
+  domains: AffairDomainValue[]
+  kinds: AffairKindValue[]
+}
+
+const initialAffairFilters = (): AffairFilterState => ({
+  search: '',
+  states: [],
+  domains: [],
+  kinds: [],
+})
+
+/** fetchAffairsByKind 拉取的非终态集合（DONE/CANCELED/ARCHIVED/COMPLETED 不进看板） */
+const BOARD_STATES: AffairStateValue[] = [
+  AffairState.INBOX,
+  AffairState.PLANNED,
+  AffairState.SCHEDULED,
+  AffairState.DOING,
+  AffairState.DEFERRED,
+  AffairState.ACTIVE,
+  AffairState.PAUSED,
+  AffairState.KICKOFF,
+  AffairState.DELEGATED,
+  AffairState.REVIEWING,
+]
+
+const BOARD_KINDS: AffairKindValue[] = [
+  AffairKind.BASE_RHYTHM,
+  AffairKind.PRECEPT,
+  AffairKind.HABIT,
+  AffairKind.FIXED_PLAN,
+  AffairKind.TASK_ONEOFF,
+  AffairKind.TASK_MAINTENANCE,
+  AffairKind.VENTURE,
+  AffairKind.ASYNC_CALLBACK,
+  AffairKind.GENERIC,
+]
+
+const filterByKind = (list: AffairData[], kind: AffairKindValue): AffairData[] =>
+  list.filter((a) => a.kind === kind)
 
 export interface RhythmState {
   // 全局配置
@@ -91,6 +183,13 @@ export interface RhythmState {
   encroachments: EncroachmentData[]
   domainTrend: DomainTrendData | null
 
+  // Dashboard 摘要（优先级事务）
+  inboxSummary: PriorityAffairItemData[]
+  overdueSummary: PriorityAffairItemData[]
+  todayDueSummary: PriorityAffairItemData[]
+  /** dashboard 装配失败的子模块名（后端 degraded 字段） */
+  degraded: string[]
+
   // 事务
   inbox: AffairData[]
   activeAffairs: AffairData[]
@@ -101,14 +200,24 @@ export interface RhythmState {
   maintenanceTasks: AffairData[]
   asyncCallbacks: AffairData[]
 
-  // 加载态
+  // 事务中心过滤器
+  affairFilters: AffairFilterState
+
+  // 分片状态
+  sections: Record<RhythmSection, SectionStatus>
+
+  // 加载态（legacy：任意分片 loading 的聚合，新代码请用 sections[section].loading）
   isLoading: boolean
+  // 全局错误（legacy：仅 dashboard 致命失败写入，分片错误请用 sections[section].error）
   error: string | null
 
   // actions
   setSelectedDate: (date: string | Date) => void
+  sectionStatus: (section: RhythmSection) => SectionStatus
+  retrySection: (section: RhythmSection) => Promise<void>
   fetchDashboard: (date?: string | Date) => Promise<void>
   fetchDayTimeline: (date?: string | Date) => Promise<void>
+  fetchConflicts: (date?: string | Date) => Promise<void>
   planDay: (date?: string | Date, options?: PlanOptions) => Promise<PlanDayData>
   rebalanceDay: (date?: string | Date, trigger?: string) => Promise<PlanDayData>
   fetchReview: (scope: 'day' | 'week', dateOrSpan?: string) => Promise<ReviewData>
@@ -139,6 +248,8 @@ export interface RhythmState {
   deleteTemplate: (id: number) => Promise<void>
   fetchAllAffairs: (filters?: Record<string, unknown>) => Promise<void>
   fetchAffairsByKind: () => Promise<void>
+  setAffairFilters: (patch: Partial<AffairFilterState>) => void
+  resetAffairFilters: () => void
   createAffair: (props: AffairCreateProps) => Promise<AffairData>
   updateAffair: (id: number, props: AffairUpdateProps) => Promise<AffairData>
   transitAffair: (id: number, action: AffairAction, options?: Record<string, unknown>) => Promise<AffairData>
@@ -179,314 +290,472 @@ const removeAffairFromLists = (state: RhythmState, id: number): Partial<RhythmSt
   asyncCallbacks: state.asyncCallbacks.filter((a) => a.id !== id),
 })
 
-export const useRhythmStore: UseBoundStore<StoreApi<RhythmState>> = create<RhythmState>((set, get) => ({
-  energyProfile: null,
-  policies: [],
-  templates: [],
-  selectedDate: toISODate(new Date()),
-  dashboard: null,
-  dayTimeline: null,
-  dayReview: null,
-  weekReview: null,
-  todayCheckins: null,
-  conflicts: null,
-  encroachments: [],
-  domainTrend: null,
-  inbox: [],
-  activeAffairs: [],
-  allAffairs: [],
-  ventures: [],
-  habits: [],
-  precepts: [],
-  maintenanceTasks: [],
-  asyncCallbacks: [],
-  isLoading: false,
-  error: null,
+export const useRhythmStore: UseBoundStore<StoreApi<RhythmState>> = create<RhythmState>((set, get) => {
+  /** 更新单个分片状态 */
+  const setSection = (section: RhythmSection, patch: Partial<SectionStatus>): void => {
+    set((state) => ({
+      sections: {
+        ...state.sections,
+        [section]: { ...state.sections[section], ...patch },
+      },
+    }))
+  }
 
-  setSelectedDate: (date: string | Date) => {
-    set({ selectedDate: toISODate(date) })
-  },
-
-  fetchDashboard: async (date?: string | Date) => {
-    const d = toISODate(date ?? get().selectedDate)
-    set({ isLoading: true, error: null })
+  /** 最佳努力刷新：失败静默（调用方已处理主错误，级联刷新不再抛出） */
+  const refreshBestEffort = async (fn: () => Promise<unknown>): Promise<void> => {
     try {
-      const dashboard = await api_get_dashboard(d)
-      set({
-        dashboard,
-        dayTimeline: dashboard.timeline,
-        dayReview: dashboard.day_review,
-        weekReview: dashboard.week_review,
-        todayCheckins: dashboard.today_checkins,
-        conflicts: dashboard.conflicts,
-        energyProfile: dashboard.energy_profile,
-        policies: dashboard.policies,
-        inbox: dashboard.inbox_summary.map((i) => i.affair),
-        activeAffairs: dashboard.inbox_summary.map((i) => i.affair),
-        isLoading: false,
+      await fn()
+    } catch {
+      // 级联刷新失败静默：分片状态已由被调 action 记录
+    }
+  }
+
+  return {
+    energyProfile: null,
+    policies: [],
+    templates: [],
+    selectedDate: toISODate(new Date()),
+    dashboard: null,
+    dayTimeline: null,
+    dayReview: null,
+    weekReview: null,
+    todayCheckins: null,
+    conflicts: null,
+    encroachments: [],
+    domainTrend: null,
+    inboxSummary: [],
+    overdueSummary: [],
+    todayDueSummary: [],
+    degraded: [],
+    inbox: [],
+    activeAffairs: [],
+    allAffairs: [],
+    ventures: [],
+    habits: [],
+    precepts: [],
+    maintenanceTasks: [],
+    asyncCallbacks: [],
+    affairFilters: initialAffairFilters(),
+    sections: initialSections(),
+    isLoading: false,
+    error: null,
+
+    setSelectedDate: (date: string | Date) => {
+      set({ selectedDate: toISODate(date) })
+    },
+
+    sectionStatus: (section: RhythmSection) => get().sections[section],
+
+    retrySection: async (section: RhythmSection) => {
+      const g = get()
+      switch (section) {
+        case 'dashboard':
+          return g.fetchDashboard()
+        case 'timeline':
+          return g.fetchDayTimeline()
+        case 'affairs':
+        case 'ventures':
+          return g.fetchAffairsByKind()
+        case 'checkins':
+          return g.fetchTodayCheckins()
+        case 'review':
+          return g.fetchReview('day').then(() => undefined)
+        case 'config':
+          return g.fetchEnergyProfile().then(() => undefined)
+      }
+    },
+
+    fetchDashboard: async (date?: string | Date) => {
+      const d = toISODate(date ?? get().selectedDate)
+      set({ isLoading: true, error: null })
+      setSection('dashboard', { loading: true, error: null })
+      try {
+        const dashboard = await api_get_dashboard(d)
+        set({
+          dashboard,
+          dayTimeline: dashboard.timeline,
+          dayReview: dashboard.day_review,
+          weekReview: dashboard.week_review,
+          todayCheckins: dashboard.today_checkins,
+          conflicts: dashboard.conflicts,
+          energyProfile: dashboard.energy_profile,
+          policies: dashboard.policies,
+          inbox: dashboard.inbox_summary.map((i) => i.affair),
+          inboxSummary: dashboard.inbox_summary,
+          overdueSummary: dashboard.overdue_summary,
+          todayDueSummary: dashboard.today_due_summary,
+          degraded: dashboard.degraded ?? [],
+          isLoading: false,
+        })
+        setSection('dashboard', { loading: false, error: null })
+      } catch (error) {
+        set({ isLoading: false, error: errorMessage(error) })
+        setSection('dashboard', { loading: false, error: errorMessage(error) })
+        throw error
+      }
+    },
+
+    fetchDayTimeline: async (date?: string | Date) => {
+      const d = toISODate(date ?? get().selectedDate)
+      setSection('timeline', { loading: true, error: null })
+      try {
+        const timeline = await api_get_day_timeline(d)
+        set({ dayTimeline: timeline })
+        setSection('timeline', { loading: false, error: null })
+      } catch (error) {
+        setSection('timeline', { loading: false, error: errorMessage(error) })
+        throw error
+      }
+    },
+
+    fetchConflicts: async (date?: string | Date) => {
+      const d = toISODate(date ?? get().selectedDate)
+      try {
+        const conflicts = await api_get_conflicts(d)
+        set({ conflicts })
+      } catch (error) {
+        setSection('dashboard', { error: errorMessage(error) })
+        throw error
+      }
+    },
+
+    planDay: async (date?: string | Date, options?: PlanOptions) => {
+      const d = toISODate(date ?? get().selectedDate)
+      const result = await api_plan_day(d, options)
+      // 级联：timeline + dashboard（含 conflicts/摘要）同步刷新
+      await refreshBestEffort(async () => {
+        await Promise.all([get().fetchDayTimeline(d), get().fetchDashboard(d)])
       })
-    } catch (error) {
-      set({ isLoading: false, error: String(error) })
-      throw error
-    }
-  },
+      return result
+    },
 
-  fetchDayTimeline: async (date?: string | Date) => {
-    const d = toISODate(date ?? get().selectedDate)
-    try {
-      const timeline = await api_get_day_timeline(d)
-      set({ dayTimeline: timeline })
-    } catch (error) {
-      set({ error: String(error) })
-      throw error
-    }
-  },
+    rebalanceDay: async (date?: string | Date, trigger = 'manual') => {
+      const d = toISODate(date ?? get().selectedDate)
+      const result = await api_rebalance_day(d, trigger)
+      await refreshBestEffort(async () => {
+        await Promise.all([get().fetchDayTimeline(d), get().fetchDashboard(d)])
+      })
+      return result
+    },
 
-  planDay: async (date?: string | Date, options?: PlanOptions) => {
-    const d = toISODate(date ?? get().selectedDate)
-    const result = await api_plan_day(d, options)
-    await get().fetchDayTimeline(d)
-    return result
-  },
-
-  rebalanceDay: async (date?: string | Date, trigger = 'manual') => {
-    const d = toISODate(date ?? get().selectedDate)
-    const result = await api_rebalance_day(d, trigger)
-    await get().fetchDayTimeline(d)
-    return result
-  },
-
-  fetchReview: async (scope: 'day' | 'week', dateOrSpan?: string) => {
-    const d = dateOrSpan ?? (scope === 'day' ? get().selectedDate : undefined)
-    const review =
-      scope === 'day' ? await api_get_day_review(d!) : await api_get_week_review(d)
-    set(scope === 'day' ? { dayReview: review } : { weekReview: review })
-    return review
-  },
-
-  fetchEncroachments: async (start?: Date, end?: Date) => {
-    const items = await api_get_encroachments(start, end)
-    set({ encroachments: items })
-  },
-
-  fetchDomainTrend: async (start: Date, end: Date) => {
-    const trend = await api_get_domain_trend(start, end)
-    set({ domainTrend: trend })
-  },
-
-  fetchTodayCheckins: async (date?: Date) => {
-    const checkins = await api_get_today_checkins(date)
-    set({ todayCheckins: checkins })
-  },
-
-  checkin: async (affairId: number, result: CheckinResultValue, note?: string, date?: Date) => {
-    const log = await api_checkin({ affair_id: affairId, result, note, log_date: date })
-    await get().fetchTodayCheckins(date)
-    return log
-  },
-
-  listCheckins: async (filters) => {
-    const res = await api_list_checkins(filters)
-    return res.logs
-  },
-
-  fetchHabitHeatmap: async (affairId: number, start: Date, end: Date) => {
-    return api_get_habit_heatmap(affairId, start, end)
-  },
-
-  fetchVentureBurndown: async (ventureId: number) => {
-    return api_get_venture_burndown(ventureId)
-  },
-
-  fetchEnergyProfile: async () => {
-    const profile = await api_get_energy_profile()
-    set({ energyProfile: profile })
-  },
-
-  saveEnergyProfile: async (data: EnergyProfileUpdateProps) => {
-    const profile = await api_upsert_energy_profile(data)
-    set({ energyProfile: profile })
-    return profile
-  },
-
-  fetchPolicies: async () => {
-    const res = await api_list_policies()
-    set({ policies: res.policies })
-  },
-
-  savePolicy: async (data: PolicyCreateProps) => {
-    const policy = await api_create_policy(data)
-    set((state) => ({ policies: [...state.policies, policy] }))
-    return policy
-  },
-
-  updatePolicy: async (id: number, data: PolicyUpdateProps) => {
-    const policy = await api_update_policy(id, data)
-    set((state) => ({
-      policies: state.policies.map((p) => (p.id === id ? policy : p)),
-    }))
-    return policy
-  },
-
-  deletePolicy: async (id: number) => {
-    await api_delete_policy(id)
-    set((state) => ({ policies: state.policies.filter((p) => p.id !== id) }))
-  },
-
-  fetchTemplates: async () => {
-    const res = await api_list_templates()
-    set({ templates: res.templates })
-  },
-
-  saveTemplate: async (data: DayTemplateCreateProps) => {
-    const template = await api_upsert_template(data)
-    set((state) => {
-      const exists = state.templates.some((t) => t.id === template.id)
-      if (exists) {
-        return { templates: state.templates.map((t) => (t.id === template.id ? template : t)) }
+    fetchReview: async (scope: 'day' | 'week', dateOrSpan?: string) => {
+      const d = dateOrSpan ?? (scope === 'day' ? get().selectedDate : undefined)
+      setSection('review', { loading: true, error: null })
+      try {
+        const review =
+          scope === 'day' ? await api_get_day_review(d!) : await api_get_week_review(d)
+        set(scope === 'day' ? { dayReview: review } : { weekReview: review })
+        setSection('review', { loading: false, error: null })
+        return review
+      } catch (error) {
+        setSection('review', { loading: false, error: errorMessage(error) })
+        throw error
       }
-      return { templates: [...state.templates, template] }
-    })
-    return template
-  },
+    },
 
-  deleteTemplate: async (id: number) => {
-    await api_delete_template(id)
-    set((state) => ({ templates: state.templates.filter((t) => t.id !== id) }))
-  },
+    fetchEncroachments: async (start?: Date, end?: Date) => {
+      const items = await api_get_encroachments(start, end)
+      set({ encroachments: items })
+    },
 
-  fetchAllAffairs: async () => {
-    // 由 affair store 负责细粒度拉取，rhythm store 只刷新聚合摘要
-    await get().fetchAffairsByKind()
-  },
+    fetchDomainTrend: async (start: Date, end: Date) => {
+      const trend = await api_get_domain_trend(start, end)
+      set({ domainTrend: trend })
+    },
 
-  fetchAffairsByKind: async () => {
-    const [ventures, habits, precepts, maintenance, asyncs] = await Promise.all([
-      api_get_affairs_by_kind('venture', ['INBOX', 'ACTIVE', 'PAUSED']),
-      api_get_affairs_by_kind('habit', ['INBOX', 'ACTIVE', 'PAUSED']),
-      api_get_affairs_by_kind('precept', ['INBOX', 'ACTIVE', 'PAUSED']),
-      api_get_affairs_by_kind('task_maintenance', ['INBOX', 'ACTIVE', 'PAUSED']),
-      api_get_affairs_by_kind('async_callback', [
-        'INBOX',
-        'ACTIVE',
-        'PAUSED',
-        'KICKOFF',
-        'DELEGATED',
-        'REVIEWING',
-      ]),
-    ])
-    set({
-      ventures,
-      habits,
-      precepts,
-      maintenanceTasks: maintenance,
-      asyncCallbacks: asyncs,
-      allAffairs: [...ventures, ...habits, ...precepts, ...maintenance, ...asyncs],
-    })
-  },
-
-  createAffair: async (props: AffairCreateProps) => {
-    const affair = await api_create_affair(props)
-    set((state) => ({
-      allAffairs: [...state.allAffairs, affair],
-      inbox: affair.state === 'INBOX' ? [...state.inbox, affair] : state.inbox,
-    }))
-    return affair
-  },
-
-  updateAffair: async (id: number, props: AffairUpdateProps) => {
-    const affair = await api_update_affair(id, props)
-    set((state) => {
-      const patch: Partial<RhythmState> = {
-        allAffairs: updateAffairInList(state.allAffairs, affair),
+    fetchTodayCheckins: async (date?: Date) => {
+      setSection('checkins', { loading: true, error: null })
+      try {
+        const checkins = await api_get_today_checkins(date)
+        set({ todayCheckins: checkins })
+        setSection('checkins', { loading: false, error: null })
+      } catch (error) {
+        setSection('checkins', { loading: false, error: errorMessage(error) })
+        throw error
       }
-      if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
-      if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
-      if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
-      if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
-      if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
-      if (affair.state === 'INBOX') patch.inbox = updateAffairInList(state.inbox, affair)
-      return patch
-    })
-    return affair
-  },
+    },
 
-  transitAffair: async (id: number, action: AffairAction, options?: Record<string, unknown>) => {
-    const affair = await api_transit_affair_state(id, action, options ?? {})
-    set((state) => {
-      const patch: Partial<RhythmState> = {
-        allAffairs: updateAffairInList(state.allAffairs, affair),
+    checkin: async (affairId: number, result: CheckinResultValue, note?: string, date?: Date) => {
+      const log = await api_checkin({ affair_id: affairId, result, note, log_date: date })
+      // 级联：今日打卡 + 日评分 + dashboard 同步刷新
+      await refreshBestEffort(async () => {
+        await get().fetchTodayCheckins(date)
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchReview('day')
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return log
+    },
+
+    listCheckins: async (filters) => {
+      const res = await api_list_checkins(filters)
+      return res.logs
+    },
+
+    fetchHabitHeatmap: async (affairId: number, start: Date, end: Date) => {
+      return api_get_habit_heatmap(affairId, start, end)
+    },
+
+    fetchVentureBurndown: async (ventureId: number) => {
+      return api_get_venture_burndown(ventureId)
+    },
+
+    fetchEnergyProfile: async () => {
+      setSection('config', { loading: true, error: null })
+      try {
+        const profile = await api_get_energy_profile()
+        set({ energyProfile: profile })
+        setSection('config', { loading: false, error: null })
+      } catch (error) {
+        setSection('config', { loading: false, error: errorMessage(error) })
+        throw error
       }
-      if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
-      if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
-      if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
-      if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
-      if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
-      patch.inbox = state.inbox.filter((a) => a.id !== id)
-      return patch
-    })
-    return affair
-  },
+    },
 
-  deleteAffair: async (id: number) => {
-    await api_delete_affair(id)
-    set((state) => removeAffairFromLists(state, id))
-  },
+    saveEnergyProfile: async (data: EnergyProfileUpdateProps) => {
+      const profile = await api_upsert_energy_profile(data)
+      set({ energyProfile: profile })
+      return profile
+    },
 
-  confirmHint: async (id: number, accept: boolean, overrides?: Record<string, unknown>) => {
-    const affair = await api_confirm_hint(id, { accept, overrides })
-    set((state) => {
-      const patch: Partial<RhythmState> = {
-        allAffairs: updateAffairInList(state.allAffairs, affair),
+    fetchPolicies: async () => {
+      const res = await api_list_policies()
+      set({ policies: res.policies })
+    },
+
+    savePolicy: async (data: PolicyCreateProps) => {
+      const policy = await api_create_policy(data)
+      set((state) => ({ policies: [...state.policies, policy] }))
+      return policy
+    },
+
+    updatePolicy: async (id: number, data: PolicyUpdateProps) => {
+      const policy = await api_update_policy(id, data)
+      set((state) => ({
+        policies: state.policies.map((p) => (p.id === id ? policy : p)),
+      }))
+      return policy
+    },
+
+    deletePolicy: async (id: number) => {
+      await api_delete_policy(id)
+      set((state) => ({ policies: state.policies.filter((p) => p.id !== id) }))
+    },
+
+    fetchTemplates: async () => {
+      const res = await api_list_templates()
+      set({ templates: res.templates })
+    },
+
+    saveTemplate: async (data: DayTemplateCreateProps) => {
+      const template = await api_upsert_template(data)
+      set((state) => {
+        const exists = state.templates.some((t) => t.id === template.id)
+        if (exists) {
+          return { templates: state.templates.map((t) => (t.id === template.id ? template : t)) }
+        }
+        return { templates: [...state.templates, template] }
+      })
+      return template
+    },
+
+    deleteTemplate: async (id: number) => {
+      await api_delete_template(id)
+      set((state) => ({ templates: state.templates.filter((t) => t.id !== id) }))
+    },
+
+    fetchAllAffairs: async () => {
+      // 由 affair store 负责细粒度拉取，rhythm store 只刷新聚合摘要
+      await get().fetchAffairsByKind()
+    },
+
+    fetchAffairsByKind: async () => {
+      setSection('affairs', { loading: true, error: null })
+      setSection('ventures', { loading: true, error: null })
+      try {
+        // 单请求拉全量非终态事务（state/kind 均支持多值数组），再按 kind 分片
+        const all = await api_get_affairs({ kind: BOARD_KINDS, state: BOARD_STATES })
+        set({
+          allAffairs: all,
+          activeAffairs: all,
+          ventures: filterByKind(all, AffairKind.VENTURE),
+          habits: filterByKind(all, AffairKind.HABIT),
+          precepts: filterByKind(all, AffairKind.PRECEPT),
+          maintenanceTasks: filterByKind(all, AffairKind.TASK_MAINTENANCE),
+          asyncCallbacks: filterByKind(all, AffairKind.ASYNC_CALLBACK),
+        })
+        setSection('affairs', { loading: false, error: null })
+        setSection('ventures', { loading: false, error: null })
+      } catch (error) {
+        const message = errorMessage(error)
+        setSection('affairs', { loading: false, error: message })
+        setSection('ventures', { loading: false, error: message })
+        throw error
       }
-      if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
-      if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
-      if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
-      if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
-      if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
-      patch.inbox = updateAffairInList(state.inbox, affair)
-      return patch
-    })
-    return affair
-  },
+    },
 
-  splitAffair: async (id: number, children: Record<string, unknown>[]) => {
-    const res = await api_split_affair(id, { children })
-    set((state) => ({
-      allAffairs: [...state.allAffairs, ...res.affairs],
-      inbox: [...state.inbox, ...res.affairs.filter((a) => a.state === 'INBOX')],
-    }))
-    return res.affairs
-  },
+    setAffairFilters: (patch: Partial<AffairFilterState>) => {
+      set((state) => ({ affairFilters: { ...state.affairFilters, ...patch } }))
+    },
 
-  setBlockStatus: async (blockId: number, status: BlockStatusValue) => {
-    await api_set_block_status(blockId, status)
-    await get().fetchDayTimeline()
-  },
+    resetAffairFilters: () => {
+      set({ affairFilters: initialAffairFilters() })
+    },
 
-  moveBlock: async (blockId: number, start: Date, end: Date) => {
-    await api_move_block(blockId, start, end)
-    await get().fetchDayTimeline()
-  },
+    createAffair: async (props: AffairCreateProps) => {
+      const affair = await api_create_affair(props)
+      set((state) => ({
+        allAffairs: [...state.allAffairs, affair],
+        inbox: affair.state === 'INBOX' ? [...state.inbox, affair] : state.inbox,
+      }))
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return affair
+    },
 
-  createBlock: async (data: Record<string, unknown>) => {
-    await api_create_time_block(data)
-    await get().fetchDayTimeline()
-  },
+    updateAffair: async (id: number, props: AffairUpdateProps) => {
+      const affair = await api_update_affair(id, props)
+      set((state) => {
+        const patch: Partial<RhythmState> = {
+          allAffairs: updateAffairInList(state.allAffairs, affair),
+        }
+        if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
+        if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
+        if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
+        if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
+        if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
+        if (affair.state === 'INBOX') patch.inbox = updateAffairInList(state.inbox, affair)
+        return patch
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return affair
+    },
 
-  recalibrateProfile: async () => {
-    // 默认校准：保持当前值但重命名 default_imported（后端实际会 upsert default）
-    const profile = await api_recalibrate_profile({
-      ...(get().energyProfile ?? {}),
-      name: 'default',
-    } as EnergyProfileUpdateProps)
-    set({ energyProfile: profile })
-    return profile
-  },
+    transitAffair: async (id: number, action: AffairAction, options?: Record<string, unknown>) => {
+      const affair = await api_transit_affair_state(id, action, options ?? {})
+      set((state) => {
+        const patch: Partial<RhythmState> = {
+          allAffairs: updateAffairInList(state.allAffairs, affair),
+        }
+        if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
+        if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
+        if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
+        if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
+        if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
+        patch.inbox = state.inbox.filter((a) => a.id !== id)
+        return patch
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return affair
+    },
 
-  ensureDefaultTemplates: async () => {
-    return api_ensure_default_templates()
-  },
+    deleteAffair: async (id: number) => {
+      await api_delete_affair(id)
+      set((state) => removeAffairFromLists(state, id))
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+    },
 
-  clearError: () => set({ error: null }),
-}))
+    confirmHint: async (id: number, accept: boolean, overrides?: Record<string, unknown>) => {
+      const affair = await api_confirm_hint(id, { accept, overrides })
+      set((state) => {
+        const patch: Partial<RhythmState> = {
+          allAffairs: updateAffairInList(state.allAffairs, affair),
+        }
+        if (affair.kind === 'venture') patch.ventures = updateAffairInList(state.ventures, affair)
+        if (affair.kind === 'habit') patch.habits = updateAffairInList(state.habits, affair)
+        if (affair.kind === 'precept') patch.precepts = updateAffairInList(state.precepts, affair)
+        if (affair.kind === 'task_maintenance') patch.maintenanceTasks = updateAffairInList(state.maintenanceTasks, affair)
+        if (affair.kind === 'async_callback') patch.asyncCallbacks = updateAffairInList(state.asyncCallbacks, affair)
+        patch.inbox = updateAffairInList(state.inbox, affair)
+        return patch
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return affair
+    },
+
+    splitAffair: async (id: number, children: Record<string, unknown>[]) => {
+      // 调用方以宽松 Record 构造子事务字段，由后端 DTO 校验兜底
+      const res = await api_split_affair(id, {
+        children: children as unknown as Parameters<typeof api_split_affair>[1]['children'],
+      })
+      set((state) => ({
+        allAffairs: [...state.allAffairs, ...res.affairs],
+        inbox: [...state.inbox, ...res.affairs.filter((a) => a.state === 'INBOX')],
+      }))
+      await refreshBestEffort(async () => {
+        await get().fetchDashboard()
+      })
+      return res.affairs
+    },
+
+    setBlockStatus: async (blockId: number, status: BlockStatusValue) => {
+      await api_set_block_status(blockId, status)
+      // 级联：时间线 + 日评分同步刷新
+      await refreshBestEffort(async () => {
+        await get().fetchDayTimeline()
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchReview('day')
+      })
+    },
+
+    moveBlock: async (blockId: number, start: Date, end: Date) => {
+      await api_move_block(blockId, start, end)
+      await refreshBestEffort(async () => {
+        await get().fetchDayTimeline()
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchReview('day')
+      })
+    },
+
+    createBlock: async (data: Record<string, unknown>) => {
+      await api_create_time_block(data)
+      await refreshBestEffort(async () => {
+        await get().fetchDayTimeline()
+      })
+      await refreshBestEffort(async () => {
+        await get().fetchReview('day')
+      })
+    },
+
+    recalibrateProfile: async () => {
+      // 校准：把当前画像数据提交给 recalibrate 端点；
+      // 后端强制写 default 画像并清除 is_default 标记（响应带回最新值）。
+      const current = get().energyProfile
+      const profile = await api_recalibrate_profile({
+        daily_energy_budget: current?.daily_energy_budget,
+        curve_template: current?.curve_template,
+        sleep_start: current?.sleep_start,
+        sleep_end: current?.sleep_end,
+        work_hours_cap: current?.work_hours_cap,
+        spare_time_windows: current?.spare_time_windows,
+        min_buffer_ratio: current?.min_buffer_ratio,
+        life_weight: current?.life_weight,
+        work_weight: current?.work_weight,
+        career_weight: current?.career_weight,
+        score_weights: current?.score_weights,
+      })
+      set({ energyProfile: profile })
+      return profile
+    },
+
+    ensureDefaultTemplates: async () => {
+      return api_ensure_default_templates()
+    },
+
+    clearError: () => set({ error: null, sections: initialSections() }),
+  }
+})

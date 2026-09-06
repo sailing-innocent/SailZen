@@ -21,6 +21,8 @@ export default defineConfig(({ mode }) => {
   },
   define: {
     'process.env.SERVER_URL': JSON.stringify(env.SERVER_URL),
+    // 可选 Bearer Token（对应后端 SAILZEN_API_TOKEN 鉴权），未设置时为空串不加头
+    'process.env.VITE_SAILZEN_API_TOKEN': JSON.stringify(env.VITE_SAILZEN_API_TOKEN ?? ''),
   },
   build: {
     outDir: 'dist',

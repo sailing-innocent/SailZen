@@ -9,8 +9,8 @@
  */
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
-import type { AffairData, AffairCreateProps, AffairUpdateProps } from '@lib/data/affair'
-import type { AffairAction } from '@lib/api/affair'
+import type { AffairData, AffairCreateProps, AffairUpdateProps, AffairKindValue } from '@lib/data/affair'
+import type { AffairAction, TransitAffairOptions } from '@lib/api/affair'
 import {
   api_get_affairs,
   api_get_affair,
@@ -38,7 +38,7 @@ export interface AffairsState {
   fetchVentures: () => Promise<void>
   fetchTasks: (parentId?: number | null) => Promise<void>
   fetchAllKinds: () => Promise<void>
-  fetchByKind: (kind: string) => Promise<AffairData[]>
+  fetchByKind: (kind: AffairKindValue) => Promise<AffairData[]>
   fetchAffair: (id: number) => Promise<AffairData>
   createVenture: (venture: AffairCreateProps) => Promise<AffairData>
   createTask: (task: AffairCreateProps) => Promise<AffairData>
@@ -50,7 +50,7 @@ export interface AffairsState {
   deleteAffair: (id: number) => Promise<boolean>
 
   // State transitions
-  _transit: (id: number, action: AffairAction, options?: { defer_to?: Date | string | number }) => Promise<AffairData>
+  _transit: (id: number, action: AffairAction, options?: TransitAffairOptions) => Promise<AffairData>
   confirmTask: (id: number) => Promise<AffairData>
   startTask: (id: number) => Promise<AffairData>
   finishTask: (id: number) => Promise<AffairData>
@@ -155,7 +155,7 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
     }
   },
 
-  fetchByKind: async (kind: string): Promise<AffairData[]> => {
+  fetchByKind: async (kind: AffairKindValue): Promise<AffairData[]> => {
     const items = await api_get_affairs_by_kind(kind)
     set((state) => ({
       ...state,
@@ -282,7 +282,7 @@ export const useAffairsStore: UseBoundStore<StoreApi<AffairsState>> = create<Aff
   // State transitions
   // -------------------------------------------------------------------------
 
-  _transit: async (id: number, action: AffairAction, options?: { defer_to?: Date | string | number }): Promise<AffairData> => {
+  _transit: async (id: number, action: AffairAction, options?: TransitAffairOptions): Promise<AffairData> => {
     const updated = await api_transit_affair_state(id, action, options ?? {})
     set((state) => ({
       tasks: updateAffairInList(state.tasks, updated),

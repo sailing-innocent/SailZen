@@ -455,6 +455,14 @@ class AffairUpdateRequest(BaseModel):
     est_minutes: Optional[int] = Field(default=None, ge=0, description="预估时长")
     window_start: Optional[datetime] = Field(default=None, description="弹性窗口开始")
     window_end: Optional[datetime] = Field(default=None, description="弹性窗口结束")
+    clear_urgency_ddl: bool = Field(
+        default=False,
+        description="清空截止时间（优先级高于 urgency_ddl 赋值；仅当字段被显式提供时生效）",
+    )
+    clear_window: bool = Field(
+        default=False,
+        description="清空弹性窗口（同时清空 window_start/window_end，优先级高于窗口赋值）",
+    )
     splittable: Optional[bool] = Field(default=None, description="是否可拆分")
     min_chunk_minutes: Optional[int] = Field(default=None, ge=0, description="最小连续块")
     fallback_plan: Optional[str] = Field(default=None, description="备用方案")
@@ -772,6 +780,14 @@ class DomainMinutes(BaseModel):
     career: int = 0
 
 
+class PlanWarning(BaseModel):
+    """计划/时间线警告条目（对象结构，与前端 PlanWarningData 对齐）"""
+
+    code: str = Field(description="警告码，如 budget_insufficient / fixed_conflict / overtime")
+    message: str
+    affair_id: Optional[int] = None
+
+
 class DayTimelineResponse(BaseModel):
     """日时间线（blocks + 三域余量统计 + 待打卡清单）"""
 
@@ -787,7 +803,7 @@ class DayTimelineResponse(BaseModel):
     checkins: Optional[CheckinTodayResponse] = Field(
         default=None, description="当日戒律/习惯待打卡清单"
     )
-    warnings: List[str] = Field(default_factory=list)
+    warnings: List[PlanWarning] = Field(default_factory=list)
 
 
 class HealthSignalItem(BaseModel):
@@ -815,7 +831,7 @@ class RhythmDayViewResponse(BaseModel):
     checkins: Optional[CheckinTodayResponse] = None
     health_signals: List[HealthSignalItem] = Field(default_factory=list)
     insights: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    warnings: List[PlanWarning] = Field(default_factory=list)
     note: Optional[str] = Field(default=None, description="日复盘备注")
 
 
@@ -843,7 +859,7 @@ class RhythmDayDashboardResponse(BaseModel):
     checkins: Optional[CheckinTodayResponse] = None
     priorities: List[PriorityAffairItem] = Field(default_factory=list)
     insights: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    warnings: List[PlanWarning] = Field(default_factory=list)
 
 
 # ============================================================================
@@ -857,12 +873,6 @@ class PlanDayRequest(BaseModel):
     date: date_type = Field(description="目标日期")
     preserve_done: bool = Field(default=True, description="保留 DONE/DOING 块")
     force: bool = Field(default=False, description="忽略预算不足等软警告")
-
-
-class PlanWarning(BaseModel):
-    code: str = Field(description="警告码，如 budget_insufficient / fixed_conflict / overtime")
-    message: str
-    affair_id: Optional[int] = None
 
 
 class UnplacedItem(BaseModel):
@@ -1029,6 +1039,10 @@ class RhythmDashboardResponse(BaseModel):
     inbox_summary: List[PriorityAffairItem] = Field(default_factory=list)
     overdue_summary: List[PriorityAffairItem] = Field(default_factory=list)
     today_due_summary: List[PriorityAffairItem] = Field(default_factory=list)
+    degraded: List[str] = Field(
+        default_factory=list,
+        description="降级加载的子模块名（timeline/day_review/week_review/checkins/profile/policies/conflicts/inbox_summary/overdue_summary/today_due_summary）",
+    )
 
 
 class HabitHeatmapItem(BaseModel):

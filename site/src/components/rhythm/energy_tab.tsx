@@ -129,7 +129,11 @@ export const EnergyTab = () => {
               <HealthQuickLogCard
               date={selected}
               health={dayView.health_signals}
-              onSubmit={(log) => logHealthOnDay(log, format(selected, 'yyyy-MM-dd'))}
+              onSubmit={async (log) => {
+                // 健康打卡会影响精力信号与日视图预算计算，提交后主动刷新日视图
+                await logHealthOnDay(log, format(selected, 'yyyy-MM-dd'))
+                await fetchDayView(selectedDate)
+              }}
             />
           </div>
         </div>
@@ -157,7 +161,7 @@ const DaySummaryCard: React.FC<{ dayView: DayViewData }> = ({ dayView }) => {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-3xl font-bold">{budget.energy_budget}</p>
-            <p className="text-xs text-muted-foreground">精力预算</p>
+            <p className="text-xs text-muted-foreground">每日精力预算</p>
           </div>
           <Badge className={RhythmColors[dayView.rhythm] || ''}>
             {RhythmLabels[dayView.rhythm] || dayView.rhythm}

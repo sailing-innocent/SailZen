@@ -6,7 +6,7 @@
  *   字段名与后端 DTO 保持一致，便于双端契约维护。
  */
 
-import type { AffairData, AffairKindValue, AffairDomainValue, AffairStateValue } from './affair'
+import type { AffairData, AffairKindValue } from './affair'
 
 // ============================================================================
 // Enums / value types
@@ -98,7 +98,7 @@ export interface DayTimelineData {
   buffer_total_minutes: number
   buffer_free_minutes: number
   checkins?: CheckinTodayData
-  warnings: string[]
+  warnings: PlanWarningData[]
   unplaced?: UnplacedItemData[]
 }
 
@@ -336,6 +336,8 @@ export interface RhythmDashboardData {
   inbox_summary: PriorityAffairItemData[]
   overdue_summary: PriorityAffairItemData[]
   today_due_summary: PriorityAffairItemData[]
+  /** 装配失败的子模块名（dashboard 降级加载，详见契约 §5） */
+  degraded?: string[]
 }
 
 // ============================================================================

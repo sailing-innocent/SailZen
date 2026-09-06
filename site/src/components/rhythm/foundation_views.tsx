@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useRhythmStore } from '@lib/store/rhythm'
-import type { EnergyProfileUpdateProps, DayTemplateCreateProps, PolicyCreateProps, PolicyUpdateProps, PolicyData, DayTemplateData } from '@lib/data/rhythm'
+import type { EnergyProfileUpdateProps, PolicyCreateProps, PolicyData, DayTemplateData } from '@lib/data/rhythm'
 import { PolicyRuleType } from '@lib/data/rhythm'
 import { AlertCircle, Plus, Save, Trash2 } from 'lucide-react'
 
@@ -30,19 +30,27 @@ export const EnergyProfileEditor = () => {
   const saveEnergyProfile = useRhythmStore((s) => s.saveEnergyProfile)
   const recalibrateProfile = useRhythmStore((s) => s.recalibrateProfile)
   const [data, setData] = useState<EnergyProfileUpdateProps>({})
+  const [recalibrating, setRecalibrating] = useState(false)
 
   useEffect(() => {
-    if (profile) setData({ ...profile, name: 'default' })
+    // 不再强制 name='default'：画像单行由后端 upsert 保证，前端只提交数值字段
+    if (profile) setData({ ...profile })
   }, [profile])
 
   if (!profile) return <div>加载中...</div>
 
   const handleSave = async () => {
-    await saveEnergyProfile({ ...data, name: 'default' })
+    await saveEnergyProfile({ ...data })
   }
 
   const handleRecalibrate = async () => {
-    await recalibrateProfile()
+    setRecalibrating(true)
+    try {
+      // 后端把当前提交值写回 default 画像并清除 is_default 标记
+      await recalibrateProfile()
+    } finally {
+      setRecalibrating(false)
+    }
   }
 
   return (
@@ -145,8 +153,8 @@ export const EnergyProfileEditor = () => {
             保存
           </Button>
           {profile.is_default && (
-            <Button variant="secondary" onClick={handleRecalibrate}>
-              确认默认画像已校准
+            <Button variant="secondary" onClick={handleRecalibrate} disabled={recalibrating}>
+              {recalibrating ? '校准中...' : '校准画像（采用当前值）'}
             </Button>
           )}
         </div>

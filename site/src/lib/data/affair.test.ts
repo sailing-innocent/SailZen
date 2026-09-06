@@ -70,3 +70,40 @@ describe('Affair priority', () => {
     expect(getAffairPriority(null, AffairState.DONE)).toBe('low')
   })
 })
+
+describe('syncVentureTargetDate', () => {
+  it('sets urgency_ddl to 00:00 of target_date when target set', async () => {
+    const { syncVentureTargetDate, defaultVentureMeta } = await import('./affair')
+    const patch = syncVentureTargetDate({
+      ...defaultVentureMeta(),
+      target_date: '2028-04-19',
+    })
+    expect(patch.clear_urgency_ddl).toBeUndefined()
+    expect(patch.urgency_ddl).toBeDefined()
+    // DDL 归一化到目标日 00:00（本地时区）
+    const ddl = new Date(patch.urgency_ddl!)
+    expect(ddl.getHours()).toBe(0)
+    expect(ddl.getMinutes()).toBe(0)
+    expect(patch.kind_meta.target_date).toBe('2028-04-19')
+  })
+
+  it('sends clear_urgency_ddl when target_date cleared', async () => {
+    const { syncVentureTargetDate, defaultVentureMeta } = await import('./affair')
+    const patch = syncVentureTargetDate({ ...defaultVentureMeta(), target_date: null })
+    expect(patch.clear_urgency_ddl).toBe(true)
+    expect(patch.urgency_ddl).toBeUndefined()
+    expect(patch.kind_meta.target_date).toBeNull()
+  })
+
+  it('keeps other meta fields intact', async () => {
+    const { syncVentureTargetDate, defaultVentureMeta } = await import('./affair')
+    const patch = syncVentureTargetDate({
+      ...defaultVentureMeta(),
+      target_date: '2029-01-01',
+      weekly_budget_hours: 10,
+      total_est_hours: 120,
+    })
+    expect(patch.kind_meta.weekly_budget_hours).toBe(10)
+    expect(patch.kind_meta.total_est_hours).toBe(120)
+  })
+})

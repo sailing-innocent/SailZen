@@ -6,7 +6,7 @@
  *   提供事务 CRUD、状态转移、事业里程碑与进度查询。
  */
 
-import { SERVER_URL, API_BASE } from './config'
+import { SERVER_URL, API_BASE, authHeaders, ApiError, parseErrorDetail } from './config'
 import type {
   AffairData,
   AffairCreateProps,
@@ -15,6 +15,7 @@ import type {
   AffairDomainValue,
   AffairStateValue,
 } from '@lib/data/affair'
+import type { VentureProgressData } from '@lib/data/rhythm'
 import { toIsoDdl } from '@lib/data/affair'
 
 export interface ConfirmHintOptions {
@@ -67,9 +68,19 @@ const buildUrl = (path: string, query?: Record<string, QueryValue>): string => {
 const checkOk = async (response: Response, action: string): Promise<void> => {
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    throw new Error(`Error ${action}: ${response.status} ${response.statusText}${text ? ` - ${text.slice(0, 200)}` : ''}`)
+    // 解析后端 detail，抛出携带 status 的结构化 ApiError，便于分片错误展示
+    throw new ApiError(response.status, `${action}: ${response.statusText}`, parseErrorDetail(text))
   }
 }
+
+const requestInit = (method: string, body?: unknown): RequestInit => ({
+  method,
+  headers: { 'Content-Type': 'application/json', ...authHeaders() },
+  body: body !== undefined ? JSON.stringify(body) : undefined,
+})
+
+/** GET/DELETE 等无 body 请求的 init：仅注入鉴权头 */
+const getInit = (): RequestInit => ({ headers: authHeaders() })
 
 // Normalize creation props before sending to backend
 const normalizeCreateProps = (props: AffairCreateProps): Record<string, unknown> => {
@@ -126,6 +137,9 @@ const normalizeUpdateProps = (props: AffairUpdateProps): Record<string, unknown>
   if (props.ai_hint !== undefined) body.ai_hint = props.ai_hint
   if (props.window_start !== undefined) body.window_start = toIsoDdl(props.window_start)
   if (props.window_end !== undefined) body.window_end = toIsoDdl(props.window_end)
+  // 清空标记：透传后端 clear_*（clear 优先于赋值；显式 null 经上面的 toIsoDdl(null) → null 同样清空）
+  if (props.clear_urgency_ddl !== undefined) body.clear_urgency_ddl = props.clear_urgency_ddl
+  if (props.clear_window !== undefined) body.clear_window = props.clear_window
   return body
 }
 
@@ -136,19 +150,10 @@ const normalizeUpdateProps = (props: AffairUpdateProps): Record<string, unknown>
 const fetchAffairsSingle = async (
   filters: Record<string, QueryValue>
 ): Promise<AffairData[]> => {
-  const response = await fetch(buildUrl('/affair/', filters))
+  const response = await fetch(buildUrl('/affair/', filters), getInit())
   await checkOk(response, 'fetching affairs')
   const data = (await response.json()) as { affairs: AffairData[]; total: number }
   return data.affairs ?? []
-}
-
-const uniqueById = (items: AffairData[]): AffairData[] => {
-  const seen = new Set<number>()
-  return items.filter((item) => {
-    if (seen.has(item.id)) return false
-    seen.add(item.id)
-    return true
-  })
 }
 
 export const api_get_affairs = async (filters?: {
@@ -180,53 +185,38 @@ export const api_get_affairs = async (filters?: {
     if (filters.limit !== undefined) base.limit = filters.limit
   }
 
-  const states = filters?.state ? (Array.isArray(filters.state) ? filters.state : [filters.state]) : [undefined]
-  const domains = filters?.domain ? (Array.isArray(filters.domain) ? filters.domain : [filters.domain]) : [undefined]
-
-  const all: AffairData[] = []
-  for (const state of states) {
-    for (const domain of domains) {
-      const query: Record<string, QueryValue> = { ...base }
-      if (state) query.state = state
-      if (domain) query.domain = domain
-      const affairs = await fetchAffairsSingle(query)
-      all.push(...affairs)
-    }
+  // 后端 list_affairs_impl 的 state/domain/kind 均支持多值数组（重复 query param），
+  // 无需 state×domain 笛卡尔积循环，单请求即可拿到并集。
+  if (filters?.state !== undefined && filters.state !== '') {
+    base.state = Array.isArray(filters.state) ? filters.state : [filters.state]
+  }
+  if (filters?.domain !== undefined && filters.domain !== '') {
+    base.domain = Array.isArray(filters.domain) ? filters.domain : [filters.domain]
   }
 
-  return uniqueById(all)
+  return fetchAffairsSingle(base)
 }
 
 export const api_get_affair = async (id: number): Promise<AffairData> => {
-  const response = await fetch(buildUrl(`/affair/${id}`))
+  const response = await fetch(buildUrl(`/affair/${id}`), getInit())
   await checkOk(response, `fetching affair ${id}`)
   return response.json()
 }
 
 export const api_create_affair = async (props: AffairCreateProps): Promise<AffairData> => {
-  const response = await fetch(buildUrl('/affair/'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(normalizeCreateProps(props)),
-  })
+  const response = await fetch(buildUrl('/affair/'), requestInit('POST', normalizeCreateProps(props)))
   await checkOk(response, 'creating affair')
   return response.json()
 }
 
 export const api_update_affair = async (id: number, props: AffairUpdateProps): Promise<AffairData> => {
-  const response = await fetch(buildUrl(`/affair/${id}`), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(normalizeUpdateProps(props)),
-  })
+  const response = await fetch(buildUrl(`/affair/${id}`), requestInit('PUT', normalizeUpdateProps(props)))
   await checkOk(response, `updating affair ${id}`)
   return response.json()
 }
 
 export const api_delete_affair = async (id: number): Promise<{ id: number; status: string; message?: string }> => {
-  const response = await fetch(buildUrl(`/affair/${id}`), {
-    method: 'DELETE',
-  })
+  const response = await fetch(buildUrl(`/affair/${id}`), { ...getInit(), method: 'DELETE' })
   await checkOk(response, `deleting affair ${id}`)
   return response.json()
 }
@@ -247,11 +237,16 @@ export type AffairAction =
   | 'resume'
   | 'archive'
   | 'graduate'
+  | 'handoff'
+  | 'return_review'
+  | 'approve'
+  | 'request_revision'
 
 export interface TransitAffairOptions {
   defer_to?: string | Date | number
   defer_end?: string | Date | number
   force?: boolean
+  revision_note?: string
 }
 
 export const api_transit_affair_state = async (
@@ -263,12 +258,9 @@ export const api_transit_affair_state = async (
   if (options.defer_to !== undefined) body.defer_to = toIsoDdl(options.defer_to)
   if (options.defer_end !== undefined) body.defer_end = toIsoDdl(options.defer_end)
   if (options.force !== undefined) body.force = options.force
+  if (options.revision_note !== undefined) body.revision_note = options.revision_note
 
-  const response = await fetch(buildUrl(`/affair/${id}/state`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const response = await fetch(buildUrl(`/affair/${id}/state`), requestInit('POST', body))
   await checkOk(response, `transiting affair ${id} state`)
   return response.json()
 }
@@ -287,31 +279,31 @@ export const api_add_milestone = async (
     description?: string
   }
 ): Promise<AffairData> => {
-  const response = await fetch(buildUrl(`/venture/${ventureId}/milestone`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const response = await fetch(
+    buildUrl(`/venture/${ventureId}/milestone`),
+    requestInit('POST', {
       title: props.title,
       description: props.description ?? '',
       timespan_id: props.timespan_id,
       urgency_ddl: toIsoDdl(props.urgency_ddl),
       est_minutes: props.est_minutes ?? 30,
-    }),
-  })
+    })
+  )
   await checkOk(response, `adding milestone to venture ${ventureId}`)
   return response.json()
 }
 
 export const api_done_milestone = async (milestoneId: number): Promise<AffairData> => {
-  const response = await fetch(buildUrl(`/venture/milestone/${milestoneId}/done`), {
-    method: 'POST',
-  })
+  const response = await fetch(
+    buildUrl(`/venture/milestone/${milestoneId}/done`),
+    requestInit('POST')
+  )
   await checkOk(response, `completing milestone ${milestoneId}`)
   return response.json()
 }
 
-export const api_get_venture_progress = async (id: number): Promise<Record<string, unknown>> => {
-  const response = await fetch(buildUrl(`/venture/${id}/progress`))
+export const api_get_venture_progress = async (id: number): Promise<VentureProgressData> => {
+  const response = await fetch(buildUrl(`/venture/${id}/progress`), getInit())
   await checkOk(response, `fetching venture progress ${id}`)
   return response.json()
 }
@@ -321,21 +313,19 @@ export const api_get_venture_progress = async (id: number): Promise<Record<strin
 // ---------------------------------------------------------------------------
 
 export const api_confirm_hint = async (id: number, options: ConfirmHintOptions): Promise<AffairData> => {
-  const response = await fetch(buildUrl(`/affair/${id}/confirm-hint`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accept: options.accept, overrides: options.overrides ?? {} }),
-  })
+  const response = await fetch(
+    buildUrl(`/affair/${id}/confirm-hint`),
+    requestInit('POST', { accept: options.accept, overrides: options.overrides ?? {} })
+  )
   await checkOk(response, `confirming hint for affair ${id}`)
   return response.json()
 }
 
 export const api_split_affair = async (id: number, options: SplitAffairOptions): Promise<{ affairs: AffairData[]; total: number }> => {
-  const response = await fetch(buildUrl(`/affair/${id}/split`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ children: options.children }),
-  })
+  const response = await fetch(
+    buildUrl(`/affair/${id}/split`),
+    requestInit('POST', { children: options.children })
+  )
   await checkOk(response, `splitting affair ${id}`)
   return response.json()
 }

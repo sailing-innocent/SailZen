@@ -6,7 +6,7 @@
  *   Energy/Policy/Checkin/Admin/Stats 等 Dashboard 所需端点。
  */
 
-import { SERVER_URL, API_BASE } from './config'
+import { SERVER_URL, API_BASE, authHeaders, ApiError, parseErrorDetail } from './config'
 import type {
   DayTimelineData,
   DayTemplateData,
@@ -58,7 +58,8 @@ const buildUrl = (path: string, query?: Record<string, unknown>): string => {
 const checkOk = async (response: Response, action: string): Promise<void> => {
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    throw new Error(`Error ${action}: ${response.status} ${response.statusText}${text ? ` - ${text.slice(0, 200)}` : ''}`)
+    // 解析后端 detail，抛出携带 status 的结构化 ApiError，便于分片错误展示
+    throw new ApiError(response.status, `${action}: ${response.statusText}`, parseErrorDetail(text))
   }
 }
 
@@ -69,16 +70,19 @@ const toISODate = (d: Date | string): string => {
 
 const requestInit = (method: string, body?: unknown): RequestInit => ({
   method,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json', ...authHeaders() },
   body: body !== undefined ? JSON.stringify(body) : undefined,
 })
+
+/** GET/DELETE 等无 body 请求的 init：仅注入鉴权头 */
+const getInit = (): RequestInit => ({ headers: authHeaders() })
 
 // ============================================================================
 // Dashboard
 // ============================================================================
 
 export const api_get_dashboard = async (date: Date | string): Promise<RhythmDashboardData> => {
-  const response = await fetch(buildUrl('/dashboard', { date: toISODate(date) }))
+  const response = await fetch(buildUrl('/dashboard', { date: toISODate(date) }), getInit())
   await checkOk(response, 'fetching dashboard')
   return response.json()
 }
@@ -88,16 +92,13 @@ export const api_get_dashboard = async (date: Date | string): Promise<RhythmDash
 // ============================================================================
 
 export const api_get_day_timeline = async (date: Date | string): Promise<DayTimelineData> => {
-  const response = await fetch(buildUrl('/timeline/day', { date: toISODate(date) }))
+  const response = await fetch(buildUrl('/timeline/day', { date: toISODate(date) }), getInit())
   await checkOk(response, 'fetching day timeline')
   return response.json()
 }
 
-export const api_get_day_view = async (date: Date | string): Promise<unknown> => {
-  const response = await fetch(buildUrl('/timeline/day-view', { date: toISODate(date) }))
-  await checkOk(response, 'fetching day view')
-  return response.json()
-}
+// 注意：统一日视图 api_get_day_view 由 lib/api/pems.ts 提供（day view 含健康信号，
+// 归 PEMS 域所有），此处不再重复定义。
 
 export const api_create_time_block = async (data: Record<string, unknown>): Promise<TimeBlockData> => {
   const response = await fetch(buildUrl('/timeline/block'), requestInit('POST', data))
@@ -153,7 +154,7 @@ export const api_rebalance_day = async (
 }
 
 export const api_get_conflicts = async (date: Date | string): Promise<ConflictReportData> => {
-  const response = await fetch(buildUrl('/plan/conflicts', { date: toISODate(date) }))
+  const response = await fetch(buildUrl('/plan/conflicts', { date: toISODate(date) }), getInit())
   await checkOk(response, 'fetching conflicts')
   return response.json()
 }
@@ -163,13 +164,13 @@ export const api_get_conflicts = async (date: Date | string): Promise<ConflictRe
 // ============================================================================
 
 export const api_get_day_review = async (date: Date | string): Promise<ReviewData> => {
-  const response = await fetch(buildUrl('/review/day', { date: toISODate(date) }))
+  const response = await fetch(buildUrl('/review/day', { date: toISODate(date) }), getInit())
   await checkOk(response, 'fetching day review')
   return response.json()
 }
 
 export const api_get_week_review = async (span?: string): Promise<ReviewData> => {
-  const response = await fetch(buildUrl('/review/week', span ? { span } : undefined))
+  const response = await fetch(buildUrl('/review/week', span ? { span } : undefined), getInit())
   await checkOk(response, 'fetching week review')
   return response.json()
 }
@@ -195,7 +196,8 @@ export const api_get_encroachments = async (
     buildUrl('/review/encroachments', {
       start_date: start ? toISODate(start) : undefined,
       end_date: end ? toISODate(end) : undefined,
-    })
+    }),
+    getInit()
   )
   await checkOk(response, 'fetching encroachments')
   return response.json()
@@ -206,7 +208,8 @@ export const api_get_domain_trend = async (
   end: Date | string
 ): Promise<DomainTrendData> => {
   const response = await fetch(
-    buildUrl('/review/domain-trend', { start_date: toISODate(start), end_date: toISODate(end) })
+    buildUrl('/review/domain-trend', { start_date: toISODate(start), end_date: toISODate(end) }),
+    getInit()
   )
   await checkOk(response, 'fetching domain trend')
   return response.json()
@@ -217,13 +220,13 @@ export const api_get_domain_trend = async (
 // ============================================================================
 
 export const api_list_templates = async (enabled_only = false): Promise<{ templates: DayTemplateData[]; total: number }> => {
-  const response = await fetch(buildUrl('/template/', { enabled_only }))
+  const response = await fetch(buildUrl('/template/', { enabled_only }), getInit())
   await checkOk(response, 'listing templates')
   return response.json()
 }
 
 export const api_get_active_template = async (date: Date | string): Promise<DayTemplateData> => {
-  const response = await fetch(buildUrl('/template/active', { date: toISODate(date) }))
+  const response = await fetch(buildUrl('/template/active', { date: toISODate(date) }), getInit())
   await checkOk(response, 'fetching active template')
   return response.json()
 }
@@ -241,7 +244,7 @@ export const api_update_template = async (id: number, data: DayTemplateCreatePro
 }
 
 export const api_delete_template = async (id: number): Promise<{ id: number; status: string }> => {
-  const response = await fetch(buildUrl(`/template/${id}`), { method: 'DELETE' })
+  const response = await fetch(buildUrl(`/template/${id}`), { ...getInit(), method: 'DELETE' })
   await checkOk(response, `deleting template ${id}`)
   return response.json()
 }
@@ -251,7 +254,7 @@ export const api_delete_template = async (id: number): Promise<{ id: number; sta
 // ============================================================================
 
 export const api_get_energy_profile = async (): Promise<EnergyProfileData> => {
-  const response = await fetch(buildUrl('/energy/profile'))
+  const response = await fetch(buildUrl('/energy/profile'), getInit())
   await checkOk(response, 'fetching energy profile')
   return response.json()
 }
@@ -267,7 +270,7 @@ export const api_upsert_energy_profile = async (data: EnergyProfileUpdateProps):
 // ============================================================================
 
 export const api_list_policies = async (enabled_only = false): Promise<{ policies: PolicyData[]; total: number }> => {
-  const response = await fetch(buildUrl('/policy/', { enabled_only }))
+  const response = await fetch(buildUrl('/policy/', { enabled_only }), getInit())
   await checkOk(response, 'listing policies')
   return response.json()
 }
@@ -285,7 +288,7 @@ export const api_update_policy = async (id: number, data: PolicyUpdateProps): Pr
 }
 
 export const api_delete_policy = async (id: number): Promise<{ id: number; status: string }> => {
-  const response = await fetch(buildUrl(`/policy/${id}`), { method: 'DELETE' })
+  const response = await fetch(buildUrl(`/policy/${id}`), { ...getInit(), method: 'DELETE' })
   await checkOk(response, `deleting policy ${id}`)
   return response.json()
 }
@@ -331,14 +334,15 @@ export const api_list_checkins = async (filters?: {
       cycle_key: filters?.cycle_key,
       skip: filters?.skip,
       limit: filters?.limit,
-    })
+    }),
+    getInit()
   )
   await checkOk(response, 'listing checkins')
   return response.json()
 }
 
 export const api_get_today_checkins = async (date?: Date | string): Promise<CheckinTodayData> => {
-  const response = await fetch(buildUrl('/checkin/today', date ? { date: toISODate(date) } : undefined))
+  const response = await fetch(buildUrl('/checkin/today', date ? { date: toISODate(date) } : undefined), getInit())
   await checkOk(response, 'fetching today checkins')
   return response.json()
 }
@@ -355,7 +359,8 @@ export const api_get_habit_heatmap = async (
   end: Date | string
 ): Promise<HabitHeatmapData> => {
   const response = await fetch(
-    buildUrl('/checkin/heatmap', { affair_id, start_date: toISODate(start), end_date: toISODate(end) })
+    buildUrl('/checkin/heatmap', { affair_id, start_date: toISODate(start), end_date: toISODate(end) }),
+    getInit()
   )
   await checkOk(response, 'fetching habit heatmap')
   return response.json()
@@ -366,7 +371,7 @@ export const api_get_habit_heatmap = async (
 // ============================================================================
 
 export const api_get_venture_burndown = async (id: number): Promise<VentureBurndownData> => {
-  const response = await fetch(buildUrl(`/venture/${id}/burndown`))
+  const response = await fetch(buildUrl(`/venture/${id}/burndown`), getInit())
   await checkOk(response, `fetching venture ${id} burndown`)
   return response.json()
 }

@@ -143,7 +143,12 @@ logger = logging.getLogger(__name__)
 
 
 def _check_auth(request: Request) -> None:
-    """可选 Bearer Token 鉴权：env SAILZEN_API_TOKEN 未设置则放行"""
+    """可选 Bearer Token 鉴权：env SAILZEN_API_TOKEN 未设置则放行。
+
+    约定：前端在 VITE_SAILZEN_API_TOKEN 存在时，由 api 层注入
+    ``Authorization: Bearer <token>`` 头（见 site/src/lib/api/rhythm.ts）。
+    未设置 env 时本函数直接放行（本地开发模式），生产部署应显式配置 token。
+    """
     expected = os.environ.get("SAILZEN_API_TOKEN", "")
     if not expected:
         return

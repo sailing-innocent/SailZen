@@ -133,6 +133,10 @@ export interface AffairCreateProps {
 
 export interface AffairUpdateProps extends Partial<AffairCreateProps> {
   ai_hint?: Record<string, unknown>
+  /** 清空截止时间（clear 优先于 urgency_ddl 赋值，对应后端 clear_urgency_ddl） */
+  clear_urgency_ddl?: boolean
+  /** 清空弹性窗口（同时清空 window_start/window_end，对应后端 clear_window） */
+  clear_window?: boolean
 }
 
 export interface AffairData extends AffairCreateProps {
@@ -160,8 +164,8 @@ export interface AffairData extends AffairCreateProps {
   ai_hint: Record<string, unknown>
   score: number
   ref: Record<string, unknown>
-  ctime?: string | number
-  mtime?: string | number
+  ctime?: string
+  mtime?: string
 }
 
 // ============================================================================
@@ -361,6 +365,33 @@ export const defaultVentureMeta = (): VentureMeta => ({
   spare_time_only: true,
   total_est_hours: 0,
 })
+
+/**
+ * venture 目标日编辑产生的更新 patch（前端侧单一来源，对应后端 §5-2 契约）。
+ *
+ * 规则（与后端 `_sync_venture_target_date` 对齐）：
+ * - 设置 target_date：DDL 归一化为当日 00:00（kind_meta 优先）。
+ * - 清空 target_date：同时下发 clear_urgency_ddl，避免旧 DDL 反向回填。
+ *
+ * @param meta 编辑后的完整 venture meta（必须含 target_date 键）
+ * @returns 可直接展开进 AffairUpdateProps 的 patch 字段
+ */
+export interface VentureTargetDatePatch {
+  kind_meta: Record<string, unknown>
+  urgency_ddl?: string
+  clear_urgency_ddl?: boolean
+}
+
+export function syncVentureTargetDate(
+  meta: VentureMeta,
+): VentureTargetDatePatch {
+  const target = meta.target_date ?? null
+  if (target) {
+    const ddl = new Date(`${target}T00:00:00`)
+    return { kind_meta: { ...meta }, urgency_ddl: ddl.toISOString() }
+  }
+  return { kind_meta: { ...meta, target_date: null }, clear_urgency_ddl: true }
+}
 
 export const defaultMaintenanceMeta = (): MaintenanceMeta => ({
   interval_days: 7,

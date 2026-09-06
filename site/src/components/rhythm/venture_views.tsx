@@ -14,8 +14,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import type { AffairData, VentureMeta } from '@lib/data/affair'
-import { defaultVentureMeta, getKindMeta } from '@lib/data/affair'
-import { api_add_milestone, api_get_venture_progress, api_update_affair } from '@lib/api/affair'
+import { defaultVentureMeta, getKindMeta, syncVentureTargetDate } from '@lib/data/affair'
+import type { VentureProgressData } from '@lib/data/rhythm'
+import { api_add_milestone, api_done_milestone, api_get_venture_progress, api_update_affair } from '@lib/api/affair'
 import { api_get_venture_burndown } from '@lib/api/rhythm'
 import { syncPlanAfterVentureChange } from './venture_plan_sync'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
@@ -60,16 +61,35 @@ export const MilestoneTree = ({
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [estMinutes, setEstMinutes] = useState(60)
+  // 里程碑单一来源：子事务行（parent_id=venture.id），经 progress 接口读取；
+  // kind_meta.milestones 为历史死字段，永不读取。
+  const [progress, setProgress] = useState<VentureProgressData | null>(null)
+
+  useEffect(() => {
+    api_get_venture_progress(venture.id).then(setProgress).catch(() => {})
+  }, [venture.id])
+
+  const milestones = progress?.milestones ?? []
+
+  const reload = async () => {
+    const fresh = await api_get_venture_progress(venture.id)
+    setProgress(fresh)
+  }
 
   const handleAdd = async () => {
     await api_add_milestone(venture.id, { title, est_minutes: estMinutes })
     setTitle('')
     setEstMinutes(60)
     setOpen(false)
+    await reload()
     onRefresh()
   }
 
-  const milestones = venture.kind_meta?.milestones as AffairData[] | undefined
+  const handleDone = async (milestone: AffairData) => {
+    await api_done_milestone(milestone.id)
+    await reload()
+    onRefresh()
+  }
 
   return (
     <Card>
@@ -93,7 +113,13 @@ export const MilestoneTree = ({
                     {m.est_minutes} 分钟 · {m.state}
                   </div>
                 </div>
-                {m.state === 'DONE' && <Check className="h-4 w-4 text-green-500" />}
+                {m.state === 'DONE' ? (
+                  <Check className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Button variant="outline" size="sm" className="h-6 px-2 text-xs" onClick={() => handleDone(m)}>
+                    完成
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -179,7 +205,7 @@ export const VentureDetail = ({
   onRefresh: () => void
 }) => {
   const meta = getKindMeta(venture, 'venture')
-  const [progress, setProgress] = useState<Awaited<ReturnType<typeof api_get_venture_progress>> | null>(null)
+  const [progress, setProgress] = useState<VentureProgressData | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<VentureMeta>(defaultVentureMeta())
@@ -196,13 +222,14 @@ export const VentureDetail = ({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await api_update_affair(venture.id, {
-        kind_meta: { ...venture.kind_meta, ...form },
-        urgency_ddl: form.target_date ? new Date(`${form.target_date}T00:00:00`) : null,
-      })
+      // 目标日与 urgency_ddl 单一来源：统一经 syncVentureTargetDate 生成补丁
+      // （target 有值 → 回填 DDL；target 清空 → clear_urgency_ddl + meta.target_date=null）
+      const mergedMeta = { ...venture.kind_meta, ...form } as VentureMeta
+      const patch = syncVentureTargetDate(mergedMeta)
+      await api_update_affair(venture.id, patch)
       const fresh = await api_get_venture_progress(venture.id)
-      setProgress(fresh as Awaited<ReturnType<typeof api_get_venture_progress>>)
-      await syncPlanAfterVentureChange(new Date(), 1)
+      setProgress(fresh)
+      await syncPlanAfterVentureChange(new Date(), { days: 1 })
       setEditing(false)
       onRefresh()
     } finally {

@@ -103,3 +103,33 @@ class TestDashboard:
         assert resp.status_code == 200
         summaries = resp.json()["inbox_summary"]
         assert any(item["affair"]["title"] == "待分拣事务" for item in summaries)
+
+
+class TestDashboardDegraded:
+    """Dashboard 降级：任一子模块装配失败不拖垮整体 500，而是记入 degraded。"""
+
+    def test_dashboard_degraded_when_subassembly_fails(
+        self, client: TestClient, monkeypatch
+    ):
+        from sail_server.model import rhythm_planner
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("simulated sub-assembly failure")
+
+        monkeypatch.setattr(rhythm_planner, "get_day_review_impl", _boom)
+        resp = client.get(f"{BASE}/dashboard", params={"date": str(TEST_DATE)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "day_review" in data
+        assert "degraded" in data
+        assert "day_review" in data["degraded"]
+        # 其余子模块正常装配
+        assert "timeline" in data
+        assert "week_review" in data
+        assert "day_review" not in data or data["day_review"]["scope"] == "day"
+
+    def test_dashboard_not_degraded_on_happy_path(self, client: TestClient):
+        resp = client.get(f"{BASE}/dashboard", params={"date": str(TEST_DATE)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data.get("degraded", []) == []

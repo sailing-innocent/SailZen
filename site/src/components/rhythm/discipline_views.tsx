@@ -5,9 +5,8 @@ import { Badge } from '@/components/ui/badge'
 
 import type { CheckinTodayItemData, CheckinResultValue, HabitHeatmapData } from '@lib/data/rhythm'
 import { useRhythmStore } from '@lib/store/rhythm'
-import { api_get_today_checkins, api_checkin, api_get_habit_heatmap } from '@lib/api/rhythm'
+import { api_get_habit_heatmap } from '@lib/api/rhythm'
 import { Check, X, Minus, Calendar } from 'lucide-react'
-import { formatDate } from './utils'
 
 const resultOptions: { value: CheckinResultValue; icon: React.ReactNode; label: string }[] = [
   { value: 'kept', icon: <Check className="h-4 w-4" />, label: '遵守' },
@@ -153,23 +152,86 @@ export const HabitHeatmap = ({ affairId }: { affairId: number }) => {
   )
 }
 
-export const PreceptComplianceChart = ({ logs }: { logs: { result: string; count: number }[] }) => {
-  const kept = logs.find((l) => l.result === 'kept')?.count ?? 0
-  const violated = logs.find((l) => l.result === 'violated')?.count ?? 0
-  const exempt = logs.find((l) => l.result === 'exempt')?.count ?? 0
+interface ComplianceStats {
+  kept: number
+  violated: number
+  exempt: number
+}
+
+/**
+ * Precept 合规率：基于真实 checkin 日志聚合（近 N 天全部戒律事务的 kept/violated/exempt）。
+ * 数据经 store.listCheckins → /checkin/ 列表接口按 affair_id 拉取后前端聚合。
+ */
+export const PreceptComplianceChart = ({ days = 30 }: { days?: number }) => {
+  const precepts = useRhythmStore((s) => s.precepts)
+  const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
+  const listCheckins = useRhythmStore((s) => s.listCheckins)
+  const [stats, setStats] = useState<ComplianceStats | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setError(null)
+      let affairs = useRhythmStore.getState().precepts
+      if (affairs.length === 0) {
+        await fetchAffairsByKind().catch(() => {})
+        affairs = useRhythmStore.getState().precepts
+      }
+      const end = new Date()
+      const start = new Date()
+      start.setDate(start.getDate() - days)
+      const acc: ComplianceStats = { kept: 0, violated: 0, exempt: 0 }
+      try {
+        await Promise.all(
+          affairs.map(async (p) => {
+            const logs = await listCheckins({ affair_id: p.id, start_date: start, end_date: end })
+            if (cancelled) return
+            logs.forEach((log) => {
+              if (log.result === 'kept') acc.kept += 1
+              else if (log.result === 'violated') acc.violated += 1
+              else if (log.result === 'exempt') acc.exempt += 1
+            })
+          })
+        )
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        return
+      }
+      if (!cancelled) setStats(acc)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [days, precepts.length, fetchAffairsByKind, listCheckins])
+
+  const kept = stats?.kept ?? 0
+  const violated = stats?.violated ?? 0
+  const exempt = stats?.exempt ?? 0
   const total = kept + violated + exempt
-  const rate = total > 0 ? kept / (kept + violated) : 1
+  const rate = kept + violated > 0 ? kept / (kept + violated) : 1
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Precept 合规率</CardTitle>
+        <CardDescription>近 {days} 天 {precepts.length} 条戒律的打卡聚合</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold">{total > 0 ? (rate * 100).toFixed(1) : 100}%</div>
-        <div className="text-sm text-muted-foreground mt-1">
-          遵守 {kept} · 破戒 {violated} · 豁免 {exempt}
-        </div>
+        {!stats && !error && <div className="text-muted-foreground">加载中...</div>}
+        {error && <div className="text-sm text-red-600 dark:text-red-400">加载失败：{error}</div>}
+        {stats && (
+          <>
+            <div className="text-3xl font-bold">{total > 0 ? (rate * 100).toFixed(1) : 100}%</div>
+            <div className="text-sm text-muted-foreground mt-1">
+              遵守 {kept} · 破戒 {violated} · 豁免 {exempt}
+            </div>
+            {total === 0 && (
+              <div className="text-xs text-muted-foreground mt-2">区间内暂无戒律打卡记录</div>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   )

@@ -208,37 +208,59 @@ _DEFAULT_DOMAIN_BY_KIND: Dict[AffairKind, AffairDomain] = {
 }
 
 
-def _sync_venture_target_date(affair: RhythmAffair) -> None:
+def _parse_venture_target_date(target_date: Any) -> datetime:
+    """解析 kind_meta.target_date 为归一化到 00:00 的 datetime。
+
+    解析失败抛 RhythmBadRequestError（400），避免未捕获 ValueError 冒出成 500。
+    """
+    try:
+        if isinstance(target_date, datetime):
+            dt = target_date
+        elif isinstance(target_date, date):
+            dt = datetime.combine(target_date, datetime.min.time())
+        elif isinstance(target_date, str) and target_date.strip():
+            s = target_date.strip()
+            try:
+                dt = datetime.fromisoformat(s)
+            except ValueError:
+                dt = datetime.combine(date.fromisoformat(s[:10]), datetime.min.time())
+        else:
+            raise ValueError(f"不支持的 target_date 类型: {type(target_date).__name__}")
+    except ValueError as e:
+        raise RhythmBadRequestError(f"venture target_date 非法: {target_date!r}") from e
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _sync_venture_target_date(
+    affair: RhythmAffair, touched: bool = True, ddl_wins: bool = False
+) -> None:
     """对 kind==venture 的事务保持 urgency_ddl 与 kind_meta.target_date 一致。
 
     规则：
-    1. 若 kind_meta.target_date 已设置，以其为准同步到 urgency_ddl。
-    2. 若 kind_meta.target_date 为空但 urgency_ddl 有值，反向补全 target_date。
-    3. 两者都为空时保持不变。
-    4. 仅在 kind==venture 时生效。
+    1. 仅在 kind==venture 且本次写入触及目标日（touched=True）时生效。
+    2. 以「最后写入的非空值」为准双向对齐：
+       - 默认 target_date 优先：非空时同步 urgency_ddl = target_date 00:00（归一化）。
+       - ddl_wins=True（本次仅显式写入 urgency_ddl、未触碰 meta）时反向对齐：
+         target_date = urgency_ddl.date()，保留 DDL 时间。
+    3. target_date 为空但 urgency_ddl 非空时，反向补全 target_date。
+    4. 两者皆空时保持为空（清空动作由 update_affair_impl 先执行）。
+
+    注意："显式清空单侧字段"的联动清空由 update_affair_impl 负责，
+    本函数只看写入后的最终状态。
     """
-    if _kind_of(affair) != AffairKind.VENTURE:
+    if _kind_of(affair) != AffairKind.VENTURE or not touched:
         return
     meta = dict(affair.kind_meta or {})
     target_date = meta.get("target_date")
     urgency = affair.urgency_ddl
 
     if target_date:
-        target_dt = None
-        if isinstance(target_date, datetime):
-            target_dt = target_date
-        elif isinstance(target_date, date) and not isinstance(target_date, datetime):
-            target_dt = datetime.combine(target_date, datetime.min.time())
-        elif isinstance(target_date, str) and target_date.strip():
-            try:
-                target_dt = datetime.fromisoformat(str(target_date).strip())
-            except ValueError:
-                target_dt = datetime.combine(
-                    date.fromisoformat(str(target_date)[:10]), datetime.min.time()
-                )
-        if target_dt is not None:
-            target_dt = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-            if urgency is None or urgency.date() != target_dt.date():
+        if ddl_wins and urgency is not None:
+            meta["target_date"] = urgency.date().isoformat()
+            affair.kind_meta = meta
+        else:
+            target_dt = _parse_venture_target_date(target_date)
+            if urgency is None or urgency != target_dt:
                 affair.urgency_ddl = target_dt
     elif urgency is not None:
         meta["target_date"] = urgency.date().isoformat()
@@ -345,7 +367,7 @@ def _profile_to_response(p: RhythmEnergyProfile) -> EnergyProfileResponse:
     return EnergyProfileResponse(
         id=p.id,
         name=p.name,
-        is_default=(p.name == "default"),
+        is_default=bool(getattr(p, "is_default", True)),
         daily_energy_budget=p.daily_energy_budget or 100,
         curve_template=p.curve_template or {},
         sleep_start=p.sleep_start or "23:30",
@@ -484,22 +506,75 @@ def update_affair_impl(
     elif request.kind is not None and request.kind != old_kind:
         affair.kind_meta = validate_kind_meta(new_kind, affair.kind_meta or {})
 
+    # 三态语义：仅当字段在请求中被显式提供（model_fields_set）时才赋值，
+    # 显式 null 同样生效（清空该字段），未提供的字段保持原值。
+    provided = request.model_fields_set
     simple_fields = [
         "title", "description", "importance", "urgency_ddl", "energy_cost",
         "money_cost", "budget_id", "est_minutes", "window_start", "window_end",
 "splittable", "min_chunk_minutes", "fallback_plan", "recurrence_rule_id",
     "day_id", "timespan_id", "parent_id", "ai_hint", "ref",
     ]
-    if request.info_collection_type is not None:
-        affair.info_collection_type = request.info_collection_type.value
+    if "info_collection_type" in provided:
+        affair.info_collection_type = (
+            request.info_collection_type.value
+            if request.info_collection_type is not None
+            else None
+        )
     for field in simple_fields:
-        value = getattr(request, field, None)
-        if value is not None:
-            setattr(affair, field, value)
-    if request.domain is not None:
-        affair.domain = request.domain.value
+        if field in provided:
+            setattr(affair, field, getattr(request, field))
+    if "domain" in provided:
+        affair.domain = request.domain.value if request.domain is not None else None
 
-    _sync_venture_target_date(affair)
+    # 清空标记：优先级高于赋值；与赋值同时提供时记录 warning 并以 clear 为准。
+    if request.clear_urgency_ddl:
+        if "urgency_ddl" in provided:
+            logger.warning(
+                f"[rhythm] affair #{affair.id}: clear_urgency_ddl 与 urgency_ddl "
+                "同时提供，以 clear 为准"
+            )
+        affair.urgency_ddl = None
+    if request.clear_window:
+        if "window_start" in provided or "window_end" in provided:
+            logger.warning(
+                f"[rhythm] affair #{affair.id}: clear_window 与窗口赋值同时提供，以 clear 为准"
+            )
+        affair.window_start = None
+        affair.window_end = None
+
+    # venture 目标日单一来源：显式清空一侧时联动清空另一侧，
+    # 避免出现 "清了 target_date 又被旧 DDL 回填" 的死角。
+    # 注意 kind_meta 为整包替换语义：请求提供了 meta 且替换后 target_date 为空，
+    # 即视为显式清空（无论请求中该键是 null 还是缺失）。
+    meta_touched = request.kind_meta is not None
+    target_cleared = meta_touched and not (affair.kind_meta or {}).get("target_date")
+    urgency_cleared = ("urgency_ddl" in provided and request.urgency_ddl is None) or (
+        request.clear_urgency_ddl
+    )
+    if new_kind == AffairKind.VENTURE:
+        if target_cleared and not urgency_cleared and "urgency_ddl" not in provided:
+            logger.warning(
+                f"[rhythm] venture #{affair.id}: target_date 已清空，联动清空 urgency_ddl"
+            )
+            affair.urgency_ddl = None
+            urgency_cleared = True
+        if urgency_cleared and not meta_touched:
+            meta = dict(affair.kind_meta or {})
+            if meta.get("target_date"):
+                logger.warning(
+                    f"[rhythm] venture #{affair.id}: urgency_ddl 已清空，联动清空 target_date"
+                )
+            meta["target_date"] = None
+            affair.kind_meta = meta
+
+    # 仅写 DDL 未触碰 meta 时 DDL 最后写入，反向对齐 target_date
+    ddl_written = "urgency_ddl" in provided and request.urgency_ddl is not None
+    _sync_venture_target_date(
+        affair,
+        touched=meta_touched or "urgency_ddl" in provided or request.clear_urgency_ddl,
+        ddl_wins=ddl_written and not meta_touched,
+    )
     db.commit()
     db.refresh(affair)
     logger.info(f"[rhythm] affair updated: #{affair.id}")
@@ -2099,11 +2174,26 @@ _DEFAULT_TRAVEL_SLOTS = [
 def recalibrate_profile_impl(
     db: Session, request: EnergyProfileUpsertRequest
 ) -> EnergyProfileResponse:
-    """Dashboard 首次校准：覆盖默认精力画像；若不存在则创建。"""
+    """Dashboard 首次校准：覆盖默认精力画像；若不存在则创建。
+
+    校准成功后清除 is_default 标记（前端据此隐藏校准向导）。
+    """
     # 强制写入 default 画像
     req = EnergyProfileUpsertRequest(**request.model_dump(exclude_unset=True))
     req.name = "default"
-    return upsert_energy_profile_impl(db, req)
+    resp = upsert_energy_profile_impl(db, req)
+    profile = (
+        db.query(RhythmEnergyProfile)
+        .filter(RhythmEnergyProfile.name == "default")
+        .first()
+    )
+    if profile is not None and bool(getattr(profile, "is_default", False)):
+        profile.is_default = False
+        db.commit()
+        db.refresh(profile)
+        resp = _profile_to_response(profile)
+        logger.info("[rhythm] energy profile recalibrated, is_default cleared")
+    return resp
 
 
 def ensure_default_templates_impl(db: Session) -> EnsureTemplatesResponse:

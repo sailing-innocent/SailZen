@@ -200,6 +200,8 @@ class RhythmEnergyProfile(ORMBase):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(64), nullable=False, unique=True, default="default")
+    # 是否为首次导入的未校准默认画像（校准后由 recalibrate 置 False）
+    is_default = Column(Boolean, default=True, nullable=False)
     # 每日精力总点（默认 100）
     daily_energy_budget = Column(Integer, default=100)
     # 24 段能量系数（0.0-1.0），区分 weekday/weekend 两套:
