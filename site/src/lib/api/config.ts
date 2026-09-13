@@ -5,7 +5,9 @@
  * @date 2024-12-26
  */
 
-export const SERVER_URL = process.env.SERVER_URL
+// 注意：未配置 SERVER_URL 时必须退化为空串（而非 undefined/"undefined" 字符串），
+// 使 `${SERVER_URL}/api/...` 退化为同源相对路径；调用方若用 new URL() 需自行传 base。
+export const SERVER_URL = process.env.SERVER_URL ?? ''
 export const API_BASE = 'api/v1'
 export function get_url() {
   return SERVER_URL

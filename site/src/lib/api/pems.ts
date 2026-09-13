@@ -34,7 +34,11 @@ const formatDate = (date: Date | string): string => {
 }
 
 const buildUrl = (path: string, query?: Record<string, string>): string => {
-  const url = new URL(`${SERVER_URL}/${RHYTHM_API_BASE}${path}`)
+  // SERVER_URL 未配置（空串）时退回当前页面 origin（同源部署），
+  // 避免 new URL(relative) 直接抛 "Failed to construct 'URL': Invalid URL"
+  const base =
+    SERVER_URL || (typeof window !== 'undefined' ? window.location.origin : undefined)
+  const url = new URL(`${SERVER_URL}/${RHYTHM_API_BASE}${path}`, base)
   if (query) {
     Object.entries(query).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') {
