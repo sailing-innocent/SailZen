@@ -30,6 +30,7 @@ const TransactionEditCard: React.FC<TransactionEditCardProps> = (props: Transact
 
   const updateTransaction = useTransactionsStore((state) => state.updateTransaction)
   const deleteTransaction = useTransactionsStore((state) => state.deleteTransaction)
+  const fetchAccounts = useAccountsStore((state) => state.fetchAccounts)
   const default_data = useTransactionsStore((state) => {
     const transactions = state.transactions
     return transactions.find((t) => t.id === transactionId)
@@ -222,8 +223,12 @@ const TransactionEditCard: React.FC<TransactionEditCardProps> = (props: Transact
             onClick={async () => {
               if (window.confirm('Are you sure you want to delete this transaction?')) {
                 try {
-                  await deleteTransaction(transactionId)
-                  console.log('Transaction deleted:', transactionId)
+                  const success = await deleteTransaction(transactionId)
+                  if (success) {
+                    console.log('Transaction deleted:', transactionId)
+                    // 删除会回退账户余额，刷新账户列表
+                    fetchAccounts()
+                  }
                 } catch (error) {
                   console.error('Error deleting transaction:', error)
                 }

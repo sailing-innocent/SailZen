@@ -93,24 +93,58 @@ def update_account_balance_impl(db, account_id: int) -> AccountData:
     balance_value = Money(account.balance)
     for in_trans in account.in_transactions:
         state = TransactionState(in_trans.state)
-        if state.is_to_acc_valid():
+        if state.is_to_acc_deprecated():
+            # 已删除交易：一次性回退其入账影响，并清除该侧所有状态位，
+            # 使记录归于 state==0（不再被列表/统计查询返回）
+            balance_value -= Money(in_trans.value)
+            state.unset_to_acc_deprecated()
+            state.unset_to_acc_valid()
+            state.unset_to_acc_updated()
+            state.unset_to_acc_changed()
+            # 对侧为外部/已删除账户时，不会有后续处理机会，一并清理
+            if (
+                in_trans.from_acc_id is None
+                or db.query(Account)
+                .filter(Account.id == in_trans.from_acc_id)
+                .first()
+                is None
+            ):
+                state.unset_from_acc_deprecated()
+                state.unset_from_acc_valid()
+                state.unset_from_acc_updated()
+                state.unset_from_acc_changed()
+        elif state.is_to_acc_valid():
             if not state.is_to_acc_updated():
                 balance_value += Money(in_trans.value)
                 state.set_to_acc_updated()
             if state.is_to_acc_changed():
                 balance_value -= Money(in_trans.prev_value)
             state.unset_to_acc_changed()
-        else:
-            if state.is_to_acc_deprecated():
-                balance_value -= Money(in_trans.value)
-                state.unset_to_acc_deprecated()
-                # finally set to 0
         in_trans.state = state.value
 
     for out_trans in account.out_transactions:
         state = TransactionState(out_trans.state)
         try:
-            if state.is_from_acc_valid():
+            if state.is_from_acc_deprecated():
+                # 已删除交易：一次性回退其出账影响，并清除该侧所有状态位
+                balance_value += Money(out_trans.value)
+                state.unset_from_acc_deprecated()
+                state.unset_from_acc_valid()
+                state.unset_from_acc_updated()
+                state.unset_from_acc_changed()
+                # 对侧为外部/已删除账户时，不会有后续处理机会，一并清理
+                if (
+                    out_trans.to_acc_id is None
+                    or db.query(Account)
+                    .filter(Account.id == out_trans.to_acc_id)
+                    .first()
+                    is None
+                ):
+                    state.unset_to_acc_deprecated()
+                    state.unset_to_acc_valid()
+                    state.unset_to_acc_updated()
+                    state.unset_to_acc_changed()
+            elif state.is_from_acc_valid():
                 if not state.is_from_acc_updated():
                     # logging.info(f"OutTransaction Value: {out_trans.value}")
                     balance_value -= Money(out_trans.value)
@@ -118,11 +152,6 @@ def update_account_balance_impl(db, account_id: int) -> AccountData:
                 if state.is_from_acc_changed():
                     balance_value += Money(out_trans.prev_value)
                 state.unset_from_acc_changed()
-            else:
-                if state.is_from_acc_deprecated():
-                    balance_value += Money(out_trans.value)
-                    state.unset_from_acc_deprecated()
-                    # finally set to 0
         except Exception as e:
             logger.error(f"Error updating account balance: {e}")
             logger.error(f"proceeding with out_trans: {out_trans}")
@@ -178,11 +207,11 @@ def recalc_account_balance_impl(db, account_id: int) -> AccountData:
     for in_trans in account.in_transactions:
         state = TransactionState(in_trans.state)
 
+        # 已删除交易：重算时直接跳过（等效于回退其影响）
+        if state.is_to_acc_deprecated():
+            continue
         if not state.is_to_acc_valid():
-            if state.is_to_acc_deprecated():
-                continue
-            else:
-                state.set_to_acc_valid()
+            state.set_to_acc_valid()
 
         balance_value += Money(in_trans.value)
         state.set_to_acc_updated()
@@ -191,11 +220,10 @@ def recalc_account_balance_impl(db, account_id: int) -> AccountData:
 
     for out_trans in account.out_transactions:
         state = TransactionState(out_trans.state)
+        if state.is_from_acc_deprecated():
+            continue
         if not state.is_from_acc_valid():
-            if state.is_from_acc_deprecated():
-                continue
-            else:
-                state.set_from_acc_valid()
+            state.set_from_acc_valid()
         balance_value -= Money(out_trans.value)
         state.set_from_acc_updated()
         state.unset_from_acc_changed()

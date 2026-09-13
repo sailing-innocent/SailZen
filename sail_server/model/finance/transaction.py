@@ -14,6 +14,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+#: state bits 6/7 = from/to_acc_deprecated（见 TransactionState）
+TRANSACTION_DEPRECATED_MASK = (1 << 6) | (1 << 7)
+
+
+def _not_deprecated():
+    """排除软删除（deprecated）交易的查询过滤条件。
+
+    历史上 delete_transaction_impl 只做软删除标记，遗留数据仍带有
+    deprecated 位，需要在这些查询中被排除。
+    """
+    return Transaction.state.op("&")(TRANSACTION_DEPRECATED_MASK) == 0
+
 
 def clean_all_impl(db):
     db.query(Transaction).delete()
@@ -92,6 +104,9 @@ def validate_transactions_impl(db):
     transactions = db.query(Transaction).all()
     for transaction in transactions:
         state = TransactionState(transaction.state)
+        # 已软删除（deprecated）的交易不再重新标记 valid，避免"复活"
+        if state.is_from_acc_deprecated() or state.is_to_acc_deprecated():
+            continue
         from_acc_id = _acc_inv(transaction.from_acc_id)
         to_acc_id = _acc_inv(transaction.to_acc_id)
 
@@ -129,7 +144,7 @@ def _build_transaction_query(
     max_value: float = None,
 ):
     """Build the base query for transactions with filtering."""
-    q = db.query(Transaction).filter(Transaction.state != 0)
+    q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
 
     if len(_tags) > 0:
         condition = None
@@ -273,29 +288,69 @@ def label_transaction_impl(db, transaction_id: int, label: str, positive: bool =
     return
 
 
+def _applied_side_value(state: TransactionState, side: str, transaction: Transaction):
+    """返回交易某一侧（from/to）已实际计入账户余额的金额。
+
+    与 update_account_balance_impl 的状态机语义保持一致：
+    - updated 位置位     -> 余额持有当前 value
+    - changed 位置位     -> 余额仍持有 prev_value（差额尚未入账）
+    - 两者皆未置位       -> 尚未入账，返回 None
+    """
+    if side == "from":
+        updated = state.is_from_acc_updated()
+        changed = state.is_from_acc_changed()
+    else:
+        updated = state.is_to_acc_updated()
+        changed = state.is_to_acc_changed()
+    if updated:
+        return transaction.value
+    if changed:
+        return transaction.prev_value
+    return None
+
+
+def _reverse_transaction_balance_effect(db, transaction: Transaction) -> None:
+    """删除交易前，回退其已实际计入相关账户余额的金额。"""
+    state = TransactionState(transaction.state)
+    to_acc_id = _acc_inv(transaction.to_acc_id)
+    from_acc_id = _acc_inv(transaction.from_acc_id)
+
+    # to 侧为入账（余额增加），回退时减去
+    if to_acc_id != -1:
+        applied = _applied_side_value(state, "to", transaction)
+        if applied is not None:
+            account = db.query(Account).filter(Account.id == to_acc_id).first()
+            if account is not None:
+                balance = Money(account.balance) - Money(applied)
+                account.balance = balance.value_str
+                account.mtime = datetime.now()
+
+    # from 侧为出账（余额减少），回退时加回
+    if from_acc_id != -1:
+        applied = _applied_side_value(state, "from", transaction)
+        if applied is not None:
+            account = db.query(Account).filter(Account.id == from_acc_id).first()
+            if account is not None:
+                balance = Money(account.balance) + Money(applied)
+                account.balance = balance.value_str
+                account.mtime = datetime.now()
+
+
 def delete_transaction_impl(db, transaction_id: int = None):
     if transaction_id is None:
         return None
-    # db.query(Transaction).filter(Transaction.id == transaction_id).delete()
-    # mark deprecate here
     transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
-    state = TransactionState(transaction.state)
+    if transaction is None:
+        return None
 
-    if state.is_from_acc_valid():
-        state.unset_from_acc_valid()
-    state.set_from_acc_deprecated()
-    if state.is_to_acc_valid():
-        state.unset_to_acc_valid()
-    state.set_to_acc_deprecated()
-    state.unset_from_acc_updated()
-    state.unset_to_acc_updated()
-    state.unset_from_acc_changed()
-    state.unset_to_acc_changed()
-
-    transaction.state = state.value
+    # 先回退已入账的余额影响，再真正删除记录。
+    # 历史上这里只做软删除标记（deprecated 位），记录会一直留在表里，
+    # 所有列表查询（仅过滤 state != 0）依旧返回它，导致"删除后刷新又出现"。
+    deleted = read_from_trans(transaction)
+    _reverse_transaction_balance_effect(db, transaction)
+    db.delete(transaction)
     db.commit()
-    db.refresh(transaction)
-    return read_from_trans(transaction)
+    return deleted
 
 
 def clear_invalid_trnasaction_impl(db):
@@ -379,7 +434,7 @@ def read_untagged_transactions_impl(
     """
     from sqlalchemy import or_
 
-    q = db.query(Transaction).filter(Transaction.state != 0)
+    q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
 
     # 筛选未打标签: tags 为 NULL、空字符串、或只包含逗号
     q = q.filter(
@@ -440,7 +495,7 @@ def get_tag_patterns_impl(
     from collections import defaultdict
 
     # Base query: valid transactions with non-empty tags
-    q = db.query(Transaction).filter(Transaction.state != 0)
+    q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
     q = q.filter(
         Transaction.tags.isnot(None),
         Transaction.tags != "",
@@ -493,7 +548,7 @@ def get_tag_patterns_impl(
     patterns = patterns[:limit]
 
     # Count untagged
-    untagged_q = db.query(Transaction).filter(Transaction.state != 0)
+    untagged_q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
     untagged_q = untagged_q.filter(
         or_(
             Transaction.tags.is_(None),
@@ -606,7 +661,7 @@ def get_transaction_stats_impl(
             "data": List[TransactionData] (optional, only when return_list=True)
         }
     """
-    q = db.query(Transaction).filter(Transaction.state != 0)
+    q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
 
     # Apply tag filtering
     if len(_tags) > 0:

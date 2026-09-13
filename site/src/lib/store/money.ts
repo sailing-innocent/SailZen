@@ -246,6 +246,11 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
   },
   deleteTransaction: async (id: number): Promise<boolean> => {
     const response = await api_delete_transaction(id)
+    const success = response.status === 'success'
+    // 仅在服务端删除成功后才移除本地记录，避免服务端失败时前端假删除
+    if (!success) {
+      return false
+    }
     set((state: TransactionsState): TransactionsState => {
       const newState: TransactionsState = {
         ...state,
@@ -257,7 +262,7 @@ export const useTransactionsStore: UseBoundStore<StoreApi<TransactionsState>> = 
       }
       return newState // trigger re-render
     })
-    return response.status === 'success'
+    return true
   },
   getSupportedTags: (): string[] => {
     // 从 FinanceTagsStore 获取动态标签，如果尚未加载则返回空数组

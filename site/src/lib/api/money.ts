@@ -183,6 +183,9 @@ const api_delete_transaction = async (id: number): Promise<TransactionResponse> 
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/transaction/${id}`, {
     method: 'DELETE',
   })
+  if (!response.ok) {
+    throw new Error('Failed to delete transaction')
+  }
   return response.json()
 }
 
