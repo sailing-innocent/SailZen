@@ -414,4 +414,22 @@ class MoneyViewModelTest {
         val delta = nowSec - midnight
         assertTrue(delta in 0..86400L)
     }
+
+    // ---------------- ViewModel 工厂 ----------------
+
+    @Test
+    fun factory_createsViewModelWithoutDefaultFactoryCrash() = runBlocking {
+        // 回归：MoneyViewModel 构造器带 repository 参数，若依赖默认 AndroidViewModelFactory
+        // 会在打开记账页时抛 IllegalArgumentException("Cannot create an instance of class ...")；
+        // 这里验证显式工厂能正常创建实例（实际接线见 MoneyScreen）。
+        val app = FakeApplication()
+        val repo = FakeMoneyRepository(app)
+        repo.accountsResult = OperationResult.Success(listOf(account(1)))
+
+        val vm = MoneyViewModelFactory(app, repo).create(MoneyViewModel::class.java)
+        vms.add(vm)
+        awaitCondition { vm.uiState.value.accounts.isNotEmpty() }
+
+        assertEquals(listOf(1), vm.uiState.value.accounts.map { it.id })
+    }
 }
