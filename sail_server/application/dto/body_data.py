@@ -105,6 +105,18 @@ BUILTIN_METRICS: List[BodyMetricDefinition] = [
         higher_is_better=False,
     ),
     BodyMetricDefinition(
+        key="penis_length", label_zh="起长", label_en="Erose Length", unit="cm",
+        category=BodyMetricCategory.BODY, precision=1, min=1.0, max=30.0,
+    ),
+    BodyMetricDefinition(
+        key="penis_circ", label_zh="起围", label_en="Erose Circ", unit="cm",
+        category=BodyMetricCategory.BODY, precision=1, min=1.0, max=30.0,
+    ),
+    BodyMetricDefinition(
+        key="penis_time", label_zh="起时长", label_en="Erose TimeLen", unit="min",
+        category=BodyMetricCategory.BODY, precision=1, min=1.0, max=60.0,
+    ),
+    BodyMetricDefinition(
         key="body_fat_pct", label_zh="体脂率", label_en="Body Fat", unit="%",
         category=BodyMetricCategory.BODY, precision=1, min=1.0, max=70.0,
         higher_is_better=False,
