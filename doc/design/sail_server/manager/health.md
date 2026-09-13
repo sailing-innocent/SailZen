@@ -17,7 +17,8 @@
 - 校验：未知 key 拒绝；内置指标做 min/max 范围校验（越界 422）
 - **dual-write**：`data` 含 `weight` 且 `source=manual` 时同步写 weights 表（savepoint 包裹），
   保证体重计划与旧 `/weight` 端点兼容；删除 body_data 记录时级联清理关联体重记录
-- 历史体重数据由 `migration/20260906_backfill_body_data.py` 幂等回填（可重入）
+- 历史体重数据不回填：原 Python 迁移脚本（`20260906_backfill_body_data.py`）已随 Python 迁移机制整体移除
+  （该机制不可靠，曾因 naive/aware datetime 崩溃阻断启动）；如需迁移历史数据，改用一次性手工脚本/CLI 执行
 
 ## 功能
 

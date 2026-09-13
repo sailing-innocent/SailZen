@@ -6,7 +6,7 @@
 > **v1.1 变更摘要**：dashboard 新增 `degraded[]` 降级字段与结构化 `PlanWarning`；
 > `PUT /affair/{id}` 三态更新语义 + `clear_*` 显式清除；`kind_meta` 明确为整体替换；
 > venture 目标日写时同步规则细化（含级联清空）；`rhythm_energy_profiles.is_default`
-> 落为真实列并配 Python 迁移；里程碑单一来源改为 progress API 派生。
+> 落为真实列并配 SQL 迁移；里程碑单一来源改为 progress API 派生。
 
 生活与工作同等重要。Rhythm 把生活必须项（戒律/习惯/基础节奏/刚性规划）与工作事项
 （一次性任务/长期维护）及个人长期事业（venture）放进**同一优先级坐标系**，
@@ -167,14 +167,13 @@ INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED �
 - 打卡 result: precept → `kept/violated/exempt`；habit → `done/missed/exempt`
 - cycle_key: daily → `2026-10-26`；weekly → `W2026-44`（ISO 周）
 - 迁移 SQL: `sail_server/migration/20261026_add_rhythm.sql`（PG）；SQLite 由 create_all 自动建表
-- 迁移 SQL `sail_server/migration/20260906_add_rhythm_profile_v2.sql`：幂等 ADD COLUMN IF NOT EXISTS
-  为 `rhythm_energy_profiles` 增加 v2 四列（work_windows/morning_health_window/
-  career_buffer_minutes/work_gap_minutes）并 DEFAULT 回填
-- Python 迁移 `sail_server/migration/20260906_add_rhythm_is_default.py`：幂等为
-  `rhythm_energy_profiles` 增加 `is_default` 列并把 `name='default'` 行回填为 true；
-  由 `server.py` 启动时 `_ensure_rhythm_schema` 自动执行（7 表存在性检查 + 迁移注册表），
-  失败只记日志、不阻断启动。里程碑不落 kind_meta：单一来源为服务端 progress 派生
-  （子事务行），`kind_meta.milestones` 已废弃
+  - SQL 迁移 `sail_server/migration/20260906_add_rhythm_is_default.sql`：幂等为
+    `rhythm_energy_profiles` 增加 `is_default` 列并把 `name='default'` 行回填为 true；
+    由启动迁移 runner（`run_migrations`，PG 后端）自动执行，`server.py` 的
+    `_ensure_rhythm_schema` 启动期兜底复检（7 表存在性检查），失败只记日志、不阻断启动。
+      （Python 迁移机制已整体移除，不再支持，不要再新增 Python 迁移脚本。）
+      里程碑不落 kind_meta：单一来源为服务端 progress 派生
+    （子事务行），`kind_meta.milestones` 已废弃
 
 ## 4. 核心算法（model/rhythm_planner.py，服务端确定性）
 

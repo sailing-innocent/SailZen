@@ -218,28 +218,31 @@ class TestVentureTargetDateClear:
 
 
 class TestMigrationIdempotent:
-    """迁移脚本幂等：在已有完整 schema 上重复执行不报错、不产生副作用。"""
+    """迁移幂等：迁移 runner 在已有完整 schema 上重复执行不报错、不产生副作用。
 
-    def test_is_default_migration_runs_twice(self, db: Session):
-        import importlib.util
-        from pathlib import Path
+    注意：Python 迁移机制已整体移除（不可靠，曾致启动失败，
+    见 sail_server/migration/__init__.py 模块 docstring），此处只验证
+    SQL 迁移注册表与 runner 行为，不要再新增 Python 迁移脚本测试。
+    """
 
-        migration_path = (
-            Path(__file__).resolve().parent.parent.parent
-            / "sail_server"
-            / "migration"
-            / "20260906_add_rhythm_is_default.py"
-        )
-        spec = importlib.util.spec_from_file_location(
-            "add_rhythm_is_default", migration_path
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    def test_run_migrations_idempotent_on_sqlite(
+        self, db: Session, monkeypatch, tmp_path
+    ):
+        """SQLite 后端重复执行 run_migrations 为空操作、不报错、列保持完整。"""
+        # db 模块导入时会读取环境变量创建 Database 单例，先切到临时 SQLite
+        monkeypatch.setenv("DB_BACKEND", "sqlite")
+        monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "migration_test.db"))
 
-        # 第一遍：列已存在（create_all 已建）→ 立即返回；建表 checkfirst 空操作
-        module.migrate(db)
-        # 第二遍：幂等
-        module.migrate(db)
+        from sail_server.db import Database
+        from sail_server.migration import run_migrations
+
+        class _BackendStub:
+            backend = "sqlite"
+
+        monkeypatch.setattr(Database, "get_instance", lambda: _BackendStub())
+
+        run_migrations(db)
+        run_migrations(db)
         db.commit()
 
         from sqlalchemy import inspect
@@ -247,6 +250,17 @@ class TestMigrationIdempotent:
         insp = inspect(db.bind)
         cols = {c["name"] for c in insp.get_columns("rhythm_energy_profiles")}
         assert "is_default" in cols
+
+    def test_migration_registry_is_sql_only(self):
+        """迁移注册表仅允许 .sql 脚本，且目录下不得残留 Python 迁移脚本。"""
+        from sail_server.migration import MIGRATION_DIR, SQL_MIGRATIONS
+
+        assert SQL_MIGRATIONS, "SQL_MIGRATIONS 不应为空"
+        for path in SQL_MIGRATIONS:
+            assert path.suffix == ".sql", f"只允许 SQL 迁移: {path}"
+            assert path.exists(), f"SQL 迁移文件缺失: {path}"
+        py_scripts = [p for p in MIGRATION_DIR.glob("*.py") if p.name != "__init__.py"]
+        assert py_scripts == [], f"Python 迁移机制已移除，不应存在: {py_scripts}"
 
     def test_backfill_marks_default_profile(self, db: Session):
         """存量 name='default' 行回填 is_default=true。"""

@@ -3,7 +3,7 @@
 # @brief Database Migration Runner
 # @author sailing-innocent
 # @date 2026-08-15
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
 """
@@ -11,9 +11,16 @@
 
 设计目标：
 - 启动时自动补齐数据库 schema 与 ORM 模型之间的差异（无痛迁移）。
-- 对 PostgreSQL 执行 SQL 迁移文件（触发器、索引、原生效能）。
-- 对所有后端执行 Python 迁移脚本（ALTER TABLE 添加列等）。
+- 仅支持 SQL 迁移文件（PostgreSQL 后端）：触发器、索引、PG 原生 DDL 等。
 - 全部脚本均为幂等，可反复安全执行。
+
+重要决策：不支持 Python 迁移脚本。
+Python 迁移机制已被实践证明不可靠，已从本框架完全移除（2026-09-13），原因：
+- ORM 层报错被 SQLAlchemy 层层包装，难以定位根因；
+- 与 PG 原生 DDL 行为差异大（如 naive/aware datetime 混用直接 TypeError
+  崩溃，20260906_backfill_body_data 曾因此迁移失败、阻断服务器启动）；
+- 数据 backfill/数据修正类需求，请改用一次性 CLI/手工脚本（scripts/ 或
+  sailzen cli）单独执行，禁止挂进启动迁移流程。
 
 用法：
     from sail_server.migration import run_migrations
@@ -24,7 +31,6 @@
 """
 
 import logging
-import runpy
 from pathlib import Path
 from typing import List, Optional
 
@@ -34,17 +40,8 @@ logger = logging.getLogger(__name__)
 
 MIGRATION_DIR = Path(__file__).parent
 
-# Python 迁移脚本（跨后端）
-# 注意：Python 迁移方式已被实践证明不可靠（如触发器函数引用不存在的列时，
-# 报错信息被 SQLAlchemy 层层包装，难以定位；且与 PG 原生 DDL 行为差异大），
-# 因此 schema 变更（加列/触发器/索引）统一走 SQL_MIGRATIONS。
-# 例外：跨 PG/SQLite 双后端的数据 backfill/数据修正，SQL 不可移植
-# （SQLite 下 JSONB 退化为 Text），可使用 Python 脚本，脚本必须幂等可重入。
-PYTHON_MIGRATIONS: List[Path] = [
-    MIGRATION_DIR / "20260906_backfill_body_data.py",
-]
-
-# SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型）
+# SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型/DDL）。
+# 注意：这里只接受 .sql 文件。不要新增 Python 迁移脚本（见模块 docstring）。
 SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20260906_add_rhythm_is_default.sql",
     MIGRATION_DIR / "20260906_add_rhythm_profile_v2.sql",
@@ -64,23 +61,14 @@ def _run_sql_migration(db: Session, sql_path: Path) -> None:
     logger.info(f"[Migration] SQL migration completed: {sql_path.name}")
 
 
-def _run_python_migration(db: Session, py_path: Path) -> None:
-    """执行单个 Python 迁移脚本。"""
-    logger.info(f"[Migration] Running Python migration: {py_path.name}")
-    module = runpy.run_path(str(py_path), run_name=f"sail_server.migration.{py_path.stem}")
-    migrate_fn = module.get("migrate")
-    if migrate_fn is None:
-        logger.warning(f"[Migration] No migrate() function found in {py_path.name}, skipping")
-        return
-    migrate_fn(db)
-    logger.info(f"[Migration] Python migration completed: {py_path.name}")
-
-
 def run_migrations(db: Optional[Session] = None) -> None:
     """自动运行所有迁移脚本。
 
     在 Database.__init__ 之后调用，确保所有 ORM 表已存在。
     迁移脚本均为幂等，可安全地在每次启动时执行。
+
+    仅执行 SQL_MIGRATIONS（PostgreSQL 后端）；SQLite 后端由
+    SQLAlchemy create_all 自动建表/补列，无需迁移脚本。
 
     Args:
         db: 可选的数据库会话。未提供时自动创建新会话。
@@ -100,12 +88,6 @@ def run_migrations(db: Optional[Session] = None) -> None:
                     _run_sql_migration(db, sql_path)
                 else:
                     logger.warning(f"[Migration] SQL migration not found: {sql_path}")
-
-        for py_path in PYTHON_MIGRATIONS:
-            if py_path.exists():
-                _run_python_migration(db, py_path)
-            else:
-                logger.warning(f"[Migration] Python migration not found: {py_path}")
 
         db.commit()
         logger.info("[Migration] All migrations completed successfully")

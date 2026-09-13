@@ -13,7 +13,6 @@
 - 未测量语义：部分指标记录的 series 仅含已测点
 - metrics 端点：内置注册表 + x_ 自定义指标动态发现（builtin=false）
 - weight dual-write：创建回填 weightId、更新联动、删除级联
-- backfill 迁移幂等：重复执行 0 新增
 - analysis 端点：任意指标 trend 返回结构正确
 """
 from datetime import datetime, timedelta
@@ -267,49 +266,6 @@ class TestBodyDataWeightDualWrite:
         weight_id = db.query(BodyData).filter(BodyData.id == rid).first().weight_id
         client.delete(f"{BASE}/{rid}")
         assert db.query(Weight).filter(Weight.id == weight_id).first() is None
-
-
-# ============================================================================
-# Backfill 迁移幂等
-# ============================================================================
-
-
-class TestBodyDataBackfill:
-    def test_backfill_idempotent(self, client: TestClient, db: Session):
-        from sail_server.migration import _run_python_migration
-        from pathlib import Path
-
-        migration = Path("sail_server/migration/20260906_backfill_body_data.py")
-
-        # 预置旧 weights 数据
-        for i in range(3):
-            db.add(Weight(value=str(70.0 + i), htime=datetime.now() - timedelta(days=i), tag="raw"))
-        db.commit()
-
-        _run_python_migration(db, migration)
-        count1 = db.query(BodyData).filter(BodyData.source == "weight_backfill").count()
-        assert count1 == 3
-        # 全部关联回填
-        assert db.query(BodyData).filter(BodyData.weight_id.isnot(None)).count() == 3
-
-        # 第二次执行 0 新增
-        _run_python_migration(db, migration)
-        count2 = db.query(BodyData).filter(BodyData.source == "weight_backfill").count()
-        assert count2 == 3
-
-    def test_backfilled_weight_visible_in_series(self, client: TestClient, db: Session):
-        from sail_server.migration import _run_python_migration
-        from pathlib import Path
-
-        migration = Path("sail_server/migration/20260906_backfill_body_data.py")
-        db.add(Weight(value="70.5", htime=datetime.now() - timedelta(days=1), tag="raw"))
-        db.commit()
-        _run_python_migration(db, migration)
-
-        resp = client.get(f"{BASE}/series?metric=weight")
-        points = resp.json()["points"]
-        assert len(points) == 1
-        assert points[0]["value"] == 70.5
 
 
 # ============================================================================
