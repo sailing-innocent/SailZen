@@ -16,10 +16,11 @@
     - 图表端缺测点断线、不补零、不插值；
     - 自定义指标 key 必须带 ``x_`` 前缀（如 ``x_uric_acid``），其余 key 必须命中内置注册表。
 
-三端（后端 / site 前端 / Android）共享同一份内置指标清单，修改时需同步：
-    - ``sail_server/application/dto/body_data.py``（本文件，权威定义）
-    - ``site/src/lib/data/body_data.ts``（前端镜像，首屏 fallback）
-    - ``android/.../core/network/dto/BodyDataDtos.kt``（Android 镜像）
+三端（后端 / site 前端 / Android）+ mock 共享同一份内置指标清单，
+单一权威为 ``config/body_metrics.toml``：修改后运行
+``uv run python scripts/generate_body_metrics.py`` 重新生成本文件、
+``site/src/lib/data/body_data.ts``、``android/.../core/network/dto/BodyDataDtos.kt``
+与 ``site/mock/server.js`` 中的注册表镜像（GENERATED 标记块内勿手改）。
 """
 
 import math
@@ -77,6 +78,8 @@ class BodyMetricDefinition(BaseModel):
     builtin: bool = Field(default=True, description="是否内置指标；自定义指标为 False")
 
 
+# === BEGIN GENERATED BODY METRICS (source: config/body_metrics.toml) ===
+# 本代码块由 scripts/generate_body_metrics.py 生成，请勿手改。
 BUILTIN_METRICS: List[BodyMetricDefinition] = [
     BodyMetricDefinition(
         key="weight", label_zh="体重", label_en="Weight", unit="kg",
@@ -128,6 +131,7 @@ BUILTIN_METRICS: List[BodyMetricDefinition] = [
         higher_is_better=False,
     ),
 ]
+# === END GENERATED BODY METRICS ===
 
 #: 内置指标 key -> 定义 的快速索引
 BUILTIN_METRIC_MAP: Dict[str, BodyMetricDefinition] = {m.key: m for m in BUILTIN_METRICS}

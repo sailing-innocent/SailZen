@@ -92,7 +92,9 @@ export interface BodyMetricAnalysisResult {
   predicted_points: BodyMetricPredictedPoint[]
 }
 
-/** 内置指标注册表（与后端 BUILTIN_METRICS 保持一致） */
+// === BEGIN GENERATED BODY METRICS (source: config/body_metrics.toml) ===
+// 本代码块由 scripts/generate_body_metrics.py 生成，请勿手改。
+/** 内置指标注册表（单一权威：config/body_metrics.toml，经代码生成同步三端） */
 export const BUILTIN_METRICS: BodyMetricDef[] = [
   { key: 'weight', labelZh: '体重', labelEn: 'Weight', unit: 'kg', category: 'body', precision: 1, min: 20, max: 300, higherIsBetter: false, builtin: true },
   { key: 'height', labelZh: '身高', labelEn: 'Height', unit: 'cm', category: 'body', precision: 1, min: 100, max: 250, higherIsBetter: true, builtin: true },
@@ -106,6 +108,7 @@ export const BUILTIN_METRICS: BodyMetricDef[] = [
   { key: 'water', labelZh: '饮水量', labelEn: 'Water', unit: 'ml', category: 'intake', precision: 0, min: 0, max: 8000, higherIsBetter: true, builtin: true },
   { key: 'caffeine', labelZh: '咖啡因', labelEn: 'Caffeine', unit: 'mg', category: 'intake', precision: 0, min: 0, max: 1000, higherIsBetter: false, builtin: true },
 ]
+// === END GENERATED BODY METRICS ===
 
 const METRIC_MAP = new Map<string, BodyMetricDef>(BUILTIN_METRICS.map((m) => [m.key, m]))
 

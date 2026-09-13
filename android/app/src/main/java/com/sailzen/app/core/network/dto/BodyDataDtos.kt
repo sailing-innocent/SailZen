@@ -31,7 +31,9 @@ data class BodyMetricDefDto(
     val builtin: Boolean = true,
 )
 
-/** 内置指标镜像（与后端 BUILTIN_METRICS 保持一致，三端同步修改） */
+// === BEGIN GENERATED BODY METRICS (source: config/body_metrics.toml) ===
+// 本代码块由 scripts/generate_body_metrics.py 生成，请勿手改。
+/** 内置指标镜像（单一权威：config/body_metrics.toml，经代码生成同步三端） */
 val BUILTIN_BODY_METRICS: List<BodyMetricDefDto> = listOf(
     BodyMetricDefDto("weight", "体重", "Weight", "kg", BodyMetricCategory.body, 1, 20.0, 300.0, higherIsBetter = false),
     BodyMetricDefDto("height", "身高", "Height", "cm", BodyMetricCategory.body, 1, 100.0, 250.0),
@@ -45,6 +47,7 @@ val BUILTIN_BODY_METRICS: List<BodyMetricDefDto> = listOf(
     BodyMetricDefDto("water", "饮水量", "Water", "ml", BodyMetricCategory.intake, 0, 0.0, 8000.0),
     BodyMetricDefDto("caffeine", "咖啡因", "Caffeine", "mg", BodyMetricCategory.intake, 0, 0.0, 1000.0, higherIsBetter = false),
 )
+// === END GENERATED BODY METRICS ===
 
 @Serializable
 data class BodyDataDto(

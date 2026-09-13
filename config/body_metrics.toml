@@ -1,0 +1,148 @@
+# =============================================================================
+# 内置身体指标注册表 —— 单一权威（single source of truth）
+# =============================================================================
+# 后端 / site 前端 / Android / site mock 四处注册表镜像均由本文件代码生成，
+# 不要再手工同步多份清单。
+#
+# 修改指标（新增/改范围/改标签等）只需编辑本文件，然后运行：
+#   uv run python scripts/generate_body_metrics.py
+# 该脚本会原地刷新以下四个生成块（标记之间的内容请勿手改）：
+#   - sail_server/application/dto/body_data.py        (BUILTIN_METRICS)
+#   - site/src/lib/data/body_data.ts                  (BUILTIN_METRICS)
+#   - android/app/src/main/java/com/sailzen/app/core/network/dto/BodyDataDtos.kt
+#     (BUILTIN_BODY_METRICS)
+#   - site/mock/server.js                             (BODY_METRICS, 仅开发用)
+#
+# 校验生成物是否最新（CI/测试用）：
+#   uv run python scripts/generate_body_metrics.py --check
+#
+# 字段说明：
+#   key              指标唯一 key（小写字母开头，仅小写字母/数字/下划线）
+#   label_zh/label_en 中文/英文标签
+#   unit             单位（kg / cm / % / g / ml / mg ...）
+#   category         分类：body 身体测量 / intake 饮食补给 / fitness 预留
+#   precision        展示用小数位数
+#   min / max        合法范围（含边界），省略表示不校验
+#   higher_is_better 偏高是否通常更好（仅信息展示）
+# =============================================================================
+
+[[metric]]
+key = "weight"
+label_zh = "体重"
+label_en = "Weight"
+unit = "kg"
+category = "body"
+precision = 1
+min = 20.0
+max = 300.0
+higher_is_better = false
+
+[[metric]]
+key = "height"
+label_zh = "身高"
+label_en = "Height"
+unit = "cm"
+category = "body"
+precision = 1
+min = 100.0
+max = 250.0
+higher_is_better = true
+
+[[metric]]
+key = "chest"
+label_zh = "胸围"
+label_en = "Chest"
+unit = "cm"
+category = "body"
+precision = 1
+min = 40.0
+max = 200.0
+higher_is_better = true
+
+[[metric]]
+key = "waist"
+label_zh = "腰围"
+label_en = "Waist"
+unit = "cm"
+category = "body"
+precision = 1
+min = 40.0
+max = 200.0
+higher_is_better = false
+
+[[metric]]
+key = "hip"
+label_zh = "臀围"
+label_en = "Hip"
+unit = "cm"
+category = "body"
+precision = 1
+min = 40.0
+max = 250.0
+higher_is_better = false
+
+[[metric]]
+key = "body_fat_pct"
+label_zh = "体脂率"
+label_en = "Body Fat"
+unit = "%"
+category = "body"
+precision = 1
+min = 1.0
+max = 70.0
+higher_is_better = false
+
+[[metric]]
+key = "muscle_mass"
+label_zh = "肌肉量"
+label_en = "Muscle Mass"
+unit = "kg"
+category = "body"
+precision = 1
+min = 5.0
+max = 150.0
+higher_is_better = true
+
+[[metric]]
+key = "protein_powder"
+label_zh = "蛋白粉"
+label_en = "Protein Powder"
+unit = "g"
+category = "intake"
+precision = 0
+min = 0.0
+max = 300.0
+higher_is_better = true
+
+[[metric]]
+key = "creatine"
+label_zh = "肌酸"
+label_en = "Creatine"
+unit = "g"
+category = "intake"
+precision = 1
+min = 0.0
+max = 50.0
+higher_is_better = true
+
+[[metric]]
+key = "water"
+label_zh = "饮水量"
+label_en = "Water"
+unit = "ml"
+category = "intake"
+precision = 0
+min = 0.0
+max = 8000.0
+higher_is_better = true
+
+[[metric]]
+key = "caffeine"
+label_zh = "咖啡因"
+label_en = "Caffeine"
+unit = "mg"
+category = "intake"
+precision = 0
+min = 0.0
+max = 1000.0
+higher_is_better = false

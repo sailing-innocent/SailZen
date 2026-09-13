@@ -28,8 +28,9 @@ const TRANSACTIONS_FILE = join(DATA_DIR, 'transactions.json')
 const WEIGHTS_FILE = join(DATA_DIR, 'weights.json')
 const BODY_DATA_FILE = join(DATA_DIR, 'body_data.json')
 
-// Builtin body metric registry mirror（与 site/src/lib/data/body_data.ts 及
-// 后端 sail_server/application/dto/body_data.py 保持三端同步；mock 仅开发用）
+// === BEGIN GENERATED BODY METRICS (source: config/body_metrics.toml) ===
+// 本代码块由 scripts/generate_body_metrics.py 生成，请勿手改。
+// 内置指标注册表镜像（单一权威：config/body_metrics.toml；mock 仅开发用）
 const BODY_METRICS = [
   { key: 'weight', labelZh: '体重', labelEn: 'Weight', unit: 'kg', category: 'body', precision: 1, min: 20, max: 300, higherIsBetter: false, builtin: true },
   { key: 'height', labelZh: '身高', labelEn: 'Height', unit: 'cm', category: 'body', precision: 1, min: 100, max: 250, higherIsBetter: true, builtin: true },
@@ -43,6 +44,7 @@ const BODY_METRICS = [
   { key: 'water', labelZh: '饮水量', labelEn: 'Water', unit: 'ml', category: 'intake', precision: 0, min: 0, max: 8000, higherIsBetter: true, builtin: true },
   { key: 'caffeine', labelZh: '咖啡因', labelEn: 'Caffeine', unit: 'mg', category: 'intake', precision: 0, min: 0, max: 1000, higherIsBetter: false, builtin: true },
 ]
+// === END GENERATED BODY METRICS ===
 
 // Ensure data directory and files exist
 async function initializeData() {
