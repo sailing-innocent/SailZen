@@ -2,6 +2,7 @@ package com.sailzen.app.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Email
@@ -31,6 +32,7 @@ import com.sailzen.app.feature.health.medication.MedicationScreen
 import com.sailzen.app.feature.health.sleep.SleepScheduleScreen
 import com.sailzen.app.feature.health.weight.WeightPlanScreen
 import com.sailzen.app.feature.inbox.InboxScreen
+import com.sailzen.app.feature.money.MoneyScreen
 import com.sailzen.app.feature.plan.PlanScreen
 import com.sailzen.app.feature.reader.ReaderHomeScreen
 import com.sailzen.app.feature.reader.ReaderScreen
@@ -49,6 +51,7 @@ object Routes {
     const val HEALTH_EXERCISE = "health_exercise"
     const val HEALTH_CHECKIN = "health_checkin?type={type}"
     const val INBOX = "inbox?reminder_id={reminder_id}"
+    const val MONEY = "money"
     const val SETTINGS = "settings"
     const val READER = "reader"
     const val READER_WORK = "reader_work/{work_id}"
@@ -69,6 +72,7 @@ private data class TabItem(
 private val TABS = listOf(
     TabItem(Routes.PLAN, "规划", Icons.Default.DateRange),
     TabItem("inbox_tab", "收件箱", Icons.Default.Email),
+    TabItem(Routes.MONEY, "记账", Icons.Filled.AccountBox),
     TabItem(Routes.HEALTH, "健康", Icons.Default.Favorite),
     TabItem(Routes.READER, "阅读", Icons.Filled.Book),
 )
@@ -183,6 +187,9 @@ fun SailZenNavGraph(
                     highlightReminderId = entry.arguments?.getInt("reminder_id") ?: -1,
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 )
+            }
+            composable(Routes.MONEY) {
+                MoneyScreen(onOpenSettings = { navController.navigate(Routes.SETTINGS) })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(onBack = { navController.popBackStack() })

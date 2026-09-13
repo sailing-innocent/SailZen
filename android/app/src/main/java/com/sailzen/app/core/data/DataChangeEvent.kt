@@ -54,4 +54,11 @@ sealed class DataChangeEvent {
     data class InboxChanged(
         override val timestamp: Long = System.currentTimeMillis(),
     ) : DataChangeEvent()
+
+    /** 财务交易发生创建/更新/删除变更（快速记账等入口）。 */
+    data class TransactionChanged(
+        val transactionId: Int? = null,
+        val action: String = "update",
+        override val timestamp: Long = System.currentTimeMillis(),
+    ) : DataChangeEvent()
 }

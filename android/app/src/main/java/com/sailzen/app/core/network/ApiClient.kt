@@ -23,6 +23,8 @@ object ApiClient {
     private var cachedRhythmApi: RhythmApi? = null
     private var cachedTextKey: String? = null
     private var cachedTextApi: TextApi? = null
+    private var cachedMoneyKey: String? = null
+    private var cachedMoneyApi: MoneyApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -104,6 +106,18 @@ object ApiClient {
         return buildRetrofit(normalized, token).create(TextApi::class.java).also {
             cachedTextKey = key
             cachedTextApi = it
+        }
+    }
+
+    /** Money 财务 API（缓存键独立） */
+    @Synchronized
+    fun moneyApi(baseUrl: String, token: String): MoneyApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedMoneyApi?.let { if (cachedMoneyKey == key) return it }
+        return buildRetrofit(normalized, token).create(MoneyApi::class.java).also {
+            cachedMoneyKey = key
+            cachedMoneyApi = it
         }
     }
 

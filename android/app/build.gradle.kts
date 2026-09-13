@@ -19,13 +19,41 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
     }
 
     // 远程服务器地址：release 构建通过 gradle 属性或环境变量注入，打包后锁定不可修改
     val releaseServerUrl = providers.gradleProperty("SAILZEN_RELEASE_SERVER_URL")
         .orElse(providers.environmentVariable("SAILZEN_RELEASE_SERVER_URL"))
         .getOrElse("")
+
+    // release 签名证书：Android 使用自签名证书，无需向 CA 申请，用 keytool 生成 keystore 即可。
+    // 凭据从 gradle 属性（推荐写入 ~/.gradle/gradle.properties）或环境变量注入，与 SERVER_URL 同一模式。
+    val releaseStoreFilePath = providers.gradleProperty("SAILZEN_RELEASE_STORE_FILE")
+        .orElse(providers.environmentVariable("SAILZEN_RELEASE_STORE_FILE"))
+        .getOrElse("")
+    val releaseStorePassword = providers.gradleProperty("SAILZEN_RELEASE_STORE_PASSWORD")
+        .orElse(providers.environmentVariable("SAILZEN_RELEASE_STORE_PASSWORD"))
+        .getOrElse("")
+    val releaseKeyAlias = providers.gradleProperty("SAILZEN_RELEASE_KEY_ALIAS")
+        .orElse(providers.environmentVariable("SAILZEN_RELEASE_KEY_ALIAS"))
+        .getOrElse("")
+    val releaseKeyPassword = providers.gradleProperty("SAILZEN_RELEASE_KEY_PASSWORD")
+        .orElse(providers.environmentVariable("SAILZEN_RELEASE_KEY_PASSWORD"))
+        .getOrElse("")
+    val hasReleaseSigning = releaseStoreFilePath.isNotBlank() && releaseStorePassword.isNotBlank() &&
+        releaseKeyAlias.isNotBlank() && releaseKeyPassword.isNotBlank()
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFilePath)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
 
     buildTypes {
         debug {
@@ -42,6 +70,12 @@ android {
             // 公网发布包锁定服务器地址，避免用户误改
             buildConfigField("String", "SERVER_URL", "\"$releaseServerUrl\"")
             buildConfigField("boolean", "SERVER_URL_LOCKED", "true")
+            // 配置了 release 证书则用它签名；未配置时回退 debug 证书，避免产出未签名包导致安装失败
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

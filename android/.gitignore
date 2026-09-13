@@ -5,3 +5,9 @@
 build/
 /app/build
 .cxx/
+
+# Release 签名 keystore 与凭据（绝不可提交/打入 patch）
+/keystore/
+*.jks
+*.keystore
+keystore.properties

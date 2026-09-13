@@ -11,6 +11,34 @@ SailZen 随身哨兵 —— 提醒触达与反馈终端（M1：提醒闭环最�
 3. Run `app` 到真机/模拟器（API ≥ 26，与服务器同局域网）。
 4. 首次打开进入「设置」页填写服务器地址（如 `http://192.168.x.x:1974`）与 Token（服务端未配置 `SAILZEN_API_TOKEN` 可留空），保存后自动连接。
 
+## 签名与发布（release）
+
+Android APK 必须签名后才能安装；`assembleRelease` 默认产出的是未签名包，直接安装会报「未包含任何证书」。
+与 HTTPS 不同，**APK 签名证书是自签名的，无需向任何 CA 申请**——用 JDK 自带的 `keytool` 生成 keystore 即等于创建了证书。只有上架 Google Play 时才涉及 Play App Signing（Google 托管密钥，可选）。
+
+本项目 release 签名的约定：
+
+- keystore 文件：`keystore/sailzen-release.keystore`（已在 `.gitignore` 排除，**绝不可提交或打入 patch**）。
+- 凭据注入：与 `SERVER_URL` 同一模式，从 gradle 属性（推荐写入全局 `~/.gradle/gradle.properties`）或环境变量读取：
+
+```properties
+SAILZEN_RELEASE_STORE_FILE=D:/path/to/sailzen-release.keystore
+SAILZEN_RELEASE_STORE_PASSWORD=<密码>
+SAILZEN_RELEASE_KEY_ALIAS=sailzen
+SAILZEN_RELEASE_KEY_PASSWORD=<密码>
+```
+
+- 未配置凭据时，release 自动回退 debug 证书签名，保证产物可安装（仅限本机调试验证）。
+
+### 生成 / 更换 keystore
+
+```bash
+keytool -genkeypair -v -keystore sailzen-release.keystore -storetype PKCS12 \
+  -alias sailzen -keyalg RSA -keysize 4096 -validity 10950
+```
+
+⚠️ keystore 及其密码丢失后，无法再以相同身份为应用发布更新（用户只能卸载重装）。请把 keystore 文件和密码备份到安全位置（如密码管理器）。
+
 ## 模块结构
 
 ```
