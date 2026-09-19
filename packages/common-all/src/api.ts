@@ -23,6 +23,8 @@ import {
   DeleteSchemaResp,
   DEngineInitResp,
   EngineSchemaWriteOpts,
+  EngineState,
+  RespWithOptError,
   FindNotesResp,
   GetDecorationsResp,
   GetNoteBlocksResp,
@@ -136,10 +138,36 @@ export type WorkspaceInitRequest = {
   config?: {
     vaults: DVault[];
   };
+  /**
+   * Engine initialization mode.
+   * - `"full"` (default): index every note in the workspace before returning.
+   * - `"minimal"`: parse schemas plus the given {@link priorityPaths} and
+   *   register stubs for all other notes. Returns as soon as the daily
+   *   journal path is usable, leaving the full index to run in the
+   *   background.
+   */
+  mode?: "minimal" | "full";
+  /**
+   * Note fnames (or fpaths relative to the vault root, without the `.md`
+   * extension) that should be fully parsed during a `"minimal"` init, e.g.
+   * today's journal note and the journal template.
+   */
+  priorityPaths?: string[];
 };
 export type WorkspaceSyncRequest = WorkspaceRequest;
 
 export type WorkspaceRequest = { ws: string };
+
+/**
+ * Engine initialization status, polled by clients during fast-first startup
+ * while the full index runs in the background on the server.
+ */
+export type EngineInitStatus = {
+  state: EngineState;
+  progress?: { vaultsDone: number; vaultsTotal: number };
+};
+
+export type EngineInitStatusResp = RespWithOptError<EngineInitStatus>;
 
 export type EngineGetNoteRequest = {
   id: string;
@@ -375,7 +403,14 @@ export class SailAPI extends API {
     });
   }
 
-  workspaceSync(req: WorkspaceSyncRequest): Promise<DEngineInitResp> {
+      workspaceInitStatus(req: WorkspaceRequest): Promise<EngineInitStatusResp> {
+      return this._makeRequest({
+        path: "workspace/initStatus",
+        method: "get",
+        qs: req,
+      });
+    }
+    workspaceSync(req: WorkspaceSyncRequest): Promise<DEngineInitResp> {
     return this._makeRequest({
       path: "workspace/sync",
       method: "post",

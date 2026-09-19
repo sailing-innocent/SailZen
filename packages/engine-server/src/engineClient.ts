@@ -15,6 +15,10 @@ import {
   EngineDeleteOpts,
   EngineEventEmitter,
   EngineInfoResp,
+  EngineInitOpts,
+  EngineState,
+  ENGINE_STATE,
+  EngineInitStatus,
   EngineSchemaWriteOpts,
   EngineWriteOptsV2,
   ERROR_SEVERITY,
@@ -68,6 +72,12 @@ type SailEngineClientOpts = {
 export class SailEngineClient implements DEngineClient, EngineEventEmitter {
   private _onNoteChangedEmitter = new EventEmitter<NoteChangeEntry[]>();
   private _config;
+  /**
+   * Last known engine state, based on init responses and status polls.
+   * Responses from older servers that don't report a state are treated as
+   * ready (full init semantics).
+   */
+  private _engineState: EngineState = ENGINE_STATE.COLD;
 
   public notes: NotePropsByIdDict;
   public noteFnames: NotePropsByFnameDict;
@@ -151,13 +161,39 @@ export class SailEngineClient implements DEngineClient, EngineEventEmitter {
   dispose() {
     this._onNoteChangedEmitter.dispose();
   }
+  /** Last known engine lifecycle state reported by the server. */
+  getEngineState(): EngineState {
+    return this._engineState;
+  }
+
+  /**
+   * Poll the server for the current engine init status. Used during
+   * fast-first startup while the full index runs in the background.
+   */
+  async fetchInitStatus(): Promise<EngineInitStatus> {
+    const resp = await this.api.workspaceInitStatus({ ws: this.ws });
+    if (resp.error) {
+      throw new SailError({
+        message: "unable to fetch engine init status",
+        payload: resp.error,
+      });
+    }
+    if (!resp.data) {
+      throw new SailError({ message: "no data" });
+    }
+    this._engineState = resp.data.state;
+    return resp.data;
+  }
+
   /**
    * Load all nodes
    */
-  async init(): Promise<DEngineInitResp> {
+  async init(opts?: EngineInitOpts): Promise<DEngineInitResp> {
     const resp = await this.api.workspaceInit({
       uri: this.ws,
       config: { vaults: this.vaults },
+      mode: opts?.mode,
+      priorityPaths: opts?.priorityPaths,
     });
 
     if (resp.error && resp.error.severity !== ERROR_SEVERITY.MINOR) {
@@ -171,9 +207,20 @@ export class SailEngineClient implements DEngineClient, EngineEventEmitter {
     }
     const { notes, config } = resp.data;
     this._config = config;
+    this._engineState = resp.data.engineState ?? ENGINE_STATE.READY;
+    // Fire synthetic create entries for notes that were not part of the
+    // previous snapshot. This drives incremental UI refresh (tree view,
+    // lookup, backlinks) when a background full index replaces the warm
+    // snapshot.
+    const newEntries: NoteChangeEntry[] = _.values(notes)
+      .filter((note) => _.isUndefined(this.notes[note.id]))
+      .map((note) => ({ status: "create" as const, note }));
     this.notes = notes;
     this.noteFnames = NoteFnameDictUtils.createNotePropsByFnameDict(this.notes);
     await this.fuseEngine.replaceNotesIndex(notes);
+    if (newEntries.length > 0) {
+      this._onNoteChangedEmitter.fire(newEntries);
+    }
     return {
       error: resp.error,
       data: {
@@ -181,6 +228,7 @@ export class SailEngineClient implements DEngineClient, EngineEventEmitter {
         config,
         wsRoot: this.wsRoot,
         vaults: this.vaults,
+        engineState: this._engineState,
       },
     };
   }

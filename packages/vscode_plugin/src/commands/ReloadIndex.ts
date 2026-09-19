@@ -29,6 +29,7 @@ import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
 import { IEngineAPIService } from "../services/EngineAPIServiceInterface";
 import { MessageSeverity, VSCodeUtils } from "../vsCodeUtils";
+import { StartupProfiler } from "../perf/StartupProfiler";
 import { BasicCommand } from "./base";
 
 enum AutoFixAction {
@@ -51,6 +52,19 @@ function categorizeActions(actions: (AutoFixAction | undefined)[]) {
 
 type ReloadIndexCommandOpts = {
   silent?: boolean;
+  /**
+   * Engine init mode. `"full"` (default) indexes every note before returning.
+   * `"minimal"` only parses schemas plus the given priority paths and
+   * registers stubs for everything else, returning as soon as the daily
+   * journal path is usable.
+   */
+  mode?: "minimal" | "full";
+  /**
+   * Fnames (or paths) to fully parse during a `"minimal"` init. Everything
+   * else on disk is registered as a lightweight stub. Ignored in `"full"`
+   * mode.
+   */
+  priorityPaths?: string[];
 };
 
 export class ReloadIndexCommand extends BasicCommand<
@@ -214,9 +228,17 @@ export class ReloadIndexCommand extends BasicCommand<
       }
 
       const start = process.hrtime();
-      const { error } = await engine.init();
+      const initMode = opts?.mode ?? "full";
+      const { error } = await engine.init({
+        mode: initMode,
+        priorityPaths: opts?.priorityPaths,
+      });
       const durationEngineInit = getDurationMilliseconds(start);
-      this.L.info({ ctx, durationEngineInit });
+      this.L.info({ ctx, durationEngineInit, mode: initMode });
+      StartupProfiler.recordSegment(
+        initMode === "minimal" ? "minimalInit" : "fullInit",
+        durationEngineInit
+      );
 
       // if fatal, stop initialization
       if (error && error.severity !== ERROR_SEVERITY.MINOR) {

@@ -14,6 +14,9 @@ import {
   EngineDeleteOpts,
   EngineEventEmitter,
   EngineInfoResp,
+  EngineInitOpts,
+  EngineState,
+  ENGINE_STATE,
   EngineSchemaWriteOpts,
   EngineWriteOptsV2,
   Event,
@@ -42,6 +45,7 @@ import {
 } from "@saili/common-all";
 import { SailEngineClient, HistoryService } from "@saili/engine-server";
 import _ from "lodash";
+import { Logger } from "../logger";
 import { IEngineAPIService } from "./EngineAPIServiceInterface";
 
 export class EngineAPIService
@@ -49,6 +53,7 @@ export class EngineAPIService
   private _internalEngine: DEngineClient;
   private _engineEventEmitter: EngineEventEmitter;
   private _trustedWorkspace: boolean = true;
+  private _warnedInitStatusDegradation: boolean = false;
 
   static createEngine({
     port,
@@ -206,9 +211,51 @@ export class EngineAPIService
   ): Promise<WriteSchemaResp> {
     return this._internalEngine.writeSchema(schema, opts);
   }
-  init(): Promise<DEngineInitResp> {
+  init(opts?: EngineInitOpts): Promise<DEngineInitResp> {
     // this.setupEngineAnalyticsTracking();
-    return this._internalEngine.init();
+    return this._internalEngine.init(opts);
+  }
+
+  /**
+   * Last known engine init state (cold/warm/ready) as reported by the server.
+   * Only meaningful for the HTTP engine client; defaults to ready for
+   * in-process engines.
+   */
+  getEngineState(): EngineState {
+    const maybeClient = this._internalEngine as Partial<SailEngineClient>;
+    if (typeof maybeClient.getEngineState === "function") {
+      return maybeClient.getEngineState();
+    }
+    return ENGINE_STATE.READY;
+  }
+
+  /**
+   * Poll the server for the current engine init status. Used during
+   * fast-first startup to observe the warm → ready transition.
+   *
+   * Degradation: if the server predates the `/initStatus` endpoint (or the
+   * request fails), this logs a warning once and reports `ready` so the
+   * caller falls back to legacy full-mode semantics. ^p2-old-server
+   */
+  async fetchInitStatus(): Promise<EngineState> {
+    const maybeClient = this._internalEngine as Partial<SailEngineClient>;
+    if (typeof maybeClient.fetchInitStatus !== "function") {
+      return ENGINE_STATE.READY;
+    }
+    try {
+      const status = await maybeClient.fetchInitStatus();
+      return status?.state ?? ENGINE_STATE.READY;
+    } catch (err) {
+      if (!this._warnedInitStatusDegradation) {
+        this._warnedInitStatusDegradation = true;
+        Logger.warn({
+          ctx: "EngineAPIService:fetchInitStatus",
+          msg: "initStatus endpoint unavailable; assuming engine is ready (legacy server)",
+          error: err as any,
+        });
+      }
+      return ENGINE_STATE.READY;
+    }
   }
 
   deleteNote(

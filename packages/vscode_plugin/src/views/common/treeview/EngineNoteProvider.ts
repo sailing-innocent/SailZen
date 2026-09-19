@@ -20,8 +20,12 @@ import {
 } from "vscode";
 import { URI } from "vscode-uri";
 import { ICONS } from "../../../constants";
+import { StartupStateService } from "../../../services/StartupStateService";
 import { type ITreeViewConfig } from "./ITreeViewConfig";
 import { TreeNote } from "./TreeNote";
+
+/** Synthetic node id shown while the engine index is still building. */
+const INDEXING_PLACEHOLDER_ID = "sail:indexing-placeholder";
 
 /**
  * Provides engine event data to generate the views for the native Tree View
@@ -127,6 +131,13 @@ export class EngineNoteProvider
   }
 
   getChildren(noteId?: string): ProviderResult<string[]> {
+    // Fast-first startup: the tree view normally only becomes visible once
+    // the engine is ready (the view's `when` clause), but if it is expanded
+    // earlier (eg. dev entries), show a single placeholder instead of a
+    // half-populated tree.
+    if (!StartupStateService.instance().isReady) {
+      return Promise.resolve([INDEXING_PLACEHOLDER_ID]);
+    }
     return new Promise<string[]>((resolve) => {
       if (noteId) {
         // Need to pre-fetch so it's available in the cache immediately upon render request.
@@ -180,9 +191,17 @@ export class EngineNoteProvider
   getTreeItem(noteProps: string): TreeItem {
     if (this._tree[noteProps]) {
       return this._tree[noteProps];
-    } else {
-      throw new Error(`${noteProps} not found in cache!`);
     }
+    if (noteProps === INDEXING_PLACEHOLDER_ID) {
+      const item = new TreeItem(
+        "Indexing…",
+        TreeItemCollapsibleState.None
+      );
+      item.iconPath = new ThemeIcon("sync~spin");
+      item.contextValue = "indexing";
+      return item;
+    }
+    throw new Error(`${noteProps} not found in cache!`);
   }
 
   dispose(): void {

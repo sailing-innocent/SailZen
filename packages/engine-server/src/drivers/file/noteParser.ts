@@ -80,12 +80,17 @@ export class NoteParser {
    *
    * @param allPaths
    * @param vault
+   * @param schemas
+   * @param opts `skipCacheCleanup`: when true, cache entries for files that
+   * were not part of `allPaths` are kept (used by minimal init which parses a
+   * subset of files). Cache entries for parsed files are still updated.
    * @returns
    */
   async parseFiles(
     allPaths: string[],
     vault: DVault,
-    schemas: SchemaModuleDict
+    schemas: SchemaModuleDict,
+    opts?: { skipCacheCleanup?: boolean }
   ): Promise<{ noteDicts: NoteDicts; errors: ISailError[] }> {
     const ctx = "parseFiles";
     const fileMetaDict: FileMetaDict = getFileMeta(allPaths);
@@ -275,16 +280,19 @@ export class NoteParser {
       SchemaUtils.matchDomain(domain, notesById, schemas);
     });
 
-    // Remove stale entries from cache
-    unseenKeys.forEach((unseenKey) => {
-      this.cache.drop(unseenKey);
-    });
+    // Remove stale entries from cache. Skipped for partial parses (minimal
+    // init) so that cache entries for not-yet-parsed files survive.
+    if (!opts?.skipCacheCleanup) {
+      unseenKeys.forEach((unseenKey) => {
+        this.cache.drop(unseenKey);
+      });
+    }
 
     // OPT:make async and don't wait for return
     // Skip this if we found no notes, which means vault did not initialize, or if there are no cache changes needed
     if (
       (_.size(notesById) > 0 && this.cache.numCacheMisses > 0) ||
-      unseenKeys.size > 0
+      (unseenKeys.size > 0 && !opts?.skipCacheCleanup)
     ) {
       this.cache.writeToFileSystem();
     }
@@ -294,6 +302,71 @@ export class NoteParser {
       noteDicts,
       errors,
     };
+  }
+
+  /**
+   * Create stub NoteProps (fname -> id mapping only, no body parsing, no file
+   * reads) for the given file paths. Used during minimal engine init so that
+   * fname lookups, write dedup and ancestor resolution work before the full
+   * index runs.
+   *
+   * Notes are processed level by level so that parent entries exist before
+   * their children. Files whose fname is already present in `noteDicts` (eg.
+   * parsed priority notes) are skipped.
+   *
+   * @param allPaths note file paths relative to the vault root (with `.md`)
+   * @param vault vault the files belong to
+   * @param noteDicts existing dicts; stubs are added into them (mutated in place)
+   */
+  static parseStubs(
+    allPaths: string[],
+    vault: DVault,
+    noteDicts: NoteDicts
+  ): { errors: ISailError[] } {
+    const errors: ISailError[] = [];
+    const fileMetaDict: FileMetaDict = getFileMeta(allPaths);
+    const maxLvl =
+      _.max(_.keys(fileMetaDict).map((e) => _.toInteger(e))) || 1;
+    let lvl = 1;
+    while (lvl <= maxLvl) {
+      const lvlFiles = (fileMetaDict[lvl] || []).filter(
+        (ent) => !globMatch(["root.*"], ent.fpath)
+      );
+      for (const ent of lvlFiles) {
+        try {
+          const { name: fname } = path.parse(ent.fpath);
+          const existing = NoteDictsUtils.findByFname({
+            fname,
+            noteDicts,
+            vault,
+          });
+          if (existing.length > 0) {
+            continue;
+          }
+          const note = NoteUtils.create({ fname, vault, stub: true });
+          const changed = NoteUtils.addOrUpdateParents({
+            note,
+            noteDicts,
+            createStubs: true,
+          });
+          changed.forEach((entry) => {
+            if (entry.note.id !== note.id) {
+              NoteDictsUtils.add(entry.note, noteDicts);
+            }
+          });
+          NoteDictsUtils.add(note, noteDicts);
+        } catch (err: any) {
+          const error = ErrorFactory.wrapIfNeeded(err);
+          error.severity = ERROR_SEVERITY.MINOR;
+          error.message =
+            `Failed to register stub for ${ent.fpath} in ${vault.fsPath}: ` +
+            error.message;
+          errors.push(error);
+        }
+      }
+      lvl += 1;
+    }
+    return { errors };
   }
 
   /**

@@ -21,7 +21,11 @@ import { Duration } from "luxon";
 import _md from "markdown-it";
 import * as vscode from "vscode";
 import { DoctorCommand, PluginDoctorActionsEnum } from "../commands/Doctor";
-import { INCOMPATIBLE_EXTENSIONS } from "../constants";
+import {
+  INCOMPATIBLE_EXTENSIONS,
+  SailStartupConfigKeys,
+  SailStartupMode,
+} from "../constants";
 import { ISailExtension } from "../sailExtensionInterface";
 import { ExtensionProvider } from "../ExtensionProvider";
 import { Logger } from "../logger";
@@ -466,9 +470,43 @@ export class StartupUtils {
     MetadataService.instance().v100ReleaseMessageShown = true;
   }
 
-  /**
-   * this method pings the localhost and checks if it is available. Incase local is blocked off,
-   * displays a toaster with a link to troubleshooting docs
-   */
-  static async showWhitelistingLocalhostDocsIfNecessary() { }
+    /**
+     * this method pings the localhost and checks if it is available. Incase local is blocked off,
+     * displays a toaster with a link to troubleshooting docs
+     */
+    static async showWhitelistingLocalhostDocsIfNecessary() { }
+
+    /**
+     * Whether the fast-first (three stage) startup path is enabled. Reads the
+     * `sail.startup.mode` VS Code setting. The legacy `"full"` mode blocks
+     * activation until the entire note index is built and is meant for
+     * troubleshooting and A/B comparison.
+     */
+    static getStartupMode(): SailStartupMode {
+      const configured = vscode.workspace
+        .getConfiguration("sail")
+        .get<string>(SailStartupConfigKeys.STARTUP_MODE, "fast");
+      return configured === "full" ? "full" : "fast";
+    }
+
+    /**
+     * Whether to automatically open today's daily journal once the engine
+     * reaches the warm state. Reads `sail.startup.autoOpenDailyJournal`.
+     */
+    static getAutoOpenDailyJournal(): boolean {
+      return vscode.workspace
+        .getConfiguration("sail")
+        .get<boolean>(SailStartupConfigKeys.AUTO_OPEN_DAILY_JOURNAL, false);
+    }
+
+    /**
+     * Whether workspace migrations should be deferred from `init()` to the
+     * background finish-activation step (after the engine is ready). Reads
+     * `sail.startup.deferMigrations`.
+     */
+    static getDeferMigrations(): boolean {
+      return vscode.workspace
+        .getConfiguration("sail")
+        .get<boolean>(SailStartupConfigKeys.DEFER_MIGRATIONS, true);
+    }
 }

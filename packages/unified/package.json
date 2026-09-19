@@ -35,6 +35,7 @@
   "dependencies": {
     "@mapbox/rehype-prism": "^0.9.0",
     "@saili/common-all": "workspace:^",
+    "hast-util-parse-selector": "^2.2.5",
     "hast-util-select": "^6.0.4",
     "js-yaml": "^4.2.0",
     "lodash": "catalog:",

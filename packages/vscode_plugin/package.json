@@ -51,11 +51,17 @@
         "view": "sail.recent-workspaces",
         "contents": "No recent workspaces detected."
       },
-      {
-        "view": "sail.treeView",
-        "contents": "First open a Sail note to see the tree view."
-      }
-    ],
+    {
+      "view": "sail.treeView",
+      "contents": "First open a Sail note to see the tree view.",
+      "when": "!sail:engineWarm || sail:pluginActive"
+    },
+    {
+      "view": "sail.treeView",
+      "contents": "Sail is indexing your notes…",
+      "when": "sail:engineWarm && !sail:pluginActive"
+    }
+  ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -539,7 +545,7 @@
         },
         {
           "command": "sail.gotoToday",
-          "when": "sail:pluginActive && shellExecutionSupported"
+          "when": "(sail:pluginActive || sail:engineWarm) && shellExecutionSupported"
         },
         {
           "command": "sail.createSchemaFromHierarchy",
@@ -547,7 +553,7 @@
         },
         {
           "command": "sail.createDailyJournalNote",
-          "when": "sail:pluginActive && shellExecutionSupported"
+          "when": "(sail:pluginActive || sail:engineWarm) && shellExecutionSupported"
         },
         {
           "command": "sail.copyNoteLink",
@@ -635,11 +641,11 @@
         },
         {
           "command": "sail.createScratchNote",
-          "when": "sail:pluginActive && shellExecutionSupported"
+          "when": "(sail:pluginActive || sail:engineWarm) && shellExecutionSupported"
         },
         {
           "command": "sail.createNote",
-          "when": "sail:pluginActive && shellExecutionSupported"
+          "when": "(sail:pluginActive || sail:engineWarm) && shellExecutionSupported"
         },
         {
           "command": "sail.createMeetingNote",
@@ -1098,11 +1104,30 @@
           "default": true,
           "description": "When enabled, newly created workspaces will be created as self contained vaults."
         },
-        "sailzen.doc.useASTPipeline": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use the new AST-based document pipeline (unified/remark) instead of regex-driven conversion."
-        },
+    "sail.startup.mode": {
+     "type": "string",
+     "enum": [
+       "fast",
+       "full"
+     ],
+     "default": "fast",
+     "description": "Startup mode. 'fast' activates the extension in three stages: schemas + daily journal path become available within ~1s (warm), while the full note index finishes in the background. 'full' blocks activation until every note is indexed (legacy behavior)."
+   },
+   "sail.startup.autoOpenDailyJournal": {
+     "type": "boolean",
+     "default": false,
+     "description": "When enabled, automatically open (or create) today's daily journal note once the engine reaches the warm state during startup."
+   },
+   "sail.startup.deferMigrations": {
+     "type": "boolean",
+     "default": true,
+     "description": "When enabled (and startup.mode is 'fast'), workspace migrations run after the engine reaches the ready state instead of blocking activation."
+   },
+   "sailzen.doc.useASTPipeline": {
+     "type": "boolean",
+     "default": true,
+     "description": "Use the new AST-based document pipeline (unified/remark) instead of regex-driven conversion."
+   },
         "sailzen.doc.defaultBuildEngine": {
           "type": "string",
           "default": "latexmk",

@@ -4,6 +4,7 @@ import {
   ConfigUtils,
   CONSTANTS,
   DWorkspaceV2,
+  ENGINE_STATE,
   getStage,
   GLOBAL_STATE_KEYS,
   GraphThemeEnum,
@@ -60,6 +61,7 @@ import { KeybindingUtils } from "./KeybindingUtils";
 import { Logger } from "./logger";
 import { Extensions } from "./settings";
 import { DocStatusBarProvider } from "./features/DocStatusBar";
+import { StartupStateService } from "./services/StartupStateService";
 import { ExtensionUtils } from "./utils/ExtensionUtils";
 import { StartupUtils } from "./utils/StartupUtils";
 import { VSCodeUtils } from "./vsCodeUtils";
@@ -172,8 +174,16 @@ export async function _activate(
       context.subscriptions.push(
         vscode.commands.registerCommand(
           SAIL_COMMANDS.RELOAD_INDEX.key,
-          async (silent?: boolean) => {
-            const out = await new ReloadIndexCommand().run({ silent });
+          async (
+            silent?: boolean,
+            mode?: "minimal" | "full",
+            priorityPaths?: string[]
+          ) => {
+            const out = await new ReloadIndexCommand().run({
+              silent,
+              mode,
+              priorityPaths,
+            });
             if (!silent) {
               vscode.window.showInformationMessage(`finish reload`);
             }
@@ -266,8 +276,15 @@ export async function _activate(
         engine: resp.data.engine,
       });
 
+      // Whether activation below will use the fast-first (warm) startup
+      // path. When it does, interactive elements are deferred to an idle
+      // callback after the warm state is reached (see below) so they don't
+      // delay the daily journal path.
+      const isFastStartup =
+        StartupUtils.getStartupMode() === "fast" && stage !== "test";
+
       // show interactive elements when **extension starts**
-      if (!opts?.skipInteractiveElements) {
+      if (!opts?.skipInteractiveElements && !isFastStartup) {
         // check if localhost is blocked
         StartupUtils.showWhitelistingLocalhostDocsIfNecessary();
         // check for missing default config keys and prompt for a backfill.
@@ -315,6 +332,108 @@ export async function _activate(
       if (respActivate.error) {
         return false;
       }
+
+      const startupState = StartupStateService.instance();
+      if (startupState.state === ENGINE_STATE.WARM) {
+        // Fast-first startup: the engine is warm and the daily journal path
+        // is usable. Return immediately; the full index and the rest of the
+        // plugin surface continue in the background.
+        HistoryService.instance().add({
+          source: "extension",
+          action: "activate",
+        });
+
+        // Status bar (includes the indexing indicator while warm).
+        const docStatusBar = new DocStatusBarProvider();
+        docStatusBar.activate(context);
+
+        if (!opts?.skipInteractiveElements) {
+          // Open today's daily journal right away if configured.
+          if (StartupUtils.getAutoOpenDailyJournal()) {
+            vscode.commands
+              .executeCommand(SAIL_COMMANDS.GOTO_TODAY_NOTE.key)
+              .then(undefined, (err) => {
+                Logger.error({ ctx: "_activate:autoOpenDailyJournal", error: err });
+              });
+          }
+
+          // Defer non-critical startup work to the next tick so the journal
+          // path stays responsive (P2-6).
+          setTimeout(() => {
+            StartupUtils.showWhitelistingLocalhostDocsIfNecessary();
+            StartupUtils.showMissingDefaultConfigMessageIfNecessary({
+              ext: ws,
+              extensionInstallStatus,
+            });
+            StartupUtils.showDeprecatedConfigMessageIfNecessary({
+              ext: ws,
+              extensionInstallStatus,
+            });
+            if (extensionInstallStatus === InstallStatus.INITIAL_INSTALL) {
+              // on first install, warn if extensions are incompatible ^dlx35gstwsun
+              StartupUtils.warnIncompatibleExtensions({ ext: ws });
+              KeybindingUtils.maybePromptKeybindingConflict().then(
+                undefined,
+                (err) => {
+                  Logger.error({
+                    ctx: "_activate:maybePromptKeybindingConflict",
+                    error: err,
+                  });
+                }
+              );
+            }
+            showWelcomeOrWhatsNew({
+              extensionInstallStatus,
+              isSecondaryInstall,
+              version: SailExtension.version(),
+              previousExtensionVersion: previousWorkspaceVersionFromState,
+              start: startActivate,
+              assetUri,
+              context,
+            }).catch((err) => {
+              Logger.error({ ctx: "_activate:showWelcomeOrWhatsNew", error: err });
+            });
+            // If automaticallyShowPreview = true, display preview panel once
+            // the full index is in.
+            WSUtils.instance()
+              .getActiveNote()
+              .then((note) => {
+                if (
+                  note &&
+                  ws.workspaceService?.config.preview?.automaticallyShowPreview
+                ) {
+                  PreviewPanelFactory.create(getExtension()).show(note);
+                }
+              })
+              .catch((err) => {
+                Logger.error({ ctx: "_activate:showPreview", error: err });
+              });
+            StartupUtils.showUninstallMarkdownLinksExtensionMessage();
+          }, 0);
+        }
+
+        // Background: full index, watchers, tree view. Fire-and-forget;
+        // failures surface through the not_initialized history event.
+        activator
+          .finishActivation({
+            ext: ws,
+            context,
+            wsRoot: maybeWsRoot,
+            engine: resp.data.engine,
+            wsService,
+            opts,
+          })
+          .catch((err) => {
+            Logger.error({ ctx: "_activate:finishActivation", error: err });
+            HistoryService.instance().add({
+              source: "extension",
+              action: "not_initialized",
+              data: { err },
+            });
+          });
+        return true;
+      }
+
       if (!opts?.skipInteractiveElements) {
         // on first install, warn if extensions are incompatible ^dlx35gstwsun
         if (extensionInstallStatus === InstallStatus.INITIAL_INSTALL) {
@@ -382,6 +501,10 @@ function togglePluginActiveContext(enabled: boolean) {
 
 // this method is called when your extension is deactivated
 export function deactivate() {
+  // Abort any in-flight background finish-activation (full index, watchers).
+  StartupStateService.instance().cancel();
+  VSCodeUtils.setContext(SailContext.ENGINE_WARM, false);
+  VSCodeUtils.setContext(SailContext.STARTING, false);
   const ws = getDWorkspace();
   if (!WorkspaceUtils.isNativeWorkspace(ws)) {
     getExtension().deactivate();
@@ -511,6 +634,24 @@ async function _setupCommands({
         vscode.commands.registerCommand(
           cmd.key,
           async (args: any) => {
+            // Fast-first startup guard: workspace commands issued while the
+            // engine is still cold wait for the warm state (queued) instead
+            // of failing against a half-initialized engine.
+            if (requireActiveWorkspace) {
+              const startupState = StartupStateService.instance();
+              if (!startupState.isWarm) {
+                const warm = await startupState
+                  .waitForWarm()
+                  .then(() => true)
+                  .catch(() => false);
+                if (!warm) {
+                  vscode.window.showInformationMessage(
+                    "Sail is still starting, please try again in a moment."
+                  );
+                  return;
+                }
+              }
+            }
             await cmd.run(args);
           }
         )

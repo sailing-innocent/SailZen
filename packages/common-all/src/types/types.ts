@@ -262,11 +262,53 @@ export type EngineSchemaWriteOpts = {
   metaOnly?: boolean;
 };
 
+/**
+ * Lifecycle state of the engine.
+ * - `cold`: server process is up but the engine has not been initialized.
+ * - `warm`: minimal init finished (schemas parsed, priority notes indexed,
+ *   stubs registered). The daily journal path is usable.
+ * - `ready`: full index finished (all notes parsed, backlinks and fuse index
+ *   built). All functionality is available.
+ */
+export type EngineState = "cold" | "warm" | "ready";
+
+export const ENGINE_STATE: {
+  COLD: "cold";
+  WARM: "warm";
+  READY: "ready";
+} = {
+  COLD: "cold",
+  WARM: "warm",
+  READY: "ready",
+};
+
+/**
+ * Options accepted by engine init.
+ */
+export type EngineInitOpts = {
+  /**
+   * - `"full"` (default): index every note before resolving.
+   * - `"minimal"`: parse schemas + {@link priorityPaths}, register stubs
+   *   for everything else, and resolve as soon as the daily journal path is
+   *   usable.
+   */
+  mode?: "minimal" | "full";
+  /**
+   * Note fnames to fully parse during a `"minimal"` init.
+   */
+  priorityPaths?: string[];
+};
+
 export type DEngineInitPayload = {
   notes: NotePropsByIdDict;
   wsRoot: string;
   vaults: DVault[];
   config: SailConfig;
+  /**
+   * The engine state reached by this init call. Absent in responses from
+   * older servers, which clients should treat as `"ready"`.
+   */
+  engineState?: EngineState;
 };
 
 export type RenameNoteOpts = {
@@ -470,7 +512,7 @@ export type DEngine = DCommonProps &
     vaults: DVault[];
     hooks: DHookDict;
 
-    init: () => Promise<DEngineInitResp>;
+          init: (opts?: EngineInitOpts) => Promise<DEngineInitResp>;
     /**
      * Get NoteProps by id. If note doesn't exist, return error
      */

@@ -45,8 +45,11 @@ export interface IWSUtils {
   openSchema(schema: SchemaModuleProps): Promise<vscode.TextEditor>;
   openNoteByPath(opts: { vault: DVault; fname: string }): Promise<vscode.TextEditor>;
 
-  showActivateProgress(): void;
-  reloadWorkspace(): Promise<unknown>;
+    showActivateProgress(opts?: { onWarm?: Promise<unknown> }): void;
+    reloadWorkspace(opts?: {
+      mode?: "minimal" | "full";
+      priorityPaths?: string[];
+    }): Promise<unknown>;
 
   /**
    * Given list of notes, prompt user to pick note by selecting corresponding vault name

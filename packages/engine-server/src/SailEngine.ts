@@ -12,6 +12,9 @@ import {
   DEngineClient,
   DEngineInitResp,
   DHookDict,
+  EngineInitOpts,
+  EngineState,
+  ENGINE_STATE,
   DHookEntry,
   DLink,
   DLinkUtils,
@@ -123,6 +126,24 @@ export class SailEngine extends EngineBase implements DEngine {
   private _noteStore: INoteStore<string>;
   private _schemaStore: ISchemaStore<string>;
   private _renderedCache: Cache<string, CachedPreview>;
+  /**
+   * Current lifecycle state of the engine. In-memory only, never persisted.
+   * - cold: not initialized
+   * - warm: minimal init finished (schemas + priority notes parsed, stubs
+   *   registered). The daily journal path is usable.
+   * - ready: full index finished.
+   */
+  private _state: EngineState = ENGINE_STATE.COLD;
+  /**
+   * Ids of stub notes registered by {@link SailEngine.initMinimal}. Tracked so
+   * that the full init can remove stubs that were never promoted to full
+   * notes or overwritten by writes.
+   */
+  private _stubNoteIds: Set<string> = new Set();
+  /**
+   * Per-vault progress of a running full index, exposed for status polling.
+   */
+  private _initProgress?: { vaultsDone: number; vaultsTotal: number };
 
   constructor(props: SailEngineOptsV3) {
     super(props);
@@ -135,6 +156,16 @@ export class SailEngine extends EngineBase implements DEngine {
     this._fileStore = props.fileStore;
     this._noteStore = props.noteStore;
     this._schemaStore = props.schemaStore;
+  }
+
+  /** Current engine lifecycle state. */
+  getEngineState(): EngineState {
+    return this._state;
+  }
+
+  /** Per-vault progress of the full index, when one is running. */
+  getInitProgress(): { vaultsDone: number; vaultsTotal: number } | undefined {
+    return this._initProgress;
   }
 
   static create({ wsRoot, logger }: { logger?: DLogger; wsRoot: string }) {
@@ -170,8 +201,16 @@ export class SailEngine extends EngineBase implements DEngine {
 
   /**
    * Does not throw error but returns it
+   *
+   * @param opts when `opts.mode === "minimal"`, only schemas plus the given
+   * priority paths are parsed and stubs are registered for all other notes,
+   * returning as soon as the daily journal path is usable. Defaults to a full
+   * index.
    */
-  async init(): Promise<DEngineInitResp> {
+  async init(opts?: EngineInitOpts): Promise<DEngineInitResp> {
+    if (opts?.mode === "minimal") {
+      return this.initMinimal({ priorityPaths: opts.priorityPaths });
+    }
     const { data: config } = DConfig.readConfigAndApplyLocalOverrideSync(
       this.wsRoot
     );
@@ -181,6 +220,7 @@ export class SailEngine extends EngineBase implements DEngine {
       wsRoot: this.wsRoot,
       vaults: this.vaults,
       config,
+      engineState: this._state,
     };
     try {
       const { data: schemas, error: schemaErrors } = await this.initSchema();
@@ -241,8 +281,24 @@ export class SailEngine extends EngineBase implements DEngine {
 
         return { key: note.id, noteMeta };
       });
-      this._noteStore.dispose();
+      // Merge into the metadata store instead of wiping it: notes created or
+      // updated while the engine was warm (during a minimal init) must
+      // survive the full index.
       await this._noteStore.bulkWriteMetadata(bulkWriteOpts);
+      // Remove stubs registered during a minimal init that were neither
+      // promoted to full notes by this index nor overwritten by writes.
+      if (this._stubNoteIds.size > 0) {
+        const aliveIds = new Set(_.keys(notesById));
+        const staleStubIds = [...this._stubNoteIds].filter(
+          (id) => !aliveIds.has(id)
+        );
+        await Promise.all(
+          staleStubIds.map((id) => this._noteStore.deleteMetadata(id))
+        );
+        this._stubNoteIds.clear();
+      }
+      this._state = ENGINE_STATE.READY;
+      this._initProgress = undefined;
 
       const hookErrors: ISailError[] = [];
       this.hooks.onCreate = this.hooks.onCreate.filter((hook) => {
@@ -283,6 +339,252 @@ export class SailEngine extends EngineBase implements DEngine {
           wsRoot: this.wsRoot,
           vaults: this.vaults,
           config,
+          engineState: this._state,
+        },
+      };
+    } catch (error: any) {
+      const { message, stack, status } = error;
+      const payload = { message, stack };
+      return {
+        data: defaultResp,
+        error: SailError.createPlainError({
+          payload,
+          message,
+          status,
+          severity: ERROR_SEVERITY.FATAL,
+        }),
+      };
+    }
+  }
+
+  /**
+   * Minimal engine initialization (fast-first startup).
+   *
+   * Fully parses all schemas plus the notes matching `priorityPaths`
+   * (fnames or fpaths without the `.md` extension, e.g. today's journal note
+   * and the journal template) and registers lightweight stub entries
+   * (fname -> id mapping only, no body parsing) for every other note on
+   * disk. This makes the following usable without waiting for a full index:
+   * - schema queries (`doesSchemaExist`)
+   * - single note lookups by fname (`findNotesMeta`)
+   * - `writeNote` dedup and ancestor resolution (daily journal creation)
+   *
+   * Stubs never enter the fuse index; backlinks and the full index are only
+   * built once {@link SailEngine.init} runs to completion (ready state).
+   *
+   * Does not throw but returns errors, same as {@link SailEngine.init}.
+   */
+  async initMinimal({
+    priorityPaths = [],
+  }: {
+    priorityPaths?: string[];
+  } = {}): Promise<DEngineInitResp> {
+    const ctx = "DEngine:initMinimal";
+    this.logger.info({ ctx, msg: "enter", priorityPaths });
+    const start = process.hrtime();
+    const { data: config } = DConfig.readConfigAndApplyLocalOverrideSync(
+      this.wsRoot
+    );
+    const defaultResp = {
+      notes: {},
+      schemas: {},
+      wsRoot: this.wsRoot,
+      vaults: this.vaults,
+      config,
+      engineState: this._state,
+    };
+    try {
+      // --- Schemas: parse everything, the schema set is small.
+      const { data: schemas, error: schemaErrors } = await this.initSchema();
+      if (_.isUndefined(schemas)) {
+        return {
+          data: defaultResp,
+          error: SailError.createFromStatus({
+            message: "No schemas found",
+            status: ERROR_STATUS.UNKNOWN,
+            severity: ERROR_SEVERITY.FATAL,
+          }),
+        };
+      }
+      const schemaDict: SchemaModuleDict = {};
+      schemas.forEach((schema) => {
+        schemaDict[schema.root.id] = schema;
+      });
+      const bulkWriteSchemaOpts = schemas.map((schema) => {
+        return { key: schema.root.id, schema };
+      });
+      this._schemaStore.dispose();
+      this._schemaStore.bulkWriteMetadata(bulkWriteSchemaOpts);
+      // Index schemas for querying (small; safe to build during warm init)
+      await this.queryStore.replaceSchemasIndex(schemaDict);
+
+      // Remove stubs registered by a previous minimal init so that repeated
+      // minimal inits don't accumulate duplicate stub entries.
+      if (this._stubNoteIds.size > 0) {
+        await Promise.all(
+          [...this._stubNoteIds].map((id) =>
+            this._noteStore.deleteMetadata(id)
+          )
+        );
+        this._stubNoteIds.clear();
+      }
+
+      // --- Notes: fully parse root + priority paths, stub the rest.
+      const priorityFnames = new Set(
+        priorityPaths.map((ent) =>
+          _.trimEnd(ent.trim().replace(/\\/g, "/"), ".md").toLowerCase()
+        )
+      );
+      let errors: ISailError[] = [];
+      if (schemaErrors) {
+        errors.push(schemaErrors);
+      }
+      const warmNotesById: NotePropsByIdDict = {};
+      const allNotesByFname: NotePropsByFnameDict = {};
+      let cacheMisses = 0;
+      this._initProgress = { vaultsDone: 0, vaultsTotal: this.vaults.length };
+
+      for (const vault of this.vaults) {
+        const vpath = vault2Path({ vault, wsRoot: this.wsRoot });
+        const maybeFiles = await this._fileStore.readDir({
+          root: URI.file(vpath),
+          include: ["*.md"],
+        });
+        if (maybeFiles.error) {
+          errors.push(
+            new SailError({
+              message: `Unable to read notes for vault ${VaultUtils.getName(
+                vault
+              )}`,
+              severity: ERROR_SEVERITY.MINOR,
+              payload: maybeFiles.error,
+            })
+          );
+          this._initProgress.vaultsDone += 1;
+          continue;
+        }
+        const fileList = maybeFiles.data.map((entry) => entry.toString());
+        const priorityFiles = fileList.filter((fpath) =>
+          priorityFnames.has(fpath.toLowerCase().replace(/\.md$/i, ""))
+        );
+        // root.md is always parsed so ancestor resolution works.
+        if (
+          fileList.includes("root.md") &&
+          !priorityFiles.includes("root.md")
+        ) {
+          priorityFiles.unshift("root.md");
+        }
+
+        const cachePath = path.join(vpath, CONSTANTS.SAIL_CACHE_FILE);
+        const notesCache = new NotesFileSystemCache({
+          cachePath,
+          noCaching: false,
+          logger: this.logger,
+        });
+        const parser = new NoteParser({
+          cache: notesCache,
+          engine: this,
+          logger: this.logger,
+        });
+
+        // Shared dicts so that stubs created below link against parsed
+        // parents (and vice versa).
+        const noteDicts: NoteDicts = {
+          notesById: warmNotesById,
+          notesByFname: allNotesByFname,
+        };
+        const { noteDicts: parsedDicts, errors: parseErrors } =
+          await parser.parseFiles(
+            priorityFiles,
+            vault,
+            schemaDict,
+            { skipCacheCleanup: true }
+          );
+        errors = errors.concat(parseErrors);
+        cacheMisses += notesCache.numCacheMisses;
+        // Merge parsed notes into the shared dicts.
+        Object.assign(noteDicts.notesById, parsedDicts.notesById);
+        noteDicts.notesByFname = NoteFnameDictUtils.merge(
+          noteDicts.notesByFname,
+          parsedDicts.notesByFname
+        );
+
+        // Register stubs for everything that was not parsed.
+        const parsedPaths = new Set(priorityFiles);
+        const remainingPaths = fileList.filter((f) => !parsedPaths.has(f));
+        const { errors: stubErrors } = NoteParser.parseStubs(
+          remainingPaths,
+          vault,
+          noteDicts
+        );
+        errors = errors.concat(stubErrors);
+        this._initProgress.vaultsDone += 1;
+      }
+
+      // Track stub ids so the full init can clean them up later, then
+      // register everything (stubs + parsed notes) in the metadata store.
+      // Stubs whose fname already has a non-stub entry in the store (eg.
+      // promoted by a write during a previous warm window) are skipped.
+      const existingNonStub = await this._noteStore.find({
+        excludeStub: true,
+      });
+      const existingKeys = new Set(
+        (existingNonStub.data ?? []).map(
+          (meta) => `${meta.fname}|${VaultUtils.getName(meta.vault)}`
+        )
+      );
+      const bulkWriteOpts: { key: string; noteMeta: NotePropsMeta }[] = [];
+      _.values(warmNotesById).forEach((note) => {
+        if (note.stub) {
+          const key = `${note.fname}|${VaultUtils.getName(note.vault)}`;
+          if (existingKeys.has(key)) {
+            NoteDictsUtils.delete(note, {
+              notesById: warmNotesById,
+              notesByFname: allNotesByFname,
+            });
+            return;
+          }
+          this._stubNoteIds.add(note.id);
+        }
+        const noteMeta: NotePropsMeta = _.omit(note, ["body"]);
+        bulkWriteOpts.push({ key: note.id, noteMeta });
+      });
+      await this._noteStore.bulkWriteMetadata(bulkWriteOpts);
+
+      this._state = ENGINE_STATE.WARM;
+      this._initProgress = undefined;
+      const duration = getDurationMilliseconds(start);
+      this.logger.info({
+        ctx,
+        msg: "exit",
+        duration,
+        numWarmNotes: _.size(warmNotesById),
+        numStubs: this._stubNoteIds.size,
+        cacheMisses,
+      });
+
+      let error: ISailError | undefined;
+      switch (_.size(errors)) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          error = new SailError(errors[0]);
+          break;
+        }
+        default:
+          error = new SailCompositeError(errors);
+      }
+      return {
+        error,
+        data: {
+          // Stubs stay server-side only: the client payload contains the
+          // fully parsed (priority) notes.
+          notes: _.pickBy(warmNotesById, (note) => !note.stub),
+          wsRoot: this.wsRoot,
+          vaults: this.vaults,
+          config,
+          engineState: this._state,
         },
       };
     } catch (error: any) {
@@ -1083,59 +1385,65 @@ export class SailEngine extends EngineBase implements DEngine {
     let errors: ISailError[] = [];
     let notesFname: NotePropsByFnameDict = {};
     const start = process.hrtime();
+    this._initProgress = { vaultsDone: 0, vaultsTotal: this.vaults.length };
 
     const allNotesList = await Promise.all(
       this.vaults.map(async (vault) => {
-        const vpath = vault2Path({ vault, wsRoot: this.wsRoot });
-        // Get list of files from filesystem
-        const maybeFiles = await this._fileStore.readDir({
-          root: URI.file(vpath),
-          include: ["*.md"],
-        });
-        if (maybeFiles.error) {
-          // Keep initializing other vaults
-          errors = errors.concat([
-            new SailError({
-              message: `Unable to read notes for vault ${VaultUtils.getName(
-                vault
-              )}`,
-              severity: ERROR_SEVERITY.MINOR,
-              payload: maybeFiles.error,
-            }),
-          ]);
-          return {};
-        }
-
-        // Load cache from vault
-        const cachePath = path.join(vpath, CONSTANTS.SAIL_CACHE_FILE);
-        const notesCache = new NotesFileSystemCache({
-          cachePath,
-          // TODO: clean up
-          noCaching: false,
-          logger: this.logger,
-        });
-
-        const { noteDicts, errors: parseErrors } = await new NoteParser({
-          cache: notesCache,
-          engine: this,
-          logger: this.logger,
-        }).parseFiles(maybeFiles.data, vault, schemas);
-        errors = errors.concat(parseErrors);
-        if (noteDicts) {
-          const { notesById, notesByFname } = noteDicts;
-          notesFname = NoteFnameDictUtils.merge(notesFname, notesByFname);
-
-          this.logger.info({
-            ctx,
-            vault,
-            numEntries: _.size(notesById),
-            numCacheUpdates: notesCache.numCacheMisses,
+        try {
+          const vpath = vault2Path({ vault, wsRoot: this.wsRoot });
+          // Get list of files from filesystem
+          const maybeFiles = await this._fileStore.readDir({
+            root: URI.file(vpath),
+            include: ["*.md"],
           });
-          return notesById;
+          if (maybeFiles.error) {
+            // Keep initializing other vaults
+            errors = errors.concat([
+              new SailError({
+                message: `Unable to read notes for vault ${VaultUtils.getName(
+                  vault
+                )}`,
+                severity: ERROR_SEVERITY.MINOR,
+                payload: maybeFiles.error,
+              }),
+            ]);
+            return {};
+          }
+
+          // Load cache from vault
+          const cachePath = path.join(vpath, CONSTANTS.SAIL_CACHE_FILE);
+          const notesCache = new NotesFileSystemCache({
+            cachePath,
+            // TODO: clean up
+            noCaching: false,
+            logger: this.logger,
+          });
+
+          const { noteDicts, errors: parseErrors } = await new NoteParser({
+            cache: notesCache,
+            engine: this,
+            logger: this.logger,
+          }).parseFiles(maybeFiles.data, vault, schemas);
+          errors = errors.concat(parseErrors);
+          if (noteDicts) {
+            const { notesById, notesByFname } = noteDicts;
+            notesFname = NoteFnameDictUtils.merge(notesFname, notesByFname);
+
+            this.logger.info({
+              ctx,
+              vault,
+              numEntries: _.size(notesById),
+              numCacheUpdates: notesCache.numCacheMisses,
+            });
+            return notesById;
+          }
+          return {};
+        } finally {
+          this._initProgress!.vaultsDone += 1;
         }
-        return {};
       })
     );
+    this._initProgress = undefined;
     const allNotes: NotePropsByIdDict = Object.assign({}, ...allNotesList);
     const notesWithLinks = _.filter(allNotes, (note) => !_.isEmpty(note.links));
     this.addBacklinks(

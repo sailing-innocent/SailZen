@@ -14,6 +14,17 @@ export const DEFAULT_LEGACY_VAULT_NAME = "vault";
 export enum SailContext {
   PLUGIN_ACTIVE = "sail:pluginActive",
   PLUGIN_NOT_ACTIVE = "!sail:pluginActive",
+  /**
+   * Set when the engine has reached the warm state: schemas are parsed and
+   * the daily journal path (create/open today's note) is usable. The full
+   * note index may still be running in the background.
+   */
+  ENGINE_WARM = "sail:engineWarm",
+  /**
+   * Set while the extension is going through its startup sequence and
+   * cleared once the engine is at least warm (or startup failed).
+   */
+  STARTING = "sail:starting",
   DEV_MODE = "sail:devMode",
   HAS_LEGACY_PREVIEW = "sail:hasLegacyPreview",
   HAS_CUSTOM_MARKDOWN_VIEW = "hasCustomMarkdownPreview",
@@ -22,6 +33,28 @@ export enum SailContext {
   BACKLINKS_SORT_ORDER = "sail:backlinksSortOrder",
   TREEVIEW_TREE_ITEM_LABEL_TYPE = "sail:treeviewItemLabelType",
 }
+
+/**
+ * VSCode configuration keys (readable via
+ * `vscode.workspace.getConfiguration("sail")`) related to startup behavior.
+ */
+export enum SailStartupConfigKeys {
+  /**
+   * `"fast"` (default): three stage startup — warm engine in ~1s, full index
+   * in the background. `"full"`: legacy blocking startup.
+   */
+  STARTUP_MODE = "startup.mode",
+  /**
+   * Automatically open today's daily journal once the engine is warm.
+   */
+  AUTO_OPEN_DAILY_JOURNAL = "startup.autoOpenDailyJournal",
+  /**
+   * Defer workspace migrations until the engine reaches the ready state.
+   */
+  DEFER_MIGRATIONS = "startup.deferMigrations",
+}
+
+export type SailStartupMode = "fast" | "full";
 
 const treeViewConfig2VSCodeEntry = (id: SailTreeViewKey) => {
   const entry = TREE_VIEWS[id];

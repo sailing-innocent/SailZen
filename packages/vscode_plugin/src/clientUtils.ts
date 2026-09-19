@@ -53,6 +53,15 @@ export class SailClientUtils {
   }
 
   /**
+   * Today's date formatted with the given date format. Extracted from
+   * {@link SailClientUtils.genNoteName} so startup code can compute warm
+   * priority paths without requiring an open note editor.
+   */
+  static getTodayDateForStartup(opts: { dateFormat: string }): string {
+    return Time.now().toFormat(opts.dateFormat);
+  }
+
+  /**
    * Generates a file name for a meeting note. The date format is not
    * configurable, because it needs to match a pre-defined generated schema
    * pattern for meeting notes.

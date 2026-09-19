@@ -10,13 +10,25 @@ import _ from "lodash";
 import { WorkspaceController } from "../modules/workspace";
 
 const router: Router = Router();
-
 router.post(
   "/initialize",
   asyncHandler(async (req: Request, res: Response) => {
     const resp = await WorkspaceController.instance().init(
       req.body as WorkspaceInitRequest
     );
+    res.json(resp);
+  })
+);
+
+/**
+ * Poll engine init status during fast-first startup. Returns
+ * `{ state: "cold" | "warm" | "ready", progress? }`.
+ */
+router.get(
+  "/initStatus",
+  asyncHandler(async (req: Request, res: Response) => {
+    const ws = req.query.ws as string;
+    const resp = await WorkspaceController.instance().initStatus({ ws });
     res.json(resp);
   })
 );
@@ -39,5 +51,4 @@ router.post(
     }
   })
 );
-
 export { router as workspaceRouter };

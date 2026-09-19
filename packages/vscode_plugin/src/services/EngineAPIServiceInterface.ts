@@ -10,6 +10,8 @@ import {
   EngineDeleteOpts,
   EngineEventEmitter,
   EngineInfoResp,
+  EngineInitOpts,
+  EngineState,
   EngineWriteOptsV2,
   FindNoteOpts,
   FindNotesMetaResp,
@@ -75,7 +77,18 @@ export interface IEngineAPIService {
 
   writeSchema(schema: SchemaModuleProps): Promise<WriteSchemaResp>;
 
-  init(): Promise<DEngineInitResp>;
+  init(opts?: EngineInitOpts): Promise<DEngineInitResp>;
+
+  /**
+   * Last known engine init state (cold/warm/ready).
+   */
+  getEngineState(): EngineState;
+
+  /**
+   * Poll the server for the current engine init status. Degrades to
+   * `ready` on legacy servers without the endpoint.
+   */
+  fetchInitStatus(): Promise<EngineState>;
 
   deleteNote(
     id: string,

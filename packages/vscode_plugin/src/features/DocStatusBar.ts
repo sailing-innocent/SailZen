@@ -6,8 +6,14 @@
  */
 
 import * as vscode from "vscode";
-import { hasDocConfig, extractDocFrontmatter } from "@saili/common-all";
+import {
+  hasDocConfig,
+  extractDocFrontmatter,
+  EngineState,
+  ENGINE_STATE,
+} from "@saili/common-all";
 import { ExtensionProvider } from "../ExtensionProvider";
+import { StartupStateService } from "../services/StartupStateService";
 
 const FORMAT_ICONS: Record<string, string> = {
   latex: "$(file-code)",
@@ -18,8 +24,9 @@ const FORMAT_ICONS: Record<string, string> = {
 
 export class DocStatusBarProvider {
   private statusBarItem: vscode.StatusBarItem;
+  /** Shown while the engine index is still building (cold/warm). */
+  private indexingStatusBarItem: vscode.StatusBarItem;
   private disposables: vscode.Disposable[] = [];
-
   constructor() {
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
@@ -27,22 +34,44 @@ export class DocStatusBarProvider {
     );
     this.statusBarItem.command = "sailzen.exportNote";
     this.statusBarItem.tooltip = "SailZen: Export this document";
+    this.indexingStatusBarItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      101
+    );
+    this.indexingStatusBarItem.text = "$(sync~spin) Sail indexing…";
+    this.indexingStatusBarItem.tooltip =
+      "Sail is indexing your notes. The full note list, backlinks and tree view become available once indexing finishes.";
   }
 
   activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(this.statusBarItem);
-
+    context.subscriptions.push(this.indexingStatusBarItem);
     // Update when active editor changes
     this.disposables.push(
       vscode.window.onDidChangeActiveTextEditor(() => this.update())
     );
-
     // Update when document is saved (frontmatter may have changed)
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument(() => this.update())
     );
-
+    // Indexing indicator for fast-first startup: visible from cold through
+    // warm, hidden once the engine reaches the ready state.
+    const startupState = StartupStateService.instance();
+    this.disposables.push(
+      startupState.onDidChangeEngineState((state) => {
+        this.updateIndexingIndicator(state);
+      })
+    );
+    this.updateIndexingIndicator(startupState.state);
     this.update();
+  }
+
+  private updateIndexingIndicator(state: EngineState): void {
+    if (state === ENGINE_STATE.READY) {
+      this.indexingStatusBarItem.hide();
+    } else {
+      this.indexingStatusBarItem.show();
+    }
   }
 
   private async update(): Promise<void> {
@@ -82,6 +111,7 @@ export class DocStatusBarProvider {
 
   dispose(): void {
     this.statusBarItem.dispose();
+    this.indexingStatusBarItem.dispose();
     for (const d of this.disposables) {
       d.dispose();
     }

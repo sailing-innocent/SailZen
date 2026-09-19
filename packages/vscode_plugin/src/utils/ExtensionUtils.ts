@@ -217,9 +217,10 @@ export class ExtensionUtils {
         onExit,
       });
     }
-    const durationStartServer = getDurationMilliseconds(start);
-    Logger.info({ ctx, msg: "post-start-server", port, durationStartServer });
-    wsService.writePort(port);
+      const durationStartServer = getDurationMilliseconds(start);
+      Logger.info({ ctx, msg: "post-start-server", port, durationStartServer });
+      StartupProfiler.recordSegment("spawnServer", durationStartServer);
+      wsService.writePort(port);
     return { port, subprocess };
   }
 
@@ -273,10 +274,12 @@ export class ExtensionUtils {
     durationReloadWorkspace,
     ext,
     activatedSuccess,
+    startupMode,
   }: {
     durationReloadWorkspace: number;
     ext: ISailExtension;
     activatedSuccess: boolean;
+    startupMode?: "fast" | "full";
   }) {
     const engine = ext.getEngine();
     const workspace = ext.getDWorkspace();
@@ -472,16 +475,17 @@ export class ExtensionUtils {
       }
     }
 
-    StartupProfiler.write(wsRoot, {
-      timestamp: new Date().toISOString(),
-      version: SailExtension.version(),
-      activationSucceeded: activatedSuccess,
-      noteCount: numNotes,
-      vaultCount: vaults.length,
-      durationMs: {
-        reloadWorkspace: durationReloadWorkspace,
-      },
-    });
+  StartupProfiler.write(wsRoot, {
+    timestamp: new Date().toISOString(),
+    version: SailExtension.version(),
+    activationSucceeded: activatedSuccess,
+    noteCount: numNotes,
+    vaultCount: vaults.length,
+    mode: startupMode,
+    durationMs: {
+      reloadWorkspace: durationReloadWorkspace,
+    },
+  });
   }
 
   /**

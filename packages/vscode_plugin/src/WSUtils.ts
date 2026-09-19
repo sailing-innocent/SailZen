@@ -278,7 +278,16 @@ export class WSUtils implements IWSUtils {
     return editor as vscode.TextEditor;
   }
 
-  showActivateProgress() {
+  /**
+   * Show the "Starting Sail..." progress notification.
+   *
+   * Two-phase behavior for fast-first startup: pass `onWarm` to have the
+   * notification dismissed as soon as the engine reaches the warm state
+   * (the daily journal path is usable) instead of waiting for the full
+   * index to finish. Without `onWarm` the legacy behavior is kept (resolve
+   * on `initialized` / `not_initialized`).
+   */
+  showActivateProgress(opts?: { onWarm?: Promise<unknown> }) {
     const ctx = "showActivateProgress";
     vscode.window.withProgress(
       {
@@ -290,7 +299,7 @@ export class WSUtils implements IWSUtils {
         _token.onCancellationRequested(() => {
           console.log("Cancelled");
         });
-        const p = new Promise((resolve) => {
+        const historyDone = new Promise((resolve) => {
           HistoryService.instance().subscribe(
             "extension",
             async (_event: HistoryEvent) => {
@@ -309,21 +318,32 @@ export class WSUtils implements IWSUtils {
             }
           );
         });
-        return p;
+        if (opts?.onWarm) {
+          return Promise.race([
+            historyDone,
+            opts.onWarm.then(() => undefined),
+          ]);
+        }
+        return historyDone;
       }
     );
   }
 
-  async reloadWorkspace(): Promise<unknown> {
-    try {
-      const out = await vscode.commands.executeCommand(
-        SAIL_COMMANDS.RELOAD_INDEX.key,
-        true
-      );
-      return out;
-    } catch (err) {
-      Logger.error({ error: err as any });
-      return undefined;
-    }
-  }
+      async reloadWorkspace(opts?: {
+        mode?: "minimal" | "full";
+        priorityPaths?: string[];
+      }): Promise<unknown> {
+        try {
+          const out = await vscode.commands.executeCommand(
+            SAIL_COMMANDS.RELOAD_INDEX.key,
+            true,
+            opts?.mode,
+            opts?.priorityPaths
+          );
+          return out;
+        } catch (err) {
+          Logger.error({ error: err as any });
+          return undefined;
+        }
+      }
 }

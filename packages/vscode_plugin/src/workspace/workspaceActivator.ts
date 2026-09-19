@@ -3,8 +3,10 @@ import { SubProcessExitType } from "@saili/api-server";
 import {
   CONSTANTS,
   SailError,
+  ConfigUtils,
   DVault,
   DWorkspaceV2,
+  ENGINE_STATE,
   ErrorFactory,
   getStage,
   GitEvents,
@@ -26,9 +28,12 @@ import path from "path";
 import semver from "semver";
 import * as vscode from "vscode";
 import { SailContext, SAIL_COMMANDS, WORKSPACE_STATE } from "../constants";
+import { SailClientUtils } from "../clientUtils";
 import { ISailExtension } from "../sailExtensionInterface";
 import { Logger } from "../logger";
+import { StartupProfiler } from "../perf/StartupProfiler";
 import { EngineAPIService } from "../services/EngineAPIService";
+import { StartupStateService } from "../services/StartupStateService";
 import { TextDocumentServiceFactory } from "../services/TextDocumentServiceFactory";
 import { ExtensionUtils } from "../utils/ExtensionUtils";
 import { StartupUtils } from "../utils/StartupUtils";
@@ -322,17 +327,24 @@ async function postReloadWorkspace({
 async function reloadWorkspace({
   ext,
   wsService,
+  mode = "full",
+  priorityPaths,
 }: {
   ext: ISailExtension;
   wsService: WorkspaceService;
+  mode?: "minimal" | "full";
+  priorityPaths?: string[];
 }) {
   const ctx = "reloadWorkspace";
   const ws = ext.getDWorkspace();
-  const maybeEngine = await WSUtils.instance().reloadWorkspace();
+  const maybeEngine = await WSUtils.instance().reloadWorkspace({
+    mode,
+    priorityPaths,
+  });
   if (!maybeEngine) {
     return maybeEngine;
   }
-  Logger.info({ ctx, msg: "post-ws.reloadWorkspace" });
+  Logger.info({ ctx, msg: "post-ws.reloadWorkspace", mode });
 
   // Run any initialization code necessary for this workspace invocation.
   const initializer = WorkspaceInitFactory.create();
@@ -344,12 +356,51 @@ async function reloadWorkspace({
   vscode.window.showInformationMessage("Sail is active");
   Logger.info({ ctx, msg: "exit" });
 
+  if (mode === "minimal") {
+    // Fast-first startup: the workspace upgrade check and the
+    // `initialized` history event are deferred to `finishActivation`, which
+    // runs once the full index is complete. This keeps the warm-state
+    // activation minimal.
+    return maybeEngine;
+  }
+
   await postReloadWorkspace({ wsService });
   HistoryService.instance().add({
     source: "extension",
     action: "initialized",
   });
   return maybeEngine;
+}
+
+/**
+ * Compute the note fnames to fully parse during a minimal (warm) init:
+ * today's daily journal and the daily journal template. Everything else on
+ * disk is registered as a lightweight stub. Best effort — returns an empty
+ * list if the journal config is missing or malformed.
+ */
+function getWarmPriorityPaths(ext: ISailExtension): string[] {
+  const ctx = "getWarmPriorityPaths";
+  try {
+    const config = ext.getDWorkspace().config;
+    const journalConfig = ConfigUtils.getJournal(config);
+    const prefix = SailClientUtils.genNotePrefix(
+      journalConfig.name,
+      journalConfig.addBehavior
+    );
+    const noteDate = SailClientUtils.getTodayDateForStartup(journalConfig);
+    const todayJournalFname = [prefix, journalConfig.dailyDomain, noteDate]
+      .filter((ent) => !_.isEmpty(ent))
+      .join(".");
+    const templateFname = `templates.${journalConfig.dailyDomain}`;
+    return [todayJournalFname, templateFname];
+  } catch (err) {
+    Logger.warn({
+      ctx,
+      msg: "unable to compute warm priority paths; warm init will stub everything",
+      err,
+    });
+    return [];
+  }
 }
 
 function togglePluginActiveContext(enabled: boolean) {
@@ -411,12 +462,53 @@ type WorkspaceActivatorSkipOpts = {
 };
 export class WorkspaceActivator {
   /**
+   * Resolves the two-phase "Starting Sail..." progress notification once the
+   * engine reaches the warm state. Only set during `_activateWarm`.
+   */
+  private _warmResolve?: () => void;
+
+  /**
+   * Start of the fast-first activation, used to report the total
+   * warm + full init duration for tracking.
+   */
+  private _activateStart?: [number, number];
+
+  /**
+   * When migrations are deferred (see `sail.startup.deferMigrations`), the
+   * arguments needed to run them in `finishActivation` are stashed here.
+   */
+  private _deferredMigrationArgs?: {
+    wsService: WorkspaceService;
+    currentVersion: string;
+    previousWorkspaceVersion: string;
+    maybeWsSettings: ReturnType<WorkspaceService["getCodeWorkspaceSettingsSync"]>;
+    sailConfig: DWorkspaceV2["config"];
+  };
+
+  /**
    * Initialize workspace. All logic that happens before the engine is initialized happens here
    * - create workspace class
    * - register traits
    * - run migrations if necessary
    */
-  async init({
+  async init(
+    opts: WorkspaceActivatorOpts & WorkspaceActivatorSkipOpts
+  ): Promise<
+    RespV3<{
+      workspace: DWorkspaceV2;
+      engine: EngineAPIService;
+      wsService: WorkspaceService;
+    }>
+  > {
+    const startWsInit = process.hrtime();
+    try {
+      return await this._initImpl(opts);
+    } finally {
+      StartupProfiler.recordSegmentSince("wsInit", startWsInit);
+    }
+  }
+
+  private async _initImpl({
     ext,
     context,
     wsRoot,
@@ -474,7 +566,10 @@ export class WorkspaceActivator {
       ext.type === WorkspaceType.CODE
         ? wsService.getCodeWorkspaceSettingsSync()
         : undefined;
-    if (!opts?.skipMigrations) {
+    const deferMigrations =
+      StartupUtils.getDeferMigrations() &&
+      WorkspaceActivator._useFastStartup();
+    if (!opts?.skipMigrations && !deferMigrations) {
       await StartupUtils.showManualUpgradeMessageIfNecessary({
         previousWorkspaceVersion,
         currentVersion,
@@ -487,8 +582,18 @@ export class WorkspaceActivator {
         maybeWsSettings,
         sailConfig,
       });
+    } else if (!opts?.skipMigrations && deferMigrations) {
+      // Fast-first startup: run migrations in the background
+      // finish-activation step instead of blocking the warm path.
+      this._deferredMigrationArgs = {
+        wsService,
+        currentVersion,
+        previousWorkspaceVersion,
+        maybeWsSettings,
+        sailConfig,
+      };
     }
-    Logger.info({ ctx: `${ctx}:postMigration`, wsRoot });
+    Logger.info({ ctx: `${ctx}:postMigration`, wsRoot, deferMigrations });
 
     // show interactive elements,
     if (!opts?.skipInteractiveElements) {
@@ -545,9 +650,65 @@ export class WorkspaceActivator {
   }
 
   /**
-   * Initialize engine and activate workspace watchers
+   * True when the fast-first (three stage) startup path should be used.
+   * Legacy `"full"` mode and the test stage keep the original blocking
+   * activation.
+   */
+  private static _useFastStartup(): boolean {
+    return StartupUtils.getStartupMode() === "fast" && getStage() !== "test";
+  }
+
+  /**
+   * Initialize engine and activate workspace watchers.
+   *
+   * Fast-first startup (`sail.startup.mode: "fast"`, default): returns as
+   * soon as the engine is warm (schemas + priority notes parsed, stubs
+   * registered). The caller then runs `finishActivation` in the background
+   * to complete the full index and turn on the rest of the plugin.
+   *
+   * Legacy `"full"` mode (and the test stage): blocks until the full index
+   * is built, preserving the original behavior.
    */
   async activate({
+    ext,
+    context,
+    wsService,
+    wsRoot,
+    opts,
+    workspaceInitializer,
+    engine,
+  }: WorkspaceActivatorOpts &
+    WorkspaceActivatorSkipOpts & {
+      engine: EngineAPIService;
+      wsService: WorkspaceService;
+    }): Promise<RespV3<boolean>> {
+    if (!WorkspaceActivator._useFastStartup()) {
+      return this._activateFull({
+        ext,
+        context,
+        wsService,
+        wsRoot,
+        opts,
+        workspaceInitializer,
+        engine,
+      });
+    }
+    return this._activateWarm({
+      ext,
+      context,
+      wsService,
+      wsRoot,
+      opts,
+      workspaceInitializer,
+      engine,
+    });
+  }
+
+  /**
+   * Legacy blocking activation: full engine index before returning, then
+   * watchers/tree view/tracking, exactly as before the fast-first refactor.
+   */
+  private async _activateFull({
     ext,
     context,
     wsService,
@@ -566,21 +727,23 @@ export class WorkspaceActivator {
     // Reload
     WSUtils.instance().showActivateProgress();
     const start = process.hrtime();
-    const reloadSuccess = await reloadWorkspace({ ext, wsService });
-    const durationReloadWorkspace = getDurationMilliseconds(start);
-
-    // NOTE: tracking is not awaited, don't block on this
-    ExtensionUtils.trackWorkspaceInit({
-      durationReloadWorkspace,
-      activatedSuccess: !!reloadSuccess,
+    const reloadWorkspaceMode: "minimal" | "full" = "full";
+    const reloadSuccess = await reloadWorkspace({
       ext,
-    }).catch((error) => {
-      Logger.warn({ ctx: "workspaceActivator", msg: "Failed to track duration", error });
+      wsService,
+      mode: reloadWorkspaceMode,
     });
-
-    analyzeWorkspace({ wsService });
-
+    const durationReloadWorkspace = getDurationMilliseconds(start);
     if (!reloadSuccess) {
+      // NOTE: tracking is not awaited, don't block on this
+      ExtensionUtils.trackWorkspaceInit({
+        durationReloadWorkspace,
+        activatedSuccess: false,
+        ext,
+        startupMode: "full",
+      }).catch((error) => {
+        Logger.warn({ ctx: "workspaceActivator", msg: "Failed to track duration", error });
+      });
       HistoryService.instance().add({
         source: "extension",
         action: "not_initialized",
@@ -591,10 +754,58 @@ export class WorkspaceActivator {
         }),
       };
     }
+      Logger.info({ ctx, msg: "fin startClient", durationReloadWorkspace });
+      return this._completeActivation({
+        ext,
+        context,
+        wsService,
+        wsRoot,
+        opts,
+        workspaceInitializer,
+        startupMode: "full",
+        durationTotal: durationReloadWorkspace,
+      });
+    }
 
+  /**
+   * Shared activation tail: tracking, workspace analysis, watchers, plugin
+   * context keys, tree view and workspace initializer hooks. Runs at the
+   * ready stage for both the legacy full path and the fast-first path.
+   */
+  private async _completeActivation({
+    ext,
+    context,
+    wsService,
+    wsRoot,
+    opts,
+    workspaceInitializer,
+    startupMode,
+    durationTotal,
+  }: WorkspaceActivatorOpts &
+    WorkspaceActivatorSkipOpts & {
+      wsService: WorkspaceService;
+      startupMode: "fast" | "full";
+      durationTotal: number;
+    }): Promise<RespV3<boolean>> {
+    const ctx = "WorkspaceActivator:completeActivation";
     ExtensionUtils.setWorkspaceContextOnActivate(wsService.config);
+    VSCodeUtils.setContext(SailContext.ENGINE_WARM, true);
+    StartupStateService.instance().setState(ENGINE_STATE.READY);
+    VSCodeUtils.setContext(SailContext.STARTING, false);
     MetadataService.instance().setSailWorkspaceActivated();
-    Logger.info({ ctx, msg: "fin startClient", durationReloadWorkspace });
+    Logger.info({ ctx, msg: "fin startClient", durationTotal, startupMode });
+
+    // NOTE: tracking is not awaited, don't block on this
+    ExtensionUtils.trackWorkspaceInit({
+      durationReloadWorkspace: durationTotal,
+      activatedSuccess: true,
+      ext,
+      startupMode,
+    }).catch((error) => {
+      Logger.warn({ ctx, msg: "Failed to track duration", error });
+    });
+
+    analyzeWorkspace({ wsService });
 
     const stage = getStage();
     if (stage !== "test") {
@@ -605,9 +816,11 @@ export class WorkspaceActivator {
     // Setup tree view
     // This needs to happen after activation because we need the engine.
     if (!opts?.skipTreeView) {
+      const startTreeViewInit = process.hrtime();
       await initTreeView({
         context,
       });
+      StartupProfiler.recordSegmentSince("treeViewInit", startTreeViewInit);
     }
 
     // Add the current workspace to the recent workspace list. The current
@@ -629,6 +842,206 @@ export class WorkspaceActivator {
       }
     }
     return { data: true };
+  }
+
+  /**
+   * Stage 1 of fast-first startup: bring the engine to the warm state and
+   * return immediately. The daily journal path (create/open today) is usable
+   * from here on; the full note index is still building in the background.
+   */
+  private async _activateWarm({
+    ext,
+    context,
+    wsService,
+    wsRoot,
+    opts,
+    workspaceInitializer,
+    engine,
+  }: WorkspaceActivatorOpts &
+    WorkspaceActivatorSkipOpts & {
+      engine: EngineAPIService;
+      wsService: WorkspaceService;
+    }): Promise<RespV3<boolean>> {
+    const ctx = "WorkspaceActivator:activateWarm";
+    VSCodeUtils.setContext(SailContext.STARTING, true);
+    // setup services
+    context.subscriptions.push(TextDocumentServiceFactory.create(ext));
+
+    // Two-phase progress notification: dismiss "Starting Sail..." as soon
+    // as the engine is warm instead of waiting for the full index.
+    const warmReached = new Promise<void>((resolve) => {
+      this._warmResolve = resolve;
+    });
+    WSUtils.instance().showActivateProgress({ onWarm: warmReached });
+
+    this._activateStart = process.hrtime();
+    const priorityPaths = getWarmPriorityPaths(ext);
+    const start = process.hrtime();
+    const reloadSuccess = await reloadWorkspace({
+      ext,
+      wsService,
+      mode: "minimal",
+      priorityPaths,
+    });
+    const durationReloadWorkspace = getDurationMilliseconds(start);
+
+    if (!reloadSuccess) {
+      VSCodeUtils.setContext(SailContext.STARTING, false);
+      HistoryService.instance().add({
+        source: "extension",
+        action: "not_initialized",
+      });
+      this._warmResolve = undefined;
+      return {
+        error: ErrorFactory.createInvalidStateError({
+          message: `issue with init`,
+        }),
+      };
+    }
+
+      // Old-server degradation (P2-7): a server without minimal-init support
+      // ignores `mode` and runs a full init, reporting `ready`. Detect this
+      // and complete activation inline with legacy semantics instead of
+      // pretending the engine is merely warm.
+      if (engine.getEngineState() === ENGINE_STATE.READY) {
+        Logger.warn({
+          ctx,
+          msg: "server does not support minimal init (no engineState in response); degrading to full-mode activation",
+        });
+        // Dismiss the two-phase progress notification and fire the history
+        // event subscribers (webview providers) expect.
+        const resolveWarm = this._warmResolve;
+        this._warmResolve = undefined;
+        resolveWarm?.();
+        HistoryService.instance().add({
+          source: "extension",
+          action: "initialized",
+        });
+        return this._completeActivation({
+          ext,
+          context,
+          wsService,
+          wsRoot,
+          opts,
+          workspaceInitializer,
+          startupMode: "full",
+          durationTotal: durationReloadWorkspace,
+        });
+      }
+
+      Logger.info({ ctx, msg: "engine warm", durationReloadWorkspace });
+      VSCodeUtils.setContext(SailContext.ENGINE_WARM, true);
+      StartupStateService.instance().setState(ENGINE_STATE.WARM);
+      const resolveWarm = this._warmResolve;
+      this._warmResolve = undefined;
+      resolveWarm?.();
+
+      ExtensionUtils.setWorkspaceContextOnActivate(wsService.config);
+      MetadataService.instance().setSailWorkspaceActivated();
+
+      // NOTE: tracking (trackWorkspaceInit) and analyzeWorkspace are deferred
+      // to finishActivation so they don't compete with the warm-state journal
+      // path for CPU/IO (see P2-6).
+      return { data: true };
+    }
+
+  /**
+   * Stage 2 of fast-first startup. Runs in the background after
+   * {@link WorkspaceActivator.activate} returns warm: triggers the full
+   * index (the response also syncs the full note set back to the client),
+   * then turns on watchers, the tree view and the remaining plugin surface.
+   *
+   * Failures are reported through the `not_initialized` history event,
+   * matching the legacy activation error semantics.
+   */
+  async finishActivation({
+    ext,
+    context,
+    wsService,
+    wsRoot,
+    opts,
+    workspaceInitializer,
+  }: WorkspaceActivatorOpts &
+    WorkspaceActivatorSkipOpts & {
+      engine: EngineAPIService;
+      wsService: WorkspaceService;
+    }): Promise<RespV3<boolean>> {
+    const ctx = "WorkspaceActivator:finishActivation";
+    try {
+      // Deferred migrations (fast-first startup): run before the full index
+      // so config changes are picked up by the full re-index.
+      if (this._deferredMigrationArgs && !StartupStateService.instance().cancelled) {
+        const args = this._deferredMigrationArgs;
+        this._deferredMigrationArgs = undefined;
+        await StartupUtils.showManualUpgradeMessageIfNecessary({
+          previousWorkspaceVersion: args.previousWorkspaceVersion,
+          currentVersion: args.currentVersion,
+        });
+        await StartupUtils.runMigrationsIfNecessary({
+          wsService: args.wsService,
+          currentVersion: args.currentVersion,
+          previousWorkspaceVersion: args.previousWorkspaceVersion,
+          maybeWsSettings: args.maybeWsSettings,
+          sailConfig: args.sailConfig,
+        });
+      }
+
+      // Trigger the full index. The server serializes it behind the warm
+      // init, and the response carries the full note set back to the client,
+      // which refreshes lookup/tree via synthetic create events.
+      const reloadSuccess = await reloadWorkspace({
+        ext,
+        wsService,
+        mode: "full",
+      });
+
+      if (StartupStateService.instance().cancelled) {
+        return { data: false };
+      }
+
+      if (!reloadSuccess) {
+        VSCodeUtils.setContext(SailContext.STARTING, false);
+        HistoryService.instance().add({
+          source: "extension",
+          action: "not_initialized",
+        });
+        return {
+          error: ErrorFactory.createInvalidStateError({
+            message: `issue with full init`,
+          }),
+        };
+      }
+
+      Logger.info({ ctx, msg: "engine ready" });
+
+      const durationTotal = this._activateStart
+        ? getDurationMilliseconds(this._activateStart)
+        : 0;
+
+      return this._completeActivation({
+        ext,
+        context,
+        wsService,
+        wsRoot,
+        opts,
+        workspaceInitializer,
+        startupMode: "fast",
+        durationTotal,
+      });
+    } catch (err) {
+      Logger.error({ ctx, error: err as any });
+      VSCodeUtils.setContext(SailContext.STARTING, false);
+      HistoryService.instance().add({
+        source: "extension",
+        action: "not_initialized",
+        data: { err },
+      });
+      return {
+        error: ErrorFactory.createInvalidStateError({
+          message: `issue with finishActivation`,
+        }),
+      };
+    }
   }
 
   async initCodeWorkspace({ context, wsRoot }: WorkspaceActivatorOpts) {

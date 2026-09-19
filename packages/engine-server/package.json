@@ -29,7 +29,8 @@
     "build": "pnpm compile && pnpm buildPrismaClient",
     "buildCI": "pnpm compile && pnpm buildPrismaClient",
     "compile": "tsc -p tsconfig.build.json",
-    "watch": "pnpm compile --watch"
+    "watch": "pnpm compile --watch",
+    "test": "pnpm exec cross-env NODE_OPTIONS=--experimental-vm-modules jest"
   },
   "dependencies": {
     "@babel/preset-typescript": "7.29.7",
@@ -58,6 +59,8 @@
     "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
     "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "@types/jest": "catalog:",
     "js-yaml": "^4.2.0",
     "klaw": "^4.1.0",
     "lodash": "catalog:",

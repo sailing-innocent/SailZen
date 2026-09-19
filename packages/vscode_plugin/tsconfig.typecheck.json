@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "ignoreDeprecations": "6.0",
+    "noEmit": true,
+    "typeRoots": [
+      "../../node_modules/.pnpm/@types+node@25.9.3/node_modules/@types",
+      "../../node_modules/.pnpm/@types+vscode@1.138.0/node_modules/@types",
+      "./node_modules/@types"
+    ]
+  },
+  "include": ["src/**/*.ts"]
+}
