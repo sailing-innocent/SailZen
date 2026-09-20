@@ -10,8 +10,6 @@ import _ from "lodash";
 import link from "rehype-autolink-headings";
 import math from "remark-math";
 // @ts-ignore
-import variables from "remark-variables";
-// @ts-ignore
 import raw from "rehype-raw";
 import slug from "rehype-slug";
 import rehypeStringify from "rehype-stringify";
@@ -75,7 +73,6 @@ export class MDUtilsV5Web {
       .use(zdocTags)
       .use(extendedImage)
       .use(remarkGfm)
-      .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
       .use(wikiLinks)
       .data("errors" as any, errors) as any;

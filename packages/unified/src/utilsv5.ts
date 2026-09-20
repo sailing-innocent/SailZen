@@ -18,8 +18,6 @@ import _ from "lodash";
 import link from "rehype-autolink-headings";
 import math from "remark-math";
 // @ts-ignore
-import variables from "remark-variables";
-// @ts-ignore
 import katex from "rehype-katex";
 import raw from "rehype-raw";
 import slug from "rehype-slug";
@@ -284,7 +282,6 @@ export class MDUtilsV5 {
       .use(extendedImage)
       .use(pageElements)
       .use(remarkGfm)
-      .use(variables)
       .use(backlinksHover, data.backlinkHoverOpts)
       .data("errors" as any, errors) as any;
 

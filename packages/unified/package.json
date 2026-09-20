@@ -1,6 +1,6 @@
 {
   "name": "@saili/unified",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Unified parser utilities for Sail",
   "license": "MIT",
@@ -53,7 +53,6 @@
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "remark-stringify": "^11.0.0",
-    "remark-variables": "^1.4.9",
     "unified": "^11.0.5",
     "unified-engine": "^11.2.2",
     "unist-builder": "^4.0.0",

@@ -663,8 +663,6 @@ interface BodyMetricDefinition {
 ---
 ## 💊 用药记录 API
 
-## 💊 用药记录 API
-
 ### 获取用药记录列表
 
 ```http
