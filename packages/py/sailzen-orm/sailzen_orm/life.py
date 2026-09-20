@@ -15,8 +15,8 @@
 from sqlalchemy import Column, Integer, String, BigInteger, Date, ForeignKey, TIMESTAMP, func
 from sqlalchemy.orm import relationship
 
-from sail_server.infrastructure.orm import ORMBase
-from sail_server.data.types import JSONB, ARRAY
+from sailzen_orm import ORMBase
+from sailzen_orm.types import JSONB, ARRAY
 
 
 class ServiceAccount(ORMBase):

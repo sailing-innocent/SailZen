@@ -68,13 +68,13 @@ if project_root not in sys.path:
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
 # 导入所有 ORM 模型
-from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.infrastructure.orm import health
-from sail_server.infrastructure.orm import finance
-from sail_server.infrastructure.orm import life
-from sail_server.infrastructure.orm import history
-from sail_server.infrastructure.orm import text as text_module
-from sail_server.infrastructure.orm import necessity
+from sailzen_orm.orm_base import ORMBase
+from sailzen_orm import health
+from sailzen_orm import finance
+from sailzen_orm import life
+from sailzen_orm import history
+from sailzen_orm import text as text_module
+from sailzen_orm import necessity
 
 
 # 配置日志

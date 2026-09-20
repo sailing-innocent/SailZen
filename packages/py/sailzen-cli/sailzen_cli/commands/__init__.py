@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # @file __init__.py
-# @brief SailZen CLI package
+# @brief SailZen CLI command modules
 # @author sailing-innocent
-# @date 2026-05-06
-# @version 1.0
+# @date 2026-09-20
+# @version 2.0
 # ---------------------------------

@@ -37,8 +37,8 @@ import os
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
 from sail_server.db import get_db_session
-from sail_server.infrastructure.orm.history import HistoryEvent, Person
-from sail_server.infrastructure.orm.text import NoteItem
+from sailzen_orm.history import HistoryEvent, Person
+from sailzen_orm.text import NoteItem
 from sail_server.utils.note_links import make_note_slug
 
 

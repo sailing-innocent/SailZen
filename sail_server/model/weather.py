@@ -58,7 +58,7 @@ from sail_server.application.dto.weather import (
     DayWeatherResponse,
     WeatherRefreshResponse,
 )
-from sail_server.infrastructure.orm.life import Day
+from sailzen_orm.life import Day
 from sail_server.utils.weather import WeatherFetchError, fetch_archive, fetch_forecast
 
 logger = logging.getLogger(__name__)

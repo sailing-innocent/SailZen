@@ -7,14 +7,23 @@
 # ---------------------------------
 
 """
-SQLAlchemy ORM 模型包
+SQLAlchemy ORM 模型包（sailzen-orm）
 
+SailZen 共享数据库结构声明层：sail_server 与 sailzen-cli 共用。
 """
 
-from sail_server.infrastructure.orm.orm_base import ORMBase
+from sailzen_orm.orm_base import ORMBase
+
+# Reminder Models
+from sailzen_orm.reminder import (
+    Reminder,
+    ReminderEvent,
+    ReminderRule,
+    Device,
+)
 
 # Health Models
-from sail_server.infrastructure.orm.health import (
+from sailzen_orm.health import (
     Weight,
     BodySize,
     BodyData,
@@ -31,10 +40,10 @@ from sail_server.infrastructure.orm.health import (
 )
 
 # Text Models
-from sail_server.infrastructure.orm.text import Work, Edition, DocumentNode
+from sailzen_orm.text import Work, Edition, DocumentNode, NoteItem
 
 # Necessity Models
-from sail_server.infrastructure.orm.necessity import (
+from sailzen_orm.necessity import (
     ResidenceType,
     ContainerType,
     ItemType,
@@ -54,27 +63,29 @@ from sail_server.infrastructure.orm.necessity import (
 )
 
 # History Models
-from sail_server.infrastructure.orm.history import (
+from sailzen_orm.history import (
     HistoryEvent,
+    Person,
 )
 
 # Life Models
-from sail_server.infrastructure.orm.life import (
+from sailzen_orm.life import (
     ServiceAccount,
     Day,
     TimeSpan,
 )
 
 # Finance Models
-from sail_server.infrastructure.orm.finance import (
+from sailzen_orm.finance import (
     Account,
     Transaction,
     Budget,
     BudgetItem,
+    FinanceTag,
 )
 
 # Rhythm Models
-from sail_server.infrastructure.orm.rhythm import (
+from sailzen_orm.rhythm import (
     RhythmAffair,
     RhythmTimeBlock,
     RhythmDayTemplate,
@@ -87,6 +98,11 @@ from sail_server.infrastructure.orm.rhythm import (
 __all__ = [
     # Base
     "ORMBase",
+    # Reminder
+    "Reminder",
+    "ReminderEvent",
+    "ReminderRule",
+    "Device",
     # Health
     "Weight",
     "BodySize",
@@ -105,6 +121,7 @@ __all__ = [
     "Work",
     "Edition",
     "DocumentNode",
+    "NoteItem",
     # Necessity Enums
     "ResidenceType",
     "ContainerType",
@@ -125,6 +142,7 @@ __all__ = [
     "Replenishment",
     # History
     "HistoryEvent",
+    "Person",
     # Life
     "ServiceAccount",
     "Day",
@@ -134,6 +152,7 @@ __all__ = [
     "Transaction",
     "Budget",
     "BudgetItem",
+    "FinanceTag",
     # Rhythm
     "RhythmAffair",
     "RhythmTimeBlock",

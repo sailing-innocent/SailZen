@@ -53,9 +53,9 @@ from sail_server.application.dto.rhythm import (
     UnplacedItem,
     VentureBurndownResponse,
 )
-from sail_server.infrastructure.orm.finance import Budget, Transaction
-from sail_server.infrastructure.orm.life import Day
-from sail_server.infrastructure.orm.rhythm import (
+from sailzen_orm.finance import Budget, Transaction
+from sailzen_orm.life import Day
+from sailzen_orm.rhythm import (
     RhythmAffair,
     RhythmEnergyProfile,
     RhythmPolicy,
@@ -1171,7 +1171,7 @@ def _build_score_context(
     habit_ids = [h.id for h in habits]
     week_done: Dict[int, int] = {hid: 0 for hid in habit_ids}
     if habit_ids:
-        from sail_server.infrastructure.orm.rhythm import RhythmDisciplineLog
+        from sailzen_orm.rhythm import RhythmDisciplineLog
 
         monday, sunday = week_range(d)
         logs = (
@@ -1597,7 +1597,7 @@ def _compute_review_for_range(
     db: Session, start: date, end: date, scope: str, period_key: str
 ) -> ReviewResponse:
     """计算 [start, end] 区间的节奏评分"""
-    from sail_server.infrastructure.orm.rhythm import RhythmDisciplineLog
+    from sailzen_orm.rhythm import RhythmDisciplineLog
 
     profile = get_or_create_profile(db)
     day_ids = [
@@ -2073,7 +2073,7 @@ def get_habit_heatmap_impl(
     db: Session, affair_id: int, start_date: date, end_date: date
 ) -> HabitHeatmapResponse:
     """habit/precept 在日期范围内的每日打卡结果矩阵。"""
-    from sail_server.infrastructure.orm.rhythm import RhythmDisciplineLog
+    from sailzen_orm.rhythm import RhythmDisciplineLog
 
     if start_date > end_date:
         raise RhythmBadRequestError("start_date 不能晚于 end_date")

@@ -34,52 +34,22 @@ import time
 from datetime import datetime
 from typing import Optional
 
+import click
 import requests
 
+from sailzen_cli.common import (
+    _resolve_default_server_url,
+    API_TIMEOUT,
+    REQUEST_DELAY,
+    server_option,
+)
+
 
 # ============================================================================
-# Environment / Server URL Resolution (与 finance_client 共享逻辑)
+# Constants
 # ============================================================================
-
-def _load_env_file(env_path: str) -> dict:
-    """手动解析 .env 文件"""
-    env = {}
-    if not os.path.isfile(env_path):
-        return env
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip().strip('"').strip("'")
-                env[key] = value
-    return env
-
-
-def _resolve_default_server_url() -> str:
-    """解析默认服务器地址"""
-    env_url = os.environ.get("SAIL_SERVER_URL")
-    if env_url:
-        return env_url
-
-    cwd = os.getcwd()
-    for env_name in (".env.prod", ".env.dev", ".env"):
-        env_path = os.path.join(cwd, env_name)
-        if os.path.isfile(env_path):
-            env = _load_env_file(env_path)
-            host = env.get("SERVER_HOST", "localhost")
-            port = env.get("SERVER_PORT", "8000")
-            return f"http://{host}:{port}"
-
-    return "http://localhost:8000"
-
 
 DEFAULT_SERVER_URL = _resolve_default_server_url()
-API_TIMEOUT = 30
-REQUEST_DELAY = 0.1
 
 
 # ============================================================================
@@ -239,112 +209,137 @@ class HealthClient:
 
 
 # ============================================================================
-# CLI Commands
+# Click Commands
 # ============================================================================
 
-def cmd_pull_weight(args):
-    """导出体重记录为 CSV"""
-    client = HealthClient(args.server)
-    print(f"Fetching weight records from {args.server} ...")
 
-    start_ts = int(datetime.strptime(args.start, "%Y-%m-%d").timestamp()) if args.start else 0
-    end_ts = int(datetime.strptime(args.end, "%Y-%m-%d").timestamp()) if args.end else int(datetime(2099, 12, 31).timestamp())
+@click.group()
+def health():
+    """健康数据管理（体重/运动/减重计划导出分析）。"""
+
+
+def _resolve_range(start: Optional[str], end: Optional[str]) -> tuple[int, int]:
+    start_ts = int(datetime.strptime(start, "%Y-%m-%d").timestamp()) if start else 0
+    end_ts = int(datetime.strptime(end, "%Y-%m-%d").timestamp()) if end else int(datetime(2099, 12, 31).timestamp())
+    return start_ts, end_ts
+
+
+@health.command("pull-weight")
+@server_option
+@click.option("--start", default=None, help="起始日期 (YYYY-MM-DD)")
+@click.option("--end", default=None, help="截止日期 (YYYY-MM-DD)")
+@click.option("--output", "-o", default=None, help="输出 CSV 文件路径")
+def cmd_pull_weight(server, start, end, output):
+    """导出体重记录为 CSV"""
+    client = HealthClient(server)
+    click.echo(f"Fetching weight records from {server} ...")
+
+    start_ts, end_ts = _resolve_range(start, end)
 
     weights = client.fetch_all_weights(start=start_ts, end=end_ts)
     if not weights:
-        print("No weight records found.")
+        click.echo("No weight records found.")
         return
 
-    csv_path = args.output or "health_weights.csv"
+    csv_path = output or "health_weights.csv"
     count = client.export_weights_to_csv(weights, csv_path)
-    print(f"Exported {count} weight records to {csv_path}")
+    click.echo(f"Exported {count} weight records to {csv_path}")
 
 
-def cmd_pull_exercise(args):
+@health.command("pull-exercise")
+@server_option
+@click.option("--start", default=None, help="起始日期 (YYYY-MM-DD)")
+@click.option("--end", default=None, help="截止日期 (YYYY-MM-DD)")
+@click.option("--output", "-o", default=None, help="输出 CSV 文件路径")
+def cmd_pull_exercise(server, start, end, output):
     """导出运动记录为 CSV"""
-    client = HealthClient(args.server)
-    print(f"Fetching exercise records from {args.server} ...")
+    client = HealthClient(server)
+    click.echo(f"Fetching exercise records from {server} ...")
 
-    start_ts = int(datetime.strptime(args.start, "%Y-%m-%d").timestamp()) if args.start else 0
-    end_ts = int(datetime.strptime(args.end, "%Y-%m-%d").timestamp()) if args.end else int(datetime(2099, 12, 31).timestamp())
+    start_ts, end_ts = _resolve_range(start, end)
 
     exercises = client.fetch_all_exercises(start=start_ts, end=end_ts)
     if not exercises:
-        print("No exercise records found.")
+        click.echo("No exercise records found.")
         return
 
-    csv_path = args.output or "health_exercises.csv"
+    csv_path = output or "health_exercises.csv"
     count = client.export_exercises_to_csv(exercises, csv_path)
-    print(f"Exported {count} exercise records to {csv_path}")
+    click.echo(f"Exported {count} exercise records to {csv_path}")
 
 
-def cmd_weight_analysis(args):
+@health.command("weight-analysis")
+@server_option
+@click.option("--start", default=None, help="起始日期 (YYYY-MM-DD)")
+@click.option("--end", default=None, help="截止日期 (YYYY-MM-DD)")
+@click.option("--model", default="linear", show_default=True, type=click.Choice(["linear", "polynomial"]), help="趋势模型")
+def cmd_weight_analysis(server, start, end, model):
     """获取体重趋势分析和减重计划进度"""
-    client = HealthClient(args.server)
+    client = HealthClient(server)
 
-    start_ts = int(datetime.strptime(args.start, "%Y-%m-%d").timestamp()) if args.start else 0
-    end_ts = int(datetime.strptime(args.end, "%Y-%m-%d").timestamp()) if args.end else int(datetime(2099, 12, 31).timestamp())
+    start_ts, end_ts = _resolve_range(start, end)
 
-    print("=" * 60)
-    print("📊 体重趋势分析")
-    print("=" * 60)
+    click.echo("=" * 60)
+    click.echo("📊 体重趋势分析")
+    click.echo("=" * 60)
 
-    # 趋势分析
-    trend = client.analyze_weight_trend(start=start_ts, end=end_ts, model_type=args.model)
-    print(f"\n趋势模型: {trend.get('model_type', 'linear')}")
-    print(f"当前趋势: {trend.get('current_trend', 'unknown')}")
-    print(f"斜率: {trend.get('slope', 0):.4f} kg/天")
-    print(f"R² 拟合度: {trend.get('r_squared', 0):.4f}")
+    trend = client.analyze_weight_trend(start=start_ts, end=end_ts, model_type=model)
+    click.echo(f"\n趋势模型: {trend.get('model_type', 'linear')}")
+    click.echo(f"当前趋势: {trend.get('current_trend', 'unknown')}")
+    click.echo(f"斜率: {trend.get('slope', 0):.4f} kg/天")
+    click.echo(f"R² 拟合度: {trend.get('r_squared', 0):.4f}")
     if "prediction_30d" in trend:
-        print(f"30天预测: {trend['prediction_30d']:.2f} kg")
+        click.echo(f"30天预测: {trend['prediction_30d']:.2f} kg")
     if "prediction_90d" in trend:
-        print(f"90天预测: {trend['prediction_90d']:.2f} kg")
+        click.echo(f"90天预测: {trend['prediction_90d']:.2f} kg")
 
-    # 平均值
     avg = client.get_weight_avg(start=start_ts, end=end_ts)
     if avg and avg.get("result"):
-        print(f"\n平均体重: {avg['result']:.2f} kg")
+        click.echo(f"\n平均体重: {avg['result']:.2f} kg")
 
-    # 减重计划
-    print("\n" + "=" * 60)
-    print("📋 减重计划")
-    print("=" * 60)
+    click.echo("\n" + "=" * 60)
+    click.echo("📋 减重计划")
+    click.echo("=" * 60)
 
     plan = client.get_weight_plan()
     if plan:
-        print(f"\n计划名称: {plan.get('name', 'N/A')}")
-        print(f"目标体重: {plan.get('target_weight', 'N/A')} kg")
-        print(f"起始体重: {plan.get('start_weight', 'N/A')} kg")
-        print(f"计划周期: {plan.get('duration_days', 'N/A')} 天")
+        click.echo(f"\n计划名称: {plan.get('name', 'N/A')}")
+        click.echo(f"目标体重: {plan.get('target_weight', 'N/A')} kg")
+        click.echo(f"起始体重: {plan.get('start_weight', 'N/A')} kg")
+        click.echo(f"计划周期: {plan.get('duration_days', 'N/A')} 天")
 
         progress = client.get_weight_plan_progress(plan_id=plan.get("id"))
         if progress:
-            print(f"\n控制率: {progress.get('control_rate', 'N/A')}")
+            click.echo(f"\n控制率: {progress.get('control_rate', 'N/A')}")
             if "current_weight" in progress:
-                print(f"当前体重: {progress['current_weight']:.2f} kg")
+                click.echo(f"当前体重: {progress['current_weight']:.2f} kg")
             if "expected_weight" in progress:
-                print(f"预期体重: {progress['expected_weight']:.2f} kg")
+                click.echo(f"预期体重: {progress['expected_weight']:.2f} kg")
             if "remaining_days" in progress:
-                print(f"剩余天数: {progress['remaining_days']} 天")
+                click.echo(f"剩余天数: {progress['remaining_days']} 天")
     else:
-        print("\n无活跃减重计划")
+        click.echo("\n无活跃减重计划")
 
 
-def cmd_weight_plan_status(args):
+@health.command("weight-plan-status")
+@server_option
+@click.option("--start", default=None, help="起始日期 (YYYY-MM-DD)")
+@click.option("--end", default=None, help="截止日期 (YYYY-MM-DD)")
+@click.option("--output", "-o", default=None, help="输出 CSV 文件路径")
+def cmd_weight_plan_status(server, start, end, output):
     """导出带计划状态的体重记录"""
-    client = HealthClient(args.server)
-    print(f"Fetching weight records with plan status from {args.server} ...")
+    client = HealthClient(server)
+    click.echo(f"Fetching weight records with plan status from {server} ...")
 
-    start_ts = int(datetime.strptime(args.start, "%Y-%m-%d").timestamp()) if args.start else 0
-    end_ts = int(datetime.strptime(args.end, "%Y-%m-%d").timestamp()) if args.end else int(datetime(2099, 12, 31).timestamp())
+    start_ts, end_ts = _resolve_range(start, end)
 
     records = client.get_weights_with_plan_status(start=start_ts, end=end_ts)
     if not records:
-        print("No records found.")
+        click.echo("No records found.")
         return
 
     fields = ["id", "value", "ctime", "expected_value", "status", "diff", "note"]
-    csv_path = args.output or "health_weight_plan_status.csv"
+    csv_path = output or "health_weight_plan_status.csv"
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
@@ -354,68 +349,8 @@ def cmd_weight_plan_status(args):
                 row["ctime"] = datetime.fromtimestamp(row["ctime"]).isoformat()
             writer.writerow(row)
 
-    print(f"Exported {len(records)} records to {csv_path}")
-
-
-# ============================================================================
-# Main Entry
-# ============================================================================
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="HealthClient - SailZen 健康数据 CLI 工具",
-    )
-    subparsers = parser.add_subparsers(dest="command", help="子命令")
-
-    def add_server_arg(p):
-        p.add_argument(
-            "--server",
-            default=os.environ.get("SAIL_SERVER_URL", DEFAULT_SERVER_URL),
-            help=f"sail_server 地址 (默认: {DEFAULT_SERVER_URL})",
-        )
-
-    def add_date_args(p):
-        p.add_argument("--start", help="起始日期 (YYYY-MM-DD)")
-        p.add_argument("--end", help="截止日期 (YYYY-MM-DD)")
-
-    # ---- pull-weight ----
-    p_w = subparsers.add_parser("pull-weight", aliases=["pw"], help="导出体重记录为 CSV")
-    add_server_arg(p_w)
-    add_date_args(p_w)
-    p_w.add_argument("--output", "-o", default=None, help="输出 CSV 文件路径")
-    p_w.set_defaults(func=cmd_pull_weight)
-
-    # ---- pull-exercise ----
-    p_e = subparsers.add_parser("pull-exercise", aliases=["pe"], help="导出运动记录为 CSV")
-    add_server_arg(p_e)
-    add_date_args(p_e)
-    p_e.add_argument("--output", "-o", default=None, help="输出 CSV 文件路径")
-    p_e.set_defaults(func=cmd_pull_exercise)
-
-    # ---- weight-analysis ----
-    p_a = subparsers.add_parser("weight-analysis", aliases=["wa"], help="体重趋势分析与减重计划")
-    add_server_arg(p_a)
-    add_date_args(p_a)
-    p_a.add_argument("--model", default="linear", choices=["linear", "polynomial"], help="趋势模型")
-    p_a.set_defaults(func=cmd_weight_analysis)
-
-    # ---- weight-plan-status ----
-    p_ps = subparsers.add_parser("weight-plan-status", aliases=["wps"], help="导出带计划状态的体重记录")
-    add_server_arg(p_ps)
-    add_date_args(p_ps)
-    p_ps.add_argument("--output", "-o", default=None, help="输出 CSV 文件路径")
-    p_ps.set_defaults(func=cmd_weight_plan_status)
-
-    args = parser.parse_args()
-
-    if args.command is None:
-        parser.print_help()
-        sys.exit(1)
-
-    args.func(args)
+    click.echo(f"Exported {len(records)} records to {csv_path}")
 
 
 if __name__ == "__main__":
-    main()
+    health()

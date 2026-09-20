@@ -56,6 +56,7 @@ import sys
 import time
 from typing import Any, Optional
 
+import click
 import requests
 
 
@@ -582,6 +583,22 @@ def main():
     except KeyboardInterrupt:
         print("\n已取消")
         sys.exit(0)
+
+
+# ============================================================================
+# Click bridge - 透传子命令与参数给 argparse 内核
+# ============================================================================
+
+
+@click.command(
+    "vault",
+    context_settings=dict(ignore_unknown_options=True, allow_extra_args=True),
+)
+@click.pass_context
+def vault(ctx: click.Context):
+    """通过 Vault API Server 读写 Sail Vault 中的笔记。"""
+    sys.argv = ["vault", *ctx.args]
+    main()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ description = "My Personal SailServer for daily management"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "sailzen-orm",
     "aiohttp>=3.13.3",
     "apscheduler>=3.11.0",
     "dotenv>=0.9.9",
@@ -36,19 +37,25 @@ dependencies = [
     "aiosqlite>=0.22.1",
 ]
 
-[project.scripts]
-sailzen = "sailzen.__main__:main"
+[tool.uv.sources]
+sailzen-orm = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "packages/py/sailzen-orm",
+    "packages/py/sailzen-cli",
+]
 
 [tool.setuptools.packages.find]
-include = ["sailzen*"]
+include = ["sail_server*"]
 
 [[tool.uv.index]]
 name = "tencent"
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
 
 [tool.pytest.ini_options]
-python_paths=[
-    "."
+python_paths = [
+    ".",
 ]
 testpaths = [
     "tests",

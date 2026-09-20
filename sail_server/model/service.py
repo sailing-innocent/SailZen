@@ -1,4 +1,4 @@
-from sail_server.infrastructure.orm.life import (
+from sailzen_orm.life import (
     ServiceAccount,
 )
 from pydantic import BaseModel

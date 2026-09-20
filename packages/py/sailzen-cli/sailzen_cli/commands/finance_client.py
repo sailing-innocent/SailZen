@@ -3,7 +3,7 @@
 # @brief FinanceClient CLI - 通过 HTTP API 分批加载/修改/上传 account 的 transaction 记录
 # @author sailing-innocent
 # @date 2026-05-06
-# @version 1.0
+# @version 2.0
 # ---------------------------------
 
 """
@@ -14,17 +14,10 @@ FinanceClient CLI 工具
 2. 用户在 CSV 中修改后，逐条 PUT 回服务器
 3. 支持查看 account 列表
 
-API 端点（基于 sail_server 路由结构）：
-- GET  /api/v1/finance/account              → 获取所有账户
-- GET  /api/v1/finance/transaction/paginated/ → 分页获取交易（page, page_size, sort_by, sort_order）
-- PUT  /api/v1/finance/transaction/{id}     → 更新单条交易
-
-工作流程：
+命令示例:
   sailzen finance pull --account 1 --server http://host:port
-    → 拉取 account 1 的所有 transaction，导出为 transactions_1.csv
-  （用户编辑 CSV）
-  sailzen finance push --csv transactions_1.csv --server http://host:port
-    → 读取 CSV，逐条 PUT 更新到服务器
+  sailzen finance push transactions_1.csv --server http://host:port
+  sailzen finance list-accounts --server http://host:port
 """
 
 from __future__ import annotations
@@ -37,70 +30,18 @@ import time
 from datetime import datetime
 from typing import Optional
 
+import click
 import requests
 
-
-# ============================================================================
-# Environment / Server URL Resolution
-# ============================================================================
-
-def _load_env_file(env_path: str) -> dict:
-    """手动解析 .env 文件（不依赖 python-dotenv）"""
-    env = {}
-    if not os.path.isfile(env_path):
-        return env
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip().strip('"').strip("'")
-                env[key] = value
-    return env
-
-
-def _resolve_default_server_url() -> str:
-    """
-    解析默认服务器地址。
-    优先级：
-      1. SAIL_SERVER_URL 环境变量
-      2. .env.prod / .env.dev 中的 SERVER_HOST + SERVER_PORT
-      3. http://localhost:8000
-    """
-    # 1. 环境变量
-    env_url = os.environ.get("SAIL_SERVER_URL")
-    if env_url:
-        return env_url
-
-    # 2. 尝试读取 .env 文件
-    cwd = os.getcwd()
-    for env_name in (".env.prod", ".env.dev", ".env"):
-        env_path = os.path.join(cwd, env_name)
-        if os.path.isfile(env_path):
-            env = _load_env_file(env_path)
-            host = env.get("SERVER_HOST", "localhost")
-            port = env.get("SERVER_PORT", "8000")
-            return f"http://{host}:{port}"
-
-    # 3. 回退默认值
-    return "http://localhost:8000"
-
+from sailzen_cli.common import (
+    _resolve_default_server_url,
+    DEFAULT_PAGE_SIZE,
+    API_TIMEOUT,
+    REQUEST_DELAY,
+    server_option,
+)
 
 DEFAULT_SERVER_URL = _resolve_default_server_url()
-
-
-# ============================================================================
-# Constants
-# ============================================================================
-
-DEFAULT_PAGE_SIZE = 100  # 每页拉取数量（API 最大 100）
-API_TIMEOUT = 30  # HTTP 请求超时（秒）
-REQUEST_DELAY = 0.1  # 请求间隔（秒），避免打爆服务器
-
-# CSV 列定义（与 TransactionResponse 字段对应）
 CSV_FIELDS = [
     "id",
     "from_acc_id",
@@ -471,22 +412,29 @@ class FinanceClient:
 
 
 # ============================================================================
-# CLI Commands
+# Click Commands
 # ============================================================================
 
 
-def cmd_list_accounts(args):
+@click.group()
+def finance():
+    """财务交易管理（拉取/修改/上传 transaction）。"""
+
+
+@finance.command("list-accounts")
+@server_option
+def cmd_list_accounts(server):
     """列出所有账户"""
-    client = FinanceClient(args.server)
+    client = FinanceClient(server)
     accounts = client.list_accounts()
     if not accounts:
-        print("No accounts found.")
+        click.echo("No accounts found.")
         return
 
-    print(f"{'ID':>6}  {'Name':<30}  {'Balance':>12}  {'State':>6}")
-    print("-" * 65)
+    click.echo(f"{'ID':>6}  {'Name':<30}  {'Balance':>12}  {'State':>6}")
+    click.echo("-" * 65)
     for acc in accounts:
-        print(
+        click.echo(
             f"{acc.get('id', ''):>6}  "
             f"{acc.get('name', ''):<30}  "
             f"{acc.get('balance', '0'):>12}  "
@@ -494,168 +442,83 @@ def cmd_list_accounts(args):
         )
 
 
-def cmd_pull(args):
+@finance.command("pull")
+@server_option
+@click.option("--account", "-a", type=int, default=None, help="按 account_id 过滤（可选，不指定则拉取全部）")
+@click.option("--output", "-o", default=None, help="输出 CSV 文件路径（默认: transactions_{account_id}.csv）")
+@click.option("--page-size", type=int, default=DEFAULT_PAGE_SIZE, show_default=True, help="每页拉取数量（最大: 100）")
+def cmd_pull(server, account, output, page_size):
     """拉取 transaction 并导出为 CSV"""
-    client = FinanceClient(args.server)
+    client = FinanceClient(server)
 
-    account_id = args.account
-    if account_id is not None:
-        account = client.get_account(account_id)
-        if account is None:
-            print(f"Error: Account {account_id} not found.", file=sys.stderr)
-            sys.exit(1)
-        print(f"Account: {account['name']} (ID: {account['id']})")
+    if account is not None:
+        acc = client.get_account(account)
+        if acc is None:
+            raise click.ClickException(f"Account {account} not found.")
+        click.echo(f"Account: {acc['name']} (ID: {acc['id']})")
 
-    print(f"Fetching transactions from {args.server} ...")
+    click.echo(f"Fetching transactions from {server} ...")
     transactions = client.fetch_all_transactions(
-        account_id=account_id,
-        page_size=args.page_size,
+        account_id=account,
+        page_size=page_size,
     )
 
     if not transactions:
-        print("No transactions found.")
+        click.echo("No transactions found.")
         return
 
-    # 生成默认 CSV 文件名
-    if args.output:
-        csv_path = args.output
+    if output:
+        csv_path = output
     else:
-        suffix = f"_{account_id}" if account_id is not None else "_all"
+        suffix = f"_{account}" if account is not None else "_all"
         csv_path = f"transactions{suffix}.csv"
 
     count = client.export_to_csv(transactions, csv_path)
-    print(f"Exported {count} transactions to {csv_path}")
+    click.echo(f"Exported {count} transactions to {csv_path}")
 
 
-def cmd_push(args):
+@finance.command("push")
+@server_option
+@click.argument("csv", type=click.Path(exists=True))
+@click.option("--dry-run", "-n", is_flag=True, help="仅预览，不实际发送请求")
+def cmd_push(server, csv, dry_run):
     """从 CSV 读取并推送更新到服务器"""
-    csv_path = args.csv
-    if not os.path.exists(csv_path):
-        print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
-        sys.exit(1)
+    client = FinanceClient(server)
+    click.echo(f"Pushing updates from {csv} to {server} ...")
 
-    client = FinanceClient(args.server)
-    print(f"Pushing updates from {csv_path} to {args.server} ...")
+    if dry_run:
+        click.echo("[DRY RUN MODE] No actual requests will be sent.\n")
 
-    if args.dry_run:
-        print("[DRY RUN MODE] No actual requests will be sent.\n")
+    result = client.push_from_csv(csv, dry_run=dry_run)
 
-    result = client.push_from_csv(csv_path, dry_run=args.dry_run)
-
-    print(f"\nDone. Success: {result['success']}, Failed: {result['failed']}")
+    click.echo(f"\nDone. Success: {result['success']}, Failed: {result['failed']}")
     if result["errors"]:
-        print(f"\nErrors:")
+        click.echo("\nErrors:")
         for err in result["errors"]:
-            print(f"  - ID {err['id']}: {err['error']}")
+            click.echo(f"  - ID {err['id']}: {err['error']}")
 
 
-def cmd_create_from_csv(args):
-    """从 CSV 读取并创建新 transaction（id 为空或缺失的行）"""
-    csv_path = args.csv
-    if not os.path.exists(csv_path):
-        print(f"Error: CSV file not found: {csv_path}", file=sys.stderr)
-        sys.exit(1)
+@finance.command("create-from-csv")
+@server_option
+@click.argument("csv", type=click.Path(exists=True))
+@click.option("--dry-run", "-n", is_flag=True, help="仅预览，不实际发送请求")
+def cmd_create_from_csv(server, csv, dry_run):
+    """从 CSV 创建新 transaction（id 为空或缺失的行）"""
+    client = FinanceClient(server)
+    click.echo(f"Creating new transactions from {csv} to {server} ...")
 
-    client = FinanceClient(args.server)
-    print(f"Creating new transactions from {csv_path} to {args.server} ...")
+    if dry_run:
+        click.echo("[DRY RUN MODE] No actual requests will be sent.\n")
 
-    if args.dry_run:
-        print("[DRY RUN MODE] No actual requests will be sent.\n")
+    result = client.create_from_csv(csv, dry_run=dry_run)
 
-    result = client.create_from_csv(csv_path, dry_run=args.dry_run)
-
-    print(f"\nDone. Created: {result['success']}, Failed: {result['failed']}")
+    click.echo(f"\nDone. Created: {result['success']}, Failed: {result['failed']}")
     if result["errors"]:
-        print(f"\nErrors:")
+        click.echo("\nErrors:")
         for err in result["errors"]:
-            print(f"  - Row '{err['row']}': {err['error']}")
-
-
-# ============================================================================
-# Main Entry
-# ============================================================================
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="FinanceClient - SailZen 财务交易 CLI 工具",
-    )
-    subparsers = parser.add_subparsers(dest="command", help="子命令")
-
-    # ---- 公共参数 ----
-    def add_server_arg(p):
-        p.add_argument(
-            "--server",
-            default=os.environ.get("SAIL_SERVER_URL", DEFAULT_SERVER_URL),
-            help=f"sail_server 地址 (默认: {DEFAULT_SERVER_URL}, 环境变量: SAIL_SERVER_URL)",
-        )
-
-    # ---- list-accounts ----
-    p_list = subparsers.add_parser("list-accounts", aliases=["la"], help="列出所有账户")
-    add_server_arg(p_list)
-    p_list.set_defaults(func=cmd_list_accounts)
-
-    # ---- pull ----
-    p_pull = subparsers.add_parser("pull", help="拉取 transaction 并导出为 CSV")
-    add_server_arg(p_pull)
-    p_pull.add_argument(
-        "--account", "-a",
-        type=int,
-        default=None,
-        help="按 account_id 过滤（可选，不指定则拉取全部）",
-    )
-    p_pull.add_argument(
-        "--output", "-o",
-        default=None,
-        help="输出 CSV 文件路径（默认: transactions_{account_id}.csv）",
-    )
-    p_pull.add_argument(
-        "--page-size",
-        type=int,
-        default=DEFAULT_PAGE_SIZE,
-        help=f"每页拉取数量（默认: {DEFAULT_PAGE_SIZE}, 最大: 100）",
-    )
-    p_pull.set_defaults(func=cmd_pull)
-
-    # ---- push ----
-    p_push = subparsers.add_parser("push", help="从 CSV 读取并推送更新到服务器")
-    add_server_arg(p_push)
-    p_push.add_argument(
-        "csv",
-        help="CSV 文件路径",
-    )
-    p_push.add_argument(
-        "--dry-run", "-n",
-        action="store_true",
-        help="仅预览，不实际发送请求",
-    )
-    p_push.set_defaults(func=cmd_push)
-
-    # ---- create-from-csv ----
-    p_create = subparsers.add_parser("create-from-csv", aliases=["create"], help="从 CSV 创建新 transaction（id 为空或缺失的行）")
-    add_server_arg(p_create)
-    p_create.add_argument(
-        "csv",
-        help="CSV 文件路径",
-    )
-    p_create.add_argument(
-        "--dry-run", "-n",
-        action="store_true",
-        help="仅预览，不实际发送请求",
-    )
-    p_create.set_defaults(func=cmd_create_from_csv)
-
-    # ----
-    args = parser.parse_args()
-
-    if args.command is None:
-        parser.print_help()
-        sys.exit(1)
-
-    args.func(args)
+            click.echo(f"  - Row '{err['row']}': {err['error']}")
 
 
 if __name__ == "__main__":
-    main()
+    finance()
+

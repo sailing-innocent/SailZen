@@ -36,7 +36,7 @@ from sail_server.model.rhythm import (
     create_affair_impl,
     transit_affair_state_impl,
 )
-from sail_server.infrastructure.orm.rhythm import RhythmAffair
+from sailzen_orm.rhythm import RhythmAffair
 from sail_server.model.rhythm_planner import plan_day_impl
 
 from .conftest import TEST_DATE, dt
@@ -152,7 +152,7 @@ class TestFixedPlan:
         confirmed = _transit(db, affair_id, AffairAction.CONFIRM)
         assert confirmed.state == AffairState.SCHEDULED
 
-        from sail_server.infrastructure.orm.rhythm import RhythmTimeBlock
+        from sailzen_orm.rhythm import RhythmTimeBlock
 
         blocks = (
             db.query(RhythmTimeBlock)

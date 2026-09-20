@@ -14,7 +14,7 @@
 
 from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func
 from sqlalchemy.orm import relationship
-from sail_server.infrastructure.orm.orm_base import ORMBase
+from sailzen_orm.orm_base import ORMBase
 
 
 class Account(ORMBase):

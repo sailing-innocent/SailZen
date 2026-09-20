@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 
-from sail_server.infrastructure.orm.life import ServiceAccount, Day, TimeSpan
+from sailzen_orm.life import ServiceAccount, Day, TimeSpan
 from sail_server.data.dao.base import BaseDAO
 
 

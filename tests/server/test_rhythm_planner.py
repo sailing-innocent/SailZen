@@ -33,8 +33,8 @@ from sail_server.application.dto.rhythm import (
     PlanDayRequest,
     RebalanceRequest,
 )
-from sail_server.infrastructure.orm.finance import Account, Budget, Transaction
-from sail_server.infrastructure.orm.rhythm import RhythmAffair, RhythmTimeBlock
+from sailzen_orm.finance import Account, Budget, Transaction
+from sailzen_orm.rhythm import RhythmAffair, RhythmTimeBlock
 from sail_server.model.rhythm import (
     create_affair_impl,
     set_block_status_impl,

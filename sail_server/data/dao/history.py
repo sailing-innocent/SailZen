@@ -15,7 +15,7 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.history import HistoryEvent
+from sailzen_orm.history import HistoryEvent
 from sail_server.data.dao.base import BaseDAO
 
 

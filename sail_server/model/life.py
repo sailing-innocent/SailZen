@@ -20,7 +20,7 @@ import logging
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.life import Day, TimeSpan
+from sailzen_orm.life import Day, TimeSpan
 from sail_server.application.dto.life import (
     TimeSpanClass,
     DayCreateRequest,

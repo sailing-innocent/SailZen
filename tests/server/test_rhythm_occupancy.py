@@ -32,8 +32,8 @@ from sail_server.application.dto.rhythm import (
     OccupancyType,
     PlanDayRequest,
 )
-from sail_server.infrastructure.orm.life import Day
-from sail_server.infrastructure.orm.rhythm import RhythmTimeBlock
+from sailzen_orm.life import Day
+from sailzen_orm.rhythm import RhythmTimeBlock
 from sail_server.model.rhythm import (
     RhythmBadRequestError,
     RhythmNotFoundError,

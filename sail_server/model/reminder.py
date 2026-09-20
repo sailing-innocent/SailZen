@@ -60,7 +60,7 @@ from sail_server.application.dto.reminder import (
     ReminderSourceConfigUpdateRequest,
     ReminderSummaryResponse,
 )
-from sail_server.infrastructure.orm.reminder import (
+from sailzen_orm.reminder import (
     Device,
     Reminder,
     ReminderEvent,

@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from enum import IntEnum
 
-from sail_server.infrastructure.orm import ORMBase
+from sailzen_orm import ORMBase
 
 
 # ------------------------------------

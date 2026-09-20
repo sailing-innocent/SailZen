@@ -6,6 +6,13 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "sailserver",
+    "sailzen-cli",
+    "sailzen-orm",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
@@ -1680,6 +1687,7 @@ dependencies = [
     { name = "redis" },
     { name = "requests" },
     { name = "rich" },
+    { name = "sailzen-orm" },
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "sqlalchemy" },
@@ -1713,6 +1721,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0.0" },
     { name = "requests", specifier = ">=2.32.3" },
     { name = "rich", specifier = ">=14.3.1" },
+    { name = "sailzen-orm", editable = "packages/py/sailzen-orm" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "sqlalchemy", specifier = ">=2.0.40" },
@@ -1720,6 +1729,38 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.34.2" },
     { name = "websockets", specifier = ">=15.0.0" },
 ]
+
+[[package]]
+name = "sailzen-cli"
+version = "0.3.0"
+source = { editable = "packages/py/sailzen-cli" }
+dependencies = [
+    { name = "click" },
+    { name = "pyyaml" },
+    { name = "requests" },
+    { name = "rich" },
+    { name = "sailzen-orm" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.3.1" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "requests", specifier = ">=2.32.3" },
+    { name = "rich", specifier = ">=14.3.1" },
+    { name = "sailzen-orm", editable = "packages/py/sailzen-orm" },
+]
+
+[[package]]
+name = "sailzen-orm"
+version = "0.3.0"
+source = { editable = "packages/py/sailzen-orm" }
+dependencies = [
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "sqlalchemy", specifier = ">=2.0.40" }]
 
 [[package]]
 name = "scikit-learn"

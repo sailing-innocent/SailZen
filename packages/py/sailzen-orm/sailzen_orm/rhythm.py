@@ -42,8 +42,8 @@ from sqlalchemy import (
     func,
 )
 
-from sail_server.data.types import JSONB
-from sail_server.infrastructure.orm.orm_base import ORMBase
+from sailzen_orm.types import JSONB
+from sailzen_orm.orm_base import ORMBase
 
 
 class RhythmAffair(ORMBase):

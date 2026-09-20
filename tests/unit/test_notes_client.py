@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from sailzen.cli.notes_client import NotesClient, Note, _parse_tags
+from sailzen_cli.commands.notes_client import NotesClient, Note, _parse_tags
 
 
 class TestNotesClient:

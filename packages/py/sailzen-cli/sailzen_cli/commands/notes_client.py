@@ -43,6 +43,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import click
 import yaml
 
 
@@ -544,6 +545,22 @@ def main():
         sys.exit(1)
 
     args.func(args)
+
+
+# ============================================================================
+# Click bridge - 透传子命令与参数给 argparse 内核
+# ============================================================================
+
+
+@click.command(
+    "notes",
+    context_settings=dict(ignore_unknown_options=True, allow_extra_args=True),
+)
+@click.pass_context
+def notes(ctx: click.Context):
+    """本地 Markdown 笔记库管理（git 托管）。"""
+    sys.argv = ["notes", *ctx.args]
+    main()
 
 
 if __name__ == "__main__":

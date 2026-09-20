@@ -24,7 +24,7 @@ from sail_server.application.dto.finance import (
     TransactionData,
     TransactionState,
 )
-from sail_server.infrastructure.orm.finance import Transaction
+from sailzen_orm.finance import Transaction
 from sail_server.model.finance.account import (
     create_account_impl,
     read_account_impl,

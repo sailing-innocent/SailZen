@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.infrastructure.orm.health import (
+from sailzen_orm.health import (
     Weight,
     Exercise,
     WeightPlan,
@@ -425,7 +425,7 @@ def _create_or_update_weight_plan_affair(
 
     返回 affair_id，失败时返回 None（不阻塞计划保存）。
     """
-    from sail_server.infrastructure.orm.rhythm import RhythmAffair
+    from sailzen_orm.rhythm import RhythmAffair
     from sail_server.application.dto.rhythm import AffairKind, AffairDomain, AffairState
 
     try:
@@ -476,7 +476,7 @@ def _create_or_update_weight_plan_affair(
 
 def _archive_weight_plan_affair(db, plan: WeightPlan) -> None:
     """将体重计划关联的 Rhythm 事务归档。"""
-    from sail_server.infrastructure.orm.rhythm import RhythmAffair
+    from sailzen_orm.rhythm import RhythmAffair
     from sail_server.application.dto.rhythm import AffairState
 
     if plan.rhythm_affair_id is None:
@@ -493,7 +493,7 @@ def _archive_weight_plan_affair(db, plan: WeightPlan) -> None:
 
 def _sync_weight_to_rhythm_checkin(db, weight: Weight, plan: WeightPlan) -> None:
     """将体重记录同步为 Rhythm 打卡日志。"""
-    from sail_server.infrastructure.orm.rhythm import (
+    from sailzen_orm.rhythm import (
         RhythmAffair,
         RhythmDisciplineLog,
     )
@@ -735,7 +735,7 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
 
 def get_weight_plan_checkin_status_impl(db, plan_id: int = None) -> dict | None:
     """获取体重计划关联的 Rhythm 打卡状态（今日是否打卡 + 连续打卡天数）。"""
-    from sail_server.infrastructure.orm.rhythm import RhythmDisciplineLog
+    from sailzen_orm.rhythm import RhythmDisciplineLog
 
     plan = _get_weight_plan_by_id(db, plan_id) if plan_id else _get_active_weight_plan(db)
     if plan is None or plan.rhythm_affair_id is None:

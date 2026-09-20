@@ -20,8 +20,8 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 
-from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.infrastructure.orm.life import Day, TimeSpan
+from sailzen_orm.orm_base import ORMBase
+from sailzen_orm.life import Day, TimeSpan
 from sail_server.application.dto.life import (
     TimeSpanClass,
     DayCreateRequest,

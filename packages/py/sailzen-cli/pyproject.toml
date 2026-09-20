@@ -1,0 +1,34 @@
+# -*- coding: utf-8 -*-
+# @file pyproject.toml
+# @brief sailzen-cli package definition
+# @author sailing-innocent
+# @date 2026-09-20
+# @version 0.3.0
+# ---------------------------------
+
+[project]
+name = "sailzen-cli"
+version = "0.3.0"
+description = "SailZen CLI - personal knowledge management command line tool"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "sailzen-orm",
+    "click>=8.3.1",
+    "requests>=2.32.3",
+    "pyyaml>=6.0.3",
+    "rich>=14.3.1",
+]
+
+[project.scripts]
+sailzen = "sailzen_cli.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sailzen_cli"]
+
+[tool.uv.sources]
+sailzen-orm = { workspace = true }

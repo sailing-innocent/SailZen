@@ -27,8 +27,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.infrastructure.orm.life import Day
+from sailzen_orm.orm_base import ORMBase
+from sailzen_orm.life import Day
 from sail_server.application.dto.weather import (
     CityWeather,
     DayWeatherResponse,

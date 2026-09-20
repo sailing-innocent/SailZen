@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-"""sailzen.cli.note_client 单元测试（使用 unittest.mock）。"""
+"""sailzen_cli.commands.note_client 单元测试（使用 unittest.mock）。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sailzen.cli.note_client import NoteItemClient
+from sailzen_cli.commands.note_client import NoteItemClient
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ class TestNoteItemClient:
         assert len(files) == 2
 
     def test_guess_category_from_path(self):
-        from sailzen.cli.note_client import _guess_category_from_path
+        from sailzen_cli.commands.note_client import _guess_category_from_path
 
         assert _guess_category_from_path("notes/text/characters/alice.md") == "character"
         assert _guess_category_from_path("notes/text/settings/magic.md") == "setting"

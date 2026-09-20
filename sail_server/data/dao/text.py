@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.text import Work, Edition, DocumentNode, NoteItem
+from sailzen_orm.text import Work, Edition, DocumentNode, NoteItem
 from sail_server.data.dao.base import BaseDAO
 
 

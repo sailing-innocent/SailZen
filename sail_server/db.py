@@ -14,17 +14,17 @@ from typing import Generator
 import functools
 import os
 
-from sail_server.infrastructure.orm.orm_base import ORMBase
+from sailzen_orm.orm_base import ORMBase
 
 # import all ORM models
-from sail_server.infrastructure.orm import health
-from sail_server.infrastructure.orm import finance
-from sail_server.infrastructure.orm import life
-from sail_server.infrastructure.orm import history
-from sail_server.infrastructure.orm import text
-from sail_server.infrastructure.orm import necessity
-from sail_server.infrastructure.orm import reminder
-from sail_server.infrastructure.orm import rhythm
+from sailzen_orm import health
+from sailzen_orm import finance
+from sailzen_orm import life
+from sailzen_orm import history
+from sailzen_orm import text
+from sailzen_orm import necessity
+from sailzen_orm import reminder
+from sailzen_orm import rhythm
 
 __all__ = [
     "Database",

@@ -21,10 +21,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from sail_server.infrastructure.orm.orm_base import ORMBase
+from sailzen_orm.orm_base import ORMBase
 
 # 确保全部 ORM 模块被加载（建表完整）
-from sail_server.infrastructure.orm import (  # noqa: F401
+from sailzen_orm import (  # noqa: F401
     finance,
     health,
     history,

@@ -23,8 +23,8 @@ from sqlalchemy import (
     ForeignKey,
 )
 from sqlalchemy.orm import relationship
-from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.data.types import JSONB
+from sailzen_orm.orm_base import ORMBase
+from sailzen_orm.types import JSONB
 
 
 class Work(ORMBase):

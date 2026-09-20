@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 from sail_server.config.paths import SERVER_DATA_DIR
 
-from sail_server.infrastructure.orm.text import (
+from sailzen_orm.text import (
     Work,
     Edition,
     DocumentNode,

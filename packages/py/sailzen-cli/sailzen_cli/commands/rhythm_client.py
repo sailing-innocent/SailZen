@@ -38,6 +38,7 @@ import time
 from datetime import date, timedelta
 from typing import Any, Optional
 
+import click
 import requests
 
 # ============================================================================
@@ -1397,6 +1398,22 @@ def main():
     except requests.ConnectionError as e:
         print(f"Error: 无法连接服务器 {args.server}: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+# ============================================================================
+# Click bridge - 透传子命令与参数给 argparse 内核
+# ============================================================================
+
+
+@click.command(
+    "rhythm",
+    context_settings=dict(ignore_unknown_options=True, allow_extra_args=True),
+)
+@click.pass_context
+def rhythm(ctx: click.Context):
+    """生活/工作节奏综合优先级调节（统一事务/时间线/打卡/事业/复盘）。"""
+    sys.argv = ["rhythm", *ctx.args]
+    main()
 
 
 if __name__ == "__main__":

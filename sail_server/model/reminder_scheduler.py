@@ -37,8 +37,8 @@ from typing import Any, Callable, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.life import Day
-from sail_server.infrastructure.orm.reminder import Reminder, ReminderRule
+from sailzen_orm.life import Day
+from sailzen_orm.reminder import Reminder, ReminderRule
 from sail_server.model.reminder import (
     DEFAULT_QUIET_HOURS,
     STATE_ARCHIVED,
@@ -109,8 +109,8 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
     """
     from datetime import time as _time
 
-    from sail_server.infrastructure.orm.health import Weight, WeightPlan
-    from sail_server.infrastructure.orm.rhythm import (
+    from sailzen_orm.health import Weight, WeightPlan
+    from sailzen_orm.rhythm import (
         RhythmAffair,
         RhythmDisciplineLog,
     )

@@ -92,7 +92,7 @@ from sail_server.application.dto.health import (
     MoodCreateRequest,
     SleepCreateRequest,
 )
-from sail_server.infrastructure.orm.health import Exercise, HealthSignal, Medication, DietLog, Weight, WeightPlan
+from sailzen_orm.health import Exercise, HealthSignal, Medication, DietLog, Weight, WeightPlan
 from sail_server.model.health import (
     create_diet_impl,
     create_energy_level_impl,
@@ -100,8 +100,8 @@ from sail_server.model.health import (
     create_mood_impl,
     create_sleep_impl,
 )
-from sail_server.infrastructure.orm.life import Day, TimeSpan
-from sail_server.infrastructure.orm.rhythm import (
+from sailzen_orm.life import Day, TimeSpan
+from sailzen_orm.rhythm import (
     RhythmAffair,
     RhythmDayTemplate,
     RhythmDisciplineLog,

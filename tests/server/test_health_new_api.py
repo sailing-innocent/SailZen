@@ -36,7 +36,7 @@ from sail_server.controller.health import (
     MoodController,
 )
 from sail_server.controller.rhythm import CheckinController
-from sail_server.infrastructure.orm.health import Medication, DietLog, Sleep, SleepScheduleGoal
+from sailzen_orm.health import Medication, DietLog, Sleep, SleepScheduleGoal
 
 pytestmark = pytest.mark.server
 

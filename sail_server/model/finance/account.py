@@ -5,7 +5,7 @@
 # @date 2025-05-22
 # @version 1.0
 # ---------------------------------
-from sail_server.infrastructure.orm.finance import Account
+from sailzen_orm.finance import Account
 from sail_server.application.dto.finance import (
     AccountData,
     TransactionData,

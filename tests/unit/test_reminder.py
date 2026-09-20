@@ -40,8 +40,8 @@ from sail_server.application.dto.reminder import (
     ReminderSourceConfigCreateRequest,
     ReminderSourceConfigUpdateRequest,
 )
-from sail_server.infrastructure.orm.orm_base import ORMBase
-from sail_server.infrastructure.orm.reminder import (
+from sailzen_orm.orm_base import ORMBase
+from sailzen_orm.reminder import (
     Device,
     Reminder,
     ReminderEvent,

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from sail_server.infrastructure.orm.text import NoteItem, Work
+from sailzen_orm.text import NoteItem, Work
 from sail_server.data.dao.text import NoteItemDAO  # direct module import avoids broken __init__
 from sail_server.application.dto.text import NoteItemCreateRequest, NoteItemUpdateRequest
 from sail_server.model.text import (

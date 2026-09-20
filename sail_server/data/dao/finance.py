@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.finance import (
+from sailzen_orm.finance import (
     Account,
     Transaction,
     Budget,

@@ -1,4 +1,4 @@
-from sail_server.infrastructure.orm.finance import Account, Transaction
+from sailzen_orm.finance import Account, Transaction
 from sail_server.application.dto.finance import (
     TransactionData,
     AccountState,

@@ -18,7 +18,7 @@ from typing import List, Optional
 
 import logging
 
-from sail_server.infrastructure.orm.finance import FinanceTag
+from sailzen_orm.finance import FinanceTag
 from sail_server.application.dto.finance import (
     FinanceTagCreateRequest,
     FinanceTagUpdateRequest,
@@ -221,7 +221,7 @@ def get_tag_usage_stats_impl(db) -> dict:
         - total_tags: 标签总数
         - total_tagged_transactions: 有标签的交易总数
     """
-    from sail_server.infrastructure.orm.finance import Transaction
+    from sailzen_orm.finance import Transaction
     from sqlalchemy import or_
     from collections import Counter
 

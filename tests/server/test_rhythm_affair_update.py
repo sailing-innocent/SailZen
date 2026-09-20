@@ -264,7 +264,7 @@ class TestMigrationIdempotent:
 
     def test_backfill_marks_default_profile(self, db: Session):
         """存量 name='default' 行回填 is_default=true。"""
-        from sail_server.infrastructure.orm.rhythm import RhythmEnergyProfile
+        from sailzen_orm.rhythm import RhythmEnergyProfile
 
         row = (
             db.query(RhythmEnergyProfile)

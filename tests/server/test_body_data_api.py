@@ -25,7 +25,7 @@ from litestar.testing import TestClient
 from sqlalchemy.orm import Session
 
 from sail_server.controller.body_data import BodyDataController
-from sail_server.infrastructure.orm.health import BodyData, Weight
+from sailzen_orm.health import BodyData, Weight
 
 pytestmark = pytest.mark.server
 

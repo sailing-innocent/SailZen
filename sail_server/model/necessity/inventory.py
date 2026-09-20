@@ -6,7 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
-from sail_server.infrastructure.orm.necessity import (
+from sailzen_orm.necessity import (
     Inventory,
     Consumption,
     Replenishment,

@@ -35,7 +35,7 @@ from sail_server.application.dto.body_data import (
     BodyMetricCategory,
     BodyMetricDefinition,
 )
-from sail_server.infrastructure.orm.health import BodyData, Weight
+from sailzen_orm.health import BodyData, Weight
 
 logger = logging.getLogger(__name__)
 

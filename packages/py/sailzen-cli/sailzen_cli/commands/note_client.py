@@ -31,7 +31,6 @@ API 端点：
 
 from __future__ import annotations
 
-import argparse
 import csv
 import json
 import os
@@ -42,60 +41,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import click
 import requests
 import yaml
 
-
-# ============================================================================
-# Environment / Server URL Resolution
-# ============================================================================
-
-
-def _load_env_file(env_path: str) -> dict:
-    """手动解析 .env 文件"""
-    env = {}
-    if not os.path.isfile(env_path):
-        return env
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            if "=" in line:
-                key, value = line.split("=", 1)
-                key = key.strip()
-                value = value.strip().strip('"').strip("'")
-                env[key] = value
-    return env
-
-
-def _resolve_default_server_url() -> str:
-    """解析默认服务器地址"""
-    env_url = os.environ.get("SAIL_SERVER_URL")
-    if env_url:
-        return env_url
-
-    cwd = os.getcwd()
-    for env_name in (".env.prod", ".env.dev", ".env"):
-        env_path = os.path.join(cwd, env_name)
-        if os.path.isfile(env_path):
-            env = _load_env_file(env_path)
-            host = env.get("SERVER_HOST", "localhost")
-            port = env.get("SERVER_PORT", "8000")
-            return f"http://{host}:{port}"
-
-    return "http://localhost:8000"
-
-
-DEFAULT_SERVER_URL = _resolve_default_server_url()
+from sailzen_cli.common import (
+    _resolve_default_server_url,
+    API_TIMEOUT,
+    REQUEST_DELAY,
+    server_option,
+)
 
 
 # ============================================================================
 # Constants
 # ============================================================================
 
-API_TIMEOUT = 30
-REQUEST_DELAY = 0.05
+DEFAULT_SERVER_URL = _resolve_default_server_url()
 NOTE_EXT = ".md"
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -326,109 +288,129 @@ def _guess_category_from_path(setting_file: str) -> Optional[str]:
     return None
 
 
-def _resolve_workspace(args) -> str:
-    root = args.workspace or os.environ.get("NOTE_WORKSPACE_ROOT", ".")
-    return root
-
-
-def _make_client(args) -> NoteItemClient:
-    return NoteItemClient(args.server, _resolve_workspace(args))
-
-
 # ============================================================================
-# CLI Commands
+# Click Commands
 # ============================================================================
 
 
-def cmd_list(args):
+def _note_client_ctx(server: str, workspace: str) -> NoteItemClient:
+    return NoteItemClient(server, workspace or os.environ.get("NOTE_WORKSPACE_ROOT", "."))
+
+
+@click.group()
+def note():
+    """服务器 NoteItem / 创作笔记同步管理。"""
+
+
+@note.command("list")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录 (默认: NOTE_WORKSPACE_ROOT 或当前目录)")
+@click.option("--category", default=None, help="按分类过滤")
+@click.option("--work-id", type=int, default=None, help="按作品 ID 过滤")
+@click.option("--edition-id", type=int, default=None, help="按版本 ID 过滤")
+def cmd_list(server, workspace, category, work_id, edition_id):
     """列出服务器上的 NoteItem"""
-    client = _make_client(args)
+    client = _note_client_ctx(server, workspace)
     notes = client.list_notes(
-        category=args.category,
-        work_id=args.work_id,
-        edition_id=args.edition_id,
+        category=category,
+        work_id=work_id,
+        edition_id=edition_id,
     )
     if not notes:
-        print("(无 NoteItem)")
+        click.echo("(无 NoteItem)")
         return
 
-    print(f"{'ID':>6}  {'Category':<12}  {'Title':<30}  {'Setting File'}")
-    print("-" * 100)
-    for note in notes:
-        title = (note.get("title") or "")[:28]
-        print(
-            f"{note.get('id', ''):>6}  "
-            f"{note.get('category', ''):<12}  "
+    click.echo(f"{'ID':>6}  {'Category':<12}  {'Title':<30}  {'Setting File'}")
+    click.echo("-" * 100)
+    for n in notes:
+        title = (n.get("title") or "")[:28]
+        click.echo(
+            f"{n.get('id', ''):>6}  "
+            f"{n.get('category', ''):<12}  "
             f"{title:<30}  "
-            f"{note.get('setting_file', '')}"
+            f"{n.get('setting_file', '')}"
         )
 
 
-def cmd_pull(args):
+@note.command("pull")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--id", "note_id", type=int, default=None, help="指定 NoteItem ID")
+@click.option("--category", default=None, help="按分类拉取全部")
+@click.option("--work-id", type=int, default=None, help="按作品 ID 过滤")
+@click.option("--edition-id", type=int, default=None, help="按版本 ID 过滤")
+def cmd_pull(server, workspace, note_id, category, work_id, edition_id):
     """拉取 NoteItem 并在本地生成/更新 Markdown 文件"""
-    client = _make_client(args)
+    client = _note_client_ctx(server, workspace)
 
-    if args.id:
-        note = client.get_note(args.id)
-        if note is None:
-            print(f"❌ NoteItem 不存在: {args.id}", file=sys.stderr)
-            sys.exit(1)
-        notes = [note]
+    if note_id:
+        n = client.get_note(note_id)
+        if n is None:
+            raise click.ClickException(f"NoteItem 不存在: {note_id}")
+        notes = [n]
     else:
         notes = client.list_notes(
-            category=args.category,
-            work_id=args.work_id,
-            edition_id=args.edition_id,
+            category=category,
+            work_id=work_id,
+            edition_id=edition_id,
         )
 
-    for note in notes:
-        note_id = note["id"]
-        setting_file = note["setting_file"]
-        content = client.get_content(note_id) or ""
+    for n in notes:
+        nid = n["id"]
+        setting_file = n["setting_file"]
+        content = client.get_content(nid) or ""
         file_path = client.write_local_note(setting_file, content)
-        print(f"✅ 拉取笔记 {note_id} -> {file_path}")
+        click.echo(f"✅ 拉取笔记 {nid} -> {file_path}")
         time.sleep(REQUEST_DELAY)
 
 
-def cmd_push(args):
+@note.command("push")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.argument("dir", default="notes/text")
+def cmd_push(server, workspace, dir):
     """扫描本地 Markdown 文件，同步到服务器"""
-    client = _make_client(args)
-    files = client.scan_local_notes(args.dir)
+    client = _note_client_ctx(server, workspace)
+    files = client.scan_local_notes(dir)
 
     for file_path in files:
         data = _build_note_from_file(client, file_path)
         existing = None
         # 尝试通过 setting_file 查找已有 NoteItem
-        for note in client.list_notes():
-            if note.get("setting_file") == data["setting_file"]:
-                existing = note
+        for n in client.list_notes():
+            if n.get("setting_file") == data["setting_file"]:
+                existing = n
                 break
 
         content = file_path.read_text(encoding="utf-8")
         if existing:
-            note_id = existing["id"]
-            client.update_note(note_id, data)
-            client.update_content(note_id, content)
-            print(f"✅ 更新笔记 {note_id}: {data['setting_file']}")
+            nid = existing["id"]
+            client.update_note(nid, data)
+            client.update_content(nid, content)
+            click.echo(f"✅ 更新笔记 {nid}: {data['setting_file']}")
         else:
             created = client.create_note(data)
-            note_id = created["id"]
-            client.update_content(note_id, content)
-            print(f"✅ 创建笔记 {note_id}: {data['setting_file']}")
+            nid = created["id"]
+            client.update_content(nid, content)
+            click.echo(f"✅ 创建笔记 {nid}: {data['setting_file']}")
         time.sleep(REQUEST_DELAY)
 
 
-def cmd_create(args):
+@note.command("create")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--category", required=True, help="笔记分类")
+@click.option("--title", required=True, help="标题")
+@click.option("--slug", default=None, help="slug（默认由标题生成）")
+@click.option("--work-id", type=int, default=None, help="关联作品 ID")
+@click.option("--edition-id", type=int, default=None, help="关联版本 ID")
+@click.option("--tags", default=None, help="标签，逗号分隔")
+def cmd_create(server, workspace, category, title, slug, work_id, edition_id, tags):
     """创建新的 NoteItem + 空 Markdown 文件"""
-    client = _make_client(args)
-    category = args.category
-    title = args.title
-    slug = args.slug or _make_slug(title)
+    client = _note_client_ctx(server, workspace)
+    slug = slug or _make_slug(title)
     dir_name = CATEGORY_DIRS.get(category, category)
     setting_file = f"notes/text/{dir_name}/{slug}.md"
-
-    work_id = args.work_id
-    edition_id = args.edition_id
 
     front = {
         "category": category,
@@ -437,8 +419,8 @@ def cmd_create(args):
         "created": _now_iso(),
         "updated": _now_iso(),
     }
-    if args.tags:
-        front["tags"] = _parse_tags(args.tags)
+    if tags:
+        front["tags"] = _parse_tags(tags)
     if work_id:
         front["work_id"] = work_id
     if edition_id:
@@ -458,203 +440,118 @@ def cmd_create(args):
     }
 
     created = client.create_note(data)
-    note_id = created["id"]
-    client.update_content(note_id, content)
+    nid = created["id"]
+    client.update_content(nid, content)
     file_path = client.write_local_note(setting_file, content)
-    print(f"✅ 创建笔记 {note_id}: {file_path}")
+    click.echo(f"✅ 创建笔记 {nid}: {file_path}")
 
 
-def cmd_delete(args):
+@note.command("delete")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--id", "note_id", type=int, required=True, help="NoteItem ID")
+@click.option("--keep-file", is_flag=True, help="保留本地文件")
+@click.option("--yes", "-y", is_flag=True, help="跳过确认")
+def cmd_delete(server, workspace, note_id, keep_file, yes):
     """删除 NoteItem 及对应文件"""
-    client = _make_client(args)
-    note = client.get_note(args.id)
-    if note is None:
-        print(f"❌ NoteItem 不存在: {args.id}", file=sys.stderr)
-        sys.exit(1)
+    client = _note_client_ctx(server, workspace)
+    n = client.get_note(note_id)
+    if n is None:
+        raise click.ClickException(f"NoteItem 不存在: {note_id}")
 
-    if not args.yes:
-        confirm = input(f"确认删除 NoteItem {args.id} [{note.get('setting_file')}]? [y/N] ").strip().lower()
+    if not yes:
+        confirm = input(f"确认删除 NoteItem {note_id} [{n.get('setting_file')}]? [y/N] ").strip().lower()
         if confirm != "y":
-            print("已取消")
+            click.echo("已取消")
             return
 
-    client.delete_note(args.id)
-    if not args.keep_file:
+    client.delete_note(note_id)
+    if not keep_file:
         try:
-            file_path = client._resolve_file_path(note["setting_file"])
+            file_path = client._resolve_file_path(n["setting_file"])
             if file_path.exists():
                 file_path.unlink()
-                print(f"✅ 已删除文件: {file_path}")
+                click.echo(f"✅ 已删除文件: {file_path}")
         except Exception as e:
-            print(f"⚠️ 删除文件失败: {e}", file=sys.stderr)
-    print(f"✅ 已删除 NoteItem: {args.id}")
+            click.echo(f"⚠️ 删除文件失败: {e}", err=True)
+    click.echo(f"✅ 已删除 NoteItem: {note_id}")
 
 
-def cmd_sync(args):
+@note.command("sync")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--category", default=None, help="按分类过滤")
+@click.option("--work-id", type=int, default=None, help="按作品 ID 过滤")
+@click.option("--edition-id", type=int, default=None, help="按版本 ID 过滤")
+def cmd_sync(server, workspace, category, work_id, edition_id):
     """双向同步：pull + push"""
-    print("--- pull ---")
-    cmd_pull(args)
-    print("--- push ---")
-    cmd_push(args)
+    click.echo("--- pull ---")
+    cmd_pull.callback(server=server, workspace=workspace, note_id=None, category=category, work_id=work_id, edition_id=edition_id)
+    click.echo("--- push ---")
+    cmd_push.callback(server=server, workspace=workspace, dir="notes/text")
 
 
-def cmd_links(args):
+@note.command("links")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--json", "as_json", is_flag=True, help="以 JSON 输出")
+def cmd_links(server, workspace, as_json):
     """分析/重建双向链接索引"""
-    client = _make_client(args)
+    client = _note_client_ctx(server, workspace)
     graph = client.get_links()
     nodes = graph.get("nodes", [])
     edges = graph.get("edges", [])
-    print(f"节点数: {len(nodes)}, 链接数: {len(edges)}")
-    if args.json:
-        print(json.dumps(graph, ensure_ascii=False, indent=2))
+    click.echo(f"节点数: {len(nodes)}, 链接数: {len(edges)}")
+    if as_json:
+        click.echo(json.dumps(graph, ensure_ascii=False, indent=2))
         return
-    print("\n--- nodes ---")
+    click.echo("\n--- nodes ---")
     for node in nodes:
-        print(f"  [{node.get('id')}] {node.get('slug')} ({node.get('title')})")
-    print("\n--- edges ---")
+        click.echo(f"  [{node.get('id')}] {node.get('slug')} ({node.get('title')})")
+    click.echo("\n--- edges ---")
     for edge in edges:
-        print(f"  {edge.get('source')} -> {edge.get('target')} [{edge.get('display')}]")
+        click.echo(f"  {edge.get('source')} -> {edge.get('target')} [{edge.get('display')}]")
 
 
-def cmd_export_csv(args):
+@note.command("export-csv")
+@server_option
+@click.option("--workspace", default=None, help="本地 note 工作区根目录")
+@click.option("--category", default=None, help="按分类过滤")
+@click.option("--work-id", type=int, default=None, help="按作品 ID 过滤")
+@click.option("--edition-id", type=int, default=None, help="按版本 ID 过滤")
+@click.option("--output", "-o", default=None, help="输出 CSV 路径")
+def cmd_export_csv(server, workspace, category, work_id, edition_id, output):
     """导出 NoteItem 到 CSV（用于批量编辑）"""
-    client = _make_client(args)
+    client = _note_client_ctx(server, workspace)
     notes = client.list_notes(
-        category=args.category,
-        work_id=args.work_id,
-        edition_id=args.edition_id,
+        category=category,
+        work_id=work_id,
+        edition_id=edition_id,
     )
     if not notes:
-        print("(无 NoteItem)")
+        click.echo("(无 NoteItem)")
         return
 
-    csv_path = args.output or "notes.csv"
+    csv_path = output or "notes.csv"
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
         writer.writeheader()
-        for note in notes:
-            meta = note.get("meta_data", {}) or {}
+        for n in notes:
+            meta = n.get("meta_data", {}) or {}
             row = {
-                "id": note.get("id"),
-                "category": note.get("category"),
-                "title": note.get("title"),
-                "slug": note.get("slug"),
-                "setting_file": note.get("setting_file"),
-                "work_id": note.get("work_id"),
-                "edition_id": note.get("edition_id"),
+                "id": n.get("id"),
+                "category": n.get("category"),
+                "title": n.get("title"),
+                "slug": n.get("slug"),
+                "setting_file": n.get("setting_file"),
+                "work_id": n.get("work_id"),
+                "edition_id": n.get("edition_id"),
                 "tags": ",".join(meta.get("tags", [])),
                 "related": ",".join(meta.get("related", [])),
             }
             writer.writerow(row)
-    print(f"✅ 导出 {len(notes)} 条记录到 {csv_path}")
-
-
-# ============================================================================
-# Main Entry
-# ============================================================================
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="NoteClient - SailZen 文本/创作笔记 CLI 工具",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  sailzen note list --category character
-  sailzen note pull --id 42
-  sailzen note push notes/text/
-  sailzen note create --category character --title "Alice" --work 1
-  sailzen note delete --id 42
-  sailzen note sync --workspace ./workspace
-  sailzen note links --json
-        """,
-    )
-    subparsers = parser.add_subparsers(dest="command", help="子命令")
-
-    def add_common_args(p):
-        p.add_argument(
-            "--server",
-            default=os.environ.get("SAIL_SERVER_URL", DEFAULT_SERVER_URL),
-            help=f"sail_server 地址 (默认: {DEFAULT_SERVER_URL})",
-        )
-        p.add_argument(
-            "--workspace",
-            default=os.environ.get("NOTE_WORKSPACE_ROOT", "."),
-            help="本地 note 工作区根目录 (默认: 当前目录)",
-        )
-
-    # ---- list ----
-    p_list = subparsers.add_parser("list", aliases=["ls"], help="列出 NoteItem")
-    add_common_args(p_list)
-    p_list.add_argument("--category", default=None, help="按分类过滤")
-    p_list.add_argument("--work-id", type=int, default=None, help="按作品 ID 过滤")
-    p_list.add_argument("--edition-id", type=int, default=None, help="按版本 ID 过滤")
-    p_list.set_defaults(func=cmd_list)
-
-    # ---- pull ----
-    p_pull = subparsers.add_parser("pull", help="拉取 NoteItem 到本地 Markdown")
-    add_common_args(p_pull)
-    p_pull.add_argument("--id", type=int, default=None, help="指定 NoteItem ID")
-    p_pull.add_argument("--category", default=None, help="按分类拉取全部")
-    p_pull.add_argument("--work-id", type=int, default=None, help="按作品 ID 过滤")
-    p_pull.add_argument("--edition-id", type=int, default=None, help="按版本 ID 过滤")
-    p_pull.set_defaults(func=cmd_pull)
-
-    # ---- push ----
-    p_push = subparsers.add_parser("push", help="扫描本地 Markdown 推送到服务器")
-    add_common_args(p_push)
-    p_push.add_argument("dir", nargs="?", default="notes/text", help="扫描目录")
-    p_push.set_defaults(func=cmd_push)
-
-    # ---- create ----
-    p_create = subparsers.add_parser("create", aliases=["new"], help="创建 NoteItem")
-    add_common_args(p_create)
-    p_create.add_argument("--category", required=True, help="笔记分类")
-    p_create.add_argument("--title", required=True, help="标题")
-    p_create.add_argument("--slug", default=None, help="slug（默认由标题生成）")
-    p_create.add_argument("--work-id", type=int, default=None, help="关联作品 ID")
-    p_create.add_argument("--edition-id", type=int, default=None, help="关联版本 ID")
-    p_create.add_argument("--tags", default=None, help="标签，逗号分隔")
-    p_create.set_defaults(func=cmd_create)
-
-    # ---- delete ----
-    p_delete = subparsers.add_parser("delete", aliases=["rm"], help="删除 NoteItem")
-    add_common_args(p_delete)
-    p_delete.add_argument("--id", type=int, required=True, help="NoteItem ID")
-    p_delete.add_argument("--keep-file", action="store_true", help="保留本地文件")
-    p_delete.add_argument("--yes", "-y", action="store_true", help="跳过确认")
-    p_delete.set_defaults(func=cmd_delete)
-
-    # ---- sync ----
-    p_sync = subparsers.add_parser("sync", help="双向同步")
-    add_common_args(p_sync)
-    p_sync.add_argument("--category", default=None, help="按分类过滤")
-    p_sync.add_argument("--work-id", type=int, default=None, help="按作品 ID 过滤")
-    p_sync.add_argument("--edition-id", type=int, default=None, help="按版本 ID 过滤")
-    p_sync.set_defaults(func=cmd_sync)
-
-    # ---- links ----
-    p_links = subparsers.add_parser("links", help="获取双向链接图谱")
-    add_common_args(p_links)
-    p_links.add_argument("--json", action="store_true", help="以 JSON 输出")
-    p_links.set_defaults(func=cmd_links)
-
-    # ---- export-csv ----
-    p_export = subparsers.add_parser("export-csv", help="导出 NoteItem 到 CSV")
-    add_common_args(p_export)
-    p_export.add_argument("--category", default=None, help="按分类过滤")
-    p_export.add_argument("--work-id", type=int, default=None, help="按作品 ID 过滤")
-    p_export.add_argument("--edition-id", type=int, default=None, help="按版本 ID 过滤")
-    p_export.add_argument("--output", "-o", default=None, help="输出 CSV 路径")
-    p_export.set_defaults(func=cmd_export_csv)
-
-    args = parser.parse_args()
-    if args.command is None:
-        parser.print_help()
-        sys.exit(1)
-
-    args.func(args)
+    click.echo(f"✅ 导出 {len(notes)} 条记录到 {csv_path}")
 
 
 if __name__ == "__main__":
-    main()
+    note()

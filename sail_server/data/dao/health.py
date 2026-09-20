@@ -17,7 +17,7 @@ from typing import List, Optional
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.health import Weight, BodySize, BodyData, Exercise, WeightPlan
+from sailzen_orm.health import Weight, BodySize, BodyData, Exercise, WeightPlan
 from sail_server.data.dao.base import BaseDAO
 
 

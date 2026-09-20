@@ -25,7 +25,7 @@ from litestar.testing import TestClient
 from litestar.plugins.pydantic import PydanticPlugin
 
 from sail_server.controller.health import WeightController, WeightPlanController, ExerciseController
-from sail_server.infrastructure.orm.rhythm import RhythmAffair, RhythmDisciplineLog
+from sailzen_orm.rhythm import RhythmAffair, RhythmDisciplineLog
 
 pytestmark = pytest.mark.server
 

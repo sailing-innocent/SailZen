@@ -16,7 +16,7 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from sail_server.infrastructure.orm.necessity import (
+from sailzen_orm.necessity import (
     Residence,
     Container,
     ItemCategory,

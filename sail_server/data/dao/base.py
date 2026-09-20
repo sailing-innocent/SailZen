@@ -16,7 +16,7 @@ from typing import TypeVar, Generic, List, Optional, Type, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
-from sail_server.infrastructure.orm import ORMBase
+from sailzen_orm import ORMBase
 
 T = TypeVar("T", bound=ORMBase)
 
