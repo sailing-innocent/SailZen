@@ -30,13 +30,15 @@ import com.sailzen.app.R
 import com.sailzen.app.core.data.db.CachedChapter
 
 /**
- * 目录底部弹层：打开时自动滚动到当前章节（修 U5），
- * 已读章节（sortIndex 小于当前）显示次级色圆点。
+ * 目录底部弹层：打开时自动滚动到当前章节，
+ * 已读章节（sortIndex 小于当前）显示次级色圆点；
+ * 已离线缓存正文的章节显示绿色圆点（弱网/离线也可预期哪些章能读）。
  */
 @Composable
 fun TocDrawer(
     chapters: List<CachedChapter>,
     currentSortIndex: Int,
+    cachedIds: Set<Int> = emptySet(),
     onSelect: (CachedChapter) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -61,6 +63,7 @@ fun TocDrawer(
                     chapter = chapter,
                     selected = chapter.sortIndex == currentSortIndex,
                     read = chapter.sortIndex < currentSortIndex,
+                    cached = cachedIds.contains(chapter.id),
                     onClick = { onSelect(chapter) },
                 )
             }
@@ -69,7 +72,13 @@ fun TocDrawer(
 }
 
 @Composable
-private fun TocItem(chapter: CachedChapter, selected: Boolean, read: Boolean, onClick: () -> Unit) {
+private fun TocItem(
+    chapter: CachedChapter,
+    selected: Boolean,
+    read: Boolean,
+    cached: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -94,6 +103,16 @@ private fun TocItem(chapter: CachedChapter, selected: Boolean, read: Boolean, on
                 read -> MaterialTheme.colorScheme.onSurfaceVariant
                 else -> MaterialTheme.colorScheme.onSurface
             },
+            modifier = Modifier.weight(1f),
         )
+        if (cached) {
+            // 已离线缓存正文标记
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.tertiary),
+            )
+        }
     }
 }

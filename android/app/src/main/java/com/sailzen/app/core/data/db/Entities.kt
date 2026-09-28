@@ -79,6 +79,24 @@ data class CachedWork(
     val updatedAt: String,
 )
 
+/**
+ * 版本（edition）本地缓存：离线时也能定位作品的版本与章节结构。
+ */
+@Entity(tableName = "cached_edition")
+data class CachedEdition(
+    @PrimaryKey val id: Int,
+    val workId: Int,
+    val editionName: String?,
+    val language: String,
+    val canonical: Boolean,
+    val status: String,
+    val updatedAt: String,
+)
+
+/**
+ * 章节缓存：目录 stub（rawText 为空）与全文缓存（rawText 非空）同表存储，
+ * 目录刷新只更新元信息、不触碰已缓存正文。
+ */
 @Entity(tableName = "cached_chapter")
 data class CachedChapter(
     @PrimaryKey val id: Int,
@@ -89,7 +107,10 @@ data class CachedChapter(
     val rawText: String,
     val charCount: Int?,
     val updatedAt: String,
-)
+) {
+    /** 正文是否已离线缓存（章节目录接口返回的 stub rawText 恒为空串） */
+    val contentCached: Boolean get() = rawText.isNotEmpty()
+}
 
 @Entity(tableName = "reading_progress")
 data class ReadingProgress(

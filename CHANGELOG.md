@@ -1,7 +1,40 @@
 # Changelog
 
 ## Unreleased
+### Added (Android)
+- **阅读器离线优先重构**（`android/`）：Room 为事实源、网络只做后台刷新，开书首帧
+  本地快照直接渲染，不再串行等待章节列表/正文/批注三个网络请求。
+  - 同步状态可见：阅读页顶栏与首页展示 离线/同步中/已同步(时间)/失败重试 chip，
+    并附待同步批注数（`ReaderSyncState` 归约器 + `ConnectivityObserver`）。
+  - 离线缓存：目录标出已缓存章节；首页按书展示「已缓存 x/y 章」与一键
+    「缓存全书」（带进度条）；阅读中自动预取后 2 章并预排版下一章；
+    版本（edition）入缓存，断网也能定位书籍结构。
+  - 流畅滚动：滚动进度高频上报不再驱动 UiState 重组；批注预裁剪为
+    按段映射（无批注段零 AnnotatedString 开销）；item key 稳定。
+  - 排版加速：分页结果进 LRU 缓存（`PageLayoutCache`），字号微调/旋转/重进
+    不重排；首帧无 300ms 防抖空白窗口。
+  - 修复：章节目录 stub 刷新不再覆盖已缓存正文；离线时跳过网络调用避免
+    弱网空等超时；快速切章的后台刷新返回不再覆盖当前章。
+  - `SyncWorker` 周期任务追加批注冲刷与作品刷新；新增 `ReaderSyncStateTest`、
+    `PageLayoutCacheTest`、`AnnotationClipperTest` 共 16 个 JVM 单测。
+- **滚动模式整章原生视图重构（修长距离滑动卡顿）**：章节全文一次性排版进
+  单个原生 TextView（NestedScrollView 承载，与翻页模式共用 ReaderTextView），
+  滚动 = 纯位移，任何距离/方向零组合成本——「全部加载好，直接上下滑动」。
+  - 原生选字/复制/批注菜单、高亮点击、点按分区全部复用，两种模式交互一致；
+  - 进度可感知：滚动百分比浮层（停止 0.9s 淡出）+ 底栏进度滑块
+    （滚动按行跳 / 翻页按页跳）；
+  - 滚动位置按排版引擎行高换算行号上报，持久化/恢复体系不变；
+  - 行序排版（layoutLines）进 LRU 缓存，行区间无缝覆盖全文。
+  - 新增 `ReaderLayoutLinesTest` 6 个单测。
+- **翻页手势防误触**：HorizontalPager 滑动手势仅在点按唤出 UI 后可用
+  （`userScrollEnabled = uiVisible`），沉浸式阅读下斜向滑动不再被误判为
+  翻页而与手指对抗（实际操作卡顿来源）；点按左右 1/3 翻页始终可用。
 
+### Fixed (Android)
+- `RhythmTime.hoursUntil` 返回整小时（原毫秒级 Double 使事务排序比较对
+  同一截止时间的多次求值因微秒噪声翻转顺序，测试偶发失败）。
+
+### Added
 ### Added
 
 - **Fast-first startup（三阶段启动）**：扩展激活分 `cold → warm → ready` 三个阶段。

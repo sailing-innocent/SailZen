@@ -12,11 +12,12 @@ import androidx.room.RoomDatabase
         PendingRhythmAction::class,
         CachedSourceConfig::class,
         CachedWork::class,
+        CachedEdition::class,
         CachedChapter::class,
         ReadingProgress::class,
         CachedAnnotation::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

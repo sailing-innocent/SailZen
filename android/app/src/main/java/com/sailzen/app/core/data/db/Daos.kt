@@ -112,8 +112,21 @@ interface ReaderDao {
     @Query("SELECT * FROM cached_work ORDER BY updatedAt DESC")
     fun observeWorks(): Flow<List<CachedWork>>
 
+    @Query("SELECT * FROM cached_work ORDER BY updatedAt DESC")
+    suspend fun worksSnapshot(): List<CachedWork>
+
     @Query("SELECT * FROM cached_work WHERE id = :workId")
     suspend fun workById(workId: Int): CachedWork?
+
+    // ---------------- Edition ----------------
+
+    @Upsert
+    suspend fun upsertEditions(items: List<CachedEdition>)
+
+    @Query("SELECT * FROM cached_edition WHERE workId = :workId")
+    suspend fun editionsByWork(workId: Int): List<CachedEdition>
+
+    // ---------------- Chapter ----------------
 
     @Upsert
     suspend fun upsertChapter(item: CachedChapter)
@@ -123,6 +136,25 @@ interface ReaderDao {
 
     @Query("SELECT * FROM cached_chapter WHERE editionId = :editionId AND sortIndex = :sortIndex LIMIT 1")
     suspend fun chapterByIndex(editionId: Int, sortIndex: Int): CachedChapter?
+
+    /** 已缓存正文的章节数（rawText 非空视为已缓存） */
+    @Query("SELECT COUNT(*) FROM cached_chapter WHERE editionId = :editionId AND length(rawText) > 0")
+    suspend fun cachedChapterCount(editionId: Int): Int
+
+    /** 已缓存正文的章节 id 列表（目录缓存标记用） */
+    @Query("SELECT id FROM cached_chapter WHERE editionId = :editionId AND length(rawText) > 0")
+    suspend fun cachedChapterIds(editionId: Int): List<Int>
+
+    /** 仅更新章节的元信息（目录刷新用），不触碰已缓存正文 */
+    @Query(
+        "UPDATE cached_chapter SET label = :label, title = :title, charCount = :charCount, " +
+            "updatedAt = :updatedAt WHERE id = :id"
+    )
+    suspend fun updateChapterMeta(id: Int, label: String, title: String, charCount: Int?, updatedAt: String)
+
+    /** 清除某版本全部章节正文（保留目录），用于重新缓存 */
+    @Query("UPDATE cached_chapter SET rawText = '' WHERE editionId = :editionId")
+    suspend fun clearEditionContent(editionId: Int)
 
     @Upsert
     suspend fun upsertProgress(item: ReadingProgress)

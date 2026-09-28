@@ -103,7 +103,8 @@ private const val MENU_COPY = 1
 private const val MENU_ANNOTATE = 2
 private const val MENU_COLOR = 3
 
-private class ReaderTextView(context: Context) : TextView(context) {
+/** 滚动模式（整章）与翻页模式（单页）共用的可选择 TextView */
+class ReaderTextView(context: Context) : TextView(context) {
 
     var pageIndex: Int = 0
     var pageStartOffset: Int = 0

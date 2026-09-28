@@ -43,6 +43,19 @@ object ReaderTextEngine {
     data class LineRange(val start: Int, val endExclusive: Int)
 
     /**
+     * 一行渲染单元（滚动模式 item 数据源）。
+     * 行高恒等于 [LayoutSpec] 下的测量行高，因此滚动列表 item 高度
+     * O(1) 可预算，LazyColumn 长距离滑动（尤其向上）不再现场折行测量。
+     */
+    data class Line(
+        val text: String,
+        val startOffset: Int,
+        val endOffset: Int,
+        /** 是否所在段落最后一行（其后需渲染段间距） */
+        val paragraphEnd: Boolean,
+    )
+
+    /**
      * 文本测量抽象：真机用 [StaticLayoutMeasurer]（StaticLayout 与 TextView
      * 同一排版引擎），JVM 单测注入假实现验证分页算法。
      */
@@ -193,6 +206,47 @@ object ReaderTextEngine {
 
         Log.d(TAG, "paginate: ${pages.size} pages for ${rawText.length} chars")
         return pages
+    }
+
+    /**
+     * 将章节全文排版为行序列（滚动模式用），与 [paginate] 共用同一测量器，
+     * 渲染行高与排版行高逐行一致。空段（空行）产出一个空文本行。
+     * 所有行拼接结果与原文完全一致（concat(line.text) == rawText）。
+     * CPU 密集，调用方应在 Dispatchers.Default 上调用并缓存结果。
+     */
+    fun layoutLines(
+        rawText: String,
+        paragraphs: List<Paragraph>,
+        spec: LayoutSpec,
+        measurer: TextMeasurer = defaultMeasurer,
+    ): List<Line> {
+        if (rawText.isEmpty()) return emptyList()
+        val lines = ArrayList<Line>(rawText.length / 24 + 16)
+        for ((pi, para) in paragraphs.withIndex()) {
+            val measured = measurer.measureLines(para.text, spec)
+            val lastIdx = measured.lastIndex
+            // 段末行延伸到下一段起点：段间换行符归入上一段末行，
+            // 使行区间无缝覆盖全文（concat(line.text) == rawText）。
+            // 尾随换行在单行渲染中不产生额外行高。
+            val nextStart = paragraphs.getOrNull(pi + 1)?.startOffset ?: rawText.length
+            for ((i, range) in measured.withIndex()) {
+                val start = para.startOffset + range.start
+                val end = if (i == lastIdx) {
+                    nextStart
+                } else {
+                    para.startOffset + range.endExclusive
+                }.coerceIn(start, rawText.length)
+                lines.add(
+                    Line(
+                        text = rawText.substring(start, end),
+                        startOffset = start,
+                        endOffset = end,
+                        paragraphEnd = i == lastIdx,
+                    ),
+                )
+            }
+        }
+        return lines
     }
 
     /** 二分查找包含 charOffset 的页码（页按 startOffset 升序） */

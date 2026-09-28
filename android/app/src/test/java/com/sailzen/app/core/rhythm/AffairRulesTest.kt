@@ -75,11 +75,11 @@ class AffairRulesTest {
         assertNull(RhythmTime.parse("  "))
     }
 
-    @Test
-    fun rhythmTime_hoursUntil() {
-        val now = LocalDateTime.of(2026, 8, 18, 9, 0, 0)
-        assertEquals(2.0, RhythmTime.hoursUntil("2026-08-18T11:00:00", now), 0.001)
-        assertEquals(-1.0, RhythmTime.hoursUntil("2026-08-18T08:00:00", now), 0.001)
-        assertEquals(Double.POSITIVE_INFINITY, RhythmTime.hoursUntil(null, now), 0.0)
-    }
+      @Test
+      fun rhythmTime_hoursUntil() {
+          val now = LocalDateTime.of(2026, 8, 18, 9, 0, 0)
+          assertEquals(2L, RhythmTime.hoursUntil("2026-08-18T11:00:00", now))
+          assertEquals(-1L, RhythmTime.hoursUntil("2026-08-18T08:00:00", now))
+          assertEquals(Long.MAX_VALUE, RhythmTime.hoursUntil(null, now))
+      }
 }
