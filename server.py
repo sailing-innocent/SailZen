@@ -46,6 +46,7 @@ class SailServer:
             "/analysis",
             "/necessity",
             "/file-storage",
+            "/blog",
             "/dag-pipeline",
         ]
         self.api_router = None
@@ -108,6 +109,7 @@ class SailServer:
         from sail_server.router.text import router as text_router
         from sail_server.router.necessity import router as necessity_router
         from sail_server.router.file_storage import router as file_storage_router
+        from sail_server.router.blog import router as blog_router
         from sail_server.router.life import router as life_router
         from sail_server.router.reminder import router as reminder_router
         from sail_server.router.rhythm import router as rhythm_router
@@ -122,6 +124,7 @@ class SailServer:
                 text_router,
                 necessity_router,
                 file_storage_router,
+                blog_router,
                 life_router,
                 reminder_router,
                 rhythm_router,

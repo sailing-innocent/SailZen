@@ -69,6 +69,11 @@ FILE_STORAGE_DIR: Path = Path(
     os.environ.get("FILE_STORAGE_PATH", str(SERVER_DATA_DIR / "file_storage"))
 ).resolve()
 
+# 博客 Markdown 存储目录 (如果环境变量 BLOG_STORAGE_PATH 存在则优先使用)
+BLOG_STORAGE_DIR: Path = Path(
+    os.environ.get("BLOG_STORAGE_PATH", str(SERVER_DATA_DIR / "blog"))
+).resolve()
+
 # SQLite 数据库文件路径
 SQLITE_DB_PATH: Path = Path(
     os.environ.get("SQLITE_PATH", str(SERVER_DATA_DIR / "sailzen.db"))

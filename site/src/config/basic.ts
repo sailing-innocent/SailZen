@@ -18,6 +18,7 @@ export const PAGE_ROUTES: PageRoute[] = [
   { name: 'Text', path: '/text', label: '文本', icon: 'Type', component: React.lazy(() => import('@pages/text')) },
   { name: 'Necessity', path: '/necessity', label: '物资', icon: 'Package', component: React.lazy(() => import('@pages/necessity')) },
   { name: 'FileStorage', path: '/file-storage', label: '文件存储', icon: 'HardDrive', component: React.lazy(() => import('@pages/file_storage')) },
+  { name: 'Blog', path: '/blog', label: '博客', icon: 'BookOpen', component: React.lazy(() => import('@pages/blog')) },
 ]
 
 export const getPageComponent = (path: string): React.LazyExoticComponent<React.FC> | undefined => {
