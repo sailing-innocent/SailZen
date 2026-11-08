@@ -1,8 +1,13 @@
 # SailZen Autonomous Agent System
 
-> **Version**: 1.0
+> **⚠️ 已被取代**: 本文档描述的旧 `sailzen/autonomous_agent` 实现已停止演进并归档至
+> `archive/autonomous_agent/`（2026-10-27）。当前实现为 **SailTick**
+> （见 [sailtick.md](./sailtick.md) 与 [sailtick-migration-notes.md](./sailtick-migration-notes.md)）。
+> 本文保留其价值：隔离原则、skill-first、cron-native 的设计哲学已被 SailTick 继承。
+
+> **Version**: 1.0 (archived)
 > **Date**: 2025-06-02
-> **Status**: Implemented
+> **Status**: Superseded by sailtick.md
 > **Core Principle**: Complete isolation. The Agent is not a module of `sail_server`; it is a sovereign runtime that *consumes* `sail_server` via HTTP API only.
 
 ---

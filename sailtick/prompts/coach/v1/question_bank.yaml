@@ -1,0 +1,80 @@
+# SailTick 渐进式问卷题库 v1
+# 设计文档 §1.2/§5: bootstrap 保持最小假设，后续每 Tick 最多问 2 题。
+# 每题标注: 时机(哪个 slot 适合问) / 必要性(minimum=最低必要集) / 为什么问
+
+- id: current_weight
+  question: 你现在的体重是多少？（直接回复数字 kg 即可）
+  why: 建立基线，所有趋势分析的前提
+  timing: [morning_checkin]
+  necessary: minimum
+  target_profile_key: weight_current
+
+- id: height
+  question: 身高是多少？（cm）
+  why: 计算 BMI 区间，判断 70kg 目标的合理节奏
+  timing: [morning_checkin]
+  necessary: minimum
+  target_profile_key: height_cm
+
+- id: wake_time
+  question: 平时工作日大概几点起床、几点睡觉？
+  why: 安排称重与提醒的时段，避开安静时段误判
+  timing: [morning_checkin]
+  necessary: minimum
+  target_profile_key: schedule_workday
+
+- id: canteen
+  question: 工作日午饭一般怎么吃？食堂/外卖/自己带？
+  why: 估计午餐摄入结构与干预空间（食堂油水通常不可控，先从可控项入手）
+  timing: [midday_checkin]
+  necessary: minimum
+  target_profile_key: lunch_source
+
+- id: dinner_habit
+  question: 晚饭通常几点吃、吃什么类型？
+  why: 晚饭是减肥干预主战场，需要知道现状再谈调整
+  timing: [evening_review]
+  necessary: minimum
+  target_profile_key: dinner_habit
+
+- id: gym_access
+  question: 附近有健身房或方便的运动场所吗？之前有规律运动的习惯吗？
+  why: 运动建议必须匹配可达资源，否则计划必然落空
+  timing: [evening_review]
+  necessary: minimum
+  target_profile_key: exercise_access
+
+- id: social_frequency
+  question: 应酬/聚餐大概一周几次？通常在周几？
+  why: 应酬是热量黑洞；知道后可在对应 Tick 预排宽松策略而非事后补救
+  timing: [midday_checkin, evening_review]
+  necessary: normal
+  target_profile_key: social_frequency
+
+- id: stress_source
+  question: 最近主要的压力来源是什么？（工作节奏/睡眠/其他）
+  why: 压力优先于热量；高压期主动降低计划强度
+  timing: [evening_review]
+  necessary: normal
+  target_profile_key: stress_source
+
+- id: sleep_quality
+  question: 最近睡眠怎么样？几点睡、几点起、睡够了吗？
+  why: 睡眠是体重管理的地基，先修睡眠再谈热量
+  timing: [morning_checkin]
+  necessary: normal
+  target_profile_key: sleep_quality
+
+- id: diet_history
+  question: 以前试过减肥吗？哪种方式坚持得最久、为什么停？
+  why: 避开已知失败路径，复用曾经有效的部分
+  timing: [evening_review]
+  necessary: normal
+  target_profile_key: diet_history
+
+- id: weight_record_method
+  question: 家里有体重秤吗？晨起空腹称重方便吗？
+  why: 决定"每日称重"任务的可执行性与提醒时段
+  timing: [morning_checkin]
+  necessary: minimum
+  target_profile_key: weight_scale_access

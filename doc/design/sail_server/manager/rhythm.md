@@ -400,7 +400,7 @@ token 取 `SAILZEN_API_TOKEN`。
 - `core/rhythm/AffairRules.kt`（VENTURE_KIND / TASK_STATE_FILTERS / isTerminal / isOverdue / availableActions / jsonObjectOf 纯函数）
 - `core/network/RhythmApi`（Retrofit，仿 ReminderApi）；done/defer/checkin/capture 离线排队补传（flushPending）
 
-## 9. Agent 管线（M4，sailzen/autonomous_agent/pipelines/rhythm_*.yaml）
+  ## 9. Agent 管线（M4，旧 sailzen/autonomous_agent，已归档至 archive/autonomous_agent）
 
 | 管线 | 调度 | 流程 |
 |------|------|------|

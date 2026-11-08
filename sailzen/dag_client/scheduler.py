@@ -25,7 +25,7 @@ import logging
 from typing import Dict, List, Optional, Set, Tuple
 
 from sailzen.dag_client.models import (
-    RunStatus, NodeStatus,
+    RunStatus, NodeStatus, AgentStatus,
     make_dag_run, make_dag_node, make_dag_edge,
     make_event_log, _now_iso,
 )

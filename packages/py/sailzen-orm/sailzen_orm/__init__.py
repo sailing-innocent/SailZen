@@ -94,6 +94,8 @@ from sailzen_orm.rhythm import (
     RhythmPolicy,
     RhythmReview,
 )
+# SailTick Models
+from sailzen_orm.tick import SailTickTicket
 
 __all__ = [
     # Base
@@ -159,6 +161,8 @@ __all__ = [
     "RhythmDayTemplate",
     "RhythmDisciplineLog",
     "RhythmEnergyProfile",
-    "RhythmPolicy",
-    "RhythmReview",
-]
+      "RhythmPolicy",
+      "RhythmReview",
+      # SailTick
+      "SailTickTicket",
+  ]

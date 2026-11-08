@@ -1,0 +1,21 @@
+id: nightly_maintenance
+name: Nightly Maintenance Tick
+description: 00:00 唤醒。无声工作：票据清理、记忆压缩、数据质量检查、自我开发（Phase 5）。
+slot: nightly_maintenance
+nodes:
+  - id: scan
+    type: tick_scan
+    name: 数据扫描与票据同步
+    params:
+      days: 7
+  - id: maintenance_plan
+    type: tick_plan
+    name: 夜间维护计划（LLM 可选，不可用则静默规则执行）
+    depends_on: [scan]
+    params:
+      prompt_slot: nightly_maintenance
+      allow_silent: true
+  - id: handoff
+    type: handoff_write
+    name: 写交接文档
+    depends_on: [maintenance_plan]

@@ -48,6 +48,7 @@ class SailServer:
             "/file-storage",
             "/blog",
             "/dag-pipeline",
+            "/tick",
         ]
         self.api_router = None
         self.debug = True
@@ -113,12 +114,12 @@ class SailServer:
         from sail_server.router.life import router as life_router
         from sail_server.router.reminder import router as reminder_router
         from sail_server.router.rhythm import router as rhythm_router
+        from sail_server.router.tick import router as tick_router
 
         self.api_router = Router(
             path=self.api_endpoint,
             route_handlers=[
                 health_check,
-                health_router,
                 finance_router,
                 history_router,
                 text_router,
@@ -128,6 +129,7 @@ class SailServer:
                 life_router,
                 reminder_router,
                 rhythm_router,
+                tick_router,
             ],
         )
 
@@ -213,6 +215,12 @@ class SailServer:
         except Exception as e:
             logger.warning(f"[Startup] Rhythm schema self-check failed: {e}")
 
+        # SailTick 票据表自检：确保 sail_tick_tickets 存在（幂等）
+        try:
+            self._ensure_tick_schema(logger)
+        except Exception as e:
+            logger.warning(f"[Startup] Tick schema self-check failed: {e}")
+
         # 启动天气后台更新循环（失败仅告警，不影响服务启动）
         try:
             if os.environ.get("WEATHER_ENABLED", "true").lower() == "true":
@@ -274,6 +282,30 @@ class SailServer:
                 logger.warning(f"[Startup] Rhythm tables still missing: {missing}")
             else:
                 logger.info("[Startup] Rhythm schema self-check passed")
+        finally:
+            db.close()
+
+    def _ensure_tick_schema(self, logger) -> None:
+        """SailTick 票据表自检（幂等，不抛异常）。
+
+        sail_tick_tickets 由 ORM create_all 在 Database init 阶段建表，
+        此处为启动期兜底校验（参考 _ensure_rhythm_schema 的同类设计）。
+        """
+        from sqlalchemy import inspect
+
+        from sail_server.db import Database
+
+        db = Database.get_instance().get_db_session()
+        try:
+            engine = db.bind
+            tables = set(inspect(engine).get_table_names())
+            if "sail_tick_tickets" in tables:
+                logger.info("[Startup] Tick schema self-check passed")
+            else:
+                logger.warning("[Startup] sail_tick_tickets missing; attempting create_all")
+                from sailzen_orm.orm_base import ORMBase
+
+                ORMBase.metadata.create_all(bind=engine)
         finally:
             db.close()
 

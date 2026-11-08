@@ -12,7 +12,8 @@ export interface PageRoute {
 export const PAGE_ROUTES: PageRoute[] = [
   { name: 'Main', path: '/main', label: '首页', icon: 'Home', component: React.lazy(() => import('@pages/main')) },
   { name: 'Money', path: '/money', label: '财务', icon: 'Wallet', component: React.lazy(() => import('@pages/money')) },
-  { name: 'Health', path: '/health', label: '健康', icon: 'Heart', component: React.lazy(() => import('@pages/health')) },
+      { name: 'Health', path: '/health', label: '健康', icon: 'Heart', component: React.lazy(() => import('@pages/health')) },
+    { name: 'Tick', path: '/tick', label: '教练', icon: 'MessageCircle', component: React.lazy(() => import('@pages/tick')) },
   { name: 'Rhythm', path: '/rhythm', label: '节奏', icon: 'RefreshCw', component: React.lazy(() => import('@pages/rhythm')) },
   { name: 'Info', path: '/info', label: '资讯', icon: 'FileText', component: React.lazy(() => import('@pages/info')) },
   { name: 'Text', path: '/text', label: '文本', icon: 'Type', component: React.lazy(() => import('@pages/text')) },

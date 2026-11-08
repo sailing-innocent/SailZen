@@ -1,7 +1,7 @@
 # SailZen Project Guide for AI Agents
 
-> 📚 **重要文档**: 
-> - [SailZen 3.0 路线图](./doc/sailzen-3.0-roadmap.md) - **当前开发重点**
+> 📚 **重要文档**:
+> - [SailTick 减肥监督教练设计](./doc/design/agent-system/sailtick.md) - **当前开发重点**（3.0 路线图已由 SailTick 承接）
 > - [产品需求文档 (PRD)](./doc/PRD.md) - 完整的产品功能需求
 > - [文档中心](./doc/README.md) - 所有文档的导航入口
 > - [重构计划](./doc/refact_todo.md) - 代码架构重构计划
@@ -92,16 +92,27 @@ SailZen/
 │   ├── data/                   # 数据访问层 (DAO)
 │   ├── utils/                  # 工具函数 (LLM, 时间等)
 │   └── cli/                    # CLI 命令
-├── tests/                      # Python 测试
-│   ├── llm_integration/        # LLM 集成测试
-│   └── server/                 # 服务器 API 测试
-├── scripts/                    # 构建和工具脚本
-│   ├── build-with-deps.js      # 依赖拓扑排序构建脚本
-│   └── bump-version.js         # 版本号同步脚本
-├── doc/                        # 文档
-│   ├── sailzen-3.0-roadmap.md  # 3.0 开发路线图
-│   ├── design/agent-system/    # Agent系统设计文档
-│   └── ...
+  ├── sailtick/ # SailTick 私人减肥监督教练（常驻 daemon，独立顶层包）
+  │ ├── tick_engine.py # Tick 状态机（SLEEP→WAKE→SCAN→PLAN→WORK→HANDOFF）
+  │ ├── daemon.py # 常驻编排（scheduler/api/inbox 轮询）
+  │ ├── db.py # 隔离 SQLite（st_* 表族，禁止 db_sync）
+  │ ├── inbox.py # sail_server 票据客户端
+  │ ├── dev/ # 自我开发（guard/repo/tasks，agent/sailtick-dev 分支隔离）
+  │ └── prompts/coach/v1/ # 教练人设/问卷题库/计划模板
+  ├── tests/ # Python 测试
+  │ ├── llm_integration/ # LLM 集成测试
+  │ ├── server/ # 服务器 API 测试
+  │ └── sailtick/ # SailTick 测试（契约/状态机/护栏/冒烟）
+  ├── scripts/ # 构建和工具脚本
+  │ ├── build-with-deps.js # 依赖拓扑排序构建脚本
+  │ ├── bump-version.js # 版本号同步脚本
+  │ ├── sailtick.service # SailTick systemd unit
+  │ └── sailtick_smoke.py # SailTick 端到端冒烟
+  ├── archive/ # 归档（旧 sailzen/autonomous_agent 等）
+  ├── doc/ # 文档
+  │ ├── design/agent-system/ # Agent系统设计（sailtick.md / autonomous-agent.md(已归档)）
+  │ └── maintain/SailTickAcceptance.md # SailTick 部署验收手册
+  │ └── ...
 └── .opencode/skills/           # AI Agent 技能定义
     ├── sailzen-dev-guide/      # 开发环境指南
     └── sailzen-ai-text-import/ # AI 文本导入工具
@@ -252,6 +263,15 @@ uv run tests/llm_integration/run_validation.py connection --real-connection --pr
 # 运行特定标记的测试
 uv run pytest -m "server"
 uv run pytest -m "current"
+
+# SailTick：核心测试 + 端到端冒烟
+uv run pytest tests/sailtick tests/server -m "not current"
+uv run python scripts/sailtick_smoke.py
+
+# SailTick：daemon 体检 / 单次 Tick / 初始化
+uv run python -m sailtick doctor
+uv run python -m sailtick trigger midday_checkin
+uv run python -m sailtick bootstrap
 ```
 
 ## Development Environment Setup
@@ -363,7 +383,8 @@ works = db.query(Work).all()
 | Analysis  | `/analysis`  | 角色档案、大纲、设定提取 |
 | Necessity | `/necessity` | 库存、住所、行程追踪           |
 | History   | `/history`   | 时间线事件追踪                 |
-| Rhythm    | `/rhythm`    | 统一事务、日时间线、打卡、事业、复盘 |
+| Rhythm    | /rhythm    | 统一事务、日时间线、打卡、事业、复盘 |
+| SailTick  | /tick      | AI 减肥监督教练票据收件箱（常驻 daemon :9070） |
 
 ## Version Management
 

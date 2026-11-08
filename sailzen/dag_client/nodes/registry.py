@@ -78,7 +78,7 @@ class NodeRegistry:
     def register(self, node_type: str, executor_cls: Type[NodeExecutor]) -> None:
         """注册节点类型。
 
-        外部包（如 sailzen.autonomous_agent）可以在运行时调用此方法
+        外部包（如 sailtick.executor）可以在运行时调用此方法
         注册自定义节点类型，无需修改 dag_client 内部代码。
         """
         if not issubclass(executor_cls, NodeExecutor):

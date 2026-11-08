@@ -1,0 +1,71 @@
+# =============================================================================
+# SailTick 私人减肥监督教练 — 配置文件模板
+# 复制为仓库根目录 sailtick.yaml 并按服务器实际情况填写。
+# 环境变量（SAILTICK_*）优先级高于本文件，见 .env.template 的 SAILTICK 段。
+# =============================================================================
+sailtick:
+  # ── 基础 ──────────────────────────────────────────────────────────
+  name: sailtick
+  data_dir: data/sailtick            # 隔离数据目录（禁止 db_sync，已加排除）
+  db_path: data/sailtick/db/sailtick.db
+  log_dir: logs/sailtick
+  api_host: 127.0.0.1                # 管理 API 监听地址（同机部署用 127.0.0.1）
+  api_port: 9070                     # 避开 dag_client 9050 / 旧 agent 9060
+  timezone: Asia/Shanghai
+  heartbeat_interval: 30             # 心跳间隔（秒）
+  inbox_poll_seconds: 600            # 收件箱轮询间隔（秒）
+
+  # ── Tick 排程 ─────────────────────────────────────────────────────
+  tick:
+    hours: [0, 6, 12, 18]            # 唤醒时刻表（已确认；周末无差异）
+    work_budget_minutes: 180         # 每次 3 小时工作预算
+    scan_budget_minutes: 15
+    plan_budget_minutes: 20
+    handoff_budget_minutes: 10
+
+  # ── LLM ───────────────────────────────────────────────────────────
+  # 决议：deepseek flash 级视为无限量；记账与软上限仅防代码 bug 失控。
+  llm:
+    default: deepseek
+    per_tick_token_cap: 200000       # 每 Tick 软上限
+    daily_token_cap: 1000000         # 每日软上限
+    providers:
+      deepseek:
+        model: deepseek-chat
+        base_url: https://api.deepseek.com/v1
+        api_key: ${DEEPSEEK_API_KEY}   # 从环境变量注入，勿填明文
+      # kimi:
+      #   model: kimi-k2.5
+      #   base_url: https://api.moonshot.cn/v1
+      #   api_key: ${MOONSHOT_API_KEY}
+
+  # ── sail_server（同机部署） ────────────────────────────────────────
+  sail_server:
+    api_base: http://127.0.0.1:1974/api/v1   # 按服务器实际端口填写
+    auth_token: ${SAILZEN_API_TOKEN}         # 与 sail_server 同一 token
+
+  # ── 通知 ──────────────────────────────────────────────────────────
+  notify:
+    quiet_hours:
+      start: 23                        # 安静时段 23:00–08:00（已确认为默认）
+      end: 8
+    push_enabled: true                 # 高优先票据经 sail_server WS 推送手机
+    dedup_window_seconds: 3600
+
+  # ── 自我开发（Phase 5，可选） ──────────────────────────────────────
+  # repo_dir: 服务器上本仓库的路径。部署时填写（验收文档 §前置检查）。
+  # 严禁 push origin（项目铁律）；严禁直动 main。
+  self_dev:
+    repo_dir: ""                       # 例: /home/<user>/SailZen
+    branch: agent/sailtick-dev
+    whitelist_dirs:
+      - sailtick
+      - tests/sailtick
+      - doc/design/agent-system
+    protected_paths:
+      - data
+      - .env
+      - .env.dev
+      - .env.prod
+      - .env.debug
+      - .git

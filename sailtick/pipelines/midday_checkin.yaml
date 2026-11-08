@@ -1,0 +1,20 @@
+id: midday_checkin
+name: Midday Check-in Tick
+description: 12:00 唤醒。午间巡检：上午回复处理、午饭摄入、下午与晚间预排。
+slot: midday_checkin
+nodes:
+  - id: scan
+    type: tick_scan
+    name: 数据扫描与票据同步
+    params:
+      days: 7
+  - id: plan
+    type: tick_plan
+    name: LLM 生成午间计划
+    depends_on: [scan]
+    params:
+      prompt_slot: midday_checkin
+  - id: handoff
+    type: handoff_write
+    name: 写交接文档
+    depends_on: [plan]

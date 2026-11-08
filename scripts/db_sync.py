@@ -1033,12 +1033,20 @@ def main():
     
     # 排除 agent 数据库路径
     AGENT_EXCLUDED_PATHS = ['data/agent', 'data/agent.db', 'agent.db']
+    # SailTick 隔离数据（sailtick.md D3: 禁止 db_sync）
+    SAILTICK_EXCLUDED_PATHS = ['data/sailtick', 'sailtick.db']
+
     def _check_agent_exclusion(path: str) -> bool:
         path_normalized = os.path.normpath(path)
         for excluded in AGENT_EXCLUDED_PATHS:
             if excluded in path_normalized or path_normalized.endswith(excluded):
                 logger.error(f"❌ 禁止同步 Agent 独立数据库: {path}")
                 logger.error("   Agent 数据完全隔离，不应被 db_sync 触及。")
+                return False
+        for excluded in SAILTICK_EXCLUDED_PATHS:
+            if excluded in path_normalized or path_normalized.endswith(excluded):
+                logger.error(f"❌ 禁止同步 SailTick 隔离数据库: {path}")
+                logger.error("   SailTick 数据完全隔离（doc/design/agent-system/sailtick.md D3）。")
                 return False
         return True
 

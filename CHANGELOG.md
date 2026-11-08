@@ -1,6 +1,33 @@
 # Changelog
 
 ## Unreleased
+### Added (SailTick)
+- **SailTick 私人减肥监督教练**（新顶层包 `sailtick/`，独立常驻 daemon，设计文档
+  `doc/design/agent-system/sailtick.md`）：每 6 小时唤醒（00/06/12/18 Asia/Shanghai）、
+  每次 3 小时工作预算，Tick 状态机 SLEEP→WAKE→SCAN→PLAN→WORK→HANDOFF，
+  每 Tick 从零组装上下文（system prompt + handoff + 记忆摘要 + 数据扫描）。
+  - 隔离 SQLite `data/sailtick/db/sailtick.db`（st_* 表族，db_sync 已加排除，禁止同步）。
+  - 交互票据走主库新表 `sail_tick_tickets` + `/api/v1/tick/*` 路由（状态机
+    pending→replied→resolved/expired/snoozed，expected_reply_by + fallback 假设，
+    AI 永不阻塞）；高优先票据经 reminder_ws 推送 Android。
+  - 前端 `/tick` 页面：待回票据收件箱 + 回复 + 快速记体重 + 历史折叠区。
+  - 自我开发能力（Phase 5）：`agent/sailtick-dev` 分支隔离 + 硬护栏（白名单目录/
+    禁止 push/main/禁动 data/.env*），完成任务自动开 approval 票据。
+  - bootstrap：goal=70kg、计划 v0.1、首批渐进式问卷票据（每 Tick 最多 2 问）。
+  - 部署件：`sailtick.yaml` 模板、`scripts/sailtick.service`、
+    `doc/maintain/SailTickAcceptance.md`、`scripts/sailtick_smoke.py` 端到端冒烟。
+  - 测试：`tests/sailtick/`（dag_client 契约 9 例 + 状态机/护栏/客户端 34 例）与
+    `tests/server/test_tick_api.py`（14 例）。
+
+### Changed
+- **归档** `sailzen/autonomous_agent/` → `archive/autonomous_agent/`（已被 sailtick 取代，
+  迁移说明 `doc/design/agent-system/sailtick-migration-notes.md`）；
+  `autonomous-agent.md` 标记 Superseded。
+- **修复 dag_client 共享引擎两处潜伏 NameError**（契约测试暴露）：
+  `repositories.py` 缺 `_NODE_TERMINAL_STATUSES` 导入、`scheduler.py` 缺 `AgentStatus`
+  导入（迁移说明 B6/B7）。
+- `.env.template` 新增 SAILTICK 段；`db_sync.py` 排除 `data/sailtick`。
+
 ### Added (Android)
 - **阅读器离线优先重构**（`android/`）：Room 为事实源、网络只做后台刷新，开书首帧
   本地快照直接渲染，不再串行等待章节列表/正文/批注三个网络请求。

@@ -32,7 +32,9 @@
 | [design/vscode_plugin_architecture.md](./design/vscode_plugin_architecture.md) | VSCode 插件架构指南 |
 | [design/text-analysis-system.md](./design/text-analysis-system.md) | AI文本分析系统设计 |
 | [design/outline-extraction.md](./design/outline-extraction.md) | 大纲提取功能设计 |
-| [design/agent-system.md](./design/agent-system.md) | Agent系统设计 |
+| design/agent-system.md (./design/agent-system.md) | Agent系统设计 |
+| design/agent-system/sailtick.md (./design/agent-system/sailtick.md) | SailTick 减肥监督教练设计 (Tick 状态机/票据协议/记忆模型) 🔄 |
+| design/agent-system/sailtick-migration-notes.md (./design/agent-system/sailtick-migration-notes.md) | SailTick 迁移说明 (旧 autonomous_agent 缺陷复现记录) |
 
 ### API 文档
 

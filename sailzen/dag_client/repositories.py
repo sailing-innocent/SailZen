@@ -24,7 +24,7 @@ from sailzen.dag_client.models import (
     DBAgent, DBEventLog, DBRequiredSkill,
     orm_to_dict, dict_to_orm, _json_encode, _json_decode, _JSON_FIELDS,
     _now_iso, NodeStatus, RunStatus,
-    status_rank, is_terminal,
+    status_rank, is_terminal, _NODE_TERMINAL_STATUSES,
 )
 
 logger = logging.getLogger(__name__)

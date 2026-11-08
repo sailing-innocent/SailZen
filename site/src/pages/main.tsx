@@ -25,6 +25,7 @@ import {
   Moon,
   Smile,
   ChevronRight,
+  MessageCircle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -105,6 +106,12 @@ const MainPage = () => {
                   label="物资"
                   href="/necessity"
                   color="text-orange-500"
+                />
+                <QuickAccessCard
+                  icon={<MessageCircle className="h-5 w-5" />}
+                  label="教练"
+                  href="/tick"
+                  color="text-sky-500"
                 />
               </CardContent>
             </Card>

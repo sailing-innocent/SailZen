@@ -1,0 +1,26 @@
+id: morning_checkin
+name: Morning Check-in Tick
+description: 06:00 唤醒。早间问候：体重/睡眠/午饭预告，规划晚饭与锻炼建议。
+slot: morning_checkin
+nodes:
+  - id: scan
+    type: tick_scan
+    name: 数据扫描与票据同步
+    params:
+      days: 7
+  - id: weight_trend
+    type: weight_trend
+    name: 体重趋势
+    depends_on: [scan]
+    params:
+      days: 14
+  - id: plan
+    type: tick_plan
+    name: LLM 生成早间计划
+    depends_on: [weight_trend]
+    params:
+      prompt_slot: morning_checkin
+  - id: handoff
+    type: handoff_write
+    name: 写交接文档
+    depends_on: [plan]
