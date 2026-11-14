@@ -98,7 +98,7 @@ const HEALTH_API_BASE = `${API_BASE}/health`
 
 /** 快速记体重（body_data metric=weight） */
 export const api_quick_log_weight = async (weight: number): Promise<void> => {
-  const response = await fetch(`${SERVER_URL}/${HEALTH_API_BASE}/body_data`, {
+  const response = await fetch(`${SERVER_URL}/${HEALTH_API_BASE}/body-data`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ data: { weight } }),
