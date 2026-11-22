@@ -245,7 +245,17 @@ def _env_override(cfg: SailTickConfig) -> None:
     if v := os.environ.get("SAILTICK_TIMEZONE"):
         cfg.timezone = v
     if v := os.environ.get("SAIL_SERVER_URL"):
-        cfg.sail_server.api_base = v.rstrip("/") + "/api/v1"
+        api_ep = (os.environ.get("API_ENDPOINT") or "/api/v1").strip()
+        if not api_ep.startswith("/"):
+            api_ep = "/" + api_ep
+        base = v.rstrip("/")
+        cfg.sail_server.api_base = base if base.endswith(api_ep) else f"{base}{api_ep}"
+    elif v := os.environ.get("SERVER_PORT"):
+        # 同机部署兜底：自动对齐 .env.prod 中的 SERVER_PORT 与 API_ENDPOINT（避免与 sailtick.yaml 默认 1974 错位）
+        api_ep = (os.environ.get("API_ENDPOINT") or "/api/v1").strip()
+        if not api_ep.startswith("/"):
+            api_ep = "/" + api_ep
+        cfg.sail_server.api_base = f"http://127.0.0.1:{v.strip()}{api_ep}"
     if v := os.environ.get("SAILZEN_API_TOKEN"):
         cfg.sail_server.auth_token = v
     if v := os.environ.get("SAILTICK_SELF_DEV_REPO"):

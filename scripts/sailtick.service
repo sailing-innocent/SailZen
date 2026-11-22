@@ -31,7 +31,7 @@ EnvironmentFile=-/home/ubuntu/repos/SailZen/.env.prod
 Environment="PYTHONUNBUFFERED=1"
 Environment="SAILTICK_ENV=prod"
 Environment="SAILTICK_CONFIG=sailtick.yaml"
-ExecStart=/home/ubuntu/.local/bin/uv run python -m sailtick --config sailtick.yaml run
+ExecStart=/home/ubuntu/repos/SailZen/.venv/bin/python -m sailtick --config sailtick.yaml run
 Restart=always
 RestartSec=10
 TimeoutStopSec=20

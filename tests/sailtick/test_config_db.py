@@ -152,3 +152,48 @@ async def test_schedules(db):
     assert schedules[0]["last_run_status"] == "success"
     assert await db.delete_schedule("tick_06") is True
     assert await db.delete_schedule("tick_06") is False
+
+
+@pytest.mark.asyncio
+async def test_scheduler_start_add_slot_and_stop(db):
+    """回归测试: TickScheduler 不能将 async aiosqlite sync_engine 交给 APScheduler SQLAlchemyJobStore。"""
+    from sailtick.scheduler import TickScheduler
+
+    triggered: list[str] = []
+
+    async def _on_trigger(schedule_id: str, slot: str, params: dict) -> None:
+        triggered.append(slot)
+
+    scheduler = TickScheduler(db=db, timezone="Asia/Shanghai")
+    scheduler.register_default_callback(_on_trigger)
+    await scheduler.start()
+    try:
+        await scheduler.add_slot(
+            schedule_id="tick_2145_pre_sleep",
+            name="Pre-sleep report",
+            slot="pre_sleep_report",
+            hour=21,
+            minute=45,
+        )
+        await db.update_schedule(
+            "tick_2145_pre_sleep",
+            {"last_run_time": "2026-11-22T21:45:00+08:00", "last_run_status": "success"},
+        )
+        # 模拟守护进程重启时重复注册同一 schedule_id：必须幂等且不覆盖 last_run_time
+        await scheduler.add_slot(
+            schedule_id="tick_2145_pre_sleep",
+            name="Pre-sleep report",
+            slot="pre_sleep_report",
+            hour=21,
+            minute=45,
+        )
+        jobs = await scheduler.next_run_times()
+        assert any(j["id"] == "tick_2145_pre_sleep" for j in jobs)
+        schedules = await db.list_schedules()
+        matched = [s for s in schedules if s["id"] == "tick_2145_pre_sleep"]
+        assert len(matched) == 1
+        assert matched[0]["last_run_time"] == "2026-11-22T21:45:00+08:00"
+        assert matched[0]["last_run_status"] == "success"
+    finally:
+        await scheduler.stop()
+

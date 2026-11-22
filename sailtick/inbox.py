@@ -50,7 +50,10 @@ class TicketInbox:
             headers = {}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
-            self._client = httpx.AsyncClient(timeout=15.0, headers=headers)
+            is_local = "127.0.0.1" in self.api_base or "localhost" in self.api_base
+            self._client = httpx.AsyncClient(
+                timeout=15.0, headers=headers, trust_env=not is_local
+            )
         return self._client
 
     async def close(self) -> None:

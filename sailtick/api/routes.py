@@ -38,12 +38,32 @@ def create_app(daemon: Any) -> Litestar:
     @post("/tick/{slot:str}")
     async def trigger_tick(slot: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """异步触发一次 Tick。"""
-        allowed = {"morning_checkin", "midday_checkin", "evening_review", "nightly_maintenance"}
+        allowed = {
+            "morning_checkin",
+            "midday_checkin",
+            "evening_review",
+            "pre_sleep_report",
+            "nightly_maintenance",
+        }
+        try:
+            for s in daemon.config.tick.resolved_slots():
+                if s.slot:
+                    allowed.add(s.slot)
+        except Exception:
+            pass
         if slot not in allowed:
             return {"error": f"unknown slot: {slot}", "allowed": sorted(allowed)}
         import asyncio
 
-        asyncio.create_task(daemon.engine.run_tick(slot, params=data or {}))
+        body = dict(data or {})
+        idem_suffix = body.pop("idempotency_suffix", None)
+        asyncio.create_task(
+            daemon.engine.run_tick(
+                slot,
+                params=body,
+                idempotency_suffix=str(idem_suffix) if idem_suffix else None,
+            )
+        )
         return {"status": "triggered", "slot": slot}
 
     @get("/tick/current")

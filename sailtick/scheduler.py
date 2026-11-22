@@ -20,7 +20,6 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -50,13 +49,12 @@ class TickScheduler:
     # ── 生命周期 ──────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        jobstores = {
-            "default": SQLAlchemyJobStore(
-                engine=self.db.engine.sync_engine,
-                tablename="apscheduler_jobs",
-            )
-        }
-        self._scheduler = AsyncIOScheduler(jobstores=jobstores, timezone=self.timezone)
+        # 排程元数据与 last_run_time 持久化在 st_schedules（走 aiosqlite），
+        # APScheduler 本身使用默认 MemoryJobStore，避免：
+        # 1) SQLAlchemyJobStore 同步调用 aiosqlite sync_engine 报 MissingGreenlet；
+        # 2) SQLAlchemyJobStore pickle 绑定方法 self._on_trigger 报 PicklingError；
+        # 3) 双驱动并发写同一 SQLite 文件产生 database is locked。
+        self._scheduler = AsyncIOScheduler(timezone=self.timezone)
         self._scheduler.start()
         logger.info("TickScheduler started (timezone=%s)", self.timezone)
         await self._restore_schedules()

@@ -103,6 +103,9 @@ class LLMGateway:
             )
         messages.append({"role": "user", "content": prompt})
 
+        if expect_json:
+            kwargs.setdefault("expect_json", True)
+
         return await self._chat_messages(messages, provider, **kwargs)
 
     async def _chat_messages(
@@ -129,17 +132,30 @@ class LLMGateway:
             if not prov_cfg.model:
                 model = "kimi-for-coding"
 
+        model_lower = model.lower()
         temperature = kwargs.get("temperature", 0.3)
+        max_tokens = int(kwargs.get("max_tokens", 2000))
+        expect_json = bool(kwargs.get("expect_json", False))
+
         # kimi-k2.5 / kimi-for-coding 等推理模型接口要求 temperature=1（传 0.3 会返回 400）
-        if "k2.5" in model.lower() or "kimi-for-coding" in model.lower():
+        if "k2.5" in model_lower or "kimi-for-coding" in model_lower:
             temperature = 1.0
 
-        payload = {
+        # deepseek-reasoner 等推理模型的 max_tokens 同时包含 reasoning_content 与最终 content，
+        # 若 max_tokens 偏小会导致思维链耗尽额度、JSON 在中途被截断（Unterminated string）。
+        is_reasoner = "reasoner" in model_lower or "deepseek-r1" in model_lower
+        if is_reasoner:
+            max_tokens = max(max_tokens, 8192)
+
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": kwargs.get("max_tokens", 2000),
+            "max_tokens": max_tokens,
         }
+        if not is_reasoner:
+            payload["temperature"] = temperature
+        if expect_json and provider in ("deepseek", "kimi"):
+            payload["response_format"] = {"type": "json_object"}
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         if "api.kimi.com/coding" in base_url:
@@ -147,14 +163,23 @@ class LLMGateway:
         client = self._get_client(provider)
         url = f"{base_url.rstrip('/')}/chat/completions"
 
-        logger.debug("LLM request to %s: model=%s", provider, model)
+        logger.debug("LLM request to %s: model=%s max_tokens=%d", provider, model, max_tokens)
         t0 = time.perf_counter()
         response = await client.post(url, json=payload, headers=headers)
         response.raise_for_status()
         latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         data = response.json()
 
-        content = data["choices"][0]["message"]["content"] if data.get("choices") else ""
+        choice = data["choices"][0] if data.get("choices") else {}
+        finish_reason = choice.get("finish_reason")
+        if finish_reason == "length":
+            logger.warning(
+                "LLM response truncated by max_tokens=%d (provider=%s, model=%s)",
+                max_tokens,
+                provider,
+                model,
+            )
+        content = (choice.get("message") or {}).get("content") or ""
         usage = data.get("usage") or {}
         total_tokens = usage.get("total_tokens", 0)
 

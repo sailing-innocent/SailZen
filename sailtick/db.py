@@ -605,18 +605,31 @@ class TickDatabase:
 
     async def create_schedule(self, data: dict) -> dict:
         async with self.session() as s:
-            row = DBSchedule(
-                id=data["id"],
-                name=data.get("name", data["id"]),
-                slot=data.get("slot", ""),
-                enabled=1 if data.get("enabled", True) else 0,
-                params=_json.dumps(data.get("params", {}), ensure_ascii=False),
-                next_run_time=data.get("next_run_time"),
-                last_run_time=data.get("last_run_time"),
-                last_run_status=data.get("last_run_status"),
-            )
-            s.add(row)
-            await s.merge(row)
+            existing = await s.get(DBSchedule, data["id"])
+            if existing is not None:
+                existing.name = data.get("name", existing.name)
+                existing.slot = data.get("slot", existing.slot)
+                existing.enabled = 1 if data.get("enabled", True) else 0
+                existing.params = _json.dumps(data.get("params", {}), ensure_ascii=False)
+                if data.get("next_run_time") is not None:
+                    existing.next_run_time = data["next_run_time"]
+                if data.get("last_run_time") is not None:
+                    existing.last_run_time = data["last_run_time"]
+                if data.get("last_run_status") is not None:
+                    existing.last_run_status = data["last_run_status"]
+                existing.updated_at = _now_iso()
+            else:
+                row = DBSchedule(
+                    id=data["id"],
+                    name=data.get("name", data["id"]),
+                    slot=data.get("slot", ""),
+                    enabled=1 if data.get("enabled", True) else 0,
+                    params=_json.dumps(data.get("params", {}), ensure_ascii=False),
+                    next_run_time=data.get("next_run_time"),
+                    last_run_time=data.get("last_run_time"),
+                    last_run_status=data.get("last_run_status"),
+                )
+                s.add(row)
             await s.commit()
             return data
 

@@ -100,6 +100,7 @@ async def cmd_doctor(config_path: Optional[str]) -> int:
     print(f"config: {cfg.config_dir or '(cwd)'}/sailtick.yaml")
     print(f"db_path: {cfg.db_path}")
     print(f"api: {cfg.api_host}:{cfg.api_port}")
+    print(f"sail_server: {cfg.sail_server.api_base}")
 
     # 1. DB 可连接
     from sailtick.db import TickDatabase
