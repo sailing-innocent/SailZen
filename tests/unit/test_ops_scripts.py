@@ -193,8 +193,13 @@ def test_android_release_guardrails_reject_missing_config(monkeypatch, tmp_path)
     from scripts.ops import build_android_release
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(build_android_release, "ANDROID_DIR", tmp_path / "android")
     for k in (
         "SAILZEN_RELEASE_SERVER_URL",
+        "SAILZEN_RELEASE_STORE_FILE",
+        "SAILZEN_RELEASE_STORE_PASSWORD",
+        "SAILZEN_RELEASE_KEY_ALIAS",
+        "SAILZEN_RELEASE_KEY_PASSWORD",
         "SAILZEN_STORE_FILE",
         "SAILZEN_STORE_PASSWORD",
         "SAILZEN_KEY_ALIAS",
@@ -206,6 +211,87 @@ def test_android_release_guardrails_reject_missing_config(monkeypatch, tmp_path)
     assert len(issues) == 2
     assert any("SAILZEN_RELEASE_SERVER_URL" in msg for msg in issues)
     assert any("签名配置" in msg for msg in issues)
+
+
+def test_init_android_signing_creates_self_signed_keystore_and_passes_guardrails(
+    monkeypatch, tmp_path
+):
+    """验证 init_android_signing.py 生成项目本地自签名证书后，build_android_release 护栏直接通过。"""
+    import shutil
+
+    if not shutil.which("keytool"):
+        pytest.skip("keytool not installed")
+
+    from scripts.ops import build_android_release
+    from scripts.ops.init_android_signing import init_android_signing
+
+    fake_android = tmp_path / "android"
+    fake_android.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(build_android_release, "ANDROID_DIR", fake_android)
+
+    ks_path, props_path = init_android_signing(
+        server_url="http://101.43.22.254/",
+        android_dir=fake_android,
+    )
+    assert ks_path.is_file()
+    assert props_path.is_file()
+    assert "SAILZEN_RELEASE_SERVER_URL=http://101.43.22.254\n" in props_path.read_text(
+        encoding="utf-8"
+    )
+    assert build_android_release.check_release_guardrails() == []
+
+    # 重复初始化默认拒绝覆盖，防止误毁签名
+    with pytest.raises(FileExistsError):
+        init_android_signing(server_url="http://101.43.22.254/", android_dir=fake_android)
+
+
+def test_publish_android_apk_version_bump_and_rollback(monkeypatch, tmp_path):
+    """验证 publish_android_apk.py 的 versionCode 自动递增、dry-run 零副作用与失败回滚。"""
+    from scripts.ops import publish_android_apk as pub
+
+    props = tmp_path / "version.properties"
+    pub.write_android_version(pub.AndroidVersion(version_code=3, version_name="0.2.0"), props)
+    cur = pub.read_android_version(props)
+    assert cur == pub.AndroidVersion(version_code=3, version_name="0.2.0")
+
+    nxt = pub.compute_next_version(cur, bump=True)
+    assert nxt == pub.AndroidVersion(version_code=4, version_name="0.2.0")
+
+    fake_apk = tmp_path / "SailZen-0.2.0-vc4-release.apk"
+    fake_apk.write_bytes(b"apk-bytes")
+
+    cfg = _make_cfg(
+        tmp_path,
+        ops_vars={"OPS_REMOTE_REPO": "/srv/SailZen", "OPS_SSH_HOST": "1.2.3.4"},
+        prod_vars={"SERVER_DATA_DIR": "data"},
+    )
+    assert cfg.remote_app_releases_dir == "/srv/SailZen/data/app_releases"
+
+    # dry-run 不修改 version.properties
+    manifest = pub.publish_android_apk(
+        cfg,
+        notes="测试演练",
+        existing_apk=fake_apk,
+        dry_run=True,
+        version_props_path=props,
+    )
+    assert manifest["version_code"] == 4
+    assert pub.read_android_version(props).version_code == 3
+
+    # 构建/上传异常时自动回滚 version.properties
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated scp failure")
+
+    monkeypatch.setattr(pub, "_upload_apk_and_manifest", boom)
+    with pytest.raises(RuntimeError, match="simulated scp failure"):
+        pub.publish_android_apk(
+            cfg,
+            existing_apk=fake_apk,
+            dry_run=False,
+            version_props_path=props,
+        )
+    assert pub.read_android_version(props).version_code == 3
 
 
 def test_health_check_probes_cover_upgraded_health_and_tick_routes():

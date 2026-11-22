@@ -1,6 +1,7 @@
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -10,6 +11,21 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+// 从 android/version.properties 读取版本号（发布脚本自动递增 VERSION_CODE）
+val versionPropsFile = rootProject.file("version.properties")
+val versionProps = Properties().apply {
+    if (versionPropsFile.isFile) {
+        versionPropsFile.inputStream().use { load(it) }
+    }
+}
+val appVersionCode = providers.gradleProperty("SAILZEN_VERSION_CODE")
+    .map { it.toInt() }
+    .orElse(versionProps.getProperty("VERSION_CODE")?.trim()?.toIntOrNull() ?: 1)
+    .get()
+val appVersionName = providers.gradleProperty("SAILZEN_VERSION_NAME")
+    .orElse(versionProps.getProperty("VERSION_NAME")?.trim()?.takeIf { it.isNotEmpty() } ?: "0.2.0")
+    .get()
+
 android {
     namespace = "com.sailzen.app"
     compileSdk = 36
@@ -18,36 +34,49 @@ android {
         applicationId = "com.sailzen.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.2.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
-    // 远程服务器地址：release 构建通过 gradle 属性或环境变量注入，打包后锁定不可修改
-    val releaseServerUrl = providers.gradleProperty("SAILZEN_RELEASE_SERVER_URL")
-        .orElse(providers.environmentVariable("SAILZEN_RELEASE_SERVER_URL"))
-        .getOrElse("")
+    // 项目本地 Release 配置（android/keystore.properties，已在 android/.gitignore 中忽略）
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties().apply {
+        if (keystorePropsFile.isFile) {
+            keystorePropsFile.inputStream().use { load(it) }
+        }
+    }
 
-    // release 签名证书：Android 使用自签名证书，无需向 CA 申请，用 keytool 生成 keystore 即可。
-    // 凭据从 gradle 属性（推荐写入 ~/.gradle/gradle.properties）或环境变量注入，与 SERVER_URL 同一模式。
-    val releaseStoreFilePath = providers.gradleProperty("SAILZEN_RELEASE_STORE_FILE")
-        .orElse(providers.environmentVariable("SAILZEN_RELEASE_STORE_FILE"))
-        .getOrElse("")
-    val releaseStorePassword = providers.gradleProperty("SAILZEN_RELEASE_STORE_PASSWORD")
-        .orElse(providers.environmentVariable("SAILZEN_RELEASE_STORE_PASSWORD"))
-        .getOrElse("")
-    val releaseKeyAlias = providers.gradleProperty("SAILZEN_RELEASE_KEY_ALIAS")
-        .orElse(providers.environmentVariable("SAILZEN_RELEASE_KEY_ALIAS"))
-        .getOrElse("")
-    val releaseKeyPassword = providers.gradleProperty("SAILZEN_RELEASE_KEY_PASSWORD")
-        .orElse(providers.environmentVariable("SAILZEN_RELEASE_KEY_PASSWORD"))
-        .getOrElse("")
+    fun resolveReleaseProp(primary: String, fallback: String? = null): String {
+        val candidates = buildList {
+            add(providers.gradleProperty(primary).orNull)
+            add(providers.environmentVariable(primary).orNull)
+            add(keystoreProps.getProperty(primary))
+            if (fallback != null) {
+                add(providers.gradleProperty(fallback).orNull)
+                add(providers.environmentVariable(fallback).orNull)
+                add(keystoreProps.getProperty(fallback))
+            }
+        }
+        return candidates.firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
+    }
+
+    // 远程服务器地址：release 构建从 keystore.properties / gradle 属性 / 环境变量注入，打包后锁定不可修改
+    val releaseServerUrl = resolveReleaseProp("SAILZEN_RELEASE_SERVER_URL").trimEnd('/')
+
+    // release 签名证书：Android 发布包本身即使用 keytool 生成的自签名证书（无需向 CA 申请）。
+    // 推荐放在 android/keystore/ 并通过 android/keystore.properties 配置（均已 gitignore）。
+    val releaseStoreFilePath = resolveReleaseProp("SAILZEN_RELEASE_STORE_FILE", "SAILZEN_STORE_FILE")
+    val releaseStorePassword = resolveReleaseProp("SAILZEN_RELEASE_STORE_PASSWORD", "SAILZEN_STORE_PASSWORD")
+    val releaseKeyAlias = resolveReleaseProp("SAILZEN_RELEASE_KEY_ALIAS", "SAILZEN_KEY_ALIAS")
+    val releaseKeyPassword = resolveReleaseProp("SAILZEN_RELEASE_KEY_PASSWORD", "SAILZEN_KEY_PASSWORD")
     val hasReleaseSigning = releaseStoreFilePath.isNotBlank() && releaseStorePassword.isNotBlank() &&
         releaseKeyAlias.isNotBlank() && releaseKeyPassword.isNotBlank()
 
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(releaseStoreFilePath)
+                val rawFile = File(releaseStoreFilePath)
+                storeFile = if (rawFile.isAbsolute) rawFile else rootProject.file(releaseStoreFilePath)
                 storePassword = releaseStorePassword
                 keyAlias = releaseKeyAlias
                 keyPassword = releaseKeyPassword
@@ -112,9 +141,10 @@ androidComponents {
         variant.outputs.forEach { output ->
             val buildType = variant.buildType
             val version = android.defaultConfig.versionName ?: "0.0.0"
+            val code = android.defaultConfig.versionCode ?: 1
             val timestamp = SimpleDateFormat("MMddHHmm", Locale.getDefault()).format(Date())
             val suffix = if (buildType == "debug") "debug" else "release"
-            output.outputFileName.set("SailZen-${version}-${suffix}-${timestamp}.apk")
+            output.outputFileName.set("SailZen-${version}-vc${code}-${suffix}-${timestamp}.apk")
         }
     }
 }

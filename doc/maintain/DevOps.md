@@ -142,7 +142,7 @@ Copy-Item .env.ops.template .env.ops
 
 - **统一 systemd unit**：已提供 [scripts/sailzen-server.service](../../scripts/sailzen-server.service)（与 `scripts/sailtick.service` 的 `After=sailzen-server.service` 完全一致）。
 - **AI Ops Skill**：已提供 [`.agents/skills/sailzen-ops/SKILL.md`](../../.agents/skills/sailzen-ops/SKILL.md)，供任意新会话 AI 按安全门禁直接调用。
-- **Android 产物分发（Phase 1 扩展）**：后续补充 `scripts/ops/build_android_release.py`，校验签名配置后打包并输出 SHA256 与私有下载链接。
+- **Android 产物分发与 OTA 自动更新**：已提供 `scripts/ops/build_android_release.py`（签名护栏校验与构建）及 `scripts/ops/publish_android_apk.py`（自动递增 `android/version.properties` 的 `VERSION_CODE`、构建 Release APK、经 SCP 原子发布至云端 `data/app_releases/` 并更新 `latest.json`）；服务端通过 `/api/v1/app/release/*` 分发（Bearer 鉴权），Android 端支持启动静默检查与设置页手动更新、SHA-256 校验与 FileProvider 一键拉起安装。
 
 ---
 

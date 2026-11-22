@@ -13,12 +13,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.navigation.compose.rememberNavController
+import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.reminder.ReminderActionReceiver
 import com.sailzen.app.core.rhythm.QuickCaptureTileService
+import com.sailzen.app.core.update.AppUpdateManager
+import com.sailzen.app.core.update.AppUpdateState
+import com.sailzen.app.ui.components.AppUpdateDialog
 import com.sailzen.app.ui.navigation.Routes
 import com.sailzen.app.ui.navigation.SailZenNavGraph
 import com.sailzen.app.ui.theme.SailZenTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -71,6 +79,87 @@ class MainActivity : ComponentActivity() {
                 SailZenNavGraph(
                     navController = navController,
                     openCapture = openCaptureState.value,
+                )
+
+                // 启动静默检查云端 APK 更新（静默失败，不打扰日常使用）
+                var updateState by remember { mutableStateOf<AppUpdateState>(AppUpdateState.Idle) }
+                val updateScope = rememberCoroutineScope()
+                val settings = remember { SettingsManager.get(applicationContext) }
+
+                LaunchedEffect(Unit) {
+                    val baseUrl = settings.serverUrl()
+                    if (baseUrl.isBlank()) return@LaunchedEffect
+                    val token = settings.apiToken()
+                    val ignoredCode = settings.ignoredUpdateVersionCode()
+                    AppUpdateManager.checkForUpdate(baseUrl, token).onSuccess { release ->
+                        if (release != null && release.versionCode != ignoredCode) {
+                            updateState = AppUpdateState.UpdateAvailable(release)
+                        }
+                    }
+                }
+
+                AppUpdateDialog(
+                    state = updateState,
+                    onStartDownload = { release ->
+                        updateScope.launch {
+                            val baseUrl = settings.serverUrl()
+                            val token = settings.apiToken()
+                            updateState = AppUpdateState.Downloading(release, 0L, release.size)
+                            val result = AppUpdateManager.downloadApk(
+                                context = applicationContext,
+                                baseUrl = baseUrl,
+                                token = token,
+                                release = release,
+                            ) { read, total ->
+                                updateState = AppUpdateState.Downloading(release, read, total)
+                            }
+                            result.fold(
+                                onSuccess = { apkFile ->
+                                    val canInstall = AppUpdateManager.canInstallPackages(applicationContext)
+                                    updateState = AppUpdateState.ReadyToInstall(
+                                        release = release,
+                                        apkFile = apkFile,
+                                        needsInstallPermission = !canInstall,
+                                    )
+                                    if (canInstall) {
+                                        runCatching {
+                                            AppUpdateManager.installApk(this@MainActivity, apkFile)
+                                        }.onFailure { err ->
+                                            updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}")
+                                        }
+                                    }
+                                },
+                                onFailure = { err ->
+                                    updateState = AppUpdateState.Error(err.message ?: "下载失败")
+                                },
+                            )
+                        }
+                    },
+                    onInstallNow = { ready ->
+                        if (!AppUpdateManager.canInstallPackages(applicationContext)) {
+                            updateState = ready.copy(needsInstallPermission = true)
+                            runCatching {
+                                startActivity(AppUpdateManager.buildInstallPermissionIntent(this@MainActivity))
+                            }
+                        } else {
+                            updateState = ready.copy(needsInstallPermission = false)
+                            runCatching {
+                                AppUpdateManager.installApk(this@MainActivity, ready.apkFile)
+                            }.onFailure { err ->
+                                updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}")
+                            }
+                        }
+                    },
+                    onOpenPermissionSettings = {
+                        runCatching {
+                            startActivity(AppUpdateManager.buildInstallPermissionIntent(this@MainActivity))
+                        }
+                    },
+                    onSkipVersion = { versionCode ->
+                        updateScope.launch { settings.saveIgnoredUpdateVersionCode(versionCode) }
+                        updateState = AppUpdateState.Idle
+                    },
+                    onDismiss = { updateState = AppUpdateState.Idle },
                 )
             }
         }

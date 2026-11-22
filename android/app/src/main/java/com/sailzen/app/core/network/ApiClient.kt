@@ -27,6 +27,8 @@ object ApiClient {
     private var cachedMoneyApi: MoneyApi? = null
     private var cachedTickKey: String? = null
     private var cachedTickApi: TickApi? = null
+    private var cachedAppUpdateKey: String? = null
+    private var cachedAppUpdateApi: AppUpdateApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -134,6 +136,36 @@ object ApiClient {
             cachedTickApi = it
         }
     }
+
+    /** Android 应用内 OTA 更新 API */
+    @Synchronized
+    fun appUpdateApi(baseUrl: String, token: String): AppUpdateApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedAppUpdateApi?.let { if (cachedAppUpdateKey == key) return it }
+        return buildRetrofit(normalized, token).create(AppUpdateApi::class.java).also {
+            cachedAppUpdateKey = key
+            cachedAppUpdateApi = it
+        }
+    }
+
+    /** 大文件下载专用 OkHttpClient（更长读超时，自动附加 Bearer Token） */
+    fun downloadClient(token: String): OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = if (token.isNotBlank()) {
+                    chain.request().newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
+                } else {
+                    chain.request()
+                }
+                chain.proceed(request)
+            }
+            .build()
 
     /** 构造 WebSocket 地址：ws(s)://host/api/v1/reminder/ws?device_id=..&token=.. */
     fun wsUrl(baseUrl: String, deviceId: String, token: String): String {

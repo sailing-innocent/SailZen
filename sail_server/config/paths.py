@@ -78,3 +78,17 @@ BLOG_STORAGE_DIR: Path = Path(
 SQLITE_DB_PATH: Path = Path(
     os.environ.get("SQLITE_PATH", str(SERVER_DATA_DIR / "sailzen.db"))
 ).resolve()
+
+# Android APK 发布包存储目录
+APP_RELEASES_DIR: Path = Path(
+    os.environ.get("APP_RELEASES_PATH", str(SERVER_DATA_DIR / "app_releases"))
+).resolve()
+
+
+def get_app_releases_dir() -> Path:
+    """动态解析 Android APK 发布包存储目录（支持运行期环境变量覆写）。"""
+    explicit = os.environ.get("APP_RELEASES_PATH", "").strip()
+    if explicit:
+        return Path(explicit).resolve()
+    base = Path(os.environ.get("SERVER_DATA_DIR", str(SERVER_DATA_DIR))).resolve()
+    return (base / "app_releases").resolve()

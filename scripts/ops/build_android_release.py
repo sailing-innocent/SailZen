@@ -37,12 +37,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from scripts.ops.common import configure_console_utf8, format_bytes
 
 ANDROID_DIR = PROJECT_ROOT / "android"
-RELEASE_REQUIRED_SIGNING_KEYS = (
-    "SAILZEN_STORE_FILE",
-    "SAILZEN_STORE_PASSWORD",
-    "SAILZEN_KEY_ALIAS",
-    "SAILZEN_KEY_PASSWORD",
+# 兼容 SAILZEN_RELEASE_*（build.gradle.kts 主用）与 SAILZEN_* 两种前缀
+RELEASE_REQUIRED_SIGNING_KEY_GROUPS = (
+    ("SAILZEN_RELEASE_STORE_FILE", "SAILZEN_STORE_FILE"),
+    ("SAILZEN_RELEASE_STORE_PASSWORD", "SAILZEN_STORE_PASSWORD"),
+    ("SAILZEN_RELEASE_KEY_ALIAS", "SAILZEN_KEY_ALIAS"),
+    ("SAILZEN_RELEASE_KEY_PASSWORD", "SAILZEN_KEY_PASSWORD"),
 )
+RELEASE_REQUIRED_SIGNING_KEYS = tuple(group[0] for group in RELEASE_REQUIRED_SIGNING_KEY_GROUPS)
 
 
 def _read_gradle_properties(path: Path) -> Dict[str, str]:
@@ -65,24 +67,45 @@ def _resolve_prop(key: str, gradle_props: Dict[str, str]) -> str:
 def check_release_guardrails(
     *, allow_debug_signing: bool = False, allow_empty_url: bool = False
 ) -> List[str]:
-    """校验 Release 构建所需配置，返回缺失/告警项列表。"""
+    """校验 Release 构建所需配置，返回缺失/告警项列表。
+
+    配置查找顺序（后者覆盖前者，环境变量最高）：
+    1. ~/.gradle/gradle.properties
+    2. android/gradle.properties
+    3. android/keystore.properties（推荐：项目本地且已 gitignore）
+    4. 进程环境变量
+    """
     merged_props: Dict[str, str] = {}
     merged_props.update(_read_gradle_properties(Path.home() / ".gradle" / "gradle.properties"))
     merged_props.update(_read_gradle_properties(ANDROID_DIR / "gradle.properties"))
+    merged_props.update(_read_gradle_properties(ANDROID_DIR / "keystore.properties"))
 
     issues: List[str] = []
     if not allow_empty_url:
         url = _resolve_prop("SAILZEN_RELEASE_SERVER_URL", merged_props)
         if not url:
             issues.append(
-                "缺少 SAILZEN_RELEASE_SERVER_URL（请在 ~/.gradle/gradle.properties 或环境变量中配置公网服务地址）"
+                "缺少 SAILZEN_RELEASE_SERVER_URL（请在 android/keystore.properties 或 ~/.gradle/gradle.properties 中配置公网服务地址）"
             )
     if not allow_debug_signing:
-        missing = [k for k in RELEASE_REQUIRED_SIGNING_KEYS if not _resolve_prop(k, merged_props)]
+        missing = [
+            primary
+            for primary, fallback in RELEASE_REQUIRED_SIGNING_KEY_GROUPS
+            if not (_resolve_prop(primary, merged_props) or _resolve_prop(fallback, merged_props))
+        ]
         if missing:
             issues.append(
-                f"缺少 Release 签名配置: {', '.join(missing)}（请在 ~/.gradle/gradle.properties 配置，严禁入库）"
+                f"缺少 Release 签名配置: {', '.join(missing)}（可运行 `uv run python scripts/ops/init_android_signing.py --server-url <URL>` 一键生成自签名证书与 android/keystore.properties，严禁入库）"
             )
+        else:
+            store_raw = _resolve_prop("SAILZEN_RELEASE_STORE_FILE", merged_props) or _resolve_prop(
+                "SAILZEN_STORE_FILE", merged_props
+            )
+            store_path = Path(store_raw)
+            if not store_path.is_absolute():
+                store_path = (ANDROID_DIR / store_path).resolve()
+            if not store_path.is_file():
+                issues.append(f"Release 签名证书文件不存在: {store_path}")
     return issues
 
 

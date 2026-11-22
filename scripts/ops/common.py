@@ -256,6 +256,30 @@ class OpsConfig:
         return self.get_ops("OPS_REMOTE_SITE_DIST", f"{self.remote_repo}/site_dist")
 
     @property
+    def remote_data_dir(self) -> str:
+        explicit = self.get_ops("OPS_REMOTE_DATA_DIR", "")
+        if explicit:
+            return explicit.rstrip("/")
+        raw = self.prod_vars.get("SERVER_DATA_DIR", "").strip()
+        if raw:
+            if raw.startswith("/"):
+                return raw.rstrip("/")
+            return f"{self.remote_repo.rstrip('/')}/{raw.lstrip('./').rstrip('/')}"
+        return f"{self.remote_repo.rstrip('/')}/data"
+
+    @property
+    def remote_app_releases_dir(self) -> str:
+        explicit = self.get_ops("OPS_REMOTE_APP_RELEASES_DIR", "")
+        if explicit:
+            return explicit.rstrip("/")
+        raw = self.prod_vars.get("APP_RELEASES_PATH", "").strip()
+        if raw:
+            if raw.startswith("/"):
+                return raw.rstrip("/")
+            return f"{self.remote_repo.rstrip('/')}/{raw.lstrip('./').rstrip('/')}"
+        return f"{self.remote_data_dir}/app_releases"
+
+    @property
     def remote_server_service(self) -> str:
         return self.get_ops("OPS_REMOTE_SERVER_SERVICE", "sailzen-server.service")
 

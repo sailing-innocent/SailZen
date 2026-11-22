@@ -3,6 +3,7 @@ package com.sailzen.app.core.data
 import android.content.Context
 import com.sailzen.app.BuildConfig
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,6 +28,7 @@ class SettingsManager private constructor(private val context: Context) {
         private val KEY_QUIET_START = stringPreferencesKey("quiet_start") // "HH:mm"
         private val KEY_QUIET_END = stringPreferencesKey("quiet_end") // "HH:mm"
         private val KEY_LAST_SYNC_EPOCH = longPreferencesKey("last_sync_epoch")
+        private val KEY_IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
 
         const val DEFAULT_QUIET_START = "23:00"
         const val DEFAULT_QUIET_END = "08:00"
@@ -87,6 +89,9 @@ class SettingsManager private constructor(private val context: Context) {
     suspend fun lastSyncEpoch(): Long =
         context.dataStore.data.first()[KEY_LAST_SYNC_EPOCH] ?: 0L
 
+    suspend fun ignoredUpdateVersionCode(): Int =
+        context.dataStore.data.first()[KEY_IGNORED_UPDATE_VERSION_CODE] ?: 0
+
     // ------------------------------------------------------------------
     // 写入
     // ------------------------------------------------------------------
@@ -112,6 +117,10 @@ class SettingsManager private constructor(private val context: Context) {
 
     suspend fun saveLastSyncEpoch(epochMillis: Long) {
         context.dataStore.edit { it[KEY_LAST_SYNC_EPOCH] = epochMillis }
+    }
+
+    suspend fun saveIgnoredUpdateVersionCode(versionCode: Int) {
+        context.dataStore.edit { it[KEY_IGNORED_UPDATE_VERSION_CODE] = versionCode }
     }
 
     // ------------------------------------------------------------------

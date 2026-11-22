@@ -16,9 +16,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -38,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.R
+import com.sailzen.app.core.update.AppUpdateManager
+import com.sailzen.app.core.update.AppUpdateState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -166,6 +171,177 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 应用内 OTA 更新
+            Text(
+                text = stringResource(R.string.update_section_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(
+                    R.string.update_current_version,
+                    state.currentVersionName,
+                    state.currentVersionCode,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            when (val update = state.updateState) {
+                is AppUpdateState.Idle -> {
+                    OutlinedButton(
+                        onClick = viewModel::checkForUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.update_check_button))
+                    }
+                }
+
+                is AppUpdateState.Checking -> {
+                    Text(
+                        text = stringResource(R.string.update_checking),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
+                is AppUpdateState.UpToDate -> {
+                    Text(
+                        text = stringResource(R.string.update_up_to_date),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = viewModel::checkForUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.update_check_button))
+                    }
+                }
+
+                is AppUpdateState.UpdateAvailable -> {
+                    Text(
+                        text = stringResource(
+                            R.string.update_available_title,
+                            update.release.versionName,
+                            update.release.versionCode,
+                        ),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    if (update.release.size > 0L) {
+                        Text(
+                            text = "安装包大小：${AppUpdateManager.formatFileSize(update.release.size)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (update.release.releaseNotes.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = update.release.releaseNotes,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.downloadAndInstall(update.release) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.update_download_button))
+                    }
+                }
+
+                is AppUpdateState.Downloading -> {
+                    val progress = if (update.totalBytes > 0L) {
+                        (update.bytesRead.toFloat() / update.totalBytes.toFloat()).coerceIn(0f, 1f)
+                    } else {
+                        null
+                    }
+                    val statusText = if (progress != null) {
+                        stringResource(
+                            R.string.update_downloading,
+                            AppUpdateManager.formatFileSize(update.bytesRead),
+                            AppUpdateManager.formatFileSize(update.totalBytes),
+                            (progress * 100).toInt(),
+                        )
+                    } else {
+                        stringResource(
+                            R.string.update_downloading_unknown,
+                            AppUpdateManager.formatFileSize(update.bytesRead),
+                        )
+                    }
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (progress != null) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+
+                is AppUpdateState.ReadyToInstall -> {
+                    Text(
+                        text = if (update.needsInstallPermission) {
+                            stringResource(R.string.update_permission_required)
+                        } else {
+                            stringResource(R.string.update_ready_hint)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (update.needsInstallPermission) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (update.needsInstallPermission) {
+                        OutlinedButton(
+                            onClick = viewModel::openInstallPermissionSettings,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.update_open_permission_settings))
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Button(
+                        onClick = viewModel::triggerInstall,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.update_install_button))
+                    }
+                }
+
+                is AppUpdateState.Error -> {
+                    Text(
+                        text = update.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = viewModel::checkForUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.update_check_button))
+                    }
+                }
+            }
         }
     }
 }

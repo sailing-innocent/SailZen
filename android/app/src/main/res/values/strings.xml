@@ -57,6 +57,24 @@
     <string name="settings_device_id">设备 ID</string>
     <string name="settings_server_url_locked_hint">Release 包已锁定服务器地址，不可修改</string>
 
+    <!-- 应用内更新 -->
+    <string name="update_section_title">应用更新</string>
+    <string name="update_current_version">当前版本：v%1$s (code %2$d)</string>
+    <string name="update_check_button">检查更新</string>
+    <string name="update_checking">正在检查新版本…</string>
+    <string name="update_up_to_date">当前已是最新版本</string>
+    <string name="update_available_title">发现新版本 v%1$s (code %2$d)</string>
+    <string name="update_download_button">下载并更新</string>
+    <string name="update_downloading">正在下载 %1$s / %2$s (%3$d%%)</string>
+    <string name="update_downloading_unknown">正在下载 %1$s…</string>
+    <string name="update_ready_hint">安装包校验通过，点击即可安装</string>
+    <string name="update_install_button">立即安装</string>
+    <string name="update_permission_required">首次应用内更新需授权“安装未知应用”，授权后返回再点安装</string>
+    <string name="update_open_permission_settings">去授权安装权限</string>
+    <string name="update_later">稍后</string>
+    <string name="update_skip_version">忽略此版本</string>
+    <string name="update_not_configured">请先配置服务器地址</string>
+
     <!-- 健康模块 -->
     <string name="health_tab">健康</string>
     <string name="health_home_title">健康</string>

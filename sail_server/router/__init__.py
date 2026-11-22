@@ -6,6 +6,7 @@
 # @version 1.0
 # ---------------------------------
 
+from .app_release import router as app_release_router
 from .file_storage import router as file_storage_router
 from .finance import router as finance_router
 from .health import router as health_router
@@ -16,6 +17,7 @@ from .text import router as text_router
 
 __all__ = [
     "analysis_router",
+    "app_release_router",
     "file_storage_router",
     "finance_router",
     "health_router",

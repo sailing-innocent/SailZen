@@ -41,6 +41,8 @@ def test_core_routers_mounted(monkeypatch):
         "/api/v1/history/event",
         "/api/v1/blog/list",
         "/api/v1/file-storage/list",
+        "/api/v1/app/release/latest",
+        "/api/v1/app/release/latest.apk",
     ]
     missing = [p for p in required_paths if p not in mounted]
     assert not missing, f"核心路由未挂载到 server.py: {missing}"

@@ -115,6 +115,7 @@ class SailServer:
         from sail_server.router.reminder import router as reminder_router
         from sail_server.router.rhythm import router as rhythm_router
         from sail_server.router.tick import router as tick_router
+        from sail_server.router.app_release import router as app_release_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -131,6 +132,7 @@ class SailServer:
                 reminder_router,
                 rhythm_router,
                 tick_router,
+                app_release_router,
             ],
         )
 
