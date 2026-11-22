@@ -1,3 +1,9 @@
+---
+name: opencode-async-api
+description: |
+  代理opencode-compatible api工具的异步API服务手册，可以据此开发功能
+---
+
 # OpenCode 异步任务 API 指南 (SSE 版本)
 
 ## 概述

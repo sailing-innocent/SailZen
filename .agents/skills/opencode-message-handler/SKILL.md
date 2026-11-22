@@ -1,3 +1,9 @@
+---
+name: opencode-message-handler
+description: |
+  代理opencode-compatible api工具的异步消息处理skill，用来处理标准opencode协议SSE消息
+---
+
 # OpenCode Message Handler Skill
 
 ## 概述
