@@ -220,6 +220,24 @@ def test_health_check_probes_cover_upgraded_health_and_tick_routes():
     assert "/tick/messages" in paths
 
 
+def test_deploy_cloud_remote_site_build_sets_ci_and_site_filter(monkeypatch, tmp_path):
+    """验证云端非交互 SSH 构建前端时设置 CI=true（避免 pnpm NO_TTY 报错）且限定 --filter=sail-site。"""
+    from scripts.ops import deploy_cloud
+
+    captured: list[str] = []
+
+    def fake_ssh(cfg, cmd, **kwargs):
+        captured.append(cmd)
+        return None
+
+    monkeypatch.setattr(deploy_cloud, "run_ssh_command", fake_ssh)
+    cfg = _make_cfg(tmp_path, ops_vars={"OPS_SITE_BUILD_MODE": "remote"})
+    swapped = deploy_cloud._deploy_site(cfg, site_build_mode="remote", dry_run=False)
+    assert swapped is True
+    assert len(captured) == 1
+    assert "export CI=true" in captured[0]
+    assert "--filter=sail-site" in captured[0]
+
 def test_check_llm_keys_masking_and_placeholder_detection():
     from scripts.ops.check_llm_keys import is_placeholder_key, mask_api_key
 

@@ -140,9 +140,11 @@ def _deploy_site(cfg: OpsConfig, *, site_build_mode: str, dry_run: bool) -> bool
         remote_prev = shlex.quote(f"{cfg.remote_site_dist}.prev")
         # 若云端 SITE_DIST 就是 site/dist 或指向 site/dist 的软链，直接 build-site 即可；
         # 否则将构建产物同步到 OPS_REMOTE_SITE_DIST 并保留 .prev 供回滚。
+        # 注意：非交互 SSH 无 TTY，必须设置 CI=true 防止 pnpm 报 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY；
+        # 且云端仅构建 site/，使用 --filter=sail-site 避免编译 VSCode 插件原生依赖（keytar/better-sqlite3 等）。
         build_cmd = (
-            f"set -e; cd {repo}; "
-            f"({pnpm_bin} install --frozen-lockfile || {pnpm_bin} install); "
+            f"set -e; export CI=true; cd {repo}; "
+            f"({pnpm_bin} install --filter=sail-site --frozen-lockfile || {pnpm_bin} install --filter=sail-site); "
             f"{pnpm_bin} build-site; "
             f"SRC_REAL=$(readlink -f {repo}/site/dist); "
             f"DST_REAL=$(readlink -f {remote_dist} 2>/dev/null || echo {remote_dist}); "
@@ -153,7 +155,11 @@ def _deploy_site(cfg: OpsConfig, *, site_build_mode: str, dry_run: bool) -> bool
             f"fi"
         )
         if dry_run:
-            print(f"[DryRun] 将在云端执行: cd {cfg.remote_repo} && {cfg.remote_pnpm_bin} build-site（并按需同步至 {cfg.remote_site_dist}）")
+            print(
+                f"[DryRun] 将在云端执行: CI=true cd {cfg.remote_repo} && "
+                f"{cfg.remote_pnpm_bin} install --filter=sail-site && {cfg.remote_pnpm_bin} build-site"
+                f"（并按需同步至 {cfg.remote_site_dist}）"
+            )
             return False
         run_ssh_command(cfg, build_cmd, timeout=300)
         print(f"[Site] 云端 {cfg.remote_pnpm_bin} build-site 完成")
