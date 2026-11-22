@@ -184,6 +184,16 @@ class DBRunLog(TickBase):
     error: Mapped[Optional[str]] = mapped_column(nullable=True)
 
 
+class DBRuntimeState(TickBase):
+    """运行时键值状态（灰度开关、熔断器状态等，跨重启持久化）。"""
+
+    __tablename__ = "st_runtime_state"
+
+    key: Mapped[str] = mapped_column(primary_key=True)
+    value: Mapped[str] = mapped_column(nullable=False)  # JSON
+    updated_at: Mapped[str] = mapped_column(default=_now_iso)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Database
 # ═══════════════════════════════════════════════════════════════════════
@@ -238,16 +248,19 @@ class TickDatabase:
 
     # ── Ticks ─────────────────────────────────────────────────────────
 
-    async def create_tick(self, slot: str, tick_date: str) -> dict:
+    async def create_tick(
+        self, slot: str, tick_date: str, idempotency_key: Optional[str] = None
+    ) -> dict:
         """创建 Tick 实例。幂等键冲突时返回已有实例。"""
+        key = idempotency_key or f"{slot}:{tick_date}"
         async with self.session() as s:
             existing = await s.execute(
-                select(DBTick).where(DBTick.idempotency_key == f"{slot}:{tick_date}")
+                select(DBTick).where(DBTick.idempotency_key == key)
             )
             row = existing.scalar_one_or_none()
             if row:
                 return self._tick_dict(row)
-            row = DBTick(slot=slot, tick_date=tick_date, idempotency_key=f"{slot}:{tick_date}")
+            row = DBTick(slot=slot, tick_date=tick_date, idempotency_key=key)
             s.add(row)
             await s.commit()
             return self._tick_dict(row)
@@ -302,14 +315,23 @@ class TickDatabase:
             result = await s.execute(select(DBTick).where(DBTick.state == "running"))
             return [self._tick_dict(r) for r in result.scalars().all()]
 
-    async def sum_cost_today(self) -> int:
-        today = datetime.now().strftime("%Y-%m-%d")
+    async def sum_cost_today(self, today: Optional[str] = None) -> int:
+        day = today or datetime.now().strftime("%Y-%m-%d")
         async with self.session() as s:
             result = await s.execute(
                 text("SELECT COALESCE(SUM(cost_tokens),0) FROM st_ticks WHERE tick_date = :d"),
-                {"d": today},
+                {"d": day},
             )
             return int(result.scalar() or 0)
+
+    async def sum_cost_usd_today(self, today: Optional[str] = None) -> float:
+        day = today or datetime.now().strftime("%Y-%m-%d")
+        async with self.session() as s:
+            result = await s.execute(
+                text("SELECT COALESCE(SUM(cost_usd),0.0) FROM st_ticks WHERE tick_date = :d"),
+                {"d": day},
+            )
+            return float(result.scalar() or 0.0)
 
     @staticmethod
     def _tick_dict(row: DBTick) -> dict:
@@ -667,6 +689,29 @@ class TickDatabase:
             await s.commit()
             return True
 
+    # ── Runtime State (Canary / Switches) ─────────────────────────────
+
+    async def set_runtime_state(self, key: str, value: Any) -> dict:
+        async with self.session() as s:
+            row = await s.get(DBRuntimeState, key)
+            if not row:
+                row = DBRuntimeState(key=key, value="")
+                s.add(row)
+            row.value = _json.dumps(value, ensure_ascii=False, default=str)
+            row.updated_at = _now_iso()
+            await s.commit()
+            return {"key": key, "updated_at": row.updated_at}
+
+    async def get_runtime_state(self, key: str) -> Optional[Any]:
+        async with self.session() as s:
+            row = await s.get(DBRuntimeState, key)
+            if not row:
+                return None
+            try:
+                return _json.loads(row.value)
+            except (_json.JSONDecodeError, TypeError):
+                return row.value
+
     # ── Stats ─────────────────────────────────────────────────────────
 
     async def get_stats(self) -> dict:
@@ -681,6 +726,7 @@ class TickDatabase:
                 "st_episodes",
                 "st_schedules",
                 "st_run_log",
+                "st_runtime_state",
             ):
                 result = await s.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 stats[table] = int(result.scalar() or 0)

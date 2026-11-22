@@ -37,7 +37,19 @@ sailtick:
       # kimi:
       #   model: kimi-k2.5
       #   base_url: https://api.moonshot.cn/v1
-      #   api_key: ${MOONSHOT_API_KEY}
+      #   api_key: ${KIMI_API_KEY}     # 同时兼容 MOONSHOT_API_KEY
+
+  # ── 灰度开关与熔断（off / shadow / canary / live） ─────────────────
+  # 可通过 CLI (`sailtick canary set <mode>`) 或管理 API (`POST /canary/switch`) 一键热切。
+  canary:
+    mode: live                         # 建议上线顺序: shadow -> canary -> live
+    allow_push: true                   # canary 预设自动关闭手机推送
+    allow_self_dev: true               # canary/shadow 预设自动禁用自我开发
+    max_tickets_per_tick: 2            # canary 预设自动限流至 1
+    allowed_slots: []                  # 空=全部 slot；灰度可限定如 [midday_checkin]
+    ticket_title_prefix: ""            # 灰度可选前缀，如 "[Canary] "
+    auto_downgrade_failures: 3         # 连续失败达到阈值自动熔断降级
+    auto_downgrade_target: shadow      # 熔断目标模式: shadow | off
 
   # ── sail_server（同机部署） ────────────────────────────────────────
   sail_server:

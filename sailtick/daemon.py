@@ -29,6 +29,7 @@ import signal
 from datetime import datetime
 from typing import Any, Optional
 
+from sailtick.canary import CanaryController, CanaryMonitor
 from sailtick.config import SailTickConfig, load_config
 from sailtick.datascan import DataScanner
 from sailtick.db import TickDatabase
@@ -71,6 +72,13 @@ class SailTickDaemon:
         self.notifier = NotificationEngine(self.config.notify, inbox=self.inbox)
         self.handoffs = HandoffManager(self.db, self.config.handoffs_dir)
         self.state = DependencyState()
+        self.canary = CanaryController(self.config.canary, self.db)
+        self.monitor = CanaryMonitor(
+            self.db,
+            self.canary,
+            self.state,
+            daily_token_cap=self.config.llm.daily_token_cap,
+        )
 
         # Phase 5: 自我开发执行器（配置了 repo_dir 才启用）
         dev_runner = None
@@ -92,6 +100,7 @@ class SailTickDaemon:
             handoffs=self.handoffs,
             state=self.state,
             dev_runner=dev_runner,
+            canary=self.canary,
         )
         self.scheduler = TickScheduler(self.db, timezone=self.config.timezone)
 
@@ -111,8 +120,9 @@ class SailTickDaemon:
         logger.info("=" * 60)
 
         await self.db.connect()
+        await self.canary.load()
         stats = await self.db.get_stats()
-        logger.info("DB stats: %s", stats)
+        logger.info("DB stats: %s | canary_mode=%s", stats, self.canary.mode)
 
         # 崩溃恢复：残留 running tick → interrupted
         interrupted = await self.engine.interrupt_running_ticks()
@@ -270,9 +280,17 @@ class SailTickDaemon:
                 "tick_hours": self.config.tick.hours,
                 "timezone": self.config.timezone,
             },
+            "canary": self.canary.get_status(),
             "db_stats": stats,
             "schedules": await self.scheduler.next_run_times(),
             "deps": self.state.snapshot(),
             "current_tick": self.engine.current_tick(),
             "daily_tokens": await self.db.sum_cost_today(),
         }
+
+    async def get_monitor_snapshot(self, window_ticks: int = 50) -> dict:
+        cur = self.engine.current_tick()
+        return await self.monitor.snapshot(
+            window_ticks=window_ticks,
+            active_tick_id=cur["id"] if cur else None,
+        )

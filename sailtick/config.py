@@ -108,6 +108,20 @@ class NotifyConfig:
 
 
 @dataclass
+class CanaryConfig:
+    """灰度开关与熔断配置（off / shadow / canary / live）。"""
+
+    mode: str = "live"
+    allow_push: bool = True
+    allow_self_dev: bool = True
+    max_tickets_per_tick: int = 2
+    allowed_slots: List[str] = field(default_factory=list)
+    ticket_title_prefix: str = ""
+    auto_downgrade_failures: int = 3
+    auto_downgrade_target: str = "shadow"
+
+
+@dataclass
 class SailTickConfig:
     """SailTick 根配置。"""
 
@@ -126,6 +140,7 @@ class SailTickConfig:
     sail_server: SailServerConfig = field(default_factory=SailServerConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
     self_dev: SelfDevConfig = field(default_factory=SelfDevConfig)
+    canary: CanaryConfig = field(default_factory=CanaryConfig)
 
     # 配置文件所在目录（用于解析相对资源，如 prompts/ pipelines/）
     config_dir: str = ""
@@ -195,12 +210,32 @@ def _env_override(cfg: SailTickConfig) -> None:
         cfg.sail_server.auth_token = v
     if v := os.environ.get("SAILTICK_SELF_DEV_REPO"):
         cfg.self_dev.repo_dir = v
-    # LLM key 直挂 provider（与 sail_server 的 MOONSHOT_API_KEY/DEEPSEEK_API_KEY 对齐）
-    for provider in ("kimi", "deepseek", "moonshot"):
-        env_name = "MOONSHOT_API_KEY" if provider == "kimi" else f"{provider.upper()}_API_KEY"
-        if key := os.environ.get(env_name):
-            target = "kimi" if provider == "moonshot" else provider
-            cfg.llm.providers.setdefault(target, LLMProviderConfig()).api_key = key
+    if v := os.environ.get("SAILTICK_MODE"):
+        cfg.canary.mode = v.strip().lower()
+    if v := os.environ.get("SAILTICK_CANARY_PREFIX"):
+        cfg.canary.ticket_title_prefix = v
+    if v := os.environ.get("SAILTICK_CANARY_SLOTS"):
+        cfg.canary.allowed_slots = [s.strip() for s in v.split(",") if s.strip()]
+    if v := os.environ.get("SAILTICK_LLM_DEFAULT"):
+        cfg.llm.default = v.strip().lower()
+    # LLM key 直挂 provider（同时兼容 KIMI_API_KEY / MOONSHOT_API_KEY / DEEPSEEK_API_KEY）
+    kimi_key = os.environ.get("KIMI_API_KEY") or os.environ.get("MOONSHOT_API_KEY")
+    if kimi_key:
+        kimi_cfg = cfg.llm.providers.setdefault("kimi", LLMProviderConfig())
+        if not kimi_cfg.api_key:
+            kimi_cfg.api_key = kimi_key
+        if not kimi_cfg.model:
+            kimi_cfg.model = os.environ.get("KIMI_MODEL") or os.environ.get("MOONSHOT_MODEL") or ""
+        if not kimi_cfg.base_url:
+            kimi_cfg.base_url = (
+                os.environ.get("KIMI_API_BASE") or os.environ.get("MOONSHOT_API_BASE") or ""
+            )
+    if deepseek_key := os.environ.get("DEEPSEEK_API_KEY"):
+        ds_cfg = cfg.llm.providers.setdefault("deepseek", LLMProviderConfig())
+        if not ds_cfg.api_key:
+            ds_cfg.api_key = deepseek_key
+        if not ds_cfg.model and os.environ.get("DEEPSEEK_MODEL"):
+            ds_cfg.model = os.environ["DEEPSEEK_MODEL"]
 
 
 def load_config(path: Optional[str] = None) -> SailTickConfig:
@@ -233,6 +268,7 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
     quiet_raw = notify_raw.get("quiet_hours", {})
     tick_raw = root.get("tick", {})
     dev_raw = root.get("self_dev", {})
+    canary_raw = root.get("canary", {})
 
     cfg = SailTickConfig(
         name=root.get("name", "sailtick"),
@@ -279,6 +315,16 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
                 "protected_paths",
                 ["data", ".env", ".env.dev", ".env.prod", ".env.debug", ".git"],
             ),
+        ),
+        canary=CanaryConfig(
+            mode=canary_raw.get("mode", "live"),
+            allow_push=canary_raw.get("allow_push", True),
+            allow_self_dev=canary_raw.get("allow_self_dev", True),
+            max_tickets_per_tick=canary_raw.get("max_tickets_per_tick", 2),
+            allowed_slots=list(canary_raw.get("allowed_slots", [])),
+            ticket_title_prefix=canary_raw.get("ticket_title_prefix", ""),
+            auto_downgrade_failures=canary_raw.get("auto_downgrade_failures", 3),
+            auto_downgrade_target=canary_raw.get("auto_downgrade_target", "shadow"),
         ),
         config_dir=config_dir,
     )

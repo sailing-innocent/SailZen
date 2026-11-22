@@ -71,4 +71,5 @@ markers = [
     "server: mark test as server",
     "current: mark test as current",
     "app: mark test as app",
+    "live_llm: mark test requiring live LLM API access (e.g. Kimi)",
 ]

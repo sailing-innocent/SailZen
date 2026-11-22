@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from sailtick.config import NotifyConfig
 from sailtick.inbox import TicketInbox
@@ -31,13 +31,19 @@ logger = logging.getLogger(__name__)
 class NotificationEngine:
     """通知引擎。"""
 
-    def __init__(self, config: NotifyConfig, inbox: Optional[TicketInbox] = None):
+    def __init__(
+        self,
+        config: NotifyConfig,
+        inbox: Optional[TicketInbox] = None,
+        clock: Callable[[], datetime] = datetime.now,
+    ):
         self.config = config
         self.inbox = inbox
+        self._clock = clock
         self._recent: Dict[str, datetime] = {}  # title -> last sent
 
     def in_quiet_hours(self, now: Optional[datetime] = None) -> bool:
-        now = now or datetime.now()
+        now = now or self._clock()
         start, end = self.config.quiet_hours.start, self.config.quiet_hours.end
         hour = now.hour
         if start <= end:  # 例如 01:00-06:00
@@ -45,10 +51,11 @@ class NotificationEngine:
         return hour >= start or hour < end  # 跨午夜，例如 23:00-08:00
 
     def _dedup_hit(self, title: str) -> bool:
+        now = self._clock()
         last = self._recent.get(title)
-        if last and (datetime.now() - last).total_seconds() < self.config.dedup_window_seconds:
+        if last and (now - last).total_seconds() < self.config.dedup_window_seconds:
             return True
-        self._recent[title] = datetime.now()
+        self._recent[title] = now
         return False
 
     async def emit(
@@ -61,10 +68,19 @@ class NotificationEngine:
         channel: str = "web",
         expected_reply_hours: Optional[int] = None,
         fallback_assumption: str = "",
+        suppress_push: bool = False,
     ) -> Dict[str, Any]:
         """发出一条通知。返回处置结果。"""
         quiet = self.in_quiet_hours()
-        would_push = priority in ("high", "urgent") and (not quiet or priority == "urgent")
+        effective_priority = priority
+        if suppress_push and priority in ("high", "urgent"):
+            effective_priority = "normal"
+        would_push = (
+            self.config.push_enabled
+            and not suppress_push
+            and effective_priority in ("high", "urgent")
+            and (not quiet or effective_priority == "urgent")
+        )
 
         if self._dedup_hit(title):
             return {"action": "dedup_skipped", "title": title}
@@ -72,9 +88,10 @@ class NotificationEngine:
         result: Dict[str, Any] = {
             "action": "ticket",
             "title": title,
-            "priority": priority,
+            "priority": effective_priority,
             "quiet_hours": quiet,
             "push": would_push,
+            "push_suppressed": suppress_push,
         }
 
         if self.inbox is None:
@@ -88,7 +105,7 @@ class NotificationEngine:
                 ticket_type=ticket_type,
                 title=title,
                 body=content,
-                priority=priority,
+                priority=effective_priority,
                 expected_reply_hours=expected_reply_hours,
                 fallback_assumption=fallback_assumption,
                 channel=channel,

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
@@ -34,9 +34,15 @@ DEFAULT_REPLY_HOURS = {
 class TicketInbox:
     """主库票据客户端。"""
 
-    def __init__(self, api_base: str, auth_token: str = ""):
+    def __init__(
+        self,
+        api_base: str,
+        auth_token: str = "",
+        clock: Callable[[], datetime] = datetime.now,
+    ):
         self.api_base = api_base.rstrip("/")
         self.auth_token = auth_token or os.environ.get("SAILZEN_API_TOKEN", "")
+        self._clock = clock
         self._client: Optional[httpx.AsyncClient] = None
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -106,7 +112,7 @@ class TicketInbox:
         if hours is None:
             hours = DEFAULT_REPLY_HOURS.get(ticket_type, 48)
         expected_by = (
-            (datetime.now() + timedelta(hours=hours)).isoformat() if hours > 0 else None
+            (self._clock() + timedelta(hours=hours)).isoformat() if hours > 0 else None
         )
         payload = {
             "tick_id": tick_id,

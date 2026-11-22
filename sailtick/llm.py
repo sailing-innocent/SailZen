@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -33,6 +34,7 @@ class LLMResponse:
     usage: Optional[Dict[str, Any]] = None
     model: str = ""
     provider: str = ""
+    latency_ms: float = 0.0
 
 
 class BudgetExceededError(RuntimeError):
@@ -51,16 +53,28 @@ class LLMGateway:
         self._clients: Dict[str, httpx.AsyncClient] = {}
         self._cost_sink = cost_sink
         self._tick_tokens = 0
+        self._tick_usd = 0.0
+        self._cost_recorded_by_sink = False
         self._budget_exceeded = False
 
     def begin_tick(self) -> None:
         """每个 Tick 开始时重置计数。"""
         self._tick_tokens = 0
+        self._tick_usd = 0.0
+        self._cost_recorded_by_sink = False
         self._budget_exceeded = False
 
     @property
     def tick_tokens(self) -> int:
         return self._tick_tokens
+
+    @property
+    def tick_usd(self) -> float:
+        return self._tick_usd
+
+    @property
+    def cost_recorded_by_sink(self) -> bool:
+        return self._cost_recorded_by_sink
 
     @property
     def budget_exceeded(self) -> bool:
@@ -95,40 +109,70 @@ class LLMGateway:
         self, messages: list, provider: str, **kwargs: Any
     ) -> LLMResponse:
         prov_cfg = self._provider_config(provider)
-        api_key = prov_cfg.api_key or os.environ.get(f"{provider.upper()}_API_KEY", "")
+        if provider == "kimi":
+            api_key = (
+                prov_cfg.api_key
+                or os.environ.get("KIMI_API_KEY", "")
+                or os.environ.get("MOONSHOT_API_KEY", "")
+            )
+        else:
+            api_key = prov_cfg.api_key or os.environ.get(f"{provider.upper()}_API_KEY", "")
         if not api_key:
             raise ValueError(f"No API key configured for provider: {provider}")
 
         model = prov_cfg.model or self._default_model(provider)
         base_url = prov_cfg.base_url or self._default_base_url(provider)
 
+        # Kimi Coding Plan key（sk-kimi-...）默认路由至 api.kimi.com/coding/v1
+        if provider == "kimi" and api_key.startswith("sk-kimi-") and not prov_cfg.base_url:
+            base_url = "https://api.kimi.com/coding/v1"
+            if not prov_cfg.model:
+                model = "kimi-for-coding"
+
+        temperature = kwargs.get("temperature", 0.3)
+        # kimi-k2.5 / kimi-for-coding 等推理模型接口要求 temperature=1（传 0.3 会返回 400）
+        if "k2.5" in model.lower() or "kimi-for-coding" in model.lower():
+            temperature = 1.0
+
         payload = {
             "model": model,
             "messages": messages,
-            "temperature": kwargs.get("temperature", 0.3),
+            "temperature": temperature,
             "max_tokens": kwargs.get("max_tokens", 2000),
         }
 
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        if "api.kimi.com/coding" in base_url:
+            headers["User-Agent"] = "KimiCLI/1.0"
         client = self._get_client(provider)
         url = f"{base_url.rstrip('/')}/chat/completions"
 
         logger.debug("LLM request to %s: model=%s", provider, model)
+        t0 = time.perf_counter()
         response = await client.post(url, json=payload, headers=headers)
         response.raise_for_status()
+        latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         data = response.json()
 
         content = data["choices"][0]["message"]["content"] if data.get("choices") else ""
         usage = data.get("usage") or {}
         total_tokens = usage.get("total_tokens", 0)
 
-        result = LLMResponse(content=content, usage=usage, model=model, provider=provider)
+        result = LLMResponse(
+            content=content,
+            usage=usage,
+            model=model,
+            provider=provider,
+            latency_ms=latency_ms,
+        )
 
         # 记账
         self._tick_tokens += total_tokens
         usd = self.estimate_cost(result)
+        self._tick_usd += usd
         if self._cost_sink is not None:
             await self._cost_sink(total_tokens, usd)
+            self._cost_recorded_by_sink = True
 
         # 软上限检查
         if self._tick_tokens > self.config.per_tick_token_cap:

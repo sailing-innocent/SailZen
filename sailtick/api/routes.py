@@ -114,6 +114,60 @@ def create_app(daemon: Any) -> Litestar:
     async def schedules() -> List[Dict[str, Any]]:
         return await daemon.scheduler.next_run_times()
 
+    # ── 灰度一键开关与监控 ─────────────────────────────────────────────
+
+    @get("/canary")
+    async def canary_status() -> Dict[str, Any]:
+        return daemon.canary.get_status()
+
+    @post("/canary/switch")
+    async def canary_switch(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body = data or {}
+        mode = body.get("mode")
+        if not mode:
+            return {"error": "mode is required (off|shadow|canary|live)"}
+        reason = str(body.get("reason", ""))
+        actor = str(body.get("actor", "api"))
+        overrides = {
+            k: v
+            for k, v in body.items()
+            if k not in ("mode", "reason", "actor")
+        }
+        try:
+            return await daemon.canary.switch(mode, reason=reason, actor=actor, **overrides)
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    @post("/canary/kill")
+    async def canary_kill(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body = data or {}
+        return await daemon.canary.kill(
+            reason=str(body.get("reason", "api kill-switch")),
+            actor=str(body.get("actor", "api")),
+        )
+
+    @post("/canary/resume")
+    async def canary_resume(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body = data or {}
+        target = str(body.get("mode", "canary"))
+        reason = str(body.get("reason", "api resume"))
+        actor = str(body.get("actor", "api"))
+        overrides = {
+            k: v
+            for k, v in body.items()
+            if k not in ("mode", "reason", "actor")
+        }
+        try:
+            return await daemon.canary.resume(
+                target_mode=target, reason=reason, actor=actor, **overrides
+            )
+        except ValueError as exc:
+            return {"error": str(exc)}
+
+    @get("/monitor")
+    async def monitor(window_ticks: int = 50) -> Dict[str, Any]:
+        return await daemon.get_monitor_snapshot(window_ticks=window_ticks)
+
     router = Router(
         path="/",
         route_handlers=[
@@ -129,6 +183,11 @@ def create_app(daemon: Any) -> Litestar:
             list_profile,
             cost,
             schedules,
+            canary_status,
+            canary_switch,
+            canary_kill,
+            canary_resume,
+            monitor,
         ],
     )
     return Litestar(route_handlers=[router], debug=False)

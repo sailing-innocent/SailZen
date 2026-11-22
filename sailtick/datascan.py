@@ -88,6 +88,11 @@ class DataScanner:
         weight = await self._fetch(
             "/health/body_data/series", {"metric": "weight", "start": since}
         )
+        if weight is None:
+            # 兼容 sail_server kebab-case 路由 /api/v1/health/body-data
+            weight = await self._fetch(
+                "/health/body-data", {"metric": "weight", "start": since}
+            )
         sleep = await self._fetch("/health/sleep", {"start": since, "limit": 20})
         diet = await self._fetch("/health/diet", {"start": since, "limit": 20})
         exercise = await self._fetch("/health/exercise", {"start": since, "limit": 20})

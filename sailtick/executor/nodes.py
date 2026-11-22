@@ -145,7 +145,7 @@ class ConditionNode(NodeExecutor):
             logger.warning("condition eval failed (%s): %s", expr, exc)
             value = False
         nxt = ctx.params.get("true_next", []) if value else ctx.params.get("false_next", [])
-        return NodeResult.ok(data={"value": bool(value)}, next_nodes=list(nxt))
+        return NodeResult(success=True, data={"value": bool(value)}, next_nodes=list(nxt))
 
     def _eval(self, expr: str, upstream: Dict[str, Any]) -> Any:
         # 支持 "<path> | default(x) > y" 的简易子集
@@ -190,10 +190,12 @@ class ConditionNode(NodeExecutor):
             if not part or part == "upstream":
                 continue
             if isinstance(cur, dict):
-                cur = cur.get(part, default)
+                if part not in cur:
+                    return default
+                cur = cur[part]
             else:
                 return default
-        return default
+        return cur if cur is not None else default
 
 
 class HandoffWriteNode(NodeExecutor):
