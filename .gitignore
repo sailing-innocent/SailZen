@@ -42,8 +42,11 @@ _tmp*
 .env.dev
 .env.debug
 .env.prod 
+.env.ops
 .env.development
 .env.production
+*.dump
+*.sql.gz
 *.bot.yaml
 .venv
 __pycache__

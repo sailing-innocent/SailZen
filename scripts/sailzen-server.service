@@ -1,0 +1,40 @@
+# systemd unit: SailZen 核心后端服务（sail_server + 静态托管 site_dist）
+#
+# 与 scripts/sailtick.service 的 After=sailzen-server.service 保持一致。
+#
+# 安装步骤（在云端 Linux 服务器执行）:
+#   sudo cp scripts/sailzen-server.service /etc/systemd/system/sailzen-server.service
+#   # 按实际用户名与路径修改 User / WorkingDirectory / ExecStart 中的路径
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now sailzen-server.service
+#   sudo systemctl status sailzen-server.service --no-pager
+#
+# 说明:
+#   - 无参数运行 server.py 默认加载仓库根目录下的 .env.prod（ENV=prod）
+#   - 建议在 /etc/sudoers.d/sailzen-ops 仅放行运维用户免密执行:
+#       ubuntu ALL=(ALL) NOPASSWD: /bin/systemctl restart sailzen-server.service, \
+#         /bin/systemctl status sailzen-server.service, \
+#         /bin/systemctl restart sailtick.service, \
+#         /bin/systemctl status sailtick.service, \
+#         /bin/systemctl stop sailtick.service
+
+[Unit]
+Description=SailZen Core API & Web Server (Litestar)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/repos/SailZen
+ExecStart=/home/ubuntu/.local/bin/uv run /home/ubuntu/repos/SailZen/server.py
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+Environment="PYTHONUNBUFFERED=1"
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sailzen-server
+
+[Install]
+WantedBy=multi-user.target

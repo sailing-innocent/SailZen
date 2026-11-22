@@ -67,7 +67,7 @@ if project_root not in sys.path:
 # 设置 PostgreSQL 客户端编码环境变量
 os.environ["PGCLIENTENCODING"] = "UTF8"
 
-# 导入所有 ORM 模型
+# 导入所有主库 ORM 模型（与 sail_server/db.py 保持一致；sailtick 隔离库不在 ORMBase 中）
 from sailzen_orm.orm_base import ORMBase
 from sailzen_orm import health
 from sailzen_orm import finance
@@ -75,6 +75,9 @@ from sailzen_orm import life
 from sailzen_orm import history
 from sailzen_orm import text as text_module
 from sailzen_orm import necessity
+from sailzen_orm import reminder
+from sailzen_orm import rhythm
+from sailzen_orm import tick
 
 
 # 配置日志

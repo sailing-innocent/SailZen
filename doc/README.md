@@ -1,180 +1,125 @@
 # SailZen 文档中心
 
-> **版本**: v2.0 | **更新**: 2026-03-01
+> **版本**: v3.0 | **更新**: 2026-11-22 | **状态**: ✅ 权威导航入口
+
+本目录收录 SailZen 全栈项目的战略规划、系统设计、运维部署、接口参考与历史归档文档。状态约定：
+- ✅ 活跃有效 · 🔄 迭代中 · 📦 历史/归档参考 · ⛔ 已停用（请勿继续开发）
 
 ---
 
-## 📚 快速导航
-
-### 核心文档
+## 1. 核心入口与战略规划
 
 | 文档 | 说明 | 状态 |
-|------|------|------|
-| [PRD.md](./PRD.md) | 产品需求文档 (完整版) | ✅ v2.0 |
-| [TESTING.md](./TESTING.md) | 测试指南与用例 | ✅ |
-| [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) | 已知问题与解决方案 | ✅ |
-| [refact_todo.md](./refact_todo.md) | 代码重构计划 | 🔄 进行中 |
-
-### 开发文档
-
-| 文档 | 说明 |
-|------|------|
-| [dev/README.md](./dev/README.md) | 开发环境搭建与规范 |
-| [dev/text-analysis-system-todo.md](./dev/text-analysis-system-todo.md) | 文本分析系统开发计划 |
-| [environment_variables.md](./environment_variables.md) | 环境变量配置参考 |
-
-### 架构设计
-
-| 文档 | 说明 |
-|------|------|
-| [design/overview.md](./design/overview.md) | 系统架构总览 |
-| [design/android_app/README.md](./design/android_app/README.md) | Android App 设计 (提醒反馈闭环/随手采集) 📋 |
-| [design/vscode_plugin_architecture.md](./design/vscode_plugin_architecture.md) | VSCode 插件架构指南 |
-| [design/text-analysis-system.md](./design/text-analysis-system.md) | AI文本分析系统设计 |
-| [design/outline-extraction.md](./design/outline-extraction.md) | 大纲提取功能设计 |
-| design/agent-system.md (./design/agent-system.md) | Agent系统设计 |
-| design/agent-system/sailtick.md (./design/agent-system/sailtick.md) | SailTick 减肥监督教练设计 (Tick 状态机/票据协议/记忆模型) 🔄 |
-| design/agent-system/sailtick-migration-notes.md (./design/agent-system/sailtick-migration-notes.md) | SailTick 迁移说明 (旧 autonomous_agent 缺陷复现记录) |
-
-### API 文档
-
-| 模块 | 文档 | 说明 |
-|------|------|------|
-| API 概览 | [api/README.md](./api/README.md) | API 文档入口与通用规范 |
-| 财务管理 | [api/finance.md](./api/finance.md) | 账户、交易、预算 API |
-| 健康管理 | [api/health.md](./api/health.md) | 体重、运动、计划 API |
-| 文本管理 | [api/text.md](./api/text.md) | 作品、版本、章节 API |
-| AI 分析 | [api/analysis.md](./api/analysis.md) | 大纲、人物、设定 API |
-| 物资管理 | [api/necessity.md](./api/necessity.md) | 库存、住所、行程 API |
-
-### 业务模块设计
-
-| 模块 | 文档 | 状态 |
-|------|------|------|
-| 财务管理 | [design/manager/life_budget.md](./design/manager/life_budget.md) | ✅ 已实现 |
-| 项目管理 | [design/manager/project.md](./design/manager/project.md) | ✅ 已实现 |
-| 健康管理 | [design/manager/health.md](./design/manager/health.md) | 🔶 部分实现 |
-| 物资管理 | [design/manager/necessity.md](./design/manager/necessity.md) | ✅ 已实现 |
-| 文本管理 | [design/manager/text.md](./design/manager/text.md) | ✅ 已实现 |
-| 节奏管理(Rhythm) | [design/manager/rhythm.md](./design/manager/rhythm.md) | ✅ M1/M2 已实现 |
-
-### 运维文档
-
-| 文档 | 说明 |
-|------|------|
-| [maintain/Database.md](./maintain/Database.md) | 数据库维护指南 |
-| [maintain/TestCase.md](./maintain/TestCase.md) | 测试用例维护 |
-| [maintain/RhythmUpgradeHandbook.md](./maintain/RhythmUpgradeHandbook.md) | Rhythm-PEMS 合并升级手册 |
+|---|---|---|
+| [AGENTS.md](../AGENTS.md) | **AI 协作总规范**（产品全貌、双环境边界、红线约束、常用命令） | ✅ 活跃 |
+| [README.md](../README.md) | 项目根目录总览与各端维护速查 | ✅ 活跃 |
+| [ROADMAP.md](./ROADMAP.md) | **短期技术债、AI 迭代循环与长期路线图（M0–M4）** | 🔄 迭代中 |
+| [SailZen3.0.md](./SailZen3.0.md) | SailZen 3.0 愿景：个人影子助手与“笔记/数据库分离”理念 | ✅ 活跃 |
+| [PRD.md](./PRD.md) | 产品需求文档（早期 v2.0 完整功能基线，部分规划已演进） | 📦 参考 |
 
 ---
 
-## 📁 文档结构
+## 2. 环境、运维与测试（DevOps）
 
-```
+| 文档 | 说明 | 状态 |
+|---|---|---|
+| [maintain/DevOps.md](./maintain/DevOps.md) | **双环境架构与 AI 自动化运维手册**（Win 调试机 vs 云端 Linux、备份/还原/自动部署闭环） | 🔄 迭代中 |
+| [ENV.md](./ENV.md) | 环境变量完整参考（`.env.dev` / `.env.debug` / `.env.prod`） | ✅ 活跃 |
+| [maintain/DeployPostgres.md](./maintain/DeployPostgres.md) | 云端 Ubuntu PostgreSQL 17 安装、systemd 配置与排障手册 | ✅ 参考 |
+| [DATABASE.md](./DATABASE.md) | 核心业务表与 Rhythm/Reminder 字段速记 | ✅ 参考 |
+| [TESTING.md](./TESTING.md) | TypeScript / Python / LLM 测试命令指南 | ✅ 活跃 |
+| [maintain/RhythmUpgradeHandbook.md](./maintain/RhythmUpgradeHandbook.md) | Rhythm-PEMS 合并升级手册 | ✅ 已完成 |
+| [maintain/SailTickAcceptance.md](./maintain/SailTickAcceptance.md) | SailTick 云端部署与 Day-1 验收手册 | ✅ 活跃 |
+
+---
+
+## 3. 系统架构与各端设计
+
+### 总体与客户端
+
+| 文档 | 说明 | 状态 |
+|---|---|---|
+| [design/overview.md](./design/overview.md) | 系统总体架构与云端/本地部署拓扑 | ✅ 活跃 |
+| [design/android_app/README.md](./design/android_app/README.md) | Android App 架构（提醒反馈闭环、随手采集、WebSocket） | ✅ 活跃 |
+| [design/android_app/ACCEPTANCE_M1.md](./design/android_app/ACCEPTANCE_M1.md) | Android App M1 构建与验收指南 | ✅ 活跃 |
+| [AndroidHealthPageHandbook.md](./AndroidHealthPageHandbook.md) | Android 健康管理页面与后端联动实施手册 | ✅ 活跃 |
+| [design/sail_site/Page.md](./design/sail_site/Page.md) | Web 管理台（`site/`）页面设计 | ✅ 参考 |
+| [design/sail_server/API.md](./design/sail_server/API.md) | 后端 API 总体设计规范 | ✅ 参考 |
+| [design/vscode_plugin/notedoc.md](./design/vscode_plugin/notedoc.md) | VSCode 笔记插件（Dendron 衍生）文档模型 | ✅ 参考 |
+| [design/vscode_plugin/note-page-elements.md](./design/vscode_plugin/note-page-elements.md) | VSCode 插件笔记页面元素说明 | ✅ 参考 |
+| [design/vscode_plugin/schema.md](./design/vscode_plugin/schema.md) | VSCode 插件笔记 Schema 说明 | ✅ 参考 |
+
+### Agent 系统（SailTick）
+
+| 文档 | 说明 | 状态 |
+|---|---|---|
+| [design/agent-system/sailtick.md](./design/agent-system/sailtick.md) | SailTick 减肥监督教练设计（Tick 状态机、票据协议、4 层记忆） | 🔄 活跃 |
+| [design/agent-system/sailtick-testing.md](./design/agent-system/sailtick-testing.md) | SailTick 四层测试与灰度监控体系（单测/轨迹回放/实时沙盒/熔断） | 🔄 活跃 |
+| [design/agent-system/sailtick-migration-notes.md](./design/agent-system/sailtick-migration-notes.md) | 从旧 `autonomous_agent` 迁移至 SailTick 的缺陷复盘 | 📦 参考 |
+
+---
+
+## 4. 业务模块设计与 API 文档
+
+### 业务领域设计（`doc/design/sail_server/manager/`）
+
+| 模块 | 设计文档 | API 参考 | 状态 |
+|---|---|---|---|
+| 模块总览 | [manager/README.md](./design/sail_server/manager/README.md) | [api/README.md](./api/README.md) | ✅ |
+| 财务管理 | [manager/life_budget.md](./design/sail_server/manager/life_budget.md) | [api/finance.md](./api/finance.md) | ✅ 已实现 |
+| 健康管理 | [manager/health.md](./design/sail_server/manager/health.md) | [api/health.md](./api/health.md) | ✅ 已实现 |
+| 节奏管理 (Rhythm) | [manager/rhythm.md](./design/sail_server/manager/rhythm.md) | — | ✅ M1/M2 已实现 |
+| 物资管理 | [manager/necessity.md](./design/sail_server/manager/necessity.md) | [api/necessity.md](./api/necessity.md) | ✅ 已实现 |
+| 文本管理 | [manager/text.md](./design/sail_server/manager/text.md) | [api/text.md](./api/text.md) | ✅ 已实现 |
+| 天气服务 | [manager/weather.md](./design/sail_server/manager/weather.md) | — | ✅ 已实现 |
+
+---
+
+## 5. 历史归档与已停用支线（⛔ 请勿作为现行规范）
+
+| 文档 | 说明 | 状态 |
+|---|---|---|
+| [design/lark_bot/bot-self-update.md](./design/lark_bot/bot-self-update.md) | 飞书机器人自更新设计（已被 Android App 替代） | ⛔ 已停用 |
+| [design/lark_bot/opencode_sse_client.md](./design/lark_bot/opencode_sse_client.md) | 飞书机器人 OpenCode SSE 客户端设计 | ⛔ 已停用 |
+| [design/agent-system/autonomous-agent.md](./design/agent-system/autonomous-agent.md) | 旧版 Autonomous Agent 设计（代码已归档至 `archive/`，由 SailTick 取代） | 📦 已归档 |
+| [design/agent-system/shadow-agent-v1-deprecated.md](./design/agent-system/shadow-agent-v1-deprecated.md) | 影子助手 v1 早期草案 | 📦 已废弃 |
+
+---
+
+## 6. 文档目录树
+
+```text
 doc/
-├── README.md                          # 本文档 - 文档中心入口
-├── PRD.md                             # 产品需求文档 (完整版)
-├── TESTING.md                         # 测试指南
-├── KNOWN_ISSUES.md                    # 已知问题追踪
-├── refact_todo.md                     # 代码重构计划
-├── environment_variables.md           # 环境变量配置
-│
-├── api/                               # API 接口文档
-│   ├── README.md                      # API 文档入口
-│   ├── finance.md                     # 财务管理 API
-│   ├── health.md                      # 健康管理 API
-│   ├── text.md                        # 文本管理 API
-│   ├── analysis.md                    # AI 分析 API
-│   ├── project.md                     # 项目管理 API
-│   └── necessity.md                   # 物资管理 API
-│
-├── design/                            # 架构设计文档
-│   ├── overview.md                    # 系统架构总览
-│   ├── android_app/                   # Android App 设计
-│   │   └── README.md                  # 定位/提醒反馈闭环/推送通道/服务端配套
-│   ├── text-analysis-system.md        # AI文本分析系统设计
-│   ├── outline-extraction.md          # 大纲提取设计
-│   ├── agent-system.md                # Agent系统设计
-│   └── manager/                       # 业务模块设计
-│       ├── README.md
-│       ├── life_budget.md             # 财务管理
-│       ├── project.md                 # 项目管理
-│       ├── health.md                  # 健康管理
-│       ├── necessity.md               # 物资管理
-│       ├── rhythm.md                  # 节奏管理（生活/工作/事业统一编排）
-│       └── text.md                    # 文本管理
-│
-├── dev/                               # 开发文档
-│   ├── README.md                      # 开发环境指南
-│   ├── text-analysis-system-todo.md   # 文本分析开发计划
-│   ├── phase2.2-2.3-acceptance-report.md
-│   └── archived/                      # 归档文档
-│
-└── maintain/                          # 运维文档
-    ├── Database.md
-    └── TestCase.md
+├── README.md                            # 本文档（文档中心入口）
+├── ROADMAP.md                           # 短期技术债、AI 迭代循环与长期路线图
+├── SailZen3.0.md                        # SailZen 3.0 愿景
+├── PRD.md                               # 产品需求文档（v2.0 基线）
+├── ENV.md                               # 环境变量配置参考
+├── DATABASE.md                          # 核心数据表速记
+├── TESTING.md                           # 测试指南
+├── AndroidHealthPageHandbook.md         # Android 健康模块实施手册
+├── api/                                 # 模块 API 参考
+│   ├── README.md
+│   ├── finance.md / health.md / necessity.md / text.md
+├── design/                              # 架构与模块设计
+│   ├── overview.md                      # 系统架构总览
+│   ├── agent-system/                    # SailTick（活跃）与旧 Agent（归档）
+│   ├── android_app/                     # Android App 设计与验收
+│   ├── sail_server/                     # 后端 API 与业务模块设计 (manager/)
+│   ├── sail_site/                       # Web 前端页面设计
+│   ├── vscode_plugin/                   # VSCode 笔记插件设计
+│   └── lark_bot/                        # [⛔ 已停用] 旧飞书机器人设计
+└── maintain/                            # 部署与运维手册
+    ├── DevOps.md                        # 双环境架构与 AI 自动化运维手册
+    ├── DeployPostgres.md                # PostgreSQL & systemd 部署指南
+    ├── RhythmUpgradeHandbook.md         # Rhythm 合并升级手册
+    └── SailTickAcceptance.md            # SailTick 部署验收手册
 ```
 
 ---
 
-## 🎯 按角色导航
+## 7. 文档维护约定
 
-### 如果你是产品经理/设计师
-1. 阅读 [PRD.md](./PRD.md) 了解完整产品需求
-2. 查看 [design/overview.md](./design/overview.md) 了解系统架构
-3. 参考各模块设计文档了解详细设计
-
-### 如果你是后端开发者
-1. 阅读 [dev/README.md](./dev/README.md) 搭建开发环境
-2. 查看 [design/overview.md](./design/overview.md) 了解后端架构
-3. 参考各模块 [API 文档](./api/) 了解接口规范
-4. 查看 [TESTING.md](./TESTING.md) 了解测试规范
-5. 参考 [refact_todo.md](./refact_todo.md) 了解重构计划
-
-### 如果你是前端开发者
-1. 阅读 [dev/README.md](./dev/README.md) 搭建开发环境
-2. 查看 [PRD.md](./PRD.md) 了解功能需求
-3. 参考各模块 [API 文档](./api/) 了解接口调用
-4. 查看前端 API 客户端代码 `site/src/lib/api/`
-5. 参考各模块设计文档了解UI设计
-
-### 如果你是测试工程师
-1. 阅读 [TESTING.md](./TESTING.md) 了解测试框架
-2. 查看 [maintain/TestCase.md](./maintain/TestCase.md) 了解测试用例
-3. 参考 [KNOWN_ISSUES.md](./KNOWN_ISSUES.md) 了解已知问题
-
----
-
-## 🔄 文档更新规范
-
-### 更新频率
-- **PRD.md**: 需求变更时立即更新
-- **架构文档**: 架构调整时更新
-- **开发文档**: 开发过程中持续更新
-- **测试文档**: 新功能发布前更新
-
-### 版本标记
-文档头部应包含版本信息：
-```markdown
-> **版本**: v2.0 | **更新**: 2026-03-01 | **状态**: 已完成
-```
-
-状态标记：
-- ✅ 已完成
-- 🔄 进行中
-- 📋 规划中
-- ⏸️ 暂停
-
----
-
-## 📝 贡献指南
-
-如需更新文档：
-1. 确保文档结构符合本规范
-2. 更新版本信息和日期
-3. 在变更记录中说明修改内容
-4. 保持与其他文档的链接一致性
-
----
-
-*本文档由 AI Agent 维护，如有疑问请参考 PRD.md 或联系开发团队。*
+- **代码改，文档跟着改**：新增/下线路由、环境变量、部署步骤或模块状态变化时，同步更新 `AGENTS.md`、`doc/ENV.md`、`doc/maintain/DevOps.md` 及对应模块文档。
+- **不留死链**：删除或归档文档时，必须同步更新本目录索引。
+- **废弃须明标**：停用功能应在文档顶部标注 `⛔ 已停用` 并说明替代方案，避免误导后续 AI 与开发者。

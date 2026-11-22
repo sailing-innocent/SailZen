@@ -120,6 +120,7 @@ class SailServer:
             path=self.api_endpoint,
             route_handlers=[
                 health_check,
+                health_router,
                 finance_router,
                 history_router,
                 text_router,
