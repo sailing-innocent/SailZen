@@ -188,6 +188,19 @@ def create_app(daemon: Any) -> Litestar:
     async def monitor(window_ticks: int = 50) -> Dict[str, Any]:
         return await daemon.get_monitor_snapshot(window_ticks=window_ticks)
 
+    # ── AI Trace 查询（本地隔离库权威副本） ────────────────────────────
+
+    @get("/traces")
+    async def list_traces(
+        limit: int = 50, slot: Optional[str] = None, status: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        return await daemon.db.list_traces(limit=limit, slot=slot, status=status)
+
+    @get("/traces/{trace_id:str}")
+    async def get_trace(trace_id: str) -> Dict[str, Any]:
+        trace = await daemon.db.get_trace(trace_id)
+        return trace or {"error": f"trace {trace_id} not found"}
+
     router = Router(
         path="/",
         route_handlers=[
@@ -208,6 +221,8 @@ def create_app(daemon: Any) -> Litestar:
             canary_kill,
             canary_resume,
             monitor,
+            list_traces,
+            get_trace,
         ],
     )
     return Litestar(route_handlers=[router], debug=False)

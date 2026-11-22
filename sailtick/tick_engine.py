@@ -38,6 +38,7 @@ from sailtick.llm import LLMGateway
 from sailtick.memory import AgentMemory
 from sailtick.notify import NotificationEngine
 from sailtick.state import DependencyState
+from sailtick.tracer import TickTraceRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,19 @@ class TickEngine:
         self._current_tick: Optional[dict] = None
         self._prompts_dir = config.prompts_dir
 
+    async def _persist_and_report_trace(self, trace_dict: Dict[str, Any]) -> None:
+        """本地落库 + 非致命上报至 sail_server（任何异常均不影响 Tick 主流程）。"""
+        try:
+            if hasattr(self.db, "save_trace") and getattr(self.db, "_engine", None) is not None:
+                await self.db.save_trace(trace_dict)
+        except Exception as exc:
+            logger.warning("Trace local save failed (non-fatal): %s", exc)
+        try:
+            if hasattr(self.inbox, "report_ai_trace"):
+                await self.inbox.report_ai_trace(trace_dict)
+        except Exception as exc:
+            logger.debug("Trace remote report failed (non-fatal): %s", exc)
+
     # ── 入口 ──────────────────────────────────────────────────────────
 
     async def run_tick(
@@ -144,38 +158,82 @@ class TickEngine:
         idempotency_suffix: Optional[str] = None,
     ) -> dict:
         """跑完整的一个 Tick。可被 scheduler 回调、CLI、管理 API 调用。"""
+        now = self._clock()
+        tick_date = tick_date or now.strftime("%Y-%m-%d")
+        mode = self.canary.mode if self.canary is not None else "live"
+        raw_params = dict(params or {})
+        trigger_source = str(
+            raw_params.get("trigger_source")
+            or ("catch_up" if catch_up else ("scheduler" if schedule_id else "manual"))
+        )
+
+        tracer = TickTraceRecorder(
+            slot=slot,
+            tick_date=tick_date,
+            mode=mode,
+            trigger_source=trigger_source,
+            clock=self._clock,
+        )
+        tracer.meta["schedule_id"] = schedule_id
+        tracer.meta["catch_up"] = catch_up
+
         if self.canary is not None:
             allowed, pause_reason = self.canary.should_run_slot(slot)
             if not allowed:
                 logger.info("Tick PAUSED slot=%s mode=%s reason=%s", slot, self.canary.mode, pause_reason)
+                tracer.record_instant_span(
+                    "canary",
+                    "canary_gate",
+                    status="skipped",
+                    output_summary=f"paused: {pause_reason}",
+                    payload={"mode": self.canary.mode, "reason": pause_reason},
+                )
                 await self.memory.save_episode(
                     None,
                     "canary_paused",
                     {"slot": slot, "mode": self.canary.mode, "reason": pause_reason},
                 )
+                trace_dict = tracer.finish("paused", summary=f"Canary paused: {pause_reason}")
+                await self._persist_and_report_trace(trace_dict)
                 return {
                     "status": "paused",
                     "reason": pause_reason,
                     "mode": self.canary.mode,
                     "slot": slot,
+                    "trace_id": tracer.trace_id,
                 }
 
-        now = self._clock()
-        tick_date = tick_date or now.strftime("%Y-%m-%d")
         idem_key = f"{slot}:{tick_date}#{idempotency_suffix}" if idempotency_suffix else f"{slot}:{tick_date}"
-        mode = self.canary.mode if self.canary is not None else "live"
 
         logger.info("═" * 60)
         logger.info("Tick START slot=%s date=%s mode=%s catch_up=%s", slot, tick_date, mode, catch_up)
 
         tick = await self.db.create_tick(slot, tick_date, idempotency_key=idem_key)
+        tracer.tick_id = str(tick["id"])
+        tracer.meta["idempotency_key"] = idem_key
         if tick["state"] == "running" and self._current_tick is not None:
             logger.warning("Tick %s already running, skip duplicate", tick["idempotency_key"])
             await self.db.update_tick(tick["id"], state="skipped", error="duplicate")
-            return {"status": "skipped", "reason": "duplicate"}
+            tracer.record_instant_span(
+                "wake",
+                "idempotency_check",
+                status="skipped",
+                output_summary="duplicate running tick",
+            )
+            trace_dict = tracer.finish("skipped", summary="Skipped: duplicate running tick")
+            await self._persist_and_report_trace(trace_dict)
+            return {"status": "skipped", "reason": "duplicate", "trace_id": tracer.trace_id}
         if tick["state"] == "completed":
             logger.info("Tick %s already completed, skip", tick["idempotency_key"])
-            return {"status": "skipped", "reason": "already_completed"}
+            tracer.record_instant_span(
+                "wake",
+                "idempotency_check",
+                status="skipped",
+                output_summary="already completed",
+            )
+            trace_dict = tracer.finish("skipped", summary="Skipped: already completed")
+            await self._persist_and_report_trace(trace_dict)
+            return {"status": "skipped", "reason": "already_completed", "trace_id": tracer.trace_id}
 
         self._current_tick = tick
         self.llm.begin_tick()
@@ -188,15 +246,102 @@ class TickEngine:
             "tick_id": tick["id"],
             "tick_date": tick_date,
             "mode": mode,
-            "params": params or {},
+            "params": raw_params,
+            "tracer": tracer,
         }
         try:
-            await self._wake(context, tick)
-            await self._scan(context, tick)
-            plan = await self._plan(context, tick)
-            context["plan"] = plan
-            await self._work(context, tick, deadline)
-            handoff_path = await self._handoff(context, tick)
+            with tracer.span("wake", "WAKE 装载上下文", input_summary=f"slot={slot} mode={mode}") as sp:
+                await self._wake(context, tick)
+                sp.set_output(
+                    f"handoff={'yes' if context.get('prev_handoff') else 'no'}, "
+                    f"plan={(context.get('active_plan') or {}).get('version', 'none')}, "
+                    f"profile_keys={len(context.get('profile_dict') or {})}"
+                )
+                sp.set_payload(
+                    {
+                        "has_prev_handoff": bool(context.get("prev_handoff")),
+                        "active_plan_version": (context.get("active_plan") or {}).get("version"),
+                        "profile_keys": sorted((context.get("profile_dict") or {}).keys()),
+                        "asked_topics_count": len(context.get("topic_history") or {}),
+                    }
+                )
+
+            with tracer.span("scan", "SCAN 数据扫描与收件箱同步", input_summary="window=7d") as sp:
+                await self._scan(context, tick)
+                sp.set_output(
+                    f"server_ok={context.get('server_ok')}, pending={len(context.get('pending_tickets', []))}, "
+                    f"replies={len(context.get('new_replies', []))}, msgs={len(context.get('unread_messages', []))}, "
+                    f"weight_updated={context.get('weight_updated')}"
+                )
+                sp.set_payload(
+                    {
+                        "server_ok": bool(context.get("server_ok")),
+                        "data_ok": bool((context.get("data_package") or {}).get("health_ok")),
+                        "pending_tickets": len(context.get("pending_tickets", [])),
+                        "new_replies": len(context.get("new_replies", [])),
+                        "unread_messages": len(context.get("unread_messages", [])),
+                        "weight_updated": bool(context.get("weight_updated")),
+                        "data_summary_preview": str(context.get("data_summary", ""))[:1500],
+                    }
+                )
+                if not context.get("server_ok") or not (context.get("data_package") or {}).get("health_ok"):
+                    sp.mark_status("degraded")
+
+            with tracer.span("plan", "PLAN 上下文组装与决策", input_summary=f"slot={slot}") as sp:
+                plan = await self._plan(context, tick)
+                context["plan"] = plan
+                tracer.plan_source = str(context.get("plan_source", "fallback"))
+                sp.set_output(
+                    f"source={tracer.plan_source}, tickets={len(plan.get('tickets', []))}, "
+                    f"actions={len(plan.get('actions', []))}"
+                )
+                sp.set_payload(
+                    {
+                        "plan_source": tracer.plan_source,
+                        "summary": plan.get("summary", ""),
+                        "tickets_count": len(plan.get("tickets", [])),
+                        "actions_count": len(plan.get("actions", [])),
+                        "plan": plan,
+                        "llm_error": context.get("llm_error"),
+                    }
+                )
+                if tracer.plan_source == "fallback_error":
+                    sp.mark_status("degraded", context.get("llm_error"))
+
+            with tracer.span(
+                "work",
+                "WORK 执行票据与动作",
+                input_summary=f"tickets={len(plan.get('tickets', []))}, actions={len(plan.get('actions', []))}",
+            ) as sp:
+                await self._work(context, tick, deadline)
+                emitted_list = context.get("emitted", [])
+                shadow_list = context.get("shadow_emitted", [])
+                work_res = context.get("work_results", [])
+                tracer.tickets_created = sum(
+                    1 for e in emitted_list if (e.get("result") or {}).get("ticket_id")
+                )
+                tracer.actions_executed = len(work_res)
+                tracer.actions_failed = sum(1 for r in work_res if r.get("ok") is False)
+                sp.set_output(
+                    f"emitted={tracer.tickets_created}, shadow={len(shadow_list)}, "
+                    f"actions={tracer.actions_executed} (failed={tracer.actions_failed})"
+                )
+                sp.set_payload(
+                    {
+                        "mode": mode,
+                        "emitted": emitted_list,
+                        "shadow_emitted": shadow_list,
+                        "work_results": work_res,
+                    }
+                )
+                if tracer.actions_failed > 0:
+                    sp.mark_status("degraded", f"{tracer.actions_failed} work action(s) failed")
+
+            with tracer.span("handoff", "HANDOFF 交接与记账") as sp:
+                handoff_path = await self._handoff(context, tick)
+                sp.set_output(f"path={handoff_path}, cost={self.llm.tick_tokens} tokens")
+                sp.set_payload({"handoff_path": handoff_path, "cost_tokens": self.llm.tick_tokens})
+
             await self.db.update_tick(
                 tick["id"], state="completed", ended_at=self._clock().isoformat()
             )
@@ -208,10 +353,36 @@ class TickEngine:
                     tick_id=tick["id"],
                     error=context.get("llm_error"),
                 )
+                if downgraded:
+                    tracer.record_instant_span(
+                        "canary",
+                        "circuit_breaker_downgrade",
+                        status="degraded",
+                        output_summary=f"downgraded to {downgraded.get('mode')}",
+                        payload={"downgraded": downgraded},
+                    )
+            tracer.meta.update(
+                {
+                    "handoff_path": handoff_path,
+                    "downgraded": bool(downgraded),
+                    "deps": self.state.snapshot() if self.state is not None else {},
+                }
+            )
+            if tracer.total_tokens == 0 and self.llm.tick_tokens > 0:
+                tracer.total_tokens = int(self.llm.tick_tokens)
+                tracer.cost_usd = float(getattr(self.llm, "tick_usd", 0.0))
+            trace_dict = tracer.finish(
+                "completed",
+                summary=str(plan.get("summary") or f"{slot} completed"),
+                error=context.get("llm_error"),
+            )
+            await self._persist_and_report_trace(trace_dict)
+
             logger.info("Tick END slot=%s id=%s cost=%d tokens", slot, tick["id"], self.llm.tick_tokens)
             return {
                 "status": "completed",
                 "tick_id": tick["id"],
+                "trace_id": tracer.trace_id,
                 "plan": plan,
                 "plan_source": context.get("plan_source", "fallback"),
                 "mode": mode,
@@ -234,6 +405,9 @@ class TickEngine:
                     tick_id=tick["id"],
                     error=str(exc),
                 )
+            tracer.plan_source = str(context.get("plan_source", tracer.plan_source))
+            trace_dict = tracer.finish("failed", summary=f"Tick failed: {exc}", error=str(exc))
+            await self._persist_and_report_trace(trace_dict)
             raise
         finally:
             self._current_tick = None
@@ -428,10 +602,13 @@ class TickEngine:
         now = self._clock()
 
         kept: List[Dict[str, Any]] = []
+        dropped: List[Dict[str, Any]] = []
         q_count = 0
         for t in raw_tickets:
+            title = str(t.get("title") or "(无标题)")
             if len(kept) >= max_tickets:
-                break
+                dropped.append({"title": title, "topic": t.get("topic", ""), "reason": f"max_tickets_per_tick={max_tickets}"})
+                continue
             ttype = t.get("type", "question")
             priority = t.get("priority", "normal")
             topic = str(t.get("topic") or "").strip()
@@ -440,27 +617,42 @@ class TickEngine:
                 if len(pending_questions) >= max_pending_q:
                     logger.info(
                         "Throttle question '%s': already %d pending questions",
-                        t.get("title"),
+                        title,
                         len(pending_questions),
                     )
+                    dropped.append({"title": title, "topic": topic, "reason": f"pending_questions>={max_pending_q}"})
                     continue
                 if q_count >= max_q_tick:
                     logger.info(
                         "Throttle question '%s': reached max_questions_per_tick=%d",
-                        t.get("title"),
+                        title,
                         max_q_tick,
                     )
+                    dropped.append({"title": title, "topic": topic, "reason": f"max_questions_per_tick={max_q_tick}"})
                     continue
                 if topic and topic in topic_history:
                     try:
                         last_dt = datetime.fromisoformat(str(topic_history[topic]))
                         if (now - last_dt).total_seconds() < cooldown_hours * 3600:
-                            logger.info("Throttle question '%s': topic '%s' in cooldown", t.get("title"), topic)
+                            logger.info("Throttle question '%s': topic '%s' in cooldown", title, topic)
+                            dropped.append({"title": title, "topic": topic, "reason": f"topic_cooldown({cooldown_hours}h)"})
                             continue
                     except ValueError:
                         pass
                 q_count += 1
             kept.append(t)
+
+        tracer: Optional[TickTraceRecorder] = context.get("tracer")
+        if tracer is not None and (raw_tickets or dropped):
+            tracer.tickets_throttled += len(dropped)
+            tracer.record_instant_span(
+                "throttle",
+                "票据防轰炸限流",
+                status="degraded" if dropped else "ok",
+                input_summary=f"raw={len(raw_tickets)}, max={max_tickets}",
+                output_summary=f"kept={len(kept)}, dropped={len(dropped)}",
+                payload={"kept_titles": [t.get("title") for t in kept], "dropped": dropped},
+            )
         return kept
 
     def _build_deterministic_daily_report_action(
@@ -583,17 +775,70 @@ class TickEngine:
             return plan
 
         prompt = self._build_plan_prompt(context, tick)
-        try:
-            resp = await self.llm.chat(prompt, expect_json=True, max_tokens=3000)
-            plan = json.loads(self._extract_json(resp.content))
-            self._validate_plan(plan)
-            context["plan_source"] = "llm"
-            context["llm_latency_ms"] = getattr(resp, "latency_ms", 0.0)
-        except Exception as exc:
-            logger.warning("PLAN llm failed, fallback to rule template: %s", exc)
-            plan = copy.deepcopy(FALLBACK_PLANS.get(tick["slot"], DEFAULT_FALLBACK_PLAN))
-            context["plan_source"] = "fallback_error"
-            context["llm_error"] = str(exc)
+        tracer: Optional[TickTraceRecorder] = context.get("tracer")
+        if tracer is not None:
+            with tracer.span(
+                "llm_call",
+                "LLM 规划生成",
+                input_summary=f"prompt_chars={len(prompt)} expect_json=True",
+            ) as llm_sp:
+                try:
+                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=3000)
+                    usage = getattr(resp, "usage", None) or {}
+                    p_tok = int(usage.get("prompt_tokens", 0) or 0)
+                    c_tok = int(usage.get("completion_tokens", 0) or 0)
+                    t_tok = int(usage.get("total_tokens", 0) or (p_tok + c_tok))
+                    cost_usd = float(getattr(resp, "cost_usd", 0.0) or 0.0)
+                    tracer.add_llm_usage(p_tok, c_tok, t_tok, cost_usd)
+                    raw_content = str(getattr(resp, "content", "") or "")
+                    reasoning = str(getattr(resp, "reasoning_content", "") or "")
+                    finish_reason = str(getattr(resp, "finish_reason", "") or "")
+                    llm_sp.set_payload(
+                        {
+                            "provider": getattr(resp, "provider", ""),
+                            "model": getattr(resp, "model", ""),
+                            "latency_ms": float(getattr(resp, "latency_ms", 0.0) or 0.0),
+                            "finish_reason": finish_reason,
+                            "prompt_chars": len(prompt),
+                            "response_chars": len(raw_content),
+                            "prompt_tokens": p_tok,
+                            "completion_tokens": c_tok,
+                            "total_tokens": t_tok,
+                            "cost_usd": cost_usd,
+                            "prompt_text": prompt,
+                            "response_text": raw_content,
+                            "reasoning_content": reasoning,
+                        }
+                    )
+                    plan = json.loads(self._extract_json(raw_content))
+                    self._validate_plan(plan)
+                    llm_sp.update_payload(parse_ok=True)
+                    llm_sp.set_output(
+                        f"model={getattr(resp, 'model', '')} tokens={t_tok} "
+                        f"finish={finish_reason or 'stop'} parse=ok"
+                    )
+                    context["plan_source"] = "llm"
+                    context["llm_latency_ms"] = getattr(resp, "latency_ms", 0.0)
+                except Exception as exc:
+                    logger.warning("PLAN llm failed, fallback to rule template: %s", exc)
+                    llm_sp.update_payload(parse_ok=False, prompt_text=prompt)
+                    llm_sp.mark_status("error", f"{type(exc).__name__}: {exc}")
+                    llm_sp.set_output(f"fallback_error: {type(exc).__name__}")
+                    plan = copy.deepcopy(FALLBACK_PLANS.get(tick["slot"], DEFAULT_FALLBACK_PLAN))
+                    context["plan_source"] = "fallback_error"
+                    context["llm_error"] = str(exc)
+        else:
+            try:
+                resp = await self.llm.chat(prompt, expect_json=True, max_tokens=3000)
+                plan = json.loads(self._extract_json(resp.content))
+                self._validate_plan(plan)
+                context["plan_source"] = "llm"
+                context["llm_latency_ms"] = getattr(resp, "latency_ms", 0.0)
+            except Exception as exc:
+                logger.warning("PLAN llm failed, fallback to rule template: %s", exc)
+                plan = copy.deepcopy(FALLBACK_PLANS.get(tick["slot"], DEFAULT_FALLBACK_PLAN))
+                context["plan_source"] = "fallback_error"
+                context["llm_error"] = str(exc)
 
         # 票据节流 + 防轰炸护栏
         tickets = self._throttle_tickets(plan.get("tickets", []), context, max_tickets)
@@ -795,6 +1040,7 @@ class TickEngine:
         prefix = policy.get("ticket_title_prefix") or ""
         suppress_push = not bool(policy.get("allow_push", True))
         topic_history = dict(context.get("topic_history") or {})
+        tracer: Optional[TickTraceRecorder] = context.get("tracer")
 
         for idx, t in enumerate(ticket_items):
             if self._clock() > deadline:
@@ -806,19 +1052,43 @@ class TickEngine:
             raw_title = t.get("title", "(无标题)")
             title = f"{prefix}{raw_title}" if prefix and not raw_title.startswith(prefix) else raw_title
             topic = str(t.get("topic") or "").strip()
-            result = await self.notifier.emit(
-                title=title,
-                content=t.get("body", ""),
-                priority=t.get("priority", "normal"),
-                ticket_type=t.get("type", "question"),
-                tick_id=tick["id"],
-                channel=t.get("channel", "mobile"),
-                expected_reply_hours=t.get("expected_reply_hours"),
-                fallback_assumption=t.get("fallback_assumption", ""),
-                suppress_push=suppress_push,
-                topic=topic,
-                meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
-            )
+            if tracer is not None:
+                with tracer.span(
+                    "ticket_emit",
+                    f"发送票据: {title[:48]}",
+                    input_summary=f"type={t.get('type', 'question')} priority={t.get('priority', 'normal')} topic={topic or '-'}",
+                ) as tsp:
+                    result = await self.notifier.emit(
+                        title=title,
+                        content=t.get("body", ""),
+                        priority=t.get("priority", "normal"),
+                        ticket_type=t.get("type", "question"),
+                        tick_id=tick["id"],
+                        channel=t.get("channel", "mobile"),
+                        expected_reply_hours=t.get("expected_reply_hours"),
+                        fallback_assumption=t.get("fallback_assumption", ""),
+                        suppress_push=suppress_push,
+                        topic=topic,
+                        meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
+                    )
+                    tsp.set_output(f"ticket_id={result.get('ticket_id')} action={result.get('action', '')}")
+                    tsp.set_payload({"title": title, "topic": topic, "result": result})
+                    if not result.get("ticket_id"):
+                        tsp.mark_status("degraded", str(result.get("reason") or "not created"))
+            else:
+                result = await self.notifier.emit(
+                    title=title,
+                    content=t.get("body", ""),
+                    priority=t.get("priority", "normal"),
+                    ticket_type=t.get("type", "question"),
+                    tick_id=tick["id"],
+                    channel=t.get("channel", "mobile"),
+                    expected_reply_hours=t.get("expected_reply_hours"),
+                    fallback_assumption=t.get("fallback_assumption", ""),
+                    suppress_push=suppress_push,
+                    topic=topic,
+                    meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
+                )
             emitted.append({"title": title, "result": result})
             if result.get("ticket_id"):
                 if topic:
@@ -830,6 +1100,8 @@ class TickEngine:
         if topic_history != (context.get("topic_history") or {}):
             await self.db.set_runtime_state("asked_topics", topic_history)
 
+        from contextlib import nullcontext
+
         for idx, a in enumerate(action_items):
             if self._clock() > deadline:
                 for rest in action_items[idx:]:
@@ -839,143 +1111,163 @@ class TickEngine:
                 break
             if not isinstance(a, dict):
                 continue
-            kind = a.get("kind")
+            kind = str(a.get("kind") or "unknown")
+            before_len = len(work_results)
 
-            if kind == "episode":
-                await self.memory.save_episode(tick["id"], "work", a.get("content"))
-                work_results.append({"kind": "episode", "ok": True})
+            span_ctx = (
+                tracer.span("work_action", f"动作: {kind}", input_summary=str(a)[:240])
+                if tracer is not None
+                else nullcontext(None)
+            )
+            with span_ctx as asp:
+                if kind == "episode":
+                    await self.memory.save_episode(tick["id"], "work", a.get("content"))
+                    work_results.append({"kind": "episode", "ok": True})
 
-            elif kind == "memory":
-                await self.memory.save(
-                    a.get("memory_type", "semantic"), a.get("key", "misc"), a.get("value")
-                )
-                work_results.append({"kind": "memory", "key": a.get("key"), "ok": True})
-
-            elif kind == "profile_update":
-                pkey = str(a.get("key") or "").strip()
-                if pkey:
-                    await self.memory.set_profile(
-                        pkey,
-                        a.get("value"),
-                        confidence=float(a.get("confidence", 0.85)),
-                        source=str(a.get("source", "asked")),
+                elif kind == "memory":
+                    await self.memory.save(
+                        a.get("memory_type", "semantic"), a.get("key", "misc"), a.get("value")
                     )
-                    work_results.append({"kind": "profile_update", "key": pkey, "ok": True})
+                    work_results.append({"kind": "memory", "key": a.get("key"), "ok": True})
 
-            elif kind == "diet_log" and context.get("server_ok"):
-                try:
-                    diet_payload = {
-                        "meal_type": a.get("meal_type", "snack"),
-                        "description": str(a.get("description") or ""),
-                    }
-                    if a.get("calories") is not None:
-                        diet_payload["calories"] = float(a["calories"])
-                    if a.get("protein") is not None:
-                        diet_payload["protein"] = float(a["protein"])
-                    res = await self.inbox.create_diet_log(diet_payload)
-                    work_results.append({"kind": "diet_log", "id": res.get("id"), "ok": True})
-                except Exception as exc:
-                    logger.warning("WORK diet_log failed (non-fatal): %s", exc)
-                    work_results.append({"kind": "diet_log", "ok": False, "error": str(exc)})
+                elif kind == "profile_update":
+                    pkey = str(a.get("key") or "").strip()
+                    if pkey:
+                        await self.memory.set_profile(
+                            pkey,
+                            a.get("value"),
+                            confidence=float(a.get("confidence", 0.85)),
+                            source=str(a.get("source", "asked")),
+                        )
+                        work_results.append({"kind": "profile_update", "key": pkey, "ok": True})
 
-            elif kind == "plan_update":
-                # 1. 本地 st_plans 留档
-                version = str(a.get("plan_version") or f"v{self._clock().strftime('%m%d.%H')}")
-                goal = str(a.get("target_weight") or "70.0")
-                content_md = str(
-                    a.get("content")
-                    or f"# {a.get('phase_name', 'AI 动态计划')}\n\n{a.get('phase_rationale', '')}\n\n{a.get('focus_notes', '')}"
-                )
-                rationale = str(a.get("phase_rationale") or a.get("rationale") or "")
-                await self.db.create_plan(version, f"{goal}kg", content_md, rationale, active=True)
-                # 2. 同步写回 sail_server 健康页 AI 动态体重计划
-                if context.get("server_ok"):
+                elif kind == "diet_log" and context.get("server_ok"):
                     try:
-                        sync_payload = {
-                            "target_weight": goal,
-                            "plan_version": version,
-                            "phase_name": str(a.get("phase_name") or "动态适应期"),
-                            "phase_rationale": rationale,
-                            "focus_notes": str(a.get("focus_notes") or ""),
-                            "daily_targets": a.get("daily_targets") if isinstance(a.get("daily_targets"), dict) else {},
-                            "tolerance_kg": float(a.get("tolerance_kg", 0.7)),
-                            "ai_summary": str(a.get("ai_summary") or plan.get("summary") or ""),
+                        diet_payload = {
+                            "meal_type": a.get("meal_type", "snack"),
+                            "description": str(a.get("description") or ""),
                         }
-                        if a.get("initial_weight"):
-                            sync_payload["initial_weight"] = str(a["initial_weight"])
-                        if a.get("description"):
-                            sync_payload["description"] = str(a["description"])
-                        synced = await self.inbox.sync_ai_weight_plan(sync_payload)
-                        work_results.append({"kind": "plan_update", "plan_id": synced.get("id"), "version": version, "ok": True})
+                        if a.get("calories") is not None:
+                            diet_payload["calories"] = float(a["calories"])
+                        if a.get("protein") is not None:
+                            diet_payload["protein"] = float(a["protein"])
+                        res = await self.inbox.create_diet_log(diet_payload)
+                        work_results.append({"kind": "diet_log", "id": res.get("id"), "ok": True})
                     except Exception as exc:
-                        logger.warning("WORK plan_update sync to sail_server failed: %s", exc)
-                        work_results.append({"kind": "plan_update", "version": version, "ok": False, "error": str(exc)})
-                else:
-                    work_results.append({"kind": "plan_update", "version": version, "ok": True, "local_only": True})
+                        logger.warning("WORK diet_log failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "diet_log", "ok": False, "error": str(exc)})
 
-            elif kind == "daily_report" and context.get("server_ok"):
-                try:
-                    report_date = str(a.get("report_date") or tick.get("tick_date") or self._clock().strftime("%Y-%m-%d"))
-                    should_push = bool(a.get("push", True)) and not suppress_push and not self.notifier.in_quiet_hours()
-                    rep_payload = {
-                        "report_date": report_date,
-                        "tick_id": tick["id"],
-                        "title": str(a.get("title") or f"{report_date} 睡前体重与健康日报"),
-                        "summary": str(a.get("summary") or plan.get("summary") or ""),
-                        "body_markdown": str(a.get("body_markdown") or ""),
-                        "weight_snapshot": a.get("weight_snapshot") if isinstance(a.get("weight_snapshot"), dict) else {},
-                        "diet_summary": a.get("diet_summary") if isinstance(a.get("diet_summary"), dict) else {},
-                        "plan_update": a.get("plan_update") if isinstance(a.get("plan_update"), dict) else {},
-                        "tomorrow_focus": a.get("tomorrow_focus") if isinstance(a.get("tomorrow_focus"), list) else [],
-                        "push": should_push,
-                    }
-                    rep = await self.inbox.upsert_daily_report(rep_payload)
-                    work_results.append({"kind": "daily_report", "report_date": report_date, "id": rep.get("id"), "pushed": rep.get("pushed"), "ok": True})
-                except Exception as exc:
-                    logger.warning("WORK daily_report failed (non-fatal): %s", exc)
-                    work_results.append({"kind": "daily_report", "ok": False, "error": str(exc)})
+                elif kind == "plan_update":
+                    # 1. 本地 st_plans 留档
+                    version = str(a.get("plan_version") or f"v{self._clock().strftime('%m%d.%H')}")
+                    goal = str(a.get("target_weight") or "70.0")
+                    content_md = str(
+                        a.get("content")
+                        or f"# {a.get('phase_name', 'AI 动态计划')}\n\n{a.get('phase_rationale', '')}\n\n{a.get('focus_notes', '')}"
+                    )
+                    rationale = str(a.get("phase_rationale") or a.get("rationale") or "")
+                    await self.db.create_plan(version, f"{goal}kg", content_md, rationale, active=True)
+                    # 2. 同步写回 sail_server 健康页 AI 动态体重计划
+                    if context.get("server_ok"):
+                        try:
+                            sync_payload = {
+                                "target_weight": goal,
+                                "plan_version": version,
+                                "phase_name": str(a.get("phase_name") or "动态适应期"),
+                                "phase_rationale": rationale,
+                                "focus_notes": str(a.get("focus_notes") or ""),
+                                "daily_targets": a.get("daily_targets") if isinstance(a.get("daily_targets"), dict) else {},
+                                "tolerance_kg": float(a.get("tolerance_kg", 0.7)),
+                                "ai_summary": str(a.get("ai_summary") or plan.get("summary") or ""),
+                            }
+                            if a.get("initial_weight"):
+                                sync_payload["initial_weight"] = str(a["initial_weight"])
+                            if a.get("description"):
+                                sync_payload["description"] = str(a["description"])
+                            synced = await self.inbox.sync_ai_weight_plan(sync_payload)
+                            work_results.append({"kind": "plan_update", "plan_id": synced.get("id"), "version": version, "ok": True})
+                        except Exception as exc:
+                            logger.warning("WORK plan_update sync to sail_server failed: %s", exc)
+                            work_results.append({"kind": "plan_update", "version": version, "ok": False, "error": str(exc)})
+                    else:
+                        work_results.append({"kind": "plan_update", "version": version, "ok": True, "local_only": True})
 
-            elif kind == "resolve_ticket" and context.get("server_ok"):
-                tid = a.get("ticket_id")
-                if tid is not None:
+                elif kind == "daily_report" and context.get("server_ok"):
                     try:
-                        await self.inbox.resolve_ticket(int(tid), str(a.get("resolution") or "已吸收"))
-                        work_results.append({"kind": "resolve_ticket", "ticket_id": int(tid), "ok": True})
+                        report_date = str(a.get("report_date") or tick.get("tick_date") or self._clock().strftime("%Y-%m-%d"))
+                        should_push = bool(a.get("push", True)) and not suppress_push and not self.notifier.in_quiet_hours()
+                        rep_payload = {
+                            "report_date": report_date,
+                            "tick_id": tick["id"],
+                            "title": str(a.get("title") or f"{report_date} 睡前体重与健康日报"),
+                            "summary": str(a.get("summary") or plan.get("summary") or ""),
+                            "body_markdown": str(a.get("body_markdown") or ""),
+                            "weight_snapshot": a.get("weight_snapshot") if isinstance(a.get("weight_snapshot"), dict) else {},
+                            "diet_summary": a.get("diet_summary") if isinstance(a.get("diet_summary"), dict) else {},
+                            "plan_update": a.get("plan_update") if isinstance(a.get("plan_update"), dict) else {},
+                            "tomorrow_focus": a.get("tomorrow_focus") if isinstance(a.get("tomorrow_focus"), list) else [],
+                            "push": should_push,
+                        }
+                        rep = await self.inbox.upsert_daily_report(rep_payload)
+                        work_results.append({"kind": "daily_report", "report_date": report_date, "id": rep.get("id"), "pushed": rep.get("pushed"), "ok": True})
                     except Exception as exc:
-                        logger.warning("WORK resolve_ticket #%s failed: %s", tid, exc)
-                        work_results.append({"kind": "resolve_ticket", "ticket_id": tid, "ok": False, "error": str(exc)})
+                        logger.warning("WORK daily_report failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "daily_report", "ok": False, "error": str(exc)})
 
-            elif kind == "dev_task" and self.dev_runner is not None:
-                if not policy.get("allow_self_dev", True):
+                elif kind == "resolve_ticket" and context.get("server_ok"):
+                    tid = a.get("ticket_id")
+                    if tid is not None:
+                        try:
+                            await self.inbox.resolve_ticket(int(tid), str(a.get("resolution") or "已吸收"))
+                            work_results.append({"kind": "resolve_ticket", "ticket_id": int(tid), "ok": True})
+                        except Exception as exc:
+                            logger.warning("WORK resolve_ticket #%s failed: %s", tid, exc)
+                            work_results.append({"kind": "resolve_ticket", "ticket_id": tid, "ok": False, "error": str(exc)})
+
+                elif kind == "dev_task" and self.dev_runner is not None:
+                    if not policy.get("allow_self_dev", True):
+                        await self.memory.save_episode(
+                            tick["id"],
+                            "dev_skipped",
+                            {"task": a.get("task_id", ""), "reason": f"disabled_in_mode:{policy['mode']}"},
+                        )
+                        if asp is not None:
+                            asp.mark_status("skipped", f"disabled_in_mode:{policy['mode']}")
+                        continue
+                    from sailtick.dev.tasks import DevTask
+
+                    task = DevTask(
+                        id=a.get("task_id", f"adhoc_{tick['id'][:8]}"),
+                        title=a.get("title", "sailtick dev task"),
+                        description=a.get("description", ""),
+                        files=list(a.get("files", [])),
+                    )
+                    result = await self.dev_runner.run_task(
+                        task, file_contents=dict(a.get("file_contents", {}))
+                    )
                     await self.memory.save_episode(
                         tick["id"],
-                        "dev_skipped",
-                        {"task": a.get("task_id", ""), "reason": f"disabled_in_mode:{policy['mode']}"},
+                        "dev",
+                        {
+                            "task": task.id,
+                            "success": result.success,
+                            "commit": result.commit,
+                            "ticket": result.ticket_id,
+                            "error": result.error,
+                        },
                     )
-                    continue
-                from sailtick.dev.tasks import DevTask
+                    work_results.append({"kind": "dev_task", "task": task.id, "ok": result.success})
 
-                task = DevTask(
-                    id=a.get("task_id", f"adhoc_{tick['id'][:8]}"),
-                    title=a.get("title", "sailtick dev task"),
-                    description=a.get("description", ""),
-                    files=list(a.get("files", [])),
-                )
-                result = await self.dev_runner.run_task(
-                    task, file_contents=dict(a.get("file_contents", {}))
-                )
-                await self.memory.save_episode(
-                    tick["id"],
-                    "dev",
-                    {
-                        "task": task.id,
-                        "success": result.success,
-                        "commit": result.commit,
-                        "ticket": result.ticket_id,
-                        "error": result.error,
-                    },
-                )
-                work_results.append({"kind": "dev_task", "task": task.id, "ok": result.success})
+                if asp is not None:
+                    if len(work_results) > before_len:
+                        last_res = work_results[-1]
+                        asp.set_payload({"action": a, "result": last_res})
+                        asp.set_output(f"ok={last_res.get('ok')}")
+                        if last_res.get("ok") is False:
+                            asp.mark_status("error", str(last_res.get("error") or "failed"))
+                    else:
+                        asp.mark_status("skipped", "precondition_not_met")
+                        asp.set_output("skipped")
 
         # 标记本 Tick 已阅读并整合的用户主动消息（仅在真实执行模式下落库）
         unread_ids = [

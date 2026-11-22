@@ -234,3 +234,26 @@ class TicketInbox:
         resp = await client.post(f"{self.api_base}/health/diet", json=payload)
         resp.raise_for_status()
         return resp.json()
+
+    # ── AI Trace 上报 ───────────────────────────────────────────────────
+
+    async def report_ai_trace(self, trace_payload: Dict[str, Any]) -> bool:
+        """上报单次 Tick 全链路 AI Trace 至 sail_server（非致命，失败仅记日志）。"""
+        try:
+            client = self._get_client()
+            resp = await client.post(
+                f"{self.api_base}/telemetry/ai-traces",
+                json=trace_payload,
+                timeout=8.0,
+            )
+            if resp.status_code >= 400:
+                logger.warning(
+                    "report_ai_trace rejected: status=%s body=%s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
+                return False
+            return True
+        except Exception as exc:
+            logger.debug("report_ai_trace skipped (non-fatal): %s", exc)
+            return False

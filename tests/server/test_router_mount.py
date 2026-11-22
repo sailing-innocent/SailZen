@@ -43,6 +43,12 @@ def test_core_routers_mounted(monkeypatch):
         "/api/v1/file-storage/list",
         "/api/v1/app/release/latest",
         "/api/v1/app/release/latest.apk",
+        "/api/v1/telemetry/ai-traces",
+        "/api/v1/telemetry/ai-traces/stats",
+        "/api/v1/telemetry/profile/api",
+        "/api/v1/telemetry/profile/modules",
+        "/api/v1/telemetry/profile/runtime",
+        "/api/v1/telemetry/sailtick/live",
     ]
     missing = [p for p in required_paths if p not in mounted]
     assert not missing, f"核心路由未挂载到 server.py: {missing}"

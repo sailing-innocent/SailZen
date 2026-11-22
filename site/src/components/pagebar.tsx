@@ -1,5 +1,5 @@
 import React from 'react'
-import { PAGE_ROUTES } from '@/config/basic'
+import { MAIN_ROUTES, SYSTEM_ROUTES, type PageRoute } from '@/config/basic'
 import {
   SidebarProvider,
   SidebarHeader,
@@ -9,34 +9,23 @@ import {
   SidebarMenuButton,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { Link, useLocation } from 'react-router-dom'
 import { useIsMobile } from '@/hooks/use-mobile'
-import {
-  Home,
-  Wallet,
-  Heart,
-  FolderKanban,
-  FileText,
-  Type,
-  Package,
-  BookOpen,
-  HardDrive,
-  RefreshCw
-} from 'lucide-react'
 
-// 图标映射
-const iconMap: Record<string, React.ReactNode> = {
-  Home: <Home className="h-4 w-4" />,
-  Wallet: <Wallet className="h-4 w-4" />,
-  Heart: <Heart className="h-4 w-4" />,
-  RefreshCw: <RefreshCw className="h-4 w-4" />,
-  FolderKanban: <FolderKanban className="h-4 w-4" />,
-  FileText: <FileText className="h-4 w-4" />,
-  Type: <Type className="h-4 w-4" />,
-  Package: <Package className="h-4 w-4" />,
-  BookOpen: <BookOpen className="h-4 w-4" />,
-  HardDrive: <HardDrive className="h-4 w-4" />
+const renderNavItem = (route: PageRoute, currentPath: string) => {
+  const Icon = route.icon
+  const isActive = currentPath === route.path || (route.path === '/main' && currentPath === '/')
+  return (
+    <SidebarMenuButton key={route.name} asChild isActive={isActive} tooltip={route.label}>
+      <Link to={route.path} className="flex items-center gap-2">
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{route.label || route.name}</span>
+      </Link>
+    </SidebarMenuButton>
+  )
 }
 
 const Pagebar: React.FC = () => {
@@ -49,32 +38,37 @@ const Pagebar: React.FC = () => {
   }
 
   return (
-    <>
-      <SidebarProvider>
-        <SidebarHeader title="SailSite" />
-        <SidebarContent>
-          <SidebarGroup>
+    <SidebarProvider className="flex-col sticky top-0 h-svh min-h-svh border-r bg-sidebar/50">
+      <SidebarHeader className="px-3 pt-4 pb-2">
+        <Link to="/main" className="flex items-center gap-2 px-1 font-semibold tracking-tight text-base">
+          <span>SailZen</span>
+        </Link>
+      </SidebarHeader>
+      <SidebarContent className="flex-1">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {MAIN_ROUTES.map((route) => renderNavItem(route, location.pathname))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      {SYSTEM_ROUTES.length > 0 && (
+        <SidebarFooter className="pt-0 pb-3">
+          <SidebarSeparator className="mb-1" />
+          <SidebarGroup className="p-0">
+            <SidebarGroupLabel className="text-[11px] uppercase tracking-wider text-muted-foreground/80">
+              Observability
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {PAGE_ROUTES.map((route) => (
-                  <SidebarMenuButton
-                    key={route.name}
-                    asChild
-                    isActive={location.pathname === route.path}
-                  >
-                    <Link to={route.path} className="flex items-center gap-2">
-                      {route.icon && iconMap[route.icon]}
-                      <span>{route.label || route.name}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                ))}
+                {SYSTEM_ROUTES.map((route) => renderNavItem(route, location.pathname))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        </SidebarContent>
-        <SidebarFooter />
-      </SidebarProvider>
-    </>
+        </SidebarFooter>
+      )}
+    </SidebarProvider>
   )
 }
 

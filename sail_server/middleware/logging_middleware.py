@@ -153,10 +153,11 @@ def logging_middleware_factory(app: ASGIApp) -> ASGIApp:
         response_status = 200
         response_headers: list = []
         response_body = b""
+        response_bytes = 0
         response_truncated = False
 
         async def wrapped_send(message: Any) -> None:
-            nonlocal response_status, response_headers, response_body, response_truncated
+            nonlocal response_status, response_headers, response_body, response_bytes, response_truncated
             if message["type"] == "http.response.start":
                 response_status = message.get("status", 200)
                 response_headers = message.get("headers", [])
@@ -167,6 +168,7 @@ def logging_middleware_factory(app: ASGIApp) -> ASGIApp:
                     response_body = "[binary body skipped]".encode()
             elif message["type"] == "http.response.body":
                 chunk = message.get("body", b"")
+                response_bytes += len(chunk)
                 if isinstance(response_body, bytes) and response_body != b"[binary body skipped]":
                     if response_truncated or len(response_body) + len(chunk) > _MAX_CAPTURE_BYTES:
                         response_truncated = True
@@ -191,6 +193,20 @@ def logging_middleware_factory(app: ASGIApp) -> ASGIApp:
                 await app(scope, receive, wrapped_send)
         except Exception as e:
             duration = (time.time() - start_time) * 1000
+            try:
+                from sail_server.utils.telemetry_collector import get_telemetry_collector
+
+                get_telemetry_collector().record_request(
+                    method=method,
+                    path=path,
+                    status_code=500,
+                    duration_ms=duration,
+                    bytes_out=response_bytes,
+                    headers=req_headers,
+                    error_detail=f"{type(e).__name__}: {e}",
+                )
+            except Exception:
+                pass
             logger.error(
                 f"Request failed: {method} {path_with_query} - {type(e).__name__}: {e}\n{traceback.format_exc()}"
             )
@@ -199,6 +215,19 @@ def logging_middleware_factory(app: ASGIApp) -> ASGIApp:
             raise
         else:
             duration = (time.time() - start_time) * 1000
+            try:
+                from sail_server.utils.telemetry_collector import get_telemetry_collector
+
+                get_telemetry_collector().record_request(
+                    method=method,
+                    path=path,
+                    status_code=response_status,
+                    duration_ms=duration,
+                    bytes_out=response_bytes,
+                    headers=req_headers,
+                )
+            except Exception:
+                pass
             if verbose:
                 logger.info(f"{method} {path_with_query} - {response_status} - {duration:.2f}ms")
                 logger.debug(f"  Request headers: {[(k.decode(), v.decode()) for k, v in req_headers]}")

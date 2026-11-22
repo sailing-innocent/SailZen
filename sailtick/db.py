@@ -194,6 +194,68 @@ class DBRuntimeState(TickBase):
     updated_at: Mapped[str] = mapped_column(default=_now_iso)
 
 
+class DBAITrace(TickBase):
+    """AI 全链路 Trace 主记录（本地隔离库权威副本）。"""
+
+    __tablename__ = "st_ai_traces"
+
+    trace_id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    service: Mapped[str] = mapped_column(default="sailtick")
+    tick_id: Mapped[str] = mapped_column(default="")
+    slot: Mapped[str] = mapped_column(default="")
+    tick_date: Mapped[str] = mapped_column(default="")
+    trigger_source: Mapped[str] = mapped_column(default="scheduler")
+    mode: Mapped[str] = mapped_column(default="live")
+    status: Mapped[str] = mapped_column(default="running")
+    plan_source: Mapped[str] = mapped_column(default="none")
+    started_at: Mapped[str] = mapped_column(default=_now_iso)
+    ended_at: Mapped[Optional[str]] = mapped_column(nullable=True)
+    duration_ms: Mapped[float] = mapped_column(default=0.0)
+    llm_calls_count: Mapped[int] = mapped_column(default=0)
+    prompt_tokens: Mapped[int] = mapped_column(default=0)
+    completion_tokens: Mapped[int] = mapped_column(default=0)
+    total_tokens: Mapped[int] = mapped_column(default=0)
+    cost_usd: Mapped[float] = mapped_column(default=0.0)
+    tickets_created: Mapped[int] = mapped_column(default=0)
+    tickets_throttled: Mapped[int] = mapped_column(default=0)
+    actions_executed: Mapped[int] = mapped_column(default=0)
+    actions_failed: Mapped[int] = mapped_column(default=0)
+    summary: Mapped[str] = mapped_column(default="")
+    error: Mapped[Optional[str]] = mapped_column(nullable=True)
+    meta_json: Mapped[str] = mapped_column(default="{}")
+
+    __table_args__ = (
+        Index("idx_st_ai_traces_started", "started_at"),
+        Index("idx_st_ai_traces_tick", "tick_id"),
+    )
+
+
+class DBAITraceSpan(TickBase):
+    """AI Trace 子阶段与调用 Span 明细。"""
+
+    __tablename__ = "st_ai_trace_spans"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    trace_id: Mapped[str] = mapped_column(nullable=False)
+    span_id: Mapped[str] = mapped_column(nullable=False)
+    parent_span_id: Mapped[Optional[str]] = mapped_column(nullable=True)
+    seq: Mapped[int] = mapped_column(default=0)
+    stage: Mapped[str] = mapped_column(nullable=False)
+    name: Mapped[str] = mapped_column(nullable=False)
+    status: Mapped[str] = mapped_column(default="ok")
+    started_at: Mapped[str] = mapped_column(default=_now_iso)
+    ended_at: Mapped[Optional[str]] = mapped_column(nullable=True)
+    duration_ms: Mapped[float] = mapped_column(default=0.0)
+    input_summary: Mapped[str] = mapped_column(default="")
+    output_summary: Mapped[str] = mapped_column(default="")
+    payload_json: Mapped[str] = mapped_column(default="{}")
+    error: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    __table_args__ = (
+        Index("idx_st_ai_trace_spans_trace", "trace_id", "seq"),
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Database
 # ═══════════════════════════════════════════════════════════════════════
@@ -725,6 +787,152 @@ class TickDatabase:
             except (_json.JSONDecodeError, TypeError):
                 return row.value
 
+    # ── AI Traces ─────────────────────────────────────────────────────
+
+    async def save_trace(self, trace: Dict[str, Any]) -> dict:
+        """持久化整条 AI Trace 及其所有 Spans（幂等覆盖）。"""
+        trace_id = str(trace.get("trace_id") or _new_id())
+        spans = trace.get("spans") or []
+        async with self.session() as s:
+            existing = await s.get(DBAITrace, trace_id)
+            if existing is None:
+                existing = DBAITrace(trace_id=trace_id)
+                s.add(existing)
+            existing.service = str(trace.get("service") or "sailtick")
+            existing.tick_id = str(trace.get("tick_id") or "")
+            existing.slot = str(trace.get("slot") or "")
+            existing.tick_date = str(trace.get("tick_date") or "")
+            existing.trigger_source = str(trace.get("trigger_source") or "scheduler")
+            existing.mode = str(trace.get("mode") or "live")
+            existing.status = str(trace.get("status") or "completed")
+            existing.plan_source = str(trace.get("plan_source") or "none")
+            existing.started_at = str(trace.get("started_at") or _now_iso())
+            existing.ended_at = trace.get("ended_at")
+            existing.duration_ms = float(trace.get("duration_ms") or 0.0)
+            existing.llm_calls_count = int(trace.get("llm_calls_count") or 0)
+            existing.prompt_tokens = int(trace.get("prompt_tokens") or 0)
+            existing.completion_tokens = int(trace.get("completion_tokens") or 0)
+            existing.total_tokens = int(trace.get("total_tokens") or 0)
+            existing.cost_usd = float(trace.get("cost_usd") or 0.0)
+            existing.tickets_created = int(trace.get("tickets_created") or 0)
+            existing.tickets_throttled = int(trace.get("tickets_throttled") or 0)
+            existing.actions_executed = int(trace.get("actions_executed") or 0)
+            existing.actions_failed = int(trace.get("actions_failed") or 0)
+            existing.summary = str(trace.get("summary") or "")
+            existing.error = trace.get("error")
+            existing.meta_json = _json.dumps(
+                trace.get("meta") or {}, ensure_ascii=False, default=str
+            )
+
+            await s.execute(delete(DBAITraceSpan).where(DBAITraceSpan.trace_id == trace_id))
+            for idx, sp in enumerate(spans):
+                s.add(
+                    DBAITraceSpan(
+                        trace_id=trace_id,
+                        span_id=str(sp.get("span_id") or f"sp_{idx}"),
+                        parent_span_id=sp.get("parent_span_id"),
+                        seq=int(sp.get("seq", idx)),
+                        stage=str(sp.get("stage") or "unknown"),
+                        name=str(sp.get("name") or ""),
+                        status=str(sp.get("status") or "ok"),
+                        started_at=str(sp.get("started_at") or _now_iso()),
+                        ended_at=sp.get("ended_at"),
+                        duration_ms=float(sp.get("duration_ms") or 0.0),
+                        input_summary=str(sp.get("input_summary") or ""),
+                        output_summary=str(sp.get("output_summary") or ""),
+                        payload_json=_json.dumps(
+                            sp.get("payload") or {}, ensure_ascii=False, default=str
+                        ),
+                        error=sp.get("error"),
+                    )
+                )
+            await s.commit()
+            return {"trace_id": trace_id, "spans": len(spans)}
+
+    async def list_traces(
+        self,
+        limit: int = 50,
+        slot: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[dict]:
+        async with self.session() as s:
+            stmt = select(DBAITrace).order_by(DBAITrace.started_at.desc()).limit(limit)
+            if slot:
+                stmt = stmt.where(DBAITrace.slot == slot)
+            if status:
+                stmt = stmt.where(DBAITrace.status == status)
+            result = await s.execute(stmt)
+            return [self._trace_dict(r) for r in result.scalars().all()]
+
+    async def get_trace(self, trace_id: str) -> Optional[dict]:
+        async with self.session() as s:
+            row = await s.get(DBAITrace, trace_id)
+            if not row:
+                return None
+            spans_res = await s.execute(
+                select(DBAITraceSpan)
+                .where(DBAITraceSpan.trace_id == trace_id)
+                .order_by(DBAITraceSpan.seq.asc())
+            )
+            out = self._trace_dict(row)
+            out["spans"] = [self._span_dict(sp) for sp in spans_res.scalars().all()]
+            return out
+
+    @staticmethod
+    def _trace_dict(row: DBAITrace) -> dict:
+        try:
+            meta = _json.loads(row.meta_json or "{}")
+        except (_json.JSONDecodeError, TypeError):
+            meta = {}
+        return {
+            "trace_id": row.trace_id,
+            "service": row.service,
+            "tick_id": row.tick_id,
+            "slot": row.slot,
+            "tick_date": row.tick_date,
+            "trigger_source": row.trigger_source,
+            "mode": row.mode,
+            "status": row.status,
+            "plan_source": row.plan_source,
+            "started_at": row.started_at,
+            "ended_at": row.ended_at,
+            "duration_ms": row.duration_ms,
+            "llm_calls_count": row.llm_calls_count,
+            "prompt_tokens": row.prompt_tokens,
+            "completion_tokens": row.completion_tokens,
+            "total_tokens": row.total_tokens,
+            "cost_usd": row.cost_usd,
+            "tickets_created": row.tickets_created,
+            "tickets_throttled": row.tickets_throttled,
+            "actions_executed": row.actions_executed,
+            "actions_failed": row.actions_failed,
+            "summary": row.summary,
+            "error": row.error,
+            "meta": meta,
+        }
+
+    @staticmethod
+    def _span_dict(row: DBAITraceSpan) -> dict:
+        try:
+            payload = _json.loads(row.payload_json or "{}")
+        except (_json.JSONDecodeError, TypeError):
+            payload = {}
+        return {
+            "span_id": row.span_id,
+            "parent_span_id": row.parent_span_id,
+            "seq": row.seq,
+            "stage": row.stage,
+            "name": row.name,
+            "status": row.status,
+            "started_at": row.started_at,
+            "ended_at": row.ended_at,
+            "duration_ms": row.duration_ms,
+            "input_summary": row.input_summary,
+            "output_summary": row.output_summary,
+            "payload": payload,
+            "error": row.error,
+        }
+
     # ── Stats ─────────────────────────────────────────────────────────
 
     async def get_stats(self) -> dict:
@@ -740,6 +948,8 @@ class TickDatabase:
                 "st_schedules",
                 "st_run_log",
                 "st_runtime_state",
+                "st_ai_traces",
+                "st_ai_trace_spans",
             ):
                 result = await s.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 stats[table] = int(result.scalar() or 0)

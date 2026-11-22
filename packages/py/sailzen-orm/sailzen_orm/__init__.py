@@ -101,6 +101,14 @@ from sailzen_orm.tick import (
     SailTickDailyReport,
 )
 
+# Telemetry & AI Trace Models
+from sailzen_orm.telemetry import (
+    SysAITrace,
+    SysAITraceSpan,
+    SysApiMetricBucket,
+    SysTelemetryEvent,
+)
+
 __all__ = [
     # Base
     "ORMBase",
@@ -167,8 +175,13 @@ __all__ = [
     "RhythmEnergyProfile",
       "RhythmPolicy",
       "RhythmReview",
-      # SailTick
-      "SailTickTicket",
-      "SailTickMessage",
-      "SailTickDailyReport",
-  ]
+    # SailTick
+    "SailTickTicket",
+    "SailTickMessage",
+    "SailTickDailyReport",
+    # Telemetry & AI Trace
+    "SysAITrace",
+    "SysAITraceSpan",
+    "SysApiMetricBucket",
+    "SysTelemetryEvent",
+]

@@ -35,6 +35,9 @@ class LLMResponse:
     model: str = ""
     provider: str = ""
     latency_ms: float = 0.0
+    finish_reason: str = ""
+    reasoning_content: str = ""
+    cost_usd: float = 0.0
 
 
 class BudgetExceededError(RuntimeError):
@@ -179,7 +182,9 @@ class LLMGateway:
                 provider,
                 model,
             )
-        content = (choice.get("message") or {}).get("content") or ""
+        message_obj = choice.get("message") or {}
+        content = message_obj.get("content") or ""
+        reasoning_content = message_obj.get("reasoning_content") or ""
         usage = data.get("usage") or {}
         total_tokens = usage.get("total_tokens", 0)
 
@@ -189,11 +194,14 @@ class LLMGateway:
             model=model,
             provider=provider,
             latency_ms=latency_ms,
+            finish_reason=str(finish_reason or ""),
+            reasoning_content=str(reasoning_content or ""),
         )
 
         # 记账
         self._tick_tokens += total_tokens
         usd = self.estimate_cost(result)
+        result.cost_usd = usd
         self._tick_usd += usd
         if self._cost_sink is not None:
             await self._cost_sink(total_tokens, usd)

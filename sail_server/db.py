@@ -26,6 +26,7 @@ from sailzen_orm import necessity
 from sailzen_orm import reminder
 from sailzen_orm import rhythm
 from sailzen_orm import tick
+from sailzen_orm import telemetry
 
 __all__ = [
     "Database",

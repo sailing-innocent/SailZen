@@ -49,6 +49,7 @@ class SailServer:
             "/blog",
             "/dag-pipeline",
             "/tick",
+            "/trace-debug",
         ]
         self.api_router = None
         self.debug = True
@@ -57,6 +58,8 @@ class SailServer:
         self._weather_task: "asyncio.Task | None" = None
         # 提醒调度任务（on_startup 中按 REMINDER_ENABLED 启动）
         self._reminder_task: "asyncio.Task | None" = None
+        # 埋点聚合刷盘后台任务（on_startup 中按 TELEMETRY_ENABLED 启动）
+        self._telemetry_task: "asyncio.Task | None" = None
 
     def init(self):
         # 日志已在 main() 中初始化，直接获取 logger
@@ -116,6 +119,7 @@ class SailServer:
         from sail_server.router.rhythm import router as rhythm_router
         from sail_server.router.tick import router as tick_router
         from sail_server.router.app_release import router as app_release_router
+        from sail_server.router.telemetry import router as telemetry_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -133,6 +137,7 @@ class SailServer:
                 rhythm_router,
                 tick_router,
                 app_release_router,
+                telemetry_router,
             ],
         )
 
@@ -224,6 +229,25 @@ class SailServer:
         except Exception as e:
             logger.warning(f"[Startup] Tick schema self-check failed: {e}")
 
+        # Telemetry / AI Trace 表自检（幂等）
+        try:
+            self._ensure_telemetry_schema(logger)
+        except Exception as e:
+            logger.warning(f"[Startup] Telemetry schema self-check failed: {e}")
+
+        # 启动埋点聚合定期刷盘任务（失败仅告警，不影响服务启动）
+        try:
+            if os.environ.get("TELEMETRY_ENABLED", "true").lower() == "true":
+                from sail_server.db import Database
+                from sail_server.utils.telemetry_collector import telemetry_flush_loop
+
+                self._telemetry_task = asyncio.create_task(
+                    telemetry_flush_loop(Database.get_instance().get_db_session)
+                )
+                logger.info("[Startup] Telemetry flush loop started")
+        except Exception as e:
+            logger.warning(f"[Startup] Failed to start telemetry flush loop: {e}")
+
         # 启动天气后台更新循环（失败仅告警，不影响服务启动）
         try:
             if os.environ.get("WEATHER_ENABLED", "true").lower() == "true":
@@ -312,11 +336,48 @@ class SailServer:
         finally:
             db.close()
 
+    def _ensure_telemetry_schema(self, logger) -> None:
+        """Telemetry / AI Trace 表自检（幂等，不抛异常）。"""
+        from sqlalchemy import inspect
+
+        from sail_server.db import Database
+
+        db = Database.get_instance().get_db_session()
+        try:
+            engine = db.bind
+            tables = set(inspect(engine).get_table_names())
+            required = {
+                "sys_ai_traces",
+                "sys_ai_trace_spans",
+                "sys_api_metric_buckets",
+                "sys_telemetry_events",
+            }
+            if required.issubset(tables):
+                logger.info("[Startup] Telemetry schema self-check passed")
+            else:
+                logger.warning(
+                    f"[Startup] Telemetry tables missing ({sorted(required - tables)}); attempting create_all"
+                )
+                from sailzen_orm.orm_base import ORMBase
+
+                ORMBase.metadata.create_all(bind=engine)
+        finally:
+            db.close()
+
     async def on_shutdown(self):
         from sail_server.utils.logging_config import get_logger
 
         logger = get_logger("sail_server")
         logger.info("Server shutting down...")
+
+        # 取消埋点刷盘任务并确保最后一次刷盘完成
+        if self._telemetry_task is not None:
+            import contextlib
+
+            self._telemetry_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._telemetry_task
+            self._telemetry_task = None
 
         # 取消天气后台更新任务
         if self._weather_task is not None:

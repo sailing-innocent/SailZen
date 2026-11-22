@@ -1,9 +1,56 @@
-import React, { useEffect, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, useSearchParams, useNavigate } from 'react-router-dom'
+import React, { useEffect, useRef, Suspense } from 'react'
+import { BrowserRouter, Routes, Route, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { useServerStore, type ServerState } from '@lib/store'
 import { MobileProviderWithFallback } from '@/hooks/use-mobile'
 import { PAGE_ROUTES, getPageComponent } from './config/basic'
+import { flushClientEvents, installGlobalErrorTelemetry, trackClientEvent } from '@lib/telemetry'
 import './App.css'
+
+const TelemetryTracker: React.FC = () => {
+  const location = useLocation()
+  const enteredAtRef = useRef<{ path: string; ts: number } | null>(null)
+
+  useEffect(() => {
+    return installGlobalErrorTelemetry()
+  }, [])
+
+  useEffect(() => {
+    const now = performance.now()
+    const prev = enteredAtRef.current
+    if (prev && prev.path !== location.pathname) {
+      const dwellMs = Math.round(now - prev.ts)
+      trackClientEvent({
+        category: 'page_view',
+        module: prev.path.split('/').filter(Boolean)[0] || 'main',
+        name: prev.path,
+        duration_ms: dwellMs,
+        detail: {
+          viewport: typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : '',
+        },
+      })
+    }
+    enteredAtRef.current = { path: location.pathname, ts: now }
+  }, [location.pathname])
+
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      const cur = enteredAtRef.current
+      if (cur) {
+        trackClientEvent({
+          category: 'page_view',
+          module: cur.path.split('/').filter(Boolean)[0] || 'main',
+          name: cur.path,
+          duration_ms: Math.round(performance.now() - cur.ts),
+        })
+        flushClientEvents()
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [])
+
+  return null
+}
 
 interface URLParams {
   path?: string
@@ -49,6 +96,7 @@ function App() {
   return (
     <MobileProviderWithFallback>
       <BrowserRouter>
+        <TelemetryTracker />
         <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
           <AppRoutes />
         </Suspense>

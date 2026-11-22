@@ -32,7 +32,9 @@ from sailzen_orm import (  # noqa: F401
     necessity,
     reminder,
     rhythm,
+    telemetry,
     text,
+    tick,
 )
 
 #: 测试基准日（2026-10-26 周一，ISO W2026-44）

@@ -2,35 +2,9 @@ import React from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import {
-  Menu,
-  Home,
-  Wallet,
-  Heart,
-  FolderKanban,
-  FileText,
-  Type,
-  Package,
-  BookOpen,
-  HardDrive,
-  RefreshCw
-} from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
-import { PAGE_ROUTES } from '@/config/basic'
-
-// 图标映射
-const iconMap: Record<string, React.ReactNode> = {
-  Home: <Home className="h-5 w-5" />,
-  Wallet: <Wallet className="h-5 w-5" />,
-  Heart: <Heart className="h-5 w-5" />,
-  RefreshCw: <RefreshCw className="h-5 w-5" />,
-  FolderKanban: <FolderKanban className="h-5 w-5" />,
-  FileText: <FileText className="h-5 w-5" />,
-  Type: <Type className="h-5 w-5" />,
-  Package: <Package className="h-5 w-5" />,
-  BookOpen: <BookOpen className="h-5 w-5" />,
-  HardDrive: <HardDrive className="h-5 w-5" />
-}
+import { MAIN_ROUTES, SYSTEM_ROUTES, type PageRoute } from '@/config/basic'
 
 interface MobileNavProps {
   children: React.ReactNode
@@ -45,35 +19,51 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
     return <>{children}</>
   }
 
+  const renderLink = (route: PageRoute) => {
+    const Icon = route.icon
+    const isActive =
+      location.pathname === route.path || (route.path === '/main' && location.pathname === '/')
+    return (
+      <Link
+        key={route.path}
+        to={route.path}
+        className={`flex items-center gap-3 w-full p-3 text-left rounded-md transition-colors ${
+          isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+        }`}
+        onClick={() => setOpen(false)}
+      >
+        <Icon className="h-5 w-5 shrink-0" />
+        <span>{route.label || route.name}</span>
+      </Link>
+    )
+  }
+
   return (
     <div className="w-full">
       {/* 移动端顶部导航栏 */}
       <div className="flex items-center justify-between p-4 bg-white border-b">
-        <div className="text-lg font-semibold">SailSite</div>
+        <div className="text-lg font-semibold">SailZen</div>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-72">
+          <SheetContent side="right" className="w-72 flex flex-col">
             <SheetHeader>
               <SheetTitle>导航菜单</SheetTitle>
             </SheetHeader>
-            <div className="mt-6 space-y-2">
-              {PAGE_ROUTES.map((route) => (
-                <Link
-                  key={route.path}
-                  to={route.path}
-                  className={`flex items-center gap-3 w-full p-3 text-left rounded-md transition-colors ${location.pathname === route.path ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                    }`}
-                  onClick={() => setOpen(false)}
-                >
-                  {route.icon && iconMap[route.icon]}
-                  <span>{route.label || route.name}</span>
-                </Link>
-              ))}
+            <div className="mt-4 flex-1 overflow-y-auto space-y-1.5">
+              {MAIN_ROUTES.map(renderLink)}
             </div>
+            {SYSTEM_ROUTES.length > 0 && (
+              <div className="pt-3 mt-3 border-t space-y-1.5">
+                <div className="px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Observability
+                </div>
+                {SYSTEM_ROUTES.map(renderLink)}
+              </div>
+            )}
           </SheetContent>
         </Sheet>
       </div>
