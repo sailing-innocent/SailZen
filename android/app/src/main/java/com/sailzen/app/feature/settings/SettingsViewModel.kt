@@ -6,14 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.sailzen.app.BuildConfig
 import com.sailzen.app.core.bg.ReminderService
 import com.sailzen.app.core.data.SettingsManager
+import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.AppReleaseDto
+import com.sailzen.app.core.network.ReminderWebSocket
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.Request
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -25,6 +30,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val quietEnd: String = "08:00",
         val deviceId: String = "",
         val connected: Boolean = false,
+        val connectionState: ReminderWebSocket.ConnectionState = ReminderWebSocket.ConnectionState.DISCONNECTED,
+        val connectionDetail: String = "",
+        val testingConnection: Boolean = false,
+        val connectionTestResult: String? = null,
+        val connectionTestOk: Boolean? = null,
         val saved: Boolean = false,
         val currentVersionName: String = BuildConfig.VERSION_NAME,
         val currentVersionCode: Int = BuildConfig.VERSION_CODE,
@@ -62,6 +72,16 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 _uiState.update { it.copy(connected = c) }
             }
         }
+        viewModelScope.launch {
+            ReminderService.connectionState.collect { st ->
+                _uiState.update { it.copy(connectionState = st) }
+            }
+        }
+        viewModelScope.launch {
+            ReminderService.connectionDetail.collect { detail ->
+                _uiState.update { it.copy(connectionDetail = detail) }
+            }
+        }
     }
 
     fun onServerUrlChange(value: String) = _uiState.update { it.copy(serverUrl = value) }
@@ -89,6 +109,63 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun consumeSaved() = _uiState.update { it.copy(saved = false) }
+
+    /** 主动探测 /api/v1/health，返回真实耗时或具体报错，便于现场排查端口/网络/鉴权问题 */
+    fun testConnection() {
+        val current = _uiState.value
+        if (current.testingConnection) return
+        viewModelScope.launch {
+            val rawUrl = if (current.serverUrlLocked) settings.defaultServerUrl() else current.serverUrl
+            val normalized = ApiClient.normalizeBaseUrl(rawUrl)
+            if (normalized.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        connectionTestOk = false,
+                        connectionTestResult = "未填写服务器地址",
+                    )
+                }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(testingConnection = true, connectionTestResult = null, connectionTestOk = null)
+            }
+            val startMs = System.currentTimeMillis()
+            val healthUrl = "$normalized/api/v1/health"
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val req = Request.Builder().url(healthUrl).get().build()
+                    ApiClient.downloadClient(current.apiToken).newCall(req).execute().use { resp ->
+                        val elapsed = System.currentTimeMillis() - startMs
+                        if (resp.isSuccessful) {
+                            true to "HTTP ${resp.code} 连通成功（${elapsed}ms）"
+                        } else {
+                            false to "HTTP ${resp.code}：请检查地址或 Token（$healthUrl）"
+                        }
+                    }
+                }
+            }
+            result.fold(
+                onSuccess = { (ok, msg) ->
+                    _uiState.update {
+                        it.copy(
+                            testingConnection = false,
+                            connectionTestOk = ok,
+                            connectionTestResult = msg,
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _uiState.update {
+                        it.copy(
+                            testingConnection = false,
+                            connectionTestOk = false,
+                            connectionTestResult = "连接失败：${err.javaClass.simpleName}: ${err.message ?: "未知错误"}（$healthUrl）",
+                        )
+                    }
+                },
+            )
+        }
+    }
 
     fun checkForUpdate() {
         val current = _uiState.value

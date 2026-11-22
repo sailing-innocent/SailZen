@@ -9,6 +9,7 @@ import com.sailzen.app.core.data.DataChangeEvent
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.data.onFailure
 import com.sailzen.app.core.data.onSuccess
+import com.sailzen.app.core.network.ReminderWebSocket
 import com.sailzen.app.core.network.dto.AffairActions
 import com.sailzen.app.core.network.dto.AffairCreateRequest
 import com.sailzen.app.core.network.dto.AffairDto
@@ -52,6 +53,8 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         val configured: Boolean = true,
         val serverUrl: String = "",
         val connected: Boolean = false,
+        val connectionState: ReminderWebSocket.ConnectionState = ReminderWebSocket.ConnectionState.DISCONNECTED,
+        val connectionDetail: String = "",
         val queuedCount: Int = 0,
         val message: String? = null,
         // 今日
@@ -120,6 +123,16 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             ReminderService.connectedState.collect { connected ->
                 _uiState.update { it.copy(connected = connected) }
+            }
+        }
+        viewModelScope.launch {
+            ReminderService.connectionState.collect { connState ->
+                _uiState.update { it.copy(connectionState = connState) }
+            }
+        }
+        viewModelScope.launch {
+            ReminderService.connectionDetail.collect { detail ->
+                _uiState.update { it.copy(connectionDetail = detail) }
             }
         }
         viewModelScope.launch {
@@ -233,6 +246,24 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
     /** 日期切换（◀ ▶），重置事务/事业懒加载标记后整体刷新 */
     fun selectDate(prev: Boolean) {
         _uiState.update { it.copy(date = it.date.plusDays(if (prev) -1 else 1)) }
+        refresh()
+    }
+
+    /** 回到今天 */
+    fun selectToday() {
+        val today = LocalDate.now()
+        if (_uiState.value.date != today) {
+            _uiState.update { it.copy(date = today) }
+            refresh()
+        }
+    }
+
+    /** 主动触发一次重连与刷新 */
+    fun reconnect() {
+        val app = getApplication<Application>()
+        if (_uiState.value.serverUrl.isNotBlank()) {
+            ReminderService.restart(app)
+        }
         refresh()
     }
 

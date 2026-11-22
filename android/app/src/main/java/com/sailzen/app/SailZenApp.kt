@@ -17,10 +17,10 @@ class SailZenApp : Application() {
         NotificationHelper.createChannels(this)
         // WorkManager 15min 周期补偿（通道 2）
         SyncWorker.enqueue(this)
-        // 已配置服务器则启动前台 Service（通道 1）
+        // 已配置服务器则尝试启动前台 Service（通道 1；若在后台冷启被系统限制，进入 MainActivity 会再次补启）
         CoroutineScope(Dispatchers.IO).launch {
             if (SettingsManager.get(this@SailZenApp).serverUrl().isNotBlank()) {
-                ReminderService.start(this@SailZenApp)
+                ReminderService.ensureStarted(this@SailZenApp)
             }
         }
     }

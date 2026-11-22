@@ -8,6 +8,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,7 +17,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
+import com.sailzen.app.core.bg.ReminderService
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.reminder.ReminderActionReceiver
 import com.sailzen.app.core.rhythm.QuickCaptureTileService
@@ -40,6 +43,7 @@ class MainActivity : ComponentActivity() {
     private val openCaptureState = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         handleIntent(intent)
         setContent {
@@ -161,6 +165,16 @@ class MainActivity : ComponentActivity() {
                     },
                     onDismiss = { updateState = AppUpdateState.Idle },
                 )
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 前台生命周期保证 ReminderService 一定能正常拉起（兼容 Android 12+ 后台启动限制）
+        lifecycleScope.launch {
+            if (SettingsManager.get(applicationContext).serverUrl().isNotBlank()) {
+                ReminderService.ensureStarted(applicationContext)
             }
         }
     }

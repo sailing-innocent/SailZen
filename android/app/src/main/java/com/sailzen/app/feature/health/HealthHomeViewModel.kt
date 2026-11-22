@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.sailzen.app.R
 import com.sailzen.app.core.data.DataChangeBus
 import com.sailzen.app.core.data.DataChangeEvent
+import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.HealthDashboardDto
@@ -25,10 +26,12 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
         val coachSummary: HealthCoachSummaryDto? = null,
         val loading: Boolean = false,
         val error: String? = null,
+        val serverConfigured: Boolean = true,
     )
 
     private val repository = HealthRepository.get(application)
     private val tickRepository = TickRepository.get(application)
+    private val settings = SettingsManager.get(application)
     private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
@@ -36,9 +39,20 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         viewModelScope.launch {
+            settings.serverUrlFlow.collect { url ->
+                val configured = url.isNotBlank()
+                val wasUnconfigured = !_uiState.value.serverConfigured
+                _uiState.update { it.copy(serverConfigured = configured) }
+                if (configured && wasUnconfigured) {
+                    refresh()
+                }
+            }
+        }
+        viewModelScope.launch {
             bus.events.collect { event ->
                 when (event) {
                     is DataChangeEvent.WeightChanged,
+                    is DataChangeEvent.BodyDataChanged,
                     is DataChangeEvent.HealthSignalChanged,
                     -> refresh()
                     else -> {}
@@ -53,17 +67,44 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
         refresh()
     }
 
+    fun stepDate(days: Long) {
+        selectDate(_uiState.value.selectedDate.plusDays(days))
+    }
+
+    fun selectToday() {
+        val today = LocalDate.now()
+        if (_uiState.value.selectedDate != today) {
+            selectDate(today)
+        }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(loading = true, error = null) }
+            val serverUrl = settings.serverUrl()
+            if (serverUrl.isBlank()) {
+                _uiState.update {
+                    it.copy(
+                        loading = false,
+                        serverConfigured = false,
+                        error = "未配置服务器地址，请先在设置页配置",
+                    )
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(loading = true, error = null, serverConfigured = true) }
             val result = repository.loadDashboard(_uiState.value.selectedDate)
             val coach = tickRepository.loadCoachSummary()
-            _uiState.update {
-                it.copy(
+            _uiState.update { prev ->
+                prev.copy(
                     loading = false,
-                    dashboard = result,
-                    coachSummary = coach,
-                    error = if (result == null) "加载失败，请检查网络" else null,
+                    // 加载失败时保留上一次已加载的缓存数据，不清空页面
+                    dashboard = result ?: prev.dashboard,
+                    coachSummary = coach ?: prev.coachSummary,
+                    error = if (result == null) "加载健康数据失败，请检查网络连接或服务器地址（$serverUrl）" else null,
                 )
             }
         }

@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.sailzen.app.core.data.SettingsManager
@@ -28,23 +29,53 @@ import kotlinx.coroutines.launch
 class ReminderService : Service() {
 
     companion object {
-        /** WS 连接状态（设置页徽标） */
+        private const val TAG = "ReminderService"
+        private const val ACTION_RECONNECT = "com.sailzen.app.action.RECONNECT"
+
+        /** WS 是否已建立连接（设置页/规划页徽标） */
         val connectedState = MutableStateFlow(false)
 
+        /** 细粒度连接状态 */
+        val connectionState = MutableStateFlow(ReminderWebSocket.ConnectionState.DISCONNECTED)
+
+        /** 最近一次连接状态明细（用于 UI 展示排查） */
+        val connectionDetail = MutableStateFlow("")
+
         fun start(context: Context) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, ReminderService::class.java),
-            )
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, ReminderService::class.java),
+                )
+            } catch (e: Exception) {
+                // Android 12+ 后台冷启动可能抛出 ForegroundServiceStartNotAllowedException，
+                // 进入 MainActivity 前台时会再次调用 ensureStarted() 补启。
+                Log.w(TAG, "startForegroundService deferred: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+
+        /** 确保前台服务已启动（支持在 Application / Activity 前台幂等调用） */
+        fun ensureStarted(context: Context) {
+            start(context)
         }
 
         fun stop(context: Context) {
             context.stopService(Intent(context, ReminderService::class.java))
         }
 
+        /**
+         * 原子重连：通过 ACTION_RECONNECT 通知服务重建 WebSocket，
+         * 避免 stopService + startForegroundService 竞态导致旧 socket 未释放或忽略新配置。
+         */
         fun restart(context: Context) {
-            stop(context)
-            start(context)
+            try {
+                ContextCompat.startForegroundService(
+                    context,
+                    Intent(context, ReminderService::class.java).setAction(ACTION_RECONNECT),
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "restart deferred: ${e.javaClass.simpleName}: ${e.message}")
+            }
         }
     }
 
@@ -63,7 +94,8 @@ class ReminderService : Service() {
             NotificationHelper.SERVICE_NOTIFICATION_ID,
             NotificationHelper.buildServiceNotification(this, 0, connectedState.value),
         )
-        startWebSocket()
+        val forceReconnect = intent?.action == ACTION_RECONNECT
+        startWebSocket(forceReconnect = forceReconnect)
         startPeriodicRefresh()
         serviceScope.launch {
             repository.registerDevice()
@@ -80,11 +112,17 @@ class ReminderService : Service() {
         webSocket = null
         refreshJob?.cancel()
         connectedState.value = false
+        connectionState.value = ReminderWebSocket.ConnectionState.DISCONNECTED
         super.onDestroy()
     }
 
-    private fun startWebSocket() {
-        if (webSocket != null) return
+    private fun startWebSocket(forceReconnect: Boolean = false) {
+        if (webSocket != null && !forceReconnect) return
+        if (forceReconnect) {
+            Log.i(TAG, "forcing WebSocket reconnect with latest settings")
+            webSocket?.stop()
+            webSocket = null
+        }
         val settings = SettingsManager.get(this)
         webSocket = ReminderWebSocket(
             scope = serviceScope,
@@ -104,8 +142,9 @@ class ReminderService : Service() {
             },
             onStateChange = { connected -> connectedState.value = connected },
             onDetailedStateChange = { state, detail ->
-                android.util.Log.d("ReminderService", "WS state=$state detail=$detail")
-                // 连接异常时刷新常驻通知，把状态透出到通知文本
+                Log.d(TAG, "WS state=$state detail=$detail")
+                connectionState.value = state
+                connectionDetail.value = detail
                 serviceScope.launch {
                     refreshServiceNotification()
                 }

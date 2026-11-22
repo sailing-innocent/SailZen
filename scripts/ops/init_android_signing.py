@@ -35,7 +35,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.ops.build_android_release import ANDROID_DIR
-from scripts.ops.common import configure_console_utf8
+from scripts.ops.common import configure_console_utf8, load_ops_config
 
 DEFAULT_KEYSTORE_REL = "keystore/sailzen-release.jks"
 DEFAULT_PROPS_PATH = ANDROID_DIR / "keystore.properties"
@@ -142,17 +142,26 @@ def main() -> int:
     )
     parser.add_argument(
         "--server-url",
-        required=True,
-        help="公网服务器地址（如 http://101.43.22.254）",
+        default=None,
+        help="公网服务器地址（留空时自动从 .env.ops/.env.prod 推导，如 http://101.43.22.254:4399）",
     )
     parser.add_argument("--alias", default=DEFAULT_ALIAS, help=f"证书别名（默认 {DEFAULT_ALIAS}）")
     parser.add_argument("--password", default=None, help="自定义证书密码（留空则自动生成强随机密码）")
     parser.add_argument("--force", action="store_true", help="强制覆盖已有证书与配置文件（慎用！）")
     args = parser.parse_args()
 
+    resolved_url = args.server_url
+    if not resolved_url:
+        try:
+            resolved_url = load_ops_config().get_server_url("prod")
+            print(f"[Config] 自动从 .env.prod/.env.ops 推导公网地址: {resolved_url}")
+        except RuntimeError as exc:
+            print(f"[FAIL] 未指定 --server-url 且无法自动推导: {exc}", file=sys.stderr)
+            return 1
+
     try:
         keystore_path, props_path = init_android_signing(
-            server_url=args.server_url,
+            server_url=resolved_url,
             alias=args.alias,
             password=args.password,
             force=args.force,

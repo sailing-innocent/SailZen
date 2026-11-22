@@ -100,6 +100,14 @@ fun SettingsScreen(
                     },
                 )
             }
+            if (!state.connected && state.connectionDetail.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "通道状态：${state.connectionState.name} · ${state.connectionDetail}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
@@ -154,11 +162,35 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = { viewModel.save() },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(stringResource(R.string.settings_save))
+                OutlinedButton(
+                    onClick = viewModel::testConnection,
+                    enabled = !state.testingConnection,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (state.testingConnection) "测试中…" else "测试连接")
+                }
+                Button(
+                    onClick = { viewModel.save() },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(stringResource(R.string.settings_save))
+                }
+            }
+            state.connectionTestResult?.let { msg ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (state.connectionTestOk == true) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    },
+                )
             }
             Spacer(modifier = Modifier.height(24.dp))
 

@@ -64,6 +64,15 @@ def _resolve_prop(key: str, gradle_props: Dict[str, str]) -> str:
     return (os.environ.get(key) or gradle_props.get(key) or "").strip()
 
 
+def resolve_release_server_url() -> str:
+    """按统一优先级解析 Release 构建将锁定的 SAILZEN_RELEASE_SERVER_URL。"""
+    merged_props: Dict[str, str] = {}
+    merged_props.update(_read_gradle_properties(Path.home() / ".gradle" / "gradle.properties"))
+    merged_props.update(_read_gradle_properties(ANDROID_DIR / "gradle.properties"))
+    merged_props.update(_read_gradle_properties(ANDROID_DIR / "keystore.properties"))
+    return _resolve_prop("SAILZEN_RELEASE_SERVER_URL", merged_props).rstrip("/")
+
+
 def check_release_guardrails(
     *, allow_debug_signing: bool = False, allow_empty_url: bool = False
 ) -> List[str]:

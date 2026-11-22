@@ -2,6 +2,7 @@ package com.sailzen.app.feature.plan.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,6 +52,7 @@ fun TodayTab(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (!state.configured) {
@@ -172,6 +174,7 @@ private fun HealthSignalCard(signal: HealthSignalItemDto) {
         "mood" -> "心情"
         else -> signal.signalType
     }
+    val summary = formatHealthSignalSummary(signal)
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -179,15 +182,46 @@ private fun HealthSignalCard(signal: HealthSignalItemDto) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(label, fontWeight = FontWeight.Medium)
-                Text(
-                    signal.valueJson.toString(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
-                )
+                if (summary.isNotBlank()) {
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            signal.htime?.let {
-                Text(it.substring(11, 16), style = MaterialTheme.typography.bodySmall)
+            signal.htime?.takeIf { it.length >= 16 }?.let {
+                Text(
+                    it.substring(11, 16),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
+}
+
+private fun formatHealthSignalSummary(signal: HealthSignalItemDto): String {
+    val obj = signal.valueJson as? kotlinx.serialization.json.JsonObject ?: return signal.valueJson.toString()
+    fun str(key: String): String? =
+        (obj[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+
+    val parts = mutableListOf<String>()
+    str("value_kg")?.let { parts += "$it kg" }
+    str("weight")?.let { if (parts.isEmpty()) parts += "$it kg" }
+    str("hours")?.let { parts += "$it 小时" }
+    str("duration_min")?.let { parts += "$it 分钟" }
+    str("minutes")?.let { parts += "$it 分钟" }
+    str("calories")?.let { parts += "$it kcal" }
+    str("title")?.let { parts += it }
+    str("name")?.let { parts += it }
+    str("note")?.let { parts += it }
+
+    if (parts.isNotEmpty()) return parts.joinToString(" · ")
+    return obj.entries
+        .mapNotNull { (k, v) ->
+            val text = (v as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
+            text?.let { "$k: $it" }
+        }
+        .joinToString(" · ")
 }

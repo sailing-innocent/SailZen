@@ -42,6 +42,31 @@ data class TransactionDto(
     @SerialName("prev_value") val prevValue: String = "0.0",
     val state: Int = 0,
     val htime: Double = 0.0,
+    val ctime: String? = null,
+    val mtime: String? = null,
+)
+
+/** 分页交易列表响应（对齐 GET /api/v1/finance/transaction/paginated/）。 */
+@Serializable
+data class PaginatedTransactionsDto(
+    val data: List<TransactionDto> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    @SerialName("page_size") val pageSize: Int = 50,
+    @SerialName("total_pages") val totalPages: Int = 1,
+    @SerialName("has_next") val hasNext: Boolean = false,
+    @SerialName("has_prev") val hasPrev: Boolean = false,
+)
+
+/** 交易汇总统计响应（对齐 GET /api/v1/finance/transaction/stats/）。 */
+@Serializable
+data class TransactionStatsDto(
+    @SerialName("total_count") val totalCount: Int = 0,
+    @SerialName("income_count") val incomeCount: Int = 0,
+    @SerialName("expense_count") val expenseCount: Int = 0,
+    @SerialName("income_total") val incomeTotal: String = "0.0",
+    @SerialName("expense_total") val expenseTotal: String = "0.0",
+    @SerialName("net_total") val netTotal: String = "0.0",
 )
 
 /**

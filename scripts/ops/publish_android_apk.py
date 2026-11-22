@@ -42,7 +42,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.ops.build_android_release import ANDROID_DIR, check_release_guardrails
+from scripts.ops.build_android_release import (
+    ANDROID_DIR,
+    check_release_guardrails,
+    resolve_release_server_url,
+)
 from scripts.ops.common import (
     OpsConfig,
     configure_console_utf8,
@@ -324,6 +328,21 @@ def publish_android_apk(
             detail = "\n".join(f"  - {item}" for item in issues)
             raise RuntimeError(f"Android Release 构建护栏未通过：\n{detail}")
         print("[OK] Release 服务器地址与正式签名护栏校验通过")
+
+        # 探活 Release 锁定的服务端地址，避免打出指向错误端口（如漏写 :4399）的不可用包
+        release_url = resolve_release_server_url()
+        if release_url and not allow_empty_url:
+            health_url = f"{release_url}{cfg.get_api_endpoint('prod')}/health"
+            try:
+                with urllib.request.urlopen(health_url, timeout=8) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(f"HTTP {resp.status}")
+                print(f"[OK] Release 服务器地址可达性校验通过: {health_url}")
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Release 锁定的服务器地址无法连通 ({health_url}): {exc}\n"
+                    "请检查 android/keystore.properties 中的 SAILZEN_RELEASE_SERVER_URL（是否漏写端口号，如 :4399）"
+                ) from exc
 
     if dry_run:
         if existing_apk is not None:

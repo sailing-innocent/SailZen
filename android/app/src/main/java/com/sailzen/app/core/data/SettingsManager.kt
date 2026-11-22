@@ -47,7 +47,9 @@ class SettingsManager private constructor(private val context: Context) {
     // ------------------------------------------------------------------
 
     val serverUrlFlow: Flow<String> =
-        context.dataStore.data.map { it[KEY_SERVER_URL] ?: defaultServerUrl() }
+        context.dataStore.data.map { prefs ->
+            resolveEffectiveServerUrl(prefs[KEY_SERVER_URL])
+        }
 
     val apiTokenFlow: Flow<String> =
         context.dataStore.data.map { it[KEY_API_TOKEN] ?: "" }
@@ -66,7 +68,21 @@ class SettingsManager private constructor(private val context: Context) {
     // ------------------------------------------------------------------
 
     suspend fun serverUrl(): String =
-        context.dataStore.data.first()[KEY_SERVER_URL] ?: defaultServerUrl()
+        resolveEffectiveServerUrl(context.dataStore.data.first()[KEY_SERVER_URL])
+
+    /**
+     * 解析最终生效的服务器地址：
+     * - Release 锁定模式下始终使用构建期注入的 BuildConfig.SERVER_URL，
+     *   避免旧版安装或 Android AutoBackup 遗留的空串/旧地址导致永久连不上。
+     * - Debug 模式下若 DataStore 未配置或为空，则回退默认地址。
+     */
+    private fun resolveEffectiveServerUrl(stored: String?): String {
+        val fallback = defaultServerUrl().trim().trimEnd('/')
+        if (BuildConfig.SERVER_URL_LOCKED && fallback.isNotBlank()) {
+            return fallback
+        }
+        return stored?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: fallback
+    }
 
     suspend fun apiToken(): String =
         context.dataStore.data.first()[KEY_API_TOKEN] ?: ""

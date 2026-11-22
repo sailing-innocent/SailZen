@@ -1,5 +1,6 @@
 package com.sailzen.app.ui.navigation
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
@@ -87,10 +88,19 @@ fun SailZenNavGraph(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    val rootTabRoutes = setOf(
+        Routes.PLAN,
+        Routes.INBOX,
+        Routes.MONEY,
+        Routes.HEALTH,
+        Routes.READER,
+    )
+    val showBottomBar = currentRoute in rootTabRoutes
+
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            // 设置页不显示底栏
-            if (currentRoute != Routes.SETTINGS) {
+            if (showBottomBar) {
                 NavigationBar {
                     TABS.forEach { tab ->
                         val selected = when (tab.route) {
@@ -118,7 +128,7 @@ fun SailZenNavGraph(
         NavHost(
             navController = navController,
             startDestination = Routes.PLAN,
-            modifier = Modifier.padding(padding),
+            modifier = Modifier.padding(bottom = padding.calculateBottomPadding()),
         ) {
             composable(Routes.PLAN) {
                 PlanScreen(
@@ -150,6 +160,7 @@ fun SailZenNavGraph(
                     onOpenHealthCheckin = { type ->
                         navController.navigate(Routes.healthCheckin(type.name))
                     },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 )
             }
             composable(Routes.HEALTH_COACH) {
@@ -210,6 +221,7 @@ fun SailZenNavGraph(
                     onOpenWork = { workId ->
                         navController.navigate(Routes.readerWork(workId))
                     },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 )
             }
             composable(

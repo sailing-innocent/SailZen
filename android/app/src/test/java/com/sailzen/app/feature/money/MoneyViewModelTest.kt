@@ -6,10 +6,19 @@ import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.money.MoneyRepository
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.PaginatedTransactionsDto
 import com.sailzen.app.core.network.dto.TransactionDeleteResponse
 import com.sailzen.app.core.network.dto.TransactionDto
+import com.sailzen.app.core.network.dto.TransactionStatsDto
 import com.sailzen.app.core.network.dto.TransactionUpsertRequest
 import java.io.File
+import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -21,6 +30,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -28,12 +38,12 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * 快速记账 ViewModel 语义测试（JVM，FakeApplication + FakeMoneyRepository）：
- * - 表单校验（金额/账户/转账两侧）与 from/to 请求映射；
- * - 类型推断与物理账户过滤；
- * - create 成功后列表 refresh、表单保留（对齐前端"继续添加"）；
- * - update/delete 成功后编辑/确认状态清空；
- * - repository Failure 时错误 message 正确回传。
+ * 记账页 ViewModel 语义测试（JVM，FakeApplication + FakeMoneyRepository）：
+ * - DatePicker UTC ↔ 本地时区转换回归（修复再次点开回退一天问题）；
+ * - 排序切换（按入账时间 ctime / 按交易日期 htime）与分页加载；
+ * - 月度收支统计拉取、切月、金额与入账时间格式化；
+ * - 表单校验、请求映射、编辑保留 tags/budgetId、连续记账与清空输入；
+ * - create / update / delete / failure 状态流转。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MoneyViewModelTest {
@@ -48,33 +58,84 @@ class MoneyViewModelTest {
             File(System.getProperty("java.io.tmpdir") ?: ".", "sailzen-test-files")
     }
 
+    private data class PaginatedCall(
+        val page: Int,
+        val pageSize: Int,
+        val sortBy: String,
+        val sortOrder: String,
+    )
+
     private class FakeMoneyRepository(context: Context) : MoneyRepository(context) {
         var accountsResult: OperationResult<List<AccountDto>> = OperationResult.Success(emptyList())
-        var transactionsResult: OperationResult<List<TransactionDto>> = OperationResult.Success(emptyList())
+        var paginatedHandler: (PaginatedCall) -> OperationResult<PaginatedTransactionsDto> = {
+            OperationResult.Success(PaginatedTransactionsDto())
+        }
+        var statsHandler: (Double, Double) -> OperationResult<TransactionStatsDto> = { _, _ ->
+            OperationResult.Success(TransactionStatsDto())
+        }
         var createResult: OperationResult<TransactionDto> = OperationResult.Failure("未配置服务器")
         var updateResult: OperationResult<TransactionDto> = OperationResult.Failure("未配置服务器")
         var deleteResult: OperationResult<TransactionDeleteResponse> =
             OperationResult.Failure("未配置服务器")
 
+        val paginatedCalls = mutableListOf<PaginatedCall>()
+        val statsCalls = mutableListOf<Pair<Double, Double>>()
         val createdRequests = mutableListOf<TransactionUpsertRequest>()
         val updatedRequests = mutableListOf<Pair<Int, TransactionUpsertRequest>>()
         val deletedIds = mutableListOf<Int>()
         var configured = true
+
+        fun setTransactions(items: List<TransactionDto>, hasNext: Boolean = false, total: Int = items.size) {
+            paginatedHandler = { call ->
+                OperationResult.Success(
+                    PaginatedTransactionsDto(
+                        data = items,
+                        total = total,
+                        page = call.page,
+                        pageSize = call.pageSize,
+                        totalPages = if (hasNext) call.page + 1 else call.page,
+                        hasNext = hasNext,
+                        hasPrev = call.page > 1,
+                    ),
+                )
+            }
+        }
 
         // override 绕过 DataStore 读：避免 VM init 协程在 DataStore 后台线程上恢复并并发
         // 触碰 Dispatchers.Main，导致跨测试的 setMain/resetMain 竞态
         override suspend fun serverConfigured() = configured
 
         override suspend fun listAccounts() = accountsResult
-        override suspend fun listTransactions(limit: Int) = transactionsResult
+
+        override suspend fun listTransactionsPaginated(
+            page: Int,
+            pageSize: Int,
+            sortBy: String,
+            sortOrder: String,
+        ): OperationResult<PaginatedTransactionsDto> {
+            val call = PaginatedCall(page, pageSize, sortBy, sortOrder)
+            paginatedCalls += call
+            return paginatedHandler(call)
+        }
+
+        override suspend fun getTransactionStats(
+            fromTime: Double,
+            toTime: Double,
+        ): OperationResult<TransactionStatsDto> {
+            statsCalls += fromTime to toTime
+            return statsHandler(fromTime, toTime)
+        }
+
         override suspend fun create(req: TransactionUpsertRequest): OperationResult<TransactionDto> {
             createdRequests += req
             return createResult
         }
+
         override suspend fun update(id: Int, req: TransactionUpsertRequest): OperationResult<TransactionDto> {
             updatedRequests += id to req
             return updateResult
         }
+
         override suspend fun delete(id: Int): OperationResult<TransactionDeleteResponse> {
             deletedIds += id
             return deleteResult
@@ -92,14 +153,20 @@ class MoneyViewModelTest {
         toAccId: Int = -1,
         value: String = "12.5",
         description: String = "午餐",
+        tags: String = "",
+        budgetId: Int? = null,
         htime: Double = 1_700_000_000.0,
+        ctime: String? = "2026-11-22T23:45:48",
     ) = TransactionDto(
         id = id,
         fromAccId = fromAccId,
         toAccId = toAccId,
         value = value,
         description = description,
+        tags = tags,
+        budgetId = budgetId,
         htime = htime,
+        ctime = ctime,
     )
 
     private suspend fun awaitCondition(timeoutMs: Long = 3000, cond: () -> Boolean) {
@@ -115,19 +182,109 @@ class MoneyViewModelTest {
     fun tearDown() {
         vms.forEach { it.viewModelScope.cancel() }
         vms.clear()
-        // 泵空 TestMainDispatcher，确保取消的协程在 resetMain 前完成
         testDispatcher.scheduler.runCurrent()
         Dispatchers.resetMain()
+    }
+
+    // ---------------- DatePicker 时区回归测试 ----------------
+
+    @Test
+    fun datePickerConversion_preservesExactDateInUtcPlus8_noOffByOneDay() {
+        val shanghai = ZoneId.of("Asia/Shanghai")
+        val targetDate = LocalDate.of(2026, 10, 5)
+        val utcMillisFromPicker = targetDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+        // 1. 用户在 DatePicker 点选 2026-10-05 → 保存为上海时区 2026-10-05 00:00:00
+        val savedSec = MoneyViewModel.pickerUtcMillisToLocalMidnightSec(utcMillisFromPicker, shanghai)
+        assertEquals(targetDate, MoneyViewModel.localEpochSecToDate(savedSec, shanghai))
+
+        // 2. 再次打开 DatePicker：转回 UTC 零点毫秒，必须是 2026-10-05T00:00:00Z，而非 2026-10-04！
+        val reopenedUtcMillis = MoneyViewModel.localEpochSecToPickerUtcMillis(savedSec, shanghai)
+        val reopenedUtcDate = Instant.ofEpochMilli(reopenedUtcMillis).atZone(ZoneOffset.UTC).toLocalDate()
+        assertEquals(targetDate, reopenedUtcDate)
+        assertEquals(utcMillisFromPicker, reopenedUtcMillis)
+
+        // 3. 连续多次打开确认不漂移
+        var sec = savedSec
+        repeat(5) {
+            val pickerMillis = MoneyViewModel.localEpochSecToPickerUtcMillis(sec, shanghai)
+            sec = MoneyViewModel.pickerUtcMillisToLocalMidnightSec(pickerMillis, shanghai)
+        }
+        assertEquals(savedSec, sec)
+        assertEquals(targetDate, MoneyViewModel.localEpochSecToDate(sec, shanghai))
+    }
+
+    @Test
+    fun datePickerConversion_preservesExactDateInNegativeOffsetAndUtc() {
+        val targetDate = LocalDate.of(2026, 10, 5)
+        val utcMillis = targetDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+        for (zone in listOf(ZoneId.of("America/New_York"), ZoneId.of("UTC"), ZoneId.of("Pacific/Kiritimati"))) {
+            val savedSec = MoneyViewModel.pickerUtcMillisToLocalMidnightSec(utcMillis, zone)
+            assertEquals("zone=$zone", targetDate, MoneyViewModel.localEpochSecToDate(savedSec, zone))
+            val reopened = MoneyViewModel.localEpochSecToPickerUtcMillis(savedSec, zone)
+            assertEquals("zone=$zone", utcMillis, reopened)
+        }
+    }
+
+    @Test
+    fun stepDateByDays_stepsAcrossMonthBoundaries() {
+        val shanghai = ZoneId.of("Asia/Shanghai")
+        val oct31 = MoneyViewModel.localDateToMidnightSec(LocalDate.of(2026, 10, 31), shanghai)
+        val nov01 = MoneyViewModel.stepDateByDays(oct31, 1, shanghai)
+        val oct30 = MoneyViewModel.stepDateByDays(oct31, -1, shanghai)
+        assertEquals(LocalDate.of(2026, 11, 1), MoneyViewModel.localEpochSecToDate(nov01, shanghai))
+        assertEquals(LocalDate.of(2026, 10, 30), MoneyViewModel.localEpochSecToDate(oct30, shanghai))
+    }
+
+    @Test
+    fun monthRangeEpochSec_coversFullLocalMonth() {
+        val shanghai = ZoneId.of("Asia/Shanghai")
+        val (fromSec, toSec) = MoneyViewModel.monthRangeEpochSec(YearMonth.of(2026, 10), shanghai)
+        assertEquals(
+            LocalDate.of(2026, 10, 1).atStartOfDay(shanghai).toEpochSecond().toDouble(),
+            fromSec,
+            0.0,
+        )
+        assertEquals(
+            LocalDate.of(2026, 10, 31).atTime(23, 59, 59).atZone(shanghai).toEpochSecond().toDouble(),
+            toSec,
+            0.0,
+        )
+    }
+
+    // ---------------- 金额与时间格式化 ----------------
+
+    @Test
+    fun formatMoney_handlesCurrencySuffixNegativesAndPlusSign() {
+        assertEquals("¥15,053.37", MoneyViewModel.formatMoney("15053.37 CNY"))
+        assertEquals("+¥4,653.63", MoneyViewModel.formatMoney("4653.63 CNY", showPlusSign = true))
+        assertEquals("-¥120.50", MoneyViewModel.formatMoney("-120.5 CNY", showPlusSign = true))
+        assertEquals("¥0.00", MoneyViewModel.formatMoney("0.0 CNY", showPlusSign = true))
+        assertEquals(BigDecimal("19707.0"), MoneyViewModel.parseMoneyAmount("19707.0 CNY"))
+    }
+
+    @Test
+    fun formatEntryTime_formatsRelativeAndAbsoluteDates() {
+        val now = LocalDateTime.of(2026, 11, 22, 23, 50, 0)
+        assertEquals("今天 23:45", MoneyViewModel.formatEntryTime("2026-11-22T23:45:48.094738", now))
+        assertEquals("昨天 08:15", MoneyViewModel.formatEntryTime("2026-11-21T08:15:00", now))
+        assertEquals("10-05 14:20", MoneyViewModel.formatEntryTime("2026-10-05T14:20:00", now))
+        assertEquals("2025-12-31 23:59", MoneyViewModel.formatEntryTime("2025-12-31T23:59:00", now))
+        assertNull(MoneyViewModel.formatEntryTime(null, now))
+        assertNull(MoneyViewModel.formatEntryTime("not-a-date", now))
     }
 
     // ---------------- 表单校验 ----------------
 
     @Test
-    fun validateForm_rejectsBlankAndNonNumericAmount() {
+    fun validateForm_rejectsBlankZeroNegativeAndNonNumericAmount() {
         val base = MoneyViewModel.TxnForm(type = MoneyViewModel.TxnType.EXPENSE, fromAccId = 1)
         assertEquals("请输入有效金额", MoneyViewModel.validateForm(base.copy(value = "")))
         assertEquals("请输入有效金额", MoneyViewModel.validateForm(base.copy(value = "abc")))
         assertEquals("请输入有效金额", MoneyViewModel.validateForm(base.copy(value = "  ")))
+        assertEquals("请输入有效金额", MoneyViewModel.validateForm(base.copy(value = "0")))
+        assertEquals("请输入有效金额", MoneyViewModel.validateForm(base.copy(value = "-5")))
     }
 
     @Test
@@ -196,11 +353,20 @@ class MoneyViewModelTest {
     }
 
     @Test
+    fun deriveEditForm_preservesExistingTagsAndBudgetId() {
+        val existing = txn(id = 42, tags = "餐饮,零食", budgetId = 7)
+        val form = MoneyViewModel.deriveEditForm(existing)
+        val req = MoneyViewModel.toRequest(form)
+        assertEquals("餐饮,零食", req.tags)
+        assertEquals(7, req.budgetId)
+    }
+
+    @Test
     fun toRequest_incomeUsesExternalAsPayer() {
         val req = MoneyViewModel.toRequest(
             MoneyViewModel.TxnForm(
                 type = MoneyViewModel.TxnType.INCOME,
-                fromAccId = 9, // 收入模式下应被忽略
+                fromAccId = 9,
                 toAccId = 2,
                 value = "3000",
                 htimeSec = 1_700_000_000L,
@@ -252,14 +418,104 @@ class MoneyViewModelTest {
         assertEquals(-1, backToExpense.toAccId)
     }
 
-    // ---------------- create 流程 ----------------
+    // ---------------- 排序切换与分页加载 ----------------
 
     @Test
-    fun submit_success_refreshesListAndKeepsForm() = runBlocking {
+    fun sortMode_defaultsToEntryTimeAndSwitchesToTxnDate() = runBlocking {
+        val repo = FakeMoneyRepository(FakeApplication())
+        repo.setTransactions(listOf(txn(id = 10)))
+
+        val vm = newVm(repo)
+        awaitCondition { repo.paginatedCalls.isNotEmpty() && !vm.uiState.value.loading }
+
+        assertEquals(MoneyViewModel.TransactionSortMode.ENTRY_TIME, vm.uiState.value.sortMode)
+        assertEquals("ctime", repo.paginatedCalls.last().sortBy)
+        assertEquals("desc", repo.paginatedCalls.last().sortOrder)
+
+        vm.setSortMode(MoneyViewModel.TransactionSortMode.TXN_DATE)
+        awaitCondition { repo.paginatedCalls.size >= 2 && !vm.uiState.value.loading }
+
+        assertEquals(MoneyViewModel.TransactionSortMode.TXN_DATE, vm.uiState.value.sortMode)
+        assertEquals("htime", repo.paginatedCalls.last().sortBy)
+    }
+
+    @Test
+    fun loadMore_appendsNextPageAndDeduplicates() = runBlocking {
+        val repo = FakeMoneyRepository(FakeApplication())
+        repo.paginatedHandler = { call ->
+            when (call.page) {
+                1 -> OperationResult.Success(
+                    PaginatedTransactionsDto(
+                        data = listOf(txn(id = 3), txn(id = 2)),
+                        total = 3,
+                        page = 1,
+                        pageSize = 2,
+                        totalPages = 2,
+                        hasNext = true,
+                    ),
+                )
+                else -> OperationResult.Success(
+                    PaginatedTransactionsDto(
+                        data = listOf(txn(id = 2), txn(id = 1)), // 包含重复 id=2
+                        total = 3,
+                        page = 2,
+                        pageSize = 2,
+                        totalPages = 2,
+                        hasNext = false,
+                    ),
+                )
+            }
+        }
+
+        val vm = newVm(repo)
+        awaitCondition { vm.uiState.value.transactions.size == 2 }
+        assertTrue(vm.uiState.value.hasMore)
+
+        vm.loadMore()
+        awaitCondition { !vm.uiState.value.loadingMore && vm.uiState.value.transactions.size == 3 }
+
+        assertEquals(listOf(3, 2, 1), vm.uiState.value.transactions.map { it.id })
+        assertFalse(vm.uiState.value.hasMore)
+    }
+
+    // ---------------- 月度统计切换 ----------------
+
+    @Test
+    fun stepStatsMonth_updatesMonthAndFetchesStats() = runBlocking {
+        val repo = FakeMoneyRepository(FakeApplication())
+        repo.statsHandler = { _, _ ->
+            OperationResult.Success(
+                TransactionStatsDto(
+                    totalCount = 12,
+                    incomeCount = 2,
+                    expenseCount = 10,
+                    incomeTotal = "5000.0 CNY",
+                    expenseTotal = "1234.56 CNY",
+                    netTotal = "3765.44 CNY",
+                ),
+            )
+        }
+
+        val vm = newVm(repo)
+        awaitCondition { vm.uiState.value.monthlyStats != null }
+        val initialMonth = vm.uiState.value.statsMonth
+        val initialCalls = repo.statsCalls.size
+
+        vm.stepStatsMonth(-1)
+        awaitCondition { repo.statsCalls.size > initialCalls && !vm.uiState.value.statsLoading }
+
+        assertEquals(initialMonth.minusMonths(1), vm.uiState.value.statsMonth)
+        assertEquals("1234.56 CNY", vm.uiState.value.monthlyStats?.expenseTotal)
+    }
+
+    // ---------------- create 流程与清空输入 ----------------
+
+    @Test
+    fun submit_success_tracksLastCreatedRefreshesAndKeepsForm() = runBlocking {
         val repo = FakeMoneyRepository(FakeApplication())
         val latest = txn(id = 9)
         repo.accountsResult = OperationResult.Success(listOf(account(1)))
-        repo.transactionsResult = OperationResult.Success(listOf(latest))
+        repo.setTransactions(listOf(latest))
         repo.createResult = OperationResult.Success(latest)
 
         val vm = newVm(repo)
@@ -276,10 +532,17 @@ class MoneyViewModelTest {
 
         assertEquals(1, repo.createdRequests.size)
         assertEquals("已记一笔", vm.uiState.value.message)
-        // 列表已 refresh 到服务端最新
+        assertEquals(9, vm.uiState.value.lastCreatedTxnId)
         assertEquals(listOf(9), vm.uiState.value.transactions.map { it.id })
-        // 表单保留（对齐前端"继续添加"）
+        // 表单保留（便于批量同账户/同日期连续录入）
         assertEquals(form, vm.uiState.value.form)
+
+        // 一键清空仅清除金额与描述，保留账户与日期
+        vm.clearFormInputs()
+        assertEquals("", vm.uiState.value.form.value)
+        assertEquals("", vm.uiState.value.form.description)
+        assertEquals(1, vm.uiState.value.form.fromAccId)
+        assertEquals(1_700_000_000L, vm.uiState.value.form.htimeSec)
     }
 
     @Test
@@ -372,22 +635,22 @@ class MoneyViewModelTest {
     // ---------------- refresh 失败回传 ----------------
 
     @Test
-    fun refresh_failure_keepsDataAndReportsMessage() = runBlocking {
+    fun refresh_failure_keepsDataAndReportsErrorAndMessage() = runBlocking {
         val repo = FakeMoneyRepository(FakeApplication())
         val existing = txn(id = 1)
         repo.accountsResult = OperationResult.Success(listOf(account(1)))
-        repo.transactionsResult = OperationResult.Success(listOf(existing))
+        repo.setTransactions(listOf(existing))
 
         val vm = newVm(repo)
         awaitCondition { vm.uiState.value.transactions.isNotEmpty() }
         assertEquals(listOf(1), vm.uiState.value.transactions.map { it.id })
 
-        repo.transactionsResult = OperationResult.Failure("连接超时")
+        repo.paginatedHandler = { OperationResult.Failure("连接超时") }
         vm.refresh()
         awaitCondition { !vm.uiState.value.loading && vm.uiState.value.message != null }
 
         assertTrue(vm.uiState.value.message!!.contains("连接超时"))
-        // 旧数据保留
+        assertEquals("连接超时", vm.uiState.value.error)
         assertEquals(listOf(1), vm.uiState.value.transactions.map { it.id })
     }
 
@@ -395,8 +658,6 @@ class MoneyViewModelTest {
 
     @Test
     fun repository_withoutServer_returnsFailureWithoutNetwork() = runBlocking {
-        // debug 构建 BuildConfig.SERVER_URL 为空 → apiOrNull 早退 null →
-        // listAccounts 返回 Failure("未配置服务器")，不触网、不抛异常
         val repo = MoneyRepository.get(FakeApplication())
         val result = repo.listAccounts()
         assertTrue(result is OperationResult.Failure)
@@ -410,7 +671,6 @@ class MoneyViewModelTest {
         val nowSec = System.currentTimeMillis() / 1000
         val midnight = MoneyViewModel.localMidnightSec(System.currentTimeMillis())
         assertTrue(midnight in (nowSec - 86400)..nowSec)
-        // 零点对齐：当天任意时刻（含跨日边界 ±1s 容差）与零点差为整天数
         val delta = nowSec - midnight
         assertTrue(delta in 0..86400L)
     }
@@ -419,9 +679,6 @@ class MoneyViewModelTest {
 
     @Test
     fun factory_createsViewModelWithoutDefaultFactoryCrash() = runBlocking {
-        // 回归：MoneyViewModel 构造器带 repository 参数，若依赖默认 AndroidViewModelFactory
-        // 会在打开记账页时抛 IllegalArgumentException("Cannot create an instance of class ...")；
-        // 这里验证显式工厂能正常创建实例（实际接线见 MoneyScreen）。
         val app = FakeApplication()
         val repo = FakeMoneyRepository(app)
         repo.accountsResult = OperationResult.Success(listOf(account(1)))

@@ -10,8 +10,10 @@ import com.sailzen.app.core.data.runOperation
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.MoneyApi
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.PaginatedTransactionsDto
 import com.sailzen.app.core.network.dto.TransactionDeleteResponse
 import com.sailzen.app.core.network.dto.TransactionDto
+import com.sailzen.app.core.network.dto.TransactionStatsDto
 import com.sailzen.app.core.network.dto.TransactionUpsertRequest
 
 /**
@@ -68,6 +70,41 @@ open class MoneyRepository protected constructor(private val context: Context) {
     /** 交易列表，服务端按 htime desc 返回（最新在前）。limit=-1 为全部。 */
     open suspend fun listTransactions(limit: Int = 200): OperationResult<List<TransactionDto>> =
         runOperation(bus, block = { apiOrNull()?.listTransactions(limit) ?: throw notConfigured() })
+
+    /** 分页交易列表，支持按 ctime（入账时间）或 htime（交易日期）排序。 */
+    open suspend fun listTransactionsPaginated(
+        page: Int = 1,
+        pageSize: Int = 50,
+        sortBy: String = "ctime",
+        sortOrder: String = "desc",
+    ): OperationResult<PaginatedTransactionsDto> =
+        runOperation(
+            bus,
+            block = {
+                apiOrNull()?.listTransactionsPaginated(
+                    page = page,
+                    pageSize = pageSize,
+                    sortBy = sortBy,
+                    sortOrder = sortOrder,
+                ) ?: throw notConfigured()
+            },
+        )
+
+    /** 指定时间范围的收支汇总统计（return_list=false）。 */
+    open suspend fun getTransactionStats(
+        fromTime: Double,
+        toTime: Double,
+    ): OperationResult<TransactionStatsDto> =
+        runOperation(
+            bus,
+            block = {
+                apiOrNull()?.getTransactionStats(
+                    fromTime = fromTime,
+                    toTime = toTime,
+                    returnList = false,
+                ) ?: throw notConfigured()
+            },
+        )
 
     // ------------------------------------------------------------------
     // 写入（成功广播 TransactionChanged）
