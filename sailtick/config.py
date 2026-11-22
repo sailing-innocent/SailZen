@@ -74,14 +74,51 @@ class QuietHoursConfig:
 
 
 @dataclass
+class TickSlotSchedule:
+    """单个定时 Tick 槽位配置（支持分钟级精度，如 21:45 睡前日报）。"""
+
+    slot: str
+    hour: int
+    minute: int = 0
+
+
+@dataclass
 class TickConfig:
     """Tick 排程配置。"""
 
     hours: List[int] = field(default_factory=lambda: [0, 6, 12, 18])
+    schedule_slots: List[TickSlotSchedule] = field(default_factory=list)
+    pre_sleep_report_time: str = "21:45"  # 每日睡前体重与健康日报时间（HH:MM）
     work_budget_minutes: int = 180
     scan_budget_minutes: int = 15
     plan_budget_minutes: int = 20
     handoff_budget_minutes: int = 10
+
+    def resolved_slots(self) -> List[TickSlotSchedule]:
+        """解析最终生效的唤醒槽位列表（显式 schedule_slots 优先，否则由 hours + pre_sleep_report_time 组合）。"""
+        if self.schedule_slots:
+            return list(self.schedule_slots)
+        hour_map = {
+            0: "nightly_maintenance",
+            6: "morning_checkin",
+            12: "midday_checkin",
+            18: "evening_review",
+        }
+        slots: List[TickSlotSchedule] = [
+            TickSlotSchedule(slot=hour_map.get(h, f"tick_{h:02d}"), hour=int(h), minute=0)
+            for h in sorted(self.hours)
+        ]
+        if self.pre_sleep_report_time:
+            try:
+                hh, mm = self.pre_sleep_report_time.strip().split(":")
+                slots.append(
+                    TickSlotSchedule(
+                        slot="pre_sleep_report", hour=int(hh), minute=int(mm)
+                    )
+                )
+            except Exception:
+                pass
+        return slots
 
 
 @dataclass
@@ -105,6 +142,9 @@ class NotifyConfig:
     quiet_hours: QuietHoursConfig = field(default_factory=QuietHoursConfig)
     push_enabled: bool = True  # 经 sail_server reminder WS 推送手机
     dedup_window_seconds: int = 3600
+    max_questions_per_tick: int = 2  # 单次 Tick 提问上限（sailtick.yaml 生产推荐设为 1）
+    max_pending_questions: int = 2   # 未回复提问达到上限时暂缓新提问
+    topic_cooldown_hours: int = 24   # 同主题冷却时长
 
 
 @dataclass
@@ -238,10 +278,46 @@ def _env_override(cfg: SailTickConfig) -> None:
             ds_cfg.model = os.environ["DEEPSEEK_MODEL"]
 
 
+def _load_dotenv_if_present(config_dir: str) -> None:
+    """自动加载 .env 文件（不覆盖已有环境变量，避免单测与 systemd EnvironmentFile 冲突）。
+
+    优先级（可通过 SAILTICK_ENV_FILE 或 SAILTICK_ENV 显式指定）:
+      - SAILTICK_ENV_FILE 显式路径
+      - SAILTICK_ENV=dev → .env.dev；SAILTICK_ENV=prod → .env.prod
+      - 未显式指定时：在 config_dir 下按 .env.prod → .env.dev → .env 探测（仅在非 pytest 临时目录时）
+    """
+    if os.environ.get("SAILTICK_DISABLE_DOTENV", "").lower() in ("1", "true", "yes"):
+        return
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+
+    base = Path(config_dir)
+    explicit = os.environ.get("SAILTICK_ENV_FILE", "").strip()
+    candidates: List[Path] = []
+    if explicit:
+        p = Path(explicit)
+        candidates.append(p if p.is_absolute() else base / p)
+    else:
+        env_name = os.environ.get("SAILTICK_ENV", "").strip().lower()
+        if env_name in ("prod", "dev", "debug"):
+            candidates.append(base / f".env.{env_name}")
+        else:
+            candidates.extend([base / ".env.prod", base / ".env"])
+
+    for env_path in candidates:
+        if env_path.is_file():
+            load_dotenv(env_path, override=False)
+            logger.debug("Loaded env defaults from %s (override=False)", env_path)
+            break
+
+
 def load_config(path: Optional[str] = None) -> SailTickConfig:
     """从 sailtick.yaml 加载配置。"""
     config_path = _find_config(path)
     config_dir = str(config_path.parent) if config_path.exists() else str(Path.cwd())
+    _load_dotenv_if_present(config_dir)
 
     raw: Dict[str, Any] = {}
     if config_path.exists():
@@ -270,6 +346,24 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
     dev_raw = root.get("self_dev", {})
     canary_raw = root.get("canary", {})
 
+    parsed_slots: List[TickSlotSchedule] = []
+    for item in tick_raw.get("schedule_slots", []) or []:
+        if isinstance(item, dict) and item.get("slot"):
+            time_str = str(item.get("time") or "").strip()
+            if ":" in time_str:
+                hh, mm = time_str.split(":", 1)
+                parsed_slots.append(
+                    TickSlotSchedule(slot=str(item["slot"]), hour=int(hh), minute=int(mm))
+                )
+            elif "hour" in item:
+                parsed_slots.append(
+                    TickSlotSchedule(
+                        slot=str(item["slot"]),
+                        hour=int(item["hour"]),
+                        minute=int(item.get("minute", 0)),
+                    )
+                )
+
     cfg = SailTickConfig(
         name=root.get("name", "sailtick"),
         data_dir=root.get("data_dir", "data/sailtick"),
@@ -282,6 +376,8 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
         inbox_poll_seconds=root.get("inbox_poll_seconds", 600),
         tick=TickConfig(
             hours=tick_raw.get("hours", [0, 6, 12, 18]),
+            schedule_slots=parsed_slots,
+            pre_sleep_report_time=tick_raw.get("pre_sleep_report_time", "21:45"),
             work_budget_minutes=tick_raw.get("work_budget_minutes", 180),
             scan_budget_minutes=tick_raw.get("scan_budget_minutes", 15),
             plan_budget_minutes=tick_raw.get("plan_budget_minutes", 20),
@@ -304,6 +400,9 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
             ),
             push_enabled=notify_raw.get("push_enabled", True),
             dedup_window_seconds=notify_raw.get("dedup_window_seconds", 3600),
+            max_questions_per_tick=notify_raw.get("max_questions_per_tick", 1),
+            max_pending_questions=notify_raw.get("max_pending_questions", 2),
+            topic_cooldown_hours=notify_raw.get("topic_cooldown_hours", 24),
         ),
         self_dev=SelfDevConfig(
             repo_dir=dev_raw.get("repo_dir", ""),

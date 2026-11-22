@@ -178,16 +178,17 @@ sudo journalctl -u sailzen-server.service -n 100 --no-pager
 
 ## ssh环境配置
 
-为了避免每一次都输入密码，可以考虑生成专用私钥
+为了避免每一次都输入密码，建议生成空口令专用部署私钥（注意在 Windows PowerShell 中不要使用 `-N '""'`，详见 `.agents/skills/sailzen-ops/SKILL.md` §1.4）：
 
-ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519_sailzen" -N '""' -C "sailzen-ops"
+```powershell
+uv run python -c 'import subprocess, os; p = os.path.expanduser("~/.ssh/id_ed25519_sailzen"); subprocess.run(["ssh-keygen", "-t", "ed25519", "-f", p, "-N", "", "-C", "sailzen-ops"], check=True)'
 $pubKey = Get-Content "$env:USERPROFILE\.ssh\id_ed25519_sailzen.pub" -Raw
 $pubKey | ssh <云端用户名>@<云端IP> "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
 
-$pubKey | ssh ubuntu@101.43.22.254 "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+在 `~/.ssh/config`（Windows 为 `C:\Users\<用户名>\.ssh\config`）中添加别名：
 
-C:\Users\zhuzihang\.ssh\config
-
+```sshconfig
 Host sailzen-prod
     HostName <云端IP>
     User <云端用户名>
@@ -195,12 +196,4 @@ Host sailzen-prod
     IdentityFile ~/.ssh/id_ed25519_sailzen
     IdentitiesOnly yes
     ServerAliveInterval 60
-
-
-Host sailzen-prod
-    HostName 101.43.22.254
-    User ubuntu
-    Port 22
-    IdentityFile ~/.ssh/id_ed25519_sailzen
-    IdentitiesOnly yes
-    ServerAliveInterval 60
+```

@@ -44,6 +44,10 @@ class SimulatedSailServer:
 
         self.tickets: List[Dict[str, Any]] = []
         self._next_id: int = 1
+        self.messages: List[Dict[str, Any]] = []
+        self._next_msg_id: int = 1
+        self.daily_reports: Dict[str, Dict[str, Any]] = {}
+        self.weight_plan: Optional[Dict[str, Any]] = None
         self.requests_log: List[Dict[str, Any]] = []
 
         # 可控健康与生活数据源
@@ -61,10 +65,52 @@ class SimulatedSailServer:
     # ── 数据种子与用户行为模拟 ─────────────────────────────────────────
 
     def seed_weight(self, date: str, value: float, note: str = "") -> None:
-        self.signals["weight"].append({"date": date, "value": value, "unit": "kg", "note": note})
+        self.signals["weight"].append(
+            {
+                "id": len(self.signals["weight"]) + 1,
+                "date": date,
+                "value": value,
+                "unit": "kg",
+                "note": note,
+            }
+        )
 
     def seed_signal(self, name: str, item: Dict[str, Any]) -> None:
         self.signals.setdefault(name, []).append(item)
+
+    def simulate_user_message(
+        self,
+        content: str,
+        category: str = "diet",
+        meta: Optional[Dict[str, Any]] = None,
+        source_channel: str = "android",
+    ) -> Dict[str, Any]:
+        """模拟用户在 Android App 上主动发送一条饮食/日常消息（不等待 AI 立即回复）。"""
+        now_iso = self._clock().isoformat()
+        msg = {
+            "id": self._next_msg_id,
+            "direction": "user_to_agent",
+            "category": category,
+            "content": content,
+            "meta": dict(meta or {}),
+            "source_channel": source_channel,
+            "status": "unread",
+            "ingested_by_tick_id": None,
+            "created_at": now_iso,
+            "ingested_at": None,
+        }
+        self._next_msg_id += 1
+        self.messages.append(msg)
+        if category == "diet":
+            self.signals["diet"].append(
+                {
+                    "id": len(self.signals["diet"]) + 1,
+                    "meal_type": (meta or {}).get("meal_type", "lunch"),
+                    "description": content,
+                    "time": now_iso,
+                }
+            )
+        return msg
 
     def simulate_user_reply(self, ticket_id: int, reply: str) -> Dict[str, Any]:
         """在 Tick 间隙模拟用户在 /tick 网页回复票据。"""
@@ -126,10 +172,13 @@ class SimulatedSailServer:
                     "id": self._next_id,
                     "tick_id": payload.get("tick_id", ""),
                     "type": payload.get("type", "info"),
+                    "topic": payload.get("topic", ""),
                     "title": payload.get("title", ""),
                     "body": payload.get("body", ""),
+                    "meta": payload.get("meta") or {},
                     "priority": payload.get("priority", "normal"),
                     "channel": payload.get("channel", "web"),
+                    "push": payload.get("push", "auto"),
                     "status": "pending",
                     "expected_reply_by": payload.get("expected_reply_by"),
                     "fallback_assumption": payload.get("fallback_assumption", ""),
@@ -138,6 +187,7 @@ class SimulatedSailServer:
                     "resolved_at": None,
                     "resolution": None,
                     "created_at": now_iso,
+                    "updated_at": now_iso,
                 }
                 self._next_id += 1
                 self.tickets.append(ticket)
@@ -200,10 +250,106 @@ class SimulatedSailServer:
                         pass
             return httpx.Response(201, json={"expired": expired})
 
+        # 用户主动消息 API
+        if path.endswith("/api/v1/tick/messages"):
+            if request.method == "GET":
+                status_f = (qs.get("status") or [None])[0]
+                items = list(self.messages)
+                if status_f:
+                    items = [m for m in items if m["status"] == status_f]
+                return httpx.Response(200, json=items)
+            if request.method == "POST":
+                payload = json.loads(request.content.decode("utf-8"))
+                msg = self.simulate_user_message(
+                    content=payload.get("content", ""),
+                    category=payload.get("category", "diet"),
+                    meta=payload.get("meta"),
+                    source_channel=payload.get("source_channel", "android"),
+                )
+                return httpx.Response(201, json=msg)
+
+        if request.method == "POST" and path.endswith("/api/v1/tick/messages/ingest"):
+            payload = json.loads(request.content.decode("utf-8"))
+            ids = set(payload.get("message_ids") or [])
+            tick_id = payload.get("tick_id", "")
+            cnt = 0
+            for m in self.messages:
+                if m["id"] in ids and m["status"] == "unread":
+                    m["status"] = "ingested"
+                    m["ingested_by_tick_id"] = tick_id
+                    m["ingested_at"] = self._clock().isoformat()
+                    cnt += 1
+            return httpx.Response(201, json={"ingested": cnt})
+
+        # 每日睡前日报 API
+        if path.endswith("/api/v1/tick/reports"):
+            if request.method == "GET":
+                ordered = sorted(self.daily_reports.values(), key=lambda x: x["report_date"], reverse=True)
+                return httpx.Response(200, json=ordered)
+            if request.method == "POST":
+                payload = json.loads(request.content.decode("utf-8"))
+                rdate = payload["report_date"]
+                rep = {
+                    "id": len(self.daily_reports) + 1,
+                    "report_date": rdate,
+                    "tick_id": payload.get("tick_id", ""),
+                    "title": payload.get("title", ""),
+                    "summary": payload.get("summary", ""),
+                    "body_markdown": payload.get("body_markdown", ""),
+                    "weight_snapshot": payload.get("weight_snapshot") or {},
+                    "diet_summary": payload.get("diet_summary") or {},
+                    "plan_update": payload.get("plan_update") or {},
+                    "tomorrow_focus": payload.get("tomorrow_focus") or [],
+                    "pushed": bool(payload.get("push", True)),
+                    "created_at": self._clock().isoformat(),
+                    "updated_at": self._clock().isoformat(),
+                }
+                self.daily_reports[rdate] = rep
+                return httpx.Response(201, json=rep)
+
+        if request.method == "GET" and path.endswith("/api/v1/tick/reports/latest"):
+            if not self.daily_reports:
+                return httpx.Response(200, json=None)
+            latest_k = max(self.daily_reports.keys())
+            return httpx.Response(200, json=self.daily_reports[latest_k])
+
+        # AI 动态体重计划写回与饮食写入
+        if request.method == "POST" and path.endswith("/health/weight/plan/ai-sync"):
+            payload = json.loads(request.content.decode("utf-8"))
+            self.weight_plan = {
+                "id": 1,
+                "managedBy": "sailtick",
+                "curveType": "ai_dynamic",
+                "targetWeight": str(payload.get("target_weight", "70.0")),
+                "planVersion": payload.get("plan_version", "v1.0"),
+                "phaseName": payload.get("phase_name", "动态适应期"),
+                "phaseRationale": payload.get("phase_rationale", ""),
+                "focusNotes": payload.get("focus_notes", ""),
+                "dailyTargets": payload.get("daily_targets") or {},
+                "toleranceKg": payload.get("tolerance_kg", 0.7),
+                "aiSummary": payload.get("ai_summary", ""),
+            }
+            return httpx.Response(201, json=self.weight_plan)
+
+        if request.method == "POST" and path.endswith("/health/diet"):
+            payload = json.loads(request.content.decode("utf-8"))
+            entry = {"id": len(self.signals["diet"]) + 1, "time": self._clock().isoformat(), **payload}
+            self.signals["diet"].append(entry)
+            return httpx.Response(201, json=entry)
+
         # 健康与生活数据 API
         if request.method == "GET":
-            if path.endswith("/health/body_data/series") or path.endswith("/health/body-data"):
-                return httpx.Response(200, json=list(self.signals["weight"]))
+            if (
+                path.endswith("/health/body-data/series")
+                or path.endswith("/health/body_data/series")
+                or path.endswith("/health/body-data")
+                or path.endswith("/health/weight")
+            ):
+                return httpx.Response(200, json={"metric": "weight", "unit": "kg", "points": list(self.signals["weight"])})
+            if path.endswith("/health/weight/plan/progress"):
+                if not self.weight_plan:
+                    return httpx.Response(200, json=None)
+                return httpx.Response(200, json={"plan": self.weight_plan, "control_rate": 90.0, "is_on_track": True})
             if path.endswith("/health/sleep"):
                 return httpx.Response(200, json=list(self.signals["sleep"]))
             if path.endswith("/health/diet"):
@@ -212,9 +358,9 @@ class SimulatedSailServer:
                 return httpx.Response(200, json=list(self.signals["exercise"]))
             if path.endswith("/health/mood"):
                 return httpx.Response(200, json=list(self.signals["mood"]))
-            if path.endswith("/money/transactions"):
+            if path.endswith("/finance/transaction") or path.endswith("/money/transactions"):
                 return httpx.Response(200, json=list(self.signals["finance"]))
-            if path.endswith("/rhythm/checkins"):
+            if path.endswith("/rhythm/checkin") or path.endswith("/rhythm/checkins"):
                 return httpx.Response(200, json=list(self.signals["rhythm"]))
             if path.endswith("/text/notes"):
                 return httpx.Response(200, json=list(self.signals["notes"]))
@@ -247,6 +393,7 @@ class SimulatedSailServer:
             "http://simulated-sail-server/api/v1",
             auth_token=self.auth_token,
             max_package_chars=max_package_chars,
+            clock=self._clock,
         )
         scanner._client = self._make_client()
         return scanner

@@ -1,42 +1,48 @@
 # systemd unit: SailTick 私人减肥监督教练 daemon（与 SailZen 同机部署）
 #
-# 安装:
+# 与 scripts/sailzen-server.service 的用户、目录与 uv 路径保持完全一致。
+#
+# 安装步骤（在云端 Linux 服务器执行）:
 #   sudo cp scripts/sailtick.service /etc/systemd/system/sailtick.service
-#   # 编辑 WorkingDirectory / ReadWritePaths 中的 <USER> 为实际用户名
+#   # 按实际用户名与路径核对 User / WorkingDirectory / ExecStart / EnvironmentFile
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now sailtick
+#   sudo systemctl enable --now sailtick.service
+#   sudo systemctl status sailtick.service --no-pager
+#
+# 灰度上线建议（首次启动强烈建议先观察 shadow -> canary -> live）:
+#   uv run python -m sailtick canary set shadow --reason "initial cloud rollout"
+#   sudo systemctl restart sailtick.service
+#   uv run python -m sailtick monitor
 #
 # 注意:
-#   - 依赖 sailzen-server.service（票据/健康数据走 sail_server REST）
+#   - 依赖 sailzen-server.service（或旧名 my-server.service，按服务器实际名调整 After/Wants）
 #   - 严禁 push origin（项目铁律）；本服务无 push 权限设计
 
 [Unit]
-Description=SailTick Private Weight-Loss Coach Daemon
-After=network.target sailzen-server.service
-Wants=sailzen-server.service
+Description=SailTick Private Health & Weight Coach Daemon
+After=network-online.target sailzen-server.service
+Wants=network-online.target sailzen-server.service
 
 [Service]
 Type=simple
-User=%I
-WorkingDirectory=/home/%I/SailZen
-ExecStart=/usr/local/bin/uv run python -m sailtick run --config sailtick.yaml
+User=ubuntu
+WorkingDirectory=/home/ubuntu/repos/SailZen
+EnvironmentFile=-/home/ubuntu/repos/SailZen/.env.prod
+Environment="PYTHONUNBUFFERED=1"
+Environment="SAILTICK_ENV=prod"
+Environment="SAILTICK_CONFIG=sailtick.yaml"
+ExecStart=/home/ubuntu/.local/bin/uv run python -m sailtick --config sailtick.yaml run
 Restart=always
 RestartSec=10
+TimeoutStopSec=20
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=sailtick
 
-# 环境（%I 为用户名；与 sail_server 共用 token 与 LLM key）
-Environment="PYTHONUNBUFFERED=1"
-Environment="SAILTICK_CONFIG=sailtick.yaml"
-# Environment="SAILZEN_API_TOKEN=..."   # 建议放 /home/%I/SailZen/.env.prod，由 read_env 加载
-
-# 安全
+# 安全隔离（保留 data/sailtick、logs/sailtick 与 uv 缓存可写）
 NoNewPrivileges=true
-ProtectSystem=strict
+ProtectSystem=full
 ProtectHome=false
-# 仅允许写 SailTick 自己的数据/日志目录（仓库代码由自我开发协议经 git 管理）
-ReadWritePaths=/home/%I/SailZen/data/sailtick /home/%I/SailZen/logs/sailtick
 
 [Install]
 WantedBy=multi-user.target

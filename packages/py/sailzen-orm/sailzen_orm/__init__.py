@@ -95,7 +95,11 @@ from sailzen_orm.rhythm import (
     RhythmReview,
 )
 # SailTick Models
-from sailzen_orm.tick import SailTickTicket
+from sailzen_orm.tick import (
+    SailTickTicket,
+    SailTickMessage,
+    SailTickDailyReport,
+)
 
 __all__ = [
     # Base
@@ -165,4 +169,6 @@ __all__ = [
       "RhythmReview",
       # SailTick
       "SailTickTicket",
+      "SailTickMessage",
+      "SailTickDailyReport",
   ]

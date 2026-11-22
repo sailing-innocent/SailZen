@@ -18,6 +18,7 @@ from sail_server.application.dto.health import (
     ExerciseResponse,
     WeightPlanCreateRequest,
     WeightPlanUpdateRequest,
+    WeightPlanAISyncRequest,
     WeightPlanResponse,
     WeightExpectedRangeResponse,
     MedicationCreateRequest,
@@ -54,6 +55,7 @@ from sail_server.model.health import (
     predict_weight_impl,
     create_weight_plan_impl,
     update_weight_plan_impl,
+    ai_sync_weight_plan_impl,
     delete_weight_plan_impl,
     get_active_weight_plan_impl,
     get_weight_plan_progress_impl,
@@ -85,7 +87,7 @@ from sail_server.model.health import (
 from sqlalchemy.orm import Session
 from typing import Generator
 
-from datetime import datetime, date
+from datetime import datetime, date as date_cls
 
 
 # ===================================================
@@ -271,6 +273,21 @@ class WeightPlanController(Controller):
             raise
         logger.info(f"Create weight plan: {plan}")
         logger.debug(f"[create_weight_plan] response: {plan.model_dump()}")
+        return plan
+
+    @post("/ai-sync")
+    async def ai_sync_weight_plan(
+        self,
+        data: WeightPlanAISyncRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> WeightPlanResponse:
+        """
+        SailTick 幂等同步/更新 AI 动态体重计划（不破坏用户 Rhythm 配置，合并动态节点）。
+        """
+        db = next(router_dependency)
+        plan = ai_sync_weight_plan_impl(db, data)
+        logger.info(f"AI sync weight plan: id={plan.id} version={plan.plan_version} phase={plan.phase_name}")
         return plan
 
     @get("/progress")
@@ -611,11 +628,11 @@ class MedicationController(Controller):
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-        date: str = None,
+        date: str | None = None,
     ) -> MedicationTodayDto:
         """Get today's medication list and compliance."""
         db = next(router_dependency)
-        target_date = _parse_date(date) or date.today()
+        target_date = _parse_date(date) or date_cls.today()
         result = medication_today_impl(db, target_date)
         logger.info(f"Get medication today: {result}")
         return result
@@ -626,11 +643,11 @@ class MedicationController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         days: int = 7,
-        end_date: str = None,
+        end_date: str | None = None,
     ) -> MedicationStatsDto:
         """Get medication compliance stats for the last N days."""
         db = next(router_dependency)
-        end = _parse_date(end_date) or date.today()
+        end = _parse_date(end_date) or date_cls.today()
         result = medication_stats_impl(db, days, end)
         logger.info(f"Get medication stats: {result}")
         return result
@@ -647,12 +664,14 @@ class DietController(Controller):
     async def get_diet_list(
         self,
         router_dependency: Generator[Session, None, None],
-        date: str = None,
-        meal_type: str = None,
+        date: str | None = None,
+        meal_type: str | None = None,
+        start: float | None = None,
+        end: float | None = None,
         skip: int = 0,
         limit: int = -1,
     ) -> list[DietResponse]:
-        """Get diet records, optionally filtered by date and meal type."""
+        """Get diet records, optionally filtered by date, timestamp range, and meal type."""
         db = next(router_dependency)
         target_date = _parse_date(date)
         meal = None
@@ -662,7 +681,7 @@ class DietController(Controller):
                 meal = MealType(meal_type)
             except ValueError:
                 pass
-        diets = read_diets_impl(db, skip, limit, target_date, meal)
+        diets = read_diets_impl(db, skip, limit, target_date, meal, start, end)
         return diets
 
     @post()
@@ -682,11 +701,11 @@ class DietController(Controller):
     async def get_diet_summary(
         self,
         router_dependency: Generator[Session, None, None],
-        date: str = None,
+        date: str | None = None,
     ) -> DietSummaryDto:
         """Get daily diet summary with nutrition goals."""
         db = next(router_dependency)
-        target_date = _parse_date(date) or date.today()
+        target_date = _parse_date(date) or date_cls.today()
         result = diet_summary_impl(db, target_date)
         logger.info(f"Get diet summary: {result}")
         return result
@@ -708,11 +727,11 @@ class DietController(Controller):
     async def get_nutrition_goal(
         self,
         router_dependency: Generator[Session, None, None],
-        date: str = None,
+        date: str | None = None,
     ) -> NutritionGoalResponse | None:
         """Get nutrition goal for a date."""
         db = next(router_dependency)
-        target_date = _parse_date(date) or date.today()
+        target_date = _parse_date(date) or date_cls.today()
         goal = read_nutrition_goal_impl(db, target_date)
         logger.info(f"Get nutrition goal: {goal}")
         return goal
@@ -730,17 +749,17 @@ class HealthDashboardController(Controller):
         self,
         router_dependency: Generator[Session, None, None],
         request: Request,
-        date: str = None,
+        date: str | None = None,
     ) -> HealthDashboardResponse:
         """Get health dashboard overview for a date."""
         db = next(router_dependency)
-        target_date = _parse_date(date) or date.today()
+        target_date = _parse_date(date) or date_cls.today()
         result = health_dashboard_impl(db, target_date)
         logger.info(f"Get health dashboard: {result}")
         return result
 
 
-def _parse_date(date_str: str | None) -> date | None:
+def _parse_date(date_str: str | None) -> date_cls | None:
     if not date_str:
         return None
     try:

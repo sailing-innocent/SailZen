@@ -45,6 +45,7 @@ MIGRATION_DIR = Path(__file__).parent
 SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20260906_add_rhythm_is_default.sql",
     MIGRATION_DIR / "20260906_add_rhythm_profile_v2.sql",
+    MIGRATION_DIR / "20261122_health_sailtick_upgrade.sql",
 ]
 
 

@@ -105,9 +105,12 @@ class TicketInbox:
         priority: str = "normal",
         expected_reply_hours: Optional[int] = None,
         fallback_assumption: str = "",
-        channel: str = "web",
+        channel: str = "mobile",
+        push: str = "auto",
+        topic: str = "",
+        meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """创建票据。expected_reply_by 默认按类型宽松设置。"""
+        """创建票据。expected_reply_by 默认按类型宽松设置；显式传递 push/topic/meta。"""
         hours = expected_reply_hours
         if hours is None:
             hours = DEFAULT_REPLY_HOURS.get(ticket_type, 48)
@@ -117,10 +120,13 @@ class TicketInbox:
         payload = {
             "tick_id": tick_id,
             "type": ticket_type,
+            "topic": topic or "",
             "title": title,
             "body": body,
+            "meta": meta or {},
             "priority": priority,
             "channel": channel,
+            "push": push,
             "expected_reply_by": expected_by,
             "fallback_assumption": fallback_assumption,
         }
@@ -175,3 +181,53 @@ class TicketInbox:
         resp.raise_for_status()
         data = resp.json()
         return int(data.get("expired", 0))
+
+    # ── 用户主动消息 / 睡前日报 / AI 动态体重计划写回 ─────────────────────
+
+    async def list_user_messages(
+        self,
+        status: str = "unread",
+        direction: str = "user_to_agent",
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        client = self._get_client()
+        resp = await client.get(
+            f"{self.api_base}/tick/messages",
+            params={"status": status, "direction": direction, "limit": limit},
+        )
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("items", [])
+
+    async def ingest_user_messages(self, message_ids: List[int], tick_id: str) -> int:
+        if not message_ids:
+            return 0
+        client = self._get_client()
+        resp = await client.post(
+            f"{self.api_base}/tick/messages/ingest",
+            json={"message_ids": message_ids, "tick_id": tick_id},
+        )
+        if resp.status_code == 404:
+            return 0
+        resp.raise_for_status()
+        return int(resp.json().get("ingested", 0))
+
+    async def upsert_daily_report(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        client = self._get_client()
+        resp = await client.post(f"{self.api_base}/tick/reports", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def sync_ai_weight_plan(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        client = self._get_client()
+        resp = await client.post(f"{self.api_base}/health/weight/plan/ai-sync", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_diet_log(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        client = self._get_client()
+        resp = await client.post(f"{self.api_base}/health/diet", json=payload)
+        resp.raise_for_status()
+        return resp.json()

@@ -12,6 +12,7 @@ import PageLayout from '@components/page_layout'
 import BodyDataChart from '@components/health/body_data_chart'
 import BodyDataRecordDialog from '@components/health/body_data_record_dialog'
 import BodyDataHistoryList from '@components/health/body_data_history_list'
+import SailTickCoachPanel from '@components/health/sailtick_coach_panel'
 import DatePicker from '@components/date_picker'
 
 import {
@@ -62,6 +63,7 @@ const curveLabel: Record<WeightPlanCurveType, string> = {
   linear: 'Linear',
   polynomial: 'Polynomial (ease-out)',
   exponential: 'Exponential',
+  ai_dynamic: 'AI Dynamic (SailTick)',
 }
 
 const HealthPage = () => {
@@ -559,16 +561,33 @@ const HealthPage = () => {
         </div>
 
         <div className={isMobile ? 'px-2' : ''}>
-          {/* 计划卡片 */}
+          {/* SailTick AI 教练面板：渐进提问 + 静默餐饮上报 + 每日睡前日报 */}
+          <SailTickCoachPanel onDataChanged={handleBodyDataChanged} />
+
+          {/* 计划卡片（支持 SailTick AI 动态计划 & 手工曲线计划） */}
           {weightPlan && (
-            <Card className="mb-4 mt-4">
+            <Card className={`mb-4 mt-4 ${weightPlan.managedBy === 'sailtick' ? 'border-emerald-300 dark:border-emerald-800' : ''}`}>
               <CardHeader className="pb-2">
-                <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} flex items-center gap-2`}>
-                  <Scale className="h-5 w-5" />
-                  Current Weight Plan
+                <CardTitle className={`${isMobile ? 'text-base' : 'text-lg'} flex items-center justify-between flex-wrap gap-2`}>
+                  <span className="flex items-center gap-2">
+                    <Scale className="h-5 w-5" />
+                    {weightPlan.managedBy === 'sailtick' ? 'AI 动态体重计划' : 'Current Weight Plan'}
+                  </span>
+                  {weightPlan.managedBy === 'sailtick' && (
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="default">SailTick 托管</Badge>
+                      {weightPlan.phaseName && <Badge variant="secondary">{weightPlan.phaseName}</Badge>}
+                      {weightPlan.planVersion && <Badge variant="outline">{weightPlan.planVersion}</Badge>}
+                    </div>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                {weightPlan.managedBy === 'sailtick' && weightPlan.aiSummary && (
+                  <div className="mb-3 rounded-md bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-900 dark:text-emerald-200">
+                    {weightPlan.aiSummary}
+                  </div>
+                )}
                 <div className={`grid gap-4 ${isMobile ? 'grid-cols-2' : 'grid-cols-4'}`}>
                   <div>
                     <div className="text-xs text-gray-500">Target</div>
@@ -591,6 +610,22 @@ const HealthPage = () => {
                     <div className="text-lg font-bold">{daysRemaining ?? '-'}</div>
                   </div>
                 </div>
+                {weightPlan.managedBy === 'sailtick' && (weightPlan.phaseRationale || weightPlan.focusNotes) && (
+                  <div className="mt-3 space-y-1 text-xs text-muted-foreground border-t pt-2.5">
+                    {weightPlan.phaseRationale && (
+                      <div>
+                        <span className="font-medium text-foreground">节奏依据：</span>
+                        {weightPlan.phaseRationale}
+                      </div>
+                    )}
+                    {weightPlan.focusNotes && (
+                      <div>
+                        <span className="font-medium text-foreground">当前关注：</span>
+                        {weightPlan.focusNotes}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className={`mt-3 flex flex-wrap gap-2 ${isMobile ? 'text-xs' : 'text-sm'}`}>
                   <div className="flex items-center gap-1 text-gray-500">
                     <CalendarDays className="h-4 w-4" />
@@ -598,6 +633,9 @@ const HealthPage = () => {
                     {new Date(weightPlan.targetTime * 1000).toLocaleDateString()}
                   </div>
                   <Badge variant="outline">{curveLabel[weightPlan.curveType || 'linear']}</Badge>
+                  {weightPlan.toleranceKg != null && weightPlan.managedBy === 'sailtick' && (
+                    <Badge variant="outline">弹性带宽 ±{weightPlan.toleranceKg}kg</Badge>
+                  )}
                   {weightPlan.feedbackEnabled && (
                     <Badge variant="secondary">Rhythm Feedback On</Badge>
                   )}

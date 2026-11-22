@@ -335,34 +335,48 @@ async def cmd_sandbox(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="sailtick", description="SailTick 私人减肥监督教练")
-    parser.add_argument("--config", help="sailtick.yaml 路径", default=None)
+    common_cfg = argparse.ArgumentParser(add_help=False)
+    common_cfg.add_argument("--config", help="sailtick.yaml 路径", default=argparse.SUPPRESS)
+
+    parser = argparse.ArgumentParser(
+        prog="sailtick", description="SailTick 私人减肥监督教练", parents=[common_cfg]
+    )
+    parser.set_defaults(config=None)
     sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("run", help="启动 daemon")
-    p_trigger = sub.add_parser("trigger", help="手动跑一次 Tick")
-    p_trigger.add_argument("slot", choices=["morning_checkin", "midday_checkin", "evening_review", "nightly_maintenance"])
-    sub.add_parser("status", help="健康状态")
-    sub.add_parser("doctor", help="依赖体检")
-    sub.add_parser("bootstrap", help="初始化 goal/计划/首批问卷")
+    sub.add_parser("run", help="启动 daemon", parents=[common_cfg])
+    p_trigger = sub.add_parser("trigger", help="手动跑一次 Tick", parents=[common_cfg])
+    p_trigger.add_argument(
+        "slot",
+        choices=[
+            "morning_checkin",
+            "midday_checkin",
+            "evening_review",
+            "pre_sleep_report",
+            "nightly_maintenance",
+        ],
+    )
+    sub.add_parser("status", help="健康状态", parents=[common_cfg])
+    sub.add_parser("doctor", help="依赖体检", parents=[common_cfg])
+    sub.add_parser("bootstrap", help="初始化 goal/计划/首批问卷", parents=[common_cfg])
 
     # Layer 4: 一键灰度开关
-    p_canary = sub.add_parser("canary", help="一键灰度开关与熔断控制")
+    p_canary = sub.add_parser("canary", help="一键灰度开关与熔断控制", parents=[common_cfg])
     canary_sub = p_canary.add_subparsers(dest="canary_action", required=True)
-    canary_sub.add_parser("status", help="查看当前模式与策略")
-    p_cset = canary_sub.add_parser("set", help="切换模式 (off|shadow|canary|live)")
+    canary_sub.add_parser("status", help="查看当前模式与策略", parents=[common_cfg])
+    p_cset = canary_sub.add_parser("set", help="切换模式 (off|shadow|canary|live)", parents=[common_cfg])
     p_cset.add_argument("mode", choices=["off", "shadow", "canary", "live"])
     p_cset.add_argument("--reason", default="")
     p_cset.add_argument("--prefix", default=None, help="灰度票据标题前缀")
     p_cset.add_argument("--max-tickets", type=int, default=None, help="单 Tick 最大票据数")
-    p_ckill = canary_sub.add_parser("kill", help="紧急总闸关停（切换至 off）")
+    p_ckill = canary_sub.add_parser("kill", help="紧急总闸关停（切换至 off）", parents=[common_cfg])
     p_ckill.add_argument("--reason", default="emergency kill-switch")
-    p_cresume = canary_sub.add_parser("resume", help="解除熔断并恢复")
+    p_cresume = canary_sub.add_parser("resume", help="解除熔断并恢复", parents=[common_cfg])
     p_cresume.add_argument("--to", dest="target_mode", choices=["shadow", "canary", "live"], default="canary")
     p_cresume.add_argument("--reason", default="manual resume")
 
     # Layer 4: 监控快照
-    p_mon = sub.add_parser("monitor", help="输出运行监控与告警快照")
+    p_mon = sub.add_parser("monitor", help="输出运行监控与告警快照", parents=[common_cfg])
     p_mon.add_argument("--json", dest="as_json", action="store_true", help="JSON 格式输出")
 
     # Layer 2: Mock LLM 轨迹回放

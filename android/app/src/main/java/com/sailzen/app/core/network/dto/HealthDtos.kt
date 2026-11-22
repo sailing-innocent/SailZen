@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonObject
 
 @Serializable
 enum class WeightPlanCurveType {
-    linear, polynomial, exponential
+    linear, polynomial, exponential, ai_dynamic
 }
 
 @Serializable
@@ -44,6 +44,13 @@ data class WeightPlanDto(
     val notifyTime: String = "08:30",
     val feedbackEnabled: Boolean = false,
     val rhythmAffairId: Int? = null,
+    val managedBy: String = "manual",
+    val planVersion: String = "",
+    val phaseName: String = "",
+    val phaseRationale: String = "",
+    val focusNotes: String = "",
+    val toleranceKg: Double = 0.5,
+    val aiSummary: String = "",
 )
 
 @Serializable

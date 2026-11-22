@@ -22,6 +22,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * 提醒核心协调者：
@@ -78,11 +79,12 @@ class ReminderRepository private constructor(private val context: Context) {
             title = title,
             body = body,
             priority = priority,
+            source = source,
             state = state,
             triggerTime = triggerTime,
             expireAfterMinutes = expireAfterMinutes,
             snoozeCount = snoozeCount,
-            payloadJson = payload.toString(),
+            payloadJson = JsonObject(payload).toString(),
             updatedAt = updatedAt ?: nowIso(),
         )
 

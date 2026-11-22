@@ -1,29 +1,32 @@
 # -*- coding: utf-8 -*-
 # @file tick_engine.py
-# @brief TickEngine — SLEEP→WAKE→SCAN→PLAN→WORK→HANDOFF 状态机
+# @brief TickEngine — SLEEP→WAKE→SCAN→PLAN→WORK→HANDOFF 状态机（支持渐进提问、静默餐饮吸收、AI 动态计划维护与每日睡前日报）
 # @author sailing-innocent
 # @date 2026-10-27
-# @version 1.0
+# @version 2.0
 # ---------------------------------
-"""TickEngine — SailTick 核心。
+"""TickEngine — SailTick 核心状态机。
 
 状态机（设计文档 §3）:
-  WAKE   建 tick 实例（幂等键 slot:date）、加载 handoff、LLM begin_tick
-  SCAN   依赖健康检查 + 数据扫描 + 票据收件箱同步
-  PLAN   LLM 生成本窗口计划（超预算/不可用 → 规则模板降级）
-  WORK   执行计划（建票据/写记忆）；硬截止 = 唤醒 + work_budget
-  HANDOFF 写交接文档、压缩记忆、记录成本
-
-上下文组装（设计文档 §4）: system prompt + 计划 + handoff + 记忆 + 数据包 + 待回票据。
+  WAKE    建 tick 实例（幂等键 slot:date）、加载 handoff / 计划 / 四层记忆
+  SCAN    依赖健康检查 + 真实数据扫描 + 体重变化检测 + 票据回复与用户主动消息同步
+  PLAN    组装完整上下文（system + slot 提示 + 渐进问卷切片 + 体重监控 + 主动餐饮消息），
+          LLM 生成本窗口计划（超预算/不可用 → 规则模板降级）
+  WORK    执行计划（防轰炸提问限流、建票据、写画像/记忆、记录饮食、同步 AI 动态计划、
+          发布每日睡前体重报告、关闭已吸收票据、标记已吸收主动消息）
+  HANDOFF 写交接文档、压缩记忆、推进游标与水位线、记录成本
 """
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
+
+import yaml
 
 from sailtick.canary import CanaryController
 from sailtick.config import SailTickConfig
@@ -45,8 +48,9 @@ FALLBACK_PLANS: Dict[str, Dict[str, Any]] = {
         "tickets": [
             {
                 "type": "question",
+                "topic": "morning_weight",
                 "title": "今天早晨体重是多少？",
-                "body": "规则模板提问：请直接回复数字（kg）。",
+                "body": "规则模板提问：请直接回复数字（kg），或在健康页随手记一下即可。",
                 "priority": "normal",
                 "expected_reply_hours": 24,
                 "fallback_assumption": "体重暂无更新，维持上次记录",
@@ -68,7 +72,14 @@ FALLBACK_PLANS: Dict[str, Dict[str, Any]] = {
         "tickets": [],
         "actions": [],
         "unfinished": [],
-        "next_tick_suggestions": ["夜间维护窗口整理数据"],
+        "next_tick_suggestions": ["睡前生成今日体重与健康日报"],
+    },
+    "pre_sleep_report": {
+        "summary": "（规则模板）每日睡前体重与健康日报",
+        "tickets": [],
+        "actions": [],
+        "unfinished": [],
+        "next_tick_suggestions": ["明早继续轻量化观察体重与作息"],
     },
     "nightly_maintenance": {
         "summary": "（规则模板）夜间无声维护",
@@ -115,8 +126,8 @@ class TickEngine:
         self.notifier = notifier
         self.handoffs = handoffs
         self.state = state
-        self.dev_runner = dev_runner  # Phase 5: 自我开发执行器（可选）
-        self.canary = canary          # 灰度/一键开关控制器（可选）
+        self.dev_runner = dev_runner
+        self.canary = canary
         self._clock = clock
         self._current_tick: Optional[dict] = None
         self._prompts_dir = config.prompts_dir
@@ -133,7 +144,6 @@ class TickEngine:
         idempotency_suffix: Optional[str] = None,
     ) -> dict:
         """跑完整的一个 Tick。可被 scheduler 回调、CLI、管理 API 调用。"""
-        # 灰度总闸与 slot 白名单检查
         if self.canary is not None:
             allowed, pause_reason = self.canary.should_run_slot(slot)
             if not allowed:
@@ -176,6 +186,7 @@ class TickEngine:
         context: Dict[str, Any] = {
             "slot": slot,
             "tick_id": tick["id"],
+            "tick_date": tick_date,
             "mode": mode,
             "params": params or {},
         }
@@ -206,6 +217,7 @@ class TickEngine:
                 "mode": mode,
                 "emitted": context.get("emitted", []),
                 "shadow_emitted": context.get("shadow_emitted", []),
+                "work_results": context.get("work_results", []),
                 "handoff_path": handoff_path,
                 "cost_tokens": self.llm.tick_tokens,
                 "downgraded": downgraded,
@@ -240,6 +252,8 @@ class TickEngine:
         context["prev_handoff"] = prev
         context["active_plan"] = await self.db.get_active_plan()
         context["memory_summary"] = await self.memory.summary_for_prompt()
+        context["profile_dict"] = await self.memory.all_profile()
+        context["topic_history"] = (await self.db.get_runtime_state("asked_topics")) or {}
         await self.memory.save_episode(
             tick["id"], "wake", {"slot": tick["slot"], "mode": context.get("mode", "live")}
         )
@@ -248,50 +262,81 @@ class TickEngine:
     # ── SCAN ──────────────────────────────────────────────────────────
 
     async def _scan(self, context: Dict[str, Any], tick: dict) -> None:
-        # 1. 依赖健康
         server_ok = await self.inbox.health()
         self.state.update("sail_server", "ok" if server_ok else "down")
         llm_ready = bool(self.llm.config.providers)
         self.state.update("llm", "ok" if llm_ready else "down")
 
-        # 2. 票据同步：超期处理 + 拉取回复
-        tickets = []
-        replies = []
+        tickets: List[Dict[str, Any]] = []
+        replies: List[Dict[str, Any]] = []
+        unread_messages: List[Dict[str, Any]] = []
         if server_ok:
             try:
                 await self.inbox.expire_overdue()
                 tickets = await self.inbox.pending_tickets()
-                replies = await self.inbox.sync_replies_since()
+                reply_cursor = await self.db.get_runtime_state("tick_reply_cursor")
+                since_dt = None
+                if reply_cursor:
+                    try:
+                        since_dt = datetime.fromisoformat(str(reply_cursor))
+                    except ValueError:
+                        since_dt = None
+                replies = await self.inbox.sync_replies_since(since=since_dt)
+                if hasattr(self.inbox, "list_user_messages"):
+                    unread_messages = await self.inbox.list_user_messages(status="unread", limit=50)
             except Exception as exc:
                 logger.warning("inbox sync failed (non-fatal): %s", exc)
 
-        # 3. 数据扫描
         data_package = await self.scanner.scan(days=7)
         self.state.update(
             "datascan", "ok" if data_package.get("health_ok") else "degraded"
         )
+
+        # 检测自上次 Tick 以来是否有新的体重测量更新
+        wm = data_package.get("weight_monitor") or {}
+        last_seen_sig = await self.db.get_runtime_state("last_weight_watermark")
+        current_sig = None
+        if wm.get("latest_kg") is not None:
+            current_sig = f"{wm.get('latest_id')}:{wm.get('latest_at')}:{wm.get('latest_kg')}"
+        weight_updated = bool(current_sig and current_sig != last_seen_sig)
+        wm["updated_since_last_tick"] = weight_updated
+
+        # 如果 datascan 中没取到 unread_messages，用 inbox 的补齐
+        if not unread_messages and isinstance(data_package.get("user_messages"), list):
+            unread_messages = data_package["user_messages"]
 
         context.update(
             {
                 "server_ok": server_ok,
                 "pending_tickets": tickets,
                 "new_replies": replies,
+                "unread_messages": unread_messages,
                 "data_package": data_package,
                 "data_summary": self.scanner.describe(data_package),
+                "weight_updated": weight_updated,
+                "current_weight_watermark": current_sig,
             }
         )
         await self.memory.save_episode(
-            tick["id"], "scan",
+            tick["id"],
+            "scan",
             {
                 "server_ok": server_ok,
                 "pending_tickets": len(tickets),
                 "new_replies": len(replies),
+                "unread_messages": len(unread_messages),
+                "weight_updated": weight_updated,
                 "data_ok": bool(data_package.get("health_ok")),
             },
         )
         logger.info(
-            "SCAN ok: server=%s tickets=%d replies=%d data_ok=%s",
-            server_ok, len(tickets), len(replies), data_package.get("health_ok"),
+            "SCAN ok: server=%s tickets=%d replies=%d msgs=%d weight_updated=%s data_ok=%s",
+            server_ok,
+            len(tickets),
+            len(replies),
+            len(unread_messages),
+            weight_updated,
+            data_package.get("health_ok"),
         )
 
     def _policy(self) -> Dict[str, Any]:
@@ -307,11 +352,211 @@ class TickEngine:
             "ticket_title_prefix": "",
         }
 
+    # ── 渐进问卷切片 & 防轰炸限流 ───────────────────────────────────────
+
+    def _select_candidate_questions(self, context: Dict[str, Any], slot: str) -> List[Dict[str, Any]]:
+        """根据当前 slot、已掌握 profile 与话题冷却，挑出最多 2 个候选问题供 LLM 择 0-1 个提问。"""
+        if slot in ("nightly_maintenance", "pre_sleep_report"):
+            return []
+        qpath = os.path.join(self._prompts_dir, "coach/v1/question_bank.yaml") if self._prompts_dir else ""
+        if not qpath or not os.path.exists(qpath):
+            return []
+        try:
+            with open(qpath, "r", encoding="utf-8") as f:
+                bank = yaml.safe_load(f) or []
+        except Exception:
+            return []
+
+        profile = context.get("profile_dict") or {}
+        topic_history = context.get("topic_history") or {}
+        now = self._clock()
+        cooldown_hours = max(1, int(self.config.notify.topic_cooldown_hours))
+        pending_topics = {
+            (t.get("topic") or "").strip()
+            for t in context.get("pending_tickets", [])
+            if t.get("topic")
+        }
+
+        candidates: List[Dict[str, Any]] = []
+        for q in bank:
+            if not isinstance(q, dict):
+                continue
+            timing = q.get("timing") or []
+            if timing and slot not in timing:
+                continue
+            pkey = q.get("target_profile_key", "")
+            # 已经高置信度知道的字段不再重复问
+            if pkey and pkey in profile and float(profile[pkey].get("confidence", 0)) >= 0.7:
+                continue
+            qid = str(q.get("id") or pkey)
+            if qid in pending_topics:
+                continue
+            last_asked_str = topic_history.get(qid)
+            if last_asked_str:
+                try:
+                    last_dt = datetime.fromisoformat(str(last_asked_str))
+                    if (now - last_dt).total_seconds() < cooldown_hours * 3600:
+                        continue
+                except ValueError:
+                    pass
+            candidates.append(q)
+
+        # minimum 优先，最多给 LLM 2 个候选，确保渐进细化不轰炸
+        candidates.sort(key=lambda item: 0 if item.get("necessary") == "minimum" else 1)
+        return candidates[:2]
+
+    def _throttle_tickets(
+        self,
+        raw_tickets: List[Dict[str, Any]],
+        context: Dict[str, Any],
+        max_tickets: int,
+    ) -> List[Dict[str, Any]]:
+        """执行防轰炸护栏：
+        - 每 Tick 最多 max_tickets 张票据；
+        - 每 Tick 最多 max_questions_per_tick (默认 1) 张非 urgent 提问；
+        - 若当前已有 >= max_pending_questions (默认 2) 张待回提问，暂缓新的非 urgent 提问；
+        - 同 topic 冷却期内跳过重复提问。
+        """
+        pending_questions = [
+            t for t in context.get("pending_tickets", [])
+            if t.get("type") == "question"
+        ]
+        max_q_tick = max(1, int(self.config.notify.max_questions_per_tick))
+        max_pending_q = max(1, int(self.config.notify.max_pending_questions))
+        cooldown_hours = max(1, int(self.config.notify.topic_cooldown_hours))
+        topic_history = context.get("topic_history") or {}
+        now = self._clock()
+
+        kept: List[Dict[str, Any]] = []
+        q_count = 0
+        for t in raw_tickets:
+            if len(kept) >= max_tickets:
+                break
+            ttype = t.get("type", "question")
+            priority = t.get("priority", "normal")
+            topic = str(t.get("topic") or "").strip()
+
+            if ttype == "question" and priority != "urgent":
+                if len(pending_questions) >= max_pending_q:
+                    logger.info(
+                        "Throttle question '%s': already %d pending questions",
+                        t.get("title"),
+                        len(pending_questions),
+                    )
+                    continue
+                if q_count >= max_q_tick:
+                    logger.info(
+                        "Throttle question '%s': reached max_questions_per_tick=%d",
+                        t.get("title"),
+                        max_q_tick,
+                    )
+                    continue
+                if topic and topic in topic_history:
+                    try:
+                        last_dt = datetime.fromisoformat(str(topic_history[topic]))
+                        if (now - last_dt).total_seconds() < cooldown_hours * 3600:
+                            logger.info("Throttle question '%s': topic '%s' in cooldown", t.get("title"), topic)
+                            continue
+                    except ValueError:
+                        pass
+                q_count += 1
+            kept.append(t)
+        return kept
+
+    def _build_deterministic_daily_report_action(
+        self, context: Dict[str, Any], tick: dict
+    ) -> Dict[str, Any]:
+        """当 pre_sleep_report 降级或 LLM 未显式输出 daily_report 时，基于真实扫描数据生成兜底睡前日报。"""
+        report_date = tick.get("tick_date") or self._clock().strftime("%Y-%m-%d")
+        pkg = context.get("data_package") or {}
+        wm = pkg.get("weight_monitor") or {}
+        ap = pkg.get("active_plan") or {}
+        diets = pkg.get("diet") or []
+        msgs = context.get("unread_messages") or []
+
+        latest_kg = wm.get("latest_kg")
+        delta = wm.get("delta_from_prev")
+        avg_7d = wm.get("avg_7d")
+        today_diet_items = [
+            f"{d.get('meal_type', 'meal')}: {d.get('description', '')}"
+            for d in diets
+            if str(d.get("time") or "").startswith(report_date)
+        ]
+        today_msg_items = [
+            f"[{m.get('category', 'note')}] {m.get('content', '')}"
+            for m in msgs
+        ]
+        all_intake = today_diet_items + today_msg_items
+
+        weight_line = (
+            f"最新体重 {latest_kg}kg"
+            + (f"（较上次 {delta:+.2f}kg）" if delta is not None else "")
+            + (f"，7日均值 {avg_7d}kg" if avg_7d is not None else "")
+            if latest_kg is not None
+            else "今日暂无新体重记录，明天晨起方便时称一下即可"
+        )
+        intake_line = (
+            f"共整合 {len(all_intake)} 条饮食/状态记录"
+            if all_intake
+            else "今日暂无饮食文字记录"
+        )
+        summary = f"{weight_line}；{intake_line}。早点休息，明天继续保持轻松节奏。"
+
+        md_lines = [
+            f"## {report_date} 睡前体重与健康日报",
+            "",
+            "### 1. 体重与趋势",
+            f"- {weight_line}",
+            "",
+            "### 2. 今日餐饮与状态整合",
+        ]
+        if all_intake:
+            md_lines.extend(f"- {item}" for item in all_intake[:12])
+        else:
+            md_lines.append("- 今日暂无饮食记录，平时随时发一句吃过什么即可，不用等回复。")
+        md_lines.extend(
+            [
+                "",
+                "### 3. 动态计划与明日建议",
+                f"- 当前阶段：{ap.get('phase_name') or '动态适应期'}（目标 {ap.get('target_weight') or '70'}kg）",
+                "- 明天晨起空腹称一次体重，午餐/晚餐随手发一条简短记录即可。",
+            ]
+        )
+
+        return {
+            "kind": "daily_report",
+            "report_date": report_date,
+            "title": f"{report_date} 睡前体重与健康日报",
+            "summary": summary,
+            "body_markdown": "\n".join(md_lines),
+            "weight_snapshot": {
+                "latest_kg": latest_kg,
+                "delta_from_prev": delta,
+                "avg_7d": avg_7d,
+                "trend_7d": wm.get("trend_7d", "unknown"),
+                "recorded_today": bool(wm.get("recorded_today")),
+                "target_kg": ap.get("target_weight") or "70",
+            },
+            "diet_summary": {
+                "count": len(all_intake),
+                "items": all_intake[:10],
+            },
+            "plan_update": {
+                "phase_name": ap.get("phase_name") or "动态适应期",
+                "plan_version": ap.get("plan_version") or "",
+                "ai_summary": ap.get("ai_summary") or "",
+            },
+            "tomorrow_focus": [
+                "晨起空腹称一次体重",
+                "白天吃过的正餐随手发一句文字记录",
+                "保证今晚充足睡眠，压力优先于热量",
+            ],
+            "push": True,
+        }
+
     # ── PLAN ──────────────────────────────────────────────────────────
 
     async def _plan(self, context: Dict[str, Any], tick: dict) -> Dict[str, Any]:
-        import copy
-
         policy = self._policy()
         max_tickets = max(0, min(2, int(policy.get("max_tickets_per_tick", 2))))
 
@@ -321,7 +566,13 @@ class TickEngine:
             or self.state.get("llm")["status"] != "ok"
         ):
             plan = copy.deepcopy(FALLBACK_PLANS.get(tick["slot"], DEFAULT_FALLBACK_PLAN))
-            plan["tickets"] = plan.get("tickets", [])[:max_tickets]
+            plan["tickets"] = self._throttle_tickets(plan.get("tickets", []), context, max_tickets)
+            if tick["slot"] == "pre_sleep_report" and not any(
+                a.get("kind") == "daily_report" for a in plan.get("actions", [])
+            ):
+                plan.setdefault("actions", []).append(
+                    self._build_deterministic_daily_report_action(context, tick)
+                )
             context["plan_source"] = "fallback"
             await self.memory.save_episode(
                 tick["id"],
@@ -344,9 +595,17 @@ class TickEngine:
             context["plan_source"] = "fallback_error"
             context["llm_error"] = str(exc)
 
-        # 票据节流：默认每 Tick 最多 2 张，灰度可收紧至 1 张
-        tickets = plan.get("tickets", [])[:max_tickets]
+        # 票据节流 + 防轰炸护栏
+        tickets = self._throttle_tickets(plan.get("tickets", []), context, max_tickets)
         plan["tickets"] = tickets
+
+        # pre_sleep_report 兜底保障：确保每晚睡前一定产出一份结构化日报
+        if tick["slot"] == "pre_sleep_report" and not any(
+            a.get("kind") == "daily_report" for a in plan.get("actions", [])
+        ):
+            plan.setdefault("actions", []).append(
+                self._build_deterministic_daily_report_action(context, tick)
+            )
 
         ep_payload: Dict[str, Any] = {
             "source": context["plan_source"],
@@ -357,12 +616,13 @@ class TickEngine:
             ep_payload["error"] = context["llm_error"]
         await self.memory.save_episode(tick["id"], "plan", ep_payload)
         await self.db.update_tick(tick["id"], plan=plan)
-        logger.info("PLAN ok: source=%s tickets=%d", context["plan_source"], len(tickets))
+        logger.info("PLAN ok: source=%s tickets=%d actions=%d", context["plan_source"], len(tickets), len(plan.get("actions", [])))
         return plan
 
     def _build_plan_prompt(self, context: Dict[str, Any], tick: dict) -> str:
         system = self._load_prompt("coach/v1/system.md")
-        # 同步拼装（各摘要已在前序阶段就绪）
+        slot_guidance = self._load_prompt(f"coach/v1/slot_{tick['slot']}.md", default="")
+
         prev: Optional[HandoffDoc] = context.get("prev_handoff")
         prev_text = prev.prev_summary if prev else "(首个 Tick)"
         plan_doc = context.get("active_plan")
@@ -372,17 +632,37 @@ class TickEngine:
         mem = context.get("memory_summary") or {}
         profile_text = mem.get("profile", "(空)")
         semantic_text = mem.get("semantic", "(空)")
+        procedural_text = mem.get("procedural", "(空)")
+
         tickets_text = "\n".join(
-            f"- #{t.get('id')} [{t.get('type')}] {t.get('title')} (by {t.get('expected_reply_by')})"
+            f"- #{t.get('id')} [{t.get('type')}] topic={t.get('topic') or '-'} {t.get('title')} (by {t.get('expected_reply_by')})"
             for t in context.get("pending_tickets", [])[:10]
         ) or "(无)"
         replies_text = "\n".join(
             f"- #{r.get('id')} {r.get('title')}: 用户回复「{r.get('reply', '')}」"
             for r in context.get("new_replies", [])[:10]
         ) or "(无)"
+        unread_msgs = context.get("unread_messages") or []
+        msgs_text = "\n".join(
+            f"- #{m.get('id')} [{m.get('category')}] ({str(m.get('created_at', ''))[:16]}): {m.get('content', '')}"
+            for m in unread_msgs[:15]
+        ) or "(无)"
+
+        candidates = self._select_candidate_questions(context, tick["slot"])
+        q_slice_text = "\n".join(
+            f"- topic={q.get('id')} (profile_key={q.get('target_profile_key')}): {q.get('question')} | 原因: {q.get('why')}"
+            for q in candidates
+        ) or "(本窗口无需新提问，或已有待回复问题)"
+
+        weight_update_note = (
+            "【有新的体重测量数据更新！请结合新体重评估趋势，按需通过 plan_update 调整 AI 动态计划】"
+            if context.get("weight_updated")
+            else "（自上次 Tick 以来暂无新体重测量）"
+        )
 
         return f"""{system}
 
+{slot_guidance}
 
 # 当前计划
 {plan_text}
@@ -392,39 +672,61 @@ class TickEngine:
 {profile_text}
 [Semantic]
 {semantic_text}
+[Procedural]
+{procedural_text}
 
 # 上 Tick 摘要
 {prev_text}
 
 # 用户状态数据
+{weight_update_note}
 {context.get('data_summary', '(无数据)')}
 
-# 新收到的用户回复
+# 新收到的用户票据回复（请吸收到 profile/diet 并可输出 resolve_ticket 关闭）
 {replies_text}
 
-# 待回复票据
+# 用户主动发来的饮食/日常消息（无需即时回复，请吸收并整合进每日睡前日报）
+{msgs_text}
+
+# 当前尚未回复的票据
 {tickets_text}
 
+# 本窗口可选的渐进提问候选（严禁一次问多个，最多选 0~1 个！）
+{q_slice_text}
+
 # 任务
-你是 SailTick 的 PLAN 阶段。基于以上信息为「{tick['slot']}」slot 生成本窗口计划。
-只输出 JSON：
+你是 SailTick 的 PLAN 阶段。基于以上信息为「{tick['slot']}」（日期 {tick.get('tick_date')}）生成本窗口计划。
+只输出严格合法的 JSON：
 {{
   "summary": "本 Tick 要点（1-2 句）",
   "tickets": [
     {{
       "type": "question|task|info",
-      "title": "票据标题（简短）",
-      "body": "正文（含为什么问这个）",
+      "topic": "话题唯一键，如 weight_checkin / diet_lunch / profile_wake_time",
+      "title": "票据标题（简短，推送通知标题）",
+      "body": "正文（温和具体，含为什么问这个）",
       "priority": "low|normal|high",
-      "expected_reply_hours": 48,
-      "fallback_assumption": "用户不回复时采用的假设"
+      "expected_reply_hours": 36,
+      "fallback_assumption": "用户不回复时采用的假设",
+      "meta": {{"quick_replies": ["可选快捷回复1", "可选快捷回复2"]}}
     }}
   ],
-  "actions": [{{"kind": "episode", "content": "要记入事件流的内容"}}],
+  "actions": [
+    {{"kind": "profile_update", "key": "wake_time", "value": "07:30", "confidence": 0.9, "source": "asked"}},
+    {{"kind": "memory", "memory_type": "semantic", "key": "diet_pattern", "value": "..."}},
+    {{"kind": "diet_log", "meal_type": "lunch", "description": "食堂鸡胸肉+米饭半碗", "calories": 550}},
+    {{"kind": "plan_update", "plan_version": "v1.1", "target_weight": "70.0", "phase_name": "稳态适应期", "phase_rationale": "原因", "focus_notes": "关注点", "tolerance_kg": 0.7, "ai_summary": "健康页一句话评语", "daily_targets": {{"{tick.get('tick_date')}": 74.5}}, "content": "完整计划 Markdown"}},
+    {{"kind": "daily_report", "report_date": "{tick.get('tick_date')}", "title": "{tick.get('tick_date')} 睡前体重与健康日报", "summary": "1-2句睡前摘要", "body_markdown": "完整日报 Markdown", "weight_snapshot": {{}}, "diet_summary": {{}}, "plan_update": {{}}, "tomorrow_focus": ["建议1", "建议2"], "push": true}},
+    {{"kind": "resolve_ticket", "ticket_id": 1, "resolution": "已吸收至画像"}},
+    {{"kind": "episode", "content": "要记入事件流的内容"}}
+  ],
   "unfinished": [{{"task": "未完成事项", "reason": "原因"}}],
   "next_tick_suggestions": ["给下个 Tick 的建议"]
 }}
-票据最多 2 张；没有问题就留空数组；保持温和不苛责的语气。"""
+注意：
+1. actions 仅输出本窗口真正需要的项（不需要的类别直接不放）；
+2. tickets 最多 1 张提问（总数最多 2 张）；若已有未回复提问或处于睡前/夜间窗口，tickets 留空 []；
+3. 保持温和不苛责的语气，压力与睡眠优先于热量。"""
 
     @staticmethod
     def _extract_json(content: str) -> str:
@@ -451,6 +753,7 @@ class TickEngine:
         policy = self._policy()
         emitted: List[Dict[str, Any]] = []
         shadow_emitted: List[Dict[str, Any]] = []
+        work_results: List[Dict[str, Any]] = []
 
         ticket_items = plan.get("tickets", [])
         action_items = plan.get("actions", [])
@@ -462,6 +765,7 @@ class TickEngine:
                     {
                         "title": t.get("title", "(无标题)"),
                         "type": t.get("type", "question"),
+                        "topic": t.get("topic", ""),
                         "priority": t.get("priority", "normal"),
                         "body": t.get("body", ""),
                         "action": "shadow_simulated",
@@ -475,10 +779,12 @@ class TickEngine:
                     "tickets_simulated": len(shadow_emitted),
                     "tickets": shadow_emitted,
                     "actions_simulated": len(action_items),
+                    "action_kinds": [a.get("kind") for a in action_items if isinstance(a, dict)],
                 },
             )
             context["emitted"] = []
             context["shadow_emitted"] = shadow_emitted
+            context["work_results"] = []
             logger.info(
                 "WORK [shadow]: simulated tickets=%d actions=%d (zero side effects)",
                 len(shadow_emitted),
@@ -488,10 +794,10 @@ class TickEngine:
 
         prefix = policy.get("ticket_title_prefix") or ""
         suppress_push = not bool(policy.get("allow_push", True))
+        topic_history = dict(context.get("topic_history") or {})
 
         for idx, t in enumerate(ticket_items):
             if self._clock() > deadline:
-                # 预算耗尽：剩余全部票据记入未完成事项
                 for rest in ticket_items[idx:]:
                     plan.setdefault("unfinished", []).append(
                         {"task": f"发票据: {rest.get('title')}", "reason": "预算耗尽", "priority": "high"}
@@ -499,21 +805,30 @@ class TickEngine:
                 break
             raw_title = t.get("title", "(无标题)")
             title = f"{prefix}{raw_title}" if prefix and not raw_title.startswith(prefix) else raw_title
+            topic = str(t.get("topic") or "").strip()
             result = await self.notifier.emit(
                 title=title,
                 content=t.get("body", ""),
                 priority=t.get("priority", "normal"),
                 ticket_type=t.get("type", "question"),
                 tick_id=tick["id"],
+                channel=t.get("channel", "mobile"),
                 expected_reply_hours=t.get("expected_reply_hours"),
                 fallback_assumption=t.get("fallback_assumption", ""),
                 suppress_push=suppress_push,
+                topic=topic,
+                meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
             )
             emitted.append({"title": title, "result": result})
             if result.get("ticket_id"):
+                if topic:
+                    topic_history[topic] = self._clock().isoformat()
                 await self.memory.save_episode(
-                    tick["id"], "work", {"ticket_created": result["ticket_id"], "title": title}
+                    tick["id"], "work", {"ticket_created": result["ticket_id"], "title": title, "topic": topic}
                 )
+
+        if topic_history != (context.get("topic_history") or {}):
+            await self.db.set_runtime_state("asked_topics", topic_history)
 
         for idx, a in enumerate(action_items):
             if self._clock() > deadline:
@@ -522,13 +837,115 @@ class TickEngine:
                         {"task": f"动作: {rest.get('kind')}", "reason": "预算耗尽", "priority": "normal"}
                     )
                 break
-            if a.get("kind") == "episode":
+            if not isinstance(a, dict):
+                continue
+            kind = a.get("kind")
+
+            if kind == "episode":
                 await self.memory.save_episode(tick["id"], "work", a.get("content"))
-            elif a.get("kind") == "memory":
+                work_results.append({"kind": "episode", "ok": True})
+
+            elif kind == "memory":
                 await self.memory.save(
                     a.get("memory_type", "semantic"), a.get("key", "misc"), a.get("value")
                 )
-            elif a.get("kind") == "dev_task" and self.dev_runner is not None:
+                work_results.append({"kind": "memory", "key": a.get("key"), "ok": True})
+
+            elif kind == "profile_update":
+                pkey = str(a.get("key") or "").strip()
+                if pkey:
+                    await self.memory.set_profile(
+                        pkey,
+                        a.get("value"),
+                        confidence=float(a.get("confidence", 0.85)),
+                        source=str(a.get("source", "asked")),
+                    )
+                    work_results.append({"kind": "profile_update", "key": pkey, "ok": True})
+
+            elif kind == "diet_log" and context.get("server_ok"):
+                try:
+                    diet_payload = {
+                        "meal_type": a.get("meal_type", "snack"),
+                        "description": str(a.get("description") or ""),
+                    }
+                    if a.get("calories") is not None:
+                        diet_payload["calories"] = float(a["calories"])
+                    if a.get("protein") is not None:
+                        diet_payload["protein"] = float(a["protein"])
+                    res = await self.inbox.create_diet_log(diet_payload)
+                    work_results.append({"kind": "diet_log", "id": res.get("id"), "ok": True})
+                except Exception as exc:
+                    logger.warning("WORK diet_log failed (non-fatal): %s", exc)
+                    work_results.append({"kind": "diet_log", "ok": False, "error": str(exc)})
+
+            elif kind == "plan_update":
+                # 1. 本地 st_plans 留档
+                version = str(a.get("plan_version") or f"v{self._clock().strftime('%m%d.%H')}")
+                goal = str(a.get("target_weight") or "70.0")
+                content_md = str(
+                    a.get("content")
+                    or f"# {a.get('phase_name', 'AI 动态计划')}\n\n{a.get('phase_rationale', '')}\n\n{a.get('focus_notes', '')}"
+                )
+                rationale = str(a.get("phase_rationale") or a.get("rationale") or "")
+                await self.db.create_plan(version, f"{goal}kg", content_md, rationale, active=True)
+                # 2. 同步写回 sail_server 健康页 AI 动态体重计划
+                if context.get("server_ok"):
+                    try:
+                        sync_payload = {
+                            "target_weight": goal,
+                            "plan_version": version,
+                            "phase_name": str(a.get("phase_name") or "动态适应期"),
+                            "phase_rationale": rationale,
+                            "focus_notes": str(a.get("focus_notes") or ""),
+                            "daily_targets": a.get("daily_targets") if isinstance(a.get("daily_targets"), dict) else {},
+                            "tolerance_kg": float(a.get("tolerance_kg", 0.7)),
+                            "ai_summary": str(a.get("ai_summary") or plan.get("summary") or ""),
+                        }
+                        if a.get("initial_weight"):
+                            sync_payload["initial_weight"] = str(a["initial_weight"])
+                        if a.get("description"):
+                            sync_payload["description"] = str(a["description"])
+                        synced = await self.inbox.sync_ai_weight_plan(sync_payload)
+                        work_results.append({"kind": "plan_update", "plan_id": synced.get("id"), "version": version, "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK plan_update sync to sail_server failed: %s", exc)
+                        work_results.append({"kind": "plan_update", "version": version, "ok": False, "error": str(exc)})
+                else:
+                    work_results.append({"kind": "plan_update", "version": version, "ok": True, "local_only": True})
+
+            elif kind == "daily_report" and context.get("server_ok"):
+                try:
+                    report_date = str(a.get("report_date") or tick.get("tick_date") or self._clock().strftime("%Y-%m-%d"))
+                    should_push = bool(a.get("push", True)) and not suppress_push and not self.notifier.in_quiet_hours()
+                    rep_payload = {
+                        "report_date": report_date,
+                        "tick_id": tick["id"],
+                        "title": str(a.get("title") or f"{report_date} 睡前体重与健康日报"),
+                        "summary": str(a.get("summary") or plan.get("summary") or ""),
+                        "body_markdown": str(a.get("body_markdown") or ""),
+                        "weight_snapshot": a.get("weight_snapshot") if isinstance(a.get("weight_snapshot"), dict) else {},
+                        "diet_summary": a.get("diet_summary") if isinstance(a.get("diet_summary"), dict) else {},
+                        "plan_update": a.get("plan_update") if isinstance(a.get("plan_update"), dict) else {},
+                        "tomorrow_focus": a.get("tomorrow_focus") if isinstance(a.get("tomorrow_focus"), list) else [],
+                        "push": should_push,
+                    }
+                    rep = await self.inbox.upsert_daily_report(rep_payload)
+                    work_results.append({"kind": "daily_report", "report_date": report_date, "id": rep.get("id"), "pushed": rep.get("pushed"), "ok": True})
+                except Exception as exc:
+                    logger.warning("WORK daily_report failed (non-fatal): %s", exc)
+                    work_results.append({"kind": "daily_report", "ok": False, "error": str(exc)})
+
+            elif kind == "resolve_ticket" and context.get("server_ok"):
+                tid = a.get("ticket_id")
+                if tid is not None:
+                    try:
+                        await self.inbox.resolve_ticket(int(tid), str(a.get("resolution") or "已吸收"))
+                        work_results.append({"kind": "resolve_ticket", "ticket_id": int(tid), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK resolve_ticket #%s failed: %s", tid, exc)
+                        work_results.append({"kind": "resolve_ticket", "ticket_id": tid, "ok": False, "error": str(exc)})
+
+            elif kind == "dev_task" and self.dev_runner is not None:
                 if not policy.get("allow_self_dev", True):
                     await self.memory.save_episode(
                         tick["id"],
@@ -536,7 +953,6 @@ class TickEngine:
                         {"task": a.get("task_id", ""), "reason": f"disabled_in_mode:{policy['mode']}"},
                     )
                     continue
-                # Phase 5 自我开发：由 nightly slot 触发（LLM 产出 file_contents 后执行）
                 from sailtick.dev.tasks import DevTask
 
                 task = DevTask(
@@ -549,14 +965,56 @@ class TickEngine:
                     task, file_contents=dict(a.get("file_contents", {}))
                 )
                 await self.memory.save_episode(
-                    tick["id"], "dev",
-                    {"task": task.id, "success": result.success, "commit": result.commit,
-                     "ticket": result.ticket_id, "error": result.error},
+                    tick["id"],
+                    "dev",
+                    {
+                        "task": task.id,
+                        "success": result.success,
+                        "commit": result.commit,
+                        "ticket": result.ticket_id,
+                        "error": result.error,
+                    },
                 )
+                work_results.append({"kind": "dev_task", "task": task.id, "ok": result.success})
+
+        # 标记本 Tick 已阅读并整合的用户主动消息（仅在真实执行模式下落库）
+        unread_ids = [
+            int(m["id"])
+            for m in (context.get("unread_messages") or [])
+            if isinstance(m, dict) and m.get("id") is not None
+        ]
+        if unread_ids and context.get("server_ok"):
+            try:
+                ingested_cnt = await self.inbox.ingest_user_messages(unread_ids, tick["id"])
+                work_results.append({"kind": "ingest_messages", "count": ingested_cnt, "ok": True})
+            except Exception as exc:
+                logger.warning("WORK ingest_user_messages failed (non-fatal): %s", exc)
+
+        # 推进体重水位线与回复同步游标
+        if context.get("current_weight_watermark"):
+            await self.db.set_runtime_state(
+                "last_weight_watermark", context["current_weight_watermark"]
+            )
+        if context.get("new_replies"):
+            latest_ts = max(
+                (str(r.get("updated_at") or r.get("replied_at") or "") for r in context["new_replies"]),
+                default="",
+            )
+            if latest_ts:
+                try:
+                    dt = datetime.fromisoformat(latest_ts.replace("Z", "+00:00"))
+                    if dt.tzinfo is not None:
+                        dt = dt.astimezone().replace(tzinfo=None)
+                    await self.db.set_runtime_state(
+                        "tick_reply_cursor", (dt + timedelta(seconds=1)).isoformat()
+                    )
+                except ValueError:
+                    pass
 
         context["emitted"] = emitted
         context["shadow_emitted"] = shadow_emitted
-        logger.info("WORK ok: emitted=%d", len(emitted))
+        context["work_results"] = work_results
+        logger.info("WORK ok: emitted=%d actions=%d", len(emitted), len(work_results))
 
     # ── HANDOFF ───────────────────────────────────────────────────────
 
@@ -566,13 +1024,14 @@ class TickEngine:
         summary_text = plan.get("summary", "")
         if mode == "shadow" and summary_text and not summary_text.startswith("[shadow]"):
             summary_text = f"[shadow] {summary_text}"
+        latest_plan = await self.db.get_active_plan()
         doc = HandoffDoc(
             tick_id=tick["id"],
             slot=tick["slot"],
             tick_date=tick["tick_date"],
             prev_summary=summary_text,
             unfinished=plan.get("unfinished", []),
-            plan_version=(context.get("active_plan") or {}).get("version", "(无)"),
+            plan_version=(latest_plan or context.get("active_plan") or {}).get("version", "(无)"),
             plan_change="见本 Tick 计划",
             pending_tickets=[
                 {
@@ -590,7 +1049,6 @@ class TickEngine:
         )
         path = await self.handoffs.write(doc)
 
-        # 压缩记忆 + 成本记录（若 LLMGateway 已通过 cost_sink 记账则不重复叠加）
         await self.memory.cleanup_expired()
         if not getattr(self.llm, "cost_recorded_by_sink", False):
             await self.db.add_tick_cost(
@@ -606,12 +1064,12 @@ class TickEngine:
 
     # ── 工具 ──────────────────────────────────────────────────────────
 
-    def _load_prompt(self, rel_path: str) -> str:
+    def _load_prompt(self, rel_path: str, default: str = "(system prompt 未找到)") -> str:
         path = os.path.join(self._prompts_dir, rel_path) if self._prompts_dir else ""
         if path and os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
-        return "(system prompt 未找到)"
+        return default
 
     def current_tick(self) -> Optional[dict]:
         return self._current_tick

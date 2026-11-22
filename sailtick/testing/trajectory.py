@@ -606,9 +606,148 @@ def _scenario_canary_circuit_breaker() -> TrajectoryScenario:
     )
 
 
+def _scenario_health_coach_full_day_loop() -> TrajectoryScenario:
+    """健康管理升级全天闭环：
+    1) 早间巡检：监测到新体重 + 尝试提 2 个问题被防轰炸护栏限流为 1 个；
+    2) 白天用户回复早间问题 + 在 Android 静默主动发送午饭/晚饭信息（无需 AI 即时回复）；
+    3) 21:45 睡前日报：整合全部体重与主动餐饮消息 -> 写画像 -> 同步 AI 动态计划 -> 发布睡前日报 -> 吸收消息并关闭已答票据。
+    """
+
+    async def setup(d: SailTickDaemon, s: SimulatedSailServer, _c: VirtualClock) -> None:
+        d.config.notify.max_questions_per_tick = 1
+        await d.memory.set_profile("goal_weight", "70kg", confidence=1.0, source="asked")
+        s.seed_weight("2026-11-21", 75.2)
+        s.seed_weight("2026-11-22", 74.8)
+
+    def user_daytime_activity(_d: SailTickDaemon, s: SimulatedSailServer, _c: VirtualClock) -> None:
+        s.simulate_user_reply_latest_pending("工作日一般 7:30 起床，23:00 睡")
+        s.simulate_user_message("午饭吃了食堂鸡胸肉+半碗米饭+西兰花", category="diet", meta={"meal_type": "lunch"})
+        s.simulate_user_message("晚饭吃了番茄鸡蛋面少面+卤蛋", category="diet", meta={"meal_type": "dinner"})
+
+    async def verify(report: TrajectoryReport, d: SailTickDaemon, s: SimulatedSailServer) -> None:
+        assert len(report.tick_results) == 2
+        assert all(r["status"] == "completed" for r in report.tick_results)
+        # 1) 早间防轰炸：LLM 企图提 2 个问题，护栏严格截断为 1 个
+        assert len(report.tick_results[0]["emitted"]) == 1
+        assert len(s.tickets) == 1
+        assert s.tickets[0]["status"] == "resolved"
+        # 2) 画像更新生效
+        prof = await d.memory.all_profile()
+        assert prof.get("schedule_workday", {}).get("value") == "07:30-23:00"
+        # 3) 用户主动发送的 2 条餐饮消息全部被标记 ingested
+        assert len(s.messages) == 2
+        assert all(m["status"] == "ingested" for m in s.messages)
+        # 4) AI 动态体重计划已写回 sail_server
+        assert s.weight_plan is not None
+        assert s.weight_plan["managedBy"] == "sailtick"
+        assert s.weight_plan["curveType"] == "ai_dynamic"
+        assert s.weight_plan["phaseName"] == "基线观察与稳态起步"
+        # 5) 睡前日报已发布并推送
+        assert "2026-11-22" in s.daily_reports
+        rep = s.daily_reports["2026-11-22"]
+        assert rep["pushed"] is True
+        assert "74.8" in rep["summary"]
+
+    return TrajectoryScenario(
+        name="health_coach_full_day_loop",
+        description="健康管理全天闭环：体重监控 + 防轰炸渐进提问(限1题) + 静默餐饮收集 + AI 动态计划同步 + 睡前体重日报",
+        start_time=datetime(2026, 11, 22, 8, 30, 0),
+        setup=setup,
+        steps=[
+            TrajectoryStep(
+                label="morning_progressive_question",
+                assert_prompt_contains=["74.8kg", "有新的体重测量数据更新"],
+                response={
+                    "summary": "早间检测到体重降至 74.8kg，发起 1 个作息渐进提问",
+                    "tickets": [
+                        {
+                            "type": "question",
+                            "topic": "wake_time",
+                            "title": "平时大概几点起床和睡觉？",
+                            "body": "了解作息后，我可以把睡前日报和称重提醒安排在最不打扰你的时间。",
+                            "priority": "normal",
+                            "expected_reply_hours": 36,
+                            "fallback_assumption": "暂按 08:00-23:00 估计",
+                            "meta": {"quick_replies": ["7:30起/23:00睡", "8:00起/23:30睡"]},
+                        },
+                        {
+                            "type": "question",
+                            "topic": "canteen",
+                            "title": "第二题应被防轰炸护栏拦截",
+                            "body": "不应在同一次 Tick 发出第二道提问",
+                            "priority": "normal",
+                        },
+                    ],
+                    "actions": [],
+                    "unfinished": [],
+                    "next_tick_suggestions": ["睡前整合饮食并更新 AI 动态计划"],
+                },
+            ),
+            TrajectoryStep(
+                label="pre_sleep_report_and_plan_sync",
+                assert_prompt_contains=["食堂鸡胸肉", "番茄鸡蛋面", "7:30 起床"],
+                response={
+                    "summary": "今日体重 74.8kg，整合 2 条餐饮记录并同步 AI 动态计划与睡前日报",
+                    "tickets": [],
+                    "actions": [
+                        {
+                            "kind": "profile_update",
+                            "key": "schedule_workday",
+                            "value": "07:30-23:00",
+                            "confidence": 0.95,
+                            "source": "asked",
+                        },
+                        {
+                            "kind": "resolve_ticket",
+                            "ticket_id": 1,
+                            "resolution": "已写入作息画像",
+                        },
+                        {
+                            "kind": "plan_update",
+                            "plan_version": "v1.1",
+                            "target_weight": "70.0",
+                            "phase_name": "基线观察与稳态起步",
+                            "phase_rationale": "近两天从 75.2 降至 74.8kg，蛋白与主食结构均衡，保持温和节奏",
+                            "focus_notes": "继续午晚餐适量蛋白+半份主食，保证 23:00 前入睡",
+                            "tolerance_kg": 0.7,
+                            "ai_summary": "体重稳步下行至 74.8kg，饮食清淡均衡，状态很好",
+                            "daily_targets": {"2026-11-22": 74.8, "2026-11-29": 74.3},
+                        },
+                        {
+                            "kind": "daily_report",
+                            "report_date": "2026-11-22",
+                            "title": "2026-11-22 睡前体重与健康日报",
+                            "summary": "今日体重 74.8kg（较昨日 -0.4kg），午晚餐结构均衡，已更新动态计划。",
+                            "body_markdown": "## 今日体重\n- 74.8kg (-0.4kg)\n## 今日餐饮\n- 午餐：食堂鸡胸肉+半碗米饭+西兰花\n- 晚餐：番茄鸡蛋面少面+卤蛋",
+                            "weight_snapshot": {"latest_kg": 74.8, "delta_from_prev": -0.4, "target_kg": 70.0},
+                            "diet_summary": {"count": 2, "highlights": "蛋白质充足、主食克制"},
+                            "plan_update": {"phase_name": "基线观察与稳态起步", "plan_version": "v1.1"},
+                            "tomorrow_focus": ["明早 7:30 起床后空腹称重", "继续随手发一句午晚饭记录"],
+                            "push": True,
+                        },
+                    ],
+                    "unfinished": [],
+                    "next_tick_suggestions": ["明早观察体重变化"],
+                },
+            ),
+        ],
+        ticks=[
+            TrajectoryTickSpec(slot="morning_checkin"),
+            TrajectoryTickSpec(
+                slot="pre_sleep_report",
+                advance_hours=13,
+                advance_minutes=15,
+                before=user_daytime_activity,
+            ),
+        ],
+        verify=verify,
+    )
+
+
 BUILTIN_SCENARIOS: Dict[str, Callable[[], TrajectoryScenario]] = {
     "onboarding_reply_loop": _scenario_onboarding_reply_loop,
     "fault_injection_and_recovery": _scenario_fault_injection_and_recovery,
     "quiet_hours_and_expiry": _scenario_quiet_hours_and_expiry,
     "canary_circuit_breaker": _scenario_canary_circuit_breaker,
+    "health_coach_full_day_loop": _scenario_health_coach_full_day_loop,
 }

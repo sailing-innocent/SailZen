@@ -19,16 +19,21 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
-from typing import List, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.tick import (
+    DailyReportResponse,
+    DailyReportUpsertRequest,
+    HealthCoachSummaryResponse,
+    TickMessageCreateRequest,
+    TickMessageResponse,
     TicketCreateRequest,
     TicketResponse,
 )
-from sailzen_orm.tick import SailTickTicket
+from sailzen_orm.tick import SailTickDailyReport, SailTickMessage, SailTickTicket
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +46,8 @@ STATUS_SNOOZED = "snoozed"
 TERMINAL_STATUSES = {STATUS_RESOLVED, STATUS_EXPIRED}
 VALID_TYPES = {"question", "task", "approval", "info"}
 VALID_PRIORITY = {"low", "normal", "high", "urgent"}
+VALID_MSG_DIRECTIONS = {"user_to_agent", "agent_to_user"}
+VALID_MSG_CATEGORIES = {"diet", "weight", "daily_info", "mood", "exercise", "general"}
 
 
 class TicketError(Exception):
@@ -67,40 +74,133 @@ def _get_or_404(db: Session, ticket_id: int) -> SailTickTicket:
 
 
 def _to_response(t: SailTickTicket) -> TicketResponse:
-    return TicketResponse.model_validate(t)
+    return TicketResponse(
+        id=t.id,
+        tick_id=t.tick_id or "",
+        type=t.type or "question",
+        topic=getattr(t, "topic", None) or "",
+        title=t.title,
+        body=t.body or "",
+        meta=getattr(t, "meta", None) if isinstance(getattr(t, "meta", None), dict) else {},
+        status=t.status or STATUS_PENDING,
+        expected_reply_by=t.expected_reply_by,
+        replied_at=t.replied_at,
+        reply=t.reply,
+        resolved_at=t.resolved_at,
+        resolution=t.resolution,
+        fallback_assumption=t.fallback_assumption or "",
+        priority=t.priority or "normal",
+        channel=t.channel or "web",
+        created_at=t.created_at,
+        updated_at=t.updated_at,
+    )
 
 
-def _push_if_needed(t: SailTickTicket) -> None:
-    """高优先/强制推送的票据广播给在线 Android 设备（失败仅告警）。"""
+def _create_and_push_agent_reminder(
+    db: Session,
+    rem_type: str,
+    title: str,
+    body: str,
+    priority: str,
+    payload: Dict[str, Any],
+    expire_minutes: int = 720,
+) -> bool:
+    """持久化一条 source='agent' 的 Reminder 并向在线 Android 设备广播。
+
+    这样无论 Android 当前 WS 在线与否：
+    - 在线设备通过 WS 立即收到通知；
+    - 离线设备稍后通过 /api/v1/reminder/pending 轮询也能可靠补齐，且与 reminders.id 绝无冲突。
+    """
+    try:
+        import asyncio
+
+        from sail_server.application.dto.reminder import ReminderResponse
+        from sail_server.utils.reminder_ws import get_reminder_push_manager
+        from sailzen_orm.reminder import Reminder
+
+        now = datetime.now()
+        manager = get_reminder_push_manager()
+        online_fn = getattr(manager, "online_device_ids", None)
+        has_online = bool(online_fn()) if callable(online_fn) else True
+
+        rem = Reminder(
+            type=rem_type,
+            title=title,
+            body=body[:500],
+            priority=priority if priority in VALID_PRIORITY else "normal",
+            source="agent",
+            state="DELIVERED" if has_online else "PENDING",
+            trigger_time=now,
+            expire_after_minutes=expire_minutes,
+            last_delivered_at=now if has_online else None,
+            payload=payload,
+        )
+        db.add(rem)
+        db.commit()
+        db.refresh(rem)
+
+        ws_payload = ReminderResponse.model_validate(rem).model_dump(mode="json")
+        try:
+            loop = asyncio.get_running_loop()
+            res = manager.broadcast_reminder(ws_payload)
+            if asyncio.iscoroutine(res):
+                loop.create_task(res)
+        except RuntimeError:
+            logger.debug("no running loop, reminder %s persisted for poll delivery", rem.id)
+        return True
+    except Exception as exc:
+        logger.warning("agent reminder persist/push failed (non-fatal): %s", exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return False
+
+
+def _resolve_linked_ticket_reminders(db: Session, ticket_id: int) -> None:
+    """票据已回复/关闭/过期时，同步关闭关联的未终态 agent Reminder，避免手机收件箱残留。"""
+    try:
+        from sailzen_orm.reminder import Reminder
+
+        active_rems = (
+            db.query(Reminder)
+            .filter(
+                Reminder.source == "agent",
+                Reminder.state.in_(["PENDING", "DELIVERED", "SNOOZED", "OPENED"]),
+            )
+            .all()
+        )
+        changed = False
+        for rem in active_rems:
+            if isinstance(rem.payload, dict) and rem.payload.get("ticket_id") == ticket_id:
+                rem.state = "RESOLVED"
+                changed = True
+        if changed:
+            db.commit()
+    except Exception as exc:
+        logger.debug("resolve linked reminders skipped (non-fatal): %s", exc)
+
+
+def _push_if_needed(db: Session, t: SailTickTicket) -> None:
+    """高优先/强制推送的票据落库 Reminder 并广播给在线 Android 设备（失败仅告警）。"""
     should_push = t.push == "force" or (
         t.push == "auto" and t.priority in ("high", "urgent")
     )
     if not should_push:
         return
-    try:
-        import asyncio
-
-        from sail_server.utils.reminder_ws import get_reminder_push_manager
-
-        manager = get_reminder_push_manager()
-        payload = {
-            "id": t.id,
-            "type": f"tick.ticket.{t.type}",
-            "title": t.title,
-            "body": t.body[:200],
-            "priority": t.priority,
-            "source": "agent",
-            "payload": {"ticket_id": t.id, "ticket_type": t.type},
-            "state": STATUS_PENDING,
-        }
-        # 同步上下文里可能没有事件循环（如 pytest），退化为 fire-and-forget task
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(manager.broadcast_reminder(payload))
-        except RuntimeError:
-            logger.debug("no running loop, skip push broadcast for ticket %s", t.id)
-    except Exception as exc:
-        logger.warning("ticket push broadcast failed (non-fatal): %s", exc)
+    _create_and_push_agent_reminder(
+        db=db,
+        rem_type=f"tick.ticket.{t.type}",
+        title=t.title,
+        body=(t.body or "")[:300],
+        priority=t.priority or "normal",
+        payload={
+            "ticket_id": t.id,
+            "ticket_type": t.type,
+            "topic": getattr(t, "topic", "") or "",
+        },
+        expire_minutes=1440,
+    )
 
 
 # ── CRUD ────────────────────────────────────────────────────────────────
@@ -116,8 +216,10 @@ def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
     t = SailTickTicket(
         tick_id=req.tick_id,
         type=req.type,
+        topic=req.topic or "",
         title=req.title,
         body=req.body,
+        meta=req.meta or {},
         priority=req.priority,
         channel=req.channel,
         expected_reply_by=req.expected_reply_by,
@@ -129,8 +231,8 @@ def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
     db.flush()
     db.commit()
     db.refresh(t)
-    _push_if_needed(t)
-    logger.info("[tick] ticket %s created: type=%s priority=%s", t.id, t.type, t.priority)
+    _push_if_needed(db, t)
+    logger.info("[tick] ticket %s created: type=%s topic=%s priority=%s", t.id, t.type, t.topic, t.priority)
     return _to_response(t)
 
 
@@ -177,6 +279,7 @@ def reply_ticket_impl(db: Session, ticket_id: int, reply: str) -> TicketResponse
     t.status = STATUS_REPLIED
     db.commit()
     db.refresh(t)
+    _resolve_linked_ticket_reminders(db, t.id)
     logger.info("[tick] ticket %s replied", t.id)
     return _to_response(t)
 
@@ -193,6 +296,7 @@ def resolve_ticket_impl(db: Session, ticket_id: int, resolution: str = "") -> Ti
     t.resolved_at = datetime.now()
     db.commit()
     db.refresh(t)
+    _resolve_linked_ticket_reminders(db, t.id)
     logger.info("[tick] ticket %s resolved", t.id)
     return _to_response(t)
 
@@ -228,6 +332,8 @@ def expire_overdue_impl(db: Session) -> int:
     for t in rows:
         t.status = STATUS_EXPIRED
     db.commit()
+    for t in rows:
+        _resolve_linked_ticket_reminders(db, t.id)
     if rows:
         logger.info("[tick] expired %d overdue tickets", len(rows))
     return len(rows)
@@ -242,3 +348,297 @@ def list_replies_since_impl(db: Session, since: Optional[datetime] = None) -> Li
         q = q.filter(SailTickTicket.updated_at >= since)
     rows = q.order_by(SailTickTicket.updated_at.asc()).limit(200).all()
     return [_to_response(r) for r in rows]
+
+
+# ── 用户主动消息 / 静默餐饮收集 ──────────────────────────────────────────────
+
+
+def _infer_meal_type(now: datetime, meta: Dict[str, Any]) -> str:
+    raw = str(meta.get("meal_type") or "").strip().lower()
+    if raw in ("breakfast", "lunch", "dinner", "snack"):
+        return raw
+    h = now.hour
+    if 5 <= h < 10:
+        return "breakfast"
+    if 10 <= h < 15:
+        return "lunch"
+    if 16 <= h < 21:
+        return "dinner"
+    return "snack"
+
+
+def _to_message_response(m: SailTickMessage) -> TickMessageResponse:
+    return TickMessageResponse(
+        id=m.id,
+        direction=m.direction or "user_to_agent",
+        category=m.category or "diet",
+        content=m.content,
+        meta=m.meta if isinstance(m.meta, dict) else {},
+        source_channel=m.source_channel or "android",
+        status=m.status or "unread",
+        ingested_by_tick_id=m.ingested_by_tick_id,
+        created_at=m.created_at,
+        ingested_at=m.ingested_at,
+    )
+
+
+def create_message_impl(
+    db: Session, req: TickMessageCreateRequest
+) -> TickMessageResponse:
+    """保存用户主动发送的餐饮/日常消息，无需等待 AI 实时回复。"""
+    if req.direction not in VALID_MSG_DIRECTIONS:
+        raise TicketBadRequestError(f"invalid direction: {req.direction!r}")
+    if req.category not in VALID_MSG_CATEGORIES:
+        raise TicketBadRequestError(f"invalid category: {req.category!r}")
+    content = (req.content or "").strip()
+    if not content:
+        raise TicketBadRequestError("content cannot be empty")
+
+    now = datetime.now()
+    meta = dict(req.meta or {})
+
+    # 餐饮类主动消息同步落库一条轻量 DietLog，使健康页饮食模块立即可见
+    if req.direction == "user_to_agent" and req.category == "diet" and req.auto_log_diet:
+        try:
+            from sailzen_orm.health import DietLog
+
+            meal_type = _infer_meal_type(now, meta)
+            meta["meal_type"] = meal_type
+            htime = now
+            if meta.get("htime"):
+                try:
+                    htime = datetime.fromtimestamp(float(meta["htime"]))
+                except (ValueError, TypeError):
+                    htime = now
+            calories = None
+            if meta.get("calories") is not None:
+                try:
+                    calories = float(meta["calories"])
+                except (ValueError, TypeError):
+                    calories = None
+            diet = DietLog(
+                meal_type=meal_type,
+                htime=htime,
+                description=content,
+                calories=calories,
+            )
+            db.add(diet)
+            db.flush()
+            meta["linked_diet_id"] = diet.id
+        except Exception as exc:
+            logger.warning("[tick] auto_log_diet failed (non-fatal): %s", exc)
+
+    msg = SailTickMessage(
+        direction=req.direction,
+        category=req.category,
+        content=content,
+        meta=meta,
+        source_channel=req.source_channel or "android",
+        status="unread",
+        created_at=now,
+    )
+    db.add(msg)
+    db.commit()
+    db.refresh(msg)
+    logger.info(
+        "[tick] message %s saved: direction=%s category=%s channel=%s",
+        msg.id,
+        msg.direction,
+        msg.category,
+        msg.source_channel,
+    )
+    return _to_message_response(msg)
+
+
+def list_messages_impl(
+    db: Session,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    direction: Optional[str] = None,
+    since: Optional[datetime] = None,
+    limit: int = 100,
+) -> List[TickMessageResponse]:
+    q = db.query(SailTickMessage)
+    if status:
+        q = q.filter(SailTickMessage.status == status)
+    if category:
+        q = q.filter(SailTickMessage.category == category)
+    if direction:
+        q = q.filter(SailTickMessage.direction == direction)
+    if since is not None:
+        q = q.filter(SailTickMessage.created_at >= since)
+    rows = q.order_by(SailTickMessage.created_at.desc(), SailTickMessage.id.desc()).limit(limit).all()
+    return [_to_message_response(r) for r in rows]
+
+
+def ingest_messages_impl(
+    db: Session, message_ids: List[int], tick_id: str = ""
+) -> int:
+    """标记一批用户消息已被 SailTick 吸收整合（幂等）。"""
+    if not message_ids:
+        return 0
+    now = datetime.now()
+    rows = (
+        db.query(SailTickMessage)
+        .filter(
+            SailTickMessage.id.in_(message_ids),
+            SailTickMessage.status == "unread",
+        )
+        .all()
+    )
+    for row in rows:
+        row.status = "ingested"
+        row.ingested_by_tick_id = tick_id or ""
+        row.ingested_at = now
+    db.commit()
+    return len(rows)
+
+
+# ── 每日睡前体重与健康日报 ────────────────────────────────────────────────────
+
+
+def _to_report_response(r: SailTickDailyReport) -> DailyReportResponse:
+    return DailyReportResponse(
+        id=r.id,
+        report_date=r.report_date,
+        tick_id=r.tick_id or "",
+        title=r.title,
+        summary=r.summary or "",
+        body_markdown=r.body_markdown or "",
+        weight_snapshot=r.weight_snapshot if isinstance(r.weight_snapshot, dict) else {},
+        diet_summary=r.diet_summary if isinstance(r.diet_summary, dict) else {},
+        plan_update=r.plan_update if isinstance(r.plan_update, dict) else {},
+        tomorrow_focus=r.tomorrow_focus if isinstance(r.tomorrow_focus, list) else [],
+        pushed=bool(r.pushed),
+        created_at=r.created_at,
+        updated_at=r.updated_at,
+    )
+
+
+def upsert_daily_report_impl(
+    db: Session, req: DailyReportUpsertRequest
+) -> DailyReportResponse:
+    """幂等创建或更新某一天的睡前健康日报，按需向 Android 推送一次通知。"""
+    report_date = (req.report_date or "").strip()[:10]
+    if not report_date:
+        raise TicketBadRequestError("report_date is required (YYYY-MM-DD)")
+
+    now = datetime.now()
+    rep = (
+        db.query(SailTickDailyReport)
+        .filter(SailTickDailyReport.report_date == report_date)
+        .first()
+    )
+    already_pushed = bool(rep.pushed) if rep is not None else False
+    if rep is None:
+        rep = SailTickDailyReport(
+            report_date=report_date,
+            tick_id=req.tick_id or "",
+            title=req.title,
+            summary=req.summary or "",
+            body_markdown=req.body_markdown or "",
+            weight_snapshot=req.weight_snapshot or {},
+            diet_summary=req.diet_summary or {},
+            plan_update=req.plan_update or {},
+            tomorrow_focus=list(req.tomorrow_focus or []),
+            pushed=False,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(rep)
+    else:
+        rep.tick_id = req.tick_id or rep.tick_id
+        rep.title = req.title
+        rep.summary = req.summary or ""
+        rep.body_markdown = req.body_markdown or ""
+        rep.weight_snapshot = req.weight_snapshot or {}
+        rep.diet_summary = req.diet_summary or {}
+        rep.plan_update = req.plan_update or {}
+        rep.tomorrow_focus = list(req.tomorrow_focus or [])
+        rep.updated_at = now
+
+    db.commit()
+    db.refresh(rep)
+
+    # 同一天日报避免重复轰炸推送
+    if req.push and not already_pushed:
+        pushed = _create_and_push_agent_reminder(
+            db=db,
+            rem_type="tick.daily_report",
+            title=rep.title,
+            body=(rep.summary or rep.body_markdown or "")[:300],
+            priority="normal",
+            payload={
+                "report_date": rep.report_date,
+                "report_id": rep.id,
+                "kind": "daily_report",
+            },
+            expire_minutes=720,
+        )
+        if pushed:
+            rep.pushed = True
+            db.commit()
+            db.refresh(rep)
+
+    logger.info("[tick] daily report upserted: date=%s pushed=%s", rep.report_date, rep.pushed)
+    return _to_report_response(rep)
+
+
+def list_daily_reports_impl(db: Session, limit: int = 14) -> List[DailyReportResponse]:
+    rows = (
+        db.query(SailTickDailyReport)
+        .order_by(SailTickDailyReport.report_date.desc())
+        .limit(limit)
+        .all()
+    )
+    return [_to_report_response(r) for r in rows]
+
+
+def get_latest_daily_report_impl(db: Session) -> Optional[DailyReportResponse]:
+    row = (
+        db.query(SailTickDailyReport)
+        .order_by(SailTickDailyReport.report_date.desc())
+        .first()
+    )
+    return _to_report_response(row) if row else None
+
+
+def get_daily_report_by_date_impl(
+    db: Session, report_date: str
+) -> Optional[DailyReportResponse]:
+    row = (
+        db.query(SailTickDailyReport)
+        .filter(SailTickDailyReport.report_date == report_date[:10])
+        .first()
+    )
+    return _to_report_response(row) if row else None
+
+
+def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
+    """聚合健康页所需的 AI 教练动态计划、最新睡前日报、待回复提问与今日主动记录。"""
+    from sail_server.model.health import (
+        get_active_weight_plan_impl,
+        get_weight_plan_progress_impl,
+    )
+
+    active_plan = get_active_weight_plan_impl(db)
+    plan_progress = get_weight_plan_progress_impl(db) if active_plan else None
+    latest_report = get_latest_daily_report_impl(db)
+    pending_tickets = list_tickets_impl(db, status=STATUS_PENDING, limit=10)
+
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    today_messages = list_messages_impl(
+        db,
+        direction="user_to_agent",
+        since=today_start,
+        limit=30,
+    )
+
+    return HealthCoachSummaryResponse(
+        active_plan=active_plan.model_dump(mode="json") if active_plan else None,
+        plan_progress=plan_progress,
+        latest_report=latest_report,
+        pending_tickets=pending_tickets[:5],
+        pending_ticket_count=len(pending_tickets),
+        today_messages=today_messages,
+    )

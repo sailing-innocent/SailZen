@@ -25,6 +25,8 @@ object ApiClient {
     private var cachedTextApi: TextApi? = null
     private var cachedMoneyKey: String? = null
     private var cachedMoneyApi: MoneyApi? = null
+    private var cachedTickKey: String? = null
+    private var cachedTickApi: TickApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -118,6 +120,18 @@ object ApiClient {
         return buildRetrofit(normalized, token).create(MoneyApi::class.java).also {
             cachedMoneyKey = key
             cachedMoneyApi = it
+        }
+    }
+
+    /** SailTick AI 教练 API（缓存键独立） */
+    @Synchronized
+    fun tickApi(baseUrl: String, token: String): TickApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedTickApi?.let { if (cachedTickKey == key) return it }
+        return buildRetrofit(normalized, token).create(TickApi::class.java).also {
+            cachedTickKey = key
+            cachedTickApi = it
         }
     }
 

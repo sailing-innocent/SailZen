@@ -14,7 +14,7 @@
 
 from datetime import datetime, date as date_type
 from enum import Enum
-from typing import Optional, List
+from typing import Dict, Optional, List
 
 from pydantic import BaseModel, Field, ConfigDict, field_serializer
 
@@ -152,6 +152,7 @@ class WeightPlanCurveType(str, Enum):
     LINEAR = "linear"
     POLYNOMIAL = "polynomial"
     EXPONENTIAL = "exponential"
+    AI_DYNAMIC = "ai_dynamic"
 
 
 class WeightPlanBase(BaseModel):
@@ -172,6 +173,39 @@ class WeightPlanBase(BaseModel):
         default=WeightPlanCurveType.LINEAR, description="目标曲线类型"
     )
     description: str = Field(default="", description="计划描述")
+    managed_by: str = Field(default="manual", description="计划维护方：manual | sailtick")
+    plan_version: str = Field(default="", description="AI 计划版本号")
+    phase_name: str = Field(default="", description="当前阶段名称")
+    phase_rationale: str = Field(default="", description="AI 节奏制定与调整依据")
+    focus_notes: str = Field(default="", description="当前核心关注点与习惯")
+    daily_targets: Dict[str, float] = Field(
+        default_factory=dict, description="AI 动态预期曲线节点 YYYY-MM-DD -> kg"
+    )
+    tolerance_kg: float = Field(default=0.5, description="波动容忍带宽 (kg)")
+    ai_summary: str = Field(default="", description="AI 动态计划状态简评")
+
+
+class WeightPlanAISyncRequest(BaseModel):
+    """SailTick 同步/更新 AI 动态体重计划的幂等请求。"""
+
+    model_config = ConfigDict(
+        alias_generator=_to_lower_camel_case,
+        populate_by_name=True,
+    )
+
+    target_weight: Optional[str] = Field(default=None, description="最终目标体重 (kg)，默认 70")
+    initial_weight: Optional[str] = Field(default=None, description="起始体重 (kg)")
+    target_time: Optional[datetime] = Field(default=None, description="预计达成时间（可随数据动态顺延/调整）")
+    description: Optional[str] = Field(default=None, description="计划总览描述")
+    plan_version: str = Field(default="v1.0", description="AI 计划版本号")
+    phase_name: str = Field(default="动态适应期", description="当前阶段名称")
+    phase_rationale: str = Field(default="", description="本阶段策略与调整原因")
+    focus_notes: str = Field(default="", description="当前关注点与轻量可执行建议")
+    daily_targets: Dict[str, float] = Field(
+        default_factory=dict, description="未来/近期每日动态预期节点 YYYY-MM-DD -> kg"
+    )
+    tolerance_kg: float = Field(default=0.7, description="波动容忍带宽 (kg)")
+    ai_summary: str = Field(default="", description="健康页卡片展示的一句话状态评语")
 
 
 class WeightPlanCreateRequest(WeightPlanBase):

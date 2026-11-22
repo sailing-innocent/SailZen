@@ -26,6 +26,7 @@ import com.sailzen.app.feature.diet.DietScreen
 import com.sailzen.app.feature.exercise.ExerciseScreen
 import com.sailzen.app.feature.health.HealthCheckinScreen
 import com.sailzen.app.feature.health.HealthHomeScreen
+import com.sailzen.app.feature.health.coach.HealthCoachScreen
 import com.sailzen.app.feature.health.bodydata.BodyDataCurveScreen
 import com.sailzen.app.feature.health.bodydata.BodyDataRecordScreen
 import com.sailzen.app.feature.health.medication.MedicationScreen
@@ -42,6 +43,7 @@ object Routes {
     const val PLAN = "plan"
     const val AFFAIR_DETAIL = "affair_detail/{affair_id}"
     const val HEALTH = "health"
+    const val HEALTH_COACH = "health_coach"
     const val HEALTH_BODY_DATA_CURVE = "health_body_data_curve"
     const val HEALTH_BODY_DATA_RECORD = "health_body_data_record"
     const val HEALTH_WEIGHT_PLAN = "health_weight_plan"
@@ -150,6 +152,14 @@ fun SailZenNavGraph(
                     },
                 )
             }
+            composable(Routes.HEALTH_COACH) {
+                HealthCoachScreen(
+                    onBack = { navController.popBackStack() },
+                    onQuickLogWeight = {
+                        navController.navigate(Routes.healthCheckin("weight"))
+                    },
+                )
+            }
                           composable(Routes.HEALTH_BODY_DATA_CURVE) { BodyDataCurveScreen(onBack = { navController.popBackStack() }) }
               composable(Routes.HEALTH_BODY_DATA_RECORD) { BodyDataRecordScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.HEALTH_WEIGHT_PLAN) { WeightPlanScreen(onBack = { navController.popBackStack() }) }
@@ -186,6 +196,7 @@ fun SailZenNavGraph(
                 InboxScreen(
                     highlightReminderId = entry.arguments?.getInt("reminder_id") ?: -1,
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                    onOpenHealthCoach = { navController.navigate(Routes.HEALTH_COACH) },
                 )
             }
             composable(Routes.MONEY) {

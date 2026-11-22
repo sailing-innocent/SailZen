@@ -18,6 +18,7 @@ sailtick:
   # ── Tick 排程 ─────────────────────────────────────────────────────
   tick:
     hours: [0, 6, 12, 18]            # 唤醒时刻表（已确认；周末无差异）
+    pre_sleep_report_time: "21:45"   # 每日睡前体重与健康日报时间（安静时段 23:00 前）
     work_budget_minutes: 180         # 每次 3 小时工作预算
     scan_budget_minutes: 15
     plan_budget_minutes: 20
@@ -61,8 +62,11 @@ sailtick:
     quiet_hours:
       start: 23                        # 安静时段 23:00–08:00（已确认为默认）
       end: 8
-    push_enabled: true                 # 高优先票据经 sail_server WS 推送手机
+    push_enabled: true                 # 提问与日报经 sail_server Reminder + WS 推送手机
     dedup_window_seconds: 3600
+    max_questions_per_tick: 1          # 渐进细化：每 Tick 最多提 1 个问题，不轰炸用户
+    max_pending_questions: 2           # 已有 2 个未回复提问时暂缓新提问
+    topic_cooldown_hours: 24           # 同话题 24 小时冷却防重复
 
   # ── 自我开发（Phase 5，可选） ──────────────────────────────────────
   # repo_dir: 服务器上本仓库的路径。部署时填写（验收文档 §前置检查）。

@@ -14,6 +14,7 @@ data class CachedReminder(
     val title: String,
     val body: String,
     val priority: String,
+    val source: String = "manual",
     val state: String,
     val triggerTime: String,
     val expireAfterMinutes: Int,

@@ -54,7 +54,7 @@ export interface WeightPredictionResponse {
 }
 
 // Weight Plan Types
-export type WeightPlanCurveType = 'linear' | 'polynomial' | 'exponential'
+export type WeightPlanCurveType = 'linear' | 'polynomial' | 'exponential' | 'ai_dynamic'
 
 export interface WeightPlanCreateProps {
   targetWeight: string
@@ -72,6 +72,14 @@ export interface WeightPlanData extends WeightPlanCreateProps {
   id: number
   createdAt: number
   rhythmAffairId?: number | null
+  managedBy?: 'manual' | 'sailtick' | string
+  planVersion?: string
+  phaseName?: string
+  phaseRationale?: string
+  focusNotes?: string
+  dailyTargets?: Record<string, number>
+  toleranceKg?: number
+  aiSummary?: string
 }
 
 export interface WeightExpectedPoint {

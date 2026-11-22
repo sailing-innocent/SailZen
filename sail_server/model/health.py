@@ -29,6 +29,7 @@ from sail_server.application.dto.health import (
     WeightPlanBase,
     WeightPlanCreateRequest,
     WeightPlanUpdateRequest,
+    WeightPlanAISyncRequest,
     WeightPlanResponse,
     WeightPlanCurveType,
     WeightExpectedRangeResponse,
@@ -142,6 +143,85 @@ def _compute_expected_weight(
         # linear (default)
         t = progress
     return initial_weight + (target_weight - initial_weight) * t
+
+
+def _resolve_plan_tolerance(plan: WeightPlan) -> float:
+    """解析计划波动容忍带宽（kg），AI 动态计划可按阶段动态放宽或收紧。"""
+    raw = getattr(plan, "tolerance_kg", None)
+    if raw is None:
+        return 0.5
+    try:
+        return max(0.2, float(raw))
+    except (ValueError, TypeError):
+        return 0.5
+
+
+def _parse_daily_targets(plan: WeightPlan) -> list[tuple[date, float]]:
+    """解析 AI 动态计划的每日/阶段预期节点（按日期升序）。"""
+    raw = getattr(plan, "daily_targets", None)
+    if not isinstance(raw, dict) or not raw:
+        return []
+    points: list[tuple[date, float]] = []
+    for k, v in raw.items():
+        try:
+            d = datetime.strptime(str(k)[:10], "%Y-%m-%d").date()
+            w = float(v)
+            points.append((d, w))
+        except (ValueError, TypeError):
+            continue
+    points.sort(key=lambda item: item[0])
+    return points
+
+
+def _compute_expected_weight_for_plan(
+    plan: WeightPlan,
+    start_weight: float,
+    target_weight: float,
+    target_date: date,
+) -> float:
+    """统一计算计划在 target_date 的预期体重（支持 AI 动态分段节点 + 传统数学曲线）。"""
+    curve_type = plan.curve_type or WeightPlanCurveType.LINEAR.value
+    plan_start_date = plan.start_time.date()
+    plan_target_date = plan.target_time.date()
+
+    checkpoints = _parse_daily_targets(plan)
+    if checkpoints and (
+        curve_type == WeightPlanCurveType.AI_DYNAMIC.value
+        or getattr(plan, "managed_by", "manual") == "sailtick"
+    ):
+        # 命中或位于动态节点之间：做平滑线性分段插值
+        if target_date <= checkpoints[0][0]:
+            first_d, first_w = checkpoints[0]
+            if target_date <= plan_start_date or first_d <= plan_start_date:
+                return first_w if target_date == first_d else start_weight
+            span = (first_d - plan_start_date).days
+            passed = (target_date - plan_start_date).days
+            ratio = max(0.0, min(1.0, passed / span)) if span > 0 else 1.0
+            return start_weight + (first_w - start_weight) * ratio
+
+        if target_date >= checkpoints[-1][0]:
+            last_d, last_w = checkpoints[-1]
+            if target_date >= plan_target_date or plan_target_date <= last_d:
+                return last_w if target_date == last_d else target_weight
+            span = (plan_target_date - last_d).days
+            passed = (target_date - last_d).days
+            ratio = max(0.0, min(1.0, passed / span)) if span > 0 else 1.0
+            return last_w + (target_weight - last_w) * ratio
+
+        for i in range(len(checkpoints) - 1):
+            d1, w1 = checkpoints[i]
+            d2, w2 = checkpoints[i + 1]
+            if d1 <= target_date <= d2:
+                span = (d2 - d1).days
+                if span <= 0:
+                    return w2
+                ratio = (target_date - d1).days / span
+                return w1 + (w2 - w1) * ratio
+
+    total_days = (plan_target_date - plan_start_date).days
+    days_passed = (target_date - plan_start_date).days
+    progress = min(days_passed / total_days, 1.0) if total_days > 0 else 1.0
+    return _compute_expected_weight(start_weight, target_weight, progress, curve_type)
 
 
 def _get_active_weight_plan(db) -> WeightPlan | None:
@@ -294,19 +374,15 @@ def target_weight_impl(db, target_date: date) -> dict | None:
 
     start_weight = _resolve_initial_weight(db, plan)
     target_weight = float(plan.target_weight)
-    total_days = (plan.target_time.date() - plan.start_time.date()).days
-    days_passed = (target_date - plan.start_time.date()).days
-    progress = min(days_passed / total_days, 1.0) if total_days > 0 else 1.0
-
-    expected = _compute_expected_weight(
-        start_weight, target_weight, progress, plan.curve_type or WeightPlanCurveType.LINEAR.value
-    )
+    expected = _compute_expected_weight_for_plan(plan, start_weight, target_weight, target_date)
     return {
         "plan_id": plan.id,
         "value": expected,
         "htime": datetime.combine(target_date, datetime.min.time()).timestamp(),
         "tag": "target",
         "curve_type": plan.curve_type or WeightPlanCurveType.LINEAR.value,
+        "managed_by": getattr(plan, "managed_by", "manual") or "manual",
+        "phase_name": getattr(plan, "phase_name", "") or "",
         "description": f"Expected weight from plan #{plan.id}",
     }
 
@@ -402,6 +478,8 @@ def predict_weight_impl(
 
 def read_from_weight_plan(plan: WeightPlan) -> WeightPlanResponse:
     """Convert WeightPlan ORM to WeightPlanResponse"""
+    raw_targets = getattr(plan, "daily_targets", None)
+    daily_targets = raw_targets if isinstance(raw_targets, dict) else {}
     return WeightPlanResponse(
         id=plan.id,
         target_weight=plan.target_weight,
@@ -409,12 +487,20 @@ def read_from_weight_plan(plan: WeightPlan) -> WeightPlanResponse:
         curve_type=plan.curve_type or WeightPlanCurveType.LINEAR.value,
         start_time=plan.start_time,
         target_time=plan.target_time,
-        description=plan.description,
+        description=plan.description or "",
         created_at=plan.created_at,
         notify_enabled=bool(plan.notify_enabled),
         notify_time=plan.notify_time or "08:30",
         feedback_enabled=bool(plan.feedback_enabled),
         rhythm_affair_id=plan.rhythm_affair_id,
+        managed_by=getattr(plan, "managed_by", None) or "manual",
+        plan_version=getattr(plan, "plan_version", None) or "",
+        phase_name=getattr(plan, "phase_name", None) or "",
+        phase_rationale=getattr(plan, "phase_rationale", None) or "",
+        focus_notes=getattr(plan, "focus_notes", None) or "",
+        daily_targets=daily_targets,
+        tolerance_kg=_resolve_plan_tolerance(plan),
+        ai_summary=getattr(plan, "ai_summary", None) or "",
     )
 
 
@@ -545,6 +631,14 @@ def create_weight_plan_impl(
         notify_enabled=plan_data.notify_enabled,
         notify_time=plan_data.notify_time or "08:30",
         feedback_enabled=plan_data.feedback_enabled,
+        managed_by=plan_data.managed_by or "manual",
+        plan_version=plan_data.plan_version or "",
+        phase_name=plan_data.phase_name or "",
+        phase_rationale=plan_data.phase_rationale or "",
+        focus_notes=plan_data.focus_notes or "",
+        daily_targets=plan_data.daily_targets or {},
+        tolerance_kg=plan_data.tolerance_kg if plan_data.tolerance_kg is not None else 0.5,
+        ai_summary=plan_data.ai_summary or "",
     )
     db.add(plan)
     try:
@@ -599,6 +693,23 @@ def update_weight_plan_impl(
         plan.notify_time = plan_data.notify_time
     if plan_data.feedback_enabled is not None:
         plan.feedback_enabled = plan_data.feedback_enabled
+    if plan_data.managed_by is not None:
+        plan.managed_by = plan_data.managed_by
+    if plan_data.plan_version is not None:
+        plan.plan_version = plan_data.plan_version
+    if plan_data.phase_name is not None:
+        plan.phase_name = plan_data.phase_name
+    if plan_data.phase_rationale is not None:
+        plan.phase_rationale = plan_data.phase_rationale
+    if plan_data.focus_notes is not None:
+        plan.focus_notes = plan_data.focus_notes
+    if plan_data.daily_targets is not None:
+        plan.daily_targets = dict(plan_data.daily_targets)
+    if plan_data.tolerance_kg is not None:
+        plan.tolerance_kg = plan_data.tolerance_kg
+    if plan_data.ai_summary is not None:
+        plan.ai_summary = plan_data.ai_summary
+    plan.updated_at = datetime.now()
 
     db.commit()
     db.refresh(plan)
@@ -626,6 +737,78 @@ def delete_weight_plan_impl(db, plan_id: int) -> dict | None:
     db.delete(plan)
     db.commit()
     return {"id": plan_id, "status": "deleted"}
+
+
+def ai_sync_weight_plan_impl(
+    db, req: WeightPlanAISyncRequest
+) -> WeightPlanResponse:
+    """SailTick 幂等创建或更新当前活跃的 AI 动态体重计划。
+
+    - 若已有活跃计划：平滑升级/更新为 sailtick AI 动态计划，保留其 Rhythm 提醒/打卡配置，
+      合并历史 daily_targets 节点并刷新未来节点，不丢失历史上下文。
+    - 若无活跃计划：新建一条 managed_by='sailtick', curve_type='ai_dynamic' 的计划。
+    """
+    now = datetime.now()
+    plan = _get_active_weight_plan(db)
+    if plan is None:
+        latest_w = _latest_weight(db)
+        initial_w = req.initial_weight or (f"{latest_w:.1f}" if latest_w is not None else None)
+        target_w = req.target_weight or "70.0"
+        target_dt = req.target_time or (now + timedelta(days=180))
+        plan = WeightPlan(
+            target_weight=str(target_w),
+            initial_weight=str(initial_w) if initial_w is not None else None,
+            curve_type=WeightPlanCurveType.AI_DYNAMIC.value,
+            start_time=now,
+            target_time=target_dt,
+            description=req.description or f"SailTick AI 动态减重计划（{req.phase_name}）",
+            managed_by="sailtick",
+            plan_version=req.plan_version or "v1.0",
+            phase_name=req.phase_name or "动态适应期",
+            phase_rationale=req.phase_rationale or "",
+            focus_notes=req.focus_notes or "",
+            daily_targets=dict(req.daily_targets or {}),
+            tolerance_kg=max(0.2, float(req.tolerance_kg or 0.7)),
+            ai_summary=req.ai_summary or "",
+            updated_at=now,
+        )
+        db.add(plan)
+    else:
+        if req.target_weight is not None:
+            plan.target_weight = str(req.target_weight)
+        if req.initial_weight is not None and not plan.initial_weight:
+            plan.initial_weight = str(req.initial_weight)
+        if req.target_time is not None:
+            plan.target_time = req.target_time
+        if req.description is not None:
+            plan.description = req.description
+        plan.curve_type = WeightPlanCurveType.AI_DYNAMIC.value
+        plan.managed_by = "sailtick"
+        if req.plan_version:
+            plan.plan_version = req.plan_version
+        if req.phase_name:
+            plan.phase_name = req.phase_name
+        if req.phase_rationale is not None:
+            plan.phase_rationale = req.phase_rationale
+        if req.focus_notes is not None:
+            plan.focus_notes = req.focus_notes
+        if req.daily_targets:
+            merged = dict(plan.daily_targets or {})
+            for k, v in req.daily_targets.items():
+                try:
+                    merged[str(k)[:10]] = round(float(v), 2)
+                except (ValueError, TypeError):
+                    continue
+            plan.daily_targets = merged
+        if req.tolerance_kg is not None:
+            plan.tolerance_kg = max(0.2, float(req.tolerance_kg))
+        if req.ai_summary is not None:
+            plan.ai_summary = req.ai_summary
+        plan.updated_at = now
+
+    db.commit()
+    db.refresh(plan)
+    return read_from_weight_plan(plan)
 
 
 def get_active_weight_plan_impl(db) -> WeightPlanResponse | None:
@@ -659,11 +842,9 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
     total_days = (
         plan_data.target_time.timestamp() - plan_data.start_time.timestamp()
     ) / 86400
-    days_passed = (now - plan_data.start_time.timestamp()) / 86400
-    progress_ratio = min(days_passed / total_days, 1.0) if total_days > 0 else 1.0
 
-    expected_current_weight = _compute_expected_weight(
-        start_weight, target_weight, progress_ratio, plan_data.curve_type
+    expected_current_weight = _compute_expected_weight_for_plan(
+        plan, start_weight, target_weight, date.today()
     )
 
     # Get actual weights from plan start to now
@@ -674,6 +855,7 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
     current_weight = 0.0
     control_rate = 0.0
     is_on_track = False
+    tolerance = _resolve_plan_tolerance(plan)
 
     if actual_weights:
         current_weight = float(actual_weights[-1].value)
@@ -681,8 +863,9 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
         # 方向感知控制率：减重计划低于预期为优，增重计划高于预期为优
         weight_direction = 1 if target_weight > start_weight else -1
         direction_diff = weight_direction * (current_weight - expected_current_weight)
-        # 2kg 容差：在正确方向或偏差 <= 2kg 时控制率 100%
-        control_rate = max(0.0, 100.0 - max(0.0, direction_diff) / 2.0 * 100.0)
+        # AI 动态计划使用自适应容忍带宽 * 3 作为软缓冲，否则沿用 2kg 容差
+        band = max(2.0, tolerance * 3.0)
+        control_rate = max(0.0, 100.0 - max(0.0, direction_diff) / band * 100.0)
         is_on_track = control_rate >= 50.0
 
     # Generate daily predictions for the entire plan period
@@ -696,12 +879,11 @@ def get_weight_plan_progress_impl(db, plan_id: int = None) -> dict | None:
         # Keep the latest record of the day
         actual_by_day[w_day] = float(w.value)
 
-    tolerance = 0.5
     for day in range(total_days_int + 1):
         day_time = plan_data.start_time.timestamp() + day * 86400
-        day_progress = day / total_days if total_days > 0 else 1.0
-        expected_weight = _compute_expected_weight(
-            start_weight, target_weight, day_progress, plan_data.curve_type
+        day_date = (plan_data.start_time + timedelta(days=day)).date()
+        expected_weight = _compute_expected_weight_for_plan(
+            plan, start_weight, target_weight, day_date
         )
         actual_for_day = actual_by_day.get(day)
 
@@ -815,9 +997,8 @@ def get_expected_weights_impl(
         elif day_ts >= plan_end_ts:
             expected = target_weight
         else:
-            progress = (day_ts - plan_start_ts) / 86400 / total_days if total_days > 0 else 1.0
-            expected = _compute_expected_weight(
-                start_weight, target_weight, progress, plan_data.curve_type
+            expected = _compute_expected_weight_for_plan(
+                plan, start_weight, target_weight, day
             )
         points.append(WeightExpectedPoint(htime=day_ts, expected_weight=float(expected)))
         day += timedelta(days=1)
@@ -877,7 +1058,7 @@ def get_weights_with_plan_status_impl(
 
     # Calculate status for each weight record
     result = []
-    tolerance = 0.5  # kg tolerance for "normal" status
+    tolerance = _resolve_plan_tolerance(plan)  # kg tolerance for "normal" status
 
     for w in weights:
         weight_value = float(w.value)
@@ -900,11 +1081,9 @@ def get_weights_with_plan_status_impl(
             else:
                 status = "normal"
         else:
-            # During plan period, interpolate using curve type
-            days_from_start = (weight_time_ts - plan_data.start_time.timestamp()) / 86400
-            progress = days_from_start / total_days if total_days > 0 else 1.0
-            expected_value = _compute_expected_weight(
-                start_weight, target_weight, progress, plan_data.curve_type
+            # During plan period, use AI dynamic checkpoints or curve type
+            expected_value = _compute_expected_weight_for_plan(
+                plan, start_weight, target_weight, w.htime.date()
             )
 
             diff = weight_value - expected_value
@@ -1488,13 +1667,20 @@ def read_diets_impl(
     limit: int = -1,
     target_date: date = None,
     meal_type: MealType = None,
+    start_time: float = None,
+    end_time: float = None,
 ) -> list[DietResponse]:
-    """Read multiple diet records with filtering"""
+    """Read multiple diet records with filtering (single day or Unix timestamp range)."""
     query = db.query(DietLog)
     if target_date is not None:
         start_dt = datetime.combine(target_date, datetime.min.time())
         end_dt = datetime.combine(target_date, datetime.max.time())
         query = query.filter(DietLog.htime >= start_dt).filter(DietLog.htime <= end_dt)
+    else:
+        if start_time is not None:
+            query = query.filter(DietLog.htime >= datetime.fromtimestamp(start_time))
+        if end_time is not None:
+            query = query.filter(DietLog.htime <= datetime.fromtimestamp(end_time))
     if meal_type is not None:
         query = query.filter(DietLog.meal_type == meal_type.value)
     query = query.order_by(DietLog.htime.desc()).offset(skip)
@@ -1662,10 +1848,11 @@ def _weight_status(db, latest: float) -> str:
     expected_value = expected.get("value")
     if expected_value is None:
         return "normal"
+    tolerance = _resolve_plan_tolerance(plan)
     diff = latest - expected_value
-    if diff > 0.5:
+    if diff > tolerance:
         return "above"
-    elif diff < -0.5:
+    elif diff < -tolerance:
         return "below"
     return "normal"
 
@@ -1746,19 +1933,24 @@ def _build_dashboard_warnings(
     diet_sugar_goal: Optional[float],
 ) -> list[str]:
     warnings = []
-    # 体重连续偏高（最近 3 天均值高于计划 0.5kg）
+    # 体重趋势提示：若由 SailTick 动态托管，优先展示 AI 状态短评（避免机械化苛责）
     if weight_latest is not None:
         plan = _get_active_weight_plan(db)
         if plan is not None:
-            now = datetime.now().timestamp()
-            three_days_ago = now - 3 * 86400
-            weights = read_weights_impl(db, 0, -1, three_days_ago, now, "raw")
-            if weights:
-                avg = sum(float(w.value) for w in weights) / len(weights)
-                expected = target_weight_impl(db, date.today())
-                expected_value = expected.get("value") if expected else None
-                if expected_value is not None and avg > expected_value + 0.5:
-                    warnings.append("近 3 天体重高于计划，建议减少精制碳水")
+            if getattr(plan, "managed_by", "manual") == "sailtick":
+                if getattr(plan, "ai_summary", ""):
+                    warnings.append(f"AI 教练：{plan.ai_summary}")
+            else:
+                now = datetime.now().timestamp()
+                three_days_ago = now - 3 * 86400
+                weights = read_weights_impl(db, 0, -1, three_days_ago, now, "raw")
+                if weights:
+                    avg = sum(float(w.value) for w in weights) / len(weights)
+                    expected = target_weight_impl(db, date.today())
+                    expected_value = expected.get("value") if expected else None
+                    tol = _resolve_plan_tolerance(plan)
+                    if expected_value is not None and avg > expected_value + tol:
+                        warnings.append("近 3 天体重高于计划，建议减少精制碳水")
     # 睡眠不足
     sleep_goal = None
     goal = read_sleep_schedule_goal_impl(db, date.today())

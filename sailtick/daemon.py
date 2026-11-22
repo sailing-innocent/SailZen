@@ -129,16 +129,21 @@ class SailTickDaemon:
         if interrupted:
             logger.warning("Interrupted %d stale running ticks", interrupted)
 
-        # 注册唤醒 slot（00/06/12/18）
-        for hour in sorted(self.config.tick.hours):
-            sid = f"tick_{hour:02d}"
-            slot = self._slot_name(hour)
-            await self.scheduler.add_slot(sid, f"Tick {slot}", slot, hour)
-
         # 触发回调：精确 slot 注册 + 默认 fallback
         self.scheduler.register_default_callback(self._on_tick_trigger)
 
         await self.scheduler.start()
+
+        # 注册唤醒 slots（支持 00/06/12/18 + 21:45 睡前日报等分钟级排程）
+        for s_cfg in self.config.tick.resolved_slots():
+            sid = (
+                f"tick_{s_cfg.hour:02d}_{s_cfg.minute:02d}_{s_cfg.slot}"
+                if s_cfg.minute
+                else f"tick_{s_cfg.hour:02d}"
+            )
+            await self.scheduler.add_slot(
+                sid, f"Tick {s_cfg.slot}", s_cfg.slot, s_cfg.hour, minute=s_cfg.minute
+            )
 
         # 管理 API
         await self._start_api()
@@ -230,13 +235,34 @@ class SailTickDaemon:
         )
 
     async def _inbox_loop(self) -> None:
-        """收件箱轮询：把用户回复同步进本地 episodic 记忆。"""
+        """收件箱轮询：按游标增量同步用户回复进本地 episodic 记忆（避免重复刷库）。"""
         while self._running:
             try:
                 if await self.inbox.health():
-                    replies = await self.inbox.sync_replies_since()
+                    cursor_str = await self.db.get_runtime_state("inbox_poll_cursor")
+                    since = datetime.fromisoformat(cursor_str) if cursor_str else None
+                    replies = await self.inbox.sync_replies_since(since=since)
+                    latest_ts = cursor_str
                     for r in replies:
                         await self.memory.save_episode(None, "user_reply", r)
+                        ts = r.get("updated_at") or r.get("replied_at")
+                        if ts and (not latest_ts or str(ts) > str(latest_ts)):
+                            latest_ts = str(ts)
+                    if replies and latest_ts:
+                        # 向前推进 1 秒避免同一条边界反复拉取
+                        try:
+                            from datetime import timedelta
+                            next_dt = datetime.fromisoformat(latest_ts.replace("Z", "+00:00"))
+                            if next_dt.tzinfo is not None:
+                                next_dt = next_dt.astimezone().replace(tzinfo=None)
+                            await self.db.set_runtime_state(
+                                "inbox_poll_cursor",
+                                (next_dt + timedelta(seconds=1)).isoformat(),
+                            )
+                        except Exception:
+                            await self.db.set_runtime_state(
+                                "inbox_poll_cursor", datetime.now().isoformat()
+                            )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

@@ -107,13 +107,34 @@ fun WeightPlanScreen(
 
 @Composable
 private fun PlanSummaryCard(plan: com.sailzen.app.core.network.dto.WeightPlanDto, progress: com.sailzen.app.core.network.dto.WeightPlanProgressDto?, checkin: com.sailzen.app.core.network.dto.WeightPlanCheckinStatusDto?) {
+    val isAiDynamic = plan.managedBy == "sailtick" || plan.curveType == WeightPlanCurveType.ai_dynamic
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (isAiDynamic) {
+            Text(
+                "SailTick AI 动态计划 ${plan.planVersion.ifBlank { "" }}".trim(),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (plan.phaseName.isNotBlank()) {
+                Text("当前阶段：${plan.phaseName}", style = MaterialTheme.typography.titleSmall)
+            }
+            if (plan.aiSummary.isNotBlank()) {
+                Text(plan.aiSummary, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
         Text("目标体重 ${plan.targetWeight} kg", style = MaterialTheme.typography.titleMedium)
-        Text("起始 ${plan.initialWeight ?: "--"} kg", style = MaterialTheme.typography.bodyMedium)
-        Text("曲线类型 ${plan.curveType}", style = MaterialTheme.typography.bodyMedium)
+        Text("起始 ${plan.initialWeight ?: "--"} kg · 模式 ${if (isAiDynamic) "AI 动态弹性 (±${plan.toleranceKg}kg)" else plan.curveType.name}", style = MaterialTheme.typography.bodyMedium)
+        if (isAiDynamic && plan.phaseRationale.isNotBlank()) {
+            Text("节奏依据：${plan.phaseRationale}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        }
+        if (isAiDynamic && plan.focusNotes.isNotBlank()) {
+            Text("当前关注：${plan.focusNotes}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        }
         progress?.let {
-            Text("控制率 ${(it.controlRate * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
-            LinearProgressIndicator(progress = it.controlRate.toFloat(), modifier = Modifier.fillMaxWidth())
+            val pct = if (it.controlRate > 1.0) it.controlRate.toInt() else (it.controlRate * 100).toInt()
+            val bar = if (it.controlRate > 1.0) (it.controlRate / 100.0).toFloat() else it.controlRate.toFloat()
+            Text("控制率 ${pct.coerceIn(0, 100)}%", style = MaterialTheme.typography.bodyMedium)
+            LinearProgressIndicator(progress = bar.coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
         }
         checkin?.let {
             Text("今日打卡 ${if (it.todayDone) "✓" else "未打卡"}  连续 ${it.streak} 天", style = MaterialTheme.typography.bodyMedium)

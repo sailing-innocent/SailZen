@@ -51,6 +51,7 @@ import com.sailzen.app.core.network.dto.DashboardExerciseItemDto
 import com.sailzen.app.core.network.dto.DashboardMedicationItemDto
 import com.sailzen.app.core.network.dto.DashboardSleepItemDto
 import com.sailzen.app.core.network.dto.DashboardWeightItemDto
+import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.HealthDashboardDto
 import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.ui.components.SectionCard
@@ -127,6 +128,13 @@ fun HealthHomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 12.dp),
         ) {
+            item {
+                SailTickCoachBanner(
+                    coach = state.coachSummary,
+                    onOpenCoach = { onNavigate(Routes.HEALTH_COACH) },
+                    onQuickWeight = { onOpenHealthCheckin(InfoCollectionType.weight) },
+                )
+            }
             item { Text(stringResource(R.string.health_today_overview), style = MaterialTheme.typography.titleMedium) }
             item { OverviewCard(state.dashboard, viewModel) }
 
@@ -162,6 +170,70 @@ fun HealthHomeScreen(
                 TextButton(onClick = { viewModel.refresh() }) { Text("重试") }
             },
         )
+    }
+}
+
+@Composable
+private fun SailTickCoachBanner(
+    coach: HealthCoachSummaryDto?,
+    onOpenCoach: () -> Unit,
+    onQuickWeight: () -> Unit,
+) {
+    val pendingCount = coach?.pendingTicketCount ?: 0
+    val latestReport = coach?.latestReport
+    val plan = coach?.activePlan
+    val isAiPlan = plan?.managedBy == "sailtick" || plan?.curveType?.name == "ai_dynamic"
+
+    Card(
+        onClick = onOpenCoach,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (pendingCount > 0) "SailTick 教练 · $pendingCount 条待回复" else "SailTick AI 健康教练",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                if (isAiPlan && !plan?.phaseName.isNullOrBlank()) {
+                    Text(
+                        text = plan!!.phaseName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            val headline = when {
+                pendingCount > 0 -> "新提问：${coach?.pendingTickets?.firstOrNull()?.title.orEmpty()}"
+                latestReport != null && latestReport.summary.isNotBlank() ->
+                    "最新日报(${latestReport.reportDate.takeLast(5)})：${latestReport.summary}"
+                isAiPlan && !plan?.aiSummary.isNullOrBlank() -> plan!!.aiSummary
+                else -> "随手发一句饮食或记录体重，每晚睡前自动整合日报并动态调整计划"
+            }
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onQuickWeight) { Text("记体重") }
+                TextButton(onClick = onOpenCoach) { Text("随手记一餐 / 看日报") }
+            }
+        }
     }
 }
 

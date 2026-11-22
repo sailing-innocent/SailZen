@@ -19,11 +19,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -45,13 +47,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.R
 import com.sailzen.app.core.data.db.CachedReminder
+import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.dto.ReminderDto
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InboxScreen(
     highlightReminderId: Int,
     onOpenSettings: () -> Unit,
+    onOpenHealthCoach: () -> Unit = {},
     viewModel: InboxViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -116,6 +123,10 @@ fun InboxScreen(
                     onResolve = { viewModel.resolve(it.id) },
                     onSnooze = { snoozeTarget = it },
                     onDismiss = { viewModel.dismiss(it.id) },
+                    onReplyAgentTicket = { rem, ticketId, reply ->
+                        viewModel.replyAgentTicket(rem.id, ticketId, reply)
+                    },
+                    onOpenHealthCoach = onOpenHealthCoach,
                 )
             } else {
                 HistoryList(history = state.history)
@@ -161,6 +172,10 @@ private fun SummaryCard(
     }
 }
 
+private fun extractTicketId(payloadJson: String): Int? = runCatching {
+    ApiClient.json.parseToJsonElement(payloadJson).jsonObject["ticket_id"]?.jsonPrimitive?.intOrNull
+}.getOrNull()
+
 @Composable
 private fun PendingList(
     pending: List<CachedReminder>,
@@ -170,6 +185,8 @@ private fun PendingList(
     onResolve: (CachedReminder) -> Unit,
     onSnooze: (CachedReminder) -> Unit,
     onDismiss: (CachedReminder) -> Unit,
+    onReplyAgentTicket: (CachedReminder, Int, String) -> Unit,
+    onOpenHealthCoach: () -> Unit,
 ) {
     if (pending.isEmpty()) {
         EmptyText(stringResource(R.string.inbox_empty_pending))
@@ -184,6 +201,10 @@ private fun PendingList(
                 onResolve = { onResolve(reminder) },
                 onSnooze = { onSnooze(reminder) },
                 onDismiss = { onDismiss(reminder) },
+                onReplyAgentTicket = { ticketId, reply ->
+                    onReplyAgentTicket(reminder, ticketId, reply)
+                },
+                onOpenHealthCoach = onOpenHealthCoach,
             )
         }
     }
@@ -197,7 +218,14 @@ private fun ReminderCard(
     onResolve: () -> Unit,
     onSnooze: () -> Unit,
     onDismiss: () -> Unit,
+    onReplyAgentTicket: (Int, String) -> Unit,
+    onOpenHealthCoach: () -> Unit,
 ) {
+    val ticketId = remember(reminder.id, reminder.payloadJson) { extractTicketId(reminder.payloadJson) }
+    val isAgentTicket = reminder.type.startsWith("tick.ticket.") && ticketId != null
+    val isDailyReport = reminder.type == "tick.daily_report"
+    var replyDraft by remember(reminder.id) { mutableStateOf("") }
+
     Card(
         onClick = onOpen,
         modifier = Modifier
@@ -224,8 +252,41 @@ private fun ReminderCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (isAgentTicket && ticketId != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = replyDraft,
+                        onValueChange = { replyDraft = it },
+                        placeholder = { Text("回复 SailTick 教练…") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        enabled = replyDraft.isNotBlank(),
+                        onClick = {
+                            onReplyAgentTicket(ticketId, replyDraft)
+                            replyDraft = ""
+                        },
+                    ) {
+                        Text("回复")
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                if (isDailyReport) {
+                    TextButton(onClick = {
+                        onResolve()
+                        onOpenHealthCoach()
+                    }) {
+                        Text("查看完整日报")
+                    }
+                }
                 TextButton(onClick = onResolve) {
                     Text(stringResource(R.string.action_done))
                 }

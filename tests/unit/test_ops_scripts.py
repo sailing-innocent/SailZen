@@ -154,5 +154,67 @@ def test_db_sync_covers_all_core_orm_tables():
     assert "rhythm_affairs" in tables
     assert "reminders" in tables
     assert "sail_tick_tickets" in tables
+    assert "sail_tick_messages" in tables
+    assert "sail_tick_daily_reports" in tables
     # sailtick 隔离库（st_*）严禁出现在主库元数据中
     assert not any(t.startswith("st_") for t in tables)
+
+
+def test_sailtick_service_unit_has_no_template_placeholder_and_valid_cli_order():
+    """验证 scripts/sailtick.service 修复了 %I 模板误用、--config 参数顺序与 .env.prod 加载。"""
+    unit_text = (Path(__file__).resolve().parents[2] / "scripts" / "sailtick.service").read_text(
+        encoding="utf-8"
+    )
+    assert "%I" not in unit_text
+    assert "EnvironmentFile=-/home/ubuntu/repos/SailZen/.env.prod" in unit_text
+    assert "-m sailtick --config sailtick.yaml run" in unit_text
+
+
+def test_sailtick_cli_accepts_config_before_and_after_subcommand():
+    """验证 sailtick CLI 同时兼容 `--config X run` 和 `run --config X`。"""
+    import subprocess
+    import sys
+
+    for args in (
+        ["--config", "sailtick.yaml", "trigger", "--help"],
+        ["trigger", "--config", "sailtick.yaml", "--help"],
+    ):
+        proc = subprocess.run(
+            [sys.executable, "-m", "sailtick", *args],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert proc.returncode == 0, proc.stderr
+
+
+def test_android_release_guardrails_reject_missing_config(monkeypatch, tmp_path):
+    """验证 build_android_release.py 在缺少公网 URL 或正式签名配置时拒绝静默编译。"""
+    from scripts.ops import build_android_release
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    for k in (
+        "SAILZEN_RELEASE_SERVER_URL",
+        "SAILZEN_STORE_FILE",
+        "SAILZEN_STORE_PASSWORD",
+        "SAILZEN_KEY_ALIAS",
+        "SAILZEN_KEY_PASSWORD",
+    ):
+        monkeypatch.delenv(k, raising=False)
+
+    issues = build_android_release.check_release_guardrails()
+    assert len(issues) == 2
+    assert any("SAILZEN_RELEASE_SERVER_URL" in msg for msg in issues)
+    assert any("签名配置" in msg for msg in issues)
+
+
+def test_health_check_probes_cover_upgraded_health_and_tick_routes():
+    from scripts.ops.health_check import CORE_READONLY_ENDPOINTS
+
+    paths = {path for _, path in CORE_READONLY_ENDPOINTS}
+    assert "/health/dashboard" in paths
+    assert "/health/weight/plan" in paths
+    assert "/health/diet" in paths
+    assert "/tick/health-summary" in paths
+    assert "/tick/reports" in paths
+    assert "/tick/messages" in paths

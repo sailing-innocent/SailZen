@@ -65,20 +65,33 @@ class NotificationEngine:
         priority: str = "normal",
         ticket_type: str = "info",
         tick_id: str = "",
-        channel: str = "web",
+        channel: str = "mobile",
         expected_reply_hours: Optional[int] = None,
         fallback_assumption: str = "",
         suppress_push: bool = False,
+        topic: str = "",
+        meta: Optional[Dict[str, Any]] = None,
+        force_push: bool = False,
     ) -> Dict[str, Any]:
-        """发出一条通知。返回处置结果。"""
+        """发出一条通知。返回处置结果。
+
+        推送规则:
+        - 安静时段（默认 23:00–08:00）：仅 urgent 推送；其他落库不推送（push="none"）。
+        - 非安静时段且未 suppress_push：high/urgent 或显式 force_push / question 票据推送到 Android（push="force"）。
+        """
         quiet = self.in_quiet_hours()
         effective_priority = priority
         if suppress_push and priority in ("high", "urgent"):
             effective_priority = "normal"
+        wants_push = (
+            effective_priority in ("high", "urgent")
+            or force_push
+            or ticket_type == "question"
+        )
         would_push = (
             self.config.push_enabled
             and not suppress_push
-            and effective_priority in ("high", "urgent")
+            and wants_push
             and (not quiet or effective_priority == "urgent")
         )
 
@@ -89,6 +102,7 @@ class NotificationEngine:
             "action": "ticket",
             "title": title,
             "priority": effective_priority,
+            "topic": topic,
             "quiet_hours": quiet,
             "push": would_push,
             "push_suppressed": suppress_push,
@@ -100,16 +114,30 @@ class NotificationEngine:
             return result
 
         try:
-            ticket = await self.inbox.create_ticket(
-                tick_id=tick_id,
-                ticket_type=ticket_type,
-                title=title,
-                body=content,
-                priority=effective_priority,
-                expected_reply_hours=expected_reply_hours,
-                fallback_assumption=fallback_assumption,
-                channel=channel,
+            import inspect
+
+            create_kwargs: Dict[str, Any] = {
+                "tick_id": tick_id,
+                "ticket_type": ticket_type,
+                "title": title,
+                "body": content,
+                "priority": effective_priority,
+                "expected_reply_hours": expected_reply_hours,
+                "fallback_assumption": fallback_assumption,
+                "channel": channel,
+            }
+            sig = inspect.signature(self.inbox.create_ticket)
+            accepts_var_kw = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
             )
+            if accepts_var_kw or "push" in sig.parameters:
+                create_kwargs["push"] = "force" if would_push else "none"
+            if accepts_var_kw or "topic" in sig.parameters:
+                create_kwargs["topic"] = topic
+            if accepts_var_kw or "meta" in sig.parameters:
+                create_kwargs["meta"] = meta or {}
+
+            ticket = await self.inbox.create_ticket(**create_kwargs)
             result["ticket_id"] = ticket.get("id")
             if not would_push:
                 result["push"] = False

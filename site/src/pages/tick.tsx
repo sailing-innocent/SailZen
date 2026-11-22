@@ -23,12 +23,15 @@ import {
   api_resolve_ticket,
   api_snooze_ticket,
   api_quick_log_weight,
+  api_send_coach_message,
+  api_list_daily_reports,
+  type DailyReport,
   type TickTicket,
   type TicketPriority,
 } from '@lib/api/tick'
 import { format, isPast } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MessageCircle, Scale, Check, Clock, BellOff } from 'lucide-react'
+import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon } from 'lucide-react'
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   low: '低',
@@ -68,17 +71,22 @@ const TickPage: React.FC = () => {
   const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({})
   const [weightInput, setWeightInput] = useState('')
   const [weightMsg, setWeightMsg] = useState<string | null>(null)
+  const [dietInput, setDietInput] = useState('')
+  const [dietMsg, setDietMsg] = useState<string | null>(null)
+  const [reports, setReports] = useState<DailyReport[]>([])
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [p, h] = await Promise.all([
+      const [p, h, reps] = await Promise.all([
         api_list_tickets({ limit: 100 }),
         api_list_tickets({ status: 'replied', limit: 20 }),
+        api_list_daily_reports(7).catch(() => [] as DailyReport[]),
       ])
       setPending(p.filter((t) => t.status === 'pending' || t.status === 'snoozed'))
       setHistory(h)
+      setReports(reps)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -124,6 +132,19 @@ const TickPage: React.FC = () => {
       setWeightMsg(`记录失败: ${e instanceof Error ? e.message : e}`)
     }
     setTimeout(() => setWeightMsg(null), 4000)
+  }
+
+  const sendDietNote = async () => {
+    const text = dietInput.trim()
+    if (!text) return
+    try {
+      await api_send_coach_message({ content: text, category: 'diet', source_channel: 'web' })
+      setDietMsg('已静默收集，将在今晚睡前日报中整合 ✓')
+      setDietInput('')
+    } catch (e) {
+      setDietMsg(`发送失败: ${e instanceof Error ? e.message : e}`)
+    }
+    setTimeout(() => setDietMsg(null), 4000)
   }
 
   return (
@@ -190,6 +211,53 @@ const TickPage: React.FC = () => {
             {weightMsg && <p className="text-xs text-muted-foreground mt-2">{weightMsg}</p>}
           </CardContent>
         </Card>
+
+        {/* 主动发送餐饮/状态（无需即时回复） */}
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Send className="h-4 w-4" />
+              随手发餐饮/状态（静默收集）
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                placeholder="例如：午饭吃了牛肉面少面+卤蛋"
+                value={dietInput}
+                onChange={(e) => setDietInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendDietNote()}
+              />
+              <Button onClick={sendDietNote} disabled={!dietInput.trim()}>
+                发送
+              </Button>
+            </div>
+            {dietMsg && <p className="text-xs text-muted-foreground mt-2">{dietMsg}</p>}
+          </CardContent>
+        </Card>
+
+        {/* 最新睡前日报 */}
+        {reports.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Moon className="h-4 w-4 text-violet-500" />
+                  {reports[0].title}
+                </span>
+                <Badge variant="secondary">{reports[0].report_date}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <p className="text-foreground/90">{reports[0].summary}</p>
+              {reports[0].body_markdown && (
+                <pre className="whitespace-pre-wrap text-xs bg-muted/40 rounded p-2.5 font-sans">
+                  {reports[0].body_markdown}
+                </pre>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* 待回票据 */}
         <h2 className="text-sm font-semibold mb-2 text-muted-foreground">

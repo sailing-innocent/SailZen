@@ -46,13 +46,19 @@ from scripts.ops.common import (
 # 全部只读、零副作用的核心业务探针（相对 API_ENDPOINT，如 /api/v1）
 CORE_READONLY_ENDPOINTS: List[Tuple[str, str]] = [
     ("Core Health", "/health"),
+    ("Health/Dashboard", "/health/dashboard"),
     ("Health/Weight", "/health/weight"),
+    ("Health/WeightPlan", "/health/weight/plan"),
+    ("Health/Diet", "/health/diet"),
     ("Health/BodyMetrics", "/health/body-data/metrics"),
     ("Finance/Account", "/finance/account"),
     ("Rhythm/Affair", "/rhythm/affair"),
     ("Rhythm/EnergyProfile", "/rhythm/energy/profile"),
     ("Reminder/Pending", "/reminder/pending"),
     ("Tick/Tickets", "/tick/tickets"),
+    ("Tick/HealthSummary", "/tick/health-summary"),
+    ("Tick/DailyReports", "/tick/reports"),
+    ("Tick/Messages", "/tick/messages"),
     ("Life/Weather", "/life/weather"),
     ("Necessity/Residence", "/necessity/residence"),
     ("Text/Work", "/text/work"),
@@ -97,25 +103,44 @@ def _probe_http(
 
 
 def _check_sailtick(cfg: OpsConfig, env_name: str) -> CheckResult:
-    """检查 SailTick 管理 API (:9070/health)。prod 通过 SSH 在本机查询，dev 直接请求本地。"""
+    """深度检查 SailTick 管理 API (:9070/health + :9070/monitor)。"""
     t0 = time.monotonic()
-    url = f"{cfg.remote_sailtick_url}/health"
+    base = cfg.remote_sailtick_url.rstrip("/")
+    health_url = f"{base}/health"
+    monitor_url = f"{base}/monitor"
     try:
         if env_name == "prod":
-            proc = run_ssh_command(cfg, f"curl -fsS --max-time 8 {shlex.quote(url)}", timeout=15)
+            proc = run_ssh_command(cfg, f"curl -fsS --max-time 8 {shlex.quote(health_url)}", timeout=15)
             payload = json.loads(proc.stdout)
+            mon_proc = run_ssh_command(
+                cfg, f"curl -fsS --max-time 8 {shlex.quote(monitor_url)}", check=False, timeout=15
+            )
+            monitor = json.loads(mon_proc.stdout) if mon_proc.returncode == 0 and mon_proc.stdout.strip() else {}
         else:
-            resp = httpx.get(url, timeout=8.0)
+            resp = httpx.get(health_url, timeout=8.0)
             resp.raise_for_status()
             payload = resp.json()
+            try:
+                mresp = httpx.get(monitor_url, timeout=8.0)
+                monitor = mresp.json() if mresp.status_code == 200 else {}
+            except Exception:
+                monitor = {}
+
         latency = (time.monotonic() - t0) * 1000.0
         status = payload.get("status", "unknown")
-        ok = status in {"running", "ok"}
-        detail = f"status={status}, schedules={len(payload.get('schedules', []))}"
-        return CheckResult("SailTick Daemon", url, ok, 200 if ok else None, latency, detail)
+        canary_mode = (payload.get("canary") or {}).get("mode", "unknown")
+        overall = monitor.get("overall_health", "healthy") if isinstance(monitor, dict) else "unknown"
+        cb_open = bool((payload.get("canary") or {}).get("circuit_breaker_open", False))
+        ok = status in {"running", "ok"} and overall != "critical" and not cb_open
+        detail = (
+            f"status={status}, mode={canary_mode}, overall={overall}, "
+            f"schedules={len(payload.get('schedules', []))}"
+            + (", CIRCUIT_BREAKER_OPEN!" if cb_open else "")
+        )
+        return CheckResult("SailTick Daemon", health_url, ok, 200 if ok else None, latency, detail)
     except Exception as exc:
         latency = (time.monotonic() - t0) * 1000.0
-        return CheckResult("SailTick Daemon", url, False, None, latency, str(exc).splitlines()[0])
+        return CheckResult("SailTick Daemon", health_url, False, None, latency, str(exc).splitlines()[0])
 
 
 def run_health_check(

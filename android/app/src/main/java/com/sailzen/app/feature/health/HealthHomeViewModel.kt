@@ -7,7 +7,9 @@ import com.sailzen.app.R
 import com.sailzen.app.core.data.DataChangeBus
 import com.sailzen.app.core.data.DataChangeEvent
 import com.sailzen.app.core.health.HealthRepository
+import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.HealthDashboardDto
+import com.sailzen.app.core.tick.TickRepository
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,11 +22,13 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
     data class UiState(
         val selectedDate: LocalDate = LocalDate.now(),
         val dashboard: HealthDashboardDto? = null,
+        val coachSummary: HealthCoachSummaryDto? = null,
         val loading: Boolean = false,
         val error: String? = null,
     )
 
     private val repository = HealthRepository.get(application)
+    private val tickRepository = TickRepository.get(application)
     private val bus = DataChangeBus.get()
 
     private val _uiState = MutableStateFlow(UiState())
@@ -53,10 +57,12 @@ class HealthHomeViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, error = null) }
             val result = repository.loadDashboard(_uiState.value.selectedDate)
+            val coach = tickRepository.loadCoachSummary()
             _uiState.update {
                 it.copy(
                     loading = false,
                     dashboard = result,
+                    coachSummary = coach,
                     error = if (result == null) "加载失败，请检查网络" else null,
                 )
             }

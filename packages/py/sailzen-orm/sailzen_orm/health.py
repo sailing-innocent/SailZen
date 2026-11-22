@@ -12,6 +12,7 @@
 从 sail_server/data/health.py 迁移
 """
 
+from datetime import datetime
 from sqlalchemy import Column, Date, Float, Integer, String, ForeignKey, TIMESTAMP, func, Boolean
 from sqlalchemy.orm import relationship
 
@@ -96,13 +97,29 @@ class WeightPlan(ORMBase):
 
     # 新增字段：起始体重、曲线类型、Rhythm 提醒与反馈联动
     initial_weight = Column(String, nullable=True)  # initial weight in kg; None means auto-detect
-    curve_type = Column(String, default="linear")  # linear / polynomial / exponential
+    curve_type = Column(String, default="linear")  # linear / polynomial / exponential / ai_dynamic
     notify_enabled = Column(Boolean, default=False)  # enable Rhythm reminder
     notify_time = Column(String, default="08:30")  # HH:MM reminder time
     rhythm_affair_id = Column(
         Integer, ForeignKey("rhythm_affairs.id"), nullable=True
     )
     feedback_enabled = Column(Boolean, default=False)  # sync weight record to Rhythm checkin
+
+    # SailTick AI 动态计划扩展字段（Expand-and-Contract，向下兼容手工计划）
+    managed_by = Column(String, default="manual")  # manual | sailtick
+    plan_version = Column(String, default="")  # AI 计划版本号，如 v1.2
+    phase_name = Column(String, default="")  # 当前阶段名，如 适应观察期 / 稳态减脂期 / 平台期缓冲
+    phase_rationale = Column(String, default="")  # AI 制定/调整本阶段节奏的依据
+    focus_notes = Column(String, default="")  # 当前核心可执行习惯与关注点
+    daily_targets = Column(JSONB, default=dict)  # AI 动态阶段预期曲线节点 {"YYYY-MM-DD": 78.4}
+    tolerance_kg = Column(Float, default=0.5)  # AI 动态波动容忍带宽（kg）
+    ai_summary = Column(String, default="")  # 健康页直接展示的 AI 状态短评
+    updated_at = Column(
+        TIMESTAMP,
+        default=datetime.now,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
 
 
 class Sleep(ORMBase):

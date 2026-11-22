@@ -18,6 +18,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Index,
     Integer,
@@ -27,6 +28,7 @@ from sqlalchemy import (
 )
 
 from sailzen_orm import ORMBase
+from sailzen_orm.types import JSONB
 
 
 class SailTickTicket(ORMBase):
@@ -39,8 +41,12 @@ class SailTickTicket(ORMBase):
     tick_id = Column(String, default="", index=True)
     # question | task | approval | info
     type = Column(String, default="question", index=True)
+    # 话题标识，用于防重复轰炸与冷却控制（如 profile_wake_time / diet_lunch / weight_checkin）
+    topic = Column(String, default="", index=True)
     title = Column(String, nullable=False)
     body = Column(String, default="")
+    # 扩展元信息（如 quick_replies / target_profile_key / report_date）
+    meta = Column(JSONB, default=dict)
     # pending | replied | resolved | expired | snoozed
     status = Column(String, default="pending", index=True)
     # 期待回复时间（超期 → expired，AI 采用 fallback 假设继续）
@@ -71,4 +77,66 @@ class SailTickTicket(ORMBase):
         # SCAN 同步用：pending 按期待回复时间排序
         Index("ix_tick_tickets_status_expected", "status", "expected_reply_by"),
         Index("ix_tick_tickets_status_updated", "status", "updated_at"),
+    )
+
+
+class SailTickMessage(ORMBase):
+    """用户与 SailTick 之间的异步轻量消息（支持用户主动发餐饮/日常信息，无需 AI 立即回复）。"""
+
+    __tablename__ = "sail_tick_messages"
+
+    id = Column(Integer, primary_key=True)
+    # user_to_agent | agent_to_user
+    direction = Column(String, default="user_to_agent", index=True)
+    # diet | weight | daily_info | mood | exercise | general
+    category = Column(String, default="diet", index=True)
+    content = Column(String, nullable=False)
+    # 结构化元信息（如 meal_type, htime, linked_diet_id, extracted_calories 等）
+    meta = Column(JSONB, default=dict)
+    # android | web | sailtick
+    source_channel = Column(String, default="android")
+    # unread | ingested | archived
+    status = Column(String, default="unread", index=True)
+    ingested_by_tick_id = Column(String, nullable=True)
+    created_at = Column(
+        TIMESTAMP, default=datetime.now, server_default=func.current_timestamp(), index=True
+    )
+    ingested_at = Column(TIMESTAMP, nullable=True)
+
+    __table_args__ = (
+        Index("ix_tick_messages_status_created", "status", "created_at"),
+    )
+
+
+class SailTickDailyReport(ORMBase):
+    """SailTick 每日睡前体重与健康日报（存于主库供 Web/Android 健康页直接展示）。"""
+
+    __tablename__ = "sail_tick_daily_reports"
+
+    id = Column(Integer, primary_key=True)
+    # YYYY-MM-DD（每天一份，重复生成则幂等 upsert 更新）
+    report_date = Column(String, unique=True, nullable=False, index=True)
+    tick_id = Column(String, default="")
+    title = Column(String, nullable=False)
+    # 一句话精炼摘要（推送通知正文 + 健康页卡片首屏展示）
+    summary = Column(String, default="")
+    # 完整 Markdown 日报正文
+    body_markdown = Column(String, default="")
+    # 结构化快照：最新体重、7日均值、环比变化、目标差距等
+    weight_snapshot = Column(JSONB, default=dict)
+    # 当日餐饮整合摘要：已记录餐次、条目摘要、结构亮点
+    diet_summary = Column(JSONB, default=dict)
+    # 动态计划状态/调整说明：版本、阶段名、调整理由、关注点
+    plan_update = Column(JSONB, default=dict)
+    # 明日 1-3 条轻量可执行建议
+    tomorrow_focus = Column(JSONB, default=list)
+    pushed = Column(Boolean, default=False)
+    created_at = Column(
+        TIMESTAMP, default=datetime.now, server_default=func.current_timestamp()
+    )
+    updated_at = Column(
+        TIMESTAMP,
+        default=datetime.now,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
     )

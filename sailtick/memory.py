@@ -49,6 +49,11 @@ class AgentMemory:
     async def list_profile(self) -> List[dict]:
         return await self.db.list_profile()
 
+    async def all_profile(self) -> Dict[str, dict]:
+        """以 key -> row dict 形式返回全部用户画像。"""
+        rows = await self.list_profile()
+        return {str(r["key"]): r for r in rows if isinstance(r, dict) and r.get("key")}
+
     # ── episodic 层（Tick 事件流） ────────────────────────────────────
 
     async def save_episode(self, tick_id: Optional[str], kind: str, content: Any) -> dict:

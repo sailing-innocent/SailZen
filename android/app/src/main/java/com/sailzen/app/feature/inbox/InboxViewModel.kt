@@ -7,6 +7,7 @@ import com.sailzen.app.core.data.db.CachedReminder
 import com.sailzen.app.core.network.dto.ReminderDto
 import com.sailzen.app.core.network.dto.SummaryDto
 import com.sailzen.app.core.reminder.ReminderRepository
+import com.sailzen.app.core.tick.TickRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,7 @@ class InboxViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     private val repository = ReminderRepository.get(application)
+    private val tickRepository = TickRepository.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -62,6 +64,21 @@ class InboxViewModel(application: Application) : AndroidViewModel(application) {
     fun dismiss(reminderId: Int) = feedback(reminderId, "dismiss")
 
     fun snooze(reminderId: Int, option: String) = feedback(reminderId, "snooze", option)
+
+    /** 在收件箱内直接回复 SailTick 教练票据并同步关闭对应提醒。 */
+    fun replyAgentTicket(reminderId: Int, ticketId: Int, reply: String) {
+        val text = reply.trim()
+        if (text.isEmpty()) return
+        viewModelScope.launch {
+            val res = tickRepository.replyTicket(ticketId, text)
+            if (res != null) {
+                repository.sendFeedback(reminderId, "resolve", null)
+                val summary = repository.summaryToday()
+                val history = repository.historyToday()
+                _uiState.update { it.copy(summary = summary, history = history) }
+            }
+        }
+    }
 
     private fun feedback(reminderId: Int, action: String, option: String? = null) {
         viewModelScope.launch {

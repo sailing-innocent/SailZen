@@ -95,11 +95,16 @@ def _run_preflight_checks(dry_run: bool) -> None:
             "-m",
             "pytest",
             "tests/server/test_router_mount.py",
+            "tests/server/test_health_api.py",
+            "tests/server/test_tick_api.py",
             "tests/unit/test_body_metrics_codegen.py",
             "tests/unit/test_ops_scripts.py",
+            "tests/sailtick",
+            "-m",
+            "not live_llm",
             "-q",
         ],
-        desc="运行发布门禁回归测试",
+        desc="运行发布门禁回归测试（Server + Ops + SailTick Layer 1/2）",
     )
 
 
@@ -107,6 +112,15 @@ def _get_remote_head(cfg: OpsConfig) -> str:
     repo = shlex.quote(cfg.remote_repo)
     proc = run_ssh_command(cfg, f"cd {repo} && git rev-parse HEAD", timeout=30)
     return proc.stdout.strip().splitlines()[-1].strip()
+
+
+def _get_remote_branch(cfg: OpsConfig) -> Optional[str]:
+    repo = shlex.quote(cfg.remote_repo)
+    proc = run_ssh_command(
+        cfg, f"cd {repo} && git symbolic-ref --short HEAD 2>/dev/null || true", check=False, timeout=30
+    )
+    branch = proc.stdout.strip()
+    return branch or None
 
 
 def _pack_site_dist(site_dist_dir: Path, archive_path: Path) -> None:
@@ -128,6 +142,7 @@ def _deploy_site(cfg: OpsConfig, *, site_build_mode: str, dry_run: bool) -> bool
         # 否则将构建产物同步到 OPS_REMOTE_SITE_DIST 并保留 .prev 供回滚。
         build_cmd = (
             f"set -e; cd {repo}; "
+            f"({pnpm_bin} install --frozen-lockfile || {pnpm_bin} install); "
             f"{pnpm_bin} build-site; "
             f"SRC_REAL=$(readlink -f {repo}/site/dist); "
             f"DST_REAL=$(readlink -f {remote_dist} 2>/dev/null || echo {remote_dist}); "
@@ -249,11 +264,19 @@ def _restart_remote_services(cfg: OpsConfig, *, with_sailtick: bool, dry_run: bo
             print(f"[Service] {svc}: {proc.stdout.strip()}")
 
 
-def _collect_remote_journal(cfg: OpsConfig) -> str:
+def _collect_remote_journal(cfg: OpsConfig, with_sailtick: bool = False) -> str:
     ctl = "sudo journalctl" if cfg.remote_use_sudo else "journalctl"
-    cmd = f"{ctl} -u {shlex.quote(cfg.remote_server_service)} -n 40 --no-pager"
-    proc = run_ssh_command(cfg, cmd, check=False, timeout=30)
-    return (proc.stdout or proc.stderr or "").strip()
+    chunks: List[str] = []
+    services = [cfg.remote_server_service]
+    if with_sailtick:
+        services.append(cfg.remote_sailtick_service)
+    for svc in services:
+        cmd = f"{ctl} -u {shlex.quote(svc)} -n 40 --no-pager"
+        proc = run_ssh_command(cfg, cmd, check=False, timeout=30)
+        text = (proc.stdout or proc.stderr or "").strip()
+        if text:
+            chunks.append(f"=== {svc} ===\n{text}")
+    return "\n\n".join(chunks)
 
 
 def rollback_cloud(
@@ -262,19 +285,27 @@ def rollback_cloud(
     target_commit: Optional[str],
     restore_site_prev: bool,
     with_sailtick: bool,
+    target_branch: Optional[str] = None,
 ) -> None:
-    """回滚云端代码与/或前端 site_dist.prev，并重启服务。"""
+    """回滚云端代码与/或前端 site_dist.prev，并重启服务（保持分支不进入 detached HEAD）。"""
     print("\n=== 执行云端自动回滚 ===")
     repo = shlex.quote(cfg.remote_repo)
     uv_bin = shlex.quote(cfg.remote_uv_bin)
 
     if target_commit:
+        if target_branch:
+            git_cmd = (
+                f"git checkout {shlex.quote(target_branch)} && "
+                f"git reset --hard {shlex.quote(target_commit)}"
+            )
+        else:
+            git_cmd = f"git checkout {shlex.quote(target_commit)}"
         run_ssh_command(
             cfg,
-            f"set -e; cd {repo}; git checkout {shlex.quote(target_commit)}; {uv_bin} sync",
+            f"set -e; cd {repo}; {git_cmd}; {uv_bin} sync",
             timeout=300,
         )
-        print(f"[Rollback] 代码已回退至 {target_commit[:12]}")
+        print(f"[Rollback] 代码已回退至 {target_commit[:12]}" + (f" (branch={target_branch})" if target_branch else ""))
 
     if restore_site_prev:
         remote_dir = shlex.quote(cfg.remote_site_dist)
@@ -318,16 +349,19 @@ def deploy_cloud(
         backup_prod_database(cfg, dry_run=dry_run)
 
     print("\n--- Step 3: 记录云端当前版本 (PREV_COMMIT) ---")
+    prev_branch: Optional[str] = None
     if dry_run:
         try:
             prev_commit = _get_remote_head(cfg)
-            print(f"[DryRun] 云端当前 HEAD: {prev_commit}")
+            prev_branch = _get_remote_branch(cfg)
+            print(f"[DryRun] 云端当前 HEAD: {prev_commit} (branch={prev_branch or 'detached'})")
         except Exception as exc:
             prev_commit = "<remote-unreachable-in-dry-run>"
             print(f"[DryRun] 无法探测云端 HEAD（请先配置 .env.ops 的 SSH 信息）: {exc}")
     else:
         prev_commit = _get_remote_head(cfg)
-        print(f"[Cloud] PREV_COMMIT = {prev_commit}")
+        prev_branch = _get_remote_branch(cfg)
+        print(f"[Cloud] PREV_COMMIT = {prev_commit} (branch={prev_branch or 'detached'})")
 
     site_swapped = False
     code_updated = False
@@ -368,7 +402,7 @@ def deploy_cloud(
     except Exception as exc:
         print(f"\n[FAIL] 部署流程异常: {exc}", file=sys.stderr)
         if not dry_run and (code_updated or site_swapped):
-            journal = _collect_remote_journal(cfg)
+            journal = _collect_remote_journal(cfg, with_sailtick=with_sailtick)
             if journal:
                 print("\n--- 云端最近日志 (journalctl) ---\n" + journal, file=sys.stderr)
             try:
@@ -377,6 +411,7 @@ def deploy_cloud(
                     target_commit=prev_commit if code_updated else None,
                     restore_site_prev=site_swapped,
                     with_sailtick=with_sailtick,
+                    target_branch=prev_branch,
                 )
                 print("[Rollback] 已自动回滚到部署前状态。", file=sys.stderr)
             except Exception as rb_exc:

@@ -140,36 +140,45 @@ def _backup_direct(cfg: OpsConfig, output_path: Path, dry_run: bool) -> None:
 
 
 def _backup_ssh(cfg: OpsConfig, output_path: Path, dry_run: bool) -> None:
-    remote_tmp = f"/tmp/{output_path.name}"
+    """通过 SSH 在云端本机压缩 pg_dump -Fc 并经 stdout 流式写回本地（不残留 /tmp 临时文件）。"""
     db_name = shlex.quote(cfg.remote_pg_db)
     pg_user = shlex.quote(cfg.remote_pg_user)
-    remote_dump_cmd = (
-        f"sudo -u {pg_user} pg_dump --format=custom --compress=6 --no-owner --no-acl "
-        f"-d {db_name} -f {shlex.quote(remote_tmp)}"
-    )
+    if cfg.remote_use_sudo:
+        remote_dump_cmd = (
+            f"sudo -n -u {pg_user} pg_dump --format=custom --compress=6 --no-owner --no-acl -d {db_name}"
+        )
+    else:
+        remote_dump_cmd = (
+            f"pg_dump -U {pg_user} --format=custom --compress=6 --no-owner --no-acl -d {db_name}"
+        )
 
     print(f"[Backup/ssh] SSH Host   : {cfg.ssh_host}")
     print(f"[Backup/ssh] Remote DB  : {cfg.remote_pg_db} (user={cfg.remote_pg_user})")
     print(f"[Backup/ssh] Output     : {output_path}")
 
     if dry_run:
-        print(f"[DryRun] 将通过 SSH 执行: {remote_dump_cmd}")
-        print(f"[DryRun] 并通过 SCP 拉回至 {output_path} 后清理远端临时文件")
+        print(f"[DryRun] 将通过 SSH 流式执行: {remote_dump_cmd} > {output_path}")
         return
 
+    from scripts.ops.common import build_ssh_base_cmd
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    ssh_cmd = [*build_ssh_base_cmd(cfg), remote_dump_cmd]
     t0 = time.monotonic()
-    try:
-        run_ssh_command(cfg, remote_dump_cmd, timeout=1800)
-        scp_download(cfg, remote_tmp, output_path, timeout=1800)
-    finally:
-        # 无论成功失败尽量清理远端 /tmp 备份文件，避免敏感数据滞留
-        try:
-            run_ssh_command(cfg, f"rm -f {shlex.quote(remote_tmp)}", check=False, timeout=30)
-        except Exception:
-            pass
+    with open(output_path, "wb") as fout:
+        proc = subprocess.run(
+            ssh_cmd,
+            stdout=fout,
+            stderr=subprocess.PIPE,
+            timeout=1800,
+        )
+    if proc.returncode != 0:
+        output_path.unlink(missing_ok=True)
+        err = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"SSH pg_dump 失败 (exit={proc.returncode}): {err}")
 
     elapsed = time.monotonic() - t0
-    print(f"[Backup/ssh] 远端导出并拉回完成，耗时 {elapsed:.1f}s")
+    print(f"[Backup/ssh] 远端流式导出完成，耗时 {elapsed:.1f}s")
 
 
 def backup_prod_database(

@@ -70,11 +70,19 @@ class TickScheduler:
 
     # ── 排程管理 ──────────────────────────────────────────────────────
 
-    async def add_slot(self, schedule_id: str, name: str, slot: str, hour: int, **params: Any) -> dict:
-        """注册一个整点唤醒 slot（如 hour=6 → 06:00）。"""
+    async def add_slot(
+        self,
+        schedule_id: str,
+        name: str,
+        slot: str,
+        hour: int,
+        minute: int = 0,
+        **params: Any,
+    ) -> dict:
+        """注册一个定时唤醒 slot（支持分钟级精度，如 hour=21, minute=45 → 21:45）。"""
         if not self._scheduler:
             raise RuntimeError("Scheduler not started")
-        trigger = CronTrigger(minute=0, hour=hour, timezone=self.timezone)
+        trigger = CronTrigger(minute=minute, hour=hour, timezone=self.timezone)
         job = self._scheduler.add_job(
             func=self._on_trigger,
             trigger=trigger,
@@ -88,11 +96,11 @@ class TickScheduler:
             "name": name,
             "slot": slot,
             "enabled": True,
-            "params": params,
+            "params": {**params, "hour": hour, "minute": minute},
             "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
         }
         await self.db.create_schedule(data)
-        logger.info("Added slot %s (hour=%d)", schedule_id, hour)
+        logger.info("Added slot %s (%02d:%02d)", schedule_id, hour, minute)
         return data
 
     async def list_schedules(self) -> List[dict]:
