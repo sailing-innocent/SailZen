@@ -32,7 +32,7 @@ sailtick:
     daily_token_cap: 1000000         # 每日软上限
     providers:
       deepseek:
-        model: deepseek-chat
+        model: deepseek-reasoner
         base_url: https://api.deepseek.com/v1
         api_key: ${DEEPSEEK_API_KEY}   # 从环境变量注入，勿填明文
       # kimi:
