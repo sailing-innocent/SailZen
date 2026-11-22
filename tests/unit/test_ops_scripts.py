@@ -218,3 +218,14 @@ def test_health_check_probes_cover_upgraded_health_and_tick_routes():
     assert "/tick/health-summary" in paths
     assert "/tick/reports" in paths
     assert "/tick/messages" in paths
+
+
+def test_check_llm_keys_masking_and_placeholder_detection():
+    from scripts.ops.check_llm_keys import is_placeholder_key, mask_api_key
+
+    assert mask_api_key("") == "<unset>"
+    assert mask_api_key("short") == "*****"
+    assert mask_api_key("sk-kimi-1234567890abcd") == "sk-k...abcd"
+    assert is_placeholder_key("sk-xxxxxxxxxxxxxxxx") is True
+    assert is_placeholder_key("your-api-key") is True
+    assert is_placeholder_key("sk-kimi-realkey1234") is False
