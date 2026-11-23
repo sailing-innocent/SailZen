@@ -356,12 +356,17 @@ class DataScanner:
         for it in items[:limit]:
             if not isinstance(it, dict):
                 continue
+            raw_meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
+            compact_meta: Dict[str, Any] = {}
+            for k in ("meal_type", "scene", "coach_advice", "draft_id"):
+                if raw_meta.get(k) not in (None, ""):
+                    compact_meta[k] = raw_meta[k]
             out.append(
                 {
                     "id": it.get("id"),
                     "category": it.get("category", "general"),
-                    "content": str(it.get("content") or "")[:200],
-                    "meta": it.get("meta") or {},
+                    "content": str(it.get("content") or "")[:240],
+                    "meta": compact_meta,
                     "created_at": str(it.get("created_at") or "")[:19],
                 }
             )

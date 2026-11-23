@@ -105,9 +105,10 @@ AVAILABLE_PROVIDERS: Dict[str, ProviderInfo] = {
         available_models=[
             "deepseek-chat",
             "deepseek-reasoner",
+            "deepseek-flash",
         ],
         requires_api_key=True,
-        description="DeepSeek 系列模型 - 高性价比中文模型",
+        description="DeepSeek 系列模型 - 高性价比中文模型，deepseek-flash 支持原生视觉多模态识图",
     ),
 }
 

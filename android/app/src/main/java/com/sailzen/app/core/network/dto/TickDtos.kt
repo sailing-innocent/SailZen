@@ -101,6 +101,64 @@ data class DailyReportDto(
 )
 
 @Serializable
+data class IntakeEntryDto(
+    val selected: Boolean = true,
+    val kind: String = "daily_info",
+    val title: String = "",
+    val confidence: Double = 0.85,
+    val data: JsonObject = JsonObject(emptyMap()),
+)
+
+@Serializable
+data class CommittedRefDto(
+    val kind: String,
+    val id: Int,
+    val label: String = "",
+)
+
+@Serializable
+data class ImageIntakeDraftDto(
+    val id: Int,
+    val status: String = "pending_confirm",
+    @SerialName("source_channel") val sourceChannel: String = "android",
+    @SerialName("ticket_id") val ticketId: Int? = null,
+    @SerialName("media_key") val mediaKey: String = "",
+    @SerialName("media_url") val mediaUrl: String = "",
+    @SerialName("media_mime") val mediaMime: String = "image/jpeg",
+    @SerialName("media_size") val mediaSize: Int = 0,
+    @SerialName("original_filename") val originalFilename: String = "",
+    @SerialName("user_note") val userNote: String = "",
+    val scene: String = "general",
+    val summary: String = "",
+    @SerialName("coach_advice") val coachAdvice: String = "",
+    @SerialName("ocr_text") val ocrText: String = "",
+    val entries: List<IntakeEntryDto> = emptyList(),
+    @SerialName("committed_refs") val committedRefs: List<CommittedRefDto> = emptyList(),
+    @SerialName("model_used") val modelUsed: String = "deepseek-flash",
+    val usage: JsonObject = JsonObject(emptyMap()),
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
+    @SerialName("committed_at") val committedAt: String? = null,
+)
+
+@Serializable
+data class ImageIntakeCommitRequest(
+    val entries: List<IntakeEntryDto>,
+    val summary: String? = null,
+    @SerialName("user_note") val userNote: String? = null,
+    @SerialName("ticket_id") val ticketId: Int? = null,
+    @SerialName("reply_text") val replyText: String? = null,
+)
+
+@Serializable
+data class ImageIntakeCommitResponse(
+    val draft: ImageIntakeDraftDto,
+    @SerialName("committed_refs") val committedRefs: List<CommittedRefDto> = emptyList(),
+    @SerialName("message_id") val messageId: Int? = null,
+    @SerialName("replied_ticket_id") val repliedTicketId: Int? = null,
+)
+
+@Serializable
 data class HealthCoachSummaryDto(
     @SerialName("active_plan") val activePlan: WeightPlanDto? = null,
     @SerialName("plan_progress") val planProgress: JsonObject? = null,
@@ -108,4 +166,5 @@ data class HealthCoachSummaryDto(
     @SerialName("pending_tickets") val pendingTickets: List<TickTicketDto> = emptyList(),
     @SerialName("pending_ticket_count") val pendingTicketCount: Int = 0,
     @SerialName("today_messages") val todayMessages: List<TickMessageDto> = emptyList(),
+    @SerialName("pending_intake_drafts") val pendingIntakeDrafts: List<ImageIntakeDraftDto> = emptyList(),
 )

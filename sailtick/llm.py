@@ -249,6 +249,8 @@ class LLMGateway:
             return 0.0
         prompt_tokens = response.usage.get("prompt_tokens", 0)
         completion_tokens = response.usage.get("completion_tokens", 0)
+        if "flash" in (response.model or "").lower():
+            return prompt_tokens / 1_000_000 * 0.30 + completion_tokens / 1_000_000 * 1.20
         pricing = {
             "kimi": {"prompt": 0.002, "completion": 0.006},
             "deepseek": {"prompt": 0.0014, "completion": 0.0028},

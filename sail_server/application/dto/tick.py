@@ -172,6 +172,73 @@ class DailyReportResponse(BaseModel):
     updated_at: datetime
 
 
+class IntakeEntryDto(BaseModel):
+    """单条可编辑的识图结构化候选记录。"""
+
+    selected: bool = Field(default=True, description="是否勾选落库")
+    kind: str = Field(
+        default="daily_info",
+        description="diet | canteen_menu | sleep | exercise | weight | mood | daily_info",
+    )
+    title: str = Field(default="", description="条目展示标题")
+    confidence: float = Field(default=0.85, ge=0.0, le=1.0, description="识别置信度 0-1")
+    data: Dict[str, Any] = Field(default_factory=dict, description="对应领域结构化字段")
+
+
+class CommittedRefDto(BaseModel):
+    """落库后生成的关联记录引用。"""
+
+    kind: str
+    id: int
+    label: str = ""
+
+
+class ImageIntakeDraftResponse(BaseModel):
+    """图片识图草稿响应（供前端弹出确认卡片微调后落库）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    status: str = "pending_confirm"
+    source_channel: str = "android"
+    ticket_id: Optional[int] = None
+    media_key: str
+    media_url: str = ""
+    media_mime: str = "image/jpeg"
+    media_size: int = 0
+    original_filename: str = ""
+    user_note: str = ""
+    scene: str = "general"
+    summary: str = ""
+    coach_advice: str = ""
+    ocr_text: str = ""
+    entries: List[IntakeEntryDto] = Field(default_factory=list)
+    committed_refs: List[CommittedRefDto] = Field(default_factory=list)
+    model_used: str = "deepseek-flash"
+    usage: Dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+    committed_at: Optional[datetime] = None
+
+
+class ImageIntakeCommitRequest(BaseModel):
+    """人工确认微调后提交落库的请求。"""
+
+    entries: List[IntakeEntryDto] = Field(default_factory=list, description="确认后的条目列表")
+    summary: Optional[str] = Field(default=None, description="可选覆盖识别摘要")
+    user_note: Optional[str] = Field(default=None, description="可选补充用户备注")
+    ticket_id: Optional[int] = Field(default=None, description="若关联票据则同时回复该票据")
+    reply_text: Optional[str] = Field(default=None, description="自定义票据回复文案（留空则自动生成）")
+
+
+class ImageIntakeCommitResponse(BaseModel):
+    """确认落库响应。"""
+
+    draft: ImageIntakeDraftResponse
+    committed_refs: List[CommittedRefDto] = Field(default_factory=list)
+    message_id: Optional[int] = None
+    replied_ticket_id: Optional[int] = None
+
+
 class HealthCoachSummaryResponse(BaseModel):
     """健康页 AI 教练聚合视图（供 Web /health 与 Android HealthHome 一次拉取）。"""
 
@@ -181,3 +248,4 @@ class HealthCoachSummaryResponse(BaseModel):
     pending_tickets: List[TicketResponse] = Field(default_factory=list)
     pending_ticket_count: int = 0
     today_messages: List[TickMessageResponse] = Field(default_factory=list)
+    pending_intake_drafts: List[ImageIntakeDraftResponse] = Field(default_factory=list)

@@ -3,6 +3,7 @@ package com.sailzen.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -13,22 +14,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.sailzen.app.core.bg.ReminderService
 import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.reminder.ReminderActionReceiver
 import com.sailzen.app.core.rhythm.QuickCaptureTileService
+import com.sailzen.app.core.tick.SharedImageInbox
+import com.sailzen.app.core.tick.SharedImagePayload
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
 import com.sailzen.app.ui.components.AppUpdateDialog
 import com.sailzen.app.ui.navigation.Routes
 import com.sailzen.app.ui.navigation.SailZenNavGraph
 import com.sailzen.app.ui.theme.SailZenTheme
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -41,6 +48,9 @@ class MainActivity : ComponentActivity() {
 
     /** 快速捕获磁贴跳入标记 */
     private val openCaptureState = mutableStateOf(false)
+
+    /** 系统分享图片跳入 AI 教练页的时间戳触发器 */
+    private val openCoachForShareToken = mutableLongStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -77,6 +87,17 @@ class MainActivity : ComponentActivity() {
                     if (affairId > 0) {
                         navController.navigate(Routes.affairDetail(affairId))
                         affairIdState.intValue = -1
+                    }
+                }
+
+                // 系统分享图片跳入：直达 SailTick AI 教练页自动识图
+                val shareToken by openCoachForShareToken
+                LaunchedEffect(shareToken) {
+                    if (shareToken > 0L) {
+                        navController.navigate(Routes.HEALTH_COACH) {
+                            launchSingleTop = true
+                        }
+                        openCoachForShareToken.longValue = 0L
                     }
                 }
 
@@ -198,5 +219,43 @@ class MainActivity : ComponentActivity() {
             // 消费掉，避免重复弹窗
             intent.removeExtra(QuickCaptureTileService.EXTRA_OPEN_CAPTURE)
         }
+        // 处理系统「分享图片到 SailZen」（ACTION_SEND image/*）
+        if (intent?.action == Intent.ACTION_SEND && intent.type?.startsWith("image/") == true) {
+            val streamUri: Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            }
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().trim()
+            if (streamUri != null) {
+                // 立即清除 action，防止配置变更重复触发
+                intent.action = Intent.ACTION_MAIN
+                lifecycleScope.launch(Dispatchers.IO) {
+                    val cachedUri = copySharedImageToCache(streamUri) ?: streamUri
+                    SharedImageInbox.offer(
+                        SharedImagePayload(
+                            uri = cachedUri,
+                            note = sharedText,
+                            sourceChannel = "android_share",
+                        ),
+                    )
+                    openCoachForShareToken.longValue = System.currentTimeMillis()
+                }
+            }
+        }
+    }
+
+    private fun copySharedImageToCache(sourceUri: Uri): Uri? {
+        return runCatching {
+            val dir = File(cacheDir, "shared_intake").apply { mkdirs() }
+            // 清理较旧缓存，仅保留最近 10 张
+            dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(10)?.forEach { it.delete() }
+            val outFile = File(dir, "share_${System.currentTimeMillis()}.jpg")
+            contentResolver.openInputStream(sourceUri)?.use { input ->
+                outFile.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            FileProvider.getUriForFile(this, "${packageName}.fileprovider", outFile)
+        }.getOrNull()
     }
 }

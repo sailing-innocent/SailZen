@@ -29,6 +29,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- 系统「分享图片到 SailZen」快捷入口（食堂菜单/手表截图/餐盘/自拍秒传识图） -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
         </activity>
 
         <!-- 延后二级选项弹窗（透明 Dialog Activity） -->

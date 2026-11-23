@@ -29,13 +29,18 @@ from datetime import datetime
 from typing import Generator, List, Optional
 
 from litestar import Controller, Request, get, post
+from litestar.datastructures import UploadFile
 from litestar.exceptions import ClientException, NotAuthorizedException, NotFoundException
+from litestar.response import File
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.tick import (
     DailyReportResponse,
     DailyReportUpsertRequest,
     HealthCoachSummaryResponse,
+    ImageIntakeCommitRequest,
+    ImageIntakeCommitResponse,
+    ImageIntakeDraftResponse,
     TickMessageCreateRequest,
     TickMessageIngestRequest,
     TickMessageResponse,
@@ -65,6 +70,14 @@ from sail_server.model.tick import (
     resolve_ticket_impl,
     snooze_ticket_impl,
     upsert_daily_report_impl,
+)
+from sail_server.model.tick_intake import (
+    analyze_image_intake_impl,
+    commit_image_intake_impl,
+    discard_image_intake_impl,
+    get_image_intake_draft_impl,
+    list_image_intake_drafts_impl,
+    resolve_tick_media_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -329,3 +342,124 @@ class TicketController(Controller):
         db = next(router_dependency)
         with _map_errors():
             return get_health_coach_summary_impl(db)
+
+    # ── 通用图片识图与二段式确认落库 ──────────────────────────────────────────
+
+    @post("/intake/analyze")
+    async def analyze_image_intake(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ImageIntakeDraftResponse:
+        """上传图片 → DeepSeek Vision（按需叠加 OCR）→ 返回可编辑结构化草稿。
+
+        接受 multipart/form-data：
+        - file: 图片文件（必需）
+        - note: 可选用户备注
+        - source_channel: web | android | android_share
+        - ticket_id: 可选关联待回票据 ID
+        - use_ocr_assist: auto | true | false
+        """
+        _check_auth(request)
+        db = next(router_dependency)
+        form = await request.form()
+        upload = form.get("file")
+        if not isinstance(upload, UploadFile):
+            raise ClientException(status_code=400, detail="请通过 multipart 字段 file 上传图片")
+
+        file_bytes = await upload.read()
+        filename = upload.filename or "upload.jpg"
+        note = str(form.get("note") or "")
+        source_channel = str(form.get("source_channel") or "web")
+        use_ocr_assist = str(form.get("use_ocr_assist") or "auto")
+        raw_ticket_id = form.get("ticket_id")
+        ticket_id: Optional[int] = None
+        if raw_ticket_id not in (None, ""):
+            try:
+                ticket_id = int(str(raw_ticket_id).strip())
+            except ValueError as exc:
+                raise ClientException(status_code=400, detail="invalid ticket_id") from exc
+
+        with _map_errors():
+            return await analyze_image_intake_impl(
+                db=db,
+                file_bytes=file_bytes,
+                filename=filename,
+                note=note,
+                source_channel=source_channel,
+                ticket_id=ticket_id,
+                use_ocr_assist=use_ocr_assist,
+            )
+
+    @get("/intake/drafts")
+    async def list_image_intake_drafts(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        status: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[ImageIntakeDraftResponse]:
+        """列出最近的识图草稿（可按 status=pending_confirm 过滤）。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return list_image_intake_drafts_impl(db, status=status, limit=limit)
+
+    @get("/intake/{draft_id:int}")
+    async def get_image_intake_draft(
+        self,
+        draft_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ImageIntakeDraftResponse:
+        """获取单个识图草稿详情。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_image_intake_draft_impl(db, draft_id)
+
+    @post("/intake/{draft_id:int}/commit")
+    async def commit_image_intake(
+        self,
+        draft_id: int,
+        data: ImageIntakeCommitRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ImageIntakeCommitResponse:
+        """人工确认微调后，将识图草稿正式写入对应健康主表与教练消息。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return commit_image_intake_impl(db, draft_id, data)
+
+    @post("/intake/{draft_id:int}/discard")
+    async def discard_image_intake(
+        self,
+        draft_id: int,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> ImageIntakeDraftResponse:
+        """丢弃一条待确认的识图草稿。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return discard_image_intake_impl(db, draft_id)
+
+    @get("/media/{year_month:str}/{filename:str}")
+    async def get_tick_media(
+        self,
+        year_month: str,
+        filename: str,
+        request: Request,
+    ) -> File:
+        """安全返回已留存的识图媒体原图（支持浏览器 img 标签与 Android 预览）。"""
+        # 注意：浏览器 <img> 无法直接带 Authorization header，支持 ?token= 或 Bearer
+        expected = os.environ.get("SAILZEN_API_TOKEN", "")
+        if expected:
+            auth = request.headers.get("Authorization", "")
+            qtoken = request.query_params.get("token", "")
+            if auth != f"Bearer {expected}" and qtoken != expected:
+                raise NotAuthorizedException(detail="invalid or missing token")
+        with _map_errors():
+            path = resolve_tick_media_path(year_month, filename)
+        return File(path=str(path), media_type="image/jpeg")

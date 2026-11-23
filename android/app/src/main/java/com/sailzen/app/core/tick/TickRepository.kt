@@ -1,6 +1,9 @@
 package com.sailzen.app.core.tick
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import com.sailzen.app.core.data.DataChangeBus
 import com.sailzen.app.core.data.DataChangeEvent
@@ -9,12 +12,22 @@ import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.TickApi
 import com.sailzen.app.core.network.dto.DailyReportDto
 import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
+import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
+import com.sailzen.app.core.network.dto.ImageIntakeCommitResponse
+import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
 import com.sailzen.app.core.network.dto.TickMessageCreateRequest
 import com.sailzen.app.core.network.dto.TickMessageDto
 import com.sailzen.app.core.network.dto.TickTicketDto
 import com.sailzen.app.core.network.dto.TicketReplyRequest
 import com.sailzen.app.core.network.dto.TicketSnoozeRequest
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * SailTick AI 教练数据仓库：
@@ -122,5 +135,121 @@ class TickRepository private constructor(private val context: Context) {
             Log.w(TAG, "sendSilentMessage failed: ${e.message}")
             null
         }
+    }
+
+    /**
+     * 读取并按需等比压缩本地图片 Uri 为 JPEG 字节流（控制长边 <= 1600px，省流量且提速）。
+     */
+    suspend fun readAndCompressUri(uri: Uri, maxEdge: Int = 1600): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("无法读取所选图片")
+                if (raw.isEmpty()) error("图片内容为空")
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+                val w = bounds.outWidth
+                val h = bounds.outHeight
+                if (w <= 0 || h <= 0) {
+                    // 无法解码但可能是 WebP/其他受服务端支持的格式，直接传原字节
+                    return@runCatching raw
+                }
+                val aspect = maxOf(w, h).toFloat() / maxOf(1, minOf(w, h)).toFloat()
+                val effectiveMax = if (aspect >= 2.4f) 2400 else maxEdge
+                var sample = 1
+                while (maxOf(w, h) / (sample * 2) >= effectiveMax) {
+                    sample *= 2
+                }
+                val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sample }
+                val bmp = BitmapFactory.decodeByteArray(raw, 0, raw.size, decodeOpts)
+                    ?: return@runCatching raw
+                val finalBmp = if (maxOf(bmp.width, bmp.height) > effectiveMax) {
+                    val scale = effectiveMax.toFloat() / maxOf(bmp.width, bmp.height).toFloat()
+                    val nw = maxOf(1, (bmp.width * scale).toInt())
+                    val nh = maxOf(1, (bmp.height * scale).toInt())
+                    Bitmap.createScaledBitmap(bmp, nw, nh, true).also {
+                        if (it !== bmp) bmp.recycle()
+                    }
+                } else {
+                    bmp
+                }
+                val baos = ByteArrayOutputStream()
+                finalBmp.compress(Bitmap.CompressFormat.JPEG, 86, baos)
+                finalBmp.recycle()
+                baos.toByteArray()
+            }
+        }
+
+    /**
+     * 上传图片至后端进行 DeepSeek Vision/OCR 识图分析，返回待人工确认草稿。
+     */
+    suspend fun analyzeImageIntake(
+        imageBytes: ByteArray,
+        filename: String = "capture.jpg",
+        note: String = "",
+        sourceChannel: String = "android",
+        ticketId: Int? = null,
+        useOcrAssist: String = "auto",
+    ): Result<ImageIntakeDraftDto> {
+        val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
+        return runCatching {
+            val fileBody = imageBytes.toRequestBody("image/jpeg".toMediaType())
+            val filePart = MultipartBody.Part.createFormData("file", filename, fileBody)
+            val textPlain = "text/plain".toMediaType()
+            client.analyzeImageIntake(
+                file = filePart,
+                note = note.trim().toRequestBody(textPlain),
+                sourceChannel = sourceChannel.toRequestBody(textPlain),
+                useOcrAssist = useOcrAssist.toRequestBody(textPlain),
+                ticketId = ticketId?.toString()?.toRequestBody(textPlain),
+            )
+        }.onFailure { e ->
+            Log.w(TAG, "analyzeImageIntake failed: ${e.message}")
+        }
+    }
+
+    /** 确认并提交识图草稿，写入健康主表与教练消息。 */
+    suspend fun commitIntakeDraft(
+        draftId: Int,
+        request: ImageIntakeCommitRequest,
+    ): Result<ImageIntakeCommitResponse> {
+        val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
+        return runCatching {
+            val res = client.commitIntakeDraft(draftId, request)
+            bus.emit(DataChangeEvent.HealthSignalChanged("intake"))
+            res
+        }.onFailure { e ->
+            Log.w(TAG, "commitIntakeDraft failed: ${e.message}")
+        }
+    }
+
+    /** 丢弃待确认识图草稿。 */
+    suspend fun discardIntakeDraft(draftId: Int): Result<ImageIntakeDraftDto> {
+        val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
+        return runCatching {
+            client.discardIntakeDraft(draftId)
+        }.onFailure { e ->
+            Log.w(TAG, "discardIntakeDraft failed: ${e.message}")
+        }
+    }
+
+    /** 拉取服务端已留存草稿的预览图字节（用于跨设备恢复未确认草稿时展示缩略图）。 */
+    suspend fun fetchMediaBytes(mediaUrl: String): ByteArray? = withContext(Dispatchers.IO) {
+        if (mediaUrl.isBlank()) return@withContext null
+        val baseUrl = settings.serverUrl()
+        if (baseUrl.isBlank()) return@withContext null
+        val normalized = ApiClient.normalizeBaseUrl(baseUrl)
+        val fullUrl = if (mediaUrl.startsWith("http")) {
+            mediaUrl
+        } else {
+            "$normalized${if (mediaUrl.startsWith("/")) mediaUrl else "/$mediaUrl"}"
+        }
+        runCatching {
+            val req = Request.Builder().url(fullUrl).get().build()
+            ApiClient.downloadClient(settings.apiToken()).newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use null
+                resp.body?.bytes()
+            }
+        }.getOrNull()
     }
 }

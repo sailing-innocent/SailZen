@@ -4,7 +4,7 @@
  * @author sailing-innocent
  * @date 2026-10-27
  */
-import { SERVER_URL, API_BASE, authHeaders, ApiError, parseErrorDetail } from './config'
+import { SERVER_URL, API_BASE, AUTH_TOKEN, authHeaders, ApiError, parseErrorDetail } from './config'
 
 const TICK_API_BASE = `${API_BASE}/tick`
 
@@ -64,6 +64,77 @@ export interface DailyReport {
   updated_at: string
 }
 
+export type IntakeScene =
+  | 'diet'
+  | 'canteen_menu'
+  | 'sleep'
+  | 'exercise'
+  | 'weight'
+  | 'selfie_status'
+  | 'general'
+
+export type IntakeEntryKind =
+  | 'diet'
+  | 'canteen_menu'
+  | 'sleep'
+  | 'exercise'
+  | 'weight'
+  | 'mood'
+  | 'daily_info'
+
+export interface IntakeEntry {
+  selected: boolean
+  kind: IntakeEntryKind
+  title: string
+  confidence: number
+  data: Record<string, unknown>
+}
+
+export interface CommittedRef {
+  kind: string
+  id: number
+  label: string
+}
+
+export interface ImageIntakeDraft {
+  id: number
+  status: 'pending_confirm' | 'committed' | 'discarded'
+  source_channel: string
+  ticket_id: number | null
+  media_key: string
+  media_url: string
+  media_mime: string
+  media_size: number
+  original_filename: string
+  user_note: string
+  scene: IntakeScene
+  summary: string
+  coach_advice: string
+  ocr_text: string
+  entries: IntakeEntry[]
+  committed_refs: CommittedRef[]
+  model_used: string
+  usage: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  committed_at: string | null
+}
+
+export interface ImageIntakeCommitPayload {
+  entries: IntakeEntry[]
+  summary?: string
+  user_note?: string
+  ticket_id?: number | null
+  reply_text?: string
+}
+
+export interface ImageIntakeCommitResponse {
+  draft: ImageIntakeDraft
+  committed_refs: CommittedRef[]
+  message_id: number | null
+  replied_ticket_id: number | null
+}
+
 export interface HealthCoachSummary {
   active_plan: Record<string, unknown> | null
   plan_progress: Record<string, unknown> | null
@@ -71,6 +142,7 @@ export interface HealthCoachSummary {
   pending_tickets: TickTicket[]
   pending_ticket_count: number
   today_messages: TickMessage[]
+  pending_intake_drafts?: ImageIntakeDraft[]
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -180,6 +252,72 @@ export const api_get_latest_daily_report = (): Promise<DailyReport | null> =>
 
 export const api_get_health_coach_summary = (): Promise<HealthCoachSummary> =>
   request<HealthCoachSummary>('/health-summary')
+
+// ── 通用图片识图与二段式确认落库 ──────────────────────────────────────────
+
+/** 构造可供 <img> 直接访问的媒体 URL（带可选 token 参数）。 */
+export const tickMediaUrl = (mediaUrl: string): string => {
+  if (!mediaUrl) return ''
+  const base = mediaUrl.startsWith('http')
+    ? mediaUrl
+    : `${SERVER_URL}${mediaUrl.startsWith('/') ? '' : '/'}${mediaUrl}`
+  if (!AUTH_TOKEN) return base
+  const sep = base.includes('?') ? '&' : '?'
+  return `${base}${sep}token=${encodeURIComponent(AUTH_TOKEN)}`
+}
+
+/** 上传图片并由 DeepSeek Vision/OCR 解析为待确认草稿 */
+export const api_analyze_image_intake = async (
+  file: File,
+  options?: {
+    note?: string
+    ticketId?: number | null
+    sourceChannel?: string
+    useOcrAssist?: 'auto' | 'true' | 'false'
+  },
+): Promise<ImageIntakeDraft> => {
+  const form = new FormData()
+  form.append('file', file, file.name || 'capture.jpg')
+  if (options?.note?.trim()) form.append('note', options.note.trim())
+  form.append('source_channel', options?.sourceChannel ?? 'web')
+  if (options?.ticketId != null) form.append('ticket_id', String(options.ticketId))
+  if (options?.useOcrAssist) form.append('use_ocr_assist', options.useOcrAssist)
+
+  const response = await fetch(`${SERVER_URL}/${TICK_API_BASE}/intake/analyze`, {
+    method: 'POST',
+    headers: { ...authHeaders() },
+    body: form,
+  })
+  if (!response.ok) {
+    throw new ApiError(response.status, response.statusText, parseErrorDetail(await response.text()))
+  }
+  return response.json() as Promise<ImageIntakeDraft>
+}
+
+export const api_list_intake_drafts = (params?: {
+  status?: 'pending_confirm' | 'committed' | 'discarded'
+  limit?: number
+}): Promise<ImageIntakeDraft[]> => {
+  const search = new URLSearchParams()
+  if (params?.status) search.set('status', params.status)
+  if (params?.limit) search.set('limit', String(params.limit))
+  const qs = search.toString()
+  return request<ImageIntakeDraft[]>(`/intake/drafts${qs ? `?${qs}` : ''}`)
+}
+
+export const api_commit_image_intake = (
+  draftId: number,
+  payload: ImageIntakeCommitPayload,
+): Promise<ImageIntakeCommitResponse> =>
+  request<ImageIntakeCommitResponse>(`/intake/${draftId}/commit`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const api_discard_image_intake = (draftId: number): Promise<ImageIntakeDraft> =>
+  request<ImageIntakeDraft>(`/intake/${draftId}/discard`, {
+    method: 'POST',
+  })
 
 // ── 健康模块：快速记体重 ──────────────────────────────────────────────
 

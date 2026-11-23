@@ -140,3 +140,52 @@ class SailTickDailyReport(ORMBase):
         server_default=func.current_timestamp(),
         onupdate=func.current_timestamp(),
     )
+
+
+class SailTickIntakeDraft(ORMBase):
+    """SailTick 通用视觉识图草稿（传图 → AI 识图拆解 → 人工确认微调 → 结构化落库）。"""
+
+    __tablename__ = "sail_tick_intake_drafts"
+
+    id = Column(Integer, primary_key=True)
+    # pending_confirm | committed | discarded
+    status = Column(String, default="pending_confirm", index=True)
+    # web | android | android_share
+    source_channel = Column(String, default="android")
+    # 可选关联票据 ID（从某张待回票据发起“传图回复”时写入）
+    ticket_id = Column(Integer, nullable=True, index=True)
+    # 媒体存储相对键，如 2026-11/20261123_221500_ab12cd34.jpg
+    media_key = Column(String, nullable=False)
+    media_mime = Column(String, default="image/jpeg")
+    media_size = Column(Integer, default=0)
+    original_filename = Column(String, default="")
+    # 用户上传时附带的简短备注（可选）
+    user_note = Column(String, default="")
+    # AI 判定的主场景：diet | canteen_menu | sleep | exercise | weight | selfie_status | general
+    scene = Column(String, default="general", index=True)
+    # AI 一句话识别总结
+    summary = Column(String, default="")
+    # AI 即时轻量建议（如食堂点餐推荐、睡眠/气色温和提示）
+    coach_advice = Column(String, default="")
+    # 可选：触发 /v1/tools/ocr 辅助时保存的原始识别文本
+    ocr_text = Column(String, default="")
+    # 结构化可编辑候选条目数组：[{"selected": true, "kind": "diet", "title": "...", "confidence": 0.9, "data": {...}}]
+    entries = Column(JSONB, default=list)
+    # 确认落库后写入的关联记录引用：[{"kind": "diet", "id": 12}, {"kind": "message", "id": 34}]
+    committed_refs = Column(JSONB, default=list)
+    model_used = Column(String, default="deepseek-flash")
+    usage = Column(JSONB, default=dict)
+    created_at = Column(
+        TIMESTAMP, default=datetime.now, server_default=func.current_timestamp(), index=True
+    )
+    updated_at = Column(
+        TIMESTAMP,
+        default=datetime.now,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+    committed_at = Column(TIMESTAMP, nullable=True)
+
+    __table_args__ = (
+        Index("ix_tick_intake_drafts_status_created", "status", "created_at"),
+    )

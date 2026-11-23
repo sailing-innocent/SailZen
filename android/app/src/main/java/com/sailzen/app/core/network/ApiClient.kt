@@ -36,12 +36,17 @@ object ApiClient {
         encodeDefaults = true
     }
 
-    private fun buildRetrofit(baseUrl: String, token: String): Retrofit {
+    private fun buildRetrofit(
+        baseUrl: String,
+        token: String,
+        readTimeoutSeconds: Long = 20,
+        writeTimeoutSeconds: Long = 20,
+    ): Retrofit {
         val normalized = normalizeBaseUrl(baseUrl)
         val okHttp = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+            .writeTimeout(writeTimeoutSeconds, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = if (token.isNotBlank()) {
                     chain.request().newBuilder()
@@ -125,13 +130,18 @@ object ApiClient {
         }
     }
 
-    /** SailTick AI 教练 API（缓存键独立） */
+    /** SailTick AI 教练 API（缓存键独立；识图调用需更长读写超时） */
     @Synchronized
     fun tickApi(baseUrl: String, token: String): TickApi {
         val normalized = normalizeBaseUrl(baseUrl)
         val key = "$normalized|$token"
         cachedTickApi?.let { if (cachedTickKey == key) return it }
-        return buildRetrofit(normalized, token).create(TickApi::class.java).also {
+        return buildRetrofit(
+            baseUrl = normalized,
+            token = token,
+            readTimeoutSeconds = 95,
+            writeTimeoutSeconds = 60,
+        ).create(TickApi::class.java).also {
             cachedTickKey = key
             cachedTickApi = it
         }

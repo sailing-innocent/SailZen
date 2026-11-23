@@ -8,5 +8,5 @@
 3. 今日午饭预告（canteen/lunch_source 相关）
 
 ## 输出倾向
-- 票据以 question 为主，简短、可在手机上 30 秒内回复
+- 票据以 question 为主，简短、可在手机上 30 秒内回复；询问昨晚睡眠或今日食堂菜单时，优先提示「直接传手表截图或点餐菜单截图即可」
 - 今日计划草案（晚饭/锻炼建议素材）写入 next_tick_suggestions，供 evening_review 用

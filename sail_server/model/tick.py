@@ -634,6 +634,10 @@ def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
         limit=30,
     )
 
+    from sail_server.model.tick_intake import list_image_intake_drafts_impl
+
+    pending_drafts = list_image_intake_drafts_impl(db, status="pending_confirm", limit=5)
+
     return HealthCoachSummaryResponse(
         active_plan=active_plan.model_dump(mode="json") if active_plan else None,
         plan_progress=plan_progress,
@@ -641,4 +645,5 @@ def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
         pending_tickets=pending_tickets[:5],
         pending_ticket_count=len(pending_tickets),
         today_messages=today_messages,
+        pending_intake_drafts=pending_drafts,
     )

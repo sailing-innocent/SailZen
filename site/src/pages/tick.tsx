@@ -10,13 +10,14 @@
  *  - 快速记体重（调 health body_data API）
  *  - 历史票据折叠区
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import PageLayout from '@components/page_layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { ImageIntakePanel } from '@components/tick/ImageIntakePanel'
 import {
   api_list_tickets,
   api_reply_ticket,
@@ -25,13 +26,15 @@ import {
   api_quick_log_weight,
   api_send_coach_message,
   api_list_daily_reports,
+  api_list_intake_drafts,
   type DailyReport,
+  type ImageIntakeDraft,
   type TickTicket,
   type TicketPriority,
 } from '@lib/api/tick'
 import { format, isPast } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon } from 'lucide-react'
+import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera } from 'lucide-react'
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   low: '低',
@@ -74,19 +77,32 @@ const TickPage: React.FC = () => {
   const [dietInput, setDietInput] = useState('')
   const [dietMsg, setDietMsg] = useState<string | null>(null)
   const [reports, setReports] = useState<DailyReport[]>([])
+  const [pendingDrafts, setPendingDrafts] = useState<ImageIntakeDraft[]>([])
+  const [linkedTicket, setLinkedTicket] = useState<{ id: number; title: string } | null>(null)
+  const [externalFileReq, setExternalFileReq] = useState<{
+    file: File
+    ticketId: number
+    ticketTitle: string
+  } | null>(null)
+  const ticketFileInputRef = useRef<HTMLInputElement | null>(null)
+  const ticketTargetRef = useRef<{ id: number; title: string } | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [p, h, reps] = await Promise.all([
+      const [p, h, reps, drafts] = await Promise.all([
         api_list_tickets({ limit: 100 }),
         api_list_tickets({ status: 'replied', limit: 20 }),
         api_list_daily_reports(7).catch(() => [] as DailyReport[]),
+        api_list_intake_drafts({ status: 'pending_confirm', limit: 5 }).catch(
+          () => [] as ImageIntakeDraft[],
+        ),
       ])
       setPending(p.filter((t) => t.status === 'pending' || t.status === 'snoozed'))
       setHistory(h)
       setReports(reps)
+      setPendingDrafts(drafts)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -185,6 +201,33 @@ const TickPage: React.FC = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* 通用拍照/传图智能记录（DeepSeek Vision + OCR） */}
+        <ImageIntakePanel
+          initialDrafts={pendingDrafts}
+          linkedTicket={linkedTicket}
+          onClearLinkedTicket={() => setLinkedTicket(null)}
+          onCommitted={() => {
+            void refresh()
+          }}
+          externalFileRequest={externalFileReq}
+          onConsumeExternalFile={() => setExternalFileReq(null)}
+        />
+        <input
+          ref={ticketFileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''
+            const target = ticketTargetRef.current
+            if (f && target) {
+              setLinkedTicket(target)
+              setExternalFileReq({ file: f, ticketId: target.id, ticketTitle: target.title })
+            }
+          }}
+        />
 
         {/* 快速记体重 */}
         <Card className="mb-4">
@@ -287,13 +330,24 @@ const TickPage: React.FC = () => {
                 )}
                 <div className="flex gap-2">
                   <Input
-                    placeholder="回复…"
+                    placeholder="回复，或点右侧相机传图回复…"
                     value={replyDrafts[t.id] ?? ''}
                     onChange={(e) =>
                       setReplyDrafts((d) => ({ ...d, [t.id]: e.target.value }))
                     }
                     onKeyDown={(e) => e.key === 'Enter' && submitReply(t.id)}
                   />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    title="拍照或传截图回复此问题"
+                    onClick={() => {
+                      ticketTargetRef.current = { id: t.id, title: t.title }
+                      ticketFileInputRef.current?.click()
+                    }}
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
                   <Button size="sm" onClick={() => submitReply(t.id)}>
                     <Check className="h-4 w-4" />
                   </Button>
