@@ -25,7 +25,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from litestar import Litestar, Router, get, post
+from litestar import Litestar, Request, Router, get, post
+from litestar.exceptions import NotAuthorizedException
 
 
 def create_app(daemon: Any) -> Litestar:
@@ -201,6 +202,81 @@ def create_app(daemon: Any) -> Litestar:
         trace = await daemon.db.get_trace(trace_id)
         return trace or {"error": f"trace {trace_id} not found"}
 
+    # ── 夜间专家结论 / 数学建模 / 食物与专业知识库 ─────────────────────
+
+    @get("/expert/brief")
+    async def expert_brief() -> Dict[str, Any]:
+        """获取 SailTick 专家最新编译的简报（供快反助手与外部客户端秒级读取）。"""
+        brief = await daemon.db.get_runtime_state("expert_brief")
+        return brief or {}
+
+    @get("/modeling/latest")
+    async def modeling_latest() -> Dict[str, Any]:
+        snap = await daemon.db.get_latest_model_snapshot()
+        return snap or {}
+
+    @get("/modeling/history")
+    async def modeling_history(limit: int = 14) -> List[Dict[str, Any]]:
+        return await daemon.db.list_model_snapshots(limit=limit)
+
+    @get("/knowledge/foods")
+    async def list_foods(q: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        await daemon.knowledge.ensure_seeded()
+        return await daemon.db.list_food_nutrition(limit=limit, query=q)
+
+    @get("/knowledge/articles")
+    async def list_knowledge(domain: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        await daemon.knowledge.ensure_seeded()
+        return await daemon.db.list_knowledge_items(domain=domain, limit=limit)
+
+    @post("/nightly/run")
+    async def run_nightly(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """手动触发一次夜间深度自维护（长周期建模 + 食物查证 + 知识整理 + 刷新专家简报）。"""
+        body = data or {}
+        allow_llm = bool(body.get("allow_llm_research", True))
+        return await daemon.nightly.run(allow_llm_research=allow_llm)
+
+    # ── 白天快反对话 & QQ Bot (OneBot v11) ─────────────────────────────
+
+    @post("/chat/quick")
+    async def quick_chat(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """白天快速反应对话入口（转达专家结论 + 灵活调计划 + 一句话设提醒）。"""
+        body = data or {}
+        text = str(body.get("text") or body.get("message") or "").strip()
+        channel = str(body.get("channel") or "api")
+        user_id = str(body.get("user_id") or "owner")
+        session_id = body.get("session_id")
+        target_type = str(body.get("target_type") or "private")
+        target_id = body.get("target_id")
+        return await daemon.quick_agent.handle_message(
+            text=text,
+            channel=channel,
+            user_id=user_id,
+            session_id=str(session_id) if session_id else None,
+            target_type=target_type,
+            target_id=str(target_id) if target_id else None,
+        )
+
+    @get("/nudges")
+    async def list_nudges(limit: int = 30) -> List[Dict[str, Any]]:
+        """查看待触发的本地提醒队列。"""
+        return await daemon.db.list_pending_nudges(limit=limit)
+
+    @post("/onebot/webhook")
+    async def onebot_webhook(request: Request) -> Dict[str, Any]:
+        """标准 OneBot v11 HTTP Post Webhook（直接对接 NapCat/Lagrange/LLOneBot）。"""
+        raw_body = await request.body()
+        sig = request.headers.get("X-Signature", "")
+        if not daemon.qq_bot.verify_signature(raw_body, sig):
+            raise NotAuthorizedException(detail="invalid X-Signature")
+        import json as _json
+
+        try:
+            event = _json.loads(raw_body.decode("utf-8")) if raw_body else {}
+        except Exception:
+            return {"status": "ignored", "reason": "invalid_json"}
+        return await daemon.qq_bot.handle_event(event)
+
     router = Router(
         path="/",
         route_handlers=[
@@ -223,6 +299,15 @@ def create_app(daemon: Any) -> Litestar:
             monitor,
             list_traces,
             get_trace,
+            expert_brief,
+            modeling_latest,
+            modeling_history,
+            list_foods,
+            list_knowledge,
+            run_nightly,
+            quick_chat,
+            list_nudges,
+            onebot_webhook,
         ],
     )
     return Litestar(route_handlers=[router], debug=False)

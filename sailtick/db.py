@@ -256,6 +256,114 @@ class DBAITraceSpan(TickBase):
     )
 
 
+class DBModelSnapshot(TickBase):
+    """夜间数学建模与预测快照（st_model_snapshots）。"""
+
+    __tablename__ = "st_model_snapshots"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    snapshot_date: Mapped[str] = mapped_column(nullable=False)  # YYYY-MM-DD
+    window_days: Mapped[int] = mapped_column(default=90)
+    model_type: Mapped[str] = mapped_column(default="ewma_wls")
+    sample_count: Mapped[int] = mapped_column(default=0)
+    latest_weight_kg: Mapped[Optional[float]] = mapped_column(nullable=True)
+    ewma_weight_kg: Mapped[Optional[float]] = mapped_column(nullable=True)
+    target_weight_kg: Mapped[float] = mapped_column(default=70.0)
+    weekly_rate_kg: Mapped[Optional[float]] = mapped_column(nullable=True)
+    eta_date: Mapped[Optional[str]] = mapped_column(nullable=True)
+    eta_optimistic_date: Mapped[Optional[str]] = mapped_column(nullable=True)
+    eta_conservative_date: Mapped[Optional[str]] = mapped_column(nullable=True)
+    confidence_score: Mapped[float] = mapped_column(default=0.0)
+    plateau_detected: Mapped[int] = mapped_column(default=0)
+    metrics_json: Mapped[str] = mapped_column(default="{}")
+    insights_json: Mapped[str] = mapped_column(default="[]")
+    created_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_model_snapshots_date", "snapshot_date"),)
+
+
+class DBFoodNutrition(TickBase):
+    """自主沉淀的食物热量与营养知识库（st_food_nutrition）。"""
+
+    __tablename__ = "st_food_nutrition"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    name: Mapped[str] = mapped_column(nullable=False, unique=True)
+    aliases_json: Mapped[str] = mapped_column(default="[]")
+    category: Mapped[str] = mapped_column(default="dish")  # dish|staple|snack|drink|protein|fruit
+    serving_desc: Mapped[str] = mapped_column(default="1份")
+    kcal_per_100g: Mapped[Optional[float]] = mapped_column(nullable=True)
+    kcal_per_serving: Mapped[Optional[float]] = mapped_column(nullable=True)
+    protein_g: Mapped[Optional[float]] = mapped_column(nullable=True)
+    carbs_g: Mapped[Optional[float]] = mapped_column(nullable=True)
+    fat_g: Mapped[Optional[float]] = mapped_column(nullable=True)
+    gi_level: Mapped[str] = mapped_column(default="medium")  # low|medium|high
+    satiety_score: Mapped[int] = mapped_column(default=3)     # 1-5
+    lighter_swap: Mapped[str] = mapped_column(default="")
+    notes: Mapped[str] = mapped_column(default="")
+    source: Mapped[str] = mapped_column(default="builtin")   # builtin|web_search|llm_verified|llm_estimate
+    confidence: Mapped[float] = mapped_column(default=0.7)
+    updated_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_food_nutrition_cat", "category"),)
+
+
+class DBKnowledgeItem(TickBase):
+    """健康师专业知识库（运动/饮食/心理调节，st_knowledge_items）。"""
+
+    __tablename__ = "st_knowledge_items"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    domain: Mapped[str] = mapped_column(nullable=False)  # diet|exercise|psychology|sleep|general
+    topic_key: Mapped[str] = mapped_column(nullable=False, unique=True)
+    title: Mapped[str] = mapped_column(nullable=False)
+    summary: Mapped[str] = mapped_column(default="")
+    key_points_json: Mapped[str] = mapped_column(default="[]")
+    applicable_scenarios_json: Mapped[str] = mapped_column(default="[]")
+    source: Mapped[str] = mapped_column(default="curated")
+    confidence: Mapped[float] = mapped_column(default=0.8)
+    updated_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_knowledge_domain", "domain"),)
+
+
+class DBQuickChatMessage(TickBase):
+    """白天快速对话短期上下文与动作审计（st_quick_chats）。"""
+
+    __tablename__ = "st_quick_chats"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    session_key: Mapped[str] = mapped_column(nullable=False)
+    channel: Mapped[str] = mapped_column(default="api")  # qq|api|cli|web
+    user_id: Mapped[str] = mapped_column(default="")
+    role: Mapped[str] = mapped_column(nullable=False)    # user|assistant
+    content: Mapped[str] = mapped_column(nullable=False)
+    actions_json: Mapped[str] = mapped_column(default="[]")
+    created_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_quick_chats_session", "session_key", "created_at"),)
+
+
+class DBScheduledNudge(TickBase):
+    """本地轻量定时提醒队列（同步 sail_server Reminder，支持 QQ Bot 到点双推）。"""
+
+    __tablename__ = "st_scheduled_nudges"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    channel: Mapped[str] = mapped_column(default="qq")  # qq|android|all
+    target_id: Mapped[str] = mapped_column(default="")  # QQ 号或群号
+    target_type: Mapped[str] = mapped_column(default="private")  # private|group
+    title: Mapped[str] = mapped_column(nullable=False)
+    body: Mapped[str] = mapped_column(default="")
+    trigger_at: Mapped[str] = mapped_column(nullable=False)  # ISO naive local time
+    server_reminder_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(default="pending")   # pending|sent|failed|canceled
+    sent_at: Mapped[Optional[str]] = mapped_column(nullable=True)
+    created_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_nudges_status_trigger", "status", "trigger_at"),)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Database
 # ═══════════════════════════════════════════════════════════════════════
@@ -933,6 +1041,358 @@ class TickDatabase:
             "error": row.error,
         }
 
+    # ── Model Snapshots (夜间数学建模快照) ────────────────────────────
+
+    async def save_model_snapshot(self, snapshot: Dict[str, Any]) -> dict:
+        async with self.session() as s:
+            row = DBModelSnapshot(
+                snapshot_date=str(snapshot.get("snapshot_date") or datetime.now().strftime("%Y-%m-%d")),
+                window_days=int(snapshot.get("window_days") or 90),
+                model_type=str(snapshot.get("model_type") or "ewma_wls"),
+                sample_count=int(snapshot.get("sample_count") or 0),
+                latest_weight_kg=snapshot.get("latest_weight_kg"),
+                ewma_weight_kg=snapshot.get("ewma_weight_kg"),
+                target_weight_kg=float(snapshot.get("target_weight_kg") or 70.0),
+                weekly_rate_kg=snapshot.get("weekly_rate_kg"),
+                eta_date=snapshot.get("eta_date"),
+                eta_optimistic_date=snapshot.get("eta_optimistic_date"),
+                eta_conservative_date=snapshot.get("eta_conservative_date"),
+                confidence_score=float(snapshot.get("confidence_score") or 0.0),
+                plateau_detected=1 if snapshot.get("plateau_detected") else 0,
+                metrics_json=_json.dumps(snapshot.get("metrics") or {}, ensure_ascii=False, default=str),
+                insights_json=_json.dumps(snapshot.get("insights") or [], ensure_ascii=False, default=str),
+            )
+            s.add(row)
+            await s.commit()
+            return self._model_snapshot_dict(row)
+
+    async def get_latest_model_snapshot(self) -> Optional[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBModelSnapshot).order_by(DBModelSnapshot.created_at.desc()).limit(1)
+            )
+            row = result.scalar_one_or_none()
+            return self._model_snapshot_dict(row) if row else None
+
+    async def list_model_snapshots(self, limit: int = 14) -> List[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBModelSnapshot).order_by(DBModelSnapshot.created_at.desc()).limit(limit)
+            )
+            return [self._model_snapshot_dict(r) for r in result.scalars().all()]
+
+    @staticmethod
+    def _model_snapshot_dict(row: DBModelSnapshot) -> dict:
+        try:
+            metrics = _json.loads(row.metrics_json or "{}")
+        except (_json.JSONDecodeError, TypeError):
+            metrics = {}
+        try:
+            insights = _json.loads(row.insights_json or "[]")
+        except (_json.JSONDecodeError, TypeError):
+            insights = []
+        return {
+            "id": row.id,
+            "snapshot_date": row.snapshot_date,
+            "window_days": row.window_days,
+            "model_type": row.model_type,
+            "sample_count": row.sample_count,
+            "latest_weight_kg": row.latest_weight_kg,
+            "ewma_weight_kg": row.ewma_weight_kg,
+            "target_weight_kg": row.target_weight_kg,
+            "weekly_rate_kg": row.weekly_rate_kg,
+            "eta_date": row.eta_date,
+            "eta_optimistic_date": row.eta_optimistic_date,
+            "eta_conservative_date": row.eta_conservative_date,
+            "confidence_score": row.confidence_score,
+            "plateau_detected": bool(row.plateau_detected),
+            "metrics": metrics,
+            "insights": insights,
+            "created_at": row.created_at,
+        }
+
+    # ── Food Nutrition Knowledge Base (自主食物热量库) ────────────────
+
+    async def upsert_food_nutrition(self, item: Dict[str, Any]) -> dict:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            raise ValueError("food name is required")
+        async with self.session() as s:
+            res = await s.execute(select(DBFoodNutrition).where(DBFoodNutrition.name == name))
+            row = res.scalar_one_or_none()
+            if row is None:
+                row = DBFoodNutrition(name=name)
+                s.add(row)
+            if "aliases" in item:
+                row.aliases_json = _json.dumps(list(item.get("aliases") or []), ensure_ascii=False)
+            if item.get("category"):
+                row.category = str(item["category"])
+            if item.get("serving_desc"):
+                row.serving_desc = str(item["serving_desc"])
+            for col in ("kcal_per_100g", "kcal_per_serving", "protein_g", "carbs_g", "fat_g"):
+                if item.get(col) is not None:
+                    setattr(row, col, float(item[col]))
+            if item.get("gi_level"):
+                row.gi_level = str(item["gi_level"])
+            if item.get("satiety_score") is not None:
+                row.satiety_score = int(item["satiety_score"])
+            if item.get("lighter_swap") is not None:
+                row.lighter_swap = str(item["lighter_swap"])
+            if item.get("notes") is not None:
+                row.notes = str(item["notes"])
+            if item.get("source"):
+                row.source = str(item["source"])
+            if item.get("confidence") is not None:
+                row.confidence = float(item["confidence"])
+            row.updated_at = _now_iso()
+            await s.commit()
+            return self._food_dict(row)
+
+    async def list_food_nutrition(self, limit: int = 200, query: Optional[str] = None) -> List[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBFoodNutrition).order_by(DBFoodNutrition.updated_at.desc()).limit(limit)
+            )
+            rows = [self._food_dict(r) for r in result.scalars().all()]
+            if query and query.strip():
+                q = query.strip().lower()
+                rows = [
+                    r for r in rows
+                    if q in r["name"].lower()
+                    or any(q in str(a).lower() for a in r.get("aliases", []))
+                    or r["name"].lower() in q
+                    or any(str(a).lower() in q for a in r.get("aliases", []) if str(a).strip())
+                ]
+            return rows
+
+    @staticmethod
+    def _food_dict(row: DBFoodNutrition) -> dict:
+        try:
+            aliases = _json.loads(row.aliases_json or "[]")
+        except (_json.JSONDecodeError, TypeError):
+            aliases = []
+        return {
+            "id": row.id,
+            "name": row.name,
+            "aliases": aliases,
+            "category": row.category,
+            "serving_desc": row.serving_desc,
+            "kcal_per_100g": row.kcal_per_100g,
+            "kcal_per_serving": row.kcal_per_serving,
+            "protein_g": row.protein_g,
+            "carbs_g": row.carbs_g,
+            "fat_g": row.fat_g,
+            "gi_level": row.gi_level,
+            "satiety_score": row.satiety_score,
+            "lighter_swap": row.lighter_swap,
+            "notes": row.notes,
+            "source": row.source,
+            "confidence": row.confidence,
+            "updated_at": row.updated_at,
+        }
+
+    # ── Health Coach Knowledge Base (专业健康师知识库) ────────────────
+
+    async def upsert_knowledge_item(self, item: Dict[str, Any]) -> dict:
+        topic_key = str(item.get("topic_key") or "").strip()
+        if not topic_key:
+            raise ValueError("topic_key is required")
+        async with self.session() as s:
+            res = await s.execute(select(DBKnowledgeItem).where(DBKnowledgeItem.topic_key == topic_key))
+            row = res.scalar_one_or_none()
+            if row is None:
+                row = DBKnowledgeItem(
+                    topic_key=topic_key,
+                    domain=str(item.get("domain") or "general"),
+                    title=str(item.get("title") or topic_key),
+                )
+                s.add(row)
+            row.domain = str(item.get("domain") or row.domain)
+            row.title = str(item.get("title") or row.title)
+            row.summary = str(item.get("summary") or "")
+            row.key_points_json = _json.dumps(list(item.get("key_points") or []), ensure_ascii=False)
+            row.applicable_scenarios_json = _json.dumps(
+                list(item.get("applicable_scenarios") or []), ensure_ascii=False
+            )
+            row.source = str(item.get("source") or "curated")
+            row.confidence = float(item.get("confidence", 0.85))
+            row.updated_at = _now_iso()
+            await s.commit()
+            return self._knowledge_dict(row)
+
+    async def list_knowledge_items(
+        self, domain: Optional[str] = None, limit: int = 100
+    ) -> List[dict]:
+        async with self.session() as s:
+            stmt = select(DBKnowledgeItem).order_by(DBKnowledgeItem.updated_at.desc()).limit(limit)
+            if domain:
+                stmt = stmt.where(DBKnowledgeItem.domain == domain)
+            result = await s.execute(stmt)
+            return [self._knowledge_dict(r) for r in result.scalars().all()]
+
+    @staticmethod
+    def _knowledge_dict(row: DBKnowledgeItem) -> dict:
+        try:
+            key_points = _json.loads(row.key_points_json or "[]")
+        except (_json.JSONDecodeError, TypeError):
+            key_points = []
+        try:
+            scenarios = _json.loads(row.applicable_scenarios_json or "[]")
+        except (_json.JSONDecodeError, TypeError):
+            scenarios = []
+        return {
+            "id": row.id,
+            "domain": row.domain,
+            "topic_key": row.topic_key,
+            "title": row.title,
+            "summary": row.summary,
+            "key_points": key_points,
+            "applicable_scenarios": scenarios,
+            "source": row.source,
+            "confidence": row.confidence,
+            "updated_at": row.updated_at,
+        }
+
+    # ── Quick Chat History (快反对话短期上下文) ────────────────────────
+
+    async def append_quick_chat(
+        self,
+        session_key: str,
+        role: str,
+        content: str,
+        channel: str = "api",
+        user_id: str = "",
+        actions: Optional[List[Dict[str, Any]]] = None,
+    ) -> dict:
+        async with self.session() as s:
+            row = DBQuickChatMessage(
+                session_key=session_key,
+                channel=channel,
+                user_id=str(user_id or ""),
+                role=role,
+                content=content,
+                actions_json=_json.dumps(actions or [], ensure_ascii=False, default=str),
+            )
+            s.add(row)
+            await s.commit()
+            return {
+                "id": row.id,
+                "session_key": row.session_key,
+                "channel": row.channel,
+                "user_id": row.user_id,
+                "role": row.role,
+                "content": row.content,
+                "actions": actions or [],
+                "created_at": row.created_at,
+            }
+
+    async def list_quick_chat_history(self, session_key: str, limit: int = 10) -> List[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBQuickChatMessage)
+                .where(DBQuickChatMessage.session_key == session_key)
+                .order_by(DBQuickChatMessage.created_at.desc())
+                .limit(limit)
+            )
+            rows = list(result.scalars().all())
+            rows.reverse()
+            out = []
+            for r in rows:
+                try:
+                    actions = _json.loads(r.actions_json or "[]")
+                except (_json.JSONDecodeError, TypeError):
+                    actions = []
+                out.append(
+                    {
+                        "id": r.id,
+                        "session_key": r.session_key,
+                        "channel": r.channel,
+                        "user_id": r.user_id,
+                        "role": r.role,
+                        "content": r.content,
+                        "actions": actions,
+                        "created_at": r.created_at,
+                    }
+                )
+            return out
+
+    # ── Scheduled Nudges (本地提醒队列，支持 QQ Bot 到点推送) ──────────
+
+    async def create_scheduled_nudge(
+        self,
+        title: str,
+        trigger_at: str,
+        body: str = "",
+        channel: str = "qq",
+        target_id: str = "",
+        target_type: str = "private",
+        server_reminder_id: Optional[int] = None,
+    ) -> dict:
+        async with self.session() as s:
+            row = DBScheduledNudge(
+                channel=channel,
+                target_id=str(target_id or ""),
+                target_type=target_type,
+                title=title,
+                body=body,
+                trigger_at=trigger_at,
+                server_reminder_id=server_reminder_id,
+                status="pending",
+            )
+            s.add(row)
+            await s.commit()
+            return self._nudge_dict(row)
+
+    async def list_due_nudges(self, now_iso: Optional[str] = None) -> List[dict]:
+        cutoff = now_iso or _now_iso()
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBScheduledNudge)
+                .where(
+                    DBScheduledNudge.status == "pending",
+                    DBScheduledNudge.trigger_at <= cutoff,
+                )
+                .order_by(DBScheduledNudge.trigger_at.asc())
+            )
+            return [self._nudge_dict(r) for r in result.scalars().all()]
+
+    async def list_pending_nudges(self, limit: int = 30) -> List[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBScheduledNudge)
+                .where(DBScheduledNudge.status == "pending")
+                .order_by(DBScheduledNudge.trigger_at.asc())
+                .limit(limit)
+            )
+            return [self._nudge_dict(r) for r in result.scalars().all()]
+
+    async def mark_nudge_status(self, nudge_id: str, status: str) -> bool:
+        async with self.session() as s:
+            row = await s.get(DBScheduledNudge, nudge_id)
+            if not row:
+                return False
+            row.status = status
+            if status == "sent":
+                row.sent_at = _now_iso()
+            await s.commit()
+            return True
+
+    @staticmethod
+    def _nudge_dict(row: DBScheduledNudge) -> dict:
+        return {
+            "id": row.id,
+            "channel": row.channel,
+            "target_id": row.target_id,
+            "target_type": row.target_type,
+            "title": row.title,
+            "body": row.body,
+            "trigger_at": row.trigger_at,
+            "server_reminder_id": row.server_reminder_id,
+            "status": row.status,
+            "sent_at": row.sent_at,
+            "created_at": row.created_at,
+        }
+
     # ── Stats ─────────────────────────────────────────────────────────
 
     async def get_stats(self) -> dict:
@@ -950,6 +1410,11 @@ class TickDatabase:
                 "st_runtime_state",
                 "st_ai_traces",
                 "st_ai_trace_spans",
+                "st_model_snapshots",
+                "st_food_nutrition",
+                "st_knowledge_items",
+                "st_quick_chats",
+                "st_scheduled_nudges",
             ):
                 result = await s.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 stats[table] = int(result.scalar() or 0)

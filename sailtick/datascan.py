@@ -49,7 +49,23 @@ SIGNAL_PRIORITY = [
     "notes",
 ]
 
-FOOD_KEYWORDS = ("餐", "饭", "外卖", "食堂", "咖啡", "奶茶", "零食", "早餐", "午饭", "晚饭", "吃", "食品", "超市", "水果")
+FOOD_KEYWORDS = (
+    "餐", "饭", "外卖", "食堂", "咖啡", "奶茶", "零食", "早餐", "午饭", "晚饭",
+    "吃", "食品", "超市", "水果", "烧烤", "火锅", "聚餐", "面", "粉", "汉堡",
+    "炸鸡", "甜品", "蛋糕", "饮料", "夜宵", "宵夜", "麦当劳", "肯德基", "瑞幸",
+    "星巴克", "霸王茶姬", "喜茶", "蜜雪", "便利店", "美团", "饿了么",
+)
+
+SNACK_DRINK_KEYWORDS = (
+    "零食", "奶茶", "咖啡", "甜品", "蛋糕", "饮料", "冰淇淋", "雪糕",
+    "炸鸡", "薯片", "糖", "瑞幸", "星巴克", "霸王茶姬", "喜茶", "蜜雪", "便利店",
+)
+
+SOCIAL_DINING_KEYWORDS = (
+    "聚餐", "火锅", "烧烤", "酒", "应酬", "请客", "大餐", "自助", "烤肉", "日料",
+)
+
+TAKEOUT_KEYWORDS = ("外卖", "美团", "饿了么", "京东外卖")
 
 
 class DataScanner:
@@ -148,9 +164,9 @@ class DataScanner:
             "/tick/messages", {"status": "unread", "direction": "user_to_agent", "limit": 50}
         )
 
-        # 5. 餐饮消费与节奏打卡（容错）
-        finance_raw = await self._fetch(
-            "/finance/transaction", {"start": start_ts, "end": end_ts, "limit": 80}
+        # 5. 餐饮消费与节奏打卡（优先使用支持时间过滤的分页路由，回退旧路由）
+        finance_raw = await self._fetch_transactions_window(
+            start_ts=start_ts, end_ts=end_ts, max_pages=1, page_size=80
         )
         rhythm_raw = await self._fetch("/rhythm/checkin", {"limit": 20})
 
@@ -174,6 +190,159 @@ class DataScanner:
             "rhythm_checkins": self._simplify_list(rhythm_raw, limit=10),
             "notes": None,
         }
+
+    async def _fetch_transactions_window(
+        self,
+        start_ts: float,
+        end_ts: float,
+        max_pages: int = 1,
+        page_size: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """拉取时间窗口内的财务交易（优先 /finance/transaction/paginated/，404 时回退旧接口）。"""
+        collected: List[Dict[str, Any]] = []
+        paginated_supported = True
+        for page in range(1, max(1, max_pages) + 1):
+            resp = await self._fetch(
+                "/finance/transaction/paginated/",
+                {
+                    "page": page,
+                    "page_size": min(100, max(1, page_size)),
+                    "from_time": start_ts,
+                    "to_time": end_ts,
+                    "sort_by": "htime",
+                    "sort_order": "desc",
+                },
+            )
+            if resp is None:
+                if page == 1:
+                    paginated_supported = False
+                break
+            if isinstance(resp, dict):
+                items = resp.get("data") or resp.get("items") or []
+                collected.extend(it for it in items if isinstance(it, dict))
+                if not resp.get("has_next") or not items:
+                    break
+            elif isinstance(resp, list):
+                collected.extend(it for it in resp if isinstance(it, dict))
+                break
+            else:
+                break
+
+        if not paginated_supported:
+            legacy = await self._fetch(
+                "/finance/transaction", {"start": start_ts, "end": end_ts, "limit": page_size}
+            )
+            if isinstance(legacy, list):
+                collected = [it for it in legacy if isinstance(it, dict)]
+            elif isinstance(legacy, dict):
+                collected = [
+                    it for it in (legacy.get("items") or legacy.get("data") or [])
+                    if isinstance(it, dict)
+                ]
+        return collected
+
+    async def collect_deep(self, days: int = 90) -> Dict[str, Any]:
+        """夜间深度自维护专用：长周期全量数据拉取（不经 prompt 字符截断，供数学建模与深度洞察）。"""
+        if not await self.health():
+            return {"health_ok": False, "window_days": days, "reason": "sail_server unreachable"}
+
+        now = self._clock()
+        start_dt = now - timedelta(days=max(7, int(days)))
+        start_ts = start_dt.timestamp()
+        end_ts = now.timestamp()
+
+        # 1. 长周期体重序列（优先 body-data/series，回退 /health/weight）
+        weight_raw = await self._fetch(
+            "/health/body-data/series",
+            {"metric": "weight", "start": start_ts, "end": end_ts},
+        )
+        weight_series = self._simplify_series(weight_raw, limit=500) or []
+        if not weight_series:
+            alt_w = await self._fetch(
+                "/health/weight", {"start": start_ts, "end": end_ts, "limit": 500}
+            )
+            weight_series = self._simplify_series(alt_w, limit=500) or []
+
+        # 2. 活跃体重计划进度
+        plan_progress = await self._fetch("/health/weight/plan/progress")
+
+        # 3. 饮食 / 睡眠 / 运动 / 心情（放宽条数）
+        diet_raw = await self._fetch("/health/diet", {"start": start_ts, "end": end_ts, "limit": 500})
+        sleep_raw = await self._fetch("/health/sleep", {"start": start_ts, "end": end_ts, "limit": 120})
+        exercise_raw = await self._fetch("/health/exercise", {"start": start_ts, "end": end_ts, "limit": 120})
+        mood_raw = await self._fetch("/health/mood", {"start": start_ts, "end": end_ts, "limit": 120})
+
+        # 4. 长周期财务交易分页拉取（最多 6 页 = 600 条，覆盖 90 天日常消费）
+        tx_all = await self._fetch_transactions_window(
+            start_ts=start_ts, end_ts=end_ts, max_pages=6, page_size=100
+        )
+
+        # 5. 最近用户消息（含已吸收，用于提取食物/习惯）
+        recent_messages = await self._fetch(
+            "/tick/messages", {"direction": "user_to_agent", "limit": 100}
+        )
+
+        food_tx = self._classify_food_transactions(tx_all)
+        weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
+
+        return {
+            "health_ok": True,
+            "collected_at": now.isoformat(),
+            "window_days": days,
+            "weight_monitor": weight_monitor,
+            "weight": weight_series,
+            "active_plan": self._simplify_plan(plan_progress),
+            "diet": self._simplify_diet(diet_raw, limit=300) or [],
+            "sleep": self._simplify_list(sleep_raw, limit=120) or [],
+            "exercise": self._simplify_list(exercise_raw, limit=120) or [],
+            "mood": self._simplify_list(mood_raw, limit=120) or [],
+            "transactions_total": len(tx_all),
+            "finance_food": food_tx,
+            "user_messages": self._simplify_messages(recent_messages, limit=100) or [],
+        }
+
+    @classmethod
+    def _classify_food_transactions(cls, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """对长周期交易做精细餐饮分类：meal / takeout / snack_drink / social_dining / late_night。"""
+        out: List[Dict[str, Any]] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            tags = str(it.get("tags") or "")
+            desc = str(it.get("description") or "")
+            cat = str(it.get("category") or "")
+            text = f"{tags} {desc} {cat}"
+            if not any(kw in text for kw in FOOD_KEYWORDS):
+                continue
+            dt = cls._parse_ts(it)
+            try:
+                val = abs(float(it.get("value") or 0.0))
+            except (ValueError, TypeError):
+                val = 0.0
+            subtypes: List[str] = []
+            if any(kw in text for kw in SNACK_DRINK_KEYWORDS):
+                subtypes.append("snack_drink")
+            if any(kw in text for kw in SOCIAL_DINING_KEYWORDS) or val >= 120.0:
+                subtypes.append("social_dining")
+            if any(kw in text for kw in TAKEOUT_KEYWORDS):
+                subtypes.append("takeout")
+            if dt is not None and (dt.hour >= 21 or dt.hour < 4):
+                subtypes.append("late_night")
+            if not subtypes:
+                subtypes.append("regular_meal")
+            out.append(
+                {
+                    "time": dt.strftime("%Y-%m-%d %H:%M") if dt else str(it.get("htime", "")),
+                    "date": dt.strftime("%Y-%m-%d") if dt else "",
+                    "weekday": dt.weekday() if dt else None,  # 0=Mon .. 6=Sun
+                    "hour": dt.hour if dt else None,
+                    "value": round(val, 2),
+                    "tags": tags,
+                    "description": desc[:80],
+                    "subtypes": subtypes,
+                }
+            )
+        return out
 
     # ── 体重监控分析 ──────────────────────────────────────────────────
 

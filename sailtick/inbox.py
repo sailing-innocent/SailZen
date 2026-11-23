@@ -235,6 +235,74 @@ class TicketInbox:
         resp.raise_for_status()
         return resp.json()
 
+    async def create_weight_log(self, weight_kg: float, note: str = "") -> Dict[str, Any]:
+        """快速写入体重记录（body-data metric=weight）。"""
+        client = self._get_client()
+        payload: Dict[str, Any] = {"data": {"weight": round(float(weight_kg), 2)}}
+        if note:
+            payload["description"] = note
+        resp = await client.post(f"{self.api_base}/health/body-data", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_user_message(
+        self,
+        content: str,
+        category: str = "daily_info",
+        meta: Optional[Dict[str, Any]] = None,
+        source_channel: str = "qq",
+        auto_log_diet: bool = False,
+    ) -> Dict[str, Any]:
+        """将快反对话中捕获的计划微调/日常信息写入 SailTickMessage 供慢脑吸收。"""
+        client = self._get_client()
+        payload = {
+            "direction": "user_to_agent",
+            "category": category,
+            "content": content,
+            "meta": meta or {},
+            "source_channel": source_channel,
+            "auto_log_diet": auto_log_diet,
+        }
+        resp = await client.post(f"{self.api_base}/tick/messages", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def create_reminder(
+        self,
+        title: str,
+        trigger_time: datetime,
+        body: str = "",
+        priority: str = "normal",
+        rem_type: str = "agent.quick_reminder",
+        payload: Optional[Dict[str, Any]] = None,
+        expire_after_minutes: int = 240,
+    ) -> Dict[str, Any]:
+        """在 sail_server 创建一条真实 Reminder（Android App 到点弹窗推送）。"""
+        client = self._get_client()
+        req = {
+            "type": rem_type,
+            "title": title,
+            "body": body,
+            "priority": priority,
+            "source": "agent",
+            "trigger_time": trigger_time.isoformat(),
+            "expire_after_minutes": expire_after_minutes,
+            "payload": payload or {},
+        }
+        resp = await client.post(f"{self.api_base}/reminder/", json=req)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def list_pending_reminders(self) -> List[Dict[str, Any]]:
+        """查询当前活跃待触发的提醒。"""
+        client = self._get_client()
+        resp = await client.get(f"{self.api_base}/reminder/pending")
+        if resp.status_code == 404:
+            return []
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else data.get("items", [])
+
     # ── AI Trace 上报 ───────────────────────────────────────────────────
 
     async def report_ai_trace(self, trace_payload: Dict[str, Any]) -> bool:

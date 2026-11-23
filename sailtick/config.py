@@ -53,8 +53,51 @@ class LLMConfig:
 
     providers: Dict[str, LLMProviderConfig] = field(default_factory=dict)
     default: str = "deepseek"
+    fast_provider: str = ""  # 白天快速响应模型 provider（留空则沿用 default）
+    fast_model: str = ""     # 白天快速响应模型名（如 deepseek-chat；留空则自动将 reasoner 降档为 chat）
     per_tick_token_cap: int = 200_000
     daily_token_cap: int = 1_000_000
+
+
+@dataclass
+class NightlyMaintenanceConfig:
+    """夜间深度自维护配置（长周期分析 + 数学建模 + 自主食物/知识沉淀）。"""
+
+    enabled: bool = True
+    deep_window_days: int = 90             # 长周期体重与交易分析窗口（天）
+    enable_modeling: bool = True           # 数学建模与精准预测
+    enable_food_research: bool = True      # 自主搜索/沉淀食物热量库
+    enable_knowledge_curation: bool = True # 综合运动/饮食/心理专业知识整理
+    enable_web_search: bool = True         # 是否允许公网检索（失败自动降级本地/LLM）
+    max_foods_per_night: int = 5           # 单次夜间最多深度调研食物数
+    max_knowledge_per_night: int = 2       # 单次夜间最多整理知识卡片数
+    web_search_timeout: float = 8.0        # 单次网络搜索超时（秒）
+
+
+@dataclass
+class QuickChatConfig:
+    """白天快速反应对话代理配置（转达专家结论 + 灵活调计划 + 顺手设提醒）。"""
+
+    enabled: bool = True
+    history_turns: int = 8                 # 短期会话保留消息条数
+    default_offwork_time: str = "18:00"    # 画像未记录下班时间时的默认下班时刻
+    offwork_lead_minutes: int = 20         # 「下班前提醒」默认提前分钟数
+    allow_plan_adjust_signal: bool = True  # 允许将突发聚餐/早下班信号同步给慢脑
+    allow_reminder_create: bool = True     # 允许一句话创建定时提醒（落库 sail_server Reminder）
+
+
+@dataclass
+class QQBotConfig:
+    """QQ Bot（OneBot v11 HTTP Webhook + 主动推送）配置。"""
+
+    enabled: bool = False
+    onebot_api_base: str = ""              # 如 http://127.0.0.1:3000（NapCat/Lagrange/LLOneBot）
+    access_token: str = ""                 # OneBot API Bearer Token
+    webhook_secret: str = ""               # 可选 X-Signature HMAC-SHA1 验签密钥
+    allowed_users: List[str] = field(default_factory=list)   # 允许交互的 QQ 号白名单（空=不限，生产建议只填主人 QQ）
+    allowed_groups: List[str] = field(default_factory=list)  # 可选允许的群号白名单
+    primary_user_id: str = ""              # 主动推送提醒时的默认主人 QQ 号
+    nudge_poll_seconds: int = 30           # 定时提醒到期检查间隔（秒）
 
 
 @dataclass
@@ -181,6 +224,9 @@ class SailTickConfig:
     notify: NotifyConfig = field(default_factory=NotifyConfig)
     self_dev: SelfDevConfig = field(default_factory=SelfDevConfig)
     canary: CanaryConfig = field(default_factory=CanaryConfig)
+    nightly: NightlyMaintenanceConfig = field(default_factory=NightlyMaintenanceConfig)
+    quick_chat: QuickChatConfig = field(default_factory=QuickChatConfig)
+    qq_bot: QQBotConfig = field(default_factory=QQBotConfig)
 
     # 配置文件所在目录（用于解析相对资源，如 prompts/ pipelines/）
     config_dir: str = ""
@@ -268,6 +314,22 @@ def _env_override(cfg: SailTickConfig) -> None:
         cfg.canary.allowed_slots = [s.strip() for s in v.split(",") if s.strip()]
     if v := os.environ.get("SAILTICK_LLM_DEFAULT"):
         cfg.llm.default = v.strip().lower()
+    if v := os.environ.get("SAILTICK_FAST_PROVIDER"):
+        cfg.llm.fast_provider = v.strip().lower()
+    if v := os.environ.get("SAILTICK_FAST_MODEL"):
+        cfg.llm.fast_model = v.strip()
+    if v := os.environ.get("SAILTICK_QQ_ENABLED"):
+        cfg.qq_bot.enabled = v.strip().lower() in ("1", "true", "yes")
+    if v := os.environ.get("SAILTICK_QQ_ONEBOT_URL"):
+        cfg.qq_bot.onebot_api_base = v.strip()
+    if v := os.environ.get("SAILTICK_QQ_ACCESS_TOKEN"):
+        cfg.qq_bot.access_token = v.strip()
+    if v := os.environ.get("SAILTICK_QQ_WEBHOOK_SECRET"):
+        cfg.qq_bot.webhook_secret = v.strip()
+    if v := os.environ.get("SAILTICK_QQ_ALLOWED_USERS"):
+        cfg.qq_bot.allowed_users = [s.strip() for s in v.split(",") if s.strip()]
+    if v := os.environ.get("SAILTICK_QQ_PRIMARY_USER"):
+        cfg.qq_bot.primary_user_id = v.strip()
     # LLM key 直挂 provider（同时兼容 KIMI_API_KEY / MOONSHOT_API_KEY / DEEPSEEK_API_KEY）
     kimi_key = os.environ.get("KIMI_API_KEY") or os.environ.get("MOONSHOT_API_KEY")
     if kimi_key:
@@ -355,6 +417,9 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
     tick_raw = root.get("tick", {})
     dev_raw = root.get("self_dev", {})
     canary_raw = root.get("canary", {})
+    nightly_raw = root.get("nightly", {})
+    quick_raw = root.get("quick_chat", {})
+    qq_raw = root.get("qq_bot", {})
 
     parsed_slots: List[TickSlotSchedule] = []
     for item in tick_raw.get("schedule_slots", []) or []:
@@ -396,6 +461,8 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
         llm=LLMConfig(
             providers=providers,
             default=llm_raw.get("default", "deepseek"),
+            fast_provider=llm_raw.get("fast_provider", ""),
+            fast_model=llm_raw.get("fast_model", ""),
             per_tick_token_cap=llm_raw.get("per_tick_token_cap", 200_000),
             daily_token_cap=llm_raw.get("daily_token_cap", 1_000_000),
         ),
@@ -434,6 +501,35 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
             ticket_title_prefix=canary_raw.get("ticket_title_prefix", ""),
             auto_downgrade_failures=canary_raw.get("auto_downgrade_failures", 3),
             auto_downgrade_target=canary_raw.get("auto_downgrade_target", "shadow"),
+        ),
+        nightly=NightlyMaintenanceConfig(
+            enabled=nightly_raw.get("enabled", True),
+            deep_window_days=int(nightly_raw.get("deep_window_days", 90)),
+            enable_modeling=nightly_raw.get("enable_modeling", True),
+            enable_food_research=nightly_raw.get("enable_food_research", True),
+            enable_knowledge_curation=nightly_raw.get("enable_knowledge_curation", True),
+            enable_web_search=nightly_raw.get("enable_web_search", True),
+            max_foods_per_night=int(nightly_raw.get("max_foods_per_night", 5)),
+            max_knowledge_per_night=int(nightly_raw.get("max_knowledge_per_night", 2)),
+            web_search_timeout=float(nightly_raw.get("web_search_timeout", 8.0)),
+        ),
+        quick_chat=QuickChatConfig(
+            enabled=quick_raw.get("enabled", True),
+            history_turns=int(quick_raw.get("history_turns", 8)),
+            default_offwork_time=str(quick_raw.get("default_offwork_time", "18:00")),
+            offwork_lead_minutes=int(quick_raw.get("offwork_lead_minutes", 20)),
+            allow_plan_adjust_signal=quick_raw.get("allow_plan_adjust_signal", True),
+            allow_reminder_create=quick_raw.get("allow_reminder_create", True),
+        ),
+        qq_bot=QQBotConfig(
+            enabled=bool(qq_raw.get("enabled", False)),
+            onebot_api_base=str(_resolve_env_vars(qq_raw.get("onebot_api_base", "")) or ""),
+            access_token=str(_resolve_env_vars(qq_raw.get("access_token", "")) or ""),
+            webhook_secret=str(_resolve_env_vars(qq_raw.get("webhook_secret", "")) or ""),
+            allowed_users=[str(u) for u in (qq_raw.get("allowed_users") or []) if str(u).strip()],
+            allowed_groups=[str(g) for g in (qq_raw.get("allowed_groups") or []) if str(g).strip()],
+            primary_user_id=str(_resolve_env_vars(qq_raw.get("primary_user_id", "")) or ""),
+            nudge_poll_seconds=int(qq_raw.get("nudge_poll_seconds", 30)),
         ),
         config_dir=config_dir,
     )

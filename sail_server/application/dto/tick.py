@@ -249,3 +249,14 @@ class HealthCoachSummaryResponse(BaseModel):
     pending_ticket_count: int = 0
     today_messages: List[TickMessageResponse] = Field(default_factory=list)
     pending_intake_drafts: List[ImageIntakeDraftResponse] = Field(default_factory=list)
+
+
+class QuickChatRequest(BaseModel):
+    """白天快速反应对话请求（转发至同机 SailTick daemon /chat/quick）。"""
+
+    text: str = Field(description="用户即时消息，如早下班安排/聚餐调计划/设提醒")
+    channel: str = Field(default="api", description="qq | android | cli | api")
+    user_id: str = Field(default="owner", description="用户标识")
+    session_id: Optional[str] = Field(default=None, description="可选会话 ID")
+    target_type: str = Field(default="private", description="private | group")
+    target_id: Optional[str] = Field(default=None, description="可选回复目标 ID")

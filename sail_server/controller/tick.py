@@ -41,6 +41,7 @@ from sail_server.application.dto.tick import (
     ImageIntakeCommitRequest,
     ImageIntakeCommitResponse,
     ImageIntakeDraftResponse,
+    QuickChatRequest,
     TickMessageCreateRequest,
     TickMessageIngestRequest,
     TickMessageResponse,
@@ -463,3 +464,51 @@ class TicketController(Controller):
         with _map_errors():
             path = resolve_tick_media_path(year_month, filename)
         return File(path=str(path), media_type="image/jpeg")
+
+    # ── 白天快反对话 & 专家简报轻量透传（转发至同机 SailTick daemon :9070） ───
+
+    @staticmethod
+    def _sailtick_api_base() -> str:
+        return os.environ.get("SAILTICK_API_URL", "http://127.0.0.1:9070").rstrip("/")
+
+    @get("/expert-brief")
+    async def get_expert_brief(self, request: Request) -> dict:
+        """获取 SailTick 专家最新建模与分析简报（透传至同机 SailTick daemon）。"""
+        _check_auth(request)
+        import httpx
+
+        url = f"{self._sailtick_api_base()}/expert/brief"
+        try:
+            async with httpx.AsyncClient(timeout=8.0, trust_env=False) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as exc:
+            logger.warning("[tick] proxy GET /expert/brief failed: %s", exc)
+            raise ClientException(
+                status_code=503,
+                detail=f"SailTick daemon unavailable: {exc}",
+            ) from exc
+
+    @post("/quick-chat")
+    async def quick_chat_proxy(
+        self,
+        data: QuickChatRequest,
+        request: Request,
+    ) -> dict:
+        """白天快速反应对话入口（透传至同机 SailTick daemon /chat/quick）。"""
+        _check_auth(request)
+        import httpx
+
+        url = f"{self._sailtick_api_base()}/chat/quick"
+        try:
+            async with httpx.AsyncClient(timeout=25.0, trust_env=False) as client:
+                resp = await client.post(url, json=data.model_dump())
+                resp.raise_for_status()
+                return resp.json()
+        except Exception as exc:
+            logger.warning("[tick] proxy POST /chat/quick failed: %s", exc)
+            raise ClientException(
+                status_code=503,
+                detail=f"SailTick quick-chat unavailable: {exc}",
+            ) from exc

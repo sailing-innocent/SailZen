@@ -18,6 +18,9 @@
     uv run python -m sailtick canary kill      # 一键总闸关停（off）
     uv run python -m sailtick canary resume    # 清除熔断并恢复到 canary
     uv run python -m sailtick monitor          # 监控健康与指标快照
+    uv run python -m sailtick chat "今天早下班怎么安排"  # 白天快速对话与顺手设提醒
+    uv run python -m sailtick brief            # 查看 SailTick 专家最新简报
+    uv run python -m sailtick nightly-analyze  # 手动跑一次夜间深度建模与知识自维护
     uv run python -m sailtick replay           # 运行 Layer 2 Mock LLM 轨迹测试
     uv run python -m sailtick sandbox          # 运行 Layer 3 真实 API 短周期沙盒
 """
@@ -291,6 +294,94 @@ async def cmd_monitor(config_path: Optional[str], as_json: bool = False) -> int:
     return 0 if snap["overall_health"] != "critical" else 1
 
 
+async def cmd_chat(text: str, config_path: Optional[str], session_id: Optional[str] = None) -> int:
+    """白天快速对话（优先走运行中 daemon API，未运行时离线直连本地 DB 执行）。"""
+    import httpx
+
+    cfg = load_config(config_path)
+    base_url = f"http://{cfg.api_host}:{cfg.api_port}"
+    try:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
+            resp = await client.post(
+                f"{base_url}/chat/quick",
+                json={"text": text, "channel": "cli", "user_id": "owner", "session_id": session_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            print(data.get("reply", ""))
+            if data.get("reminders_created"):
+                for r in data["reminders_created"]:
+                    print(f"[提醒已创建] {r.get('trigger_time')} - {r.get('title')}")
+            return 0
+    except Exception:
+        pass
+
+    from sailtick.daemon import SailTickDaemon
+
+    daemon = SailTickDaemon(cfg)
+    await daemon.db.connect()
+    try:
+        data = await daemon.quick_agent.handle_message(
+            text=text, channel="cli", user_id="owner", session_id=session_id
+        )
+        print(data.get("reply", ""))
+        if data.get("reminders_created"):
+            for r in data["reminders_created"]:
+                print(f"[提醒已创建] {r.get('trigger_time')} - {r.get('title')}")
+        return 0
+    finally:
+        await daemon.qq_bot.close()
+        await daemon.llm.close()
+        await daemon.inbox.close()
+        await daemon.scanner.close()
+        await daemon.db.close()
+
+
+async def cmd_brief(config_path: Optional[str], as_json: bool = False) -> int:
+    """查看 SailTick 专家最新简报。"""
+    import json
+
+    from sailtick.db import TickDatabase
+    from sailtick.nightly import NightlySelfMaintenance
+
+    cfg = load_config(config_path)
+    db = TickDatabase(cfg.db_path)
+    await db.connect()
+    try:
+        brief = await db.get_runtime_state("expert_brief")
+    finally:
+        await db.close()
+
+    if not brief:
+        print("尚未生成专家简报，可运行 `uv run python -m sailtick nightly-analyze` 立即生成。")
+        return 0
+    if as_json:
+        print(json.dumps(brief, ensure_ascii=False, indent=2, default=str))
+    else:
+        print(NightlySelfMaintenance.format_brief_for_prompt(brief))
+    return 0
+
+
+async def cmd_nightly_analyze(config_path: Optional[str], no_llm: bool = False) -> int:
+    """手动触发一次夜间深度自维护（长周期建模 + 自主食物调研 + 知识整理 + 专家简报）。"""
+    import json
+
+    from sailtick.daemon import SailTickDaemon
+
+    daemon = SailTickDaemon(load_config(config_path))
+    await daemon.db.connect()
+    try:
+        res = await daemon.nightly.run(allow_llm_research=not no_llm)
+        print(json.dumps(res.get("expert_brief") or {}, ensure_ascii=False, indent=2, default=str))
+        return 0
+    finally:
+        await daemon.qq_bot.close()
+        await daemon.llm.close()
+        await daemon.inbox.close()
+        await daemon.scanner.close()
+        await daemon.db.close()
+
+
 async def cmd_replay(scenario_name: str) -> int:
     """运行 Layer 2 Mock LLM 轨迹回放测试。"""
     from sailtick.testing.trajectory import BUILTIN_SCENARIOS, TrajectoryRunner
@@ -380,6 +471,17 @@ def main() -> None:
     p_mon = sub.add_parser("monitor", help="输出运行监控与告警快照", parents=[common_cfg])
     p_mon.add_argument("--json", dest="as_json", action="store_true", help="JSON 格式输出")
 
+    # 白天快反对话 & 夜间深度分析快捷命令
+    p_chat = sub.add_parser("chat", help="白天快速对话（转达专家结论/调计划/设提醒）", parents=[common_cfg])
+    p_chat.add_argument("text", help="要发送给快反助手的话")
+    p_chat.add_argument("--session", default=None, help="可选会话 ID")
+
+    p_brief = sub.add_parser("brief", help="查看 SailTick 专家最新简报", parents=[common_cfg])
+    p_brief.add_argument("--json", dest="as_json", action="store_true", help="JSON 格式输出")
+
+    p_na = sub.add_parser("nightly-analyze", help="手动跑一次夜间深度建模与知识沉淀", parents=[common_cfg])
+    p_na.add_argument("--no-llm", action="store_true", help="仅跑确定性数学建模，不调用 LLM 调研")
+
     # Layer 2: Mock LLM 轨迹回放
     p_rep = sub.add_parser("replay", help="运行 Mock LLM 轨迹回放测试（Layer 2）")
     p_rep.add_argument("--scenario", default="all", help="场景名或 all")
@@ -418,6 +520,12 @@ def main() -> None:
         sys.exit(asyncio.run(cmd_canary(args)))
     elif command == "monitor":
         sys.exit(asyncio.run(cmd_monitor(args.config, as_json=args.as_json)))
+    elif command == "chat":
+        sys.exit(asyncio.run(cmd_chat(args.text, args.config, session_id=args.session)))
+    elif command == "brief":
+        sys.exit(asyncio.run(cmd_brief(args.config, as_json=args.as_json)))
+    elif command == "nightly-analyze":
+        sys.exit(asyncio.run(cmd_nightly_analyze(args.config, no_llm=args.no_llm)))
     elif command == "replay":
         sys.exit(asyncio.run(cmd_replay(args.scenario)))
     elif command == "sandbox":

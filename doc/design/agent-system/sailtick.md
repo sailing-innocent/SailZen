@@ -283,9 +283,40 @@ sailtick:
 - **M1（可演示）**：Phase 0-2 + 6 → daemon 本地跑通完整 Tick 循环 + handoff。
 - **M2（可上线）**：+ Phase 3/4/8 → 服务器部署，网页 /tick 异步交互（Day-1 剧本）。
 - **M3（完整体验）**：+ Phase 5/7 全量测试 + Android 原生页/插件面板（P2）。
-- **P2/P3 backlog**：IM bot、自动计划调整 v2、周报生成、管理维度扩展（财务/社交）、跨设备提醒同步。
+- **P2/P3 backlog**：自动计划调整 v2、周报生成、管理维度扩展（财务/社交）、跨设备提醒同步。
 
-## 13. 附录：目录结构
+## 13. 夜间深度自维护 & 白天快反双系统（v2.0 架构演进）
+
+为解决「夜间定时 Tick 用户无消息导致空转」与「白天突发变动（早下班/同学聚餐/顺手设提醒）需要秒级响应」的矛盾，SailTick 演进为**慢脑专家 + 快脑助手**双系统：
+
+### 13.1 慢脑夜间深度自维护（`nightly.py` / `analytics.py` / `knowledge.py`）
+
+`nightly_maintenance`（00:00）静默执行四步自我迭代（也可通过 `POST /nightly/run` 或 `uv run python -m sailtick nightly-analyze` 手动触发）：
+
+1. **长周期深度数据扫描（`DataScanner.collect_deep(days=90)`）**：分页拉取 `/finance/transaction/paginated/` 与 90 天体重/饮食/睡眠/运动/心情，细化餐饮交易分类（`snack_drink` / `takeout` / `social_dining` / `late_night`）。
+2. **数学建模与精准预测（`WeightModelingEngine` → `st_model_snapshots`）**：
+   - EWMA（alpha=0.25）过滤水分/高盐短期波动，分离真实代谢体重与日波动残差；
+   - 时间衰减加权最小二乘回归（WLS）与代谢适应指数趋近模型择优，产出 7/14/30 天预测区间、70kg 预计达标日期（乐观/中位/保守）、14 天柔和 `daily_targets` 与信心指数；
+   - 自动检测平台期、周末反弹、熬夜/聚餐/零食次日体重影响，并产出高价值「精准发问建议」喂给白天 Tick。
+3. **自主食物热量库与专业健康师知识库（`st_food_nutrition` / `st_knowledge_items`）**：
+   - 内置中式日常/食堂/外卖/零食基准库；夜间自动提取饮食/消费/白天快脑入队的未知食物，经可插拔公网检索 + LLM 营养师校验落库；
+   - 按当前数据痛点自主整理覆盖**饮食营养 / 运动处方 / 心理调节 / 睡眠修复**的结构化健康师知识卡片。
+4. **编译专家简报（`st_runtime_state["expert_brief"]` / `GET /expert/brief`）**：将数学模型预测、阶段策略、行为规律与早下班/聚餐应急预案打包成紧凑简报，供白天 Tick 与快反助手秒级复用。
+
+### 13.2 白天快反助手 & QQ Bot 接入（`quick_agent.py` / `qq_bot.py`）
+
+无需重做网页聊天 UI，白天交互采用轻量快反代理（优先路由 `llm.fast_model` 如 `deepseek-chat`，1-3s 响应），**只查专家简报与本地知识库，负责转达结论、灵活微调计划与顺手建提醒**：
+
+- **接口与渠道**：
+  - SailTick daemon (`:9070`): `POST /chat/quick`、`POST /onebot/webhook`（标准 OneBot v11，直接对接 NapCatQQ / Lagrange.OneBot / LLOneBot，支持 `X-Signature` 验签与 QQ 白名单）、`GET /expert/brief`、`GET /modeling/latest`、`GET /knowledge/foods`、`GET /knowledge/articles`；
+  - `sail_server` 轻量透传：`GET /api/v1/tick/expert-brief`、`POST /api/v1/tick/quick-chat`；
+  - CLI：`uv run python -m sailtick chat "下班前提醒我别忘了买洗衣液和七号电池"`、`uv run python -m sailtick brief`。
+- **高频能力**：
+  - **早下班/聚餐灵活调度**：即时给出分档运动+晚餐或聚餐控损方案，并自动发一条 `SailTickMessage` 给慢脑在晚间日报/下轮 Tick 同步微调动态计划；
+  - **一句话定时提醒**：解析「下班前」「30分钟后」「明早8点半」等中文时间，落库 `sail_server` `POST /api/v1/reminder/`（Android 到点推送）并写入本地 `st_scheduled_nudges`（启用 QQ Bot 时到点同步私聊提醒，双保险）；
+  - **快脑提需求 → 慢脑夜间查证**：白天问到未收录食物热量时，先给估算并将食物入队 `pending_food_research`，夜间自动联网核查补全。
+
+## 14. 附录：目录结构
 
 ```
 sailtick/

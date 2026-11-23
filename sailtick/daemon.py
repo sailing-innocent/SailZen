@@ -35,9 +35,13 @@ from sailtick.datascan import DataScanner
 from sailtick.db import TickDatabase
 from sailtick.handoff import HandoffManager
 from sailtick.inbox import TicketInbox
+from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.llm import LLMGateway
 from sailtick.memory import AgentMemory
+from sailtick.nightly import NightlySelfMaintenance
 from sailtick.notify import NotificationEngine
+from sailtick.qq_bot import OneBotQQAdapter
+from sailtick.quick_agent import QuickCoachAgent
 from sailtick.scheduler import TickScheduler
 from sailtick.state import DependencyState
 from sailtick.tick_engine import TickEngine
@@ -89,6 +93,34 @@ class SailTickDaemon:
             logger.info("Self-dev enabled: repo=%s branch=%s",
                         self.config.self_dev.repo_dir, self.config.self_dev.branch)
 
+        self.knowledge = HealthKnowledgeManager(
+            db=self.db,
+            llm=self.llm,
+            enable_web_search=self.config.nightly.enable_web_search,
+            web_search_timeout=self.config.nightly.web_search_timeout,
+        )
+        self.nightly = NightlySelfMaintenance(
+            config=self.config,
+            db=self.db,
+            memory=self.memory,
+            scanner=self.scanner,
+            llm=self.llm,
+            knowledge=self.knowledge,
+        )
+        self.quick_agent = QuickCoachAgent(
+            config=self.config,
+            db=self.db,
+            memory=self.memory,
+            inbox=self.inbox,
+            llm=self.llm,
+            knowledge=self.knowledge,
+        )
+        self.qq_bot = OneBotQQAdapter(
+            config=self.config.qq_bot,
+            db=self.db,
+            quick_agent=self.quick_agent,
+        )
+
         self.engine = TickEngine(
             config=self.config,
             db=self.db,
@@ -101,6 +133,7 @@ class SailTickDaemon:
             state=self.state,
             dev_runner=dev_runner,
             canary=self.canary,
+            nightly=self.nightly,
         )
         self.scheduler = TickScheduler(self.db, timezone=self.config.timezone)
 
@@ -179,6 +212,7 @@ class SailTickDaemon:
             except asyncio.CancelledError:
                 pass
             self._api_task = None
+        await self.qq_bot.close()
         await self.llm.close()
         await self.inbox.close()
         await self.scanner.close()
@@ -227,6 +261,12 @@ class SailTickDaemon:
 
     async def _heartbeat(self) -> None:
         await self.memory.cleanup_expired()
+        try:
+            sent = await self.qq_bot.dispatch_due_nudges()
+            if sent:
+                logger.info("Dispatched %d due QQ reminder nudges", sent)
+        except Exception as exc:
+            logger.warning("dispatch_due_nudges error: %s", exc)
         deps = self.state.snapshot()
         logger.debug(
             "heartbeat: deps=%s tick=%s",

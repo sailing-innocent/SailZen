@@ -28,6 +28,8 @@ sailtick:
   # 决议：deepseek flash 级视为无限量；记账与软上限仅防代码 bug 失控。
   llm:
     default: deepseek
+    fast_provider: deepseek          # 白天快反代理 provider（留空沿用 default）
+    fast_model: deepseek-chat        # 白天快反代理模型（非推理低延迟，1-3s 响应）
     per_tick_token_cap: 200000       # 每 Tick 软上限
     daily_token_cap: 1000000         # 每日软上限
     providers:
@@ -67,6 +69,37 @@ sailtick:
     max_questions_per_tick: 1          # 渐进细化：每 Tick 最多提 1 个问题，不轰炸用户
     max_pending_questions: 2           # 已有 2 个未回复提问时暂缓新提问
     topic_cooldown_hours: 24           # 同话题 24 小时冷却防重复
+
+  # ── 夜间深度自维护（长周期分析 + 数学建模 + 自主查食物热量 + 健康师知识库） ──
+  nightly:
+    enabled: true
+    deep_window_days: 90             # 长周期体重与交易分析窗口（天）
+    enable_modeling: true            # 数学建模（EWMA + 回归/动力学模型 + 70kg 预测区间）
+    enable_food_research: true       # 自动发现未知食物并自主联网/结构化查证热量
+    enable_knowledge_curation: true  # 按当前痛点自主整理运动/饮食/心理专业知识卡片
+    enable_web_search: true          # 允许公网检索（失败优雅降级为本地基准 + LLM）
+    max_foods_per_night: 5           # 单次夜间最多深度调研食物条数
+    max_knowledge_per_night: 2       # 单次夜间最多整理知识卡片数
+
+  # ── 白天快速对话代理（转达 SailTick 专家结论 + 灵活调计划 + 顺手设提醒） ─────
+  quick_chat:
+    enabled: true
+    history_turns: 8                 # 短期对话上下文保留条数
+    default_offwork_time: "18:00"    # 画像未记录下班时间时的默认下班时刻
+    offwork_lead_minutes: 20         # 「下班前提醒」默认提前分钟数
+    allow_plan_adjust_signal: true   # 突发聚餐/早下班信号自动同步给慢脑
+    allow_reminder_create: true      # 支持一句话创建定时提醒（落库 sail_server Reminder）
+
+  # ── QQ Bot 接入（OneBot v11 HTTP Webhook + 主动提醒推送，对接 NapCat/Lagrange）─
+  qq_bot:
+    enabled: false                   # 部署 NapCat/Lagrange 后改为 true（或配 SAILTICK_QQ_ENABLED=true）
+    onebot_api_base: ${SAILTICK_QQ_ONEBOT_URL}     # 如 http://127.0.0.1:3000
+    access_token: ${SAILTICK_QQ_ACCESS_TOKEN}
+    webhook_secret: ${SAILTICK_QQ_WEBHOOK_SECRET}
+    allowed_users: []                # 生产建议只填主人 QQ 号（或 SAILTICK_QQ_ALLOWED_USERS）
+    allowed_groups: []
+    primary_user_id: ${SAILTICK_QQ_PRIMARY_USER}
+    nudge_poll_seconds: 30
 
   # ── 自我开发（Phase 5，可选） ──────────────────────────────────────
   # repo_dir: 服务器上本仓库的路径。部署时填写（验收文档 §前置检查）。

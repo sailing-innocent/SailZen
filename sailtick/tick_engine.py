@@ -36,6 +36,7 @@ from sailtick.handoff import HandoffDoc, HandoffManager
 from sailtick.inbox import TicketInbox
 from sailtick.llm import LLMGateway
 from sailtick.memory import AgentMemory
+from sailtick.nightly import NightlySelfMaintenance
 from sailtick.notify import NotificationEngine
 from sailtick.state import DependencyState
 from sailtick.tracer import TickTraceRecorder
@@ -116,6 +117,7 @@ class TickEngine:
         state: DependencyState,
         dev_runner: Any = None,
         canary: Optional[CanaryController] = None,
+        nightly: Optional[NightlySelfMaintenance] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -129,9 +131,27 @@ class TickEngine:
         self.state = state
         self.dev_runner = dev_runner
         self.canary = canary
+        self._nightly = nightly
         self._clock = clock
         self._current_tick: Optional[dict] = None
         self._prompts_dir = config.prompts_dir
+
+    def _get_nightly(self) -> NightlySelfMaintenance:
+        if self._nightly is None:
+            self._nightly = NightlySelfMaintenance(
+                config=self.config,
+                db=self.db,
+                memory=self.memory,
+                scanner=self.scanner,
+                llm=self.llm,
+                clock=self._clock,
+            )
+        else:
+            # 保持与可能被测试/热更新替换的 scanner/llm 同步
+            self._nightly.scanner = self.scanner
+            self._nightly.llm = self.llm
+            self._nightly.knowledge.llm = self.llm
+        return self._nightly
 
     async def _persist_and_report_trace(self, trace_dict: Dict[str, Any]) -> None:
         """本地落库 + 非致命上报至 sail_server（任何异常均不影响 Tick 主流程）。"""
@@ -428,6 +448,7 @@ class TickEngine:
         context["memory_summary"] = await self.memory.summary_for_prompt()
         context["profile_dict"] = await self.memory.all_profile()
         context["topic_history"] = (await self.db.get_runtime_state("asked_topics")) or {}
+        context["expert_brief"] = await self.db.get_runtime_state("expert_brief")
         await self.memory.save_episode(
             tick["id"], "wake", {"slot": tick["slot"], "mode": context.get("mode", "live")}
         )
@@ -478,6 +499,23 @@ class TickEngine:
         # 如果 datascan 中没取到 unread_messages，用 inbox 的补齐
         if not unread_messages and isinstance(data_package.get("user_messages"), list):
             unread_messages = data_package["user_messages"]
+
+        # 夜间自维护（阶段1，确定性无额外 LLM 调用）：长周期深度数据扫描 + 数学建模 + 编译专家简报
+        if tick["slot"] == "nightly_maintenance" and self.config.nightly.enabled:
+            try:
+                stage1 = await self._get_nightly().run_modeling_stage(
+                    tick_id=tick["id"],
+                    tracer=context.get("tracer"),
+                )
+                context["nightly_stage1"] = stage1
+                context["expert_brief"] = stage1.get("expert_brief")
+            except Exception as exc:
+                logger.warning("nightly modeling stage failed (non-fatal): %s", exc)
+        elif not context.get("expert_brief") and self.config.nightly.enabled:
+            try:
+                await self._get_nightly().knowledge.ensure_seeded()
+            except Exception:
+                pass
 
         context.update(
             {
@@ -904,6 +942,9 @@ class TickEngine:
             if context.get("weight_updated")
             else "（自上次 Tick 以来暂无新体重测量）"
         )
+        expert_brief_text = NightlySelfMaintenance.format_brief_for_prompt(
+            context.get("expert_brief")
+        )
 
         return f"""{system}
 
@@ -911,6 +952,9 @@ class TickEngine:
 
 # 当前计划
 {plan_text}
+
+# 夜间数学建模与深度洞察（专家简报）
+{expert_brief_text}
 
 # 用户画像与记忆
 [Profile]
@@ -1258,6 +1302,28 @@ class TickEngine:
                     )
                     work_results.append({"kind": "dev_task", "task": task.id, "ok": result.success})
 
+                elif kind == "nightly_food_research":
+                    foods_list = list(a.get("foods") or [])
+                    if foods_list:
+                        await self._get_nightly().knowledge.enqueue_food_research(foods_list)
+                    stage1 = context.get("nightly_stage1") or {}
+                    res_food = await self._get_nightly().knowledge.run_nightly_food_research(
+                        stage1.get("deep_pkg") or {},
+                        max_foods=int(a.get("max_foods") or self.config.nightly.max_foods_per_night),
+                    )
+                    work_results.append({"kind": "nightly_food_research", **res_food, "ok": True})
+
+                elif kind == "nightly_knowledge_curation":
+                    domains = list(a.get("domains") or ["diet", "exercise", "psychology"])
+                    stage1 = context.get("nightly_stage1") or {}
+                    ins = ((stage1.get("modeling") or {}).get("insights")) or []
+                    res_kn = await self._get_nightly().knowledge.run_nightly_knowledge_curation(
+                        focus_domains=domains,
+                        insights=ins,
+                        max_items=int(a.get("max_items") or self.config.nightly.max_knowledge_per_night),
+                    )
+                    work_results.append({"kind": "nightly_knowledge_curation", **res_kn, "ok": True})
+
                 if asp is not None:
                     if len(work_results) > before_len:
                         last_res = work_results[-1]
@@ -1268,6 +1334,39 @@ class TickEngine:
                     else:
                         asp.mark_status("skipped", "precondition_not_met")
                         asp.set_output("skipped")
+
+        # 夜间自维护（阶段2）：自动完成未知食物热量查证 + 专业健康师知识整理 + 刷新专家简报
+        # 仅在真实 LLMGateway 或显式 params.run_research=True 时执行，避免干扰 ScriptedLLM 单步回放测试
+        if (
+            tick["slot"] == "nightly_maintenance"
+            and self.config.nightly.enabled
+            and (
+                isinstance(self.llm, LLMGateway)
+                or bool((context.get("params") or {}).get("run_research"))
+            )
+            and self._clock() <= deadline
+        ):
+            try:
+                stage1 = context.get("nightly_stage1") or {}
+                stage2 = await self._get_nightly().run_research_stage(
+                    deep_pkg=stage1.get("deep_pkg"),
+                    model_result=stage1.get("modeling"),
+                    saved_snapshot=stage1.get("saved_snapshot"),
+                    tick_id=tick["id"],
+                    tracer=tracer,
+                )
+                context["expert_brief"] = stage2.get("expert_brief")
+                work_results.append(
+                    {
+                        "kind": "nightly_research",
+                        "foods_researched": stage2["food_research"].get("researched_names", []),
+                        "knowledge_curated": stage2["knowledge_curation"].get("curated_topics", []),
+                        "ok": True,
+                    }
+                )
+            except Exception as exc:
+                logger.warning("WORK nightly research stage failed (non-fatal): %s", exc)
+                work_results.append({"kind": "nightly_research", "ok": False, "error": str(exc)})
 
         # 标记本 Tick 已阅读并整合的用户主动消息（仅在真实执行模式下落库）
         unread_ids = [

@@ -111,6 +111,44 @@ class LLMGateway:
 
         return await self._chat_messages(messages, provider, **kwargs)
 
+    async def chat_fast(
+        self,
+        prompt: str,
+        system: Optional[str] = None,
+        history: Optional[list] = None,
+        expect_json: bool = False,
+        **kwargs: Any,
+    ) -> LLMResponse:
+        """白天快反对话专用：自动路由到低延迟非推理模型（如 deepseek-chat）。"""
+        provider = getattr(self.config, "fast_provider", "") or self.config.default
+        if provider not in self.config.providers and self.config.providers:
+            provider = next(iter(self.config.providers.keys()))
+        fast_model = getattr(self.config, "fast_model", "") or ""
+        if not fast_model and provider in self.config.providers:
+            configured = (self.config.providers[provider].model or "").lower()
+            if "reasoner" in configured or "deepseek-r1" in configured:
+                fast_model = "deepseek-chat"
+        kwargs.setdefault("temperature", 0.4)
+        kwargs.setdefault("max_tokens", 1200)
+        if fast_model:
+            kwargs.setdefault("model_override", fast_model)
+
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        if history:
+            for item in history:
+                if isinstance(item, dict) and item.get("role") in ("user", "assistant"):
+                    messages.append({"role": item["role"], "content": str(item.get("content") or "")})
+        if expect_json:
+            prompt = (
+                prompt
+                + "\n\n只输出 JSON（不要 markdown 代码围栏，不要任何其他文字）。"
+            )
+            kwargs.setdefault("expect_json", True)
+        messages.append({"role": "user", "content": prompt})
+        return await self._chat_messages(messages, provider, **kwargs)
+
     async def _chat_messages(
         self, messages: list, provider: str, **kwargs: Any
     ) -> LLMResponse:
@@ -126,7 +164,7 @@ class LLMGateway:
         if not api_key:
             raise ValueError(f"No API key configured for provider: {provider}")
 
-        model = prov_cfg.model or self._default_model(provider)
+        model = kwargs.get("model_override") or prov_cfg.model or self._default_model(provider)
         base_url = prov_cfg.base_url or self._default_base_url(provider)
 
         # Kimi Coding Plan key（sk-kimi-...）默认路由至 api.kimi.com/coding/v1

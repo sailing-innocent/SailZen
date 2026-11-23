@@ -48,6 +48,8 @@ class SimulatedSailServer:
         self._next_msg_id: int = 1
         self.daily_reports: Dict[str, Dict[str, Any]] = {}
         self.weight_plan: Optional[Dict[str, Any]] = None
+        self.reminders: List[Dict[str, Any]] = []
+        self._next_reminder_id: int = 1
         self.requests_log: List[Dict[str, Any]] = []
 
         # 可控健康与生活数据源
@@ -337,6 +339,42 @@ class SimulatedSailServer:
             self.signals["diet"].append(entry)
             return httpx.Response(201, json=entry)
 
+        if request.method == "POST" and path.endswith("/health/body-data"):
+            payload = json.loads(request.content.decode("utf-8"))
+            w = (payload.get("data") or {}).get("weight")
+            entry = {
+                "id": len(self.signals["weight"]) + 1,
+                "date": self._clock().strftime("%Y-%m-%d %H:%M"),
+                "value": w,
+                "unit": "kg",
+                "note": payload.get("description", ""),
+            }
+            if w is not None:
+                self.signals["weight"].append(entry)
+            return httpx.Response(201, json=entry)
+
+        # Reminder API 仿真
+        if path.endswith("/api/v1/reminder/") or path.endswith("/api/v1/reminder"):
+            if request.method == "POST":
+                payload = json.loads(request.content.decode("utf-8"))
+                rem = {
+                    "id": self._next_reminder_id,
+                    "type": payload.get("type", "agent.quick_reminder"),
+                    "title": payload.get("title", ""),
+                    "body": payload.get("body", ""),
+                    "priority": payload.get("priority", "normal"),
+                    "source": payload.get("source", "agent"),
+                    "state": "PENDING",
+                    "trigger_time": payload.get("trigger_time"),
+                    "payload": payload.get("payload") or {},
+                }
+                self._next_reminder_id += 1
+                self.reminders.append(rem)
+                return httpx.Response(201, json=rem)
+
+        if request.method == "GET" and path.endswith("/api/v1/reminder/pending"):
+            return httpx.Response(200, json=list(self.reminders))
+
         # 健康与生活数据 API
         if request.method == "GET":
             if (
@@ -358,6 +396,23 @@ class SimulatedSailServer:
                 return httpx.Response(200, json=list(self.signals["exercise"]))
             if path.endswith("/health/mood"):
                 return httpx.Response(200, json=list(self.signals["mood"]))
+            if path.endswith("/finance/transaction/paginated/") or path.endswith("/finance/transaction/paginated"):
+                page = int((qs.get("page") or ["1"])[0])
+                page_size = int((qs.get("page_size") or ["100"])[0])
+                all_tx = list(self.signals["finance"])
+                start_i = (page - 1) * page_size
+                chunk = all_tx[start_i : start_i + page_size]
+                return httpx.Response(
+                    200,
+                    json={
+                        "data": chunk,
+                        "total": len(all_tx),
+                        "page": page,
+                        "page_size": page_size,
+                        "has_next": start_i + page_size < len(all_tx),
+                        "has_prev": page > 1,
+                    },
+                )
             if path.endswith("/finance/transaction") or path.endswith("/money/transactions"):
                 return httpx.Response(200, json=list(self.signals["finance"]))
             if path.endswith("/rhythm/checkin") or path.endswith("/rhythm/checkins"):
