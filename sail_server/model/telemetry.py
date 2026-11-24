@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.telemetry import (
@@ -489,10 +489,27 @@ def _collect_merged_buckets(
     return list(merged.values())
 
 
+def _weighted_quantile(items: List[Dict[str, Any]], key: str, q: float) -> float:
+    """按请求量加权计算分位数，避免单个离群大文件下载拉偏全局/模块 P50/P95。"""
+    valid = [(float(x.get(key) or 0.0), int(x.get("req_count") or 0)) for x in items if int(x.get("req_count") or 0) > 0]
+    if not valid:
+        return 0.0
+    valid.sort(key=lambda pair: pair[0])
+    total = sum(w for _, w in valid)
+    target = total * q
+    cum = 0
+    for val, weight in valid:
+        cum += weight
+        if cum >= target:
+            return round(val, 2)
+    return round(valid[-1][0], 2)
+
+
 def get_api_profile_impl(
     db: Session,
     window_hours: int = 24,
     include_self: bool = False,
+    include_notable: bool = True,
 ) -> ApiProfileResponse:
     buckets = _collect_merged_buckets(db, window_hours=window_hours, include_self=include_self)
 
@@ -502,12 +519,6 @@ def get_api_profile_impl(
     total_ms = sum(b["total_ms"] for b in buckets)
     total_bytes = sum(b["bytes_out"] for b in buckets)
     max_ms = max((b["max_ms"] for b in buckets), default=0.0)
-
-    def _weighted_avg(key: str, items: List[Dict[str, Any]]) -> float:
-        n = sum(x["req_count"] for x in items)
-        if n <= 0:
-            return 0.0
-        return round(sum(x[key] * x["req_count"] for x in items) / n, 2)
 
     by_mod_raw: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     by_ep_raw: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = defaultdict(list)
@@ -532,9 +543,9 @@ def get_api_profile_impl(
                 err_5xx=e5,
                 error_rate=round((e4 + e5) / n, 4) if n else 0.0,
                 avg_ms=round(tms / n, 2) if n else 0.0,
-                p50_ms=_weighted_avg("p50_ms", items),
-                p95_ms=_weighted_avg("p95_ms", items),
-                p99_ms=round(max((x["p99_ms"] for x in items), default=0.0), 2),
+                p50_ms=_weighted_quantile(items, "p50_ms", 0.50),
+                p95_ms=_weighted_quantile(items, "p95_ms", 0.95),
+                p99_ms=_weighted_quantile(items, "p99_ms", 0.99),
                 max_ms=round(max((x["max_ms"] for x in items), default=0.0), 2),
                 bytes_out=sum(x["bytes_out"] for x in items),
             )
@@ -557,7 +568,7 @@ def get_api_profile_impl(
                 err_5xx=e5,
                 error_rate=round((e4 + e5) / n, 4) if n else 0.0,
                 avg_ms=round(tms / n, 2) if n else 0.0,
-                p95_ms=_weighted_avg("p95_ms", items),
+                p95_ms=_weighted_quantile(items, "p95_ms", 0.95),
                 max_ms=round(max((x["max_ms"] for x in items), default=0.0), 2),
                 bytes_out=sum(x["bytes_out"] for x in items),
             )
@@ -567,59 +578,61 @@ def get_api_profile_impl(
     top_called = sorted(endpoints, key=lambda e: e.req_count, reverse=True)[:15]
 
     # 慢请求与 5xx 离散事件（DB + 内存实时合并）
-    cutoff = datetime.now() - timedelta(hours=max(1, window_hours))
-    db_notable = (
-        db.query(SysTelemetryEvent)
-        .filter(
-            SysTelemetryEvent.category.in_(["api_slow", "api_error"]),
-            SysTelemetryEvent.created_at >= cutoff,
-        )
-        .order_by(SysTelemetryEvent.created_at.desc())
-        .limit(60)
-        .all()
-    )
-    notable_items: List[NotableEventItem] = [
-        NotableEventItem(
-            id=r.id,
-            category=r.category,
-            module=r.module or "system",
-            name=r.name,
-            client_source=r.client_source or "other",
-            duration_ms=r.duration_ms,
-            status_code=r.status_code,
-            value=r.value,
-            detail=r.detail if isinstance(r.detail, dict) else {},
-            created_at=r.created_at,
-        )
-        for r in db_notable
-    ]
-    seen_keys = {
-        (it.category, it.name, it.created_at.strftime("%Y-%m-%d %H:%M:%S"))
-        for it in notable_items
-    }
-    for mem_evt in get_telemetry_collector().snapshot_recent_notable(limit=40):
-        ts = mem_evt["created_at"]
-        if ts < cutoff:
-            continue
-        k = (mem_evt["category"], mem_evt["name"], ts.strftime("%Y-%m-%d %H:%M:%S"))
-        if k in seen_keys:
-            continue
-        seen_keys.add(k)
-        notable_items.append(
-            NotableEventItem(
-                id=None,
-                category=mem_evt["category"],
-                module=mem_evt["module"],
-                name=mem_evt["name"],
-                client_source=mem_evt["client_source"],
-                duration_ms=mem_evt.get("duration_ms"),
-                status_code=mem_evt.get("status_code"),
-                value=mem_evt.get("value"),
-                detail=mem_evt.get("detail") or {},
-                created_at=ts,
+    notable_items: List[NotableEventItem] = []
+    if include_notable:
+        cutoff = datetime.now() - timedelta(hours=max(1, window_hours))
+        db_notable = (
+            db.query(SysTelemetryEvent)
+            .filter(
+                SysTelemetryEvent.category.in_(["api_slow", "api_error"]),
+                SysTelemetryEvent.created_at >= cutoff,
             )
+            .order_by(SysTelemetryEvent.created_at.desc())
+            .limit(60)
+            .all()
         )
-    notable_items.sort(key=lambda x: x.created_at, reverse=True)
+        notable_items = [
+            NotableEventItem(
+                id=r.id,
+                category=r.category,
+                module=r.module or "system",
+                name=r.name,
+                client_source=r.client_source or "other",
+                duration_ms=r.duration_ms,
+                status_code=r.status_code,
+                value=r.value,
+                detail=r.detail if isinstance(r.detail, dict) else {},
+                created_at=r.created_at,
+            )
+            for r in db_notable
+        ]
+        seen_keys = {
+            (it.category, it.name, it.created_at.strftime("%Y-%m-%d %H:%M:%S"))
+            for it in notable_items
+        }
+        for mem_evt in get_telemetry_collector().snapshot_recent_notable(limit=40):
+            ts = mem_evt["created_at"]
+            if ts < cutoff:
+                continue
+            k = (mem_evt["category"], mem_evt["name"], ts.strftime("%Y-%m-%d %H:%M:%S"))
+            if k in seen_keys:
+                continue
+            seen_keys.add(k)
+            notable_items.append(
+                NotableEventItem(
+                    id=None,
+                    category=mem_evt["category"],
+                    module=mem_evt["module"],
+                    name=mem_evt["name"],
+                    client_source=mem_evt["client_source"],
+                    duration_ms=mem_evt.get("duration_ms"),
+                    status_code=mem_evt.get("status_code"),
+                    value=mem_evt.get("value"),
+                    detail=mem_evt.get("detail") or {},
+                    created_at=ts,
+                )
+            )
+        notable_items.sort(key=lambda x: x.created_at, reverse=True)
     slow_count = sum(1 for x in notable_items if x.category == "api_slow")
 
     return ApiProfileResponse(
@@ -629,9 +642,9 @@ def get_api_profile_impl(
         total_5xx=total_5xx,
         error_rate=round((total_4xx + total_5xx) / total_req, 4) if total_req else 0.0,
         avg_ms=round(total_ms / total_req, 2) if total_req else 0.0,
-        p50_ms=_weighted_avg("p50_ms", buckets),
-        p95_ms=_weighted_avg("p95_ms", buckets),
-        p99_ms=round(max((b["p99_ms"] for b in buckets), default=0.0), 2),
+        p50_ms=_weighted_quantile(buckets, "p50_ms", 0.50),
+        p95_ms=_weighted_quantile(buckets, "p95_ms", 0.95),
+        p99_ms=_weighted_quantile(buckets, "p99_ms", 0.99),
         max_ms=round(max_ms, 2),
         total_bytes_out=total_bytes,
         slow_threshold_ms=SLOW_REQUEST_THRESHOLD_MS,
@@ -671,7 +684,9 @@ def _dir_stats(path: Path) -> Tuple[int, float]:
 def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfileResponse:
     now = datetime.now()
     cutoff = now - timedelta(days=max(1, window_days))
-    api_prof = get_api_profile_impl(db, window_hours=max(24, window_days * 24))
+    api_prof = get_api_profile_impl(
+        db, window_hours=max(24, window_days * 24), include_notable=False
+    )
     api_by_mod = {m.module: m for m in api_prof.by_module}
 
     def _attach_api(card: ModuleProfileCard, mod_key: str) -> ModuleProfileCard:
@@ -686,23 +701,25 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
 
     cards: List[ModuleProfileCard] = []
 
-    # 1. Finance 财务
+    # 1. Finance 财务（单表条件聚合合并 3 次全表扫描为 1 次）
     try:
         from sailzen_orm.finance import Account, Budget, Transaction
 
         acc_total = db.query(func.count(Account.id)).scalar() or 0
-        tx_total = db.query(func.count(Transaction.id)).scalar() or 0
-        tx_recent = (
-            db.query(func.count(Transaction.id))
-            .filter(Transaction.htime >= cutoff)
-            .scalar()
-            or 0
+        tx_agg = (
+            db.query(
+                func.count(Transaction.id),
+                func.count(case((Transaction.htime >= cutoff, 1))),
+                func.count(
+                    case(((Transaction.tags.is_(None)) | (Transaction.tags == ""), 1))
+                ),
+            )
+            .one()
         )
-        tx_untagged = (
-            db.query(func.count(Transaction.id))
-            .filter((Transaction.tags.is_(None)) | (Transaction.tags == ""))
-            .scalar()
-            or 0
+        tx_total, tx_recent, tx_untagged = (
+            int(tx_agg[0] or 0),
+            int(tx_agg[1] or 0),
+            int(tx_agg[2] or 0),
         )
         budget_total = db.query(func.count(Budget.id)).scalar() or 0
         untagged_ratio = round(tx_untagged / tx_total, 4) if tx_total else 0.0
@@ -715,10 +732,10 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                     summary=f"总交易 {tx_total} 笔 · 近{window_days}天新增 {tx_recent} 笔 · 未打标 {untagged_ratio*100:.1f}%",
                     metrics={
                         "accounts": int(acc_total),
-                        "transactions_total": int(tx_total),
-                        "transactions_window": int(tx_recent),
+                        "transactions_total": tx_total,
+                        "transactions_window": tx_recent,
                         "budgets": int(budget_total),
-                        "untagged_count": int(tx_untagged),
+                        "untagged_count": tx_untagged,
                         "untagged_ratio": untagged_ratio,
                     },
                 ),
@@ -732,8 +749,14 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     try:
         from sailzen_orm.health import BodyData, DietLog, Exercise, Mood, Sleep, Weight, WeightPlan
 
-        bd_total = db.query(func.count(BodyData.id)).scalar() or 0
-        bd_recent = db.query(func.count(BodyData.id)).filter(BodyData.htime >= cutoff).scalar() or 0
+        bd_agg = (
+            db.query(
+                func.count(BodyData.id),
+                func.count(case((BodyData.htime >= cutoff, 1))),
+            )
+            .one()
+        )
+        bd_total, bd_recent = int(bd_agg[0] or 0), int(bd_agg[1] or 0)
         w_recent = db.query(func.count(Weight.id)).filter(Weight.htime >= cutoff).scalar() or 0
         diet_recent = db.query(func.count(DietLog.id)).filter(DietLog.htime >= cutoff).scalar() or 0
         ex_recent = db.query(func.count(Exercise.id)).filter(Exercise.htime >= cutoff).scalar() or 0
@@ -749,8 +772,8 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                     status="healthy" if total_recent_logs > 0 else "idle",
                     summary=f"近{window_days}天：体重 {w_recent} · 饮食 {diet_recent} · 运动 {ex_recent} · 睡眠 {sleep_recent}",
                     metrics={
-                        "body_data_total": int(bd_total),
-                        "body_data_window": int(bd_recent),
+                        "body_data_total": bd_total,
+                        "body_data_window": bd_recent,
                         "weight_window": int(w_recent),
                         "diet_window": int(diet_recent),
                         "exercise_window": int(ex_recent),
@@ -765,7 +788,7 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     except Exception as exc:
         logger.debug("[telemetry] health profile skipped: %s", exc)
 
-    # 3. Rhythm 节奏
+    # 3. Rhythm 节奏（合并 RhythmAffair 3 次扫描为 1 次）
     try:
         from sailzen_orm.rhythm import (
             RhythmAffair,
@@ -774,18 +797,27 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
             RhythmTimeBlock,
         )
 
-        aff_total = db.query(func.count(RhythmAffair.id)).scalar() or 0
-        aff_active = (
-            db.query(func.count(RhythmAffair.id))
-            .filter(RhythmAffair.state.in_(["ACTIVE", "DOING", "SCHEDULED", "PLANNED"]))
-            .scalar()
-            or 0
+        aff_agg = (
+            db.query(
+                func.count(RhythmAffair.id),
+                func.count(
+                    case(
+                        (
+                            RhythmAffair.state.in_(
+                                ["ACTIVE", "DOING", "SCHEDULED", "PLANNED"]
+                            ),
+                            1,
+                        )
+                    )
+                ),
+                func.count(case((RhythmAffair.state == "INBOX", 1))),
+            )
+            .one()
         )
-        aff_inbox = (
-            db.query(func.count(RhythmAffair.id))
-            .filter(RhythmAffair.state == "INBOX")
-            .scalar()
-            or 0
+        aff_total, aff_active, aff_inbox = (
+            int(aff_agg[0] or 0),
+            int(aff_agg[1] or 0),
+            int(aff_agg[2] or 0),
         )
         disc_recent = (
             db.query(func.count(RhythmDisciplineLog.id))
@@ -803,9 +835,9 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                     status="healthy" if (aff_active > 0 or disc_recent > 0) else "idle",
                     summary=f"活跃事务 {aff_active} · 收件箱 {aff_inbox} · 近{window_days}天打卡 {disc_recent}",
                     metrics={
-                        "affairs_total": int(aff_total),
-                        "affairs_active": int(aff_active),
-                        "affairs_inbox": int(aff_inbox),
+                        "affairs_total": aff_total,
+                        "affairs_active": aff_active,
+                        "affairs_inbox": aff_inbox,
                         "discipline_logs_window": int(disc_recent),
                         "time_blocks_total": int(blocks_total),
                         "reviews_total": int(reviews_total),
@@ -817,28 +849,26 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     except Exception as exc:
         logger.debug("[telemetry] rhythm profile skipped: %s", exc)
 
-    # 4. SailTick 教练
+    # 4. SailTick 教练（合并 SailTickTicket 4 次扫描为 1 次）
     try:
         from sailzen_orm.tick import SailTickDailyReport, SailTickMessage, SailTickTicket
 
-        t_total = db.query(func.count(SailTickTicket.id)).scalar() or 0
-        t_pending = (
-            db.query(func.count(SailTickTicket.id))
-            .filter(SailTickTicket.status == "pending")
-            .scalar()
-            or 0
+        t_agg = (
+            db.query(
+                func.count(SailTickTicket.id),
+                func.count(case((SailTickTicket.status == "pending", 1))),
+                func.count(
+                    case((SailTickTicket.status.in_(["replied", "resolved"]), 1))
+                ),
+                func.count(case((SailTickTicket.status == "expired", 1))),
+            )
+            .one()
         )
-        t_replied = (
-            db.query(func.count(SailTickTicket.id))
-            .filter(SailTickTicket.status.in_(["replied", "resolved"]))
-            .scalar()
-            or 0
-        )
-        t_expired = (
-            db.query(func.count(SailTickTicket.id))
-            .filter(SailTickTicket.status == "expired")
-            .scalar()
-            or 0
+        t_total, t_pending, t_replied, t_expired = (
+            int(t_agg[0] or 0),
+            int(t_agg[1] or 0),
+            int(t_agg[2] or 0),
+            int(t_agg[3] or 0),
         )
         msg_unread = (
             db.query(func.count(SailTickMessage.id))
@@ -865,9 +895,9 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                         f"待回票据 {t_pending} · 日报 {reports_total}"
                     ),
                     metrics={
-                        "tickets_total": int(t_total),
-                        "tickets_pending": int(t_pending),
-                        "tickets_expired": int(t_expired),
+                        "tickets_total": t_total,
+                        "tickets_pending": t_pending,
+                        "tickets_expired": t_expired,
                         "ticket_reply_rate": reply_rate,
                         "messages_unread": int(msg_unread),
                         "daily_reports": int(reports_total),
@@ -883,23 +913,30 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     except Exception as exc:
         logger.debug("[telemetry] tick profile skipped: %s", exc)
 
-    # 5. Reminder & Android WS
+    # 5. Reminder & Android WS（合并 Reminder 3 次扫描为 1 次）
     try:
         from sail_server.utils.reminder_ws import get_reminder_push_manager
         from sailzen_orm.reminder import Device, Reminder
 
-        r_total = db.query(func.count(Reminder.id)).scalar() or 0
-        r_pending = (
-            db.query(func.count(Reminder.id))
-            .filter(Reminder.state.in_(["PENDING", "DELIVERED", "SNOOZED"]))
-            .scalar()
-            or 0
+        r_agg = (
+            db.query(
+                func.count(Reminder.id),
+                func.count(
+                    case(
+                        (
+                            Reminder.state.in_(["PENDING", "DELIVERED", "SNOOZED"]),
+                            1,
+                        )
+                    )
+                ),
+                func.count(case((Reminder.state == "RESOLVED", 1))),
+            )
+            .one()
         )
-        r_resolved = (
-            db.query(func.count(Reminder.id))
-            .filter(Reminder.state == "RESOLVED")
-            .scalar()
-            or 0
+        r_total, r_pending, r_resolved = (
+            int(r_agg[0] or 0),
+            int(r_agg[1] or 0),
+            int(r_agg[2] or 0),
         )
         dev_total = db.query(func.count(Device.id)).scalar() or 0
         ws_online = get_reminder_push_manager().online_count()
@@ -913,9 +950,9 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                     metrics={
                         "online_ws_devices": int(ws_online),
                         "registered_devices": int(dev_total),
-                        "reminders_total": int(r_total),
-                        "reminders_active": int(r_pending),
-                        "reminders_resolved": int(r_resolved),
+                        "reminders_total": r_total,
+                        "reminders_active": r_pending,
+                        "reminders_resolved": r_resolved,
                     },
                 ),
                 "reminder",
@@ -924,15 +961,21 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     except Exception as exc:
         logger.debug("[telemetry] reminder profile skipped: %s", exc)
 
-    # 6. Text 文本与阅读
+    # 6. Text 文本与阅读（合并 Edition count + sum 为 1 次）
     try:
         from sailzen_orm.text import DocumentNode, Edition, NoteItem, Work
 
         works_cnt = db.query(func.count(Work.id)).scalar() or 0
-        editions_cnt = db.query(func.count(Edition.id)).scalar() or 0
+        ed_agg = (
+            db.query(
+                func.count(Edition.id),
+                func.coalesce(func.sum(Edition.char_count), 0),
+            )
+            .one()
+        )
+        editions_cnt, total_chars = int(ed_agg[0] or 0), int(ed_agg[1] or 0)
         nodes_cnt = db.query(func.count(DocumentNode.id)).scalar() or 0
         notes_cnt = db.query(func.count(NoteItem.id)).scalar() or 0
-        total_chars = db.query(func.coalesce(func.sum(Edition.char_count), 0)).scalar() or 0
         cards.append(
             _attach_api(
                 ModuleProfileCard(
@@ -942,10 +985,10 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
                     summary=f"作品 {works_cnt} · 章节节点 {nodes_cnt} · 笔记索引 {notes_cnt}",
                     metrics={
                         "works": int(works_cnt),
-                        "editions": int(editions_cnt),
+                        "editions": editions_cnt,
                         "document_nodes": int(nodes_cnt),
                         "note_items": int(notes_cnt),
-                        "total_chars": int(total_chars),
+                        "total_chars": total_chars,
                     },
                 ),
                 "text",

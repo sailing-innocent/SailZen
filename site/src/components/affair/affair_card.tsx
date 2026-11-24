@@ -57,6 +57,7 @@ const AffairCard: React.FC<AffairCardProps> = ({
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
+  const confirmTask = useAffairsStore((state: AffairsState) => state.confirmTask)
   const startTask = useAffairsStore((state: AffairsState) => state.startTask)
   const finishTask = useAffairsStore((state: AffairsState) => state.finishTask)
   const cancelTask = useAffairsStore((state: AffairsState) => state.cancelTask)
@@ -103,7 +104,12 @@ const AffairCard: React.FC<AffairCardProps> = ({
   const handleStartDoing = async () => {
     setIsLoading(true)
     try {
+      if (affair.state === AffairState.INBOX) {
+        await confirmTask(affair.id)
+      }
       await startTask(affair.id)
+    } catch (err) {
+      console.error('Failed to start affair:', err)
     } finally {
       setIsLoading(false)
     }
@@ -112,8 +118,18 @@ const AffairCard: React.FC<AffairCardProps> = ({
   const handleComplete = async () => {
     setIsLoading(true)
     try {
+      // 后端状态机要求 finish 仅允许从 DOING / SCHEDULED 触发，
+      // 勾选 PLANNED / INBOX 事务时先自动完成前置状态推进，避免 409 Conflict
+      if (affair.state === AffairState.INBOX) {
+        await confirmTask(affair.id)
+        await startTask(affair.id)
+      } else if (affair.state === AffairState.PLANNED) {
+        await startTask(affair.id)
+      }
       await finishTask(affair.id)
       onComplete?.()
+    } catch (err) {
+      console.error('Failed to complete affair:', err)
     } finally {
       setIsLoading(false)
     }
@@ -123,6 +139,8 @@ const AffairCard: React.FC<AffairCardProps> = ({
     setIsLoading(true)
     try {
       await cancelTask(affair.id)
+    } catch (err) {
+      console.error('Failed to cancel affair:', err)
     } finally {
       setIsLoading(false)
     }
@@ -132,6 +150,8 @@ const AffairCard: React.FC<AffairCardProps> = ({
     setIsLoading(true)
     try {
       await reopenTask(affair.id)
+    } catch (err) {
+      console.error('Failed to reopen affair:', err)
     } finally {
       setIsLoading(false)
     }

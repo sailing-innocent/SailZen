@@ -49,6 +49,7 @@ from sail_server.model.finance.transaction import (
     update_transaction_impl,
     delete_transaction_impl,
     get_transaction_stats_impl,
+    get_transaction_stats_batch_impl,
     read_untagged_transactions_impl,
     get_tag_patterns_impl,
     batch_tag_transactions_impl,
@@ -623,36 +624,7 @@ class TransactionController(Controller):
         """
         try:
             db = next(router_dependency)
-            results = []
-
-            for query in data:
-                query_id = query.get("id", "")
-                try:
-                    tag_list = []
-                    tags_str = query.get("tags", "")
-                    if tags_str and tags_str.strip():
-                        tag_list = [
-                            tag.strip() for tag in tags_str.split(",") if tag.strip()
-                        ]
-
-                    stats = get_transaction_stats_impl(
-                        db=db,
-                        skip=query.get("skip", 0),
-                        limit=query.get("limit", -1),
-                        from_time=query.get("from_time"),
-                        to_time=query.get("to_time"),
-                        _tags=tag_list,
-                        tag_op=query.get("tag_op", "and"),
-                        _desc=query.get("description"),
-                        min_value=query.get("min_value"),
-                        max_value=query.get("max_value"),
-                        return_list=query.get("return_list", False),
-                    )
-                    results.append({"id": query_id, "stats": stats})
-                except Exception as e:
-                    logger.error(f"Error getting stats for query {query_id}: {e}")
-                    results.append({"id": query_id, "stats": None, "error": str(e)})
-
+            results = get_transaction_stats_batch_impl(db=db, queries=data)
             logger.info(f"Batch stats: processed {len(results)} queries")
             return results
 

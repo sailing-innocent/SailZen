@@ -42,6 +42,16 @@ _UUID_RE = re.compile(
 _HEX32_RE = re.compile(r"/[0-9a-fA-F]{24,64}(?=/|$)")
 _INT_ID_RE = re.compile(r"/\d+(?=/|$)")
 _DATE_RE = re.compile(r"/\d{4}-\d{2}-\d{2}(?=/|$)")
+_RELEASE_DOWNLOAD_RE = re.compile(r"^(/api/v\d+/app/release/download/)[^/]+$")
+
+
+def is_binary_download_endpoint(endpoint: str) -> bool:
+    """判断是否为大文件/二进制下载端点（不计入常规 API 慢请求告警，避免污染业务慢接口榜单）。"""
+    lower = (endpoint or "").lower()
+    return (
+        "/app/release/download/" in lower
+        or (("/file_storage/" in lower or "/file-storage/" in lower) and "/download" in lower)
+    )
 
 KNOWN_MODULES = {
     "finance": "finance",
@@ -76,6 +86,7 @@ def normalize_api_path(path: str) -> Tuple[str, str]:
     norm = _HEX32_RE.sub("/{id}", norm)
     norm = _DATE_RE.sub("/{date}", norm)
     norm = _INT_ID_RE.sub("/{id}", norm)
+    norm = _RELEASE_DOWNLOAD_RE.sub(r"\1{filename}", norm)
     return module, norm[:256]
 
 
@@ -212,7 +223,11 @@ class TelemetryCollector:
         key: BucketKey = (bucket_hour, module, method.upper()[:12], endpoint, client_source)
 
         is_error = status_code >= 500 or error_detail is not None
-        is_slow = duration_ms >= SLOW_REQUEST_THRESHOLD_MS and module != "telemetry"
+        is_slow = (
+            duration_ms >= SLOW_REQUEST_THRESHOLD_MS
+            and module != "telemetry"
+            and not is_binary_download_endpoint(endpoint)
+        )
 
         with self._lock:
             self._total_requests_since_boot += 1

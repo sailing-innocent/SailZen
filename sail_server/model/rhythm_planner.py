@@ -1351,23 +1351,15 @@ def rebalance_impl(db: Session, request: RebalanceRequest) -> PlanDayResponse:
 # ============================================================================
 
 
-def detect_conflicts_impl(db: Session, d: date) -> List[EncroachmentItem]:
-    """当日侵占检测报告"""
-    day = db.query(Day).filter(Day.date == d).first()
-    if day is None:
-        return []
-    blocks = _existing_blocks(db, day.id)
-    profile = get_or_create_profile(db)
-    policies = (
-        db.query(RhythmPolicy).filter(RhythmPolicy.enabled.is_(True)).all()
-    )
+def _detect_conflicts_for_day(
+    d: date,
+    blocks: List[RhythmTimeBlock],
+    profile: RhythmEnergyProfile,
+    policies: List[RhythmPolicy],
+    affairs: Dict[int, RhythmAffair],
+) -> List[EncroachmentItem]:
+    """基于已预取的数据在内存中执行单日侵占检测（零额外 SQL）。"""
     out: List[EncroachmentItem] = []
-
-    affair_ids = {b.affair_id for b in blocks if b.affair_id}
-    affairs: Dict[int, RhythmAffair] = {}
-    if affair_ids:
-        for a in db.query(RhythmAffair).filter(RhythmAffair.id.in_(affair_ids)).all():
-            affairs[a.id] = a
 
     # 1. protect_window 禁排窗被工作/事业块穿透
     for policy in policies:
@@ -1506,6 +1498,24 @@ def detect_conflicts_impl(db: Session, d: date) -> List[EncroachmentItem]:
     return out
 
 
+def detect_conflicts_impl(db: Session, d: date) -> List[EncroachmentItem]:
+    """当日侵占检测报告"""
+    day = db.query(Day).filter(Day.date == d).first()
+    if day is None:
+        return []
+    blocks = _existing_blocks(db, day.id)
+    profile = get_or_create_profile(db)
+    policies = (
+        db.query(RhythmPolicy).filter(RhythmPolicy.enabled.is_(True)).all()
+    )
+    affair_ids = {b.affair_id for b in blocks if b.affair_id}
+    affairs: Dict[int, RhythmAffair] = {}
+    if affair_ids:
+        for a in db.query(RhythmAffair).filter(RhythmAffair.id.in_(affair_ids)).all():
+            affairs[a.id] = a
+    return _detect_conflicts_for_day(d, blocks, profile, policies, affairs)
+
+
 # ============================================================================
 # 时间线查询
 # ============================================================================
@@ -1596,28 +1606,68 @@ def get_day_timeline_impl(db: Session, d: date, with_checkins: bool = True) -> D
 def _compute_review_for_range(
     db: Session, start: date, end: date, scope: str, period_key: str
 ) -> ReviewResponse:
-    """计算 [start, end] 区间的节奏评分"""
+    """计算 [start, end] 区间的节奏评分（批量预取 + 内存聚合，消除 N+1 与逐日重复查询）。"""
     from sailzen_orm.rhythm import RhythmDisciplineLog
 
     profile = get_or_create_profile(db)
-    day_ids = [
-        row.id for row in db.query(Day.id).filter(Day.date >= start, Day.date <= end).all()
-    ]
-    blocks: List[RhythmTimeBlock] = []
+    day_rows = (
+        db.query(Day.id, Day.date)
+        .filter(Day.date >= start, Day.date <= end)
+        .order_by(Day.date.asc())
+        .all()
+    )
+    day_id_by_date: Dict[date, int] = {d_val: d_id for d_id, d_val in day_rows}
+    day_ids = [d_id for d_id, _ in day_rows]
+
+    all_blocks: List[RhythmTimeBlock] = []
+    blocks_by_day: Dict[int, List[RhythmTimeBlock]] = {}
     if day_ids:
-        blocks = (
+        all_blocks = (
             db.query(RhythmTimeBlock)
             .filter(
                 RhythmTimeBlock.day_id.in_(day_ids),
-                RhythmTimeBlock.status.in_(["PLANNED", "DOING", "DONE"]),
+                RhythmTimeBlock.status != "MOVED",
             )
+            .order_by(RhythmTimeBlock.start_time)
             .all()
         )
-    affair_ids = {b.affair_id for b in blocks if b.affair_id}
-    affairs: Dict[int, RhythmAffair] = {}
-    if affair_ids:
-        for a in db.query(RhythmAffair).filter(RhythmAffair.id.in_(affair_ids)).all():
-            affairs[a.id] = a
+        for b in all_blocks:
+            blocks_by_day.setdefault(b.day_id, []).append(b)
+
+    blocks = [b for b in all_blocks if b.status in ("PLANNED", "DOING", "DONE")]
+    block_affair_ids = {b.affair_id for b in all_blocks if b.affair_id}
+
+    # 单次查询合并加载：块关联事务 + PRECEPT + ACTIVE HABIT + ACTIVE VENTURE
+    kind_filter = [
+        AffairKind.PRECEPT.value,
+        AffairKind.HABIT.value,
+        AffairKind.VENTURE.value,
+    ]
+    affair_query = db.query(RhythmAffair)
+    if block_affair_ids:
+        affair_query = affair_query.filter(
+            (RhythmAffair.id.in_(block_affair_ids))
+            | (RhythmAffair.kind.in_(kind_filter))
+        )
+    else:
+        affair_query = affair_query.filter(RhythmAffair.kind.in_(kind_filter))
+
+    loaded_affairs = affair_query.all()
+    affairs: Dict[int, RhythmAffair] = {a.id: a for a in loaded_affairs}
+
+    precepts = [a for a in loaded_affairs if a.kind == AffairKind.PRECEPT.value]
+    precept_id_set = {a.id for a in precepts}
+    habits = [
+        a
+        for a in loaded_affairs
+        if a.kind == AffairKind.HABIT.value and a.state == AffairState.ACTIVE.value
+    ]
+    habit_id_set = {a.id for a in habits}
+    ventures = [
+        a
+        for a in loaded_affairs
+        if a.kind == AffairKind.VENTURE.value and a.state == AffairState.ACTIVE.value
+    ]
 
     # 三域投入
     domain_minutes = {"life": 0, "work": 0, "career": 0}
@@ -1625,66 +1675,54 @@ def _compute_review_for_range(
         dom = _block_domain(b, affairs.get(b.affair_id) if b.affair_id else None)
         domain_minutes[dom] += _minutes((b.start_time, b.end_time))
 
-    # 戒律合规率 = kept/(kept+violated)
-    precept_ids = [
-        a.id
-        for a in db.query(RhythmAffair)
-        .filter(RhythmAffair.kind == AffairKind.PRECEPT.value)
-        .all()
-    ]
+    # 单次批量加载区间内戒律 + 习惯日志，消除睡眠戒律重复查与习惯 N+1 count
+    def _is_sleep_precept(a: RhythmAffair) -> bool:
+        if a.state not in (AffairState.ACTIVE.value, AffairState.PAUSED.value):
+            return False
+        meta = a.kind_meta or {}
+        if meta.get("severity") != "hard":
+            return False
+        rule_text = str(meta.get("rule_text", ""))
+        if "睡" in rule_text or "sleep" in rule_text.lower():
+            return True
+        try:
+            h, _ = str(meta.get("check_time", "22:30")).split(":")[:2]
+            return int(h) >= 22 or int(h) < 7
+        except (ValueError, IndexError):
+            return False
+
+    sleep_id_set = {a.id for a in precepts if _is_sleep_precept(a)}
+    log_affair_ids = precept_id_set | habit_id_set
+
     kept = violated = 0
-    if precept_ids:
-        logs = (
-            db.query(RhythmDisciplineLog)
+    sleep_kept = sleep_violated = 0
+    habit_done_counts: Dict[int, int] = {}
+
+    if log_affair_ids:
+        log_rows = (
+            db.query(RhythmDisciplineLog.affair_id, RhythmDisciplineLog.result)
             .filter(
-                RhythmDisciplineLog.affair_id.in_(precept_ids),
+                RhythmDisciplineLog.affair_id.in_(log_affair_ids),
                 RhythmDisciplineLog.log_date >= start,
                 RhythmDisciplineLog.log_date <= end,
             )
             .all()
         )
-        kept = sum(1 for x in logs if x.result == "kept")
-        violated = sum(1 for x in logs if x.result == "violated")
+        for aid, res in log_rows:
+            if aid in precept_id_set:
+                if res == "kept":
+                    kept += 1
+                elif res == "violated":
+                    violated += 1
+            if aid in sleep_id_set:
+                if res == "kept":
+                    sleep_kept += 1
+                elif res == "violated":
+                    sleep_violated += 1
+            if aid in habit_id_set and res == "done":
+                habit_done_counts[aid] = habit_done_counts.get(aid, 0) + 1
+
     precept_rate = kept / (kept + violated) if (kept + violated) > 0 else 1.0
-
-    # 睡眠窗守约（hard precept 中睡眠相关：rule_text 含「睡」或 check_time>=22:00）
-    sleep_kept = sleep_violated = 0
-    if precept_ids:
-        sleep_precepts = (
-            db.query(RhythmAffair)
-            .filter(
-                RhythmAffair.kind == AffairKind.PRECEPT.value,
-                RhythmAffair.state.in_([AffairState.ACTIVE.value, AffairState.PAUSED.value]),
-            )
-            .all()
-        )
-        def _is_sleep_precept(a: RhythmAffair) -> bool:
-            meta = a.kind_meta or {}
-            if meta.get("severity") != "hard":
-                return False
-            rule_text = str(meta.get("rule_text", ""))
-            if "睡" in rule_text or "sleep" in rule_text.lower():
-                return True
-            # check_time 在睡眠窗内（22:00 次日 07:00）也视作睡眠戒律
-            try:
-                h, _ = str(meta.get("check_time", "22:30")).split(":")[:2]
-                return int(h) >= 22 or int(h) < 7
-            except (ValueError, IndexError):
-                return False
-
-        sleep_ids = [a.id for a in sleep_precepts if _is_sleep_precept(a)]
-        if sleep_ids:
-            sleep_logs = (
-                db.query(RhythmDisciplineLog)
-                .filter(
-                    RhythmDisciplineLog.affair_id.in_(sleep_ids),
-                    RhythmDisciplineLog.log_date >= start,
-                    RhythmDisciplineLog.log_date <= end,
-                )
-                .all()
-            )
-            sleep_kept = sum(1 for x in sleep_logs if x.result == "kept")
-            sleep_violated = sum(1 for x in sleep_logs if x.result == "violated")
     sleep_keeping = (
         sleep_kept / (sleep_kept + sleep_violated)
         if (sleep_kept + sleep_violated) > 0
@@ -1692,52 +1730,24 @@ def _compute_review_for_range(
     )
 
     # 习惯达标率
-    habits = (
-        db.query(RhythmAffair)
-        .filter(
-            RhythmAffair.kind == AffairKind.HABIT.value,
-            RhythmAffair.state == AffairState.ACTIVE.value,
-        )
-        .all()
-    )
+    weeks = max(((end - start).days + 1) / 7.0, 1 / 7)
     habit_ratios: List[float] = []
     for h in habits:
         freq = int((h.kind_meta or {}).get("freq_per_week") or 3)
-        # 含首尾日的周数（Mon..Sun = 7 天 = 1 周）
-        weeks = max(((end - start).days + 1) / 7.0, 1 / 7)
-        # target 用真实计算值，不再 floor 到 1：避免"1 次达成即满分"高估
         target = freq * weeks
-        done = (
-            db.query(RhythmDisciplineLog)
-            .filter(
-                RhythmDisciplineLog.affair_id == h.id,
-                RhythmDisciplineLog.result == "done",
-                RhythmDisciplineLog.log_date >= start,
-                RhythmDisciplineLog.log_date <= end,
-            )
-            .count()
-        )
+        done = habit_done_counts.get(h.id, 0)
         habit_ratios.append(min(done / target, 1.0))
     habit_consistency = (
         sum(habit_ratios) / len(habit_ratios) if habit_ratios else 1.0
     )
 
     # 事业周预算达成率
-    ventures = (
-        db.query(RhythmAffair)
-        .filter(
-            RhythmAffair.kind == AffairKind.VENTURE.value,
-            RhythmAffair.state == AffairState.ACTIVE.value,
-        )
-        .all()
-    )
     venture_fulfillment = 0.0
     if ventures:
         budget_min = sum(
             float((v.kind_meta or {}).get("weekly_budget_hours") or 0.0) * 60
             for v in ventures
         )
-        weeks = max(((end - start).days + 1) / 7.0, 1 / 7)
         budget_min *= weeks
         career_min = domain_minutes["career"]
         venture_fulfillment = (
@@ -1795,13 +1805,22 @@ def _compute_review_for_range(
             + 0.10 * (1 - buffer_consumed)
         )
 
-    # 侵占事件（区间内逐日聚合，日评仅当日）
+    # 侵占事件（复用已加载的 blocks/affairs/profile + 单次策略查询，零逐日往返 SQL）
     encroachments: List[Dict[str, Any]] = []
-    cursor = start
-    while cursor <= end:
-        for item in detect_conflicts_impl(db, cursor):
-            encroachments.append(item.model_dump(mode="json"))
-        cursor += timedelta(days=1)
+    if day_id_by_date:
+        policies = (
+            db.query(RhythmPolicy).filter(RhythmPolicy.enabled.is_(True)).all()
+        )
+        cursor = start
+        while cursor <= end:
+            d_id = day_id_by_date.get(cursor)
+            if d_id is not None:
+                day_blks = blocks_by_day.get(d_id, [])
+                for item in _detect_conflicts_for_day(
+                    cursor, day_blks, profile, policies, affairs
+                ):
+                    encroachments.append(item.model_dump(mode="json"))
+            cursor += timedelta(days=1)
 
     return ReviewResponse(
         scope=scope,
@@ -1826,6 +1845,18 @@ def _save_review(db: Session, resp: ReviewResponse) -> RhythmReview:
         )
         .first()
     )
+    if row is not None and (
+        row.rhythm_score == resp.rhythm_score
+        and row.domain_minutes == resp.domain_minutes
+        and row.precept_compliance_rate == resp.precept_compliance_rate
+        and row.habit_consistency == resp.habit_consistency
+        and row.sleep_window_keeping == resp.sleep_window_keeping
+        and row.venture_budget_fulfillment == resp.venture_budget_fulfillment
+        and row.buffer_consumed == resp.buffer_consumed
+        and (row.encroachments or []) == resp.encroachments
+    ):
+        # 指标无变化时跳过无意义写事务与 WAL 刷盘
+        return row
     if row is None:
         row = RhythmReview(scope=resp.scope, period_key=resp.period_key)
         db.add(row)

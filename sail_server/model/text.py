@@ -105,36 +105,55 @@ def create_work_impl(db: Session, work_data: WorkCreateRequest) -> WorkResponse:
     )
 
 
-def _calculate_work_stats(db: Session, work: Work) -> dict:
-    """计算作品的统计信息"""
-    # 版本数量
-    edition_count = (
-        db.query(func.count(Edition.id)).filter(Edition.work_id == work.id).scalar()
-        or 0
-    )
-
-    # 章节数量和总字符数（所有版本的章节总和）
-    chapter_count = 0
-    total_chars = 0
-
-    for edition in work.editions:
-        edition_chapters = (
-            db.query(func.count(DocumentNode.id))
-            .filter(
-                DocumentNode.edition_id == edition.id,
-                DocumentNode.node_type == "chapter",
-            )
-            .scalar()
-            or 0
-        )
-        chapter_count += edition_chapters
-        total_chars += edition.char_count or 0
-
-    return {
-        "edition_count": edition_count,
-        "chapter_count": chapter_count,
-        "total_chars": total_chars,
+def _calculate_works_stats_batch(db: Session, work_ids: List[int]) -> dict[int, dict]:
+    """批量计算多个作品的统计信息（2 次聚合 SQL，消除 N+1 查询）。"""
+    stats_map: dict[int, dict] = {
+        wid: {"edition_count": 0, "chapter_count": 0, "total_chars": 0}
+        for wid in work_ids
     }
+    if not work_ids:
+        return stats_map
+
+    edition_rows = (
+        db.query(
+            Edition.work_id,
+            func.count(Edition.id),
+            func.coalesce(func.sum(Edition.char_count), 0),
+        )
+        .filter(Edition.work_id.in_(work_ids))
+        .group_by(Edition.work_id)
+        .all()
+    )
+    for wid, ed_cnt, char_sum in edition_rows:
+        if wid in stats_map:
+            stats_map[wid]["edition_count"] = int(ed_cnt or 0)
+            stats_map[wid]["total_chars"] = int(char_sum or 0)
+
+    chapter_rows = (
+        db.query(
+            Edition.work_id,
+            func.count(DocumentNode.id),
+        )
+        .join(Edition, DocumentNode.edition_id == Edition.id)
+        .filter(
+            Edition.work_id.in_(work_ids),
+            DocumentNode.node_type == "chapter",
+        )
+        .group_by(Edition.work_id)
+        .all()
+    )
+    for wid, chap_cnt in chapter_rows:
+        if wid in stats_map:
+            stats_map[wid]["chapter_count"] = int(chap_cnt or 0)
+
+    return stats_map
+
+
+def _calculate_work_stats(db: Session, work: Work) -> dict:
+    """计算单个作品的统计信息。"""
+    return _calculate_works_stats_batch(db, [work.id]).get(
+        work.id, {"edition_count": 0, "chapter_count": 0, "total_chars": 0}
+    )
 
 
 def get_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
@@ -166,9 +185,12 @@ def get_works_impl(db: Session, skip: int = 0, limit: int = 20) -> List[WorkResp
     works = (
         db.query(Work).order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
     )
+    stats_map = _calculate_works_stats_batch(db, [w.id for w in works])
     result = []
     for work in works:
-        stats = _calculate_work_stats(db, work)
+        stats = stats_map.get(
+            work.id, {"edition_count": 0, "chapter_count": 0, "total_chars": 0}
+        )
         result.append(
             WorkResponse(
                 id=work.id,

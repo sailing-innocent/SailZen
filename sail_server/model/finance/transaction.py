@@ -7,7 +7,10 @@ from sail_server.application.dto.finance import (
 from sail_server.utils.finance_helpers import _acc, _acc_inv, _htime, _htime_inv
 
 from sail_server.utils.money import Money
+from bisect import bisect_left, bisect_right
 from datetime import datetime
+from decimal import Decimal
+from typing import Any
 
 import time
 import logging
@@ -620,6 +623,24 @@ def batch_tag_transactions_impl(
     }
 
 
+def _parse_money_decimal(raw_val: Any) -> Decimal:
+    """将交易金额字符串解析为 Decimal（与 Money.__init__ 语义完全一致）。"""
+    if isinstance(raw_val, Decimal):
+        return raw_val
+    if isinstance(raw_val, str):
+        s = raw_val.strip()
+        if " " in s:
+            parts = s.split()
+            if len(parts) == 2 and parts[1] in Money._supported_currency:
+                s = parts[0]
+        return Decimal(s)
+    return Decimal(str(raw_val))
+
+
+def _is_safe_like_literal(s: str) -> bool:
+    return ("%" not in s) and ("_" not in s)
+
+
 def get_transaction_stats_impl(
     db,
     skip: int = 0,
@@ -635,115 +656,53 @@ def get_transaction_stats_impl(
 ):
     """
     Get transaction statistics with filtering options.
-
-    Args:
-        db: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-        from_time: Start timestamp for filtering
-        to_time: End timestamp for filtering
-        _tags: List of tags to filter by
-        tag_op: "and" or "or" operation for tag filtering
-        _desc: Description filter (partial match)
-        min_value: Minimum transaction value
-        max_value: Maximum transaction value
-        return_list: If True, include transaction data in response; if False, only return stats
-
-    Returns:
-        Dict with statistics and optional data field:
-        {
-            "total_count": int,
-            "income_count": int,
-            "expense_count": int,
-            "income_total": str,
-            "expense_total": str,
-            "net_total": str,
-            "data": List[TransactionData] (optional, only when return_list=True)
-        }
     """
-    q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
+    q = _build_transaction_query(
+        db=db,
+        from_time=from_time,
+        to_time=to_time,
+        _tags=_tags,
+        tag_op=tag_op,
+        _desc=_desc,
+        min_value=min_value,
+        max_value=max_value,
+    )
 
-    # Apply tag filtering
-    if len(_tags) > 0:
-        condition = None
-        for tag in _tags:
-            if tag is not None and tag.strip() != "":
-                if condition is None:
-                    condition = Transaction.tags.like(f"%{tag}%")
-                else:
-                    if tag_op == "or":
-                        condition = condition | Transaction.tags.like(f"%{tag}%")
-                    else:
-                        condition = condition & Transaction.tags.like(f"%{tag}%")
-        if condition is not None:
-            q = q.filter(condition)
+    # 仅需统计时使用轻量列投影 + Decimal 聚合，避免加载整行 ORM 实例与反复构造 Money 对象
+    rows = q.with_entities(
+        Transaction.from_acc_id,
+        Transaction.to_acc_id,
+        Transaction.value,
+    ).all()
 
-    # Apply description filtering
-    if _desc is not None:
-        q = q.filter(Transaction.description.like(f"%{_desc}%"))
+    income_total = Decimal("0.0")
+    expense_total = Decimal("0.0")
+    income_count = 0
+    expense_count = 0
 
-    # Apply time filtering
-    if from_time is not None:
-        q = q.filter(Transaction.htime >= _htime(from_time))
-    if to_time is not None:
-        q = q.filter(Transaction.htime <= _htime(to_time))
+    for raw_from, raw_to, raw_val in rows:
+        from_acc_id = _acc_inv(raw_from)
+        to_acc_id = _acc_inv(raw_to)
+        if from_acc_id == -1 and to_acc_id > 0:
+            income_total += _parse_money_decimal(raw_val)
+            income_count += 1
+        elif from_acc_id > 0 and to_acc_id == -1:
+            expense_total += _parse_money_decimal(raw_val)
+            expense_count += 1
 
-    # Apply value filtering
-    if min_value is not None:
-        q = q.filter(Transaction.value >= str(min_value))
-    if max_value is not None:
-        q = q.filter(Transaction.value <= str(max_value))
-
-    q = q.order_by(Transaction.htime.desc())
-
-    # Get all transactions for statistics calculation
-    all_transactions = q.all()
-
-    # Calculate statistics
-    if all_transactions is None:
-        stats = {
-            "total_count": 0,
-            "income_count": 0,
-            "expense_count": 0,
-            "income_total": "0.0",
-            "expense_total": "0.0",
-            "net_total": "0.0",
-        }
-    else:
-        income_total = Money("0.0")
-        expense_total = Money("0.0")
-        income_count = 0
-        expense_count = 0
-
-        for transaction in all_transactions:
-            from_acc_id = _acc_inv(transaction.from_acc_id)
-            to_acc_id = _acc_inv(transaction.to_acc_id)
-            value = Money(transaction.value)
-
-            # Income: from_acc_id=-1, to_acc_id>0
-            if from_acc_id == -1 and to_acc_id > 0:
-                income_total += value
-                income_count += 1
-            # Expense: from_acc_id>0, to_acc_id=-1
-            elif from_acc_id > 0 and to_acc_id == -1:
-                expense_total += value
-                expense_count += 1
-
-        net_total = income_total - expense_total
-
-        stats = {
-            "total_count": len(all_transactions),
-            "income_count": income_count,
-            "expense_count": expense_count,
-            "income_total": str(income_total),
-            "expense_total": str(expense_total),
-            "net_total": str(net_total),
-        }
+    net_total = income_total - expense_total
+    stats = {
+        "total_count": len(rows),
+        "income_count": income_count,
+        "expense_count": expense_count,
+        "income_total": f"{income_total} CNY",
+        "expense_total": f"{expense_total} CNY",
+        "net_total": f"{net_total} CNY",
+    }
 
     # Add data field if return_list is True
     if return_list:
-        # Apply pagination for data
-        data_q = q
+        data_q = q.order_by(Transaction.htime.desc())
         if skip >= 0:
             data_q = data_q.offset(skip)
         if limit > 0:
@@ -758,3 +717,194 @@ def get_transaction_stats_impl(
             ]
 
     return stats
+
+
+def get_transaction_stats_batch_impl(db, queries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """批量计算交易统计：合并单次轻量 SQL 查询 + htime 二分切片聚合，消除 N 次全表扫描。"""
+    if not queries:
+        return []
+
+    bind = db.get_bind()
+    is_sqlite = bool(bind is not None and bind.dialect.name == "sqlite")
+
+    def _norm_text(s: str) -> str:
+        return s.lower() if is_sqlite else s
+
+    def _can_fast_path(q: dict[str, Any]) -> bool:
+        if q.get("return_list", False):
+            return False
+        if q.get("min_value") is not None or q.get("max_value") is not None:
+            return False
+        tags_str = q.get("tags", "")
+        if tags_str and not _is_safe_like_literal(str(tags_str)):
+            return False
+        desc = q.get("description")
+        if desc is not None and not _is_safe_like_literal(str(desc)):
+            return False
+        return True
+
+    fast_indices: list[int] = [i for i, q in enumerate(queries) if _can_fast_path(q)]
+
+    # 预先构建全局时间边界（仅当所有 fast-path 查询均给出对应边界时下推 SQL 过滤）
+    timed_rows: list[tuple[datetime, int, Decimal, str, str]] = []
+    timed_keys: list[datetime] = []
+    null_time_rows: list[tuple[int, Decimal, str, str]] = []
+
+    if fast_indices:
+        all_have_from = all(queries[i].get("from_time") is not None for i in fast_indices)
+        all_have_to = all(queries[i].get("to_time") is not None for i in fast_indices)
+
+        base_q = db.query(
+            Transaction.from_acc_id,
+            Transaction.to_acc_id,
+            Transaction.value,
+            Transaction.tags,
+            Transaction.description,
+            Transaction.htime,
+        ).filter(Transaction.state != 0, _not_deprecated())
+
+        if all_have_from:
+            min_from = min(float(queries[i]["from_time"]) for i in fast_indices)
+            base_q = base_q.filter(Transaction.htime >= _htime(min_from))
+        if all_have_to:
+            max_to = max(float(queries[i]["to_time"]) for i in fast_indices)
+            base_q = base_q.filter(Transaction.htime <= _htime(max_to))
+
+        raw_rows = base_q.all()
+        for raw_from, raw_to, raw_val, raw_tags, raw_desc, htime_val in raw_rows:
+            from_acc_id = _acc_inv(raw_from)
+            to_acc_id = _acc_inv(raw_to)
+            if from_acc_id == -1 and to_acc_id > 0:
+                kind = 1  # income
+                val = _parse_money_decimal(raw_val)
+            elif from_acc_id > 0 and to_acc_id == -1:
+                kind = -1  # expense
+                val = _parse_money_decimal(raw_val)
+            else:
+                kind = 0  # transfer / other
+                val = Decimal("0.0")
+
+            tags_norm = _norm_text(raw_tags) if raw_tags is not None else ""
+            desc_norm = _norm_text(raw_desc) if raw_desc is not None else ""
+            if htime_val is None:
+                null_time_rows.append((kind, val, tags_norm, desc_norm))
+            else:
+                timed_rows.append((htime_val, kind, val, tags_norm, desc_norm))
+
+        timed_rows.sort(key=lambda r: r[0])
+        timed_keys = [r[0] for r in timed_rows]
+
+    fast_set = set(fast_indices)
+    results: list[dict[str, Any]] = []
+
+    for idx, query in enumerate(queries):
+        query_id = query.get("id", "")
+        try:
+            tags_str = query.get("tags", "")
+            tag_list = (
+                [tag.strip() for tag in str(tags_str).split(",") if tag.strip()]
+                if tags_str and str(tags_str).strip()
+                else []
+            )
+
+            if idx not in fast_set:
+                stats = get_transaction_stats_impl(
+                    db=db,
+                    skip=query.get("skip", 0),
+                    limit=query.get("limit", -1),
+                    from_time=query.get("from_time"),
+                    to_time=query.get("to_time"),
+                    _tags=tag_list,
+                    tag_op=query.get("tag_op", "and"),
+                    _desc=query.get("description"),
+                    min_value=query.get("min_value"),
+                    max_value=query.get("max_value"),
+                    return_list=query.get("return_list", False),
+                )
+                results.append({"id": query_id, "stats": stats})
+                continue
+
+            from_ts = query.get("from_time")
+            to_ts = query.get("to_time")
+            lo = bisect_left(timed_keys, _htime(from_ts)) if from_ts is not None else 0
+            hi = (
+                bisect_right(timed_keys, _htime(to_ts))
+                if to_ts is not None
+                else len(timed_rows)
+            )
+
+            norm_tags = [_norm_text(t) for t in tag_list]
+            use_or = query.get("tag_op", "and") == "or"
+            desc = query.get("description")
+            norm_desc = _norm_text(str(desc)) if desc is not None else None
+
+            total_count = 0
+            income_count = 0
+            expense_count = 0
+            income_total = Decimal("0.0")
+            expense_total = Decimal("0.0")
+
+            # 遍历命中时间区间的记录
+            for i in range(lo, hi):
+                _, kind, val, row_tags, row_desc = timed_rows[i]
+                if norm_tags:
+                    if not row_tags:
+                        continue
+                    if use_or:
+                        if not any(t in row_tags for t in norm_tags):
+                            continue
+                    else:
+                        if not all(t in row_tags for t in norm_tags):
+                            continue
+                if norm_desc is not None and norm_desc not in row_desc:
+                    continue
+
+                total_count += 1
+                if kind == 1:
+                    income_total += val
+                    income_count += 1
+                elif kind == -1:
+                    expense_total += val
+                    expense_count += 1
+
+            # 仅在未指定时间范围时纳入 htime 为 NULL 的行（与 SQL 语义一致）
+            if from_ts is None and to_ts is None and null_time_rows:
+                for kind, val, row_tags, row_desc in null_time_rows:
+                    if norm_tags:
+                        if not row_tags:
+                            continue
+                        if use_or:
+                            if not any(t in row_tags for t in norm_tags):
+                                continue
+                        else:
+                            if not all(t in row_tags for t in norm_tags):
+                                continue
+                    if norm_desc is not None and norm_desc not in row_desc:
+                        continue
+                    total_count += 1
+                    if kind == 1:
+                        income_total += val
+                        income_count += 1
+                    elif kind == -1:
+                        expense_total += val
+                        expense_count += 1
+
+            net_total = income_total - expense_total
+            results.append(
+                {
+                    "id": query_id,
+                    "stats": {
+                        "total_count": total_count,
+                        "income_count": income_count,
+                        "expense_count": expense_count,
+                        "income_total": f"{income_total} CNY",
+                        "expense_total": f"{expense_total} CNY",
+                        "net_total": f"{net_total} CNY",
+                    },
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error getting stats for query {query_id}: {e}")
+            results.append({"id": query_id, "stats": None, "error": str(e)})
+
+    return results

@@ -50,6 +50,12 @@ def test_normalize_api_path_and_client_inference():
         "file_storage",
         "/api/v1/file-storage/list",
     )
+    assert normalize_api_path(
+        "/api/v1/app/release/download/SailZen-0.2.0-vc4-release-11232256.apk"
+    ) == (
+        "app_release",
+        "/api/v1/app/release/download/{filename}",
+    )
     assert infer_client_source([(b"user-agent", b"okhttp/4.12.0")]) == "android"
     assert infer_client_source([(b"user-agent", b"python-httpx/0.27")]) == "sailtick"
     assert infer_client_source([(b"x-sailzen-client", b"web")]) == "web"
@@ -229,4 +235,37 @@ def test_api_profile_collector_and_modules_profile(db, rhythm_engine):
     rt_prof = get_system_runtime_profile_impl(db)
     assert rt_prof.db_backend == "sqlite"
     assert rt_prof.table_counts["sys_telemetry_events"] >= 3
+    collector.reset_for_tests()
+
+
+def test_weighted_quantile_resists_binary_download_outlier(db):
+    """单个大文件下载（25s）不应污染全局 P50/P95，也不应误报 api_slow 告警。"""
+    collector = get_telemetry_collector()
+    collector.reset_for_tests()
+
+    for _ in range(100):
+        collector.record_request(
+            method="GET",
+            path="/api/v1/health/dashboard",
+            status_code=200,
+            duration_ms=5.0,
+            bytes_out=512,
+            headers=[(b"x-sailzen-client", b"web")],
+        )
+    collector.record_request(
+        method="GET",
+        path="/api/v1/app/release/download/SailZen-0.2.0-vc4.apk",
+        status_code=200,
+        duration_ms=25000.0,
+        bytes_out=13_000_000,
+        headers=[(b"user-agent", b"okhttp/4.12")],
+    )
+
+    prof = get_api_profile_impl(db, window_hours=24)
+    assert prof.total_requests == 101
+    assert prof.p50_ms == 5.0
+    assert prof.p95_ms == 5.0
+    assert prof.max_ms == 25000.0
+    # 二进制下载不触发常规 api_slow 误报
+    assert prof.slow_requests_count == 0
     collector.reset_for_tests()
