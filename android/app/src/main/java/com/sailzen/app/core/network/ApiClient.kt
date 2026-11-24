@@ -29,6 +29,8 @@ object ApiClient {
     private var cachedTickApi: TickApi? = null
     private var cachedAppUpdateKey: String? = null
     private var cachedAppUpdateApi: AppUpdateApi? = null
+    private var cachedUserInboxKey: String? = null
+    private var cachedUserInboxApi: UserInboxApi? = null
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -48,14 +50,12 @@ object ApiClient {
             .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(writeTimeoutSeconds, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                val request = if (token.isNotBlank()) {
-                    chain.request().newBuilder()
-                        .header("Authorization", "Bearer $token")
-                        .build()
-                } else {
-                    chain.request()
+                val builder = chain.request().newBuilder()
+                    .header("X-SailZen-Client", "android")
+                if (token.isNotBlank()) {
+                    builder.header("Authorization", "Bearer $token")
                 }
-                chain.proceed(request)
+                chain.proceed(builder.build())
             }
             .addInterceptor(
                 HttpLoggingInterceptor().apply {
@@ -159,6 +159,18 @@ object ApiClient {
         }
     }
 
+    /** 统一 UserProfile 与 UserInbox API */
+    @Synchronized
+    fun userInboxApi(baseUrl: String, token: String): UserInboxApi {
+        val normalized = normalizeBaseUrl(baseUrl)
+        val key = "$normalized|$token"
+        cachedUserInboxApi?.let { if (cachedUserInboxKey == key) return it }
+        return buildRetrofit(normalized, token).create(UserInboxApi::class.java).also {
+            cachedUserInboxKey = key
+            cachedUserInboxApi = it
+        }
+    }
+
     /** 大文件下载专用 OkHttpClient（更长读超时，自动附加 Bearer Token） */
     fun downloadClient(token: String): OkHttpClient =
         OkHttpClient.Builder()
@@ -166,16 +178,26 @@ object ApiClient {
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                val request = if (token.isNotBlank()) {
-                    chain.request().newBuilder()
-                        .header("Authorization", "Bearer $token")
-                        .build()
-                } else {
-                    chain.request()
+                val builder = chain.request().newBuilder()
+                    .header("X-SailZen-Client", "android")
+                if (token.isNotBlank()) {
+                    builder.header("Authorization", "Bearer $token")
                 }
-                chain.proceed(request)
+                chain.proceed(builder.build())
             }
             .build()
+
+    /** 构造用户级多端同步 WebSocket 地址：ws(s)://host/api/v1/user/ws?device_id=..&client_type=android&token=.. */
+    fun userWsUrl(baseUrl: String, deviceId: String, token: String): String {
+        var url = normalizeBaseUrl(baseUrl)
+        url = when {
+            url.startsWith("https://") -> "wss://" + url.removePrefix("https://")
+            url.startsWith("http://") -> "ws://" + url.removePrefix("http://")
+            else -> "ws://$url"
+        }
+        val encodedToken = URLEncoder.encode(token, "UTF-8")
+        return "$url/api/v1/user/ws?device_id=$deviceId&client_type=android&token=$encodedToken"
+    }
 
     /** 构造 WebSocket 地址：ws(s)://host/api/v1/reminder/ws?device_id=..&token=.. */
     fun wsUrl(baseUrl: String, deviceId: String, token: String): String {

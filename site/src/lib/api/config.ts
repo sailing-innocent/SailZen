@@ -24,8 +24,54 @@ declare const process: { env: Record<string, string | undefined> }
 
 export const AUTH_TOKEN = process.env.VITE_SAILZEN_API_TOKEN ?? ''
 
-export const authHeaders = (): Record<string, string> =>
-  AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {}
+const WEB_DEVICE_ID_KEY = 'sailzen_web_device_id'
+
+/** 获取或生成持久化的浏览器端设备标识（用于多端 WS 同步与在线设备观测）。 */
+export const getWebDeviceId = (): string => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return 'web-ssr'
+  }
+  try {
+    let id = window.localStorage.getItem(WEB_DEVICE_ID_KEY)
+    if (!id) {
+      const rand =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+      id = `web-${rand}`
+      window.localStorage.setItem(WEB_DEVICE_ID_KEY, id)
+    }
+    return id
+  } catch {
+    return 'web-ephemeral'
+  }
+}
+
+export const authHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'X-SailZen-Client': 'web',
+    'X-SailZen-Device': getWebDeviceId(),
+  }
+  if (AUTH_TOKEN) {
+    headers.Authorization = `Bearer ${AUTH_TOKEN}`
+  }
+  return headers
+}
+
+/** 构建 User Sync WebSocket URL（/api/v1/user/ws）。 */
+export const buildUserWsUrl = (): string => {
+  const base = SERVER_URL || (typeof window !== 'undefined' ? window.location.origin : '')
+  if (!base) return ''
+  const wsBase = base.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://').replace(/\/$/, '')
+  const params = new URLSearchParams({
+    device_id: getWebDeviceId(),
+    client_type: 'web',
+  })
+  if (AUTH_TOKEN) {
+    params.set('token', AUTH_TOKEN)
+  }
+  return `${wsBase}/${API_BASE}/user/ws?${params.toString()}`
+}
 
 /** 结构化 API 错误：携带 HTTP 状态码与后端 detail 文本，便于分片错误展示。 */
 export class ApiError extends Error {

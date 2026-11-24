@@ -12,6 +12,7 @@ import com.sailzen.app.core.health.HealthRepository
 import com.sailzen.app.core.reminder.ReminderRepository
 import com.sailzen.app.core.rhythm.RhythmRepository
 import com.sailzen.app.core.text.TextRepository
+import com.sailzen.app.core.user.UserInboxRepository
 import java.util.concurrent.TimeUnit
 
 /**
@@ -47,6 +48,7 @@ class SyncWorker(
             if (!repository.serverConfigured()) {
                 Result.success()
             } else {
+                UserInboxRepository.get(applicationContext).syncInbox(full = false)
                 repository.syncPending()
                 repository.flushPendingFeedback()
                 // Rhythm M3：补传离线 done/defer/checkin/capture/health

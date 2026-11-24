@@ -110,6 +110,23 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
 
+            Text(text = "用户档案（单用户免登录模式）", style = MaterialTheme.typography.titleSmall)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "身份标识：${state.userSlug} · 修改昵称与安静时段后自动同步至 Web 与教练",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = state.userDisplayName,
+                onValueChange = viewModel::onUserDisplayNameChange,
+                label = { Text("显示名称") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
             OutlinedTextField(
                 value = state.serverUrl,
                 onValueChange = viewModel::onServerUrlChange,

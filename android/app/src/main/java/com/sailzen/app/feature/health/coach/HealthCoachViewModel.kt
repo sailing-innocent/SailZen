@@ -11,6 +11,7 @@ import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
 import com.sailzen.app.core.network.dto.IntakeEntryDto
 import com.sailzen.app.core.tick.SharedImageInbox
 import com.sailzen.app.core.tick.TickRepository
+import com.sailzen.app.core.user.UserInboxRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +47,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
     )
 
     private val repo = TickRepository.get(application)
+    private val userInboxRepo = UserInboxRepository.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -273,6 +275,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                         )
                     }
                     refresh()
+                    userInboxRepo.syncInbox(full = false)
                 },
                 onFailure = { err ->
                     _uiState.update {
@@ -320,7 +323,10 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                     feedbackMessage = if (res != null) "已回复教练，下次巡检会自动吸收" else "回复失败，请检查网络",
                 )
             }
-            if (res != null) refresh()
+            if (res != null) {
+                refresh()
+                userInboxRepo.syncInbox(full = false)
+            }
         }
     }
 
@@ -332,7 +338,10 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                     feedbackMessage = if (res != null) "已暂缓 24 小时" else "操作失败，请检查网络",
                 )
             }
-            if (res != null) refresh()
+            if (res != null) {
+                refresh()
+                userInboxRepo.syncInbox(full = false)
+            }
         }
     }
 
@@ -352,7 +361,10 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                     },
                 )
             }
-            if (res != null) refresh()
+            if (res != null) {
+                refresh()
+                userInboxRepo.syncInbox(full = false)
+            }
         }
     }
 

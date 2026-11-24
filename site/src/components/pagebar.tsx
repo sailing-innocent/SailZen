@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/sidebar'
 import { Link, useLocation } from 'react-router-dom'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { GlobalInboxDrawerButton, UserProfileDialogButton } from '@components/user/UserInboxPanel'
 
 const renderNavItem = (route: PageRoute, currentPath: string) => {
   const Icon = route.icon
@@ -39,10 +40,14 @@ const Pagebar: React.FC = () => {
 
   return (
     <SidebarProvider className="flex-col sticky top-0 h-svh min-h-svh border-r bg-sidebar/50">
-      <SidebarHeader className="px-3 pt-4 pb-2">
+      <SidebarHeader className="px-3 pt-4 pb-2 space-y-2">
         <Link to="/main" className="flex items-center gap-2 px-1 font-semibold tracking-tight text-base">
           <span>SailZen</span>
         </Link>
+        <div className="space-y-1">
+          <UserProfileDialogButton />
+          <GlobalInboxDrawerButton />
+        </div>
       </SidebarHeader>
       <SidebarContent className="flex-1">
         <SidebarGroup>

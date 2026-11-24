@@ -37,6 +37,10 @@ class SailTickTicket(ORMBase):
     __tablename__ = "sail_tick_tickets"
 
     id = Column(Integer, primary_key=True)
+    # 归属用户 ID（逻辑引用 user_profiles.id，默认单用户 owner=1）
+    user_id = Column(Integer, default=1, index=True)
+    # 关联统一收件箱条目 ID（逻辑引用 user_inbox_items.id）
+    inbox_item_id = Column(Integer, nullable=True, index=True)
     # 创建它的 tick 实例（sailtick.db st_ticks.id，仅作追溯，无外键约束跨库不可行）
     tick_id = Column(String, default="", index=True)
     # question | task | approval | info
@@ -86,6 +90,8 @@ class SailTickMessage(ORMBase):
     __tablename__ = "sail_tick_messages"
 
     id = Column(Integer, primary_key=True)
+    # 归属用户 ID（逻辑引用 user_profiles.id，默认单用户 owner=1）
+    user_id = Column(Integer, default=1, index=True)
     # user_to_agent | agent_to_user
     direction = Column(String, default="user_to_agent", index=True)
     # diet | weight | daily_info | mood | exercise | general

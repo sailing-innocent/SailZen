@@ -281,6 +281,22 @@ def create_weight_impl(db, weight_create: WeightCreateRequest) -> WeightResponse
 
         logging.getLogger(__name__).warning(f"[health] Rhythm feedback sync failed: {e}")
 
+    try:
+        from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+        reconcile_domain_signal(
+            db,
+            domain="health",
+            event="weight.logged",
+            payload={
+                "value": float(weight.value),
+                "date": weight.htime.date().isoformat() if weight.htime else None,
+                "weight_id": weight.id,
+            },
+        )
+    except Exception as exc:
+        logger.debug("[health] weight inbox auto-resolve skipped: %s", exc)
+
     return read_from_weight(weight)
 
 
@@ -1147,6 +1163,22 @@ def create_exercise_impl(
     db.add(exercise)
     db.commit()
     db.refresh(exercise)
+    try:
+        from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+        reconcile_domain_signal(
+            db,
+            domain="health",
+            event="exercise.logged",
+            payload={
+                "exercise_type": exercise.exercise_type,
+                "date": exercise.htime.date().isoformat() if exercise.htime else None,
+                "summary": exercise.description or "",
+                "exercise_id": exercise.id,
+            },
+        )
+    except Exception as exc:
+        logger.debug("[health] exercise inbox auto-resolve skipped: %s", exc)
     return read_from_exercise(exercise)
 
 
@@ -1242,6 +1274,22 @@ def create_sleep_impl(db, sleep_create: SleepCreateRequest) -> SleepResponse:
     db.add(sleep)
     db.commit()
     db.refresh(sleep)
+    try:
+        from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+        reconcile_domain_signal(
+            db,
+            domain="health",
+            event="sleep.logged",
+            payload={
+                "hours": _sleep_minutes_to_hours(sleep.hours),
+                "date": sleep.htime.date().isoformat() if sleep.htime else None,
+                "summary": sleep.description or "",
+                "sleep_id": sleep.id,
+            },
+        )
+    except Exception as exc:
+        logger.debug("[health] sleep inbox auto-resolve skipped: %s", exc)
     return read_from_sleep(sleep)
 
 
@@ -1521,6 +1569,22 @@ def create_medication_impl(
     db.add(medication)
     db.commit()
     db.refresh(medication)
+    if medication.taken:
+        try:
+            from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+            reconcile_domain_signal(
+                db,
+                domain="health",
+                event="medication.logged",
+                payload={
+                    "name": medication.name,
+                    "summary": medication.name,
+                    "medication_id": medication.id,
+                },
+            )
+        except Exception as exc:
+            logger.debug("[health] medication inbox auto-resolve skipped: %s", exc)
     return read_from_medication(medication)
 
 
@@ -1652,6 +1716,22 @@ def create_diet_impl(db, diet_create: DietCreateRequest) -> DietResponse:
     db.add(diet)
     db.commit()
     db.refresh(diet)
+    try:
+        from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+        reconcile_domain_signal(
+            db,
+            domain="health",
+            event="diet.logged",
+            payload={
+                "meal_type": diet.meal_type,
+                "date": diet.htime.date().isoformat() if diet.htime else None,
+                "summary": diet.description or "",
+                "diet_id": diet.id,
+            },
+        )
+    except Exception as exc:
+        logger.debug("[health] diet inbox auto-resolve skipped: %s", exc)
     return read_from_diet(diet)
 
 

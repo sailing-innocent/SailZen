@@ -6,6 +6,7 @@ import {
 } from '@lib/data'
 import { type HealthState, useHealthStore } from '@lib/store/health'
 import { type BodyDataState, useBodyDataStore } from '@lib/store/body_data'
+import { useUserInboxStore } from '@lib/store/user'
 import { type BodyDataRecord } from '@lib/data/body_data'
 
 import PageLayout from '@components/page_layout'
@@ -89,6 +90,7 @@ const HealthPage = () => {
 
   const fetchMetrics = useBodyDataStore((state: BodyDataState) => state.fetchMetrics)
   const fetchRecords = useBodyDataStore((state: BodyDataState) => state.fetchRecords)
+  const syncInbox = useUserInboxStore((state) => state.syncInbox)
   const isMobile = useIsMobile()
 
   const selectItems = dateSpanSelectOptions.map((option) => (
@@ -185,13 +187,15 @@ const HealthPage = () => {
       if (weightPlan?.feedbackEnabled) {
         showBodySaveMessage('已记录体重并同步 Rhythm 打卡')
       }
+      syncInbox(false)
     }
   }
 
-  const handleBodyDataChanged = ({ hadWeight }: { hadWeight: boolean }) => {
+  const handleBodyDataChanged = ({ hadWeight = false }: { hadWeight?: boolean } = {}) => {
     if (hadWeight) {
       refreshWeightDerived()
     }
+    syncInbox(false)
   }
 
   const handleCreateExercise = async () => {
@@ -200,6 +204,7 @@ const HealthPage = () => {
       description: exerciseDescription,
     }
     await createExercise(props)
+    syncInbox(false)
     setExerciseDescription('')
     setExerciseDate(new Date())
     setIsExerciseDialogOpen(false)

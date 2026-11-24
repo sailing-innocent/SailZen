@@ -11,6 +11,7 @@ import com.sailzen.app.core.network.AppReleaseDto
 import com.sailzen.app.core.network.ReminderWebSocket
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
+import com.sailzen.app.core.user.UserInboxRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,8 @@ import okhttp3.Request
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     data class UiState(
+        val userDisplayName: String = "SailZen Owner",
+        val userSlug: String = "owner",
         val serverUrl: String = "",
         val serverUrlLocked: Boolean = false,
         val apiToken: String = "",
@@ -42,6 +45,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
 
     private val settings = SettingsManager.get(application)
+    private val userInboxRepo = UserInboxRepository.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -64,6 +68,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             settings.deviceIdFlow.collect { v -> _uiState.update { it.copy(deviceId = v) } }
         }
         viewModelScope.launch {
+            settings.userDisplayNameFlow.collect { v -> _uiState.update { it.copy(userDisplayName = v) } }
+        }
+        viewModelScope.launch {
+            settings.userSlugFlow.collect { v -> _uiState.update { it.copy(userSlug = v) } }
+        }
+        viewModelScope.launch {
             // 确保 deviceId 已生成
             settings.getOrCreateDeviceId()
         }
@@ -84,6 +94,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun onUserDisplayNameChange(value: String) = _uiState.update { it.copy(userDisplayName = value) }
+
     fun onServerUrlChange(value: String) = _uiState.update { it.copy(serverUrl = value) }
 
     fun onApiTokenChange(value: String) = _uiState.update { it.copy(apiToken = value) }
@@ -98,6 +110,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val url = if (current.serverUrlLocked) settings.defaultServerUrl() else current.serverUrl
             settings.saveServerConfig(url, current.apiToken)
             settings.saveQuietHours(current.quietStart, current.quietEnd)
+            userInboxRepo.updateProfile(
+                displayName = current.userDisplayName,
+                quietStart = current.quietStart,
+                quietEnd = current.quietEnd,
+            )
             // 重启前台服务以应用新配置
             if (settings.serverUrl().isNotBlank()) {
                 ReminderService.restart(getApplication())

@@ -465,8 +465,21 @@ class TickEngine:
         tickets: List[Dict[str, Any]] = []
         replies: List[Dict[str, Any]] = []
         unread_messages: List[Dict[str, Any]] = []
+        user_profile: Optional[Dict[str, Any]] = None
         if server_ok:
             try:
+                if hasattr(self.inbox, "get_user_profile"):
+                    user_profile = await self.inbox.get_user_profile()
+                    if isinstance(user_profile, dict):
+                        qh = user_profile.get("quiet_hours")
+                        if isinstance(qh, dict) and qh.get("start") and qh.get("end"):
+                            try:
+                                st_h = int(str(qh["start"]).split(":")[0])
+                                et_h = int(str(qh["end"]).split(":")[0])
+                                self.notifier.config.quiet_hours.start = st_h
+                                self.notifier.config.quiet_hours.end = et_h
+                            except (ValueError, TypeError, AttributeError):
+                                pass
                 await self.inbox.expire_overdue()
                 tickets = await self.inbox.pending_tickets()
                 reply_cursor = await self.db.get_runtime_state("tick_reply_cursor")
@@ -520,6 +533,7 @@ class TickEngine:
         context.update(
             {
                 "server_ok": server_ok,
+                "user_profile": user_profile,
                 "pending_tickets": tickets,
                 "new_replies": replies,
                 "unread_messages": unread_messages,
@@ -589,6 +603,24 @@ class TickEngine:
             if t.get("topic")
         }
 
+        # 话题别名归一化（修复 question_bank.yaml 中 canteen 与 prompt 示例 diet_lunch 错位导致的重复提问）
+        _TOPIC_ALIASES = {
+            "diet_lunch": "canteen",
+            "lunch_source": "canteen",
+            "canteen": "canteen",
+            "diet_dinner": "dinner_habit",
+            "dinner_habit": "dinner_habit",
+            "weight_checkin": "current_weight",
+            "weight_current": "current_weight",
+            "current_weight": "current_weight",
+            "profile_wake_time": "wake_time",
+            "schedule_workday": "wake_time",
+            "wake_time": "wake_time",
+        }
+        canonical_pending = {
+            _TOPIC_ALIASES.get(tp, tp) for tp in pending_topics if tp
+        } | pending_topics
+
         candidates: List[Dict[str, Any]] = []
         for q in bank:
             if not isinstance(q, dict):
@@ -601,9 +633,10 @@ class TickEngine:
             if pkey and pkey in profile and float(profile[pkey].get("confidence", 0)) >= 0.7:
                 continue
             qid = str(q.get("id") or pkey)
-            if qid in pending_topics:
+            canon_qid = _TOPIC_ALIASES.get(qid, qid)
+            if qid in canonical_pending or canon_qid in canonical_pending:
                 continue
-            last_asked_str = topic_history.get(qid)
+            last_asked_str = topic_history.get(qid) or topic_history.get(canon_qid)
             if last_asked_str:
                 try:
                     last_dt = datetime.fromisoformat(str(last_asked_str))
@@ -1096,6 +1129,27 @@ class TickEngine:
             raw_title = t.get("title", "(无标题)")
             title = f"{prefix}{raw_title}" if prefix and not raw_title.startswith(prefix) else raw_title
             topic = str(t.get("topic") or "").strip()
+            meta = dict(t.get("meta")) if isinstance(t.get("meta"), dict) else {}
+            # 附带结构化自动消解信号，便于 sail_server 在用户在 Web/健康页直接记录后秒级消解收件箱
+            if not meta.get("auto_resolve_signals"):
+                tdate = tick.get("tick_date") or self._clock().strftime("%Y-%m-%d")
+                low_topic = topic.lower()
+                if low_topic in ("diet_lunch", "canteen", "lunch_source"):
+                    meta["auto_resolve_signals"] = [
+                        {"domain": "health", "event": "diet.logged", "meal_type": "lunch", "date": tdate}
+                    ]
+                elif low_topic in ("diet_dinner", "dinner_habit"):
+                    meta["auto_resolve_signals"] = [
+                        {"domain": "health", "event": "diet.logged", "meal_type": "dinner", "date": tdate}
+                    ]
+                elif low_topic in ("diet_breakfast", "breakfast"):
+                    meta["auto_resolve_signals"] = [
+                        {"domain": "health", "event": "diet.logged", "meal_type": "breakfast", "date": tdate}
+                    ]
+                elif low_topic in ("weight_checkin", "current_weight"):
+                    meta["auto_resolve_signals"] = [
+                        {"domain": "health", "event": "weight.logged", "date": tdate}
+                    ]
             if tracer is not None:
                 with tracer.span(
                     "ticket_emit",
@@ -1113,7 +1167,7 @@ class TickEngine:
                         fallback_assumption=t.get("fallback_assumption", ""),
                         suppress_push=suppress_push,
                         topic=topic,
-                        meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
+                        meta=meta,
                     )
                     tsp.set_output(f"ticket_id={result.get('ticket_id')} action={result.get('action', '')}")
                     tsp.set_payload({"title": title, "topic": topic, "result": result})
@@ -1131,12 +1185,26 @@ class TickEngine:
                     fallback_assumption=t.get("fallback_assumption", ""),
                     suppress_push=suppress_push,
                     topic=topic,
-                    meta=t.get("meta") if isinstance(t.get("meta"), dict) else {},
+                    meta=meta,
                 )
             emitted.append({"title": title, "result": result})
             if result.get("ticket_id"):
                 if topic:
-                    topic_history[topic] = self._clock().isoformat()
+                    ts_iso = self._clock().isoformat()
+                    topic_history[topic] = ts_iso
+                    # 同时写入规范别名，确保冷却与题库过滤一致
+                    _canon_map = {
+                        "diet_lunch": "canteen",
+                        "lunch_source": "canteen",
+                        "canteen": "diet_lunch",
+                        "diet_dinner": "dinner_habit",
+                        "dinner_habit": "diet_dinner",
+                        "weight_checkin": "current_weight",
+                        "current_weight": "weight_checkin",
+                    }
+                    alias_key = _canon_map.get(topic)
+                    if alias_key:
+                        topic_history[alias_key] = ts_iso
                 await self.memory.save_episode(
                     tick["id"], "work", {"ticket_created": result["ticket_id"], "title": title, "topic": topic}
                 )
@@ -1381,12 +1449,20 @@ class TickEngine:
             except Exception as exc:
                 logger.warning("WORK ingest_user_messages failed (non-fatal): %s", exc)
 
-        # 推进体重水位线与回复同步游标
+        # 推进体重水位线与回复同步游标（仅在非降级 PLAN 或确实吸收了回复动作时才推进，防止回复丢失后重复提问）
         if context.get("current_weight_watermark"):
             await self.db.set_runtime_state(
                 "last_weight_watermark", context["current_weight_watermark"]
             )
-        if context.get("new_replies"):
+        plan_degraded = bool(context.get("plan_degraded")) or bool(
+            (context.get("plan") or {}).get("_fallback")
+        )
+        absorbed_reply = any(
+            r.get("ok") and r.get("kind") in ("profile_update", "resolve_ticket", "memory", "diet_log")
+            for r in work_results
+            if isinstance(r, dict)
+        )
+        if context.get("new_replies") and (not plan_degraded or absorbed_reply):
             latest_ts = max(
                 (str(r.get("updated_at") or r.get("replied_at") or "") for r in context["new_replies"]),
                 default="",

@@ -174,6 +174,22 @@ def create_body_data_impl(db: Session, data: BodyDataCreateRequest) -> BodyDataR
 
     if weight is not None:
         _sync_weight_rhythm_feedback(db, weight)
+        try:
+            from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+            reconcile_domain_signal(
+                db,
+                domain="health",
+                event="weight.logged",
+                payload={
+                    "value": float(weight.value),
+                    "date": record.htime.date().isoformat() if record.htime else None,
+                    "body_data_id": record.id,
+                    "weight_id": weight.id,
+                },
+            )
+        except Exception as exc:
+            logger.debug("[body_data] inbox auto-resolve skipped: %s", exc)
     return read_from_body_data(record)
 
 

@@ -23,6 +23,7 @@ JSON 字段使用 sail_server.data.types.JSONB（PG 原生 / SQLite Text+JSON）
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     ForeignKey,
@@ -43,6 +44,10 @@ class Reminder(ORMBase):
     __tablename__ = "reminders"
 
     id = Column(Integer, primary_key=True)
+    # 归属用户 ID（逻辑引用 user_profiles.id，默认单用户 owner=1）
+    user_id = Column(Integer, default=1, index=True)
+    # 关联统一收件箱条目 ID（逻辑引用 user_inbox_items.id）
+    inbox_item_id = Column(Integer, nullable=True, index=True)
     # 提醒类型：attendance.checkin / diet.log / affair.due / agent.message / test.ping ...
     type = Column(String, index=True)
     title = Column(String)
@@ -128,18 +133,27 @@ class ReminderRule(ORMBase):
 
 
 class Device(ORMBase):
-    """注册的 App 设备"""
+    """注册的终端设备（Android / Web / CLI / VSCode 插件）"""
 
     __tablename__ = "devices"
 
     id = Column(Integer, primary_key=True)
-    # App 端 UUID（DataStore 持久）
+    # 归属用户 ID（逻辑引用 user_profiles.id，默认单用户 owner=1）
+    user_id = Column(Integer, default=1, index=True)
+    # 端侧 UUID（Android DataStore / Web localStorage 持久）
     device_id = Column(String, unique=True, index=True)
     device_name = Column(String, default="")
     platform = Column(String, default="android")
+    # android | web | vscode | cli | qq_bot | sailtick
+    client_type = Column(String(32), default="android")
     app_version = Column(String, default="")
     # 预留（FCM 等），M1 不使用
     push_token = Column(String, nullable=True)
+    # 终端能力声明：{"push_ws": true, "system_notification": true}
+    capabilities = Column(JSONB, default=dict)
+    is_active = Column(Boolean, default=True)
+    # 终端最后一次同步到的收件箱游标
+    last_sync_seq = Column(BigInteger, default=0)
     last_seen_at = Column(TIMESTAMP, server_default=func.current_timestamp())
 
 

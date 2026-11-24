@@ -21,6 +21,7 @@ import {
   type TickTicket,
 } from '@lib/api/tick'
 import { BellOff, Check, ChevronDown, ChevronUp, Moon, Send, Sparkles, Utensils } from 'lucide-react'
+import { useUserInboxStore } from '@lib/store/user'
 
 interface SailTickCoachPanelProps {
   onDataChanged?: () => void
@@ -69,9 +70,12 @@ export const SailTickCoachPanel: React.FC<SailTickCoachPanelProps> = ({ onDataCh
     }
   }, [])
 
+  const inboxVersion = useUserInboxStore((s) => s.inboxVersion)
+  const syncInbox = useUserInboxStore((s) => s.syncInbox)
+
   useEffect(() => {
     refresh()
-  }, [refresh])
+  }, [refresh, inboxVersion])
 
   const activeReport =
     reports.find((r) => r.report_date === selectedReportDate) ?? summary?.latest_report ?? null
@@ -106,12 +110,12 @@ export const SailTickCoachPanel: React.FC<SailTickCoachPanelProps> = ({ onDataCh
     if (!text) return
     await api_reply_ticket(ticket.id, text)
     setReplyDrafts((prev) => ({ ...prev, [ticket.id]: '' }))
-    await refresh()
+    await Promise.all([refresh(), syncInbox(false)])
   }
 
   const handleSnoozeTicket = async (ticketId: number) => {
     await api_snooze_ticket(ticketId, 24)
-    await refresh()
+    await Promise.all([refresh(), syncInbox(false)])
   }
 
   const pendingTickets = summary?.pending_tickets ?? []

@@ -24,6 +24,32 @@ data class CachedReminder(
 )
 
 /**
+ * 统一用户收件箱本地缓存（对应后端 user_inbox_items，由 sync_seq 单调游标精确对账）。
+ */
+@Entity(tableName = "inbox_cache")
+data class CachedInboxItem(
+    @PrimaryKey val id: Int,
+    val syncSeq: Long,
+    val sourceDomain: String,
+    val itemKind: String,
+    val topic: String,
+    val refType: String,
+    val refId: Int?,
+    val reminderId: Int?,
+    val ticketId: Int?,
+    val title: String,
+    val body: String,
+    val priority: String,
+    val status: String, // pending | delivered | snoozed | opened | answered | resolved | dismissed | expired | canceled
+    val isRead: Boolean,
+    val actionSchemaJson: String,
+    val replyText: String?,
+    val resolutionSource: String,
+    val resolutionSummary: String,
+    val updatedAt: String,
+)
+
+/**
  * 离线反馈队列：网络不可用时暂存，联网后按序批量上报，
  * 服务端按 client_event_ts 还原时序。
  */

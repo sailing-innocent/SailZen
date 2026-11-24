@@ -30,6 +30,7 @@ import com.sailzen.app.core.tick.SharedImageInbox
 import com.sailzen.app.core.tick.SharedImagePayload
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
+import com.sailzen.app.core.user.UserInboxRepository
 import com.sailzen.app.ui.components.AppUpdateDialog
 import com.sailzen.app.ui.navigation.Routes
 import com.sailzen.app.ui.navigation.SailZenNavGraph
@@ -192,10 +193,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // 前台生命周期保证 ReminderService 一定能正常拉起（兼容 Android 12+ 后台启动限制）
-        lifecycleScope.launch {
+        // 前台生命周期保证 ReminderService 一定能正常拉起，并静默引导 UserProfile 与对账收件箱
+        lifecycleScope.launch(Dispatchers.IO) {
             if (SettingsManager.get(applicationContext).serverUrl().isNotBlank()) {
                 ReminderService.ensureStarted(applicationContext)
+                val userInbox = UserInboxRepository.get(applicationContext)
+                userInbox.bootstrapSilently()
+                userInbox.syncInbox(full = false)
             }
         }
     }

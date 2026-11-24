@@ -120,11 +120,15 @@ class SailServer:
         from sail_server.router.tick import router as tick_router
         from sail_server.router.app_release import router as app_release_router
         from sail_server.router.telemetry import router as telemetry_router
+        from sail_server.router.user import router as user_router
+        from sail_server.router.inbox import router as inbox_router
 
         self.api_router = Router(
             path=self.api_endpoint,
             route_handlers=[
                 health_check,
+                user_router,
+                inbox_router,
                 health_router,
                 finance_router,
                 history_router,
@@ -234,6 +238,22 @@ class SailServer:
             self._ensure_telemetry_schema(logger)
         except Exception as e:
             logger.warning(f"[Startup] Telemetry schema self-check failed: {e}")
+
+        # 统一 UserProfile 默认 owner 幂等引导（单用户免登录自动打开）
+        try:
+            from sail_server.model.user import ensure_default_user_profile
+            from sail_server.db import Database
+
+            db = Database.get_instance().get_db_session()
+            try:
+                owner = ensure_default_user_profile(db)
+                logger.info(
+                    f"[Startup] Default UserProfile ready: id={owner.id} slug={owner.slug}"
+                )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"[Startup] Default UserProfile bootstrap failed: {e}")
 
         # 启动埋点聚合定期刷盘任务（失败仅告警，不影响服务启动）
         try:

@@ -13,6 +13,7 @@ import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.ReminderWebSocket
 import com.sailzen.app.core.reminder.NotificationHelper
 import com.sailzen.app.core.reminder.ReminderRepository
+import com.sailzen.app.core.user.UserInboxRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -81,12 +82,14 @@ class ReminderService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var repository: ReminderRepository
+    private lateinit var userInboxRepository: UserInboxRepository
     private var webSocket: ReminderWebSocket? = null
     private var refreshJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
         repository = ReminderRepository.get(this)
+        userInboxRepository = UserInboxRepository.get(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -98,7 +101,9 @@ class ReminderService : Service() {
         startWebSocket(forceReconnect = forceReconnect)
         startPeriodicRefresh()
         serviceScope.launch {
+            userInboxRepository.bootstrapSilently()
             repository.registerDevice()
+            userInboxRepository.syncInbox(full = true)
             repository.syncPending()
             refreshServiceNotification()
         }
@@ -131,13 +136,30 @@ class ReminderService : Service() {
                 if (url.isBlank()) {
                     null
                 } else {
-                    ApiClient.wsUrl(url, settings.getOrCreateDeviceId(), settings.apiToken())
+                    ApiClient.userWsUrl(url, settings.getOrCreateDeviceId(), settings.apiToken())
                 }
             },
             onReminder = { dto ->
                 serviceScope.launch {
                     repository.processDelivered(dto)
                     refreshServiceNotification()
+                }
+            },
+            onInboxUpserted = { item, shouldNotify ->
+                serviceScope.launch {
+                    userInboxRepository.processWsUpserted(item, shouldNotify)
+                    refreshServiceNotification()
+                }
+            },
+            onInboxResolved = { ev ->
+                serviceScope.launch {
+                    userInboxRepository.processWsResolved(ev)
+                    refreshServiceNotification()
+                }
+            },
+            onProfileUpdated = { profile ->
+                serviceScope.launch {
+                    userInboxRepository.applyProfileLocally(profile)
                 }
             },
             onStateChange = { connected -> connectedState.value = connected },
@@ -158,6 +180,7 @@ class ReminderService : Service() {
         refreshJob = serviceScope.launch {
             while (true) {
                 delay(5 * 60 * 1000L)
+                userInboxRepository.syncInbox(full = false)
                 repository.syncPending()
                 refreshServiceNotification()
             }
@@ -165,9 +188,7 @@ class ReminderService : Service() {
     }
 
     private suspend fun refreshServiceNotification() {
-        val summary = repository.summaryToday()
-        val count = summary?.pending
-            ?: AppDatabase.get(this).reminderDao().activeList().size
+        val count = userInboxRepository.activeCountLocal()
         try {
             NotificationManagerCompat.from(this).notify(
                 NotificationHelper.SERVICE_NOTIFICATION_ID,

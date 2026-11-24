@@ -47,7 +47,7 @@ class TicketInbox:
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            headers = {}
+            headers = {"X-SailZen-Client": "sailtick"}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
             is_local = "127.0.0.1" in self.api_base or "localhost" in self.api_base
@@ -302,6 +302,39 @@ class TicketInbox:
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, list) else data.get("items", [])
+
+    # ── 统一 UserProfile 读写 ───────────────────────────────────────────
+
+    async def get_user_profile(self) -> Optional[Dict[str, Any]]:
+        """拉取 sail_server 统一 UserProfile（安静时段、目标体重、跨端偏好）。"""
+        try:
+            client = self._get_client()
+            resp = await client.get(f"{self.api_base}/user/profile", timeout=8.0)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            logger.debug("get_user_profile skipped (non-fatal): %s", exc)
+            return None
+
+    async def update_user_health_profile(self, health_patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """将高置信度学到的公开画像字段回写到 UserProfile.health_profile。"""
+        if not health_patch:
+            return None
+        try:
+            client = self._get_client()
+            resp = await client.patch(
+                f"{self.api_base}/user/profile",
+                json={"health_profile": health_patch},
+                timeout=8.0,
+            )
+            if resp.status_code >= 400:
+                return None
+            return resp.json()
+        except Exception as exc:
+            logger.debug("update_user_health_profile skipped (non-fatal): %s", exc)
+            return None
 
     # ── AI Trace 上报 ───────────────────────────────────────────────────
 

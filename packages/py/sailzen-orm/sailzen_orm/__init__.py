@@ -14,12 +14,17 @@ SailZen 共享数据库结构声明层：sail_server 与 sailzen-cli 共用。
 
 from sailzen_orm.orm_base import ORMBase
 
+# User & Unified Inbox Models
+from sailzen_orm.user import UserProfile
+from sailzen_orm.inbox import UserInboxItem, UserInboxEvent
+
 # Reminder Models
 from sailzen_orm.reminder import (
     Reminder,
     ReminderEvent,
     ReminderRule,
     Device,
+    ReminderSourceConfig,
 )
 
 # Health Models
@@ -113,11 +118,16 @@ from sailzen_orm.telemetry import (
 __all__ = [
     # Base
     "ORMBase",
+    # User & Unified Inbox
+    "UserProfile",
+    "UserInboxItem",
+    "UserInboxEvent",
     # Reminder
     "Reminder",
     "ReminderEvent",
     "ReminderRule",
     "Device",
+    "ReminderSourceConfig",
     # Health
     "Weight",
     "BodySize",

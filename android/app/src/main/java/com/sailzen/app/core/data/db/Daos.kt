@@ -45,6 +45,42 @@ interface ReminderDao {
 }
 
 @Dao
+interface InboxDao {
+
+    @Upsert
+    suspend fun upsert(item: CachedInboxItem)
+
+    @Upsert
+    suspend fun upsertAll(items: List<CachedInboxItem>)
+
+    @Query("SELECT * FROM inbox_cache WHERE id = :id")
+    suspend fun byId(id: Int): CachedInboxItem?
+
+    @Query(
+        "SELECT * FROM inbox_cache " +
+            "WHERE status IN ('pending', 'delivered', 'snoozed', 'opened') " +
+            "ORDER BY syncSeq DESC"
+    )
+    fun observeActive(): Flow<List<CachedInboxItem>>
+
+    @Query(
+        "SELECT * FROM inbox_cache " +
+            "WHERE status NOT IN ('pending', 'delivered', 'snoozed', 'opened') " +
+            "ORDER BY syncSeq DESC LIMIT 60"
+    )
+    fun observeHistory(): Flow<List<CachedInboxItem>>
+
+    @Query(
+        "SELECT * FROM inbox_cache " +
+            "WHERE status IN ('pending', 'delivered', 'snoozed', 'opened')"
+    )
+    suspend fun activeList(): List<CachedInboxItem>
+
+    @Query("DELETE FROM inbox_cache")
+    suspend fun clear()
+}
+
+@Dao
 interface FeedbackDao {
 
     @Insert

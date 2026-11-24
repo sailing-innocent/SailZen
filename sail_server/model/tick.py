@@ -104,12 +104,12 @@ def _create_and_push_agent_reminder(
     priority: str,
     payload: Dict[str, Any],
     expire_minutes: int = 720,
-) -> bool:
-    """持久化一条 source='agent' 的 Reminder 并向在线 Android 设备广播。
+) -> Optional[int]:
+    """持久化一条 source='agent' 的 Reminder 并向在线 Android 设备广播，返回新 Reminder ID。
 
     这样无论 Android 当前 WS 在线与否：
     - 在线设备通过 WS 立即收到通知；
-    - 离线设备稍后通过 /api/v1/reminder/pending 轮询也能可靠补齐，且与 reminders.id 绝无冲突。
+    - 离线设备稍后通过 /api/v1/reminder/pending 或 /api/v1/inbox/sync 都能可靠补齐。
     """
     try:
         import asyncio
@@ -147,14 +147,14 @@ def _create_and_push_agent_reminder(
                 loop.create_task(res)
         except RuntimeError:
             logger.debug("no running loop, reminder %s persisted for poll delivery", rem.id)
-        return True
+        return rem.id
     except Exception as exc:
         logger.warning("agent reminder persist/push failed (non-fatal): %s", exc)
         try:
             db.rollback()
         except Exception:
             pass
-        return False
+        return None
 
 
 def _resolve_linked_ticket_reminders(db: Session, ticket_id: int) -> None:
@@ -181,14 +181,14 @@ def _resolve_linked_ticket_reminders(db: Session, ticket_id: int) -> None:
         logger.debug("resolve linked reminders skipped (non-fatal): %s", exc)
 
 
-def _push_if_needed(db: Session, t: SailTickTicket) -> None:
+def _push_if_needed(db: Session, t: SailTickTicket) -> Optional[int]:
     """高优先/强制推送的票据落库 Reminder 并广播给在线 Android 设备（失败仅告警）。"""
     should_push = t.push == "force" or (
         t.push == "auto" and t.priority in ("high", "urgent")
     )
     if not should_push:
-        return
-    _create_and_push_agent_reminder(
+        return None
+    return _create_and_push_agent_reminder(
         db=db,
         rem_type=f"tick.ticket.{t.type}",
         title=t.title,
@@ -231,7 +231,17 @@ def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
     db.flush()
     db.commit()
     db.refresh(t)
-    _push_if_needed(db, t)
+    rem_id = _push_if_needed(db, t)
+    try:
+        from sail_server.model.inbox import project_ticket_to_inbox
+
+        should_notify = t.push == "force" or (
+            t.push == "auto" and t.priority in ("high", "urgent")
+        )
+        project_ticket_to_inbox(db, t, reminder_id=rem_id, notify=should_notify)
+        db.refresh(t)
+    except Exception as exc:
+        logger.debug("[tick] project_ticket_to_inbox skipped: %s", exc)
     logger.info("[tick] ticket %s created: type=%s topic=%s priority=%s", t.id, t.type, t.topic, t.priority)
     return _to_response(t)
 
@@ -280,6 +290,12 @@ def reply_ticket_impl(db: Session, ticket_id: int, reply: str) -> TicketResponse
     db.commit()
     db.refresh(t)
     _resolve_linked_ticket_reminders(db, t.id)
+    try:
+        from sail_server.model.inbox import sync_inbox_on_ticket_changed
+
+        sync_inbox_on_ticket_changed(db, t, action="replied")
+    except Exception as exc:
+        logger.debug("[tick] sync inbox on reply skipped: %s", exc)
     logger.info("[tick] ticket %s replied", t.id)
     return _to_response(t)
 
@@ -297,6 +313,12 @@ def resolve_ticket_impl(db: Session, ticket_id: int, resolution: str = "") -> Ti
     db.commit()
     db.refresh(t)
     _resolve_linked_ticket_reminders(db, t.id)
+    try:
+        from sail_server.model.inbox import sync_inbox_on_ticket_changed
+
+        sync_inbox_on_ticket_changed(db, t, action="resolved")
+    except Exception as exc:
+        logger.debug("[tick] sync inbox on resolve skipped: %s", exc)
     logger.info("[tick] ticket %s resolved", t.id)
     return _to_response(t)
 
@@ -313,6 +335,12 @@ def snooze_ticket_impl(db: Session, ticket_id: int, hours: int = 24) -> TicketRe
     t.expected_reply_by = base + timedelta(hours=hours)
     db.commit()
     db.refresh(t)
+    try:
+        from sail_server.model.inbox import sync_inbox_on_ticket_changed
+
+        sync_inbox_on_ticket_changed(db, t, action="snoozed")
+    except Exception as exc:
+        logger.debug("[tick] sync inbox on snooze skipped: %s", exc)
     logger.info("[tick] ticket %s snoozed %dh", t.id, hours)
     return _to_response(t)
 
@@ -334,6 +362,12 @@ def expire_overdue_impl(db: Session) -> int:
     db.commit()
     for t in rows:
         _resolve_linked_ticket_reminders(db, t.id)
+        try:
+            from sail_server.model.inbox import sync_inbox_on_ticket_changed
+
+            sync_inbox_on_ticket_changed(db, t, action="expired", actor_client="system")
+        except Exception:
+            pass
     if rows:
         logger.info("[tick] expired %d overdue tickets", len(rows))
     return len(rows)
@@ -440,6 +474,47 @@ def create_message_impl(
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # 跨端自动消解：用户在 Web/Android 健康页发餐饮/体重/运动/睡眠消息时，自动消解匹配的待回提问与提醒
+    if req.direction == "user_to_agent":
+        try:
+            from sail_server.model.inbox_resolver import reconcile_domain_signal
+
+            actor = req.source_channel or "web"
+            if req.category == "diet":
+                meal_type = meta.get("meal_type") or _infer_meal_type(now, meta)
+                reconcile_domain_signal(
+                    db,
+                    domain="health",
+                    event="diet.logged",
+                    payload={
+                        "meal_type": meal_type,
+                        "date": now.date().isoformat(),
+                        "summary": content,
+                        "message_id": msg.id,
+                        "diet_id": meta.get("linked_diet_id"),
+                    },
+                    actor_client=actor,
+                )
+            elif req.category == "weight":
+                reconcile_domain_signal(
+                    db,
+                    domain="health",
+                    event="weight.logged",
+                    payload={"date": now.date().isoformat(), "summary": content, "message_id": msg.id},
+                    actor_client=actor,
+                )
+            elif req.category == "exercise":
+                reconcile_domain_signal(
+                    db,
+                    domain="health",
+                    event="exercise.logged",
+                    payload={"date": now.date().isoformat(), "summary": content, "message_id": msg.id},
+                    actor_client=actor,
+                )
+        except Exception as exc:
+            logger.debug("[tick] message auto-resolve skipped: %s", exc)
+
     logger.info(
         "[tick] message %s saved: direction=%s category=%s channel=%s",
         msg.id,
@@ -561,8 +636,9 @@ def upsert_daily_report_impl(
     db.refresh(rep)
 
     # 同一天日报避免重复轰炸推送
+    rem_id: Optional[int] = None
     if req.push and not already_pushed:
-        pushed = _create_and_push_agent_reminder(
+        rem_id = _create_and_push_agent_reminder(
             db=db,
             rem_type="tick.daily_report",
             title=rep.title,
@@ -575,10 +651,19 @@ def upsert_daily_report_impl(
             },
             expire_minutes=720,
         )
-        if pushed:
+        if rem_id is not None:
             rep.pushed = True
             db.commit()
             db.refresh(rep)
+
+    try:
+        from sail_server.model.inbox import project_daily_report_to_inbox
+
+        project_daily_report_to_inbox(
+            db, rep, reminder_id=rem_id, notify=bool(req.push and not already_pushed)
+        )
+    except Exception as exc:
+        logger.debug("[tick] project_daily_report_to_inbox skipped: %s", exc)
 
     logger.info("[tick] daily report upserted: date=%s pushed=%s", rep.report_date, rep.pushed)
     return _to_report_response(rep)

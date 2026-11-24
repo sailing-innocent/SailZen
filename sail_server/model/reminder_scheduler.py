@@ -123,24 +123,43 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
 
     created = 0
 
-    def _today_exists(type_: str) -> bool:
-        return (
+    def _today_exists(type_: str, payload_key: Optional[str] = None, payload_val: Optional[str] = None) -> bool:
+        rows = (
             db.query(Reminder)
             .filter(
                 Reminder.type == type_,
                 Reminder.trigger_time >= datetime.combine(today, datetime.min.time()),
                 Reminder.trigger_time < datetime.combine(today + timedelta(days=1), datetime.min.time()),
             )
-            .first()
-            is not None
+            .all()
         )
+        if not payload_key:
+            return len(rows) > 0
+        for row in rows:
+            p = row.payload if isinstance(row.payload, dict) else {}
+            if str(p.get(payload_key, "")) == str(payload_val):
+                return True
+        return False
 
-    def _create(type_: str, title: str, body: str, trigger: datetime, payload: Dict[str, Any], source: str = "rhythm") -> None:
+    def _create(
+        type_: str,
+        title: str,
+        body: str,
+        trigger: datetime,
+        payload: Dict[str, Any],
+        source: str = "rhythm",
+        dedup_payload_key: Optional[str] = None,
+    ) -> None:
         nonlocal created
-        if _today_exists(type_):
+        if _today_exists(
+            type_,
+            dedup_payload_key,
+            payload.get(dedup_payload_key) if dedup_payload_key else None,
+        ):
             return
-        quiet_hours = profile.spare_time_windows or DEFAULT_QUIET_HOURS
-        if is_in_quiet_hours(quiet_hours, trigger):
+        from sail_server.model.user import is_user_in_quiet_hours
+
+        if is_user_in_quiet_hours(db, user_id=1, now=trigger):
             return
         r = Reminder(
             type=type_,
@@ -164,17 +183,30 @@ def _generate_rhythm_daily_brief(db: Session, now: datetime) -> int:
     # 起床提醒：sleep_end
     sleep_end = str(profile.sleep_end or "07:00")
     h, m = int(sleep_end.split(":")[0]), int(sleep_end.split(":")[1])
-    _create("rhythm.daily_brief", "早安，准备开始一天", "查看今日 Rhythm 安排", _make_time(h, m), {"sub_type": "wake_up"}, source="rhythm.daily_brief")
+    _create(
+        "rhythm.daily_brief",
+        "早安，准备开始一天",
+        "查看今日 Rhythm 安排",
+        _make_time(h, m),
+        {"sub_type": "wake_up"},
+        source="rhythm.daily_brief",
+        dedup_payload_key="sub_type",
+    )
 
-    # 三餐提醒
-    for label, hh, mm in [("早餐", 8, 0), ("午餐", 12, 0), ("晚餐", 18, 30)]:
+    # 三餐提醒（按 meal_type 分别幂等去重，修复早饭生成后跳过午/晚饭的 Bug）
+    for label, meal_code, hh, mm in [
+        ("早餐", "breakfast", 8, 0),
+        ("午餐", "lunch", 12, 0),
+        ("晚餐", "dinner", 18, 30),
+    ]:
         _create(
             "rhythm.meal",
             f"{label}时间",
             f"记录{label}",
             _make_time(hh, mm),
-            {"meal_type": label, "collection_type": "meal"},
+            {"meal_type": meal_code, "meal_label": label, "collection_type": "meal"},
             source="rhythm.meal",
+            dedup_payload_key="meal_type",
         )
 
     def _today_plan_reminder_exists(plan_id: int) -> bool:
@@ -374,6 +406,15 @@ def scan_once(
                 pushed_payloads.append(read_from_reminder(r).model_dump(mode="json"))
                 stats["delivered"] += 1
             db.commit()
+            for r in rows:
+                try:
+                    from sail_server.model.inbox import sync_inbox_on_reminder_changed
+
+                    sync_inbox_on_reminder_changed(
+                        db, r, action="delivered", actor_client="system"
+                    )
+                except Exception:
+                    pass
             if len(rows) < batch_size:
                 break
 

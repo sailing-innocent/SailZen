@@ -9,9 +9,11 @@ export * from './money'
 export * from './affair'
 export * from './pems'
 export * from './rhythm'
+export * from './user'
 
 export { useBudgetsStore, useFinanceTagsStore } from './money'
 export { useRhythmStore } from './rhythm'
+export { useUserInboxStore } from './user'
 
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import { api_get_health } from '@lib/api'

@@ -1,9 +1,11 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package com.sailzen.app.feature.inbox
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -47,10 +50,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.R
-import com.sailzen.app.core.data.db.CachedReminder
+import com.sailzen.app.core.data.db.CachedInboxItem
 import com.sailzen.app.core.network.ApiClient
-import com.sailzen.app.core.network.dto.ReminderDto
-import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -64,13 +67,15 @@ fun InboxScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
-    var snoozeTarget by remember { mutableStateOf<CachedReminder?>(null) }
+    var snoozeTarget by remember { mutableStateOf<CachedInboxItem?>(null) }
     val listState = rememberLazyListState()
 
-    // 通知"处理"跳入：滚动到对应卡片
+    // 通知"处理"跳入：滚动到对应收件箱卡片（兼容 reminderId 或 inboxItemId）
     LaunchedEffect(highlightReminderId, state.pending) {
         if (highlightReminderId > 0) {
-            val index = state.pending.indexOfFirst { it.id == highlightReminderId }
+            val index = state.pending.indexOfFirst {
+                it.reminderId == highlightReminderId || it.id == highlightReminderId
+            }
             if (index >= 0) {
                 listState.animateScrollToItem(index)
             }
@@ -99,16 +104,16 @@ fun InboxScreen(
                 .fillMaxSize(),
         ) {
             SummaryCard(
-                pending = state.summary?.pending,
-                resolved = state.summary?.resolved,
-                ignored = state.summary?.ignored,
-                expired = state.summary?.expired,
+                active = state.summary?.active ?: state.pending.size,
+                answered = (state.summary?.answered ?: 0) + (state.summary?.resolved ?: 0),
+                dismissed = state.summary?.dismissed ?: 0,
+                expired = state.summary?.expired ?: 0,
             )
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text(stringResource(R.string.inbox_tab_pending)) },
+                    text = { Text("${stringResource(R.string.inbox_tab_pending)} (${state.pending.size})") },
                 )
                 Tab(
                     selected = selectedTab == 1,
@@ -117,21 +122,17 @@ fun InboxScreen(
                 )
             }
             if (selectedTab == 0) {
-                PendingList(
+                PendingInboxList(
                     pending = state.pending,
                     listState = listState,
-                    highlightReminderId = highlightReminderId,
-                    onOpen = { viewModel.open(it.id) },
+                    onReply = { item, text -> viewModel.reply(item.id, text) },
                     onResolve = { viewModel.resolve(it.id) },
                     onSnooze = { snoozeTarget = it },
                     onDismiss = { viewModel.dismiss(it.id) },
-                    onReplyAgentTicket = { rem, ticketId, reply ->
-                        viewModel.replyAgentTicket(rem.id, ticketId, reply)
-                    },
                     onOpenHealthCoach = onOpenHealthCoach,
                 )
             } else {
-                HistoryList(history = state.history)
+                HistoryInboxList(history = state.history)
             }
         }
     }
@@ -149,10 +150,10 @@ fun InboxScreen(
 
 @Composable
 private fun SummaryCard(
-    pending: Int?,
-    resolved: Int?,
-    ignored: Int?,
-    expired: Int?,
+    active: Int,
+    answered: Int,
+    dismissed: Int,
+    expired: Int,
 ) {
     Card(
         modifier = Modifier
@@ -166,28 +167,53 @@ private fun SummaryCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "待处理 ${pending ?: 0} · 已完成 ${resolved ?: 0} · " +
-                    "已忽略 ${ignored ?: 0} · 已过期 ${expired ?: 0}",
+                text = "待处理 $active · 已处理 $answered · 已忽略 $dismissed · 已过期 $expired",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
     }
 }
 
-private fun extractTicketId(payloadJson: String): Int? = runCatching {
-    ApiClient.json.parseToJsonElement(payloadJson).jsonObject["ticket_id"]?.jsonPrimitive?.intOrNull
-}.getOrNull()
+private fun extractQuickReplies(actionSchemaJson: String): List<String> = runCatching {
+    val obj = ApiClient.json.parseToJsonElement(actionSchemaJson).jsonObject
+    obj["quick_replies"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content.takeIf(String::isNotBlank) }
+        ?: emptyList()
+}.getOrDefault(emptyList())
+
+private fun allowsTextReply(item: CachedInboxItem): Boolean {
+    if (item.itemKind == "question") return true
+    return runCatching {
+        val obj = ApiClient.json.parseToJsonElement(item.actionSchemaJson).jsonObject
+        obj["allow_text_reply"]?.jsonPrimitive?.booleanOrNull == true
+    }.getOrDefault(false)
+}
+
+private fun domainLabel(domain: String): String = when (domain) {
+    "sailtick" -> "AI 教练"
+    "rhythm" -> "节奏"
+    "health" -> "健康"
+    "finance" -> "财务"
+    else -> "系统"
+}
+
+private fun statusLabel(status: String): String = when (status) {
+    "answered" -> "已答复"
+    "resolved" -> "已完成"
+    "dismissed" -> "已忽略"
+    "expired" -> "已过期"
+    "canceled" -> "已撤销"
+    "snoozed" -> "已延后"
+    else -> status
+}
 
 @Composable
-private fun PendingList(
-    pending: List<CachedReminder>,
+private fun PendingInboxList(
+    pending: List<CachedInboxItem>,
     listState: LazyListState,
-    highlightReminderId: Int,
-    onOpen: (CachedReminder) -> Unit,
-    onResolve: (CachedReminder) -> Unit,
-    onSnooze: (CachedReminder) -> Unit,
-    onDismiss: (CachedReminder) -> Unit,
-    onReplyAgentTicket: (CachedReminder, Int, String) -> Unit,
+    onReply: (CachedInboxItem, String) -> Unit,
+    onResolve: (CachedInboxItem) -> Unit,
+    onSnooze: (CachedInboxItem) -> Unit,
+    onDismiss: (CachedInboxItem) -> Unit,
     onOpenHealthCoach: () -> Unit,
 ) {
     if (pending.isEmpty()) {
@@ -195,17 +221,13 @@ private fun PendingList(
         return
     }
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-        items(pending, key = { it.id }) { reminder ->
-            ReminderCard(
-                reminder = reminder,
-                highlighted = reminder.id == highlightReminderId,
-                onOpen = { onOpen(reminder) },
-                onResolve = { onResolve(reminder) },
-                onSnooze = { onSnooze(reminder) },
-                onDismiss = { onDismiss(reminder) },
-                onReplyAgentTicket = { ticketId, reply ->
-                    onReplyAgentTicket(reminder, ticketId, reply)
-                },
+        items(pending, key = { it.id }) { item ->
+            InboxItemCard(
+                item = item,
+                onReply = { text -> onReply(item, text) },
+                onResolve = { onResolve(item) },
+                onSnooze = { onSnooze(item) },
+                onDismiss = { onDismiss(item) },
                 onOpenHealthCoach = onOpenHealthCoach,
             )
         }
@@ -213,23 +235,24 @@ private fun PendingList(
 }
 
 @Composable
-private fun ReminderCard(
-    reminder: CachedReminder,
-    highlighted: Boolean,
-    onOpen: () -> Unit,
+private fun InboxItemCard(
+    item: CachedInboxItem,
+    onReply: (String) -> Unit,
     onResolve: () -> Unit,
     onSnooze: () -> Unit,
     onDismiss: () -> Unit,
-    onReplyAgentTicket: (Int, String) -> Unit,
     onOpenHealthCoach: () -> Unit,
 ) {
-    val ticketId = remember(reminder.id, reminder.payloadJson) { extractTicketId(reminder.payloadJson) }
-    val isAgentTicket = reminder.type.startsWith("tick.ticket.") && ticketId != null
-    val isDailyReport = reminder.type == "tick.daily_report"
-    var replyDraft by remember(reminder.id) { mutableStateOf("") }
+    val quickReplies = remember(item.id, item.actionSchemaJson) {
+        extractQuickReplies(item.actionSchemaJson)
+    }
+    val canReply = remember(item.id, item.itemKind, item.actionSchemaJson) {
+        allowsTextReply(item)
+    }
+    val isDailyReport = item.itemKind == "report" || item.topic == "daily_report"
+    var replyDraft by remember(item.id) { mutableStateOf("") }
 
     Card(
-        onClick = onOpen,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -237,24 +260,37 @@ private fun ReminderCard(
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = reminder.title,
+                    text = item.title,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
-                PriorityChip(priority = reminder.priority)
+                PriorityChip(priority = item.priority)
             }
-            if (reminder.body.isNotBlank()) {
+            if (item.body.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(text = reminder.body, style = MaterialTheme.typography.bodyMedium)
+                Text(text = item.body, style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${reminder.type} · ${reminder.triggerTime}" +
-                    (if (reminder.snoozeCount > 0) " · 已延后 ${reminder.snoozeCount} 次" else ""),
+                text = "${domainLabel(item.sourceDomain)} · ${statusLabel(item.status)} · ${item.updatedAt}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (isAgentTicket && ticketId != null) {
+            if (quickReplies.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    quickReplies.forEach { qr ->
+                        SuggestionChip(
+                            onClick = { onReply(qr) },
+                            label = { Text(qr) },
+                        )
+                    }
+                }
+            }
+            if (canReply) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -264,14 +300,14 @@ private fun ReminderCard(
                     OutlinedTextField(
                         value = replyDraft,
                         onValueChange = { replyDraft = it },
-                        placeholder = { Text("回复 SailTick 教练…") },
+                        placeholder = { Text("简短回复，多端同步关闭…") },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     Button(
                         enabled = replyDraft.isNotBlank(),
                         onClick = {
-                            onReplyAgentTicket(ticketId, replyDraft)
+                            onReply(replyDraft)
                             replyDraft = ""
                         },
                     ) {
@@ -318,31 +354,45 @@ private fun PriorityChip(priority: String) {
 }
 
 @Composable
-private fun HistoryList(history: List<ReminderDto>) {
+private fun HistoryInboxList(history: List<CachedInboxItem>) {
     if (history.isEmpty()) {
         EmptyText(stringResource(R.string.inbox_empty_history))
         return
     }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(history, key = { it.id }) { reminder ->
+        items(history, key = { it.id }) { item ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = reminder.title, style = MaterialTheme.typography.titleSmall)
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = item.title, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "${domainLabel(item.sourceDomain)} · ${item.updatedAt}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        AssistChip(onClick = {}, label = { Text(statusLabel(item.status)) })
+                    }
+                    if (item.resolutionSummary.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "${reminder.type} · ${reminder.triggerTime}",
+                            text = item.resolutionSummary,
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    if (item.resolutionSource.isNotBlank()) {
+                        Text(
+                            text = "来源：${item.resolutionSource}",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    AssistChip(onClick = {}, label = { Text(reminder.state) })
                 }
             }
         }

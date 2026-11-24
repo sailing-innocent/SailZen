@@ -1,7 +1,10 @@
 package com.sailzen.app.core.network
 
 import android.util.Log
+import com.sailzen.app.core.network.dto.InboxItemDto
 import com.sailzen.app.core.network.dto.ReminderDto
+import com.sailzen.app.core.network.dto.UserProfileDto
+import com.sailzen.app.core.network.dto.WsInboxResolvedDto
 import com.sailzen.app.core.network.dto.WsMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -34,6 +37,9 @@ class ReminderWebSocket(
     private val scope: CoroutineScope,
     private val urlProvider: suspend () -> String?,
     private val onReminder: (ReminderDto) -> Unit,
+    private val onInboxUpserted: (InboxItemDto, Boolean) -> Unit = { _, _ -> },
+    private val onInboxResolved: (WsInboxResolvedDto) -> Unit = {},
+    private val onProfileUpdated: (UserProfileDto) -> Unit = {},
     private val onStateChange: (connected: Boolean) -> Unit = {},
     private val onDetailedStateChange: (state: ConnectionState, detail: String) -> Unit = { _, _ -> },
 ) {
@@ -270,6 +276,33 @@ class ReminderWebSocket(
                     onReminder(reminder)
                 } catch (e: Exception) {
                     Log.w(TAG, "bad reminder payload: ${e.message}")
+                }
+            }
+            "inbox.item_upserted" -> {
+                val data = message.data ?: return
+                try {
+                    val item = json.decodeFromJsonElement<InboxItemDto>(data)
+                    onInboxUpserted(item, message.shouldNotify ?: false)
+                } catch (e: Exception) {
+                    Log.w(TAG, "bad inbox.item_upserted payload: ${e.message}")
+                }
+            }
+            "inbox.item_resolved" -> {
+                val data = message.data ?: return
+                try {
+                    val ev = json.decodeFromJsonElement<WsInboxResolvedDto>(data)
+                    onInboxResolved(ev)
+                } catch (e: Exception) {
+                    Log.w(TAG, "bad inbox.item_resolved payload: ${e.message}")
+                }
+            }
+            "profile.updated" -> {
+                val data = message.data ?: return
+                try {
+                    val profile = json.decodeFromJsonElement<UserProfileDto>(data)
+                    onProfileUpdated(profile)
+                } catch (e: Exception) {
+                    Log.w(TAG, "bad profile.updated payload: ${e.message}")
                 }
             }
             "connected" -> Log.i(TAG, "server acknowledged connection")

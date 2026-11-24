@@ -3,38 +3,46 @@ package com.sailzen.app.feature.inbox
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.sailzen.app.core.data.db.CachedReminder
-import com.sailzen.app.core.network.dto.ReminderDto
-import com.sailzen.app.core.network.dto.SummaryDto
+import com.sailzen.app.core.data.db.CachedInboxItem
+import com.sailzen.app.core.network.dto.InboxSummaryDto
 import com.sailzen.app.core.reminder.ReminderRepository
-import com.sailzen.app.core.tick.TickRepository
+import com.sailzen.app.core.user.UserInboxRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/**
+ * 统一收件箱 ViewModel：
+ * 订阅 Room `inbox_cache`（由单调游标 sync_seq 与 User WS 实时维护），
+ * 任一端回复/记餐/关闭后立即从待处理移除并展示在历史中（附带消解来源说明）。
+ */
 class InboxViewModel(application: Application) : AndroidViewModel(application) {
 
     data class UiState(
-        val pending: List<CachedReminder> = emptyList(),
-        val history: List<ReminderDto> = emptyList(),
-        val summary: SummaryDto? = null,
+        val pending: List<CachedInboxItem> = emptyList(),
+        val history: List<CachedInboxItem> = emptyList(),
+        val summary: InboxSummaryDto? = null,
         val refreshing: Boolean = false,
         val configured: Boolean = true,
     )
 
-    private val repository = ReminderRepository.get(application)
-    private val tickRepository = TickRepository.get(application)
+    private val userInboxRepo = UserInboxRepository.get(application)
+    private val reminderRepo = ReminderRepository.get(application)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        // 待处理列表直接订阅 Room 缓存（WS 投递/反馈动作会实时反映）
         viewModelScope.launch {
-            repository.observeActive().collect { list ->
+            userInboxRepo.observeActive().collect { list ->
                 _uiState.update { it.copy(pending = list) }
+            }
+        }
+        viewModelScope.launch {
+            userInboxRepo.observeHistory().collect { list ->
+                _uiState.update { it.copy(history = list) }
             }
         }
         refresh()
@@ -43,50 +51,50 @@ class InboxViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(refreshing = true) }
-            repository.syncPending()
-            val summary = repository.summaryToday()
-            val history = repository.historyToday()
+            userInboxRepo.syncInbox(full = true)
+            reminderRepo.syncPending()
+            val summary = userInboxRepo.summaryToday()
             _uiState.update {
                 it.copy(
                     summary = summary,
-                    history = history,
                     refreshing = false,
-                    configured = repository.serverConfigured(),
+                    configured = reminderRepo.serverConfigured(),
                 )
             }
         }
     }
 
-    fun open(reminderId: Int) = feedback(reminderId, "open")
-
-    fun resolve(reminderId: Int) = feedback(reminderId, "resolve")
-
-    fun dismiss(reminderId: Int) = feedback(reminderId, "dismiss")
-
-    fun snooze(reminderId: Int, option: String) = feedback(reminderId, "snooze", option)
-
-    /** 在收件箱内直接回复 SailTick 教练票据并同步关闭对应提醒。 */
-    fun replyAgentTicket(reminderId: Int, ticketId: Int, reply: String) {
+    fun reply(itemId: Int, reply: String) {
         val text = reply.trim()
         if (text.isEmpty()) return
         viewModelScope.launch {
-            val res = tickRepository.replyTicket(ticketId, text)
-            if (res != null) {
-                repository.sendFeedback(reminderId, "resolve", null)
-                val summary = repository.summaryToday()
-                val history = repository.historyToday()
-                _uiState.update { it.copy(summary = summary, history = history) }
-            }
+            userInboxRepo.replyItem(itemId, text)
+            val summary = userInboxRepo.summaryToday()
+            _uiState.update { it.copy(summary = summary) }
         }
     }
 
-    private fun feedback(reminderId: Int, action: String, option: String? = null) {
+    fun resolve(itemId: Int) {
         viewModelScope.launch {
-            repository.sendFeedback(reminderId, action, option)
-            // 反馈后刷新小结与历史
-            val summary = repository.summaryToday()
-            val history = repository.historyToday()
-            _uiState.update { it.copy(summary = summary, history = history) }
+            userInboxRepo.resolveItem(itemId)
+            val summary = userInboxRepo.summaryToday()
+            _uiState.update { it.copy(summary = summary) }
+        }
+    }
+
+    fun dismiss(itemId: Int) {
+        viewModelScope.launch {
+            userInboxRepo.dismissItem(itemId)
+            val summary = userInboxRepo.summaryToday()
+            _uiState.update { it.copy(summary = summary) }
+        }
+    }
+
+    fun snooze(itemId: Int, option: String) {
+        viewModelScope.launch {
+            userInboxRepo.snoozeItem(itemId, option)
+            val summary = userInboxRepo.summaryToday()
+            _uiState.update { it.copy(summary = summary) }
         }
     }
 }

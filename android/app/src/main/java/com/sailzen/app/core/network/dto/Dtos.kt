@@ -83,6 +83,7 @@ data class OkResponse(
 data class WsMessage(
     val type: String,
     val data: JsonElement? = null,
+    @SerialName("should_notify") val shouldNotify: Boolean? = null,
     val timestamp: String? = null,
 )
 

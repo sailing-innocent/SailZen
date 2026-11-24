@@ -8,6 +8,7 @@ import androidx.room.RoomDatabase
 @Database(
     entities = [
         CachedReminder::class,
+        CachedInboxItem::class,
         PendingFeedback::class,
         PendingRhythmAction::class,
         CachedSourceConfig::class,
@@ -17,12 +18,14 @@ import androidx.room.RoomDatabase
         ReadingProgress::class,
         CachedAnnotation::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun reminderDao(): ReminderDao
+
+    abstract fun inboxDao(): InboxDao
 
     abstract fun feedbackDao(): FeedbackDao
 

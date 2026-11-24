@@ -5,6 +5,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Menu } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { MAIN_ROUTES, SYSTEM_ROUTES, type PageRoute } from '@/config/basic'
+import { GlobalInboxDrawerButton, UserProfileDialogButton } from '@components/user/UserInboxPanel'
 
 interface MobileNavProps {
   children: React.ReactNode
@@ -43,12 +44,15 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
       {/* 移动端顶部导航栏 */}
       <div className="flex items-center justify-between p-4 bg-white border-b">
         <div className="text-lg font-semibold">SailZen</div>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
+        <div className="flex items-center gap-1">
+          <GlobalInboxDrawerButton compact />
+          <UserProfileDialogButton compact />
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
           <SheetContent side="right" className="w-72 flex flex-col">
             <SheetHeader>
               <SheetTitle>导航菜单</SheetTitle>
@@ -66,6 +70,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ children }) => {
             )}
           </SheetContent>
         </Sheet>
+        </div>
       </div>
 
       {/* 主内容区域 - 添加溢出控制防止图表超出屏幕 */}

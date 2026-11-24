@@ -362,6 +362,12 @@ def create_reminder_impl(db: Session, req: ReminderCreateRequest) -> ReminderRes
     _add_event(db, r.id, "created", {"type": r.type, "source": r.source})
     db.commit()
     db.refresh(r)
+    try:
+        from sail_server.model.inbox import project_reminder_to_inbox
+
+        project_reminder_to_inbox(db, r, notify=False)
+    except Exception as exc:
+        logger.debug("[reminder] project to inbox skipped: %s", exc)
     return read_from_reminder(r)
 
 
@@ -470,6 +476,12 @@ def feedback_reminder_impl(
 
     db.commit()
     db.refresh(r)
+    try:
+        from sail_server.model.inbox import sync_inbox_on_reminder_changed
+
+        sync_inbox_on_reminder_changed(db, r, action=action)
+    except Exception as exc:
+        logger.debug("[reminder] sync inbox on feedback skipped: %s", exc)
     return read_from_reminder(r)
 
 
@@ -484,6 +496,12 @@ def cancel_reminder_impl(db: Session, reminder_id: int) -> ReminderResponse:
     _add_event(db, r.id, "canceled", {})
     db.commit()
     db.refresh(r)
+    try:
+        from sail_server.model.inbox import sync_inbox_on_reminder_changed
+
+        sync_inbox_on_reminder_changed(db, r, action="cancel", actor_client="system")
+    except Exception as exc:
+        logger.debug("[reminder] sync inbox on cancel skipped: %s", exc)
     return read_from_reminder(r)
 
 

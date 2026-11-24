@@ -334,12 +334,22 @@ class ReminderRepository private constructor(private val context: Context) {
         return flushed
     }
 
-    /** 补偿同步：GET /pending 对账缓存 + 未来 PENDING 排闹钟 + 冲刷离线反馈 */
+    /** 补偿同步：GET /pending 对账缓存（含清理已在其他端关闭的残留活跃条目）+ 排闹钟 + 冲刷离线反馈 */
     suspend fun syncPending(): Int {
         val api = apiOrNull() ?: return 0
         return try {
             val list = api.pending()
             db.reminderDao().upsertAll(list.map { it.toCached() })
+            // 根治残留 Bug：本地仍处于活跃态但已不在服务端 /pending 中的提醒，说明已在 Web/其他端关闭
+            val serverActiveIds = list.map { it.id }.toSet()
+            val localActive = db.reminderDao().activeList()
+            for (stale in localActive) {
+                if (stale.id !in serverActiveIds) {
+                    db.reminderDao().upsert(stale.copy(state = "RESOLVED", updatedAt = nowIso()))
+                    NotificationHelper.cancel(context, stale.id)
+                    AlarmScheduler.cancel(context, stale.id)
+                }
+            }
             scheduleAlarmsForFuture(list)
             flushPendingFeedback()
             list.size

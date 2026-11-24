@@ -35,6 +35,7 @@ import {
 import { format, isPast } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
 import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera } from 'lucide-react'
+import { useUserInboxStore } from '@lib/store/user'
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   low: '低',
@@ -110,9 +111,12 @@ const TickPage: React.FC = () => {
     }
   }, [])
 
+  const inboxVersion = useUserInboxStore((s) => s.inboxVersion)
+  const syncInbox = useUserInboxStore((s) => s.syncInbox)
+
   useEffect(() => {
     refresh()
-  }, [refresh])
+  }, [refresh, inboxVersion])
 
   const latestReply = useMemo(
     () => history.find((t) => t.reply)?.reply ?? null,
@@ -124,17 +128,17 @@ const TickPage: React.FC = () => {
     if (!text) return
     await api_reply_ticket(id, text)
     setReplyDrafts((d) => ({ ...d, [id]: '' }))
-    await refresh()
+    await Promise.all([refresh(), syncInbox(false)])
   }
 
   const resolve = async (id: number) => {
     await api_resolve_ticket(id)
-    await refresh()
+    await Promise.all([refresh(), syncInbox(false)])
   }
 
   const snooze = async (id: number) => {
     await api_snooze_ticket(id, 24)
-    await refresh()
+    await Promise.all([refresh(), syncInbox(false)])
   }
 
   const logWeight = async () => {

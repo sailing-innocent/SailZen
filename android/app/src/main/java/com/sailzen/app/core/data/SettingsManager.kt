@@ -29,6 +29,9 @@ class SettingsManager private constructor(private val context: Context) {
         private val KEY_QUIET_END = stringPreferencesKey("quiet_end") // "HH:mm"
         private val KEY_LAST_SYNC_EPOCH = longPreferencesKey("last_sync_epoch")
         private val KEY_IGNORED_UPDATE_VERSION_CODE = intPreferencesKey("ignored_update_version_code")
+        private val KEY_USER_DISPLAY_NAME = stringPreferencesKey("user_display_name")
+        private val KEY_USER_SLUG = stringPreferencesKey("user_slug")
+        private val KEY_LAST_INBOX_SYNC_SEQ = longPreferencesKey("last_inbox_sync_seq")
 
         const val DEFAULT_QUIET_START = "23:00"
         const val DEFAULT_QUIET_END = "08:00"
@@ -62,6 +65,12 @@ class SettingsManager private constructor(private val context: Context) {
 
     val quietEndFlow: Flow<String> =
         context.dataStore.data.map { it[KEY_QUIET_END] ?: DEFAULT_QUIET_END }
+
+    val userDisplayNameFlow: Flow<String> =
+        context.dataStore.data.map { it[KEY_USER_DISPLAY_NAME] ?: "SailZen Owner" }
+
+    val userSlugFlow: Flow<String> =
+        context.dataStore.data.map { it[KEY_USER_SLUG] ?: "owner" }
 
     // ------------------------------------------------------------------
     // 读取
@@ -108,6 +117,12 @@ class SettingsManager private constructor(private val context: Context) {
     suspend fun ignoredUpdateVersionCode(): Int =
         context.dataStore.data.first()[KEY_IGNORED_UPDATE_VERSION_CODE] ?: 0
 
+    suspend fun lastInboxSyncSeq(): Long =
+        context.dataStore.data.first()[KEY_LAST_INBOX_SYNC_SEQ] ?: 0L
+
+    suspend fun userDisplayName(): String =
+        context.dataStore.data.first()[KEY_USER_DISPLAY_NAME] ?: "SailZen Owner"
+
     // ------------------------------------------------------------------
     // 写入
     // ------------------------------------------------------------------
@@ -137,6 +152,17 @@ class SettingsManager private constructor(private val context: Context) {
 
     suspend fun saveIgnoredUpdateVersionCode(versionCode: Int) {
         context.dataStore.edit { it[KEY_IGNORED_UPDATE_VERSION_CODE] = versionCode }
+    }
+
+    suspend fun saveLastInboxSyncSeq(seq: Long) {
+        context.dataStore.edit { it[KEY_LAST_INBOX_SYNC_SEQ] = seq }
+    }
+
+    suspend fun saveUserProfileLocal(displayName: String, slug: String = "owner") {
+        context.dataStore.edit {
+            if (displayName.isNotBlank()) it[KEY_USER_DISPLAY_NAME] = displayName.trim()
+            if (slug.isNotBlank()) it[KEY_USER_SLUG] = slug.trim()
+        }
     }
 
     // ------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
-import { useServerStore, type ServerState } from '@lib/store'
+import { useServerStore, useUserInboxStore, type ServerState } from '@lib/store'
 import { MobileProviderWithFallback } from '@/hooks/use-mobile'
 import { PAGE_ROUTES, getPageComponent } from './config/basic'
 import { flushClientEvents, installGlobalErrorTelemetry, trackClientEvent } from '@lib/telemetry'
@@ -59,9 +59,18 @@ interface URLParams {
 
 const AppRoutes: React.FC = () => {
   const fetchServerHealth = useServerStore((state: ServerState) => state.fetchServerHealth)
+  const bootstrapUser = useUserInboxStore((state) => state.bootstrap)
+  const disconnectWs = useUserInboxStore((state) => state.disconnectWs)
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [, setUrlParams] = React.useState<URLParams>({ path: undefined, content: undefined })
+
+  useEffect(() => {
+    bootstrapUser()
+    return () => {
+      disconnectWs()
+    }
+  }, [bootstrapUser, disconnectWs])
 
   useEffect(() => {
 

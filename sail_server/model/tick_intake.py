@@ -781,14 +781,21 @@ def commit_image_intake_impl(
     )
     committed_refs.append(CommittedRefDto(kind="message", id=msg_resp.id, label="教练消息已同步"))
 
-    # 若关联票据，自动回复该票据
+    # 若关联票据，自动回复该票据（兼容同事务中饮食/体重落库已自动消解该票据的场景）
     target_ticket_id = req.ticket_id if req.ticket_id is not None else draft.ticket_id
     replied_ticket_id: Optional[int] = None
     if target_ticket_id is not None:
         reply_text = (req.reply_text or "").strip() or msg_content
         try:
-            reply_ticket_impl(db, target_ticket_id, reply_text)
-            replied_ticket_id = target_ticket_id
+            existing_ticket = db.get(SailTickTicket, target_ticket_id)
+            if existing_ticket is not None and existing_ticket.status == "replied":
+                # 若同次提交已由域事件自动消解，用更完整的识图汇总回复覆盖并同步回写收件箱
+                existing_ticket.reply = reply_text
+                db.commit()
+                replied_ticket_id = target_ticket_id
+            else:
+                reply_ticket_impl(db, target_ticket_id, reply_text)
+                replied_ticket_id = target_ticket_id
             committed_refs.append(
                 CommittedRefDto(kind="ticket", id=target_ticket_id, label=f"已回复票据 #{target_ticket_id}")
             )
