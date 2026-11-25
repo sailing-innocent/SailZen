@@ -166,7 +166,7 @@ class DataScanner:
             "/tick/messages", {"status": "unread", "direction": "user_to_agent", "limit": 50}
         )
 
-        # 5. 财务秘书总览、餐饮消费、节奏全景（今日/明日时间线 + 重要项目倒排 + 焦点事务 + 占用）与打卡
+        # 5. 财务秘书总览、餐饮消费、节奏全景（今日/明日时间线 + 重要项目倒排 + 焦点事务 + 占用）、打卡与 Vault 日记摘要
         finance_overview_raw = await self._fetch("/finance/overview")
         finance_raw = await self._fetch_transactions_window(
             start_ts=start_ts, end_ts=end_ts, max_pages=1, page_size=80
@@ -176,8 +176,13 @@ class DataScanner:
         tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
         rhythm_dash_raw = await self._fetch("/rhythm/dashboard", {"date": today_str})
         rhythm_tomorrow_raw = await self._fetch("/rhythm/timeline/day", {"date": tomorrow_str})
+        vault_journals_raw = await self._fetch(
+            "/tick/vault/journals",
+            {"start_date": start_dt.strftime("%Y-%m-%d"), "end_date": today_str, "limit": 10},
+        )
         rhythm_snapshot = self._simplify_rhythm(rhythm_dash_raw, rhythm_tomorrow_raw, today_str)
         finance_snapshot = self._simplify_finance(finance_overview_raw)
+        notes_snapshot = self._simplify_vault_journals(vault_journals_raw, limit=7)
 
         weight_series = self._simplify_series(weight_raw, limit=21)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
@@ -199,7 +204,7 @@ class DataScanner:
             "mood": self._simplify_list(mood, limit=10),
             "finance_food": self._filter_food_transactions(finance_raw, limit=12),
             "rhythm_checkins": self._simplify_list(rhythm_raw, limit=10),
-            "notes": None,
+            "notes": notes_snapshot,
         }
 
     async def _fetch_transactions_window(
@@ -310,6 +315,13 @@ class DataScanner:
             else (rhythm_affairs_raw if isinstance(rhythm_affairs_raw, list) else [])
         )
 
+        # 7. 近 45 天本地 Vault 日记轻量摘要（供财务异常/差旅账单背景归因）
+        vault_start = (now - timedelta(days=45)).strftime("%Y-%m-%d")
+        vault_journals = await self._fetch(
+            "/tick/vault/journals",
+            {"start_date": vault_start, "end_date": rhythm_end, "limit": 60},
+        )
+
         food_tx = self._classify_food_transactions(tx_all)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
 
@@ -333,6 +345,7 @@ class DataScanner:
             "rhythm_history": rhythm_history if isinstance(rhythm_history, dict) else {},
             "rhythm_projects": rhythm_projects if isinstance(rhythm_projects, list) else [],
             "rhythm_affairs": rhythm_affairs,
+            "vault_journals": vault_journals if isinstance(vault_journals, list) else [],
         }
 
     @classmethod
@@ -639,6 +652,25 @@ class DataScanner:
         return out
 
     @staticmethod
+    def _simplify_vault_journals(raw: Any, limit: int = 7) -> Optional[List[Dict[str, Any]]]:
+        if not isinstance(raw, list) or not raw:
+            return None
+        out: List[Dict[str, Any]] = []
+        for item in raw[:limit]:
+            if not isinstance(item, dict):
+                continue
+            out.append(
+                {
+                    "date": item.get("note_date"),
+                    "summary": str(item.get("summary") or "")[:180],
+                    "travel_hints": (item.get("travel_hints") or [])[:4],
+                    "mood_hints": (item.get("mood_hints") or [])[:4],
+                    "spend_hints": (item.get("spend_context_hints") or [])[:4],
+                }
+            )
+        return out or None
+
+    @staticmethod
     def _simplify_finance(raw: Any) -> Optional[Dict[str, Any]]:
         if not isinstance(raw, dict) or not raw:
             return None
@@ -925,4 +957,13 @@ class DataScanner:
             items = package.get(key)
             if items:
                 lines.append(f"{label}: {len(items)} 条记录")
+        notes = package.get("notes") or []
+        if notes:
+            n_str = "; ".join(
+                f"{n.get('date')}: {str(n.get('summary') or '')[:50]}"
+                for n in notes[:4]
+                if isinstance(n, dict)
+            )
+            if n_str:
+                lines.append(f"近期日记摘要({len(notes)}篇): {n_str}")
         return "\n".join(lines)

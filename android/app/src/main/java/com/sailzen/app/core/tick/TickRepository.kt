@@ -34,19 +34,20 @@ import okhttp3.RequestBody.Companion.toRequestBody
 data class QuickChatResult(
     val reply: String,
     val rhythmUpdated: Boolean = false,
+    val financeUpdated: Boolean = false,
     val fallbackAsync: Boolean = false,
     val source: String = "",
 )
 
 /**
  * SailTick Personal Agent 数据仓库：
- * - 实时快脑随身对话（协商日程、项目、临时占用与健康状态；daemon 离线自动降级为异步消息）
+ * - 实时快脑随身对话（协商日程、财务、项目、临时占用与健康状态；daemon 离线自动降级为异步消息）
  * - 获取 AI 教练聚合摘要（动态计划 + 最新睡前日报 + 待回提问 + 今日主动记录）
  * - 回复/暂缓 AI 提问票据
  * - 主动静默发送餐饮/日常状态消息（无需等待 AI 即时回复）
  * - 浏览历史睡前体重与健康日报
  */
-class TickRepository private constructor(private val context: Context) {
+open class TickRepository protected constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "TickRepository"
@@ -151,7 +152,7 @@ class TickRepository private constructor(private val context: Context) {
      * 与 SailTick Personal Agent 实时对话协商（支持日程重排、临时占用、项目创建与状态查询）。
      * 若后端 SailTick daemon 暂未在线（如 503），自动降级写入异步消息箱，保证移动端“说了不丢”。
      */
-    suspend fun quickChat(
+    open suspend fun quickChat(
         text: String,
         channel: String = "android",
         sessionId: String = "android:owner",
@@ -171,10 +172,14 @@ class TickRepository private constructor(private val context: Context) {
                 bus.emit(DataChangeEvent.DayViewChanged())
                 bus.emit(DataChangeEvent.AffairChanged(action = "ai_quick_chat"))
             }
+            if (res.financeUpdated) {
+                bus.emit(DataChangeEvent.TransactionChanged(action = "ai_quick_chat"))
+            }
             Result.success(
                 QuickChatResult(
-                    reply = res.reply.ifBlank { "已收到，日程与状态已同步。" },
+                    reply = res.reply.ifBlank { "已收到，状态已同步。" },
                     rhythmUpdated = res.rhythmUpdated,
+                    financeUpdated = res.financeUpdated,
                     fallbackAsync = false,
                     source = res.source,
                 ),
@@ -186,7 +191,7 @@ class TickRepository private constructor(private val context: Context) {
                     TickMessageCreateRequest(
                         direction = "user_to_agent",
                         category = "daily_info",
-                        content = "[日程协商] $trimmed",
+                        content = "[快捷协商] $trimmed",
                         sourceChannel = channel,
                         autoLogDiet = false,
                     ),
@@ -194,8 +199,9 @@ class TickRepository private constructor(private val context: Context) {
                 bus.emit(DataChangeEvent.HealthSignalChanged("tick"))
                 Result.success(
                     QuickChatResult(
-                        reply = "SailTick 实时快脑暂未在线，已将你的想法写入异步消息箱，下次 Tick 唤醒时会自动吸收并重排日程。",
+                        reply = "SailTick 实时快脑暂未在线，已将你的消息写入异步消息箱，下次 Tick 唤醒时会自动吸收处理。",
                         rhythmUpdated = false,
+                        financeUpdated = false,
                         fallbackAsync = true,
                         source = "async_inbox",
                     ),
@@ -210,7 +216,7 @@ class TickRepository private constructor(private val context: Context) {
     /**
      * 读取并按需等比压缩本地图片 Uri 为 JPEG 字节流（控制长边 <= 1600px，省流量且提速）。
      */
-    suspend fun readAndCompressUri(uri: Uri, maxEdge: Int = 1600): Result<ByteArray> =
+    open suspend fun readAndCompressUri(uri: Uri, maxEdge: Int = 1600): Result<ByteArray> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val raw = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
@@ -253,7 +259,7 @@ class TickRepository private constructor(private val context: Context) {
     /**
      * 上传图片至后端进行 DeepSeek Vision/OCR 识图分析，返回待人工确认草稿。
      */
-    suspend fun analyzeImageIntake(
+    open suspend fun analyzeImageIntake(
         imageBytes: ByteArray,
         filename: String = "capture.jpg",
         note: String = "",
@@ -278,8 +284,8 @@ class TickRepository private constructor(private val context: Context) {
         }
     }
 
-    /** 确认并提交识图草稿，写入健康主表与教练消息。 */
-    suspend fun commitIntakeDraft(
+    /** 确认并提交识图草稿，写入健康/财务主表与教练消息。 */
+    open suspend fun commitIntakeDraft(
         draftId: Int,
         request: ImageIntakeCommitRequest,
     ): Result<ImageIntakeCommitResponse> {
@@ -287,6 +293,12 @@ class TickRepository private constructor(private val context: Context) {
         return runCatching {
             val res = client.commitIntakeDraft(draftId, request)
             bus.emit(DataChangeEvent.HealthSignalChanged("intake"))
+            val hasFinanceEntry = request.entries.any {
+                it.selected && (it.kind == "transaction" || it.kind == "account_balance_check")
+            }
+            if (hasFinanceEntry) {
+                bus.emit(DataChangeEvent.TransactionChanged(action = "ocr_intake"))
+            }
             res
         }.onFailure { e ->
             Log.w(TAG, "commitIntakeDraft failed: ${e.message}")
@@ -294,7 +306,7 @@ class TickRepository private constructor(private val context: Context) {
     }
 
     /** 丢弃待确认识图草稿。 */
-    suspend fun discardIntakeDraft(draftId: Int): Result<ImageIntakeDraftDto> {
+    open suspend fun discardIntakeDraft(draftId: Int): Result<ImageIntakeDraftDto> {
         val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
         return runCatching {
             client.discardIntakeDraft(draftId)

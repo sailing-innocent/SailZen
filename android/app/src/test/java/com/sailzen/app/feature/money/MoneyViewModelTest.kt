@@ -6,11 +6,20 @@ import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.money.MoneyRepository
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.AccountReconcileRequestDto
+import com.sailzen.app.core.network.dto.AccountReconcileResponseDto
+import com.sailzen.app.core.network.dto.BalanceCheckpointDto
+import com.sailzen.app.core.network.dto.FinanceOverviewDto
+import com.sailzen.app.core.network.dto.HygieneProposalDto
+import com.sailzen.app.core.network.dto.HygieneScanRequestDto
+import com.sailzen.app.core.network.dto.HygieneScanResultDto
 import com.sailzen.app.core.network.dto.PaginatedTransactionsDto
 import com.sailzen.app.core.network.dto.TransactionDeleteResponse
 import com.sailzen.app.core.network.dto.TransactionDto
 import com.sailzen.app.core.network.dto.TransactionStatsDto
 import com.sailzen.app.core.network.dto.TransactionUpsertRequest
+import com.sailzen.app.core.tick.QuickChatResult
+import com.sailzen.app.core.tick.TickRepository
 import java.io.File
 import java.math.BigDecimal
 import java.time.Instant
@@ -77,12 +86,33 @@ class MoneyViewModelTest {
         var updateResult: OperationResult<TransactionDto> = OperationResult.Failure("未配置服务器")
         var deleteResult: OperationResult<TransactionDeleteResponse> =
             OperationResult.Failure("未配置服务器")
+        var overviewResult: OperationResult<FinanceOverviewDto> =
+            OperationResult.Success(FinanceOverviewDto())
+        var pendingProposalsResult: OperationResult<List<HygieneProposalDto>> =
+            OperationResult.Success(emptyList())
+        var autoProposalsResult: OperationResult<List<HygieneProposalDto>> =
+            OperationResult.Success(emptyList())
+        var reconcileHandler: (AccountReconcileRequestDto) -> OperationResult<AccountReconcileResponseDto> = {
+            OperationResult.Failure("未配置服务器")
+        }
+        var hygieneScanResult: OperationResult<HygieneScanResultDto> =
+            OperationResult.Success(HygieneScanResultDto())
+        var approveResult: OperationResult<HygieneProposalDto> =
+            OperationResult.Failure("未配置服务器")
+        var dismissResult: OperationResult<HygieneProposalDto> =
+            OperationResult.Failure("未配置服务器")
+        var revertResult: OperationResult<HygieneProposalDto> =
+            OperationResult.Failure("未配置服务器")
 
         val paginatedCalls = mutableListOf<PaginatedCall>()
         val statsCalls = mutableListOf<Pair<Double, Double>>()
         val createdRequests = mutableListOf<TransactionUpsertRequest>()
         val updatedRequests = mutableListOf<Pair<Int, TransactionUpsertRequest>>()
         val deletedIds = mutableListOf<Int>()
+        val reconcileRequests = mutableListOf<AccountReconcileRequestDto>()
+        val approvedIds = mutableListOf<Int>()
+        val dismissedIds = mutableListOf<Int>()
+        val revertedIds = mutableListOf<Int>()
         var configured = true
 
         fun setTransactions(items: List<TransactionDto>, hasNext: Boolean = false, total: Int = items.size) {
@@ -140,10 +170,65 @@ class MoneyViewModelTest {
             deletedIds += id
             return deleteResult
         }
+
+        override suspend fun getFinanceOverview(month: String?): OperationResult<FinanceOverviewDto> =
+            overviewResult
+
+        override suspend fun reconcileAccount(
+            req: AccountReconcileRequestDto,
+        ): OperationResult<AccountReconcileResponseDto> {
+            reconcileRequests += req
+            return reconcileHandler(req)
+        }
+
+        override suspend fun runHygieneScan(
+            req: HygieneScanRequestDto,
+        ): OperationResult<HygieneScanResultDto> = hygieneScanResult
+
+        override suspend fun listHygieneProposals(
+            status: String?,
+            autonomyLevel: String?,
+            limit: Int,
+        ): OperationResult<List<HygieneProposalDto>> =
+            if (autonomyLevel == "auto_applied") autoProposalsResult else pendingProposalsResult
+
+        override suspend fun approveHygieneProposal(id: Int): OperationResult<HygieneProposalDto> {
+            approvedIds += id
+            return approveResult
+        }
+
+        override suspend fun dismissHygieneProposal(id: Int): OperationResult<HygieneProposalDto> {
+            dismissedIds += id
+            return dismissResult
+        }
+
+        override suspend fun revertHygieneProposal(id: Int): OperationResult<HygieneProposalDto> {
+            revertedIds += id
+            return revertResult
+        }
     }
 
-    private fun newVm(repository: FakeMoneyRepository): MoneyViewModel =
-        MoneyViewModel(FakeApplication(), repository).also(vms::add)
+    private class FakeTickRepository(context: Context) : TickRepository(context) {
+        var quickChatHandler: (String) -> Result<QuickChatResult> = {
+            Result.success(QuickChatResult(reply = "ok", financeUpdated = false))
+        }
+        val chatInputs = mutableListOf<String>()
+
+        override suspend fun quickChat(
+            text: String,
+            channel: String,
+            sessionId: String,
+        ): Result<QuickChatResult> {
+            chatInputs += text
+            return quickChatHandler(text)
+        }
+    }
+
+    private fun newVm(
+        repository: FakeMoneyRepository,
+        tickRepository: FakeTickRepository? = null,
+    ): MoneyViewModel =
+        MoneyViewModel(FakeApplication(), repository, tickRepository).also(vms::add)
 
     private fun account(id: Int, state: Int = 0) = AccountDto(id = id, name = "账户$id", state = state)
 
@@ -688,5 +773,109 @@ class MoneyViewModelTest {
         awaitCondition { vm.uiState.value.accounts.isNotEmpty() }
 
         assertEquals(listOf(1), vm.uiState.value.accounts.map { it.id })
+    }
+
+    // ---------------- Finance 2.0：智能对账 / 清理队列 / 快脑对话 ----------------
+
+    @Test
+    fun computeReconcileDrift_calculatesSignedDifferenceAndRejectsInvalid() {
+        assertEquals(BigDecimal("12.50"), MoneyViewModel.computeReconcileDrift("100.00 CNY", "112.5"))
+        assertEquals(BigDecimal("-8.30"), MoneyViewModel.computeReconcileDrift("100.00", "91.7"))
+        assertEquals(BigDecimal("0.00"), MoneyViewModel.computeReconcileDrift("500.0", "500"))
+        assertNull(MoneyViewModel.computeReconcileDrift("100.00", ""))
+        assertNull(MoneyViewModel.computeReconcileDrift("100.00", "abc"))
+    }
+
+    @Test
+    fun submitReconcile_microDrift_closesDialogAndRefreshes() = runBlocking {
+        val repo = FakeMoneyRepository(FakeApplication())
+        repo.accountsResult = OperationResult.Success(listOf(AccountDto(id = 2, name = "微信", balance = "100.00")))
+        repo.reconcileHandler = { req ->
+            OperationResult.Success(
+                AccountReconcileResponseDto(
+                    account = AccountDto(id = req.accountId, name = "微信", balance = req.actualBalance),
+                    checkpoint = BalanceCheckpointDto(
+                        id = 1,
+                        accountId = req.accountId,
+                        reportedBalance = req.actualBalance,
+                        bookBalance = "100.00",
+                        driftAmount = "-12.00",
+                        handling = "micro_adjusted",
+                    ),
+                    handling = "micro_adjusted",
+                    driftAmount = "-12.00",
+                    message = "已为「微信」执行小额无感平账（差额 -12.00 元）。",
+                ),
+            )
+        }
+
+        val vm = newVm(repo)
+        awaitCondition { vm.uiState.value.accounts.isNotEmpty() }
+
+        vm.openReconcileDialog()
+        assertTrue(vm.uiState.value.reconcileOpen)
+        assertEquals(2, vm.uiState.value.reconcileAccId)
+
+        vm.setReconcileActualBalance("88.00")
+        vm.submitReconcile()
+        awaitCondition { !vm.uiState.value.reconcileBusy && !vm.uiState.value.reconcileOpen }
+
+        assertEquals(1, repo.reconcileRequests.size)
+        assertEquals("88.00", repo.reconcileRequests.first().actualBalance)
+        assertTrue(vm.uiState.value.message!!.contains("小额无感平账"))
+    }
+
+    @Test
+    fun hygieneProposal_approveAndRevert_triggersRefresh() = runBlocking {
+        val repo = FakeMoneyRepository(FakeApplication())
+        val pending = HygieneProposalDto(
+            id = 11,
+            proposalType = "auto_tag",
+            autonomyLevel = "needs_review",
+            status = "pending",
+            title = "建议打标",
+        )
+        repo.pendingProposalsResult = OperationResult.Success(listOf(pending))
+        repo.approveResult = OperationResult.Success(pending.copy(status = "applied"))
+        repo.revertResult = OperationResult.Success(pending.copy(status = "reverted"))
+
+        val vm = newVm(repo)
+        awaitCondition { vm.uiState.value.pendingProposals.size == 1 }
+
+        vm.approveProposal(11)
+        awaitCondition { vm.uiState.value.hygieneBusyId == null && vm.uiState.value.message == "已批准执行" }
+        assertEquals(listOf(11), repo.approvedIds)
+
+        vm.revertProposal(11)
+        awaitCondition { vm.uiState.value.hygieneBusyId == null && vm.uiState.value.message == "已撤销并恢复原状" }
+        assertEquals(listOf(11), repo.revertedIds)
+    }
+
+    @Test
+    fun sendFinanceQuickChat_withFinanceUpdated_refreshesAndShowsReply() = runBlocking {
+        val app = FakeApplication()
+        val repo = FakeMoneyRepository(app)
+        val tickRepo = FakeTickRepository(app)
+        tickRepo.quickChatHandler = {
+            Result.success(
+                QuickChatResult(
+                    reply = "已记入 微信 支出 ¥32.00（午饭）",
+                    financeUpdated = true,
+                ),
+            )
+        }
+
+        val vm = newVm(repo, tickRepo)
+        awaitCondition { !vm.uiState.value.loading }
+        val callsBefore = repo.paginatedCalls.size
+
+        vm.setChatInput("午饭 32 微信")
+        vm.sendFinanceQuickChat()
+        awaitCondition { !vm.uiState.value.chatBusy && vm.uiState.value.chatReply != null }
+
+        assertEquals(listOf("午饭 32 微信"), tickRepo.chatInputs)
+        assertEquals("", vm.uiState.value.chatInput)
+        assertTrue(vm.uiState.value.chatReply!!.contains("32.00"))
+        assertTrue(repo.paginatedCalls.size > callsBefore)
     }
 }

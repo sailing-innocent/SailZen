@@ -1,15 +1,27 @@
 package com.sailzen.app.feature.money
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.money.MoneyRepository
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.AccountReconcileRequestDto
+import com.sailzen.app.core.network.dto.FinanceOverviewDto
+import com.sailzen.app.core.network.dto.HygieneProposalDto
+import com.sailzen.app.core.network.dto.HygieneScanRequestDto
+import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
+import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.IntakeEntryDto
 import com.sailzen.app.core.network.dto.TransactionDto
 import com.sailzen.app.core.network.dto.TransactionStatsDto
 import com.sailzen.app.core.network.dto.TransactionUpsertRequest
+import com.sailzen.app.core.tick.TickRepository
 import java.math.BigDecimal
+import java.math.RoundingMode
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.time.Instant
@@ -40,7 +52,10 @@ import kotlinx.coroutines.launch
 class MoneyViewModel(
     application: Application,
     private val repository: MoneyRepository = MoneyRepository.get(application),
+    private val tickRepository: TickRepository? = null,
 ) : AndroidViewModel(application) {
+
+    private fun tickRepo(): TickRepository = tickRepository ?: TickRepository.get(getApplication())
 
     enum class TxnType { EXPENSE, INCOME, TRANSFER }
 
@@ -82,6 +97,31 @@ class MoneyViewModel(
         val error: String? = null,
         val message: String? = null,
         val serverConfigured: Boolean = true,
+        // Finance 2.0 (SailTick 开销秘书)
+        val overview: FinanceOverviewDto? = null,
+        val pendingProposals: List<HygieneProposalDto> = emptyList(),
+        val autoProposals: List<HygieneProposalDto> = emptyList(),
+        val hygieneExpanded: Boolean = false,
+        val hygieneTab: Int = 0, // 0 = 待确认, 1 = AI 自动托管(可撤销)
+        val hygieneBusyId: Int? = null,
+        val scanningHygiene: Boolean = false,
+        val chatInput: String = "",
+        val chatBusy: Boolean = false,
+        val chatReply: String? = null,
+        val reconcileOpen: Boolean = false,
+        val reconcileAccId: Int = -1,
+        val reconcileActualBalance: String = "",
+        val reconcileNote: String = "",
+        val reconcileForceAdjust: Boolean = false,
+        val reconcileBusy: Boolean = false,
+        // 小票 / 账单截图 OCR 识图草稿
+        val analyzingImage: Boolean = false,
+        val activeDraft: ImageIntakeDraftDto? = null,
+        val draftEntries: List<IntakeEntryDto> = emptyList(),
+        val draftSummary: String = "",
+        val draftReplyText: String = "",
+        val previewImageBytes: ByteArray? = null,
+        val committingDraft: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -289,13 +329,25 @@ class MoneyViewModel(
             tags = txn.tags,
             budgetId = txn.budgetId,
         )
+
+        /** 计算智能对账差额（actual - book），输入非法返回 null。 */
+        fun computeReconcileDrift(bookBalanceRaw: String, actualBalanceRaw: String): BigDecimal? {
+            val cleaned = actualBalanceRaw.trim()
+            if (cleaned.isEmpty()) return null
+            val actual = cleaned.toBigDecimalOrNull() ?: return null
+            val book = parseMoneyAmount(bookBalanceRaw)
+            return actual.subtract(book).setScale(2, RoundingMode.HALF_UP)
+        }
+
+        fun formatYearMonthParam(month: YearMonth): String =
+            String.format(Locale.US, "%04d-%02d", month.year, month.monthValue)
     }
 
     // ------------------------------------------------------------------
     // 数据加载
     // ------------------------------------------------------------------
 
-    /** 并发拉取账户 + 最近交易（按当前排序）+ 当前统计月汇总；失败保留旧数据并给出非阻塞提示。 */
+    /** 并发拉取账户 + 最近交易（按当前排序）+ 当前统计月汇总 + SailTick 秘书概览；失败保留旧数据并给出非阻塞提示。 */
     fun refresh() {
         refreshJob?.cancel()
         listJob?.cancel()
@@ -303,10 +355,19 @@ class MoneyViewModel(
         val sortMode = _uiState.value.sortMode
         val statsMonth = _uiState.value.statsMonth
         val (fromTime, toTime) = monthRangeEpochSec(statsMonth)
+        val monthParam = formatYearMonthParam(statsMonth)
         refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(loading = true, statsLoading = true) }
             val configured = repository.serverConfigured()
-            val (accountsResult, pageResult, statsResult) = coroutineScope {
+            data class RefreshBundle(
+                val accounts: OperationResult<List<AccountDto>>,
+                val page: OperationResult<com.sailzen.app.core.network.dto.PaginatedTransactionsDto>,
+                val stats: OperationResult<TransactionStatsDto>,
+                val overview: OperationResult<FinanceOverviewDto>,
+                val pending: OperationResult<List<HygieneProposalDto>>,
+                val autoApplied: OperationResult<List<HygieneProposalDto>>,
+            )
+            val bundle = coroutineScope {
                 val accDeferred = async { repository.listAccounts() }
                 val txnDeferred = async {
                     repository.listTransactionsPaginated(
@@ -317,27 +378,44 @@ class MoneyViewModel(
                     )
                 }
                 val statsDeferred = async { repository.getTransactionStats(fromTime, toTime) }
-                Triple(accDeferred.await(), txnDeferred.await(), statsDeferred.await())
+                val overviewDeferred = async { repository.getFinanceOverview(monthParam) }
+                val pendingDeferred = async {
+                    repository.listHygieneProposals(status = "pending", limit = 20)
+                }
+                val autoDeferred = async {
+                    repository.listHygieneProposals(autonomyLevel = "auto_applied", limit = 20)
+                }
+                RefreshBundle(
+                    accounts = accDeferred.await(),
+                    page = txnDeferred.await(),
+                    stats = statsDeferred.await(),
+                    overview = overviewDeferred.await(),
+                    pending = pendingDeferred.await(),
+                    autoApplied = autoDeferred.await(),
+                )
             }
             val failureMsg = listOfNotNull(
-                (accountsResult as? OperationResult.Failure)?.message,
-                (pageResult as? OperationResult.Failure)?.message,
+                (bundle.accounts as? OperationResult.Failure)?.message,
+                (bundle.page as? OperationResult.Failure)?.message,
             ).firstOrNull()
-            val statsFailureMsg = (statsResult as? OperationResult.Failure)?.message
-            val pageData = pageResult.getOrNull()
+            val statsFailureMsg = (bundle.stats as? OperationResult.Failure)?.message
+            val pageData = bundle.page.getOrNull()
             _uiState.update {
                 it.copy(
                     serverConfigured = configured,
                     loading = false,
                     loadingMore = false,
                     statsLoading = false,
-                    accounts = accountsResult.getOrNull() ?: it.accounts,
+                    accounts = bundle.accounts.getOrNull() ?: it.accounts,
                     transactions = pageData?.data ?: it.transactions,
                     totalTransactions = pageData?.total ?: it.totalTransactions,
                     currentPage = pageData?.page ?: it.currentPage,
                     hasMore = pageData?.hasNext ?: it.hasMore,
-                    monthlyStats = statsResult.getOrNull() ?: it.monthlyStats,
+                    monthlyStats = bundle.stats.getOrNull() ?: it.monthlyStats,
                     statsError = statsFailureMsg,
+                    overview = bundle.overview.getOrNull() ?: it.overview,
+                    pendingProposals = bundle.pending.getOrNull() ?: it.pendingProposals,
+                    autoProposals = bundle.autoApplied.getOrNull() ?: it.autoProposals,
                     error = failureMsg,
                     message = it.message ?: failureMsg?.let { msg -> "加载失败：$msg" },
                 )
@@ -597,6 +675,362 @@ class MoneyViewModel(
                     _uiState.update {
                         it.copy(submitting = false, confirmDelete = null, message = "删除失败：${result.message}")
                     }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Finance 2.0：SailTick 快脑对话 / 智能对账 / 清理队列 / 识图小票
+    // ------------------------------------------------------------------
+
+    fun setChatInput(value: String) = _uiState.update { it.copy(chatInput = value) }
+
+    fun clearChatReply() = _uiState.update { it.copy(chatReply = null) }
+
+    fun sendFinanceQuickChat(overrideText: String? = null) {
+        val text = (overrideText ?: _uiState.value.chatInput).trim()
+        if (text.isEmpty() || _uiState.value.chatBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(chatBusy = true) }
+            val result = tickRepo().quickChat(text = text, channel = "android")
+            result.fold(
+                onSuccess = { res ->
+                    _uiState.update {
+                        it.copy(
+                            chatBusy = false,
+                            chatInput = if (overrideText == null) "" else it.chatInput,
+                            chatReply = res.reply,
+                            message = if (res.financeUpdated) "账单已同步更新" else it.message,
+                        )
+                    }
+                    if (res.financeUpdated) {
+                        refresh()
+                    }
+                },
+                onFailure = { err ->
+                    _uiState.update {
+                        it.copy(
+                            chatBusy = false,
+                            message = "SailTick 对话失败：${err.message ?: "请检查网络"}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun toggleHygieneExpanded() = _uiState.update { it.copy(hygieneExpanded = !it.hygieneExpanded) }
+
+    fun setHygieneTab(tab: Int) = _uiState.update { it.copy(hygieneTab = tab.coerceIn(0, 1)) }
+
+    fun runHygieneScan(days: Int = 90) {
+        if (_uiState.value.scanningHygiene) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(scanningHygiene = true) }
+            when (
+                val res = repository.runHygieneScan(
+                    HygieneScanRequestDto(
+                        days = days,
+                        autoApplySafe = true,
+                        maxReviewProposals = 6,
+                        createdBy = "android",
+                    ),
+                )
+            ) {
+                is OperationResult.Success -> {
+                    val s = res.data
+                    _uiState.update {
+                        it.copy(
+                            scanningHygiene = false,
+                            hygieneExpanded = true,
+                            message = "体检完成：扫描 ${s.scannedTxCount} 笔，自动打标 ${s.autoTaggedCount} 笔，新增待确认 ${s.reviewProposalsCreated} 条",
+                        )
+                    }
+                    refresh()
+                }
+                is OperationResult.Failure ->
+                    _uiState.update {
+                        it.copy(scanningHygiene = false, message = "账单体检失败：${res.message}")
+                    }
+            }
+        }
+    }
+
+    fun approveProposal(id: Int) {
+        if (_uiState.value.hygieneBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(hygieneBusyId = id) }
+            when (val res = repository.approveHygieneProposal(id)) {
+                is OperationResult.Success -> {
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "已批准执行") }
+                    refresh()
+                }
+                is OperationResult.Failure ->
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "批准失败：${res.message}") }
+            }
+        }
+    }
+
+    fun dismissProposal(id: Int) {
+        if (_uiState.value.hygieneBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(hygieneBusyId = id) }
+            when (val res = repository.dismissHygieneProposal(id)) {
+                is OperationResult.Success -> {
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "已忽略该建议") }
+                    refresh()
+                }
+                is OperationResult.Failure ->
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "忽略失败：${res.message}") }
+            }
+        }
+    }
+
+    fun revertProposal(id: Int) {
+        if (_uiState.value.hygieneBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(hygieneBusyId = id) }
+            when (val res = repository.revertHygieneProposal(id)) {
+                is OperationResult.Success -> {
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "已撤销并恢复原状") }
+                    refresh()
+                }
+                is OperationResult.Failure ->
+                    _uiState.update { it.copy(hygieneBusyId = null, message = "撤销失败：${res.message}") }
+            }
+        }
+    }
+
+    // ---------------- 智能余额核对 ----------------
+
+    fun openReconcileDialog(accId: Int? = null) {
+        val physical = physicalAccounts(_uiState.value.accounts)
+        val chosen = accId ?: physical.firstOrNull()?.id ?: -1
+        _uiState.update {
+            it.copy(
+                reconcileOpen = true,
+                reconcileAccId = chosen,
+                reconcileActualBalance = "",
+                reconcileNote = "",
+                reconcileForceAdjust = false,
+            )
+        }
+    }
+
+    fun closeReconcileDialog() = _uiState.update { it.copy(reconcileOpen = false) }
+
+    fun setReconcileAccId(accId: Int) = _uiState.update { it.copy(reconcileAccId = accId) }
+
+    fun setReconcileActualBalance(value: String) = _uiState.update { it.copy(reconcileActualBalance = value) }
+
+    fun setReconcileNote(value: String) = _uiState.update { it.copy(reconcileNote = value) }
+
+    fun setReconcileForceAdjust(force: Boolean) = _uiState.update { it.copy(reconcileForceAdjust = force) }
+
+    fun submitReconcile() {
+        val state = _uiState.value
+        if (state.reconcileBusy) return
+        if (state.reconcileAccId <= 0) {
+            _uiState.update { it.copy(message = "请先选择要核对的账户") }
+            return
+        }
+        val actual = state.reconcileActualBalance.trim()
+        if (actual.toBigDecimalOrNull() == null) {
+            _uiState.update { it.copy(message = "请输入有效的真实余额数字") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(reconcileBusy = true) }
+            when (
+                val res = repository.reconcileAccount(
+                    AccountReconcileRequestDto(
+                        accountId = state.reconcileAccId,
+                        actualBalance = actual,
+                        forceAdjust = state.reconcileForceAdjust,
+                        note = state.reconcileNote.trim(),
+                        source = "android",
+                    ),
+                )
+            ) {
+                is OperationResult.Success -> {
+                    val data = res.data
+                    _uiState.update {
+                        it.copy(
+                            reconcileBusy = false,
+                            reconcileOpen = false,
+                            hygieneExpanded = data.handling == "large_drift_pending" || it.hygieneExpanded,
+                            message = data.message.ifBlank { "余额核对已完成" },
+                        )
+                    }
+                    refresh()
+                }
+                is OperationResult.Failure ->
+                    _uiState.update {
+                        it.copy(reconcileBusy = false, message = "核对失败：${res.message}")
+                    }
+            }
+        }
+    }
+
+    // ---------------- 小票 / 账单截图 OCR 识图 ----------------
+
+    fun analyzeReceiptUri(uri: Uri, note: String = "") {
+        if (_uiState.value.analyzingImage) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(analyzingImage = true) }
+            val repo = tickRepo()
+            val bytesResult = repo.readAndCompressUri(uri)
+            val bytes = bytesResult.getOrElse { err ->
+                _uiState.update {
+                    it.copy(analyzingImage = false, message = "读取图片失败：${err.message ?: "请重试"}")
+                }
+                return@launch
+            }
+            val result = repo.analyzeImageIntake(
+                imageBytes = bytes,
+                filename = "receipt_${System.currentTimeMillis()}.jpg",
+                note = note.ifBlank { "账单/小票/账户余额截图识图" },
+                sourceChannel = "android",
+                useOcrAssist = "auto",
+            )
+            result.fold(
+                onSuccess = { draft ->
+                    _uiState.update {
+                        it.copy(
+                            analyzingImage = false,
+                            activeDraft = draft,
+                            draftEntries = draft.entries,
+                            draftSummary = draft.summary,
+                            draftReplyText = "",
+                            previewImageBytes = bytes,
+                        )
+                    }
+                },
+                onFailure = { err ->
+                    _uiState.update {
+                        it.copy(
+                            analyzingImage = false,
+                            message = "小票识图失败：${err.message ?: "请稍后重试"}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun closeDraftSheet() = _uiState.update {
+        it.copy(
+            activeDraft = null,
+            draftEntries = emptyList(),
+            draftSummary = "",
+            draftReplyText = "",
+            previewImageBytes = null,
+        )
+    }
+
+    fun updateDraftSummary(summary: String) = _uiState.update { it.copy(draftSummary = summary) }
+
+    fun updateDraftReplyText(replyText: String) = _uiState.update { it.copy(draftReplyText = replyText) }
+
+    fun toggleEntrySelected(index: Int, selected: Boolean) = _uiState.update { prev ->
+        prev.copy(
+            draftEntries = prev.draftEntries.mapIndexed { i, item ->
+                if (i == index) item.copy(selected = selected) else item
+            },
+        )
+    }
+
+    fun updateEntryKind(index: Int, kind: String) = _uiState.update { prev ->
+        prev.copy(
+            draftEntries = prev.draftEntries.mapIndexed { i, item ->
+                if (i == index) item.copy(kind = kind) else item
+            },
+        )
+    }
+
+    fun updateEntryTitle(index: Int, title: String) = _uiState.update { prev ->
+        prev.copy(
+            draftEntries = prev.draftEntries.mapIndexed { i, item ->
+                if (i == index) item.copy(title = title) else item
+            },
+        )
+    }
+
+    fun updateEntryDataField(index: Int, key: String, value: JsonElement) = _uiState.update { prev ->
+        prev.copy(
+            draftEntries = prev.draftEntries.mapIndexed { i, item ->
+                if (i != index) return@mapIndexed item
+                val mutable = item.data.toMutableMap()
+                mutable[key] = value
+                item.copy(data = JsonObject(mutable))
+            },
+        )
+    }
+
+    fun commitActiveDraft() {
+        val state = _uiState.value
+        val draft = state.activeDraft ?: return
+        if (state.draftEntries.none { it.selected }) {
+            _uiState.update { it.copy(message = "请至少勾选一条要落库的记录") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(committingDraft = true) }
+            val result = tickRepo().commitIntakeDraft(
+                draftId = draft.id,
+                request = ImageIntakeCommitRequest(
+                    entries = state.draftEntries,
+                    summary = state.draftSummary.trim().ifBlank { draft.summary },
+                    ticketId = draft.ticketId,
+                    replyText = state.draftReplyText.trim().ifBlank { null },
+                ),
+            )
+            result.fold(
+                onSuccess = { committed ->
+                    val labels = committed.committedRefs.mapNotNull { it.label.takeIf(String::isNotBlank) }
+                    val msg = if (labels.isNotEmpty()) {
+                        "已入账：${labels.joinToString(" · ")}"
+                    } else {
+                        "识图记录已落库"
+                    }
+                    _uiState.update {
+                        it.copy(
+                            committingDraft = false,
+                            activeDraft = null,
+                            draftEntries = emptyList(),
+                            draftSummary = "",
+                            draftReplyText = "",
+                            previewImageBytes = null,
+                            message = msg,
+                        )
+                    }
+                    refresh()
+                },
+                onFailure = { err ->
+                    _uiState.update {
+                        it.copy(
+                            committingDraft = false,
+                            message = "入账失败：${err.message ?: "请稍后重试"}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun discardActiveDraft() {
+        val draft = _uiState.value.activeDraft ?: return
+        viewModelScope.launch {
+            tickRepo().discardIntakeDraft(draft.id)
+            _uiState.update {
+                it.copy(
+                    activeDraft = null,
+                    draftEntries = emptyList(),
+                    draftSummary = "",
+                    draftReplyText = "",
+                    previewImageBytes = null,
+                    message = "已丢弃该识图草稿",
+                )
             }
         }
     }

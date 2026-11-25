@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.sailzen.app.core.money.MoneyRepository
+import com.sailzen.app.core.tick.TickRepository
 
 /**
  * MoneyViewModel 工厂：构造器带默认 repository 参数，默认 AndroidViewModelFactory
@@ -14,12 +15,14 @@ import com.sailzen.app.core.money.MoneyRepository
 class MoneyViewModelFactory(
     private val application: Application,
     private val repository: MoneyRepository? = null,
+    private val tickRepository: TickRepository? = null,
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T =
         MoneyViewModel(
-            application,
-            repository ?: MoneyRepository.get(application),
+            application = application,
+            repository = repository ?: MoneyRepository.get(application),
+            tickRepository = tickRepository,
         ) as T
 }

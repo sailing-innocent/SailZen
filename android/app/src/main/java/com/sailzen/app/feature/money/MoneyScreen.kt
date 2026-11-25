@@ -1,6 +1,10 @@
 package com.sailzen.app.feature.money
 
 import android.app.Application
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -78,10 +82,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.core.network.dto.AccountDto
 import com.sailzen.app.core.network.dto.TransactionDto
 import com.sailzen.app.core.network.dto.TransactionStatsDto
+import com.sailzen.app.feature.health.coach.ImageIntakeConfirmSheet
+import java.io.File
 import java.math.BigDecimal
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -104,10 +111,45 @@ private val DateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 fun MoneyScreen(
     onOpenSettings: () -> Unit,
 ) {
-    val application = LocalContext.current.applicationContext as Application
+    val context = LocalContext.current
+    val application = context.applicationContext as Application
     val viewModel: MoneyViewModel = viewModel(factory = MoneyViewModelFactory(application))
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.analyzeReceiptUri(uri)
+        }
+    }
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success: Boolean ->
+        val uri = pendingCameraUri
+        pendingCameraUri = null
+        if (success && uri != null) {
+            viewModel.analyzeReceiptUri(uri)
+        }
+    }
+
+    fun launchGallery() {
+        photoPickerLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+
+    fun launchCamera() {
+        val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+        dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(8)?.forEach { it.delete() }
+        val file = File(dir, "receipt_${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        pendingCameraUri = uri
+        takePictureLauncher.launch(uri)
+    }
 
     LaunchedEffect(state.message) {
         val msg = state.message ?: return@LaunchedEffect
@@ -163,6 +205,35 @@ fun MoneyScreen(
                             onDismiss = { viewModel.dismissError() },
                         )
                     }
+                }
+
+                // 0. SailTick 开销秘书卡片（真实零食/覆盖率、一句话快记、拍小票、智能对账、清理队列）
+                item(key = "sailtick_secretary") {
+                    SailTickSecretaryCard(
+                        overview = state.overview,
+                        pendingProposals = state.pendingProposals,
+                        autoProposals = state.autoProposals,
+                        hygieneExpanded = state.hygieneExpanded,
+                        hygieneTab = state.hygieneTab,
+                        hygieneBusyId = state.hygieneBusyId,
+                        scanningHygiene = state.scanningHygiene,
+                        chatInput = state.chatInput,
+                        chatBusy = state.chatBusy,
+                        chatReply = state.chatReply,
+                        analyzingImage = state.analyzingImage,
+                        onChatInputChange = viewModel::setChatInput,
+                        onSendChat = { viewModel.sendFinanceQuickChat() },
+                        onClearChatReply = viewModel::clearChatReply,
+                        onPickGallery = { launchGallery() },
+                        onTakePhoto = { launchCamera() },
+                        onOpenReconcile = { viewModel.openReconcileDialog() },
+                        onToggleHygiene = viewModel::toggleHygieneExpanded,
+                        onSelectHygieneTab = viewModel::setHygieneTab,
+                        onRunHygieneScan = { viewModel.runHygieneScan() },
+                        onApproveProposal = viewModel::approveProposal,
+                        onDismissProposal = viewModel::dismissProposal,
+                        onRevertProposal = viewModel::revertProposal,
+                    )
                 }
 
                 // 1. 月度收支统计卡
@@ -293,6 +364,45 @@ fun MoneyScreen(
             dismissButton = {
                 TextButton(onClick = viewModel::dismissDelete) { Text("取消") }
             },
+        )
+    }
+
+    // ---------------- 智能余额核对对话框 ----------------
+    if (state.reconcileOpen) {
+        ReconcileAccountDialog(
+            accounts = MoneyViewModel.physicalAccounts(state.accounts),
+            selectedAccId = state.reconcileAccId,
+            actualBalance = state.reconcileActualBalance,
+            note = state.reconcileNote,
+            forceAdjust = state.reconcileForceAdjust,
+            busy = state.reconcileBusy,
+            onSelectAccount = viewModel::setReconcileAccId,
+            onActualBalanceChange = viewModel::setReconcileActualBalance,
+            onNoteChange = viewModel::setReconcileNote,
+            onForceAdjustChange = viewModel::setReconcileForceAdjust,
+            onSubmit = viewModel::submitReconcile,
+            onDismiss = viewModel::closeReconcileDialog,
+        )
+    }
+
+    // ---------------- 小票 / 账单截图 OCR 识图确认卡 ----------------
+    state.activeDraft?.let { activeDraft ->
+        ImageIntakeConfirmSheet(
+            draft = activeDraft,
+            entries = state.draftEntries,
+            summary = state.draftSummary,
+            replyText = state.draftReplyText,
+            previewBytes = state.previewImageBytes,
+            committing = state.committingDraft,
+            onDismiss = viewModel::closeDraftSheet,
+            onSummaryChange = viewModel::updateDraftSummary,
+            onReplyTextChange = viewModel::updateDraftReplyText,
+            onToggleEntry = viewModel::toggleEntrySelected,
+            onEntryKindChange = viewModel::updateEntryKind,
+            onEntryTitleChange = viewModel::updateEntryTitle,
+            onEntryFieldChange = viewModel::updateEntryDataField,
+            onCommit = viewModel::commitActiveDraft,
+            onDiscard = viewModel::discardActiveDraft,
         )
     }
 }

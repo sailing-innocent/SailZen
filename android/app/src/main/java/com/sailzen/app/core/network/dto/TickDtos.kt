@@ -181,6 +181,7 @@ data class QuickChatRequest(
 data class QuickChatResponse(
     val reply: String = "",
     @SerialName("rhythm_updated") val rhythmUpdated: Boolean = false,
+    @SerialName("finance_updated") val financeUpdated: Boolean = false,
     val source: String = "",
     @SerialName("session_id") val sessionId: String? = null,
     @SerialName("latency_ms") val latencyMs: Double = 0.0,

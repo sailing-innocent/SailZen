@@ -50,10 +50,14 @@ API 端点（基于 api_server standalone 路由结构）：
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import sys
 import time
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
 import click
@@ -564,6 +568,31 @@ def main():
     )
     p_delete.set_defaults(func=cmd_delete)
 
+    # ---- sync-journals (Phase 2 Vault <-> Cloud Bridge) ----
+    p_sync = subparsers.add_parser(
+        "sync-journals",
+        help="将本地 D:\\vault 近期非空日记轻量摘要增量同步至云端 sail_server 供 SailTick 关联消费背景",
+    )
+    p_sync.add_argument("--vault-dir", default=os.environ.get("SAILZEN_VAULT_DIR", r"D:\vault"), help="本地 Vault 根目录（默认 D:\\vault）")
+    p_sync.add_argument("--days", type=int, default=30, help="同步最近 N 天日记（默认 30 天）")
+    p_sync.add_argument("--server", default=os.environ.get("SAIL_SERVER_URL", "http://127.0.0.1:1974"), help="sail_server 地址")
+    p_sync.add_argument("--token", default=os.environ.get("SAILZEN_API_TOKEN", ""), help="SAILZEN_API_TOKEN")
+    p_sync.add_argument("--dry-run", action="store_true", help="仅预览待同步日记摘要，不发请求")
+    p_sync.set_defaults(func=cmd_sync_journals)
+
+    # ---- export-finance-review (Cloud -> Vault Markdown) ----
+    p_exp = subparsers.add_parser(
+        "export-finance-review",
+        help="从云端导出月度财务与生活开销复盘 Markdown 写入本地 Vault",
+    )
+    p_exp.add_argument("--vault-dir", default=os.environ.get("SAILZEN_VAULT_DIR", r"D:\vault"), help="本地 Vault 根目录（默认 D:\\vault）")
+    p_exp.add_argument("--month", default=None, help="目标月份 YYYY-MM（默认本月）")
+    p_exp.add_argument("--server", default=os.environ.get("SAIL_SERVER_URL", "http://127.0.0.1:1974"), help="sail_server 地址")
+    p_exp.add_argument("--token", default=os.environ.get("SAILZEN_API_TOKEN", ""), help="SAILZEN_API_TOKEN")
+    p_exp.add_argument("--dry-run", action="store_true", help="仅在终端预览 Markdown，不写文件")
+    p_exp.add_argument("--overwrite", action="store_true", help="若文件已存在强制覆盖")
+    p_exp.set_defaults(func=cmd_export_finance_review)
+
     # ----
     args = parser.parse_args()
 
@@ -583,6 +612,175 @@ def main():
     except KeyboardInterrupt:
         print("\n已取消")
         sys.exit(0)
+
+
+# ============================================================================
+# Phase 2: Local Dendron Vault <-> Cloud SailZen Journal & Finance Bridge
+# ============================================================================
+
+_JOURNAL_FILE_RE = re.compile(r"^journal\.daily\.(\d{4})\.(\d{2})\.(\d{2})\.md$")
+_TRAVEL_HINTS = ("出差", "高铁", "动车", "火车", "机票", "航班", "酒店", "民宿", "旅行", "旅游", "回家", "返程")
+_SPEND_HINTS = ("采购", "超市", "盒马", "聚餐", "请客", "房租", "搬家", "体检", "医院", "买", "外卖", "零食", "咖啡", "奶茶")
+_MOOD_HINTS = ("开心", "满足", "顺利", "疲惫", "累", "压力", "焦虑", "失眠", "熬夜", "放松", "难受", "郁闷")
+
+
+def extract_journal_digest_from_file(path: Path) -> Optional[dict]:
+    """解析单篇 Dendron daily journal，跳过空骨架，提取轻量摘要与语义信号。"""
+    m = _JOURNAL_FILE_RE.match(path.name)
+    if not m:
+        return None
+    note_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+    body = raw
+    title = note_date
+    tags: list[str] = []
+    if raw.startswith("---"):
+        parts = raw.split("---", 2)
+        if len(parts) == 3:
+            fm, body = parts[1], parts[2]
+            tm = re.search(r"^title:\s*['\"]?([^'\"\r\n]+)['\"]?", fm, re.MULTILINE)
+            if tm:
+                title = tm.group(1).strip()
+            for tag_m in re.findall(r"^\s*-\s*([A-Za-z0-9_\-\u4e00-\u9fff]+)\s*$", fm, re.MULTILINE):
+                if tag_m != "journalNote":
+                    tags.append(tag_m)
+
+    # 剥离空标题与例行 wiki 链接骨架（如 `- [[routines.daily]]`、`## Plan` 等）
+    meaningful_lines: list[str] = []
+    for line in body.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        if re.match(
+            r"^#{1,6}\s+(Plan|Records?|Summary|Todo|Notes?|Affairs|Routines?|Pending)$",
+            s,
+            re.IGNORECASE,
+        ):
+            continue
+        if re.match(r"^[-*]\s*\[\[routines\.[^\]]+\]\]$", s):
+            continue
+        meaningful_lines.append(s)
+
+    clean_text = "\n".join(meaningful_lines).strip()
+    if len(clean_text) < 4:
+        return None  # 空骨架日记不上传
+
+    summary_lines = [ln.lstrip("#-* ").strip() for ln in meaningful_lines[:6] if ln.lstrip("#-* ").strip()]
+    summary = "；".join(summary_lines)[:480]
+    excerpt = clean_text[:1500]
+    content_hash = hashlib.sha256(clean_text.encode("utf-8")).hexdigest()[:32]
+
+    return {
+        "note_date": note_date,
+        "filename": path.name,
+        "title": title,
+        "summary": summary,
+        "excerpt": excerpt,
+        "mood_hints": [kw for kw in _MOOD_HINTS if kw in clean_text][:8],
+        "travel_hints": [kw for kw in _TRAVEL_HINTS if kw in clean_text][:8],
+        "spend_context_hints": [kw for kw in _SPEND_HINTS if kw in clean_text][:8],
+        "tags": tags[:12],
+        "content_hash": content_hash,
+    }
+
+
+def scan_local_vault_journals(
+    vault_dir: Path,
+    days: int = 30,
+    today: Optional[datetime] = None,
+) -> list[dict]:
+    """扫描本地 Vault 近期（截止今天、忽略未来空白骨架）的非空日记摘要。"""
+    notes_dir = vault_dir / "notes"
+    if not notes_dir.is_dir():
+        notes_dir = vault_dir
+    if not notes_dir.is_dir():
+        return []
+
+    ref = today or datetime.now()
+    cutoff_str = (ref - timedelta(days=max(1, int(days)))).strftime("%Y-%m-%d")
+    today_str = ref.strftime("%Y-%m-%d")
+
+    digests: list[dict] = []
+    for p in sorted(notes_dir.glob("journal.daily.*.md"), reverse=True):
+        m = _JOURNAL_FILE_RE.match(p.name)
+        if not m:
+            continue
+        d_str = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        if d_str > today_str or d_str < cutoff_str:
+            continue
+        d = extract_journal_digest_from_file(p)
+        if d is not None:
+            digests.append(d)
+    return digests
+
+
+def _sail_headers(token: str) -> dict:
+    h = {"Content-Type": "application/json"}
+    if token:
+        h["Authorization"] = f"Bearer {token}"
+    return h
+
+
+def cmd_sync_journals(args) -> None:
+    vault_dir = Path(args.vault_dir)
+    digests = scan_local_vault_journals(vault_dir, days=args.days)
+    print(f"扫描 {vault_dir} 近 {args.days} 天日记：发现 {len(digests)} 篇非空日记")
+    for d in digests[:5]:
+        hints = d["travel_hints"] + d["spend_context_hints"][:2]
+        print(f"  - {d['note_date']}: {d['summary'][:60]}" + (f" [{', '.join(hints)}]" if hints else ""))
+
+    if args.dry_run:
+        print("[DRY-RUN] 未向服务器发送任何数据。")
+        return
+    if not digests:
+        print("没有需要同步的日记。")
+        return
+
+    base = args.server.rstrip("/")
+    url = f"{base}/api/v1/tick/vault/journals/sync"
+    resp = requests.post(
+        url,
+        headers=_sail_headers(args.token),
+        json={"items": digests, "source_vault": vault_dir.name or "local"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    res = resp.json()
+    print(
+        f"✓ 同步完成：新增 {res.get('created', 0)} · 更新 {res.get('updated', 0)} · 未变更跳过 {res.get('skipped', 0)}"
+    )
+
+
+def cmd_export_finance_review(args) -> None:
+    base = args.server.rstrip("/")
+    url = f"{base}/api/v1/tick/vault/export/finance-review"
+    params = {"month": args.month} if args.month else {}
+    resp = requests.get(url, headers=_sail_headers(args.token), params=params, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    md = data.get("markdown", "")
+    filename = data.get("filename", f"journal.finance.{(args.month or datetime.now().strftime('%Y-%m')).replace('-', '.')}.md")
+
+    if args.dry_run:
+        print(f"[DRY-RUN] 目标文件：{Path(args.vault_dir) / 'notes' / filename}")
+        print("-" * 60)
+        print(md)
+        return
+
+    notes_dir = Path(args.vault_dir) / "notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    target = notes_dir / filename
+    if target.exists() and not args.overwrite:
+        existing_head = target.read_text(encoding="utf-8")[:200]
+        if "id: sailtick-finance-" not in existing_head:
+            print(f"⚠️ 文件已存在且非 SailTick 托管文档，跳过覆盖（可加 --overwrite）：{target}", file=sys.stderr)
+            sys.exit(1)
+    target.write_text(md, encoding="utf-8")
+    print(f"✓ 已导出 {data.get('month')} 财务复盘至：{target}（关联 {data.get('journals_linked', 0)} 篇日记）")
 
 
 # ============================================================================

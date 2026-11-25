@@ -75,6 +75,12 @@ class FinanceAnalyticsEngine:
         accounts = deep_pkg.get("finance_accounts") or []
         accounts = accounts if isinstance(accounts, list) else []
         hygiene_res = deep_pkg.get("finance_hygiene_scan") or {}
+        vault_journals = deep_pkg.get("vault_journals") or []
+        journal_by_date: Dict[str, Dict[str, Any]] = {
+            str(j.get("note_date")): j
+            for j in vault_journals
+            if isinstance(j, dict) and j.get("note_date")
+        }
 
         # 识别需排除在日常消费趋势外的账户（如房贷账户）
         excluded_acc_ids = {
@@ -205,7 +211,16 @@ class FinanceAnalyticsEngine:
                     unsplit_mixed_count += 1
 
             if any(kw in desc for kw in _TRAVEL_KEYWORDS) and (now - dt).days <= 30:
-                travel_txs.append({"id": tx.get("id"), "date": d_str, "desc": desc[:24], "value": round(val, 2)})
+                j_day = journal_by_date.get(d_str)
+                travel_txs.append(
+                    {
+                        "id": tx.get("id"),
+                        "date": d_str,
+                        "desc": desc[:24],
+                        "value": round(val, 2),
+                        "journal_summary": str(j_day.get("summary") or "")[:80] if j_day else "",
+                    }
+                )
 
         # 若 overview 提供了更全的本月汇总（避免分页截断），优先采用
         if overview.get("mtd_expense") is not None and mtd_expense == 0:
@@ -279,7 +294,14 @@ class FinanceAnalyticsEngine:
             names = "、".join(f"{a['name']}({a['days_silent']}天)" for a in silent_accounts[:2])
             insights.append(f"常用账户较久未记账：{names}，方便时可核对一次余额")
         if travel_txs:
-            insights.append(f"近 30 天检测到 {len(travel_txs)} 笔高铁/机票/酒店账单，可在财务页一键关联至 Rhythm 行程")
+            linked_j = [t for t in travel_txs if t.get("journal_summary")]
+            if linked_j:
+                sample = linked_j[0]
+                insights.append(
+                    f"近 30 天检测到 {len(travel_txs)} 笔差旅账单（如 {sample['date']}「{sample['desc']}」，日记提及：{sample['journal_summary'][:36]}），可在财务页关联至 Rhythm 行程"
+                )
+            else:
+                insights.append(f"近 30 天检测到 {len(travel_txs)} 笔高铁/机票/酒店账单，可在财务页一键关联至 Rhythm 行程")
 
         # 提炼最多 1 条高价值发问建议（严控不轰炸：历史慢迭代静默推进，绝不催促用户补旧账）
         suggested_questions: List[Dict[str, str]] = []

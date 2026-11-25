@@ -103,6 +103,7 @@ from sailzen_orm.tick import (
     SailTickMessage,
     SailTickDailyReport,
     SailTickIntakeDraft,
+    VaultJournalDigest,
 )
 
 # Telemetry & AI Trace Models
@@ -187,6 +188,7 @@ __all__ = [
     "SailTickMessage",
     "SailTickDailyReport",
     "SailTickIntakeDraft",
+    "VaultJournalDigest",
     # Telemetry & AI Trace
     "SysAITrace",
     "SysAITraceSpan",

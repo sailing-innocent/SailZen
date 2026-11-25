@@ -195,3 +195,41 @@ class SailTickIntakeDraft(ORMBase):
     __table_args__ = (
         Index("ix_tick_intake_drafts_status_created", "status", "created_at"),
     )
+
+
+class VaultJournalDigest(ORMBase):
+    """本地 Dendron/Vault 日记的云端轻量只读上下文摘要（The Bridge）。
+
+    原则：Notes are notes. Databases are databases. The Agent is the bridge.
+    主笔记仍保存在本地 Git/Vault 中，云端仅缓存去重后的脱敏摘要与行为信号，
+    供 SailTick 关联差旅/情绪/大额消费背景。
+    """
+
+    __tablename__ = "vault_journal_digests"
+
+    id = Column(Integer, primary_key=True)
+    # YYYY-MM-DD（每天一条，按 content_hash 幂等增量更新）
+    note_date = Column(String, unique=True, nullable=False, index=True)
+    filename = Column(String, default="")
+    title = Column(String, default="")
+    summary = Column(String, default="")
+    excerpt = Column(String, default="")
+    mood_hints = Column(JSONB, default=list)
+    travel_hints = Column(JSONB, default=list)
+    spend_context_hints = Column(JSONB, default=list)
+    tags = Column(JSONB, default=list)
+    content_hash = Column(String, default="", index=True)
+    source_vault = Column(String, default="local")
+    synced_at = Column(
+        TIMESTAMP, default=datetime.now, server_default=func.current_timestamp()
+    )
+    updated_at = Column(
+        TIMESTAMP,
+        default=datetime.now,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+    )
+
+    __table_args__ = (
+        Index("ix_vault_journal_digests_date", "note_date"),
+    )

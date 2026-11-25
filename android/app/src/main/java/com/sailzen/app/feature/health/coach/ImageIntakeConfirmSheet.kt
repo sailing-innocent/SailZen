@@ -65,7 +65,10 @@ private val SCENE_LABELS = mapOf(
     "exercise" to "运动记录",
     "weight" to "体重/体脂",
     "selfie_status" to "气色/状态",
-    "general" to "日常健康",
+    "receipt" to "消费小票/订单",
+    "bill_screenshot" to "账单流水截图",
+    "account_balance" to "账户余额核对",
+    "general" to "日常记录",
 )
 
 private val KIND_CHOICES = listOf(
@@ -75,6 +78,8 @@ private val KIND_CHOICES = listOf(
     "exercise" to "运动",
     "weight" to "体重",
     "mood" to "气色/状态",
+    "transaction" to "账单",
+    "account_balance_check" to "余额核对",
     "daily_info" to "日常",
 )
 
@@ -548,6 +553,130 @@ private fun IntakeEntryEditorCard(
                             maxLines = 3,
                         )
                     }
+                }
+
+                "transaction" -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = entry.data.str("amount"),
+                            onValueChange = { onFieldChange("amount", numberOrNullJson(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("金额 (¥)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = entry.data.str("account_hint"),
+                            onValueChange = { onFieldChange("account_hint", JsonPrimitive(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("账户(微信/支付宝)") },
+                            singleLine = true,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = entry.data.str("tags"),
+                            onValueChange = { onFieldChange("tags", JsonPrimitive(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("标签(逗号分隔)") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = entry.data.str("htime"),
+                            onValueChange = { onFieldChange("htime", JsonPrimitive(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("交易时间") },
+                            singleLine = true,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = entry.data.str("description"),
+                        onValueChange = { onFieldChange("description", JsonPrimitive(it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("商户 / 消费描述") },
+                        singleLine = true,
+                    )
+                    val itemsArr = entry.data["items"] as? JsonArray
+                    if (itemsArr != null && itemsArr.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    "已拆出 ${itemsArr.size} 项商品明细（主账单保持 1 笔流水）",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                itemsArr.forEach { elem ->
+                                    val obj = elem as? JsonObject ?: return@forEach
+                                    val name = obj.str("name").ifBlank { "商品" }
+                                    val amt = obj.str("amount")
+                                    val tag = obj.str("tag").ifBlank { "未分类" }
+                                    val snackMark = if (obj.bool("is_snack") || tag == "零食") " [零食]" else ""
+                                    Text(
+                                        "• $name$snackMark — [$tag] ¥$amt",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "含零食/餐饮时同步联动健康饮食",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Switch(
+                            checked = entry.data.bool("sync_to_health"),
+                            onCheckedChange = { onFieldChange("sync_to_health", JsonPrimitive(it)) },
+                        )
+                    }
+                }
+
+                "account_balance_check" -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = entry.data.str("account_hint"),
+                            onValueChange = { onFieldChange("account_hint", JsonPrimitive(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("账户名") },
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = entry.data.str("actual_balance"),
+                            onValueChange = { onFieldChange("actual_balance", numberOrNullJson(it)) },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("真实余额 (¥)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                        )
+                    }
+                    OutlinedTextField(
+                        value = entry.data.str("description"),
+                        onValueChange = { onFieldChange("description", JsonPrimitive(it)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("核对备注") },
+                        singleLine = true,
+                    )
                 }
 
                 else -> {

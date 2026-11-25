@@ -512,3 +512,60 @@ class TicketController(Controller):
                 status_code=503,
                 detail=f"SailTick quick-chat unavailable: {exc}",
             ) from exc
+
+    # ── 本地 Vault 日记双向轻量桥接（Phase 2 The Bridge） ──────────────────
+
+    @post("/vault/journals/sync")
+    async def sync_vault_journals(
+        self,
+        data: dict,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """幂等接收本地 CLI 提取的近期日记摘要（按 content_hash 去重），供 SailTick 关联消费与生活上下文。"""
+        _check_auth(request)
+        from sail_server.model.vault_bridge import sync_vault_journals_impl
+
+        db = next(router_dependency)
+        items = data.get("items") if isinstance(data, dict) else []
+        source_vault = str(data.get("source_vault") or "local") if isinstance(data, dict) else "local"
+        if not isinstance(items, list):
+            raise ClientException(status_code=400, detail="items must be a list")
+        return sync_vault_journals_impl(db, items, source_vault=source_vault)
+
+    @get("/vault/journals")
+    async def list_vault_journals(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        keyword: Optional[str] = None,
+        limit: int = 30,
+    ) -> list[dict]:
+        """查询已同步的本地 Vault 日记轻量摘要。"""
+        _check_auth(request)
+        from sail_server.model.vault_bridge import list_vault_journals_impl
+
+        db = next(router_dependency)
+        return list_vault_journals_impl(
+            db,
+            start_date=start_date,
+            end_date=end_date,
+            keyword=keyword,
+            limit=limit,
+        )
+
+    @get("/vault/export/finance-review")
+    async def export_vault_finance_review(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        month: Optional[str] = None,
+    ) -> dict:
+        """生成 Dendron 兼容的月度财务与生活开销复盘 Markdown，供 CLI 写回本地 Vault。"""
+        _check_auth(request)
+        from sail_server.model.vault_bridge import export_finance_review_markdown_impl
+
+        db = next(router_dependency)
+        return export_finance_review_markdown_impl(db, month=month)

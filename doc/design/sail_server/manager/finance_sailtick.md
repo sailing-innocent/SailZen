@@ -1,10 +1,10 @@
 # Finance 2.0 — SailTick 驱动的日常开销秘书架构设计
 
-> **版本**: v2.0 | **日期**: 2026-11-25 | **状态**: 🔄 Phase 1 实施中
+> **版本**: v2.0 | **日期**: 2026-11-25 | **状态**: ✅ Phase 1 + Phase 2 已实现
 > **关联文档**: [SailTick Personal Agent 设计文档](../../agent-system/sailtick.md) · [Rhythm v2 设计文档](./rhythm.md) · [财务基础模型](./life_budget.md)
 > **实施分期**:
-> - **Phase 1（本轮）**: 数据模型升级（明细拆分/无感平账/清理队列）、后端 API、视觉 OCR 账单/小票识图、SailTick 慢快双脑全面接管、Web 财务秘书工作台、2 年历史账单诊断与安全清理脚本。
-> - **Phase 2（后续）**: Android 端小票分享识图与智能对账升级、云端与本地 `D:\vault` 日记双向轻量桥接（摘要同步 + 月报回写）。
+> - **Phase 1（已完成）**: 数据模型升级（明细拆分/无感平账/清理队列）、后端 API、视觉 OCR 账单/小票识图、SailTick 慢快双脑全面接管、夜间按月倒推慢迭代回填、Web 财务秘书工作台、2 年历史账单诊断与安全清理脚本。
+> - **Phase 2（已完成）**: Android 端小票/账单拍照与相册识图、一句话快脑记账、智能余额核对与分级清理队列，以及云端与本地 `D:\vault` 日记双向轻量桥接（`sailzen vault sync-journals` 摘要同步 + `sailzen vault export-finance-review` 月报回写 + SailTick 差旅/情绪消费上下文关联）。
 
 ---
 

@@ -10,6 +10,12 @@ import com.sailzen.app.core.data.runOperation
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.MoneyApi
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.AccountReconcileRequestDto
+import com.sailzen.app.core.network.dto.AccountReconcileResponseDto
+import com.sailzen.app.core.network.dto.FinanceOverviewDto
+import com.sailzen.app.core.network.dto.HygieneProposalDto
+import com.sailzen.app.core.network.dto.HygieneScanRequestDto
+import com.sailzen.app.core.network.dto.HygieneScanResultDto
 import com.sailzen.app.core.network.dto.PaginatedTransactionsDto
 import com.sailzen.app.core.network.dto.TransactionDeleteResponse
 import com.sailzen.app.core.network.dto.TransactionDto
@@ -129,5 +135,69 @@ open class MoneyRepository protected constructor(private val context: Context) {
             bus,
             block = { apiOrNull()?.deleteTransaction(id) ?: throw notConfigured() },
             onSuccess = { DataChangeEvent.TransactionChanged(transactionId = id, action = "delete") },
+        )
+
+    // ------------------------------------------------------------------
+    // Finance 2.0 (SailTick 开销秘书)
+    // ------------------------------------------------------------------
+
+    open suspend fun getFinanceOverview(month: String? = null): OperationResult<FinanceOverviewDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.getFinanceOverview(month) ?: throw notConfigured() },
+        )
+
+    open suspend fun reconcileAccount(
+        req: AccountReconcileRequestDto,
+    ): OperationResult<AccountReconcileResponseDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.reconcileAccount(req) ?: throw notConfigured() },
+            onSuccess = { DataChangeEvent.TransactionChanged(action = "reconcile") },
+        )
+
+    open suspend fun runHygieneScan(
+        req: HygieneScanRequestDto = HygieneScanRequestDto(),
+    ): OperationResult<HygieneScanResultDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.runHygieneScan(req) ?: throw notConfigured() },
+            onSuccess = { DataChangeEvent.TransactionChanged(action = "hygiene_scan") },
+        )
+
+    open suspend fun listHygieneProposals(
+        status: String? = null,
+        autonomyLevel: String? = null,
+        limit: Int = 30,
+    ): OperationResult<List<HygieneProposalDto>> =
+        runOperation(
+            bus,
+            block = {
+                apiOrNull()?.listHygieneProposals(
+                    status = status,
+                    autonomyLevel = autonomyLevel,
+                    limit = limit,
+                ) ?: throw notConfigured()
+            },
+        )
+
+    open suspend fun approveHygieneProposal(id: Int): OperationResult<HygieneProposalDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.approveHygieneProposal(id) ?: throw notConfigured() },
+            onSuccess = { DataChangeEvent.TransactionChanged(action = "hygiene_approve") },
+        )
+
+    open suspend fun dismissHygieneProposal(id: Int): OperationResult<HygieneProposalDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.dismissHygieneProposal(id) ?: throw notConfigured() },
+        )
+
+    open suspend fun revertHygieneProposal(id: Int): OperationResult<HygieneProposalDto> =
+        runOperation(
+            bus,
+            block = { apiOrNull()?.revertHygieneProposal(id) ?: throw notConfigured() },
+            onSuccess = { DataChangeEvent.TransactionChanged(action = "hygiene_revert") },
         )
 }
