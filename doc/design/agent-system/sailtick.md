@@ -316,14 +316,20 @@ sailtick:
   - **一句话定时提醒**：解析「下班前」「30分钟后」「明早8点半」等中文时间，落库 `sail_server` `POST /api/v1/reminder/`（Android 到点推送）并写入本地 `st_scheduled_nudges`（启用 QQ Bot 时到点同步私聊提醒，双保险）；
   - **快脑提需求 → 慢脑夜间查证**：白天问到未收录食物热量时，先给估算并将食物入队 `pending_food_research`，夜间自动联网核查补全。
 
-## 14. 统一 Personal Agent 演进：接管 Rhythm 体系（v3.0）
+## 14. 统一 Personal Agent 演进：接管 Rhythm 与 Finance 体系（v3.0 → v4.0）
 
-SailTick 从单一「减肥监督教练」升级为**健康 + 项目与日程节奏（Rhythm）统一 Personal Agent 大脑**，共享 4 层记忆、防轰炸票据配额与每日睡前综合日报（身体睡眠/压力状态直接联动调节当日日程负载）：
+SailTick 从单一「减肥监督教练」升级为**健康 + 项目与日程节奏（Rhythm）+ 日常开销秘书（Finance）统一 Personal Agent 大脑**，共享 4 层记忆、防轰炸票据配额与每日睡前综合日报（身体睡眠/压力状态直接联动调节当日日程负载，混合小票拆分直接联动健康零食监控与差旅日程）：
 
-- **严格 HTTP 调度客户端（`sailtick/rhythm_client.py`）**：只通过 `/api/v1/rhythm/*` 读写，绝不直连主库。
-- **夜间节奏规律引擎（`sailtick/rhythm_analytics.py`）**：接入 `NightlySelfMaintenance`，从近 21 天 `/rhythm/timeline/range` 与活跃项目中自动学习「高效黄金时段」「易被打断时段」「过载减负信号」及「项目倒排风险（`on_track` / `attention` / `at_risk` / `stalled` / `overdue`）」，编译进统一 `expert_brief`，彻底取代人工维护精力曲线与权重公式。
-- **慢脑自主排程权（`TickEngine` WORK 动作）**：新增 7 类 Rhythm 动作（`rhythm_sync_timeline`、`rhythm_upsert_affair`、`rhythm_transit_affair`、`rhythm_milestone_done`、`rhythm_occupancy`、`rhythm_block_status`、`rhythm_checkin`），日常直接调用 `POST /api/v1/rhythm/timeline/ai-sync` 落库可视化日程（自动保留已完成与刚性钉块），仅在重大项目取舍或明显延期风险时发轻量票据协商；`pre_sleep_report` 合并输出「健康 + 节奏」综合睡前日报。
-- **快脑实时日程应变（`QuickCoachAgent`）**：新增 `/today`、`/projects` 快捷指令与实时 Rhythm 上下文注入，支持白天一句话钉入临时会议/请假、新建项目/任务、反馈完成状态或直接秒级重排今日剩余时间线（返回 `rhythm_updated: true` 触发前端即时刷新）。
+- **Rhythm 接管（v3.0）**：
+  - 严格 HTTP 调度客户端（`sailtick/rhythm_client.py`）：只通过 `/api/v1/rhythm/*` 读写，绝不直连主库。
+  - 夜间节奏规律引擎（`sailtick/rhythm_analytics.py`）：自动学习高效黄金时段、易被打断时段、过载减负信号与项目倒排风险，编译进统一 `expert_brief`。
+  - 慢脑自主排程权 + 快脑 `/today` `/projects` 实时日程应变。
+- **Finance 2.0 接管（v4.0，详见 [finance_sailtick.md](../sail_server/manager/finance_sailtick.md)）**：
+  - 严格 HTTP 财务客户端（`sailtick/finance_client.py`）：只通过 `/api/v1/finance/*` 读写，绝不直连主库。
+  - 分级自治账单治理（`POST /api/v1/finance/hygiene/scan` + `finance_hygiene_proposals`）：高置信度自动打标、历史 `balance fix` 隔离与小额无感平账（≤¥30）静默落库且支持一键撤销；大额漂移与疑似重复进入待审队列。
+  - 夜间财务健康引擎（`sailtick/finance_analytics.py`）：分析真实收支（排除平账与房贷噪音）、真实零食开销（含混合小票 `meta.items` 拆分）、固定/弹性支出预测与沉默账户提醒，编译进 `expert_brief["finance"]`。
+  - 视觉 OCR 小票/账单识图（`tick_intake.py` 扩展 `receipt` / `bill_screenshot` / `account_balance`）：支持一笔采购多品类拆分并自动联动健康饮食记录。
+  - 快脑实时记账与对账（`QuickCoachAgent`）：新增 `/money`、`/accounts` 指令及 `finance_log_tx`、`finance_reconcile_account`、`finance_batch_tag` 自然语言动作（返回 `finance_updated: true`）。
 
 ## 15. 附录：目录结构
 

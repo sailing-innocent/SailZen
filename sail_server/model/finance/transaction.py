@@ -46,6 +46,12 @@ def trans_from_create(create: TransactionData):
     budget_id = create.budget_id if create.budget_id is not None else None
     # Use current time if htime is None
     htime_val = create.htime if create.htime is not None else datetime.now().timestamp()
+    entry_kind = getattr(create, "entry_kind", None) or "normal"
+    exclude_from_stats = bool(getattr(create, "exclude_from_stats", False))
+    meta_val = getattr(create, "meta", None)
+    meta_dict = dict(meta_val) if isinstance(meta_val, dict) else {}
+    if entry_kind in ("micro_adjust", "balance_adjust"):
+        exclude_from_stats = True
     return Transaction(
         from_acc_id=from_acc_id,
         to_acc_id=to_acc_id,
@@ -55,6 +61,9 @@ def trans_from_create(create: TransactionData):
         description=create.description,
         tags=create.tags,
         state=init_state.value,
+        entry_kind=entry_kind,
+        exclude_from_stats=exclude_from_stats,
+        meta=meta_dict,
         htime=_htime(htime_val),
         ctime=datetime.now(),
         mtime=datetime.now(),
@@ -62,6 +71,8 @@ def trans_from_create(create: TransactionData):
 
 
 def read_from_trans(trans: Transaction):
+    if trans is None:
+        return None
     tags = ""
     if trans.tags is not None:
         tags = trans.tags
@@ -74,10 +85,13 @@ def read_from_trans(trans: Transaction):
         to_acc_id=_acc_inv(trans.to_acc_id),
         value=trans.value,
         prev_value=trans.prev_value,
-        description=trans.description,
+        description=trans.description or "",
         tags=tags,
         budget_id=budget_id,
         state=trans.state,
+        entry_kind=getattr(trans, "entry_kind", None) or "normal",
+        exclude_from_stats=bool(getattr(trans, "exclude_from_stats", False)),
+        meta=dict(trans.meta) if isinstance(getattr(trans, "meta", None), dict) else {},
         htime=_htime_inv(trans.htime),
         ctime=trans.ctime,
         mtime=trans.mtime,
@@ -136,6 +150,19 @@ def create_transaction_impl(db, transaction_create: TransactionData):
     return read_from_trans(transaction)
 
 
+def _not_excluded_from_stats():
+    """排除不计入消费/收入趋势统计的平账/调整交易（含历史遗留 balance fix）。"""
+    from sqlalchemy import func as sa_func, or_
+
+    return (
+        or_(Transaction.exclude_from_stats.is_(None), Transaction.exclude_from_stats == False)  # noqa: E712
+        & or_(
+            Transaction.description.is_(None),
+            sa_func.lower(Transaction.description) != "balance fix",
+        )
+    )
+
+
 def _build_transaction_query(
     db,
     from_time: float = None,
@@ -145,9 +172,12 @@ def _build_transaction_query(
     _desc: str = None,
     min_value: float = None,
     max_value: float = None,
+    include_excluded: bool = True,
 ):
     """Build the base query for transactions with filtering."""
     q = db.query(Transaction).filter(Transaction.state != 0, _not_deprecated())
+    if not include_excluded:
+        q = q.filter(_not_excluded_from_stats())
 
     if len(_tags) > 0:
         condition = None
@@ -406,6 +436,12 @@ def update_transaction_impl(
     transaction.value = transaction_update.value
     transaction.description = transaction_update.description
     transaction.tags = transaction_update.tags
+    if getattr(transaction_update, "entry_kind", None) is not None:
+        transaction.entry_kind = transaction_update.entry_kind
+    if getattr(transaction_update, "exclude_from_stats", None) is not None:
+        transaction.exclude_from_stats = bool(transaction_update.exclude_from_stats)
+    if getattr(transaction_update, "meta", None) is not None:
+        transaction.meta = dict(transaction_update.meta)
     transaction.state = state.value
     transaction.htime = _htime(transaction_update.htime)
     transaction.mtime = datetime.now()
@@ -413,6 +449,192 @@ def update_transaction_impl(
     db.refresh(transaction)
 
     return read_from_trans(transaction)
+
+
+def update_transaction_meta_impl(db, transaction_id: int, req) -> TransactionData | None:
+    """更新单笔交易的结构化明细拆分（meta.items）、跨领域关联（meta.links）与统计归类。"""
+    transaction = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if transaction is None:
+        return None
+
+    meta = dict(transaction.meta) if isinstance(transaction.meta, dict) else {}
+
+    if req.items is not None:
+        normalized_items = []
+        item_tags = []
+        for it in req.items:
+            d = it.model_dump() if hasattr(it, "model_dump") else dict(it)
+            tag_val = str(d.get("tag") or "").strip()
+            if tag_val and tag_val not in item_tags:
+                item_tags.append(tag_val)
+            normalized_items.append(
+                {
+                    "name": str(d.get("name") or "").strip(),
+                    "amount": str(d.get("amount") or "0.00"),
+                    "tag": tag_val,
+                    "is_snack": bool(d.get("is_snack", False)) or tag_val == "零食",
+                    "health_hint": str(d.get("health_hint") or "").strip(),
+                }
+            )
+        meta["items"] = normalized_items
+        if getattr(req, "sync_tags_from_items", True) and item_tags:
+            existing_tags = [
+                t.strip() for t in (transaction.tags or "").split(",") if t.strip()
+            ]
+            merged = list(dict.fromkeys(item_tags + existing_tags))
+            transaction.tags = ",".join(merged)
+
+    if req.links is not None:
+        links = dict(meta.get("links") or {})
+        links.update(req.links)
+        meta["links"] = links
+
+    if req.extra_meta is not None:
+        for k, v in req.extra_meta.items():
+            meta[k] = v
+
+    if req.entry_kind is not None:
+        transaction.entry_kind = req.entry_kind
+        if req.entry_kind in ("micro_adjust", "balance_adjust") and req.exclude_from_stats is None:
+            transaction.exclude_from_stats = True
+    if req.exclude_from_stats is not None:
+        transaction.exclude_from_stats = bool(req.exclude_from_stats)
+
+    transaction.meta = meta
+    transaction.mtime = datetime.now()
+    db.commit()
+    db.refresh(transaction)
+    return read_from_trans(transaction)
+
+
+def get_breakdown_stats_impl(
+    db,
+    from_time: float | None = None,
+    to_time: float | None = None,
+    include_excluded: bool = False,
+    exclude_account_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    """按品类/标签汇总真实收支（优先按 meta.items 拆分金额累加，无明细时回退主标签）。
+
+    同时计算真实零食支出（独立「零食」交易 + 混合小票中 is_snack=True 的子项），
+    彻底解决一次超市采购隐藏零食消费的问题。
+    """
+    from collections import defaultdict
+
+    q = _build_transaction_query(
+        db=db,
+        from_time=from_time,
+        to_time=to_time,
+        include_excluded=include_excluded,
+    )
+    rows = q.all()
+    excl_accs = set(exclude_account_ids or [])
+
+    tag_expense: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
+    tag_count: dict[str, int] = defaultdict(int)
+    total_expense = Decimal("0.00")
+    total_income = Decimal("0.00")
+    snack_total = Decimal("0.00")
+    snack_count = 0
+    snack_from_split = Decimal("0.00")
+    split_tx_count = 0
+    untagged_expense = Decimal("0.00")
+    untagged_count = 0
+    expense_tx_count = 0
+    income_tx_count = 0
+
+    for t in rows:
+        from_id = _acc_inv(t.from_acc_id)
+        to_id = _acc_inv(t.to_acc_id)
+        if from_id in excl_accs or to_id in excl_accs:
+            continue
+
+        val = abs(_parse_money_decimal(t.value))
+        if from_id == -1 and to_id > 0:
+            total_income += val
+            income_tx_count += 1
+            continue
+        if not (from_id > 0 and to_id == -1):
+            continue  # transfer
+
+        expense_tx_count += 1
+        total_expense += val
+        meta = t.meta if isinstance(t.meta, dict) else {}
+        items = meta.get("items") if isinstance(meta.get("items"), list) else []
+
+        if items:
+            split_tx_count += 1
+            allocated = Decimal("0.00")
+            tx_has_snack = False
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                item_amt = abs(_parse_money_decimal(it.get("amount", "0")))
+                if item_amt <= 0:
+                    continue
+                allocated += item_amt
+                item_tag = str(it.get("tag") or "").strip() or "未分类"
+                tag_expense[item_tag] += item_amt
+                tag_count[item_tag] += 1
+                if bool(it.get("is_snack")) or item_tag == "零食":
+                    snack_total += item_amt
+                    snack_from_split += item_amt
+                    tx_has_snack = True
+            if tx_has_snack:
+                snack_count += 1
+            remainder = val - allocated
+            if remainder > Decimal("0.01"):
+                primary = next(
+                    (x.strip() for x in (t.tags or "").split(",") if x.strip()),
+                    "未分类",
+                )
+                tag_expense[primary] += remainder
+        else:
+            tags_list = [x.strip() for x in (t.tags or "").split(",") if x.strip()]
+            if not tags_list:
+                tag_expense["未分类"] += val
+                tag_count["未分类"] += 1
+                untagged_expense += val
+                untagged_count += 1
+            else:
+                primary = tags_list[0]
+                tag_expense[primary] += val
+                tag_count[primary] += 1
+                if "零食" in tags_list:
+                    snack_total += val
+                    snack_count += 1
+
+    by_tag = sorted(
+        [
+            {
+                "tag": k,
+                "amount": f"{v:.2f}",
+                "count": tag_count[k],
+                "pct": round(float(v / total_expense * 100), 1) if total_expense > 0 else 0.0,
+            }
+            for k, v in tag_expense.items()
+        ],
+        key=lambda x: Decimal(x["amount"]),
+        reverse=True,
+    )
+
+    return {
+        "total_expense": f"{total_expense:.2f}",
+        "total_income": f"{total_income:.2f}",
+        "net_cashflow": f"{(total_income - total_expense):.2f}",
+        "expense_count": expense_tx_count,
+        "income_count": income_tx_count,
+        "split_tx_count": split_tx_count,
+        "untagged_expense": f"{untagged_expense:.2f}",
+        "untagged_count": untagged_count,
+        "snack_total": f"{snack_total:.2f}",
+        "snack_count": snack_count,
+        "snack_from_split": f"{snack_from_split:.2f}",
+        "snack_pct_of_expense": round(float(snack_total / total_expense * 100), 1)
+        if total_expense > 0
+        else 0.0,
+        "by_tag": by_tag,
+    }
 
 
 # ============================================================================
@@ -653,6 +875,7 @@ def get_transaction_stats_impl(
     min_value: float = None,
     max_value: float = None,
     return_list: bool = False,
+    include_excluded: bool = False,
 ):
     """
     Get transaction statistics with filtering options.
@@ -666,6 +889,7 @@ def get_transaction_stats_impl(
         _desc=_desc,
         min_value=min_value,
         max_value=max_value,
+        include_excluded=include_excluded,
     )
 
     # 仅需统计时使用轻量列投影 + Decimal 聚合，避免加载整行 ORM 实例与反复构造 Money 对象
@@ -761,7 +985,7 @@ def get_transaction_stats_batch_impl(db, queries: list[dict[str, Any]]) -> list[
             Transaction.tags,
             Transaction.description,
             Transaction.htime,
-        ).filter(Transaction.state != 0, _not_deprecated())
+        ).filter(Transaction.state != 0, _not_deprecated(), _not_excluded_from_stats())
 
         if all_have_from:
             min_from = min(float(queries[i]["from_time"]) for i in fast_indices)

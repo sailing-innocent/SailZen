@@ -48,6 +48,7 @@ SQL_MIGRATIONS: List[Path] = [
     MIGRATION_DIR / "20261123_add_tick_image_intake.sql",
     MIGRATION_DIR / "20261124_perf_hot_indexes.sql",
     MIGRATION_DIR / "20261124_user_profile_and_inbox.sql",
+    MIGRATION_DIR / "20261125_finance_sailtick_upgrade.sql",
 ]
 
 

@@ -5,6 +5,14 @@
  * @date 2024-12-26
  */
 
+export interface TransactionLineItem {
+  name: string
+  amount: string
+  tag: string
+  is_snack?: boolean
+  health_hint?: string
+}
+
 export interface TransactionCreateProps {
   from_acc_id: number
   to_acc_id: number
@@ -12,6 +20,9 @@ export interface TransactionCreateProps {
   description: string
   tags: string
   htime: number
+  entry_kind?: string
+  exclude_from_stats?: boolean
+  meta?: Record<string, unknown>
 }
 
 export interface TransactionData extends TransactionCreateProps {
@@ -447,4 +458,107 @@ export interface FinanceTagUpdateProps {
   category?: string
   sort_order?: number
   is_active?: number
+}
+
+// ============ Finance 2.0 (SailTick Secretary) Types ============
+
+export interface AccountHealthItem {
+  id: number
+  name: string
+  balance: string
+  days_since_last_tx: number | null
+  last_reconciled_at: string | null
+  last_drift: string | null
+  exclude_from_consumption: boolean
+}
+
+export interface SilentAccountHint {
+  account_id: number
+  name: string
+  days_silent: number
+  last_tx_date: string | null
+}
+
+export interface FinanceOverview {
+  month: string
+  today_expense: string
+  today_count: number
+  mtd_expense: string
+  mtd_income: string
+  mtd_net: string
+  mtd_expense_count: number
+  mtd_snack_total: string
+  mtd_snack_from_split: string
+  mtd_snack_pct: number
+  mtd_split_tx_count: number
+  mtd_untagged_count: number
+  mtd_by_tag: Array<{ tag: string; amount: string; count: number; pct: number }>
+  overall_tag_coverage_pct: number
+  overall_expense_count: number
+  overall_untagged_expense_count: number
+  excluded_adjustments_count: number
+  pending_hygiene_count: number
+  auto_applied_hygiene_count: number
+  silent_accounts: SilentAccountHint[]
+  account_health: AccountHealthItem[]
+}
+
+export interface BalanceCheckpoint {
+  id: number
+  account_id: number
+  account_name: string
+  reported_balance: string
+  book_balance: string
+  drift_amount: string
+  handling: 'exact' | 'micro_adjusted' | 'large_drift_pending' | 'manual_reset' | string
+  adjustment_tx_id: number | null
+  note: string
+  source: string
+  created_at: string | null
+}
+
+export interface AccountReconcileRequest {
+  account_id: number
+  actual_balance: string
+  micro_threshold?: number
+  force_adjust?: boolean
+  note?: string
+  source?: string
+}
+
+export interface AccountReconcileResponse {
+  account: AccountData
+  checkpoint: BalanceCheckpoint
+  handling: string
+  drift_amount: string
+  message: string
+  proposal_id: number | null
+}
+
+export interface HygieneProposal {
+  id: number
+  proposal_type: string
+  autonomy_level: 'auto_applied' | 'needs_review' | string
+  status: 'pending' | 'applied' | 'reverted' | 'dismissed' | string
+  target_tx_ids: number[]
+  confidence: number
+  title: string
+  reason: string
+  before_snapshot: Record<string, unknown>
+  after_payload: Record<string, unknown>
+  created_by: string
+  created_at: string | null
+  resolved_at: string | null
+}
+
+export interface HygieneScanResult {
+  scanned_transactions: number
+  legacy_fix_found: number
+  legacy_fix_auto_classified: number
+  auto_tagged_count: number
+  review_proposals_created: number
+  duplicates_detected: number
+  mixed_split_hints: number
+  travel_links_detected: number
+  created_proposal_ids: number[]
 }

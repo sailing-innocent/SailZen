@@ -38,6 +38,7 @@ from sailtick.llm import LLMGateway
 from sailtick.memory import AgentMemory
 from sailtick.nightly import NightlySelfMaintenance
 from sailtick.notify import NotificationEngine
+from sailtick.finance_client import FinanceClient
 from sailtick.rhythm_client import RhythmClient
 from sailtick.state import DependencyState
 from sailtick.tracer import TickTraceRecorder
@@ -120,6 +121,7 @@ class TickEngine:
         canary: Optional[CanaryController] = None,
         nightly: Optional[NightlySelfMaintenance] = None,
         rhythm: Optional[RhythmClient] = None,
+        finance: Optional[FinanceClient] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -139,6 +141,11 @@ class TickEngine:
             config.sail_server.auth_token,
             clock=clock,
         )
+        self.finance = finance or FinanceClient(
+            config.sail_server.api_base,
+            config.sail_server.auth_token,
+            clock=clock,
+        )
         self._clock = clock
         self._current_tick: Optional[dict] = None
         self._prompts_dir = config.prompts_dir
@@ -151,6 +158,7 @@ class TickEngine:
                 memory=self.memory,
                 scanner=self.scanner,
                 llm=self.llm,
+                finance_client=self.finance,
                 clock=self._clock,
             )
         else:
@@ -158,6 +166,8 @@ class TickEngine:
             self._nightly.scanner = self.scanner
             self._nightly.llm = self.llm
             self._nightly.knowledge.llm = self.llm
+            if self._nightly.finance_client is None:
+                self._nightly.finance_client = self.finance
         return self._nightly
 
     async def _persist_and_report_trace(self, trace_dict: Dict[str, Any]) -> None:
@@ -779,10 +789,17 @@ class TickEngine:
             if t_blocks
             else "今日未排定固定时间块"
         )
-        summary = f"{weight_line}；{intake_line}；{rhythm_line}。早点休息，明天继续轻松推进。"
+        fin = pkg.get("finance") if isinstance(pkg.get("finance"), dict) else {}
+        fin_line = (
+            f"今日支出 ¥{fin.get('today_expense', '0')}，本月累计 ¥{fin.get('mtd_expense', '0')}"
+            f"（真实零食 ¥{fin.get('mtd_snack_total', '0')}）"
+            if fin.get("mtd_expense") is not None
+            else "今日暂无新消费入账"
+        )
+        summary = f"{weight_line}；{intake_line}；{rhythm_line}；{fin_line}。早点休息，明天继续轻松推进。"
 
         md_lines = [
-            f"## {report_date} 睡前健康与节奏日报",
+            f"## {report_date} 睡前健康、节奏与财务日报",
             "",
             "### 1. 体重与健康趋势",
             f"- {weight_line}",
@@ -808,7 +825,16 @@ class TickEngine:
         md_lines.extend(
             [
                 "",
-                "### 4. 动态计划与明日焦点",
+                "### 4. 今日开销与财务秘书摘要",
+                f"- {fin_line}",
+            ]
+        )
+        if fin.get("pending_hygiene_count"):
+            md_lines.append(f"- 账单清理队列有 {fin['pending_hygiene_count']} 条待确认建议，有空在财务页点一下即可。")
+        md_lines.extend(
+            [
+                "",
+                "### 5. 动态计划与明日焦点",
                 f"- 当前阶段：{ap.get('phase_name') or '动态适应期'}（目标 {ap.get('target_weight') or '70'}kg）",
                 "- 明天聚焦 1-2 件最重要推进项，顺手称重与保持睡眠。",
             ]
@@ -817,7 +843,7 @@ class TickEngine:
         return {
             "kind": "daily_report",
             "report_date": report_date,
-            "title": f"{report_date} 睡前健康与节奏日报",
+            "title": f"{report_date} 睡前健康、节奏与财务日报",
             "summary": summary,
             "body_markdown": "\n".join(md_lines),
             "weight_snapshot": {
@@ -1074,6 +1100,10 @@ class TickEngine:
     {{"kind": "rhythm_occupancy", "date": "{tick.get('tick_date')}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "评审会"}},
     {{"kind": "rhythm_block_status", "block_id": 56, "status": "DONE|SKIPPED|DOING"}},
     {{"kind": "rhythm_checkin", "affair_id": 7, "result": "done|kept|missed", "note": ""}},
+    {{"kind": "finance_log_tx", "amount": 35.5, "description": "午饭外卖", "direction": "expense", "tags": "零食", "account_hint": "微信", "items": []}},
+    {{"kind": "finance_reconcile_account", "account_hint": "支付宝余额宝", "actual_balance": 2950.3, "note": "余额核对"}},
+    {{"kind": "finance_run_hygiene", "days": 30, "auto_apply_safe": true}},
+    {{"kind": "finance_batch_tag", "updates": [{{"id": 123, "tags": "交通"}}]}},
     {{"kind": "resolve_ticket", "ticket_id": 1, "resolution": "已吸收至画像"}},
     {{"kind": "episode", "content": "要记入事件流的内容"}}
   ],
@@ -1505,6 +1535,66 @@ class TickEngine:
                         logger.warning("WORK rhythm_checkin failed (non-fatal): %s", exc)
                         work_results.append({"kind": "rhythm_checkin", "ok": False, "error": str(exc)})
 
+                elif kind == "finance_log_tx" and context.get("server_ok"):
+                    try:
+                        res = await self.finance.create_transaction(
+                            amount=float(a.get("amount") or a.get("value") or 0),
+                            description=str(a.get("description") or ""),
+                            direction=str(a.get("direction") or "expense"),
+                            tags=str(a.get("tags") or ""),
+                            account_id=a.get("account_id"),
+                            account_hint=str(a.get("account_hint") or ""),
+                            items=a.get("items") if isinstance(a.get("items"), list) else None,
+                        )
+                        work_results.append({"kind": "finance_log_tx", "tx_id": res.get("id"), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK finance_log_tx failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "finance_log_tx", "ok": False, "error": str(exc)})
+
+                elif kind == "finance_reconcile_account" and context.get("server_ok"):
+                    try:
+                        res = await self.finance.reconcile_account(
+                            actual_balance=float(a.get("actual_balance") or 0),
+                            account_id=a.get("account_id"),
+                            account_hint=str(a.get("account_hint") or ""),
+                            force_adjust=bool(a.get("force_adjust", False)),
+                            note=str(a.get("note") or ""),
+                            source=f"sailtick:{tick['slot']}",
+                        )
+                        work_results.append(
+                            {
+                                "kind": "finance_reconcile_account",
+                                "handling": res.get("handling"),
+                                "drift": res.get("drift_amount"),
+                                "ok": True,
+                            }
+                        )
+                    except Exception as exc:
+                        logger.warning("WORK finance_reconcile_account failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "finance_reconcile_account", "ok": False, "error": str(exc)})
+
+                elif kind == "finance_run_hygiene" and context.get("server_ok"):
+                    try:
+                        res = await self.finance.run_hygiene_scan(
+                            days=a.get("days", 30),
+                            auto_apply_safe=bool(a.get("auto_apply_safe", True)),
+                            created_by=f"sailtick:{tick['slot']}",
+                        )
+                        work_results.append({"kind": "finance_run_hygiene", **res, "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK finance_run_hygiene failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "finance_run_hygiene", "ok": False, "error": str(exc)})
+
+                elif kind == "finance_batch_tag" and context.get("server_ok"):
+                    try:
+                        updates = [u for u in (a.get("updates") or []) if isinstance(u, dict)]
+                        if updates:
+                            res = await self.finance.batch_tag(updates)
+                            work_results.append({"kind": "finance_batch_tag", "success_count": res.get("success_count", 0), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK finance_batch_tag failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "finance_batch_tag", "ok": False, "error": str(exc)})
+
                 elif kind == "dev_task" and self.dev_runner is not None:
                     if not policy.get("allow_self_dev", True):
                         await self.memory.save_episode(
@@ -1590,6 +1680,7 @@ class TickEngine:
                     model_result=stage1.get("modeling"),
                     saved_snapshot=stage1.get("saved_snapshot"),
                     rhythm_result=stage1.get("rhythm"),
+                    finance_result=stage1.get("finance"),
                     tick_id=tick["id"],
                     tracer=tracer,
                 )

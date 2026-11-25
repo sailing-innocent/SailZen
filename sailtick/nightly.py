@@ -17,14 +17,17 @@
 
 from __future__ import annotations
 
+import calendar
 import logging
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sailtick.analytics import WeightModelingEngine
 from sailtick.config import SailTickConfig
 from sailtick.datascan import DataScanner
 from sailtick.db import TickDatabase
+from sailtick.finance_analytics import FinanceAnalyticsEngine
+from sailtick.finance_client import FinanceClient
 from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.memory import AgentMemory
 from sailtick.rhythm_analytics import RhythmAnalyticsEngine
@@ -46,6 +49,8 @@ class NightlySelfMaintenance:
         knowledge: Optional[HealthKnowledgeManager] = None,
         modeling: Optional[WeightModelingEngine] = None,
         rhythm_analytics: Optional[RhythmAnalyticsEngine] = None,
+        finance_analytics: Optional[FinanceAnalyticsEngine] = None,
+        finance_client: Optional[FinanceClient] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -56,6 +61,8 @@ class NightlySelfMaintenance:
         self._clock = clock
         self.modeling = modeling or WeightModelingEngine(clock=clock)
         self.rhythm_analytics = rhythm_analytics or RhythmAnalyticsEngine(clock=clock)
+        self.finance_analytics = finance_analytics or FinanceAnalyticsEngine(clock=clock)
+        self.finance_client = finance_client
         self.knowledge = knowledge or HealthKnowledgeManager(
             db=db,
             llm=llm,
@@ -113,6 +120,7 @@ class NightlySelfMaintenance:
             saved_snapshot = await self.db.get_latest_model_snapshot()
 
         rhythm_result: Optional[Dict[str, Any]] = None
+        finance_result: Optional[Dict[str, Any]] = None
         if data_ok:
             rhythm_result = self.rhythm_analytics.analyze(deep_pkg)
             if tracer is not None:
@@ -142,10 +150,54 @@ class NightlySelfMaintenance:
                 },
             )
 
+            # 夜间财务分级自治慢迭代：近期轻量巡检 + 按月倒推历史游标（带待审水位背压限流）
+            backfill_progress: Optional[Dict[str, Any]] = None
+            if self.finance_client is not None:
+                backfill_progress = await self._run_nightly_finance_backfill(
+                    deep_pkg=deep_pkg,
+                    tracer=tracer,
+                )
+            else:
+                backfill_progress = await self.db.get_runtime_state("finance_backfill_progress")
+
+            if backfill_progress is not None:
+                deep_pkg["finance_backfill_progress"] = backfill_progress
+
+            finance_result = self.finance_analytics.analyze(deep_pkg)
+            if backfill_progress is not None:
+                finance_result["backfill"] = backfill_progress
+            if tracer is not None:
+                tracer.record_instant_span(
+                    "nightly_finance_analytics",
+                    "夜间个人财务健康与习惯分析",
+                    status="ok",
+                    input_summary=f"txs={finance_result['transactions_analyzed']}",
+                    output_summary=(
+                        f"mtd=¥{finance_result['mtd_expense']} "
+                        f"snack=¥{finance_result['mtd_snack_total']} "
+                        f"eom_proj=¥{finance_result['projected_eom_expense']}"
+                    ),
+                    payload=finance_result,
+                )
+            await self.memory.update(
+                "semantic",
+                "nightly_finance_latest",
+                {
+                    "date": finance_result["snapshot_date"],
+                    "month": finance_result["month"],
+                    "mtd_expense": finance_result["mtd_expense"],
+                    "mtd_snack_total": finance_result["mtd_snack_total"],
+                    "projected_eom_expense": finance_result["projected_eom_expense"],
+                    "tag_coverage_pct": finance_result["tag_coverage_pct"],
+                    "insights": finance_result["insights"][:4],
+                },
+            )
+
         expert_brief = await self.compile_expert_brief(
             model_result=model_result,
             saved_snapshot=saved_snapshot,
             rhythm_result=rhythm_result,
+            finance_result=finance_result,
             deep_pkg=deep_pkg if data_ok else None,
             profile_dict=profile_dict,
             active_plan=active_plan,
@@ -173,6 +225,7 @@ class NightlySelfMaintenance:
             "deep_pkg": deep_pkg,
             "modeling": model_result,
             "rhythm": rhythm_result,
+            "finance": finance_result,
             "saved_snapshot": saved_snapshot,
             "expert_brief": expert_brief,
         }
@@ -183,6 +236,7 @@ class NightlySelfMaintenance:
         model_result: Optional[Dict[str, Any]] = None,
         saved_snapshot: Optional[Dict[str, Any]] = None,
         rhythm_result: Optional[Dict[str, Any]] = None,
+        finance_result: Optional[Dict[str, Any]] = None,
         tick_id: Optional[str] = None,
         tracer: Optional[TickTraceRecorder] = None,
         explicit_foods: Optional[List[str]] = None,
@@ -233,10 +287,19 @@ class NightlySelfMaintenance:
                     payload=kn_res,
                 )
 
+        # 阶段 2c：慢脑 LLM 对本晚推进的历史月份剩余长尾未标账单做温和语义研判（仅写入待审，受水位限流）
+        fin_llm_res: Dict[str, Any] = {"month": None, "evaluated": 0, "proposals_created": 0}
+        if ncfg.enable_finance_backfill and self.finance_client is not None and self.llm is not None:
+            fin_llm_res = await self._run_nightly_finance_llm_longtail(
+                deep_pkg=deep_pkg if data_ok else {},
+                tracer=tracer,
+            )
+
         expert_brief = await self.compile_expert_brief(
             model_result=model_result,
             saved_snapshot=saved_snapshot,
             rhythm_result=rhythm_result,
+            finance_result=finance_result,
             deep_pkg=deep_pkg if data_ok else None,
             food_res=food_res,
             kn_res=kn_res,
@@ -252,11 +315,13 @@ class NightlySelfMaintenance:
                 "model_type": (model_result or {}).get("model_type", "none"),
                 "foods_researched": food_res.get("researched_names", []),
                 "knowledge_curated": kn_res.get("curated_topics", []),
+                "finance_llm_longtail": fin_llm_res,
             },
         )
         return {
             "food_research": food_res,
             "knowledge_curation": kn_res,
+            "finance_llm_longtail": fin_llm_res,
             "expert_brief": expert_brief,
         }
 
@@ -278,6 +343,7 @@ class NightlySelfMaintenance:
                 model_result=stage1["modeling"],
                 saved_snapshot=stage1["saved_snapshot"],
                 rhythm_result=stage1.get("rhythm"),
+                finance_result=stage1.get("finance"),
                 tick_id=tick_id,
                 tracer=tracer,
             )
@@ -297,6 +363,7 @@ class NightlySelfMaintenance:
             "seeded": stage1["seeded"],
             "modeling": stage1["modeling"],
             "rhythm": stage1.get("rhythm"),
+            "finance": stage1.get("finance"),
             "food_research": food_res,
             "knowledge_curation": kn_res,
             "expert_brief": expert_brief,
@@ -307,6 +374,7 @@ class NightlySelfMaintenance:
         model_result: Optional[Dict[str, Any]] = None,
         saved_snapshot: Optional[Dict[str, Any]] = None,
         rhythm_result: Optional[Dict[str, Any]] = None,
+        finance_result: Optional[Dict[str, Any]] = None,
         deep_pkg: Optional[Dict[str, Any]] = None,
         profile_dict: Optional[Dict[str, Any]] = None,
         active_plan: Optional[Dict[str, Any]] = None,
@@ -379,6 +447,9 @@ class NightlySelfMaintenance:
             "project_stuck": (
                 "重要项目推进卡壳：先问清楚是阻塞点、范围太大还是优先级变了，拆出 1 个 30 分钟内可见产出的极小里程碑，不给宏大空泛计划。"
             ),
+            "bill_drift_or_unlogged": (
+                "账实不符或漏记账：绝不责备！差额 ≤30 元直接无感小额平账（不污染消费趋势），大额差额温和协助回忆近期大件/房租/出行或让用户截一张微信/支付宝账单图直接 OCR 补齐。"
+            ),
         }
 
         fin = ((m or {}).get("metrics") or {}).get("finance_food") or {}
@@ -386,13 +457,18 @@ class NightlySelfMaintenance:
         rhy = rhythm_result or (
             self.rhythm_analytics.analyze(deep_pkg) if isinstance(deep_pkg, dict) else {}
         )
+        fin_an = finance_result or (
+            self.finance_analytics.analyze(deep_pkg) if isinstance(deep_pkg, dict) else {}
+        )
         merged_insights = (
-            list((m or {}).get("insights") or [])[:4]
-            + list((rhy or {}).get("insights") or [])[:4]
+            list((m or {}).get("insights") or [])[:3]
+            + list((rhy or {}).get("insights") or [])[:3]
+            + list((fin_an or {}).get("insights") or [])[:3]
         )
         merged_questions = (
-            list((m or {}).get("suggested_questions") or [])[:2]
-            + list((rhy or {}).get("suggested_questions") or [])[:2]
+            list((m or {}).get("suggested_questions") or [])[:1]
+            + list((rhy or {}).get("suggested_questions") or [])[:1]
+            + list((fin_an or {}).get("suggested_questions") or [])[:1]
         )
 
         return {
@@ -431,6 +507,25 @@ class NightlySelfMaintenance:
                 "active_projects_count": (rhy or {}).get("active_projects_count", 0),
                 "project_risks": (rhy or {}).get("project_risks", []),
             },
+            "finance": {
+                "month": (fin_an or {}).get("month"),
+                "mtd_expense": (fin_an or {}).get("mtd_expense", 0.0),
+                "mtd_income": (fin_an or {}).get("mtd_income", 0.0),
+                "mtd_net": (fin_an or {}).get("mtd_net", 0.0),
+                "daily_flexible_pace": (fin_an or {}).get("daily_flexible_pace", 0.0),
+                "projected_eom_expense": (fin_an or {}).get("projected_eom_expense", 0.0),
+                "mtd_snack_total": (fin_an or {}).get("mtd_snack_total", 0.0),
+                "mtd_snack_from_split": (fin_an or {}).get("mtd_snack_from_split", 0.0),
+                "mtd_snack_pct": (fin_an or {}).get("mtd_snack_pct", 0.0),
+                "savings_rate_90d": (fin_an or {}).get("savings_rate_90d"),
+                "tag_coverage_pct": (fin_an or {}).get("tag_coverage_pct", 100.0),
+                "pending_hygiene_count": (fin_an or {}).get("pending_hygiene_count", 0),
+                "top_tags_mtd": (fin_an or {}).get("top_tags_mtd", []),
+                "silent_accounts": (fin_an or {}).get("silent_accounts", []),
+                "travel_txs_recent": (fin_an or {}).get("travel_txs_recent", []),
+                "backfill": (fin_an or {}).get("backfill")
+                or (deep_pkg or {}).get("finance_backfill_progress"),
+            },
             "plan_context": {
                 "phase_name": phase_name,
                 "plan_version": plan_version,
@@ -458,6 +553,355 @@ class NightlySelfMaintenance:
                 "last_curated_topics": (kn_res or {}).get("curated_topics", []),
             },
         }
+
+    @staticmethod
+    def _month_bounds(ym: str) -> Tuple[float, float]:
+        """将 'YYYY-MM' 转为该自然月的 (start_ts, end_ts)。"""
+        year, mon = int(ym[:4]), int(ym[5:7])
+        last_day = calendar.monthrange(year, mon)[1]
+        start_dt = datetime(year, mon, 1, 0, 0, 0)
+        end_dt = datetime(year, mon, last_day, 23, 59, 59)
+        return start_dt.timestamp(), end_dt.timestamp()
+
+    async def _run_nightly_finance_backfill(
+        self,
+        deep_pkg: Dict[str, Any],
+        tracer: Optional[TickTraceRecorder] = None,
+    ) -> Dict[str, Any]:
+        """夜间财务渐进式慢迭代（蚂蚁搬家式按月倒推 + AI 自主记录进度 + 待审水位背压限流）。
+
+        原则：
+        1. 不急于一时：每晚最多推进 1 个有待整理账单的历史自然月；
+        2. 严格控制打扰：当待人工确认队列 >= pending_cap（默认 5）时自动暂停历史深挖；
+        3. 自己维护进度：持久化 cursor_month / completed_months / 累计成果至 st_runtime_state 与语义记忆；
+        4. 先保日常新鲜度：对近 14 天新账单做轻量无感补标。
+        """
+        ncfg = self.config.nightly
+        now = self._clock()
+        today_str = now.strftime("%Y-%m-%d")
+        pending_cap = max(1, int(ncfg.finance_backfill_pending_cap))
+        max_new_per_night = max(1, int(ncfg.finance_backfill_max_new_reviews_per_night))
+
+        prev = await self.db.get_runtime_state("finance_backfill_progress")
+        state: Dict[str, Any] = dict(prev) if isinstance(prev, dict) else {}
+        completed_months: List[str] = list(state.get("completed_months") or [])
+        completed_set = set(completed_months)
+
+        overview = deep_pkg.get("finance_overview") or {}
+        if not overview and self.finance_client is not None:
+            try:
+                overview = await self.finance_client.get_overview()
+                deep_pkg["finance_overview"] = overview
+            except Exception:
+                overview = {}
+        pending_now = int(overview.get("pending_hygiene_count") or 0)
+
+        # 1. 近 14 天日常新账单轻量巡检（始终保持最新流水干净，待审新增上限 <= 2 且不超过总水位）
+        recent_budget = max(0, min(2, pending_cap - pending_now))
+        recent_auto_tagged = 0
+        recent_reviews = 0
+        try:
+            recent_scan = await self.finance_client.run_hygiene_scan(
+                days=14,
+                auto_apply_safe=True,
+                max_review_proposals=recent_budget,
+                include_legacy_fix=False,
+                created_by="sailtick_nightly_recent",
+            )
+            deep_pkg["finance_hygiene_scan"] = recent_scan
+            recent_auto_tagged = int(recent_scan.get("auto_tagged_count") or 0)
+            recent_reviews = int(recent_scan.get("review_proposals_created") or 0)
+            pending_now += recent_reviews
+        except Exception as exc:
+            logger.warning("nightly recent finance scan skipped: %s", exc)
+
+        if not ncfg.enable_finance_backfill or not hasattr(self.finance_client, "get_hygiene_months"):
+            state.setdefault("status", "idle")
+            state["last_run_date"] = today_str
+            return state
+
+        # 2. 水位背压控制：待审队列已达到上限时，优雅暂停向历史深挖，绝不堆负担
+        if pending_now >= pending_cap:
+            state.update(
+                {
+                    "status": "paused_backpressure",
+                    "completed_months": completed_months,
+                    "last_run_date": today_str,
+                    "last_action": "paused_backpressure",
+                    "pending_count_at_pause": pending_now,
+                    "notes": f"待人工确认队列已有 {pending_now} 条（上限 {pending_cap}），今晚暂停历史回溯，等你随手消化后再继续。",
+                }
+            )
+            await self.db.set_runtime_state("finance_backfill_progress", state)
+            if tracer is not None:
+                tracer.record_instant_span(
+                    "nightly_finance_backfill",
+                    "历史账单慢迭代（水位限流暂停）",
+                    status="ok",
+                    input_summary=f"pending={pending_now} cap={pending_cap}",
+                    output_summary="paused_backpressure",
+                    payload=state,
+                )
+            return state
+
+        # 3. 查询自然月分布，按最新→最早寻找 1 个尚有待整理账单的历史月
+        try:
+            months_info = await self.finance_client.get_hygiene_months()
+        except Exception as exc:
+            logger.warning("nightly get_hygiene_months skipped: %s", exc)
+            return state
+
+        months_list = months_info.get("months") if isinstance(months_info, dict) else []
+        months_list = months_list if isinstance(months_list, list) else []
+        legacy_unclassified = int((months_info or {}).get("legacy_fix_unclassified") or 0)
+        total_months = len(months_list)
+
+        target_month: Optional[str] = None
+        skipped_clean: List[str] = []
+        remaining_after_target: List[str] = []
+
+        for m_item in months_list:
+            if not isinstance(m_item, dict):
+                continue
+            ym = str(m_item.get("month") or "")
+            if not ym or ym in completed_set:
+                continue
+            if target_month is None:
+                if not m_item.get("needs_work", False):
+                    # 该月本来就已全部打标，静默划入已完成，不浪费一整晚
+                    completed_months.append(ym)
+                    completed_set.add(ym)
+                    skipped_clean.append(ym)
+                    continue
+                target_month = ym
+            else:
+                if m_item.get("needs_work", False):
+                    remaining_after_target.append(ym)
+
+        # 若无月份需要处理但还有未归类的 1970 legacy fix，则顺手做一次纯隔离
+        if target_month is None and legacy_unclassified == 0:
+            state.update(
+                {
+                    "status": "completed",
+                    "cursor_month": None,
+                    "completed_months": completed_months,
+                    "total_months_detected": total_months,
+                    "last_run_date": today_str,
+                    "last_action": "completed",
+                    "notes": f"全部 {total_months} 个历史月份均已完成首轮渐进整理，后续仅随日常新流水维护。",
+                }
+            )
+            await self.db.set_runtime_state("finance_backfill_progress", state)
+            return state
+
+        allowed_reviews = max(0, min(max_new_per_night, pending_cap - pending_now))
+        auto_tagged_bf = 0
+        legacy_iso_bf = 0
+        reviews_bf = 0
+
+        try:
+            if target_month is not None:
+                m_start, m_end = self._month_bounds(target_month)
+                bf_scan = await self.finance_client.run_hygiene_scan(
+                    days=None,
+                    from_time=m_start,
+                    to_time=m_end,
+                    auto_apply_safe=True,
+                    max_review_proposals=allowed_reviews,
+                    include_legacy_fix=legacy_unclassified > 0,
+                    created_by="sailtick_nightly_backfill",
+                )
+                completed_months.append(target_month)
+                completed_set.add(target_month)
+                deep_pkg["_finance_backfill_target_window"] = {
+                    "month": target_month,
+                    "from_time": m_start,
+                    "to_time": m_end,
+                    "remaining_review_budget": max(0, allowed_reviews - int(bf_scan.get("review_proposals_created") or 0)),
+                }
+            else:
+                bf_scan = await self.finance_client.run_hygiene_scan(
+                    days=1,
+                    auto_apply_safe=True,
+                    max_review_proposals=0,
+                    include_legacy_fix=True,
+                    created_by="sailtick_nightly_backfill",
+                )
+
+            auto_tagged_bf = int(bf_scan.get("auto_tagged_count") or 0)
+            legacy_iso_bf = int(bf_scan.get("legacy_fix_auto_classified") or 0)
+            reviews_bf = int(bf_scan.get("review_proposals_created") or 0)
+
+            # 合并当晚统计供分析器感知
+            prev_scan = deep_pkg.get("finance_hygiene_scan") or {}
+            deep_pkg["finance_hygiene_scan"] = {
+                **prev_scan,
+                "auto_tagged_count": recent_auto_tagged + auto_tagged_bf,
+                "legacy_fix_auto_classified": legacy_iso_bf,
+                "review_proposals_created": recent_reviews + reviews_bf,
+                "backfill_month": target_month,
+            }
+            if auto_tagged_bf or legacy_iso_bf or recent_auto_tagged:
+                deep_pkg["finance_overview"] = await self.finance_client.get_overview()
+        except Exception as exc:
+            logger.warning("nightly finance backfill scan failed (non-fatal): %s", exc)
+            return state
+
+        next_cursor = remaining_after_target[0] if remaining_after_target else None
+        new_status = "completed" if next_cursor is None else "in_progress"
+        cum_auto = int(state.get("cumulative_auto_tagged") or 0) + auto_tagged_bf + recent_auto_tagged
+        cum_legacy = int(state.get("cumulative_legacy_isolated") or 0) + legacy_iso_bf
+        cum_rev = int(state.get("cumulative_review_created") or 0) + reviews_bf
+
+        note_parts = []
+        if target_month:
+            note_parts.append(f"已静默推进 {target_month}（自动补标 {auto_tagged_bf} 笔，待审 +{reviews_bf} 条）")
+        if legacy_iso_bf:
+            note_parts.append(f"隔离历史平账 {legacy_iso_bf} 笔")
+        if next_cursor:
+            note_parts.append(f"下晚继续 {next_cursor}")
+        else:
+            note_parts.append("全历史首轮已收尾")
+
+        state.update(
+            {
+                "status": new_status,
+                "cursor_month": next_cursor,
+                "completed_months": completed_months,
+                "total_months_detected": total_months,
+                "last_run_date": today_str,
+                "last_month_processed": target_month,
+                "last_action": "processed" if target_month else "legacy_isolated",
+                "last_month_auto_tagged": auto_tagged_bf,
+                "last_month_review_created": reviews_bf,
+                "skipped_clean_months": skipped_clean,
+                "cumulative_auto_tagged": cum_auto,
+                "cumulative_legacy_isolated": cum_legacy,
+                "cumulative_review_created": cum_rev,
+                "notes": "；".join(note_parts),
+            }
+        )
+        await self.db.set_runtime_state("finance_backfill_progress", state)
+        await self.memory.update(
+            "semantic",
+            "finance_backfill_progress",
+            {
+                "status": new_status,
+                "cursor_month": next_cursor,
+                "completed_count": len(completed_months),
+                "total_months": total_months,
+                "last_month_processed": target_month,
+                "cumulative_auto_tagged": cum_auto,
+                "notes": state["notes"],
+            },
+        )
+        if tracer is not None:
+            tracer.record_instant_span(
+                "nightly_finance_backfill",
+                f"历史账单慢迭代 ({target_month or 'legacy'})",
+                status="ok",
+                input_summary=f"month={target_month} budget={allowed_reviews} pending={pending_now}/{pending_cap}",
+                output_summary=f"auto_tagged={auto_tagged_bf} legacy={legacy_iso_bf} reviews={reviews_bf} next={next_cursor}",
+                payload=state,
+            )
+        return state
+
+    async def _run_nightly_finance_llm_longtail(
+        self,
+        deep_pkg: Dict[str, Any],
+        tracer: Optional[TickTraceRecorder] = None,
+    ) -> Dict[str, Any]:
+        """阶段 2c：慢脑 LLM 对本晚历史月剩余长尾未标支出做温和研判（只入待审队列，绝不越权自动改库）。"""
+        win = deep_pkg.get("_finance_backfill_target_window")
+        if not isinstance(win, dict) or int(win.get("remaining_review_budget") or 0) <= 0:
+            return {"month": None, "evaluated": 0, "proposals_created": 0}
+        if not hasattr(self.finance_client, "list_untagged_window") or not hasattr(
+            self.finance_client, "create_hygiene_proposal"
+        ):
+            return {"month": win.get("month"), "evaluated": 0, "proposals_created": 0}
+
+        budget = int(win["remaining_review_budget"])
+        max_items = max(1, int(self.config.nightly.finance_backfill_max_llm_items_per_night))
+        try:
+            untagged = await self.finance_client.list_untagged_window(
+                from_time=win["from_time"],
+                to_time=win["to_time"],
+                page_size=min(20, max_items * 2),
+            )
+            tags_raw = await self.finance_client.list_tags() if hasattr(self.finance_client, "list_tags") else []
+        except Exception as exc:
+            logger.warning("nightly finance longtail fetch skipped: %s", exc)
+            return {"month": win.get("month"), "evaluated": 0, "proposals_created": 0}
+
+        # 仅挑选支出且有描述的条目
+        candidates = [
+            tx
+            for tx in untagged
+            if isinstance(tx, dict)
+            and int(tx.get("from_acc_id") or -1) > 0
+            and int(tx.get("to_acc_id") or -1) == -1
+            and not tx.get("exclude_from_stats")
+            and str(tx.get("description") or "").strip()
+        ][:max_items]
+        if not candidates:
+            return {"month": win.get("month"), "evaluated": 0, "proposals_created": 0}
+
+        tag_vocab = [str(t.get("name")) for t in tags_raw if isinstance(t, dict) and t.get("name")] or [
+            "零食", "交通", "日用消耗", "娱乐休闲", "人际交往", "医药健康", "衣物", "大宗电器", "大宗收支"
+        ]
+        items_desc = "\n".join(
+            f"- id={tx.get('id')} 金额=¥{tx.get('value')} 描述=「{tx.get('description')}」"
+            for tx in candidates
+        )
+        prompt = (
+            "你是 SailTick 夜间账单慢脑助手，请为以下长尾未打标历史支出给出温和的候选标签建议（仅供参考，不自动改库）。\n"
+            f"可选标签集合：{', '.join(tag_vocab)}\n"
+            f"待研判账单（{win.get('month')}）：\n{items_desc}\n"
+            "规则：宁缺毋滥，只有较有把握（confidence >= 0.70）时才输出建议；不要编造不在集合内的标签。\n"
+            '严格输出 JSON：{"suggestions": [{"id": 123, "tags": "日用消耗", "confidence": 0.78, "reason": "简短理由"}]}'
+        )
+        created = 0
+        try:
+            resp = await self.llm.chat(prompt, expect_json=True, max_tokens=600)
+            parsed = HealthKnowledgeManager._parse_json_safe(getattr(resp, "content", "") or "")
+            suggestions = parsed.get("suggestions") if isinstance(parsed, dict) else []
+            cand_map = {int(tx["id"]): tx for tx in candidates if tx.get("id") is not None}
+            for s in (suggestions or []):
+                if created >= budget or not isinstance(s, dict):
+                    break
+                tid = s.get("id")
+                tag_s = str(s.get("tags") or "").strip()
+                conf = float(s.get("confidence") or 0.0)
+                if tid is None or int(tid) not in cand_map or not tag_s or conf < 0.70:
+                    continue
+                if not all(x.strip() in tag_vocab for x in tag_s.split(",") if x.strip()):
+                    continue
+                tx = cand_map[int(tid)]
+                res = await self.finance_client.create_hygiene_proposal(
+                    proposal_type="auto_tag",
+                    target_tx_ids=[int(tid)],
+                    title=f"历史慢迭代建议 #{tid}「{str(tx.get('description') or '')[:18]}」→ {tag_s}",
+                    reason=f"({win.get('month')}) ¥{tx.get('value')}；{str(s.get('reason') or '夜间慢脑语义推断')}",
+                    confidence=min(0.88, conf),
+                    after_payload={"tags": tag_s},
+                    created_by="sailtick_nightly_llm",
+                )
+                if res.get("created"):
+                    created += 1
+        except Exception as exc:
+            logger.warning("nightly finance llm longtail skipped: %s", exc)
+
+        result = {"month": win.get("month"), "evaluated": len(candidates), "proposals_created": created}
+        if tracer is not None:
+            tracer.record_instant_span(
+                "nightly_finance_llm_longtail",
+                f"慢脑长尾账单研判 ({win.get('month')})",
+                status="ok",
+                input_summary=f"candidates={len(candidates)} budget={budget}",
+                output_summary=f"proposals_created={created}",
+                payload=result,
+            )
+        return result
 
     @staticmethod
     def _extract_target_weight(
@@ -548,6 +992,29 @@ class NightlySelfMaintenance:
                     f"目标:{pr.get('target_date') or '未定'}(剩{pr.get('days_left')}天) "
                     f"完成{int((pr.get('completion_ratio') or 0)*100)}% | {pr.get('action_hint', '')}"
                 )
+
+        fin_brief = brief.get("finance") or {}
+        if isinstance(fin_brief, dict) and (
+            fin_brief.get("mtd_expense")
+            or fin_brief.get("pending_hygiene_count")
+            or fin_brief.get("backfill")
+        ):
+            f_parts = [
+                f"本月({fin_brief.get('month', '')})真实支出¥{fin_brief.get('mtd_expense', 0):.0f}",
+                f"预计月底¥{fin_brief.get('projected_eom_expense', 0):.0f}",
+                f"真实零食¥{fin_brief.get('mtd_snack_total', 0):.0f}({fin_brief.get('mtd_snack_pct', 0)}%)",
+                f"标签覆盖率{fin_brief.get('tag_coverage_pct', 100)}%",
+            ]
+            if fin_brief.get("pending_hygiene_count"):
+                f_parts.append(f"待审清理{fin_brief['pending_hygiene_count']}条")
+            bf = fin_brief.get("backfill")
+            if isinstance(bf, dict) and bf.get("status"):
+                done_cnt = len(bf.get("completed_months") or [])
+                tot_cnt = bf.get("total_months_detected") or done_cnt
+                f_parts.append(
+                    f"历史慢迭代:{bf.get('status')}({done_cnt}/{tot_cnt}月, 累计自动补标{bf.get('cumulative_auto_tagged', 0)}笔)"
+                )
+            lines.append("财务开销画像: " + "，".join(f_parts))
 
         insights = brief.get("insights") or []
         if insights:

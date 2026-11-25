@@ -40,6 +40,7 @@ SIGNAL_PRIORITY = [
     "weight",
     "user_messages",
     "rhythm",
+    "finance",
     "diet",
     "active_plan",
     "sleep",
@@ -165,7 +166,8 @@ class DataScanner:
             "/tick/messages", {"status": "unread", "direction": "user_to_agent", "limit": 50}
         )
 
-        # 5. 餐饮消费、节奏全景（今日/明日时间线 + 重要项目倒排 + 焦点事务 + 占用）与打卡
+        # 5. 财务秘书总览、餐饮消费、节奏全景（今日/明日时间线 + 重要项目倒排 + 焦点事务 + 占用）与打卡
+        finance_overview_raw = await self._fetch("/finance/overview")
         finance_raw = await self._fetch_transactions_window(
             start_ts=start_ts, end_ts=end_ts, max_pages=1, page_size=80
         )
@@ -175,6 +177,7 @@ class DataScanner:
         rhythm_dash_raw = await self._fetch("/rhythm/dashboard", {"date": today_str})
         rhythm_tomorrow_raw = await self._fetch("/rhythm/timeline/day", {"date": tomorrow_str})
         rhythm_snapshot = self._simplify_rhythm(rhythm_dash_raw, rhythm_tomorrow_raw, today_str)
+        finance_snapshot = self._simplify_finance(finance_overview_raw)
 
         weight_series = self._simplify_series(weight_raw, limit=21)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
@@ -190,6 +193,7 @@ class DataScanner:
             "diet": diet_items,
             "user_messages": msg_items,
             "rhythm": rhythm_snapshot,
+            "finance": finance_snapshot,
             "sleep": self._simplify_list(sleep, limit=10),
             "exercise": self._simplify_list(exercise, limit=10),
             "mood": self._simplify_list(mood, limit=10),
@@ -279,10 +283,12 @@ class DataScanner:
         exercise_raw = await self._fetch("/health/exercise", {"start": start_ts, "end": end_ts, "limit": 120})
         mood_raw = await self._fetch("/health/mood", {"start": start_ts, "end": end_ts, "limit": 120})
 
-        # 4. 长周期财务交易分页拉取（最多 6 页 = 600 条，覆盖 90 天日常消费）
+        # 4. 长周期财务交易分页拉取（最多 6 页 = 600 条，覆盖 90 天日常消费）+ 账户 + 秘书总览
         tx_all = await self._fetch_transactions_window(
             start_ts=start_ts, end_ts=end_ts, max_pages=6, page_size=100
         )
+        finance_overview_raw = await self._fetch("/finance/overview")
+        finance_accounts_raw = await self._fetch("/finance/account/")
 
         # 5. 最近用户消息（含已吸收，用于提取食物/习惯）
         recent_messages = await self._fetch(
@@ -319,6 +325,9 @@ class DataScanner:
             "exercise": self._simplify_list(exercise_raw, limit=120) or [],
             "mood": self._simplify_list(mood_raw, limit=120) or [],
             "transactions_total": len(tx_all),
+            "finance_transactions": tx_all,
+            "finance_overview": finance_overview_raw if isinstance(finance_overview_raw, dict) else {},
+            "finance_accounts": finance_accounts_raw if isinstance(finance_accounts_raw, list) else [],
             "finance_food": food_tx,
             "user_messages": self._simplify_messages(recent_messages, limit=100) or [],
             "rhythm_history": rhythm_history if isinstance(rhythm_history, dict) else {},
@@ -630,6 +639,26 @@ class DataScanner:
         return out
 
     @staticmethod
+    def _simplify_finance(raw: Any) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict) or not raw:
+            return None
+        return {
+            "month": raw.get("month"),
+            "today_expense": raw.get("today_expense"),
+            "today_count": raw.get("today_count", 0),
+            "mtd_expense": raw.get("mtd_expense"),
+            "mtd_income": raw.get("mtd_income"),
+            "mtd_net": raw.get("mtd_net"),
+            "mtd_snack_total": raw.get("mtd_snack_total"),
+            "mtd_snack_from_split": raw.get("mtd_snack_from_split"),
+            "mtd_snack_pct": raw.get("mtd_snack_pct"),
+            "tag_coverage_pct": raw.get("overall_tag_coverage_pct"),
+            "pending_hygiene_count": raw.get("pending_hygiene_count", 0),
+            "silent_accounts": (raw.get("silent_accounts") or [])[:4],
+            "top_tags": (raw.get("mtd_by_tag") or [])[:5],
+        }
+
+    @staticmethod
     def _simplify_blocks(blocks: Any, limit: int = 16) -> List[Dict[str, Any]]:
         if not isinstance(blocks, list):
             return []
@@ -865,6 +894,26 @@ class DataScanner:
             if inbox_af:
                 ib_str = "; ".join(f"#{a.get('id')}{a.get('title')}" for a in inbox_af[:5])
                 lines.append(f"待整理随手记({len(inbox_af)}项): {ib_str}")
+
+        fin = package.get("finance")
+        if isinstance(fin, dict) and fin:
+            f_parts = []
+            if fin.get("today_expense") is not None:
+                f_parts.append(f"今日支出 ¥{fin['today_expense']}({fin.get('today_count', 0)}笔)")
+            if fin.get("mtd_expense") is not None:
+                f_parts.append(f"本月({fin.get('month')})真实支出 ¥{fin['mtd_expense']}")
+            if fin.get("mtd_snack_total") is not None:
+                f_parts.append(f"真实零食 ¥{fin['mtd_snack_total']}({fin.get('mtd_snack_pct', 0)}%)")
+            if fin.get("tag_coverage_pct") is not None:
+                f_parts.append(f"标签覆盖率 {fin['tag_coverage_pct']}%")
+            if fin.get("pending_hygiene_count"):
+                f_parts.append(f"待审清理 {fin['pending_hygiene_count']} 条")
+            if f_parts:
+                lines.append("财务秘书摘要: " + "，".join(f_parts))
+            silent = fin.get("silent_accounts") or []
+            if silent:
+                s_str = "、".join(f"{a.get('name')}({a.get('days_silent')}天未记)" for a in silent[:3])
+                lines.append(f"沉默账户提示: {s_str}")
 
         for key, label in (
             ("sleep", "睡眠"),

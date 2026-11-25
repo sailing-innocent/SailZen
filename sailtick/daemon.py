@@ -33,6 +33,7 @@ from sailtick.canary import CanaryController, CanaryMonitor
 from sailtick.config import SailTickConfig, load_config
 from sailtick.datascan import DataScanner
 from sailtick.db import TickDatabase
+from sailtick.finance_client import FinanceClient
 from sailtick.handoff import HandoffManager
 from sailtick.inbox import TicketInbox
 from sailtick.knowledge import HealthKnowledgeManager
@@ -77,6 +78,9 @@ class SailTickDaemon:
         self.rhythm = RhythmClient(
             self.config.sail_server.api_base, self.config.sail_server.auth_token
         )
+        self.finance = FinanceClient(
+            self.config.sail_server.api_base, self.config.sail_server.auth_token
+        )
         self.notifier = NotificationEngine(self.config.notify, inbox=self.inbox)
         self.handoffs = HandoffManager(self.db, self.config.handoffs_dir)
         self.state = DependencyState()
@@ -110,6 +114,7 @@ class SailTickDaemon:
             scanner=self.scanner,
             llm=self.llm,
             knowledge=self.knowledge,
+            finance_client=self.finance,
         )
         self.quick_agent = QuickCoachAgent(
             config=self.config,
@@ -119,6 +124,7 @@ class SailTickDaemon:
             llm=self.llm,
             knowledge=self.knowledge,
             rhythm=self.rhythm,
+            finance=self.finance,
         )
         self.qq_bot = OneBotQQAdapter(
             config=self.config.qq_bot,
@@ -140,6 +146,7 @@ class SailTickDaemon:
             canary=self.canary,
             nightly=self.nightly,
             rhythm=self.rhythm,
+            finance=self.finance,
         )
         self.scheduler = TickScheduler(self.db, timezone=self.config.timezone)
 
@@ -223,6 +230,7 @@ class SailTickDaemon:
         await self.inbox.close()
         await self.scanner.close()
         await self.rhythm.close()
+        await self.finance.close()
         await self.db.close()
         logger.info("SailTick Daemon stopped")
 

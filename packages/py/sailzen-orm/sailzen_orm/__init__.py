@@ -87,6 +87,8 @@ from sailzen_orm.finance import (
     Budget,
     BudgetItem,
     FinanceTag,
+    FinanceBalanceCheckpoint,
+    FinanceHygieneProposal,
 )
 
 # Rhythm Models (v2 极简核心 3 表)
@@ -174,6 +176,8 @@ __all__ = [
     "Budget",
     "BudgetItem",
     "FinanceTag",
+    "FinanceBalanceCheckpoint",
+    "FinanceHygieneProposal",
     # Rhythm
     "RhythmAffair",
     "RhythmTimeBlock",

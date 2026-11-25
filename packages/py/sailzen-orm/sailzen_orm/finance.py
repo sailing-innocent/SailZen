@@ -12,9 +12,21 @@
 从 sail_server/data/finance.py 迁移
 """
 
-from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, func
+from datetime import datetime
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    TIMESTAMP,
+    func,
+)
 from sqlalchemy.orm import relationship
 from sailzen_orm.orm_base import ORMBase
+from sailzen_orm.types import JSONB
 
 
 class Account(ORMBase):
@@ -23,7 +35,8 @@ class Account(ORMBase):
     name = Column(String)
     description = Column(String)
     balance = Column(String)
-    state = Column(Integer)  # 0: physical account 1: budget pocket
+    state = Column(Integer)  # 0: physical account 1: budget pocket / archived
+    meta = Column(JSONB, default=dict)  # exclude_from_consumption, drift_tolerance, last_reconciled_at, aliases
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
 
@@ -64,6 +77,10 @@ class Transaction(ORMBase):
     description = Column(String)
     tags = Column(String)
     state = Column(Integer)  # 0: create 1: valid 2: virtual 3: done 4: cancel
+    # Finance 2.0 (SailTick): 区分正常消费/小额平账/大额重置/退款，支持单交易 JSONB 明细拆分
+    entry_kind = Column(String, default="normal")  # normal | micro_adjust | balance_adjust | refund
+    exclude_from_stats = Column(Boolean, default=False)
+    meta = Column(JSONB, default=dict)  # items: [{name, amount, tag, is_snack}], links: {...}, ai_audit: {...}
     htime = Column(TIMESTAMP, server_default=func.current_timestamp())  # happen time
     ctime = Column(TIMESTAMP, server_default=func.current_timestamp())
     mtime = Column(TIMESTAMP, server_default=func.current_timestamp())
@@ -179,3 +196,54 @@ class BudgetItem(ORMBase):
 
     # Relationship
     budget = relationship("Budget", back_populates="items")
+
+
+class FinanceBalanceCheckpoint(ORMBase):
+    """账户真实余额核对快照（替代旧版 1970-01-01 balance fix 强制重置）。"""
+
+    __tablename__ = "finance_balance_checkpoints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    reported_balance = Column(String, nullable=False)  # 用户上报的真实余额
+    book_balance = Column(String, nullable=False)  # 核对前账面余额
+    drift_amount = Column(String, nullable=False, default="0.00")  # reported - book
+    # exact | micro_adjusted | large_drift_pending | manual_reset
+    handling = Column(String, nullable=False, default="exact")
+    adjustment_tx_id = Column(Integer, ForeignKey("transactions.id", ondelete="SET NULL"), nullable=True)
+    note = Column(String, default="")
+    source = Column(String, default="manual")  # manual | quick_chat | ocr | sailtick
+    created_at = Column(TIMESTAMP, default=datetime.now, server_default=func.current_timestamp())
+
+    __table_args__ = (
+        Index("ix_finance_checkpoints_acc_created", "account_id", "created_at"),
+    )
+
+
+class FinanceHygieneProposal(ORMBase):
+    """SailTick 分级自治账单治理建议与可撤销审计日志。"""
+
+    __tablename__ = "finance_hygiene_proposals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    # auto_tag | legacy_fix_classify | duplicate_merge | large_drift | micro_adjust_audit
+    # | travel_rhythm_link | mixed_split_hint | new_tag_suggest
+    proposal_type = Column(String, nullable=False, index=True)
+    # auto_applied (已静默落库，支持一键撤销) | needs_review (待人工确认)
+    autonomy_level = Column(String, nullable=False, default="needs_review")
+    # pending | applied | reverted | dismissed
+    status = Column(String, nullable=False, default="pending", index=True)
+    target_tx_ids = Column(JSONB, default=list)
+    confidence = Column(Float, default=0.0)
+    title = Column(String, nullable=False)
+    reason = Column(String, default="")
+    before_snapshot = Column(JSONB, default=dict)
+    after_payload = Column(JSONB, default=dict)
+    created_by = Column(String, default="sailtick")
+    created_at = Column(TIMESTAMP, default=datetime.now, server_default=func.current_timestamp())
+    resolved_at = Column(TIMESTAMP, nullable=True)
+
+    __table_args__ = (
+        Index("ix_finance_hygiene_status_created", "status", "created_at"),
+        Index("ix_finance_hygiene_type_status", "proposal_type", "status"),
+    )

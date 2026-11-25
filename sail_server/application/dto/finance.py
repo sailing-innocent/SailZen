@@ -15,7 +15,7 @@ Phase 3 试点模块：将 dataclass DTOs 迁移到 Pydantic BaseModel
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from enum import IntEnum
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -191,6 +191,7 @@ class AccountBase(BaseModel):
     description: str = Field(default="", description="账户描述")
     balance: str = Field(default="0.0", description="账户余额")
     state: int = Field(default=0, description="账户状态")
+    meta: Dict[str, Any] = Field(default_factory=dict, description="扩展元数据")
 
 
 class AccountCreateRequest(AccountBase):
@@ -250,6 +251,9 @@ class TransactionBase(BaseModel):
     description: str = Field(default="", description="交易描述")
     tags: str = Field(default="", description="交易标签")
     budget_id: Optional[int] = Field(default=None, description="关联预算ID")
+    entry_kind: str = Field(default="normal", description="账目类型: normal/micro_adjust/balance_adjust/refund")
+    exclude_from_stats: bool = Field(default=False, description="是否从消费/收入统计中排除（仍计入余额）")
+    meta: Dict[str, Any] = Field(default_factory=dict, description="扩展结构化元数据（含 items 多品类拆分与 links）")
 
 
 class TransactionCreateRequest(TransactionBase):
@@ -272,6 +276,9 @@ class TransactionUpdateRequest(BaseModel):
     tags: str = Field(default="", description="交易标签")
     budget_id: Optional[int] = Field(default=None, description="关联预算ID")
     htime: Optional[float] = Field(default=None, description="发生时间戳")
+    entry_kind: Optional[str] = Field(default=None, description="账目类型")
+    exclude_from_stats: Optional[bool] = Field(default=None, description="是否排除统计")
+    meta: Optional[Dict[str, Any]] = Field(default=None, description="扩展结构化元数据")
 
 
 class TransactionResponse(TransactionBase):
@@ -403,6 +410,7 @@ class AccountData(BaseModel):
     description: str = Field(default="", description="账户描述")
     balance: str = Field(default="0.0", description="账户余额")
     state: int = Field(default=0, description="账户状态")
+    meta: Dict[str, Any] = Field(default_factory=dict, description="扩展元数据")
     ctime: Optional[datetime] = Field(default=None, description="创建时间")
     mtime: Optional[datetime] = Field(default=None, description="修改时间")
 
@@ -421,6 +429,9 @@ class TransactionData(BaseModel):
     tags: str = Field(default="", description="交易标签")
     state: int = Field(default=0, description="交易状态")
     budget_id: Optional[int] = Field(default=None, description="关联预算ID")
+    entry_kind: str = Field(default="normal", description="账目类型")
+    exclude_from_stats: bool = Field(default=False, description="是否排除统计")
+    meta: Dict[str, Any] = Field(default_factory=dict, description="扩展元数据")
     htime: Optional[float] = Field(default=0.0, description="发生时间戳")
     ctime: Optional[datetime] = Field(default=None, description="创建时间")
     mtime: Optional[datetime] = Field(default=None, description="修改时间")
@@ -516,3 +527,124 @@ class BudgetData(BaseModel):
     mtime: Optional[datetime] = Field(default=None, description="修改时间")
     status: int = Field(default=0, description="预算状态")
     items: List[BudgetItemData] = Field(default_factory=list, description="预算子项")
+
+
+# ============================================================================
+# Finance 2.0 (SailTick Secretary) DTOs
+# ============================================================================
+
+
+class TransactionLineItem(BaseModel):
+    """单笔交易的品类明细拆分项（如一次超市采购中的日用品 + 零食）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str = Field(description="商品/子项名称")
+    amount: str = Field(description="子项金额")
+    tag: str = Field(default="", description="归属财务标签")
+    is_snack: bool = Field(default=False, description="是否属于零食/含糖饮品（联动健康模块）")
+    health_hint: str = Field(default="", description="可选健康提示")
+
+
+class TransactionMetaUpdateRequest(BaseModel):
+    """更新单笔交易的明细拆分、跨领域关联或统计归类"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: Optional[List[TransactionLineItem]] = Field(default=None, description="多品类明细拆分数组")
+    links: Optional[Dict[str, Any]] = Field(default=None, description="跨领域关联（diet/rhythm/vault）")
+    entry_kind: Optional[str] = Field(default=None, description="账目类型: normal/micro_adjust/balance_adjust/refund")
+    exclude_from_stats: Optional[bool] = Field(default=None, description="是否从消费/收入统计中排除")
+    sync_tags_from_items: bool = Field(default=True, description="是否按明细标签自动同步交易主 tags")
+    extra_meta: Optional[Dict[str, Any]] = Field(default=None, description="其他合并写入 meta 的键值")
+
+
+class AccountReconcileRequest(BaseModel):
+    """智能余额核对请求（小额自动无感平账，大额引导排查）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    account_id: int = Field(description="账户ID")
+    actual_balance: str = Field(description="用户看到的真实账户余额")
+    micro_threshold: float = Field(default=30.0, description="小额无感平账阈值（元）")
+    force_adjust: bool = Field(default=False, description="超过阈值时是否强制平账")
+    note: str = Field(default="", description="备注")
+    source: str = Field(default="manual", description="来源: manual/quick_chat/ocr/sailtick")
+
+
+class BalanceCheckpointResponse(BaseModel):
+    """余额核对快照响应"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    account_id: int
+    account_name: str = ""
+    reported_balance: str
+    book_balance: str
+    drift_amount: str
+    handling: str  # exact | micro_adjusted | large_drift_pending | manual_reset
+    adjustment_tx_id: Optional[int] = None
+    note: str = ""
+    source: str = "manual"
+    created_at: Optional[datetime] = None
+
+
+class AccountReconcileResponse(BaseModel):
+    """智能余额核对结果"""
+
+    account: AccountResponse
+    checkpoint: BalanceCheckpointResponse
+    handling: str
+    drift_amount: str
+    message: str
+    proposal_id: Optional[int] = None
+
+
+class HygieneScanRequest(BaseModel):
+    """账单健康体检与分级自治扫描请求"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    days: Optional[int] = Field(default=90, description="扫描最近 N 天（null/0=全历史；若提供 from_time/to_time 则按区间）")
+    from_time: Optional[float] = Field(default=None, description="可选起始时间戳（用于按月倒推慢迭代）")
+    to_time: Optional[float] = Field(default=None, description="可选截止时间戳（用于按月倒推慢迭代）")
+    auto_apply_safe: bool = Field(default=True, description="是否静默执行高置信度安全动作（带可撤销审计）")
+    min_auto_confidence: float = Field(default=0.90, description="自动执行最低置信度")
+    max_review_proposals: int = Field(default=10, description="本次扫描最多新增多少条待人工确认建议（防轰炸）")
+    include_legacy_fix: bool = Field(default=True, description="是否纳入 1970 伪时间戳历史 balance fix 隔离")
+    created_by: str = Field(default="sailtick", description="触发来源")
+
+
+class HygieneProposalCreateRequest(BaseModel):
+    """由 SailTick 慢脑提交单条待人工确认清理建议（仅允许 needs_review，绝不静默删改）"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    proposal_type: str = Field(default="auto_tag", description="建议类型")
+    target_tx_ids: List[int] = Field(default_factory=list, description="目标交易 ID 列表")
+    confidence: float = Field(default=0.75, description="置信度 0-1")
+    title: str = Field(description="简短标题")
+    reason: str = Field(default="", description="推断理由")
+    after_payload: Dict[str, Any] = Field(default_factory=dict, description="批准后执行的变更负载")
+    created_by: str = Field(default="sailtick_nightly_llm", description="创建来源")
+
+
+class HygieneProposalResponse(BaseModel):
+    """清理建议 / 托管审计记录响应"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    proposal_type: str
+    autonomy_level: str  # auto_applied | needs_review
+    status: str  # pending | applied | reverted | dismissed
+    target_tx_ids: List[int] = Field(default_factory=list)
+    confidence: float = 0.0
+    title: str
+    reason: str = ""
+    before_snapshot: Dict[str, Any] = Field(default_factory=dict)
+    after_payload: Dict[str, Any] = Field(default_factory=dict)
+    created_by: str = "sailtick"
+    created_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None

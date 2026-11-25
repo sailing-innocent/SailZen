@@ -80,6 +80,10 @@ sailtick:
     enable_web_search: true          # 允许公网检索（失败优雅降级为本地基准 + LLM）
     max_foods_per_night: 5           # 单次夜间最多深度调研食物条数
     max_knowledge_per_night: 2       # 单次夜间最多整理知识卡片数
+    enable_finance_backfill: true    # 历史账单夜间慢迭代（按月倒推 + 水位限流，不急于一时）
+    finance_backfill_pending_cap: 5  # 待审清理队列 >= 该水位时暂停历史深挖，绝不堆负担
+    finance_backfill_max_new_reviews_per_night: 3  # 每晚历史回溯最多新增待审建议数
+    finance_backfill_max_llm_items_per_night: 4    # 阶段2慢脑每晚最多辅助研判长尾未标账单数
 
   # ── 白天快速对话代理（转达 SailTick 专家结论 + 灵活调计划 + 顺手设提醒） ─────
   quick_chat:

@@ -5,9 +5,13 @@
 # @date 2025-05-22
 # @version 1.0
 # ---------------------------------
-from sailzen_orm.finance import Account
+from decimal import Decimal, InvalidOperation
+from typing import List, Optional
+from sailzen_orm.finance import Account, FinanceBalanceCheckpoint, FinanceHygieneProposal
 from sail_server.application.dto.finance import (
     AccountData,
+    AccountReconcileRequest,
+    BalanceCheckpointResponse,
     TransactionData,
     AccountState,
     TransactionState,
@@ -19,6 +23,18 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 from .transaction import create_transaction_impl
+
+
+def _to_decimal(raw) -> Decimal:
+    if isinstance(raw, Decimal):
+        return raw
+    s = str(raw or "0").strip()
+    if " " in s:
+        s = s.split()[0]
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return Decimal("0.00")
 
 
 def clean_all_impl(db):
@@ -38,12 +54,16 @@ def account_from_create(create: AccountData):
 
 
 def read_from_account(account: Account):
+    if account is None:
+        return None
     return AccountData(
         id=account.id,
         name=account.name,
-        description=account.description,
-        balance=account.balance,
-        state=account.state,
+        description=account.description or "",
+        balance=account.balance or "0.0",
+        state=account.state if account.state is not None else 0,
+        meta=dict(account.meta) if isinstance(account.meta, dict) else {},
+        ctime=account.ctime,
         mtime=account.mtime,
     )
 
@@ -167,34 +187,246 @@ def update_account_balance_impl(db, account_id: int) -> AccountData:
 
 
 def fix_account_balance_impl(db, fix) -> AccountData:
+    """修复账户余额（兼容旧接口，内部已升级为当前时间戳 + exclude_from_stats=True + 记录核对快照）。"""
     logging.info(f"fixing account balance for account {fix.id}")
-    id = fix.id
-    balance = Money(fix.balance)
-    # update balance before fix
-    res = update_account_balance_impl(db, id)
+    req = AccountReconcileRequest(
+        account_id=int(fix.id),
+        actual_balance=str(fix.balance),
+        micro_threshold=30.0,
+        force_adjust=True,
+        note="via fix_balance",
+        source="manual",
+    )
+    res = reconcile_account_balance_impl(db, req)
     if res is None:
         return None
-    account = db.query(Account).filter(Account.id == id).first()
-    curr_balance = Money(account.balance)
-    # fix balance
-    to_fix = balance - curr_balance
-    logger.info(f"fixing balance for account {id} by {to_fix.value_str}")
-    # new transaction
-    create_transaction_impl(
-        db,
-        TransactionData(
-            from_acc_id=-1,
-            to_acc_id=id,
-            value=to_fix.value_str,
-            description="balance fix",
-            tags="",
-            htime=1,
-        ),
+    return res["account"]
+
+
+def reconcile_account_balance_impl(db, req: AccountReconcileRequest) -> Optional[dict]:
+    """智能账户余额核对（Finance 2.0 分级自治核心）：
+    - 差额 < 0.01 元：记录 exact 快照；
+    - |差额| <= micro_threshold（默认 30 元）或显式 force_adjust=True：
+      写入不污染统计（exclude_from_stats=True）的当前时间戳平账交易 + 可一键撤销的审计记录；
+    - |差额| > micro_threshold 且非强制：
+      保留原账面余额，记录 large_drift_pending 快照并生成待排查清理建议。
+    """
+    account_id = int(req.account_id)
+    updated = update_account_balance_impl(db, account_id)
+    if updated is None:
+        return None
+
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if account is None:
+        return None
+
+    now = datetime.now()
+    book_dec = _to_decimal(account.balance)
+    actual_dec = _to_decimal(req.actual_balance)
+    drift_dec = (actual_dec - book_dec).quantize(Decimal("0.01"))
+    abs_drift = abs(drift_dec)
+
+    # 支持账户级自定义容忍阈值
+    acc_meta = dict(account.meta) if isinstance(account.meta, dict) else {}
+    threshold_val = req.micro_threshold
+    if "drift_tolerance" in acc_meta and req.micro_threshold == 30.0:
+        try:
+            threshold_val = float(acc_meta["drift_tolerance"])
+        except (TypeError, ValueError):
+            pass
+    threshold_dec = Decimal(str(max(0.0, float(threshold_val))))
+
+    adj_tx_id: Optional[int] = None
+    proposal_id: Optional[int] = None
+
+    if abs_drift < Decimal("0.01"):
+        handling = "exact"
+        message = f"账户「{account.name}」账实一致（¥{actual_dec:.2f}），无需平账。"
+    elif abs_drift <= threshold_dec or req.force_adjust:
+        is_micro = abs_drift <= threshold_dec
+        handling = "micro_adjusted" if is_micro else "manual_reset"
+        entry_kind = "micro_adjust" if is_micro else "balance_adjust"
+        desc_prefix = "小额无感平账" if is_micro else "余额核对调整"
+        sign_str = f"+{drift_dec:.2f}" if drift_dec >= 0 else f"{drift_dec:.2f}"
+        tx_desc = f"{desc_prefix} ({account.name} {sign_str})"
+        if req.note:
+            tx_desc = f"{tx_desc} - {req.note}"
+
+        if drift_dec > 0:
+            from_id, to_id, tx_val = -1, account_id, f"{abs_drift:.2f}"
+        else:
+            from_id, to_id, tx_val = account_id, -1, f"{abs_drift:.2f}"
+
+        adj_tx = create_transaction_impl(
+            db,
+            TransactionData(
+                from_acc_id=from_id,
+                to_acc_id=to_id,
+                value=tx_val,
+                description=tx_desc,
+                tags="",
+                entry_kind=entry_kind,
+                exclude_from_stats=True,
+                meta={
+                    "reconcile": {
+                        "book_balance": f"{book_dec:.2f}",
+                        "actual_balance": f"{actual_dec:.2f}",
+                        "drift": f"{drift_dec:.2f}",
+                        "handling": handling,
+                        "source": req.source,
+                    }
+                },
+                htime=now.timestamp(),
+            ),
+        )
+        adj_tx_id = adj_tx.id
+        update_account_balance_impl(db, account_id)
+        db.refresh(account)
+
+        # 写入可一键撤销的分级自治审计记录
+        audit = FinanceHygieneProposal(
+            proposal_type="micro_adjust_audit",
+            autonomy_level="auto_applied",
+            status="applied",
+            target_tx_ids=[adj_tx_id],
+            confidence=1.0,
+            title=f"{'小额平账' if is_micro else '手动平账'}：{account.name} ({sign_str} 元)",
+            reason=(
+                f"账面 ¥{book_dec:.2f} → 实际 ¥{actual_dec:.2f}（差额 {sign_str} 元），"
+                "已标记为不计入消费统计的平账项，支持随时撤销。"
+            ),
+            before_snapshot={
+                "account_id": account_id,
+                "prev_balance": f"{book_dec:.2f}",
+                "created_tx_id": adj_tx_id,
+            },
+            after_payload={
+                "account_id": account_id,
+                "actual_balance": f"{actual_dec:.2f}",
+                "drift_amount": f"{drift_dec:.2f}",
+                "adjustment_tx_id": adj_tx_id,
+            },
+            created_by=req.source or "manual",
+            created_at=now,
+            resolved_at=now,
+        )
+        db.add(audit)
+        db.flush()
+        proposal_id = audit.id
+        message = (
+            f"已为「{account.name}」执行{'小额无感平账' if is_micro else '余额对齐'}"
+            f"（差额 {sign_str} 元，不计入消费趋势统计）。"
+        )
+    else:
+        handling = "large_drift_pending"
+        sign_str = f"+{drift_dec:.2f}" if drift_dec >= 0 else f"{drift_dec:.2f}"
+        proposal = FinanceHygieneProposal(
+            proposal_type="large_drift",
+            autonomy_level="needs_review",
+            status="pending",
+            target_tx_ids=[],
+            confidence=0.85,
+            title=f"账户「{account.name}」存在较大余额差额 ({sign_str} 元)",
+            reason=(
+                f"账面 ¥{book_dec:.2f}，实际 ¥{actual_dec:.2f}，差额 {sign_str} 元超过小额阈值 ¥{threshold_dec:.0f}。"
+                "建议先排查近期是否有漏记账单或截图上传；若确认无需追查，可一键批准平账。"
+            ),
+            before_snapshot={
+                "account_id": account_id,
+                "book_balance": f"{book_dec:.2f}",
+            },
+            after_payload={
+                "account_id": account_id,
+                "actual_balance": f"{actual_dec:.2f}",
+                "drift_amount": f"{drift_dec:.2f}",
+                "force_adjust": True,
+                "note": req.note,
+            },
+            created_by=req.source or "manual",
+            created_at=now,
+        )
+        db.add(proposal)
+        db.flush()
+        proposal_id = proposal.id
+        message = (
+            f"检测到「{account.name}」差额 {sign_str} 元（超过小额阈值 ¥{threshold_dec:.0f}），"
+            "已加入待排查清单；如不想追查，可选择强制平账。"
+        )
+
+    cp = FinanceBalanceCheckpoint(
+        account_id=account_id,
+        reported_balance=f"{actual_dec:.2f}",
+        book_balance=f"{book_dec:.2f}",
+        drift_amount=f"{drift_dec:.2f}",
+        handling=handling,
+        adjustment_tx_id=adj_tx_id,
+        note=req.note or "",
+        source=req.source or "manual",
+        created_at=now,
     )
-    # update balance after fix
-    update_account_balance_impl(db, id)
+    db.add(cp)
+
+    acc_meta["last_reconciled_at"] = now.isoformat()
+    acc_meta["last_reconcile_handling"] = handling
+    acc_meta["last_drift"] = f"{drift_dec:.2f}"
+    account.meta = acc_meta
+    account.mtime = now
+
+    db.commit()
     db.refresh(account)
-    return read_from_account(account)
+    db.refresh(cp)
+
+    return {
+        "account": read_from_account(account),
+        "checkpoint": BalanceCheckpointResponse(
+            id=cp.id,
+            account_id=cp.account_id,
+            account_name=account.name or "",
+            reported_balance=cp.reported_balance,
+            book_balance=cp.book_balance,
+            drift_amount=cp.drift_amount,
+            handling=cp.handling,
+            adjustment_tx_id=cp.adjustment_tx_id,
+            note=cp.note or "",
+            source=cp.source or "manual",
+            created_at=cp.created_at,
+        ),
+        "handling": handling,
+        "drift_amount": f"{drift_dec:.2f}",
+        "message": message,
+        "proposal_id": proposal_id,
+    }
+
+
+def list_balance_checkpoints_impl(
+    db, account_id: Optional[int] = None, limit: int = 30
+) -> List[BalanceCheckpointResponse]:
+    """查询余额核对快照历史。"""
+    q = db.query(FinanceBalanceCheckpoint)
+    if account_id is not None:
+        q = q.filter(FinanceBalanceCheckpoint.account_id == int(account_id))
+    rows = (
+        q.order_by(FinanceBalanceCheckpoint.created_at.desc(), FinanceBalanceCheckpoint.id.desc())
+        .limit(max(1, min(200, int(limit))))
+        .all()
+    )
+    acc_map = {a.id: a.name or "" for a in db.query(Account).all()}
+    return [
+        BalanceCheckpointResponse(
+            id=cp.id,
+            account_id=cp.account_id,
+            account_name=acc_map.get(cp.account_id, ""),
+            reported_balance=cp.reported_balance,
+            book_balance=cp.book_balance,
+            drift_amount=cp.drift_amount,
+            handling=cp.handling,
+            adjustment_tx_id=cp.adjustment_tx_id,
+            note=cp.note or "",
+            source=cp.source or "manual",
+            created_at=cp.created_at,
+        )
+        for cp in rows
+    ]
 
 
 # recalc account balance

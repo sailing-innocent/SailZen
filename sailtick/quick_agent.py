@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sailtick.config import SailTickConfig
 from sailtick.db import TickDatabase
+from sailtick.finance_client import FinanceClient
 from sailtick.inbox import TicketInbox
 from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.memory import AgentMemory
@@ -199,6 +200,7 @@ class QuickCoachAgent:
         llm: Any = None,
         knowledge: Optional[HealthKnowledgeManager] = None,
         rhythm: Optional[RhythmClient] = None,
+        finance: Optional[FinanceClient] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -208,6 +210,11 @@ class QuickCoachAgent:
         self.llm = llm
         self._clock = clock
         self.rhythm = rhythm or RhythmClient(
+            config.sail_server.api_base,
+            config.sail_server.auth_token,
+            clock=clock,
+        )
+        self.finance = finance or FinanceClient(
             config.sail_server.api_base,
             config.sail_server.auth_token,
             clock=clock,
@@ -275,10 +282,11 @@ class QuickCoachAgent:
                 sess_key, limit=max(2, self.config.quick_chat.history_turns)
             )
             rhythm_dash = await self._load_live_rhythm()
+            finance_overview = await self._load_live_finance()
             pending_reminders = await self._load_pending_reminders()
             ctx_sp.set_output(
                 f"history={len(history)} pending_reminders={len(pending_reminders)} "
-                f"rhythm={'ok' if rhythm_dash else 'none'} foods={len(matched_foods)}"
+                f"rhythm={'ok' if rhythm_dash else 'none'} finance={'ok' if finance_overview else 'none'} foods={len(matched_foods)}"
             )
 
         # 3. 决策回复与动作（优先快模型，无 LLM 时自动规则兜底）
@@ -301,6 +309,7 @@ class QuickCoachAgent:
                         matched_foods=matched_foods,
                         matched_knowledge=matched_knowledge,
                         rhythm_dash=rhythm_dash,
+                        finance_overview=finance_overview,
                         pending_reminders=pending_reminders,
                         history=history,
                     )
@@ -343,6 +352,7 @@ class QuickCoachAgent:
         executed_actions: List[Dict[str, Any]] = []
         reminders_created: List[Dict[str, Any]] = []
         rhythm_updated = False
+        finance_updated = False
         for act in raw_actions:
             if not isinstance(act, dict):
                 continue
@@ -377,6 +387,8 @@ class QuickCoachAgent:
                             reminders_created.append(res)
                     if str(res.get("kind", "")).startswith("rhythm_") and res.get("ok") and not res.get("deduplicated"):
                         rhythm_updated = True
+                    if str(res.get("kind", "")).startswith("finance_") and res.get("ok") and not res.get("deduplicated"):
+                        finance_updated = True
                 else:
                     act_sp.mark_status("skipped", "unsupported or disabled action")
 
@@ -405,6 +417,7 @@ class QuickCoachAgent:
             "actions": executed_actions,
             "reminders_created": reminders_created,
             "rhythm_updated": rhythm_updated,
+            "finance_updated": finance_updated,
             "expert_brief_date": (brief or {}).get("snapshot_date") if isinstance(brief, dict) else None,
             "foods_matched": [f["name"] for f in matched_foods],
             "source": plan_source,
@@ -431,6 +444,14 @@ class QuickCoachAgent:
                 return await self.rhythm.get_dashboard(self._clock().date())
         except Exception as exc:
             logger.debug("QuickCoachAgent load live rhythm skipped: %s", exc)
+        return None
+
+    async def _load_live_finance(self) -> Optional[Dict[str, Any]]:
+        try:
+            if await self.finance.health():
+                return await self.finance.get_overview()
+        except Exception as exc:
+            logger.debug("QuickCoachAgent load live finance skipped: %s", exc)
         return None
 
     async def _load_pending_reminders(self) -> List[Dict[str, Any]]:
@@ -528,7 +549,8 @@ class QuickCoachAgent:
                     "• 日程突发变动：「下午2点到4点临时加会，帮我重排今天」「今天太累了晚上只留轻任务」\n"
                     "• 重要项目/待办：「新增项目：下月15号前上线新版本」「把评审文档标完成」\n"
                     "• 生活变动与提醒：「今天早下班怎么安排」「今晚聚餐」「下班前提醒我买洗衣液」\n"
-                    "• 快捷命令：/today 今日日程 · /projects 重要项目 · /brief 专家简报 · /predict 体重预测 · /food 食物 · /remind 提醒"
+                    "• 日常记账与对账：「午饭外卖 32 微信」「支付宝余额对齐到 2950」「帮我扫描清理未打标账单」\n"
+                    "• 快捷命令：/today 日程 · /projects 项目 · /money 账单概览 · /accounts 账户余额 · /brief 专家简报 · /predict 预测 · /food 热量 · /remind 提醒"
                 ),
                 "actions": [],
                 "reminders_created": [],
@@ -584,6 +606,70 @@ class QuickCoachAgent:
                 ddl_part = f"目标 {p.get('target_date')} (剩{dleft}天)" if p.get("target_date") else "未设目标日"
                 pct = int((p.get("completion_ratio") or 0) * 100)
                 lines.append(f"• #{p.get('affair_id')} {p.get('title')} — {ddl_part} · 里程碑 {pct}% · 近14d投入 {p.get('recent_14d_hours', 0)}h")
+            return {
+                "reply": "\n".join(lines),
+                "actions": [],
+                "reminders_created": [],
+                "source": "command",
+            }
+
+        if low in ("/money", "/账单", "/财务", "本月开销", "花钱情况"):
+            ov = await self._load_live_finance()
+            if not ov:
+                return {
+                    "reply": "暂时连不上 Finance 财务服务，稍后再试。",
+                    "actions": [],
+                    "reminders_created": [],
+                    "source": "command",
+                }
+            lines = [
+                f"【财务开销秘书 · {ov.get('month', '')}】",
+                f"• 今日支出：¥{ov.get('today_expense', '0.00')}（{ov.get('today_count', 0)} 笔）",
+                f"• 本月真实支出：¥{ov.get('mtd_expense', '0.00')} | 收入：¥{ov.get('mtd_income', '0.00')} | 净结余：¥{ov.get('mtd_net', '0.00')}",
+                f"• 真实零食开销：¥{ov.get('mtd_snack_total', '0.00')}（占本月 {ov.get('mtd_snack_pct', 0)}%，含混合小票拆分 ¥{ov.get('mtd_snack_from_split', '0.00')}）",
+                f"• 标签覆盖率：{ov.get('overall_tag_coverage_pct', 100)}% | 待审清理：{ov.get('pending_hygiene_count', 0)} 条 | AI 自动托管：{ov.get('auto_applied_hygiene_count', 0)} 条",
+            ]
+            top_tags = ov.get("mtd_by_tag") or []
+            if top_tags:
+                t_str = " · ".join(f"{t.get('tag')} ¥{t.get('amount')}" for t in top_tags[:4])
+                lines.append(f"• 本月主要去向：{t_str}")
+            silent = ov.get("silent_accounts") or []
+            if silent:
+                s_str = "、".join(f"{a.get('name')}({a.get('days_silent')}天未记)" for a in silent[:3])
+                lines.append(f"• 提醒：{s_str}")
+            bf = await self.db.get_runtime_state("finance_backfill_progress")
+            if isinstance(bf, dict) and bf.get("status"):
+                done_m = len(bf.get("completed_months") or [])
+                tot_m = bf.get("total_months_detected") or done_m
+                lines.append(
+                    f"• 历史慢迭代：{bf.get('status')}（已理 {done_m}/{tot_m} 月，累计静默补标 {bf.get('cumulative_auto_tagged', 0)} 笔"
+                    + (f"，下晚推进 {bf['cursor_month']}" if bf.get("cursor_month") else "")
+                    + "）"
+                )
+            return {
+                "reply": "\n".join(lines),
+                "actions": [],
+                "reminders_created": [],
+                "source": "command",
+            }
+
+        if low in ("/accounts", "/余额", "/账户", "账户余额"):
+            ov = await self._load_live_finance()
+            accs = (ov or {}).get("account_health") or []
+            if not accs:
+                return {
+                    "reply": "暂未读取到活跃账户余额信息。",
+                    "actions": [],
+                    "reminders_created": [],
+                    "source": "command",
+                }
+            lines = ["【活跃账户余额与核对状态】"]
+            for a in accs[:10]:
+                rec = str(a.get("last_reconciled_at") or "")[:10] or "未核对"
+                days_s = a.get("days_since_last_tx")
+                act_part = f"{days_s}天前有流水" if days_s is not None else "暂无流水"
+                lines.append(f"• {a.get('name')}：¥{a.get('balance')}（{act_part} · 上次核对 {rec}）")
+            lines.append("直接说「把微信余额对齐到 xxx」即可无感平账核对。")
             return {
                 "reply": "\n".join(lines),
                 "actions": [],
@@ -729,6 +815,20 @@ class QuickCoachAgent:
                 )
         return "\n".join(lines)
 
+    @staticmethod
+    def _format_live_finance_for_prompt(ov: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(ov, dict) or not ov:
+            return "(暂未获取到实时财务总览)"
+        lines = [
+            f"月份: {ov.get('month')} | 今日支出: ¥{ov.get('today_expense')}({ov.get('today_count', 0)}笔) | 本月真实支出: ¥{ov.get('mtd_expense')} | 收入: ¥{ov.get('mtd_income')}",
+            f"真实零食支出: ¥{ov.get('mtd_snack_total')} ({ov.get('mtd_snack_pct')}%, 含小票拆分¥{ov.get('mtd_snack_from_split')}) | 标签覆盖率: {ov.get('overall_tag_coverage_pct')}% | 待审清理: {ov.get('pending_hygiene_count')}条",
+        ]
+        accs = ov.get("account_health") or []
+        if accs:
+            acc_str = "；".join(f"#{a.get('id')}{a.get('name')}=¥{a.get('balance')}" for a in accs[:8])
+            lines.append(f"活跃账户: {acc_str}")
+        return "\n".join(lines)
+
     async def _ask_fast_llm(
         self,
         clean_text: str,
@@ -737,6 +837,7 @@ class QuickCoachAgent:
         matched_foods: List[Dict[str, Any]],
         matched_knowledge: List[Dict[str, Any]],
         rhythm_dash: Optional[Dict[str, Any]],
+        finance_overview: Optional[Dict[str, Any]],
         pending_reminders: List[Dict[str, Any]],
         history: List[Dict[str, Any]],
     ) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
@@ -747,6 +848,7 @@ class QuickCoachAgent:
         playbooks = (brief or {}).get("flexible_playbooks") if isinstance(brief, dict) else {}
         playbook_text = "\n".join(f"- {k}: {v}" for k, v in (playbooks or {}).items()) or "(默认温和策略)"
         rhythm_text = self._format_live_rhythm_for_prompt(rhythm_dash)
+        finance_text = self._format_live_finance_for_prompt(finance_overview)
         pending_rem_text = self._format_pending_reminders_for_prompt(pending_reminders)
 
         food_text = "\n".join(
@@ -761,8 +863,8 @@ class QuickCoachAgent:
         ) or "(无)"
 
         system_prompt = f"""你是 SailTick Personal Agent 的「白天快速反应助手」（常驻 Android / Web / QQ 快捷对话端）。
-你统一协助用户处理**日程与项目突发变动（Rhythm）**和**健康减重日常（饮食/运动/体重）**。
-你有权直接调用 Rhythm API、提醒工具与画像更新工具——让用户用自然语言一句话就能搞定，绝不让用户去填复杂 PM 表单。
+你统一协助用户处理**日程与项目突发变动（Rhythm）**、**健康减重日常（饮食/运动/体重）**以及**日常开销秘书（记账/余额核对/账单体检）**。
+你有权直接调用 Rhythm API、Finance API、提醒工具与画像更新工具——让用户用自然语言一句话就能搞定，绝不让用户去填复杂表单。
 
 当前时间：{now.strftime('%Y-%m-%d %H:%M')}（星期{'一二三四五六日'[now.weekday()]}）
 画像记录的常规下班时间：{offwork}（⚠️ 硬规则：若用户本轮原话已明确给出时间，如「今天7点下班」「19:00下班」，**必须严格以用户原话为准**；仅当用户未提具体时刻时才用常规值并提前 {self.config.quick_chat.offwork_lead_minutes} 分钟）
@@ -770,11 +872,14 @@ class QuickCoachAgent:
 【当前已生效的待触发提醒（严禁重复创建）】
 {pending_rem_text}
 
-【SailTick 夜间专家简报（健康 + 节奏）】
+【SailTick 夜间专家简报（健康 + 节奏 + 财务）】
 {brief_text}
 
 【今日实时可视化日程与活跃项目】
 {rhythm_text}
+
+【实时财务开销与活跃账户】
+{finance_text}
 
 【专家应急预案】
 {playbook_text}
@@ -799,6 +904,10 @@ class QuickCoachAgent:
 5. **日程突发变动（加会/请假/早下班/太累了/想重排）**：调用 `rhythm_occupancy` 和/或 `rhythm_sync_timeline` 重排今日剩余可视化时间线，附带 `plan_adjust_signal` 同步给慢脑。
 6. **新增项目或任务 / 反馈完成**：口述新目标用 `rhythm_upsert_affair`（先核对上方列表是否已存在，已存在传 `affair_id` 更新），反馈完成用 `rhythm_block_status` 或 `rhythm_transit_affair`。
 7. **食物热量/体重/饮食**：命中食物库直接答；未命中先估算并输出 `enqueue_food_research`；报体重/饮食直接落库。
+8. **日常记账/余额核对/账单体检**：
+   - 用户口述花钱/收入（支持混合拆分，如「盒马花了128，零食42日用86，支付宝」）→ 调用 `finance_log_tx`（填写 `items` 明细数组以便同时精准追踪零食占比）；
+   - 用户报某账户当前真实余额（如「微信现在剩 320.5」「支付宝余额对齐到 2950」）→ 调用 `finance_reconcile_account`（差额 ≤30 元自动无感平账，大额进入待排查清单）；
+   - 用户让扫描清理账单或补标签 → 调用 `finance_run_hygiene`。
 
 严格只输出 JSON：
 {{
@@ -813,6 +922,10 @@ class QuickCoachAgent:
     {{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": ""}},
     {{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}},
     {{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate", "defer_to": "2026-11-26T09:00:00"}},
+    {{"kind": "finance_log_tx", "amount": 128.0, "description": "盒马采购", "direction": "expense|income", "tags": "日用消耗,零食", "account_hint": "支付宝", "items": [{{"name": "零食", "amount": "42.00", "tag": "零食", "is_snack": true}}, {{"name": "日用品", "amount": "86.00", "tag": "日用消耗", "is_snack": false}}]}},
+    {{"kind": "finance_reconcile_account", "account_hint": "支付宝余额宝", "actual_balance": 2950.3, "force_adjust": false, "note": "口头核对"}},
+    {{"kind": "finance_run_hygiene", "days": 30, "auto_apply_safe": true}},
+    {{"kind": "finance_batch_tag", "updates": [{{"id": 123, "tags": "交通"}}]}},
     {{"kind": "plan_adjust_signal", "scene": "unexpected_meeting|early_offwork|social_dining|low_energy|other", "summary": "一句话记录今日变动"}},
     {{"kind": "log_diet", "meal_type": "breakfast|lunch|dinner|snack", "description": "饮食内容", "calories": 500}},
     {{"kind": "log_weight", "weight_kg": 73.6}},
@@ -1533,6 +1646,82 @@ class QuickCoachAgent:
             except Exception as exc:
                 logger.warning("QuickCoachAgent rhythm_transit_affair failed: %s", exc)
             return {"kind": "rhythm_transit_affair", "ok": False}
+
+        if kind == "finance_log_tx":
+            try:
+                amt = float(act.get("amount") or act.get("value") or 0)
+                if amt <= 0:
+                    return {"kind": "finance_log_tx", "ok": False, "error": "invalid amount"}
+                if await self.finance.health():
+                    res = await self.finance.create_transaction(
+                        amount=amt,
+                        description=str(act.get("description") or raw_text[:60]),
+                        direction=str(act.get("direction") or "expense"),
+                        tags=str(act.get("tags") or ""),
+                        account_id=act.get("account_id"),
+                        account_hint=str(act.get("account_hint") or ""),
+                        items=act.get("items") if isinstance(act.get("items"), list) else None,
+                    )
+                    return {
+                        "kind": "finance_log_tx",
+                        "ok": True,
+                        "tx_id": res.get("id"),
+                        "value": res.get("value"),
+                        "description": res.get("description"),
+                    }
+            except Exception as exc:
+                logger.warning("QuickCoachAgent finance_log_tx failed: %s", exc)
+            return {"kind": "finance_log_tx", "ok": False}
+
+        if kind == "finance_reconcile_account":
+            try:
+                bal = float(act.get("actual_balance"))
+                if await self.finance.health():
+                    res = await self.finance.reconcile_account(
+                        actual_balance=bal,
+                        account_id=act.get("account_id"),
+                        account_hint=str(act.get("account_hint") or ""),
+                        force_adjust=bool(act.get("force_adjust", False)),
+                        note=str(act.get("note") or "快脑口头核对"),
+                        source=f"quick_chat:{channel}",
+                    )
+                    return {
+                        "kind": "finance_reconcile_account",
+                        "ok": True,
+                        "handling": res.get("handling"),
+                        "drift_amount": res.get("drift_amount"),
+                        "message": res.get("message"),
+                    }
+            except Exception as exc:
+                logger.warning("QuickCoachAgent finance_reconcile_account failed: %s", exc)
+            return {"kind": "finance_reconcile_account", "ok": False}
+
+        if kind == "finance_run_hygiene":
+            try:
+                if await self.finance.health():
+                    res = await self.finance.run_hygiene_scan(
+                        days=act.get("days", 30),
+                        auto_apply_safe=bool(act.get("auto_apply_safe", True)),
+                        created_by=f"quick_chat:{channel}",
+                    )
+                    return {"kind": "finance_run_hygiene", "ok": True, **res}
+            except Exception as exc:
+                logger.warning("QuickCoachAgent finance_run_hygiene failed: %s", exc)
+            return {"kind": "finance_run_hygiene", "ok": False}
+
+        if kind == "finance_batch_tag":
+            try:
+                updates = [u for u in (act.get("updates") or []) if isinstance(u, dict)]
+                if updates and await self.finance.health():
+                    res = await self.finance.batch_tag(updates)
+                    return {
+                        "kind": "finance_batch_tag",
+                        "ok": True,
+                        "success_count": res.get("success_count", 0),
+                    }
+            except Exception as exc:
+                logger.warning("QuickCoachAgent finance_batch_tag failed: %s", exc)
+            return {"kind": "finance_batch_tag", "ok": False}
 
         return None
 

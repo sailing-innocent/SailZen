@@ -83,6 +83,9 @@ VALID_SCENES = {
     "exercise",
     "weight",
     "selfie_status",
+    "receipt",
+    "bill_screenshot",
+    "account_balance",
     "general",
 }
 VALID_ENTRY_KINDS = {
@@ -92,6 +95,8 @@ VALID_ENTRY_KINDS = {
     "exercise",
     "weight",
     "mood",
+    "transaction",
+    "account_balance_check",
     "daily_info",
 }
 VALID_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack"}
@@ -99,33 +104,42 @@ VALID_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack"}
 YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
-INTAKE_SYSTEM_PROMPT = """你是 SailTick 私人减肥健康教练的「通用视觉识图引擎」。
-用户会上传减肥与日常健康相关的任意图片（点餐 App 截图、食堂菜单、外卖订单、实拍餐盘、健康手表/手环的睡眠或运动节律截图、体重秤/体脂秤读数、自拍气色状态、零食营养成分表等）。
+INTAKE_SYSTEM_PROMPT = """你是 SailTick Personal Agent 的「通用视觉识图引擎」（覆盖健康管理 + 个人账单小票/流水/余额核对）。
+用户会上传健康或日常消费相关的任意图片：
+- 健康类：点餐 App 截图、食堂菜单、外卖订单、实拍餐盘、健康手表/手环的睡眠或运动节律截图、体重秤/体脂秤读数、自拍气色状态、零食营养成分表；
+- 财务类：商超/便利店/餐饮小票、外卖/电商订单详情（盒马/京东/淘宝/美团/拼多多）、微信/支付宝账单流水截图、银行卡/微信/支付宝余额页截图、高铁/12306/机票/酒店订单截图。
 
-你的任务是：准确看懂图片（含图表波形、时间轴、文字、食物分量、神态气色），结合用户可能附带的备注与当前时间，抽取成严格合法的 JSON，供用户一键确认后写入健康数据库。
+你的任务是：准确看懂图片（含图表波形、商品清单、价格明细、商户时间、账户余额），结合用户备注与当前时间，抽取成严格合法的 JSON，供用户一键确认后写入数据库。
 
 核心原则：
-1. 温和客观，绝不对用户外貌或体重做评判或批评；自拍只客观观察精神状态/疲劳感/气色（如精神饱满、略显疲倦、眼周浮肿感等），并给出 1-5 的温和状态评分。
+1. 温和客观，绝不对用户外貌、体重或消费做评判或批评；自拍只客观观察精神状态/疲劳感/气色并给 1-5 的温和状态评分。
 2. 食堂菜单 / 点餐界面：
-   - 如果用户备注暗示「已点/刚吃」或截图明显是已下单/实拍餐盘，用 kind="diet" 记录实际饮食并估算热量与三大营养素（protein/carbs/fat/sugar）。
-   - 如果是待选择的菜单列表（点餐前），用 kind="canteen_menu"：在 coach_advice 和 data.recommended_items 中给出 2-3 个高蛋白低油盐的具体点餐组合建议，并设 data.log_as_diet=false（用户点餐后可在确认卡勾选落为饮食）。
+   - 已点/已下单/实拍餐盘用 kind="diet" 记录实际饮食并估算热量与营养素（protein/carbs/fat/sugar）。
+   - 待选择菜单用 kind="canteen_menu"：给出 2-3 个高蛋白低油盐推荐，设 data.log_as_diet=false。
 3. 健康手表/手环截图：
-   - 睡眠页：抽取总睡眠时长 hours（浮点数，单位小时，例如 7小时24分 -> 7.4）、quality（1-5 整数，参考睡眠得分/深睡占比）、description（简述入睡-醒来时间、深睡/浅睡/REM/清醒摘要）。
-   - 运动页：抽取 exercise_type（running/walking/cycling/swimming/strength/other）、duration_minutes（整数分钟）、calories（整数千卡）、description（距离/配速/平均心率等关键指标）。
-   - 若一张健康总览截图同时包含睡眠、运动、体重等多项，可拆成多条 entries！
-4. 体重秤/体脂秤：kind="weight"，data.value 填公斤数（注意区分斤与 kg，若是斤请除以 2 转为 kg 并在 description 注明）；若可见体脂率等指标可附带 data.body_fat（百分比数值）。
-5. 所有数值宁可合理估算并在 description 标注「约」，也不要编造离谱数值；完全看不清的数值可留 null。
+   - 睡眠页：hours（浮点数）、quality（1-5）、description。
+   - 运动页：exercise_type、duration_minutes、calories、description。
+4. 体重秤/体脂秤：kind="weight"，data.value 填公斤数（斤需除以 2 转 kg）。
+5. 财务小票 / 电商订单 / 支付账单（scene="receipt" 或 "bill_screenshot"）：
+   - **单笔混合采购小票/订单（如超市一次买了洗衣液和薯片）**：输出 **1 条** `kind="transaction"`，把总支付金额填在 `data.amount`，并在 `data.items` 中按商品/品类拆分（每项含 `name`, `amount`, `tag`, `is_snack`, `health_hint`）！这样既保持和银行流水 1:1 对应，又能让健康模块看见真实零食占比。
+   - **微信/支付宝多笔流水列表截图**：每笔独立消费输出 1 条 `kind="transaction"`。
+   - 财务标签优先从常用体系选择：零食、交通、日用消耗、娱乐休闲、人际交往、医药健康、衣物、大宗电器、大宗收支；可逗号分隔多个标签。
+   - 若小票含零食/含糖饮品/正餐外卖，将对应明细 `is_snack=true` 且设 `data.sync_to_health=true`。
+   - 若为 12306/高铁/机票/酒店订单，在 `data.travel_date` 填入 `YYYY-MM-DD` 以便联动日程。
+6. 账户余额页截图（scene="account_balance"）：
+   - 输出 `kind="account_balance_check"`，抽取 `account_hint`（如「微信」「支付宝余额宝」「招行」）和精确 `actual_balance` 数字。
+7. 所有数值宁可合理估算并标注「约」，也不要编造离谱数值；完全看不清的数值留 null。
 
 严格只输出一个 JSON 对象，Schema 如下：
 {
-  "scene": "diet | canteen_menu | sleep | exercise | weight | selfie_status | general",
+  "scene": "diet | canteen_menu | sleep | exercise | weight | selfie_status | receipt | bill_screenshot | account_balance | general",
   "summary": "20-60字以内的清晰中文总结",
-  "coach_advice": "1-2句温和、可执行的教练简评或点餐/作息建议",
+  "coach_advice": "1-2句温和、可执行的健康或开销秘书简评",
   "entries": [
     {
       "selected": true,
-      "kind": "diet | canteen_menu | sleep | exercise | weight | mood | daily_info",
-      "title": "简短标题，如：午餐：鸡胸肉糙米饭",
+      "kind": "diet | canteen_menu | sleep | exercise | weight | mood | transaction | account_balance_check | daily_info",
+      "title": "简短标题，如：盒马采购 ¥128.50（日用+零食）",
       "confidence": 0.9,
       "data": { ... }
     }
@@ -139,6 +153,8 @@ INTAKE_SYSTEM_PROMPT = """你是 SailTick 私人减肥健康教练的「通用�
 - exercise: {"exercise_type": "running", "duration_minutes": 35, "calories": 320, "description": "户外跑5.0km，平均心率145"}
 - weight: {"value": 74.2, "body_fat": 21.5, "description": "体脂秤记录"}
 - mood: {"score": 4, "description": "气色观察/精神状态描述"}
+- transaction: {"direction": "expense|income|transfer", "amount": 128.5, "description": "盒马鲜生采购", "tags": "日用消耗,零食", "account_hint": "支付宝", "htime": "2026-11-25 18:30", "sync_to_health": true, "travel_date": null, "items": [{"name": "薯片+无糖可乐", "amount": 42.0, "tag": "零食", "is_snack": true, "health_hint": "零食"}, {"name": "洗衣液+纸巾", "amount": 86.5, "tag": "日用消耗", "is_snack": false}]}
+- account_balance_check: {"account_hint": "支付宝余额宝", "actual_balance": 2950.3, "description": "支付宝余额核对"}
 - daily_info: {"category": "daily_info", "description": "其他健康或日常信息摘要"}
 """
 
@@ -346,6 +362,59 @@ def _normalize_entries(
                 "score": score,
                 "description": str(raw_data.get("description") or summary).strip(),
             }
+        elif kind == "transaction":
+            direction = str(raw_data.get("direction") or "expense").strip().lower()
+            if direction not in ("expense", "income", "transfer"):
+                direction = "expense"
+            amt = _safe_float(raw_data.get("amount") or raw_data.get("value"))
+            raw_items = raw_data.get("items")
+            norm_items: List[Dict[str, Any]] = []
+            inferred_tags: List[str] = []
+            has_snack_item = False
+            if isinstance(raw_items, list):
+                for sub in raw_items:
+                    if not isinstance(sub, dict):
+                        continue
+                    sub_amt = _safe_float(sub.get("amount"))
+                    sub_tag = str(sub.get("tag") or "").strip()
+                    is_snack = bool(sub.get("is_snack", False)) or sub_tag == "零食"
+                    if is_snack:
+                        has_snack_item = True
+                    if sub_tag and sub_tag not in inferred_tags:
+                        inferred_tags.append(sub_tag)
+                    norm_items.append(
+                        {
+                            "name": str(sub.get("name") or "商品").strip()[:60],
+                            "amount": f"{abs(sub_amt):.2f}" if sub_amt is not None else "0.00",
+                            "tag": sub_tag,
+                            "is_snack": is_snack,
+                            "health_hint": str(sub.get("health_hint") or "").strip()[:60],
+                        }
+                    )
+            tags_str = str(raw_data.get("tags") or "").strip()
+            if not tags_str and inferred_tags:
+                tags_str = ",".join(inferred_tags)
+            data = {
+                "direction": direction,
+                "amount": round(abs(amt), 2) if amt is not None else None,
+                "description": str(raw_data.get("description") or item.get("title") or summary).strip()[:120],
+                "tags": tags_str,
+                "account_hint": str(raw_data.get("account_hint") or "").strip()[:40],
+                "account_id": _safe_int(raw_data.get("account_id")),
+                "htime": str(raw_data.get("htime") or now.strftime("%Y-%m-%d %H:%M")).strip(),
+                "sync_to_health": bool(raw_data.get("sync_to_health", has_snack_item)),
+                "travel_date": str(raw_data.get("travel_date") or "").strip()[:10] or None,
+                "items": norm_items,
+            }
+        elif kind == "account_balance_check":
+            bal = _safe_float(raw_data.get("actual_balance") or raw_data.get("balance"))
+            data = {
+                "account_hint": str(raw_data.get("account_hint") or "").strip()[:40],
+                "account_id": _safe_int(raw_data.get("account_id")),
+                "actual_balance": round(bal, 2) if bal is not None else None,
+                "description": str(raw_data.get("description") or item.get("title") or summary).strip()[:120],
+                "force_adjust": bool(raw_data.get("force_adjust", False)),
+            }
         else:
             data = {
                 "category": str(raw_data.get("category") or "daily_info").strip(),
@@ -366,6 +435,8 @@ def _normalize_entries(
                 "exercise": "运动记录",
                 "weight": "体重记录",
                 "mood": "状态/气色记录",
+                "transaction": "账单消费记录",
+                "account_balance_check": "账户余额核对",
                 "daily_info": "日常健康记录",
             }.get(kind, "健康记录")
 
@@ -583,11 +654,75 @@ def discard_image_intake_impl(db: Session, draft_id: int) -> ImageIntakeDraftRes
     return _to_draft_response(d)
 
 
+def _resolve_finance_account_id(
+    db: Session,
+    explicit_id: Optional[int],
+    account_hint: str = "",
+) -> Optional[int]:
+    """根据显式 ID 或中文账户提示（如「微信」「支付宝」「招行」）解析目标物理账户。"""
+    from sailzen_orm.finance import Account
+
+    if explicit_id is not None and int(explicit_id) > 0:
+        acc = db.query(Account).filter(Account.id == int(explicit_id)).first()
+        if acc is not None:
+            return acc.id
+
+    accounts = db.query(Account).order_by(Account.id.asc()).all()
+    if not accounts:
+        return None
+    active = [a for a in accounts if (a.state or 0) == 0]
+    pool = active or accounts
+
+    hint = (account_hint or "").strip().lower()
+    if hint:
+        for a in pool:
+            name_low = (a.name or "").lower()
+            if hint in name_low or name_low in hint:
+                return a.id
+        # 常见简称映射
+        aliases = {
+            "wechat": "微信",
+            "wx": "微信",
+            "alipay": "支付宝",
+            "余额宝": "支付宝",
+            "cmb": "招行",
+            "boc": "中行",
+            "icbc": "工商",
+        }
+        mapped = aliases.get(hint)
+        if mapped:
+            for a in pool:
+                if mapped in (a.name or ""):
+                    return a.id
+
+    # 默认优先常用日常消费账户（微信 / 支付宝）
+    for pref in ("微信", "支付宝"):
+        for a in pool:
+            if pref in (a.name or ""):
+                return a.id
+    return pool[0].id
+
+
+def _parse_tx_htime(raw_htime: Any, fallback: datetime) -> float:
+    if isinstance(raw_htime, (int, float)) and raw_htime > 1_000_000_000:
+        return float(raw_htime)
+    if isinstance(raw_htime, str) and raw_htime.strip():
+        s = raw_htime.strip().replace("/", "-")
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(s[:19], fmt).timestamp()
+            except ValueError:
+                continue
+    return fallback.timestamp()
+
+
 def _scene_to_message_category(scene: str, entries: List[IntakeEntryDto]) -> str:
     selected_kinds = [e.kind for e in entries if e.selected]
     for k in selected_kinds:
         if k in ("diet", "weight", "exercise", "mood"):
             return k
+        if k in ("transaction", "account_balance_check"):
+            return "daily_info"
     return {
         "diet": "diet",
         "weight": "weight",
@@ -595,6 +730,9 @@ def _scene_to_message_category(scene: str, entries: List[IntakeEntryDto]) -> str
         "selfie_status": "mood",
         "sleep": "daily_info",
         "canteen_menu": "daily_info",
+        "receipt": "daily_info",
+        "bill_screenshot": "daily_info",
+        "account_balance": "daily_info",
     }.get(scene, "daily_info")
 
 
@@ -748,6 +886,116 @@ def commit_image_intake_impl(
             )
             committed_refs.append(CommittedRefDto(kind="mood", id=created.id, label=f"状态/气色 {score}/5"))
             summary_parts.append(f"气色/状态 {score}/5：{desc}")
+
+        elif kind == "transaction":
+            from sail_server.application.dto.finance import TransactionData
+            from sail_server.model.finance.account import update_account_balance_impl
+            from sail_server.model.finance.transaction import create_transaction_impl
+
+            amt = _safe_float(data.get("amount") or data.get("value"))
+            if amt is not None and amt > 0:
+                direction = str(data.get("direction") or "expense").lower()
+                acc_id = _resolve_finance_account_id(
+                    db,
+                    _safe_int(data.get("account_id")),
+                    str(data.get("account_hint") or ""),
+                )
+                if acc_id is None:
+                    raise TicketBadRequestError("未找到可用的财务账户，请先创建账户")
+
+                from_acc_id, to_acc_id = (acc_id, -1) if direction != "income" else (-1, acc_id)
+                desc = str(data.get("description") or entry.title or summary).strip()
+                tags_str = str(data.get("tags") or "").strip()
+                items = data.get("items") if isinstance(data.get("items"), list) else []
+                htime_ts = _parse_tx_htime(data.get("htime"), now)
+
+                # 跨领域健康联动：若明细中含零食/饮品且开启 sync_to_health，顺手写入轻量 DietLog
+                linked_diet_ids: List[int] = []
+                snack_items = [
+                    it for it in items if isinstance(it, dict) and (it.get("is_snack") or it.get("tag") == "零食")
+                ]
+                should_sync_health = bool(data.get("sync_to_health", bool(snack_items)))
+                if should_sync_health and (snack_items or "零食" in tags_str):
+                    snack_names = "、".join(
+                        f"{it.get('name', '零食')}(¥{it.get('amount', '')})" for it in snack_items[:6]
+                    ) or desc
+                    diet_rec = create_diet_impl(
+                        db,
+                        DietCreateRequest(
+                            meal_type=MealType.SNACK,
+                            description=f"[小票联动] {snack_names}",
+                            photo_path=draft.media_key,
+                        ),
+                    )
+                    linked_diet_ids.append(diet_rec.id)
+                    committed_refs.append(
+                        CommittedRefDto(kind="diet", id=diet_rec.id, label=f"联动零食记录: {snack_names[:26]}")
+                    )
+
+                tx_meta: Dict[str, Any] = {
+                    "items": items,
+                    "links": {
+                        "intake_draft_id": draft.id,
+                        **({"diet_ids": linked_diet_ids} if linked_diet_ids else {}),
+                        **({"travel_date": data["travel_date"]} if data.get("travel_date") else {}),
+                    },
+                    "ai_audit": {"source": "ocr_intake", "draft_id": draft.id},
+                }
+                created_tx = create_transaction_impl(
+                    db,
+                    TransactionData(
+                        from_acc_id=from_acc_id,
+                        to_acc_id=to_acc_id,
+                        value=f"{abs(amt):.2f}",
+                        description=desc,
+                        tags=tags_str,
+                        entry_kind="normal",
+                        exclude_from_stats=False,
+                        meta=tx_meta,
+                        htime=htime_ts,
+                    ),
+                )
+                update_account_balance_impl(db, acc_id)
+                split_note = f"（已拆 {len(items)} 项明细）" if items else ""
+                committed_refs.append(
+                    CommittedRefDto(
+                        kind="transaction",
+                        id=created_tx.id,
+                        label=f"记账 ¥{abs(amt):.2f} {desc[:20]}{split_note}",
+                    )
+                )
+                summary_parts.append(f"账单[{tags_str or '未分类'}] {desc} ¥{abs(amt):.2f}{split_note}")
+
+        elif kind == "account_balance_check":
+            from sail_server.application.dto.finance import AccountReconcileRequest
+            from sail_server.model.finance.account import reconcile_account_balance_impl
+
+            bal = _safe_float(data.get("actual_balance") or data.get("balance"))
+            acc_id = _resolve_finance_account_id(
+                db,
+                _safe_int(data.get("account_id")),
+                str(data.get("account_hint") or ""),
+            )
+            if bal is not None and acc_id is not None:
+                rec = reconcile_account_balance_impl(
+                    db,
+                    AccountReconcileRequest(
+                        account_id=acc_id,
+                        actual_balance=f"{bal:.2f}",
+                        force_adjust=bool(data.get("force_adjust", False)),
+                        note=str(data.get("description") or "截图余额核对"),
+                        source="ocr",
+                    ),
+                )
+                if rec:
+                    committed_refs.append(
+                        CommittedRefDto(
+                            kind="account_reconcile",
+                            id=rec["checkpoint"].id,
+                            label=rec["message"][:40],
+                        )
+                    )
+                    summary_parts.append(rec["message"])
 
         else:
             desc = str(data.get("description") or entry.title or summary).strip()

@@ -71,6 +71,9 @@ export type IntakeScene =
   | 'exercise'
   | 'weight'
   | 'selfie_status'
+  | 'receipt'
+  | 'bill_screenshot'
+  | 'account_balance'
   | 'general'
 
 export type IntakeEntryKind =
@@ -80,6 +83,8 @@ export type IntakeEntryKind =
   | 'exercise'
   | 'weight'
   | 'mood'
+  | 'transaction'
+  | 'account_balance_check'
   | 'daily_info'
 
 export interface IntakeEntry {
@@ -342,6 +347,7 @@ export interface QuickChatResponse {
   actions: Array<Record<string, unknown>>
   reminders_created: Array<Record<string, unknown>>
   rhythm_updated?: boolean
+  finance_updated?: boolean
   expert_brief_date?: string | null
   source: string
   session_id?: string

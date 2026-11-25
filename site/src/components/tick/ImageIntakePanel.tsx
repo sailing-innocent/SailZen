@@ -38,7 +38,10 @@ const SCENE_LABEL: Record<IntakeScene, string> = {
   exercise: '运动记录',
   weight: '体重/体脂',
   selfie_status: '气色/状态',
-  general: '日常健康',
+  receipt: '消费小票/订单',
+  bill_screenshot: '账单流水截图',
+  account_balance: '账户余额核对',
+  general: '日常记录',
 }
 
 const KIND_OPTIONS: Array<{ value: IntakeEntryKind; label: string }> = [
@@ -48,6 +51,8 @@ const KIND_OPTIONS: Array<{ value: IntakeEntryKind; label: string }> = [
   { value: 'exercise', label: '运动记录' },
   { value: 'weight', label: '体重/体脂' },
   { value: 'mood', label: '状态/气色' },
+  { value: 'transaction', label: '账单交易' },
+  { value: 'account_balance_check', label: '余额核对' },
   { value: 'daily_info', label: '日常信息' },
 ]
 
@@ -680,6 +685,115 @@ export const ImageIntakePanel: React.FC<ImageIntakePanelProps> = ({
                       <Input
                         className="h-7 text-xs col-span-3"
                         placeholder="气色/精神状态观察"
+                        value={asStr(entry.data.description)}
+                        onChange={(e) => updateEntryData(idx, 'description', e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {entry.kind === 'transaction' && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          className="h-7 text-xs"
+                          placeholder="金额 (¥)"
+                          value={asNumStr(entry.data.amount)}
+                          onChange={(e) =>
+                            updateEntryData(
+                              idx,
+                              'amount',
+                              e.target.value ? Number(e.target.value) : null,
+                            )
+                          }
+                        />
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="账户(微信/支付宝)"
+                          value={asStr(entry.data.account_hint)}
+                          onChange={(e) => updateEntryData(idx, 'account_hint', e.target.value)}
+                        />
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="标签(逗号分隔)"
+                          value={asStr(entry.data.tags)}
+                          onChange={(e) => updateEntryData(idx, 'tags', e.target.value)}
+                        />
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="发生时间"
+                          value={asStr(entry.data.htime)}
+                          onChange={(e) => updateEntryData(idx, 'htime', e.target.value)}
+                        />
+                      </div>
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="商户 / 消费描述"
+                        value={asStr(entry.data.description)}
+                        onChange={(e) => updateEntryData(idx, 'description', e.target.value)}
+                      />
+                      {Array.isArray(entry.data.items) && entry.data.items.length > 0 && (
+                        <div className="rounded border bg-muted/30 p-2 space-y-1">
+                          <div className="text-[11px] font-medium text-muted-foreground">
+                            已自动拆分明细（共 {entry.data.items.length} 项，主账单仍保持 1 笔流水）：
+                          </div>
+                          {(entry.data.items as Array<Record<string, unknown>>).map((sub, si) => (
+                            <div
+                              key={si}
+                              className="flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                            >
+                              <span>
+                                {asStr(sub.name)}
+                                {sub.is_snack ? (
+                                  <Badge variant="destructive" className="ml-1.5 text-[10px] py-0">
+                                    零食
+                                  </Badge>
+                                ) : null}
+                              </span>
+                              <span className="text-muted-foreground">
+                                [{asStr(sub.tag) || '未分类'}] ¥{asStr(sub.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px]">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(entry.data.sync_to_health)}
+                          onChange={(e) => updateEntryData(idx, 'sync_to_health', e.target.checked)}
+                        />
+                        含零食/餐饮时同步记入健康饮食追踪
+                      </label>
+                    </div>
+                  )}
+
+                  {entry.kind === 'account_balance_check' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-center">
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="账户名(如支付宝余额宝)"
+                        value={asStr(entry.data.account_hint)}
+                        onChange={(e) => updateEntryData(idx, 'account_hint', e.target.value)}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="h-7 text-xs"
+                        placeholder="当前真实余额"
+                        value={asNumStr(entry.data.actual_balance)}
+                        onChange={(e) =>
+                          updateEntryData(
+                            idx,
+                            'actual_balance',
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
+                      />
+                      <Input
+                        className="h-7 text-xs col-span-2"
+                        placeholder="核对备注"
                         value={asStr(entry.data.description)}
                         onChange={(e) => updateEntryData(idx, 'description', e.target.value)}
                       />

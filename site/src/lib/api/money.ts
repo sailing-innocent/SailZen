@@ -28,6 +28,13 @@ import {
   type FinanceTagData,
   type FinanceTagCreateProps,
   type FinanceTagUpdateProps,
+  type FinanceOverview,
+  type AccountReconcileRequest,
+  type AccountReconcileResponse,
+  type BalanceCheckpoint,
+  type HygieneProposal,
+  type HygieneScanResult,
+  type TransactionLineItem,
 } from '@lib/data/money'
 
 import { SERVER_URL, API_BASE } from './config'
@@ -528,6 +535,138 @@ const api_seed_finance_tags = async (): Promise<{ status: string; created_count:
   return response.json()
 }
 
+// ============ Finance 2.0 (SailTick Secretary) APIs ============
+
+const api_get_finance_overview = async (month?: string): Promise<FinanceOverview> => {
+  const qs = month ? `?month=${encodeURIComponent(month)}` : ''
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/overview${qs}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch finance overview')
+  }
+  return response.json()
+}
+
+const api_reconcile_account_balance = async (
+  payload: AccountReconcileRequest,
+): Promise<AccountReconcileResponse> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/account/reconcile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: 'Failed to reconcile account' }))
+    throw new Error(err.detail || 'Failed to reconcile account')
+  }
+  return response.json()
+}
+
+const api_get_balance_checkpoints = async (
+  accountId?: number,
+  limit: number = 30,
+): Promise<BalanceCheckpoint[]> => {
+  const params = new URLSearchParams()
+  if (accountId !== undefined) params.append('account_id', String(accountId))
+  params.append('limit', String(limit))
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/account/checkpoints?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch balance checkpoints')
+  }
+  return response.json()
+}
+
+const api_update_transaction_meta = async (
+  txId: number,
+  payload: {
+    items?: TransactionLineItem[]
+    links?: Record<string, unknown>
+    entry_kind?: string
+    exclude_from_stats?: boolean
+    sync_tags_from_items?: boolean
+  },
+): Promise<TransactionData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/transaction/${txId}/meta`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update transaction meta')
+  }
+  return response.json()
+}
+
+const api_run_hygiene_scan = async (options?: {
+  days?: number | null
+  auto_apply_safe?: boolean
+  min_auto_confidence?: number
+  created_by?: string
+}): Promise<HygieneScanResult> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/hygiene/scan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      days: options?.days ?? 90,
+      auto_apply_safe: options?.auto_apply_safe ?? true,
+      min_auto_confidence: options?.min_auto_confidence ?? 0.9,
+      created_by: options?.created_by ?? 'web_user',
+    }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to run hygiene scan')
+  }
+  return response.json()
+}
+
+const api_list_hygiene_proposals = async (params?: {
+  status?: string
+  autonomy_level?: string
+  proposal_type?: string
+  limit?: number
+}): Promise<HygieneProposal[]> => {
+  const search = new URLSearchParams()
+  if (params?.status) search.append('status', params.status)
+  if (params?.autonomy_level) search.append('autonomy_level', params.autonomy_level)
+  if (params?.proposal_type) search.append('proposal_type', params.proposal_type)
+  if (params?.limit) search.append('limit', String(params.limit))
+  const qs = search.toString()
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/hygiene/proposals${qs ? '?' + qs : ''}`)
+  if (!response.ok) {
+    throw new Error('Failed to fetch hygiene proposals')
+  }
+  return response.json()
+}
+
+const api_approve_hygiene_proposal = async (id: number): Promise<HygieneProposal> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/hygiene/proposals/${id}/approve`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to approve proposal')
+  }
+  return response.json()
+}
+
+const api_dismiss_hygiene_proposal = async (id: number): Promise<HygieneProposal> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/hygiene/proposals/${id}/dismiss`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to dismiss proposal')
+  }
+  return response.json()
+}
+
+const api_revert_hygiene_proposal = async (id: number): Promise<HygieneProposal> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/hygiene/proposals/${id}/revert`, {
+    method: 'POST',
+  })
+  if (!response.ok) {
+    throw new Error('Failed to revert proposal')
+  }
+  return response.json()
+}
+
 export {
   api_get_account,
   api_create_account,
@@ -569,6 +708,16 @@ export {
   api_update_finance_tag,
   api_delete_finance_tag,
   api_seed_finance_tags,
+  // Finance 2.0 (SailTick Secretary)
+  api_get_finance_overview,
+  api_reconcile_account_balance,
+  api_get_balance_checkpoints,
+  api_update_transaction_meta,
+  api_run_hygiene_scan,
+  api_list_hygiene_proposals,
+  api_approve_hygiene_proposal,
+  api_dismiss_hygiene_proposal,
+  api_revert_hygiene_proposal,
 }
 
 export type { BatchLinkResult }

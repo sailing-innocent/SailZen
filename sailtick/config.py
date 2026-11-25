@@ -61,7 +61,7 @@ class LLMConfig:
 
 @dataclass
 class NightlyMaintenanceConfig:
-    """夜间深度自维护配置（长周期分析 + 数学建模 + 自主食物/知识沉淀）。"""
+    """夜间深度自维护配置（长周期分析 + 数学建模 + 自主食物/知识沉淀 + 历史账单慢迭代）。"""
 
     enabled: bool = True
     deep_window_days: int = 90             # 长周期体重与交易分析窗口（天）
@@ -72,6 +72,11 @@ class NightlyMaintenanceConfig:
     max_foods_per_night: int = 5           # 单次夜间最多深度调研食物数
     max_knowledge_per_night: int = 2       # 单次夜间最多整理知识卡片数
     web_search_timeout: float = 8.0        # 单次网络搜索超时（秒）
+    # Finance 2.0 夜间渐进式历史清理（蚂蚁搬家式慢迭代 + 水位限流）
+    enable_finance_backfill: bool = True
+    finance_backfill_pending_cap: int = 5            # 待审队列 >= 该水位时暂停深挖历史，绝不堆负担
+    finance_backfill_max_new_reviews_per_night: int = 3  # 每晚历史回溯最多新增待审建议条数
+    finance_backfill_max_llm_items_per_night: int = 4    # 阶段2慢脑 LLM 每晚最多辅助研判长尾未标交易数
 
 
 @dataclass
@@ -512,6 +517,14 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
             max_foods_per_night=int(nightly_raw.get("max_foods_per_night", 5)),
             max_knowledge_per_night=int(nightly_raw.get("max_knowledge_per_night", 2)),
             web_search_timeout=float(nightly_raw.get("web_search_timeout", 8.0)),
+            enable_finance_backfill=nightly_raw.get("enable_finance_backfill", True),
+            finance_backfill_pending_cap=int(nightly_raw.get("finance_backfill_pending_cap", 5)),
+            finance_backfill_max_new_reviews_per_night=int(
+                nightly_raw.get("finance_backfill_max_new_reviews_per_night", 3)
+            ),
+            finance_backfill_max_llm_items_per_night=int(
+                nightly_raw.get("finance_backfill_max_llm_items_per_night", 4)
+            ),
         ),
         quick_chat=QuickChatConfig(
             enabled=quick_raw.get("enabled", True),

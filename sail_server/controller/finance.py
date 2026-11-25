@@ -19,9 +19,11 @@ from sail_server.application.dto.finance import (
     AccountCreateRequest,
     AccountUpdateRequest,
     AccountFixBalanceRequest,
+    AccountReconcileRequest,
     TransactionResponse,
     TransactionCreateRequest,
     TransactionUpdateRequest,
+    TransactionMetaUpdateRequest,
     BudgetResponse,
     BudgetCreateRequest,
     BudgetUpdateRequest,
@@ -30,6 +32,8 @@ from sail_server.application.dto.finance import (
     FinanceTagResponse,
     FinanceTagCreateRequest,
     FinanceTagUpdateRequest,
+    HygieneScanRequest,
+    HygieneProposalCreateRequest,
 )
 from sail_server.model.finance.account import (
     read_account_impl,
@@ -38,6 +42,8 @@ from sail_server.model.finance.account import (
     update_account_balance_impl,
     recalc_account_balance_impl,
     fix_account_balance_impl,
+    reconcile_account_balance_impl,
+    list_balance_checkpoints_impl,
     delete_account_impl,
 )
 
@@ -47,12 +53,25 @@ from sail_server.model.finance.transaction import (
     read_transactions_paginated_impl,
     create_transaction_impl,
     update_transaction_impl,
+    update_transaction_meta_impl,
     delete_transaction_impl,
     get_transaction_stats_impl,
     get_transaction_stats_batch_impl,
+    get_breakdown_stats_impl,
     read_untagged_transactions_impl,
     get_tag_patterns_impl,
     batch_tag_transactions_impl,
+)
+
+from sail_server.model.finance.hygiene import (
+    run_hygiene_scan_impl,
+    list_hygiene_months_impl,
+    create_hygiene_proposal_impl,
+    list_hygiene_proposals_impl,
+    approve_hygiene_proposal_impl,
+    dismiss_hygiene_proposal_impl,
+    revert_hygiene_proposal_impl,
+    get_finance_overview_impl,
 )
 
 from sail_server.model.finance.budget import (
@@ -200,6 +219,39 @@ class AccountController(Controller):
             return None
 
         return AccountResponse.model_validate(account)
+
+    @post("/reconcile")
+    async def reconcile_account_balance(
+        self,
+        data: AccountReconcileRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """智能余额核对：小额自动无感平账（不污染统计，可撤销），大额加入待排查清单。"""
+        db = next(router_dependency)
+        res = reconcile_account_balance_impl(db, data)
+        if res is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+        return {
+            "account": AccountResponse.model_validate(res["account"]).model_dump(mode="json"),
+            "checkpoint": res["checkpoint"].model_dump(mode="json"),
+            "handling": res["handling"],
+            "drift_amount": res["drift_amount"],
+            "message": res["message"],
+            "proposal_id": res["proposal_id"],
+        }
+
+    @get("/checkpoints")
+    async def get_balance_checkpoints(
+        self,
+        router_dependency: Generator[Session, None, None],
+        account_id: int | None = None,
+        limit: int = 30,
+    ) -> list[dict]:
+        """查询余额核对快照历史。"""
+        db = next(router_dependency)
+        cps = list_balance_checkpoints_impl(db, account_id=account_id, limit=limit)
+        return [cp.model_dump(mode="json") for cp in cps]
 
     @delete("/{account_id:int}", status_code=200)
     async def delete_account(
@@ -394,6 +446,38 @@ class TransactionController(Controller):
             return None
 
         return TransactionResponse.model_validate(transaction)
+
+    @put("/{transaction_id:int}/meta")
+    async def update_transaction_meta(
+        self,
+        transaction_id: int,
+        data: TransactionMetaUpdateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> TransactionResponse:
+        """更新交易的品类明细拆分（meta.items）、跨领域关联或统计排除标记。"""
+        db = next(router_dependency)
+        transaction = update_transaction_meta_impl(db, transaction_id, data)
+        if transaction is None:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        return TransactionResponse.model_validate(transaction)
+
+    @get("/breakdown-stats")
+    async def get_breakdown_stats(
+        self,
+        router_dependency: Generator[Session, None, None],
+        from_time: float | None = None,
+        to_time: float | None = None,
+        include_excluded: bool = False,
+    ) -> dict:
+        """按品类/标签汇总真实收支（优先按 meta.items 拆分，同时计算真实零食支出）。"""
+        db = next(router_dependency)
+        return get_breakdown_stats_impl(
+            db=db,
+            from_time=from_time,
+            to_time=to_time,
+            include_excluded=include_excluded,
+        )
 
     @delete("/{transaction_id:int}", status_code=200)
     async def delete_transaction(
@@ -1414,3 +1498,134 @@ class TagController(Controller):
         except Exception as e:
             logger.error(f"Error seeding tags: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Finance 2.0 Secretary & Hygiene Controller
+# ============================================================================
+
+
+class FinanceSecretaryController(Controller):
+    path = ""
+
+    @get("/overview")
+    async def get_overview(
+        self,
+        router_dependency: Generator[Session, None, None],
+        month: str | None = None,
+    ) -> dict:
+        """财务秘书聚合总览（本月真实收支、真实零食拆分、标签覆盖率、清理队列、沉默账户）。"""
+        db = next(router_dependency)
+        return get_finance_overview_impl(db, month=month)
+
+    @post("/hygiene/scan")
+    async def run_hygiene_scan(
+        self,
+        router_dependency: Generator[Session, None, None],
+        data: HygieneScanRequest | None = None,
+    ) -> dict:
+        """触发账单健康体检与分级自治清理扫描（支持按精确时间区间与待审数量限流）。"""
+        db = next(router_dependency)
+        req = data or HygieneScanRequest()
+        return run_hygiene_scan_impl(
+            db,
+            days=req.days,
+            from_time=req.from_time,
+            to_time=req.to_time,
+            auto_apply_safe=req.auto_apply_safe,
+            min_auto_confidence=req.min_auto_confidence,
+            max_review_proposals=req.max_review_proposals,
+            include_legacy_fix=req.include_legacy_fix,
+            created_by=req.created_by,
+        )
+
+    @get("/hygiene/months")
+    async def list_hygiene_months(
+        self,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """按自然月统计历史未打标与平账待治理分布（供 SailTick 夜间按月倒推慢迭代）。"""
+        db = next(router_dependency)
+        return list_hygiene_months_impl(db)
+
+    @post("/hygiene/proposals")
+    async def create_hygiene_proposal(
+        self,
+        data: HygieneProposalCreateRequest,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """提交单条待人工确认建议（幂等去重，仅 needs_review）。"""
+        db = next(router_dependency)
+        prop, created = create_hygiene_proposal_impl(
+            db,
+            proposal_type=data.proposal_type,
+            target_tx_ids=data.target_tx_ids,
+            title=data.title,
+            reason=data.reason,
+            confidence=data.confidence,
+            after_payload=data.after_payload,
+            created_by=data.created_by,
+        )
+        return {
+            "created": created,
+            "proposal": prop.model_dump(mode="json") if prop else None,
+        }
+
+    @get("/hygiene/proposals")
+    async def list_hygiene_proposals(
+        self,
+        router_dependency: Generator[Session, None, None],
+        status: str | None = None,
+        autonomy_level: str | None = None,
+        proposal_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """查询账单清理建议与 AI 自动托管审计记录。"""
+        db = next(router_dependency)
+        items = list_hygiene_proposals_impl(
+            db,
+            status=status,
+            autonomy_level=autonomy_level,
+            proposal_type=proposal_type,
+            limit=limit,
+        )
+        return [it.model_dump(mode="json") for it in items]
+
+    @post("/hygiene/proposals/{proposal_id:int}/approve")
+    async def approve_hygiene_proposal(
+        self,
+        proposal_id: int,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """人工批准待审清理建议并执行落库。"""
+        db = next(router_dependency)
+        res = approve_hygiene_proposal_impl(db, proposal_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        return res.model_dump(mode="json")
+
+    @post("/hygiene/proposals/{proposal_id:int}/dismiss")
+    async def dismiss_hygiene_proposal(
+        self,
+        proposal_id: int,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """忽略待审清理建议。"""
+        db = next(router_dependency)
+        res = dismiss_hygiene_proposal_impl(db, proposal_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        return res.model_dump(mode="json")
+
+    @post("/hygiene/proposals/{proposal_id:int}/revert")
+    async def revert_hygiene_proposal(
+        self,
+        proposal_id: int,
+        router_dependency: Generator[Session, None, None],
+    ) -> dict:
+        """一键撤销已执行或 AI 自动托管的账单治理动作。"""
+        db = next(router_dependency)
+        res = revert_hygiene_proposal_impl(db, proposal_id)
+        if res is None:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        return res.model_dump(mode="json")
