@@ -1377,6 +1377,52 @@ class TickDatabase:
             await s.commit()
             return True
 
+    async def update_scheduled_nudge(
+        self,
+        nudge_id: str,
+        *,
+        title: Optional[str] = None,
+        body: Optional[str] = None,
+        trigger_at: Optional[str] = None,
+        server_reminder_id: Optional[int] = None,
+        status: Optional[str] = None,
+    ) -> Optional[dict]:
+        """原地更新本地提醒记录（改期/换绑 server_reminder_id 时复用同一行，避免分裂）。"""
+        async with self.session() as s:
+            row = await s.get(DBScheduledNudge, nudge_id)
+            if not row:
+                return None
+            if title is not None:
+                row.title = title
+            if body is not None:
+                row.body = body
+            if trigger_at is not None:
+                row.trigger_at = trigger_at
+            if server_reminder_id is not None:
+                row.server_reminder_id = server_reminder_id
+            if status is not None:
+                row.status = status
+                if status == "sent":
+                    row.sent_at = _now_iso()
+            await s.commit()
+            return self._nudge_dict(row)
+
+    async def cancel_nudges_by_server_reminder_id(self, server_reminder_id: int) -> int:
+        """按云端 server_reminder_id 联动取消对应的本地 pending Nudge。"""
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBScheduledNudge).where(
+                    DBScheduledNudge.server_reminder_id == int(server_reminder_id),
+                    DBScheduledNudge.status == "pending",
+                )
+            )
+            rows = list(result.scalars().all())
+            for r in rows:
+                r.status = "canceled"
+            if rows:
+                await s.commit()
+            return len(rows)
+
     @staticmethod
     def _nudge_dict(row: DBScheduledNudge) -> dict:
         return {

@@ -373,7 +373,18 @@ class SimulatedSailServer:
                 return httpx.Response(201, json=rem)
 
         if request.method == "GET" and path.endswith("/api/v1/reminder/pending"):
-            return httpx.Response(200, json=list(self.reminders))
+            active = [r for r in self.reminders if r.get("state") not in ("CANCELED", "RESOLVED", "IGNORED")]
+            return httpx.Response(200, json=active)
+
+        if request.method == "DELETE" and "/api/v1/reminder/" in path:
+            seg = path.rstrip("/").rsplit("/", 1)[-1]
+            if seg.isdigit():
+                rid = int(seg)
+                for r in self.reminders:
+                    if r["id"] == rid:
+                        r["state"] = "CANCELED"
+                        return httpx.Response(200, json=r)
+                return httpx.Response(404, json={"detail": "not found"})
 
         # 健康与生活数据 API
         if request.method == "GET":

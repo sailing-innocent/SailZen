@@ -143,6 +143,9 @@ class _FakeRhythmClient:
             }
         ]
 
+    async def list_affairs(self, **kwargs) -> List[Dict[str, Any]]:
+        return list(self.affairs)
+
     async def sync_ai_timeline(self, **kwargs) -> Dict[str, Any]:
         self.synced_timelines.append(kwargs)
         return {
@@ -459,6 +462,12 @@ async def test_quick_agent_commands_and_live_rhythm_scheduling(tmp_path):
         assert new_proj["rhythm_updated"] is True
         assert len(rhythm.affairs) == 1
         assert rhythm.affairs[0]["kind"] == "venture"
+
+        # 重复提交同名项目（含轻微空格变化）：幂等复用，不新建第二条事务
+        dup_proj = await qa.handle_message("新建项目：个人博客 2.0 重构")
+        assert len(rhythm.affairs) == 1
+        assert dup_proj["actions"][0]["deduplicated"] is True
+        assert dup_proj["rhythm_updated"] is False
 
         # 2. 有 Fast LLM 场景：直接调用 rhythm_sync_timeline 重排剩余日程
         qa_llm = QuickCoachAgent(

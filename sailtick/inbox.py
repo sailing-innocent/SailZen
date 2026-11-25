@@ -303,6 +303,19 @@ class TicketInbox:
         data = resp.json()
         return data if isinstance(data, list) else data.get("items", [])
 
+    async def cancel_reminder(self, reminder_id: int) -> bool:
+        """撤销 sail_server 上的指定提醒（同时自动消解关联收件箱条目）。"""
+        try:
+            client = self._get_client()
+            resp = await client.delete(f"{self.api_base}/reminder/{int(reminder_id)}")
+            if resp.status_code in (404, 409):
+                return False
+            resp.raise_for_status()
+            return True
+        except Exception as exc:
+            logger.warning("cancel_reminder(%s) failed: %s", reminder_id, exc)
+            return False
+
     # ── 统一 UserProfile 读写 ───────────────────────────────────────────
 
     async def get_user_profile(self) -> Optional[Dict[str, Any]]:
