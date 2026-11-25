@@ -27,6 +27,7 @@ import {
   api_send_coach_message,
   api_list_daily_reports,
   api_list_intake_drafts,
+  api_quick_chat,
   type DailyReport,
   type ImageIntakeDraft,
   type TickTicket,
@@ -34,7 +35,7 @@ import {
 } from '@lib/api/tick'
 import { format, isPast } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera } from 'lucide-react'
+import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera, Sparkles, Calendar } from 'lucide-react'
 import { useUserInboxStore } from '@lib/store/user'
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
@@ -77,6 +78,9 @@ const TickPage: React.FC = () => {
   const [weightMsg, setWeightMsg] = useState<string | null>(null)
   const [dietInput, setDietInput] = useState('')
   const [dietMsg, setDietMsg] = useState<string | null>(null)
+  const [quickInput, setQuickInput] = useState('')
+  const [quickBusy, setQuickBusy] = useState(false)
+  const [quickReply, setQuickReply] = useState<string | null>(null)
   const [reports, setReports] = useState<DailyReport[]>([])
   const [pendingDrafts, setPendingDrafts] = useState<ImageIntakeDraft[]>([])
   const [linkedTicket, setLinkedTicket] = useState<{ id: number; title: string } | null>(null)
@@ -167,18 +171,84 @@ const TickPage: React.FC = () => {
     setTimeout(() => setDietMsg(null), 4000)
   }
 
+  const sendQuickChat = async (override?: string) => {
+    const text = (override ?? quickInput).trim()
+    if (!text || quickBusy) return
+    setQuickBusy(true)
+    try {
+      const res = await api_quick_chat(text, { channel: 'web_tick', session_id: 'web:tick' })
+      setQuickReply(res.reply)
+      setQuickInput('')
+    } catch (e) {
+      setQuickReply(`快反助手暂不可用：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setQuickBusy(false)
+    }
+  }
+
   return (
     <PageLayout>
       <div className={`p-4 mx-auto w-full ${isMobile ? '' : 'max-w-3xl'}`}>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-primary" />
-            SailTick 教练
+            SailTick Personal Agent
           </h1>
-          <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-            刷新
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a href="/rhythm">
+                <Calendar className="h-3.5 w-3.5 mr-1" />
+                日程画布
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
+              刷新
+            </Button>
+          </div>
         </div>
+
+        {/* 即时快反对话（日程/项目/健康统一入口） */}
+        <Card className="mb-4 border-primary/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              随时对话（日程重排 · 项目跟进 · 饮食运动 · 定时提醒）
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2.5">
+            <div className="flex gap-2">
+              <Input
+                placeholder="例如：/today、下午加会帮我重排、下班前提醒我买洗衣液"
+                value={quickInput}
+                onChange={(e) => setQuickInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendQuickChat()}
+                disabled={quickBusy}
+              />
+              <Button onClick={() => sendQuickChat()} disabled={quickBusy || !quickInput.trim()}>
+                {quickBusy ? '处理中' : '发送'}
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {['/today', '/projects', '/brief', '/remind'].map((cmd) => (
+                <Button
+                  key={cmd}
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={quickBusy}
+                  onClick={() => sendQuickChat(cmd)}
+                >
+                  {cmd}
+                </Button>
+              ))}
+            </div>
+            {quickReply && (
+              <div className="rounded-md bg-muted/60 p-3 text-sm whitespace-pre-wrap">
+                {quickReply}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {error && (
           <Card className="mb-4 border-destructive">

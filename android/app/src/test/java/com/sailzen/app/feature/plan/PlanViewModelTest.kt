@@ -109,4 +109,77 @@ class PlanViewModelTest {
         // 事业已加载不影响事务的懒加载判定
         assertTrue(PlanViewModel.shouldLazyLoad(PlanTab.AFFAIR, affairsLoaded = false, venturesLoaded = true))
     }
+
+    // ---------------- Rhythm v2 紧凑展示与项目倒计时 ----------------
+
+    @Test
+    fun formatMinutesCompact_formatsMinutesAndHoursCleanly() {
+        assertEquals("0m", PlanViewModel.formatMinutesCompact(0))
+        assertEquals("45m", PlanViewModel.formatMinutesCompact(45))
+        assertEquals("1h", PlanViewModel.formatMinutesCompact(60))
+        assertEquals("1.5h", PlanViewModel.formatMinutesCompact(90))
+        assertEquals("2h", PlanViewModel.formatMinutesCompact(120))
+    }
+
+    @Test
+    fun projectDeadlineBadge_classifiesUrgencyAndLabels() {
+        assertEquals("未定目标日" to false, PlanViewModel.projectDeadlineBadge(null))
+        assertEquals("超期 3 天" to true, PlanViewModel.projectDeadlineBadge(-3))
+        assertEquals("今日截止" to true, PlanViewModel.projectDeadlineBadge(0))
+        assertEquals("剩 5 天" to true, PlanViewModel.projectDeadlineBadge(5))
+        assertEquals("剩 21 天" to false, PlanViewModel.projectDeadlineBadge(21))
+    }
+
+    @Test
+    fun rhythmV2Dtos_decodeDashboardAndQuickChatPayloads() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val dashRaw = """
+            {
+              "date": "2026-11-25",
+              "timeline": {
+                "date": "2026-11-25",
+                "day_id": 20261125,
+                "plan_version": 3,
+                "ai_rationale": "上午留给核心项目，下午避开评审会",
+                "completed_minutes": 60,
+                "planned_minutes": 180,
+                "blocks": []
+              },
+              "projects": [
+                {
+                  "affair_id": 10,
+                  "title": "SailZen 3.0",
+                  "days_left": 14,
+                  "recent_14d_hours": 8.5,
+                  "completion_ratio": 0.4
+                }
+              ],
+              "occupancies": [
+                {
+                  "id": 99,
+                  "date": "2026-11-25",
+                  "start": "14:00",
+                  "end": "15:00",
+                  "whole_day": false,
+                  "occupancy_type": "meeting",
+                  "label": "产品评审"
+                }
+              ]
+            }
+        """.trimIndent()
+        val dash = json.decodeFromString<com.sailzen.app.core.network.dto.RhythmDashboardDto>(dashRaw)
+        assertEquals(3, dash.timeline.planVersion)
+        assertEquals("上午留给核心项目，下午避开评审会", dash.timeline.aiRationale)
+        assertEquals(60, dash.timeline.completedMinutes)
+        assertEquals(180, dash.timeline.plannedMinutes)
+        assertEquals(1, dash.projects.size)
+        assertEquals(14, dash.projects[0].daysLeft)
+        assertEquals(8.5, dash.projects[0].recent14dHours, 0.001)
+        assertEquals("产品评审", dash.occupancies[0].label)
+
+        val chatRaw = """{"reply":"已帮你避开14点评审会并重排","rhythm_updated":true,"source":"llm"}"""
+        val chat = json.decodeFromString<com.sailzen.app.core.network.dto.QuickChatResponse>(chatRaw)
+        assertTrue(chat.rhythmUpdated)
+        assertEquals("llm", chat.source)
+    }
 }

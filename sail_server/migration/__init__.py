@@ -43,8 +43,6 @@ MIGRATION_DIR = Path(__file__).parent
 # SQL 迁移脚本（PostgreSQL 专用，用于触发器、索引、PG 原生类型/DDL）。
 # 注意：这里只接受 .sql 文件。不要新增 Python 迁移脚本（见模块 docstring）。
 SQL_MIGRATIONS: List[Path] = [
-    MIGRATION_DIR / "20260906_add_rhythm_is_default.sql",
-    MIGRATION_DIR / "20260906_add_rhythm_profile_v2.sql",
     MIGRATION_DIR / "20261122_health_sailtick_upgrade.sql",
     MIGRATION_DIR / "20261123_add_telemetry_trace.sql",
     MIGRATION_DIR / "20261123_add_tick_image_intake.sql",

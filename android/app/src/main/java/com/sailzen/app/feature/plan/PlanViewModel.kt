@@ -18,15 +18,15 @@ import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.CheckinTodayItemDto
 import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
-import com.sailzen.app.core.network.dto.ReviewDto
+import com.sailzen.app.core.network.dto.OccupancyDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import com.sailzen.app.core.rhythm.AffairRules
 import com.sailzen.app.core.rhythm.RhythmRepository
 import com.sailzen.app.core.rhythm.RhythmTime
+import com.sailzen.app.core.tick.TickRepository
 import java.time.LocalDate
-import java.time.LocalDateTime
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,12 +34,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * 规划页 ViewModel：合并原 时间线 / 打卡 / 事业 三个页面状态。
+ * 规划页 ViewModel（Rhythm v2 + SailTick Personal Agent）：
  *
- * - 今日 Tab：dayView(date) 一次聚合请求同时携带 blocks + checkins + healthSignals，
- *   inbox() 待分拣，reviewWeek() 周节奏卡；checkinToday() 仅作 dayView 缺 checkins 时的兜底。
- * - 事务 / 事业 Tab：懒加载（首次切入时拉取），切回今日不重复拉取；
- *   已加载过的 Tab 在 refresh() 时联动刷新（DataChangeBus 事件驱动）。
+ * - 今日 Tab：优先通过 `/api/v1/rhythm/dashboard` 单请求聚合当日时间线、AI 排程说明、
+ *   临时占用、打卡、待分拣与重点项目；顶部内置 SailTick 随身协商入口，一句话调整日程并同步刷新。
+ * - 待办 / 项目 Tab：支持按需懒加载与 DataChangeBus 自动联动；项目列表走单接口 `/venture/projects`，
+ *   彻底告别旧版 N+1 进度轮询与重型权重/周预算公式。
  */
 class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -63,17 +63,20 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         val checkins: CheckinTodayDto? = null,
         val healthSignals: List<HealthSignalItemDto> = emptyList(),
         val inbox: List<AffairDto> = emptyList(),
-        val weekReview: ReviewDto? = null,
-        val weekReviewOpen: Boolean = false,
-        val planning: Boolean = false,
+        val occupancies: List<OccupancyDto> = emptyList(),
+        // SailTick 实时协商
+        val chatBusy: Boolean = false,
+        val chatReply: String? = null,
+        val chatIsAsyncFallback: Boolean = false,
+        val occupancyDialogOpen: Boolean = false,
         val planBBlock: TimeBlockDto? = null,
         val planBText: String? = null,
         val captureOpen: Boolean = false, // 磁贴深链快速捕获弹窗
-        // 事务
+        // 待办
         val tasks: List<AffairDto> = emptyList(),
         val stateFilter: String = AffairStates.ACTIVE,
         val affairsLoaded: Boolean = false,
-        // 事业
+        // 项目
         val ventures: List<VentureProgressDto> = emptyList(),
         val inboxVentures: List<AffairDto> = emptyList(),
         val venturesLoaded: Boolean = false,
@@ -93,16 +96,37 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         fun splitInbox(inbox: List<AffairDto>): Pair<List<AffairDto>, List<AffairDto>> =
             inbox.filter { it.aiHint.isNotEmpty() } to inbox.filter { it.aiHint.isEmpty() }
 
-        /** Tab 切入时是否需要拉取数据（今日始终整体刷新，事务/事业懒加载） */
+        /** Tab 切入时是否需要拉取数据（今日始终整体刷新，待办/项目懒加载） */
         fun shouldLazyLoad(tab: PlanTab, affairsLoaded: Boolean, venturesLoaded: Boolean): Boolean =
             when (tab) {
                 PlanTab.TODAY -> true
                 PlanTab.AFFAIR -> !affairsLoaded
                 PlanTab.VENTURE -> !venturesLoaded
             }
+
+        /** 紧凑时长展示：90 -> "1.5h"，45 -> "45m" */
+        fun formatMinutesCompact(minutes: Int): String {
+            if (minutes <= 0) return "0m"
+            return if (minutes >= 60) {
+                val hours = minutes / 60.0
+                if (minutes % 60 == 0) "${minutes / 60}h" else "%.1fh".format(hours)
+            } else {
+                "${minutes}m"
+            }
+        }
+
+        /** 项目目标日倒计时文案与紧急标识（用于项目卡片轻量展示，替代旧倒排压力公式） */
+        fun projectDeadlineBadge(daysLeft: Int?): Pair<String, Boolean> = when {
+            daysLeft == null -> "未定目标日" to false
+            daysLeft < 0 -> "超期 ${-daysLeft} 天" to true
+            daysLeft == 0 -> "今日截止" to true
+            daysLeft <= 7 -> "剩 $daysLeft 天" to true
+            else -> "剩 $daysLeft 天" to false
+        }
     }
 
     private val repository = RhythmRepository.get(application)
+    private val tickRepository = TickRepository.get(application)
     private val settings = SettingsManager.get(application)
     private val bus = DataChangeBus.get()
 
@@ -156,49 +180,54 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(refreshing = true) }
             repository.flushPending()
             val date = _uiState.value.date
+            val dash = repository.dashboard(date)
             val dayView = repository.dayView(date)
-            val timeline = dayView?.blocks?.let { blocks ->
-                DayTimelineDto(
-                    date = dayView.date,
-                    dayId = dayView.dayId,
-                    planVersion = dayView.planVersion,
-                    blocks = blocks,
-                    domainMinutes = dayView.domainMinutes,
-                    energyConsumed = dayView.energyConsumed,
-                    energyBudget = dayView.energyBudget,
-                    bufferTotalMinutes = dayView.bufferTotalMinutes,
-                    bufferFreeMinutes = dayView.bufferFreeMinutes,
-                    checkins = dayView.checkins,
-                    warnings = dayView.warnings,
-                )
-            } ?: repository.timeline(date)
-            // 打卡主源 dayView.checkins，服务端缺失时回退专用接口
-            val checkins = dayView?.checkins ?: repository.checkinToday()
-            val inbox = repository.inbox()
-            val weekReview = repository.reviewWeek()
+
+            val timeline = dash?.timeline
+                ?: dayView?.let { dv ->
+                    DayTimelineDto(
+                        date = dv.date,
+                        dayId = dv.dayId,
+                        planVersion = dv.planVersion,
+                        aiRationale = dv.aiRationale,
+                        blocks = dv.blocks,
+                        domainMinutes = dv.domainMinutes,
+                        checkins = dv.checkins,
+                    )
+                }
+                ?: repository.timeline(date)
+
+            val checkins = dash?.todayCheckins?.takeIf {
+                it.precepts.isNotEmpty() || it.habits.isNotEmpty() || it.date.isNotBlank()
+            } ?: dayView?.checkins ?: repository.checkinToday()
+
+            val inbox = dash?.inboxAffairs ?: repository.inbox()
+            val occupancies = dash?.occupancies ?: emptyList()
             val loadedAffairs = _uiState.value.affairsLoaded
             val loadedVentures = _uiState.value.venturesLoaded
-            _uiState.update {
-                it.copy(
+
+            _uiState.update { prev ->
+                prev.copy(
                     timeline = timeline,
                     dayView = dayView,
                     checkins = checkins,
                     healthSignals = dayView?.healthSignals ?: emptyList(),
                     inbox = inbox,
-                    weekReview = weekReview,
+                    occupancies = occupancies,
+                    ventures = dash?.projects ?: prev.ventures,
+                    venturesLoaded = if (dash != null) true else prev.venturesLoaded,
                     refreshing = false,
                     configured = settings.serverUrl().isNotBlank(),
                     serverUrl = settings.serverUrl(),
                     connected = ReminderService.connectedState.value,
                 )
             }
-            // 已加载过的 Tab 联动刷新（如：今日页启动事务后事务 Tab 列表同步）
             if (loadedAffairs) loadAffairs()
-            if (loadedVentures) loadVentures()
+            if (loadedVentures && dash == null) loadVentures()
         }
     }
 
-    /** 事务 Tab 数据（懒加载：首次切入或筛选变化时调用） */
+    /** 待办 Tab 数据（懒加载：首次切入或筛选变化时调用） */
     fun loadAffairs() {
         viewModelScope.launch {
             val filter = _uiState.value.stateFilter
@@ -209,15 +238,16 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 事业 Tab 数据（懒加载） */
+    /** 项目 Tab 数据（单请求 `/venture/projects` + INBOX 待启项目） */
     fun loadVentures() {
         viewModelScope.launch {
-            val all = repository.listAffairs(kinds = listOf(AffairRules.VENTURE_KIND))
-            val activeIds = all.filter { it.state == AffairStates.ACTIVE }
-            val progress = activeIds.mapNotNull { repository.ventureProgress(it.id) }
-            val inbox = all.filter { it.state == AffairStates.INBOX }
+            val projects = repository.listProjects()
+            val inbox = repository.listAffairs(
+                state = AffairStates.INBOX,
+                kinds = listOf(AffairRules.VENTURE_KIND),
+            )
             _uiState.update {
-                it.copy(ventures = progress, inboxVentures = inbox, venturesLoaded = true)
+                it.copy(ventures = projects, inboxVentures = inbox, venturesLoaded = true)
             }
         }
     }
@@ -243,7 +273,7 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         loadAffairs()
     }
 
-    /** 日期切换（◀ ▶），重置事务/事业懒加载标记后整体刷新 */
+    /** 日期切换（◀ ▶） */
     fun selectDate(prev: Boolean) {
         _uiState.update { it.copy(date = it.date.plusDays(if (prev) -1 else 1)) }
         refresh()
@@ -269,19 +299,93 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissMessage() = _uiState.update { it.copy(message = null) }
 
-    // ---------------- 今日：日计划 / 时间线 ----------------
+    // ---------------- SailTick 实时协商 ----------------
 
-    /** 生成/重生成日计划 */
-    fun plan() {
+    fun sendQuickChat(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || _uiState.value.chatBusy) return
         viewModelScope.launch {
-            _uiState.update { it.copy(planning = true) }
-            repository.planDay(_uiState.value.date)
-                .onSuccess {
-                    refresh()
-                    _uiState.update { it.copy(planning = false) }
-                }
-                .onFailure { _uiState.update { it.copy(planning = false) } }
+            _uiState.update { it.copy(chatBusy = true) }
+            tickRepository.quickChat(trimmed).fold(
+                onSuccess = { res ->
+                    _uiState.update {
+                        it.copy(
+                            chatBusy = false,
+                            chatReply = res.reply,
+                            chatIsAsyncFallback = res.fallbackAsync,
+                            message = if (res.rhythmUpdated) "SailTick 已更新今日日程" else null,
+                        )
+                    }
+                    if (res.rhythmUpdated) refresh()
+                },
+                onFailure = {
+                    _uiState.update {
+                        it.copy(
+                            chatBusy = false,
+                            message = "无法发送给 SailTick，请检查网络与服务器配置",
+                        )
+                    }
+                },
+            )
         }
+    }
+
+    fun clearChatReply() = _uiState.update {
+        it.copy(chatReply = null, chatIsAsyncFallback = false)
+    }
+
+    // ---------------- 临时占用 & 时间线块操作 ----------------
+
+    fun openOccupancyDialog() = _uiState.update { it.copy(occupancyDialogOpen = true) }
+
+    fun closeOccupancyDialog() = _uiState.update { it.copy(occupancyDialogOpen = false) }
+
+    fun createOccupancy(
+        occupancyType: String,
+        start: String?,
+        end: String?,
+        wholeDay: Boolean,
+        label: String,
+        note: String = "",
+    ) {
+        viewModelScope.launch {
+            repository.createOccupancy(
+                date = _uiState.value.date,
+                occupancyType = occupancyType,
+                start = start,
+                end = end,
+                wholeDay = wholeDay,
+                label = label,
+                note = note,
+            )
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            occupancyDialogOpen = false,
+                            message = "已钉住占用时段，AI 排程会自动避开",
+                        )
+                    }
+                    refresh()
+                }
+                .onFailure {
+                    _uiState.update { it.copy(message = "创建占用失败，请检查时间格式 (HH:MM)") }
+                }
+        }
+    }
+
+    fun deleteBlock(blockId: Int) = viewModelScope.launch {
+        repository.deleteBlock(blockId)
+            .onSuccess { refresh() }
+            .onFailure { _uiState.update { it.copy(message = "移除时间块失败") } }
+    }
+
+    fun deleteOccupancy(blockId: Int) = viewModelScope.launch {
+        repository.deleteOccupancy(blockId)
+            .onSuccess {
+                _uiState.update { it.copy(message = "已取消该占用时段") }
+                refresh()
+            }
+            .onFailure { _uiState.update { it.copy(message = "取消占用失败") } }
     }
 
     fun doneBlock(blockId: Int) = viewModelScope.launch {
@@ -294,7 +398,7 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
             .onSuccess { refresh() }
     }
 
-    /** 右滑 defer：推迟到明天 09:00（fixed 块 UI 层不出现该操作） */
+    /** 右滑 defer：推迟到明天 09:00（fixed/occupied 块 UI 层不出现该操作） */
     fun deferBlock(block: TimeBlockDto) = viewModelScope.launch {
         val affairId = block.affairId ?: return@launch
         val tomorrow = LocalDate.now().plusDays(1).atTime(9, 0)
@@ -313,26 +417,22 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissPlanB() = _uiState.update { it.copy(planBBlock = null, planBText = null) }
 
-    fun openWeekReview() = _uiState.update { it.copy(weekReviewOpen = true) }
-
-    fun closeWeekReview() = _uiState.update { it.copy(weekReviewOpen = false) }
-
-    // ---------------- 今日：快速捕获（CaptureBar + 磁贴深链弹窗） ----------------
+    // ---------------- 快速捕获（磁贴深链弹窗） ----------------
 
     fun openCapture() = _uiState.update { it.copy(captureOpen = true) }
 
     fun closeCapture() = _uiState.update { it.copy(captureOpen = false) }
 
-    fun capture(title: String, kind: String) = viewModelScope.launch {
+    fun capture(title: String, kind: String = "task_oneoff") = viewModelScope.launch {
         if (title.isBlank()) return@launch
         repository.capture(title.trim(), kind)
             .onSuccess {
-                _uiState.update { it.copy(captureOpen = false) }
+                _uiState.update { it.copy(captureOpen = false, message = "已记录到待办") }
                 refresh()
             }
     }
 
-    // ---------------- 今日：AI 建议采纳 ----------------
+    // ---------------- 待分拣 AI 建议采纳 ----------------
 
     fun acceptHint(affairId: Int) = viewModelScope.launch {
         repository.acceptHintAndConfirm(affairId)
@@ -346,13 +446,11 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------------- 今日：打卡（戒律 / 习惯） ----------------
 
-    /** 戒律：kept / violated（带备注弹窗） */
     fun preceptKept(item: CheckinTodayItemDto) = checkin(item.affair.id, "kept")
 
     fun preceptViolated(item: CheckinTodayItemDto) =
         _uiState.update { it.copy(noteTarget = item) }
 
-    /** 习惯：done / missed */
     fun habitDone(item: CheckinTodayItemDto) = checkin(item.affair.id, "done")
 
     fun habitMissed(item: CheckinTodayItemDto) = checkin(item.affair.id, "missed")
@@ -371,32 +469,39 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
                 .onSuccess { refresh() }
         }
 
-    // ---------------- 事务 / 事业 ----------------
+    // ---------------- 待办 / 项目 ----------------
 
-    fun createVenture(title: String, targetDate: String?, weeklyBudgetHours: Double) {
+    fun createVenture(title: String, targetDate: String?, description: String = "") {
         viewModelScope.launch {
             val meta = buildMap<String, Any> {
                 if (!targetDate.isNullOrBlank()) put("target_date", targetDate)
-                put("weekly_budget_hours", weeklyBudgetHours)
             }
             repository.createAffair(
                 AffairCreateRequest(
                     title = title,
+                    description = description,
                     kind = AffairRules.VENTURE_KIND,
                     domain = "career",
                     kindMeta = AffairRules.jsonObjectOf(meta),
                 ),
             )
                 .onSuccess { created ->
-                    // venture 为长期流：捕获后置 ACTIVE 才会进入事业视图
                     repository.transit(created.id, AffairActions.CONFIRM)
+                    _uiState.update { it.copy(message = "已创建项目，SailTick 会在后续排程中自动推进") }
                     refresh()
+                    loadVentures()
                 }
-                .onFailure { _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") } }
+                .onFailure { _uiState.update { it.copy(message = "创建项目失败，请检查网络或服务器配置") } }
         }
     }
 
-    fun createTask(title: String, kind: String, domain: String?, estMinutes: Int, ddlIso: String?) {
+    fun createTask(
+        title: String,
+        ddlIso: String? = null,
+        estMinutes: Int = 30,
+        domain: String? = "work",
+        kind: String = "task_oneoff",
+    ) {
         viewModelScope.launch {
             repository.createAffair(
                 AffairCreateRequest(
@@ -407,8 +512,12 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
                     urgencyDdl = ddlIso,
                 ),
             )
-                .onSuccess { refresh() }
-                .onFailure { _uiState.update { it.copy(message = "创建失败，请检查网络或服务器配置") } }
+                .onSuccess {
+                    _uiState.update { it.copy(message = "已创建待办") }
+                    refresh()
+                    loadAffairs()
+                }
+                .onFailure { _uiState.update { it.copy(message = "创建待办失败，请检查网络或服务器配置") } }
         }
     }
 
@@ -423,7 +532,10 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
     fun milestoneDone(milestoneId: Int) {
         viewModelScope.launch {
             repository.milestoneDone(milestoneId)
-                .onSuccess { refresh() }
+                .onSuccess {
+                    refresh()
+                    loadVentures()
+                }
                 .onFailure { _uiState.update { it.copy(message = "操作失败") } }
         }
     }

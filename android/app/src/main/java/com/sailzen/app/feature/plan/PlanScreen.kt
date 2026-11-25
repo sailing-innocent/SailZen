@@ -2,6 +2,7 @@ package com.sailzen.app.feature.plan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,19 +15,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,10 +75,10 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * 规划页（合并原 时间线 / 打卡 / 事业）：
- * - 顶部单行 TopAppBar（标题 + 连接状态胶囊 + 快捷操作），彻底避免内容溢出挤压下方 Tab；
- * - 独立日期切换条（◀ 日期 · 星期 ▶ + 回今天）与非侵入式断连提示条；
- * - 页内 PrimaryTabRow：今日 / 事务 / 事业。
+ * 规划页（Rhythm v2 + SailTick Personal Agent）：
+ * - 顶部单行 TopAppBar（标题 + 连接状态胶囊 + 钉占用 / 刷新 / 设置）
+ * - 独立日期切换条（◀ 日期 · 星期 ▶ + 回今天）与非阻塞断连提示条
+ * - 页内 PrimaryTabRow：今日 / 待办 / 项目
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,12 +127,8 @@ fun PlanScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.plan() }, enabled = !state.planning) {
-                        if (state.planning) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "生成日计划")
-                        }
+                    IconButton(onClick = { viewModel.openOccupancyDialog() }) {
+                        Icon(Icons.Default.EventBusy, contentDescription = "钉住临时占用")
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "刷新")
@@ -142,10 +142,10 @@ fun PlanScreen(
         floatingActionButton = {
             when (state.selectedTab) {
                 PlanTab.AFFAIR -> FloatingActionButton(onClick = { showCreateTask = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "新建任务")
+                    Icon(Icons.Default.Add, contentDescription = "新建待办")
                 }
                 PlanTab.VENTURE -> FloatingActionButton(onClick = { showCreateVenture = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "新建事业")
+                    Icon(Icons.Default.Add, contentDescription = "新建项目")
                 }
                 PlanTab.TODAY -> {}
             }
@@ -160,7 +160,6 @@ fun PlanScreen(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().height(2.dp))
             }
 
-            // 独立日期切换栏，布局清爽不与 TopAppBar 或 Tab 互相挤压
             DateNavigatorBar(
                 date = state.date,
                 onPrev = { viewModel.selectDate(prev = true) },
@@ -168,7 +167,6 @@ fun PlanScreen(
                 onToday = { viewModel.selectToday() },
             )
 
-            // 仅在异常/未配置时以独立细条展示，不挤压标题或 Tab
             if (!state.configured || (!state.connected && state.connectionState == ConnectionState.ERROR)) {
                 ConnectionWarningStrip(
                     configured = state.configured,
@@ -187,13 +185,13 @@ fun PlanScreen(
                     onClick = { viewModel.selectTab(PlanTab.TODAY) },
                 )
                 PlanTabItem(
-                    label = "事务",
+                    label = "待办",
                     count = state.tasks.size,
                     selected = state.selectedTab == PlanTab.AFFAIR,
                     onClick = { viewModel.selectTab(PlanTab.AFFAIR) },
                 )
                 PlanTabItem(
-                    label = "事业",
+                    label = "项目",
                     count = state.ventures.size,
                     selected = state.selectedTab == PlanTab.VENTURE,
                     onClick = { viewModel.selectTab(PlanTab.VENTURE) },
@@ -203,18 +201,25 @@ fun PlanScreen(
             when (state.selectedTab) {
                 PlanTab.TODAY -> TodayTab(
                     state = state,
-                    onCapture = { title, kind -> viewModel.capture(title, kind) },
+                    onQuickChat = { viewModel.sendQuickChat(it) },
+                    onDismissChatReply = { viewModel.clearChatReply() },
                     onAcceptHint = { viewModel.acceptHint(it) },
                     onRejectHint = { viewModel.rejectHint(it) },
                     onConfirmInbox = { viewModel.transit(it, AffairActions.CONFIRM) },
                     onCancelInbox = { viewModel.transit(it, AffairActions.CANCEL) },
-                    onOpenWeekReview = { viewModel.openWeekReview() },
                     onPreceptKept = { viewModel.preceptKept(it) },
                     onPreceptViolated = { viewModel.preceptViolated(it) },
                     onHabitDone = { viewModel.habitDone(it) },
                     onHabitMissed = { viewModel.habitMissed(it) },
                     onDoneBlock = { viewModel.doneBlock(it) },
                     onDeferBlock = { viewModel.deferBlock(it) },
+                    onDeleteBlock = { block ->
+                        if (block.blockType == "occupied") {
+                            viewModel.deleteOccupancy(block.id)
+                        } else {
+                            viewModel.deleteBlock(block.id)
+                        }
+                    },
                     onPlanB = { viewModel.showPlanB(it) },
                 )
 
@@ -233,6 +238,23 @@ fun PlanScreen(
                 )
             }
         }
+    }
+
+    // ---------------- 钉住临时占用弹窗 ----------------
+    if (state.occupancyDialogOpen) {
+        CreateOccupancyDialog(
+            date = state.date,
+            onDismiss = { viewModel.closeOccupancyDialog() },
+            onConfirm = { type, start, end, wholeDay, label ->
+                viewModel.createOccupancy(
+                    occupancyType = type,
+                    start = start,
+                    end = end,
+                    wholeDay = wholeDay,
+                    label = label,
+                )
+            },
+        )
     }
 
     // ---------------- Plan B 弹窗 ----------------
@@ -274,7 +296,7 @@ fun PlanScreen(
                     OutlinedTextField(
                         value = note,
                         onValueChange = { note = it },
-                        label = { Text("原因（供 AI 复盘归因）") },
+                        label = { Text("原因（供 SailTick 复盘归因）") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -288,42 +310,12 @@ fun PlanScreen(
         )
     }
 
-    // ---------------- 周报详情弹窗 ----------------
-    if (state.weekReviewOpen) {
-        state.weekReview?.let { review ->
-            AlertDialog(
-                onDismissRequest = { viewModel.closeWeekReview() },
-                title = { Text("节奏周报 ${review.periodKey}") },
-                text = {
-                    Column {
-                        Text("节奏分 %.1f / 100".format(review.rhythmScore), fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text("戒律合规率 %.0f%%".format(review.preceptComplianceRate * 100))
-                        Text("习惯达标率 %.0f%%".format(review.habitConsistency * 100))
-                        Text("睡眠窗守约 %.0f%%".format(review.sleepWindowKeeping * 100))
-                        Text("事业预算达成 %.0f%%".format(review.ventureBudgetFulfillment * 100))
-                        Text("缓冲消耗 %.0f%%".format(review.bufferConsumed * 100))
-                        Text("侵占事件 ${review.encroachments.size} 起")
-                        if (review.aiSummary.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            Text("AI 周评", fontWeight = FontWeight.Bold)
-                            Text(review.aiSummary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { viewModel.closeWeekReview() }) { Text("关闭") }
-                },
-            )
-        }
-    }
-
-    // ---------------- 新建任务 / 事业弹窗 ----------------
+    // ---------------- 新建待办 / 项目弹窗 ----------------
     if (showCreateTask) {
         CreateTaskDialog(
             onDismiss = { showCreateTask = false },
-            onConfirm = { title, kind, domain, minutes, ddl ->
-                viewModel.createTask(title, kind, domain, minutes, ddl)
+            onConfirm = { title, ddl, minutes, domain ->
+                viewModel.createTask(title = title, ddlIso = ddl, estMinutes = minutes, domain = domain)
                 showCreateTask = false
             },
         )
@@ -331,12 +323,103 @@ fun PlanScreen(
     if (showCreateVenture) {
         CreateVentureDialog(
             onDismiss = { showCreateVenture = false },
-            onConfirm = { title, targetDate, hours ->
-                viewModel.createVenture(title, targetDate, hours)
+            onConfirm = { title, targetDate, description ->
+                viewModel.createVenture(title = title, targetDate = targetDate, description = description)
                 showCreateVenture = false
             },
         )
     }
+}
+
+@Composable
+private fun CreateOccupancyDialog(
+    date: LocalDate,
+    onDismiss: () -> Unit,
+    onConfirm: (type: String, start: String?, end: String?, wholeDay: Boolean, label: String) -> Unit,
+) {
+    val types = listOf(
+        "meeting" to "会议",
+        "leave" to "请假",
+        "travel" to "出行",
+        "appointment" to "预约",
+    )
+    var selectedType by remember { mutableStateOf("meeting") }
+    var wholeDay by remember { mutableStateOf(false) }
+    var start by remember { mutableStateOf("14:00") }
+    var end by remember { mutableStateOf("15:00") }
+    var label by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("钉住临时占用 · $date") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    types.forEach { (key, title) ->
+                        FilterChip(
+                            selected = selectedType == key,
+                            onClick = { selectedType = key },
+                            label = { Text(title) },
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("全天占用", style = MaterialTheme.typography.bodyMedium)
+                    Switch(checked = wholeDay, onCheckedChange = { wholeDay = it })
+                }
+                if (!wholeDay) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = start,
+                            onValueChange = { start = it },
+                            label = { Text("开始 HH:MM") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedTextField(
+                            value = end,
+                            onValueChange = { end = it },
+                            label = { Text("结束 HH:MM") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = { Text("说明（如：产品评审、看牙）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            FilledTonalButton(
+                onClick = {
+                    val defaultLabel = types.firstOrNull { it.first == selectedType }?.second ?: "占用"
+                    onConfirm(
+                        selectedType,
+                        if (wholeDay) null else start.trim(),
+                        if (wholeDay) null else end.trim(),
+                        wholeDay,
+                        label.trim().ifBlank { defaultLabel },
+                    )
+                },
+                enabled = wholeDay || (start.isNotBlank() && end.isNotBlank()),
+            ) { Text("钉住") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 @Composable
@@ -440,21 +523,12 @@ private fun DateNavigatorBar(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium,
                     )
-                    if (isToday) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "今天",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    } else {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "回今天",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = if (isToday) "今天" else "回今天",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
                 IconButton(onClick = onNext, modifier = Modifier.size(36.dp)) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "后一天")

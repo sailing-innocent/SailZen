@@ -788,12 +788,11 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
     except Exception as exc:
         logger.debug("[telemetry] health profile skipped: %s", exc)
 
-    # 3. Rhythm 节奏（合并 RhythmAffair 3 次扫描为 1 次）
+    # 3. Rhythm 节奏（v2 极简 3 表：Affair / TimeBlock / DisciplineLog）
     try:
         from sailzen_orm.rhythm import (
             RhythmAffair,
             RhythmDisciplineLog,
-            RhythmReview,
             RhythmTimeBlock,
         )
 
@@ -826,21 +825,19 @@ def get_modules_profile_impl(db: Session, window_days: int = 7) -> ModulesProfil
             or 0
         )
         blocks_total = db.query(func.count(RhythmTimeBlock.id)).scalar() or 0
-        reviews_total = db.query(func.count(RhythmReview.id)).scalar() or 0
         cards.append(
             _attach_api(
                 ModuleProfileCard(
                     key="rhythm",
                     label="节奏 (Rhythm)",
-                    status="healthy" if (aff_active > 0 or disc_recent > 0) else "idle",
-                    summary=f"活跃事务 {aff_active} · 收件箱 {aff_inbox} · 近{window_days}天打卡 {disc_recent}",
+                    status="healthy" if (aff_active > 0 or blocks_total > 0 or disc_recent > 0) else "idle",
+                    summary=f"活跃事务 {aff_active} · 时间块 {blocks_total} · 近{window_days}天打卡 {disc_recent}",
                     metrics={
                         "affairs_total": aff_total,
                         "affairs_active": aff_active,
                         "affairs_inbox": aff_inbox,
                         "discipline_logs_window": int(disc_recent),
                         "time_blocks_total": int(blocks_total),
-                        "reviews_total": int(reviews_total),
                     },
                 ),
                 "rhythm",

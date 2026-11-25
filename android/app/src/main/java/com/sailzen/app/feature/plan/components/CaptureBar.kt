@@ -102,7 +102,7 @@ fun CaptureBar(onCapture: (String, String) -> Unit) {
 @Composable
 fun CaptureDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
     var title by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf("generic") }
+    var kind by remember { mutableStateOf("task_oneoff") }
     var expanded by remember { mutableStateOf(false) }
 
     AlertDialog(

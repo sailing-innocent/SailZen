@@ -53,7 +53,7 @@ CORE_READONLY_ENDPOINTS: List[Tuple[str, str]] = [
     ("Health/BodyMetrics", "/health/body-data/metrics"),
     ("Finance/Account", "/finance/account"),
     ("Rhythm/Affair", "/rhythm/affair"),
-    ("Rhythm/EnergyProfile", "/rhythm/energy/profile"),
+    ("Rhythm/Dashboard", "/rhythm/dashboard"),
     ("Reminder/Pending", "/reminder/pending"),
     ("Tick/Tickets", "/tick/tickets"),
     ("Tick/HealthSummary", "/tick/health-summary"),

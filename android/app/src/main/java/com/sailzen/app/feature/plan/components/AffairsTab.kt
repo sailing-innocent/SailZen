@@ -148,39 +148,34 @@ private fun TaskCard(task: AffairDto, onClick: () -> Unit, onAction: (String) ->
 @Composable
 fun CreateTaskDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, String, String?, Int, String?) -> Unit,
+    onConfirm: (title: String, ddlIso: String?, estMinutes: Int, domain: String?) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
-    var kind by remember { mutableStateOf("task_oneoff") }
-    var domain by remember { mutableStateOf("work") }
-    var minutes by remember { mutableStateOf("30") }
     var ddl by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf("30") }
+    var domain by remember { mutableStateOf("work") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新建任务") },
+        title = { Text("新建待办") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("任务名称") },
+                    label = { Text("要做的事") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    listOf("task_oneoff", "task_maintenance", "fixed_plan", "generic").forEach { option ->
-                        FilterChip(
-                            selected = kind == option,
-                            onClick = { kind = option },
-                            label = { Text(kindLabel(option)) },
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    value = ddl,
+                    onValueChange = { ddl = it },
+                    label = { Text("截止时间 YYYY-MM-DD（可选）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("life", "work", "career").forEach { option ->
+                    listOf("work", "career", "life").forEach { option ->
                         FilterChip(
                             selected = domain == option,
                             onClick = { domain = option },
@@ -191,13 +186,8 @@ fun CreateTaskDialog(
                 OutlinedTextField(
                     value = minutes,
                     onValueChange = { minutes = it },
-                    label = { Text("预估时长（分钟）") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = ddl,
-                    onValueChange = { ddl = it },
-                    label = { Text("截止 YYYY-MM-DDTHH:MM:SS（可留空）") },
+                    label = { Text("大致时长（分钟，可默认 30）") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -205,12 +195,17 @@ fun CreateTaskDialog(
         confirmButton = {
             FilledTonalButton(
                 onClick = {
+                    val rawDdl = ddl.trim()
+                    val normalizedDdl = when {
+                        rawDdl.isBlank() -> null
+                        rawDdl.length == 10 -> "${rawDdl}T23:59:00"
+                        else -> rawDdl
+                    }
                     onConfirm(
                         title.trim(),
-                        kind,
-                        domain,
+                        normalizedDdl,
                         minutes.toIntOrNull() ?: 30,
-                        ddl.trim().ifBlank { null },
+                        domain,
                     )
                 },
                 enabled = title.isNotBlank(),

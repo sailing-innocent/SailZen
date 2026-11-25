@@ -5,6 +5,8 @@ import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeCommitResponse
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.QuickChatRequest
+import com.sailzen.app.core.network.dto.QuickChatResponse
 import com.sailzen.app.core.network.dto.TickMessageCreateRequest
 import com.sailzen.app.core.network.dto.TickMessageDto
 import com.sailzen.app.core.network.dto.TickTicketDto
@@ -99,4 +101,9 @@ interface TickApi {
     suspend fun discardIntakeDraft(
         @Path("id") id: Int,
     ): ImageIntakeDraftDto
+
+    @POST("api/v1/tick/quick-chat")
+    suspend fun quickChat(
+        @Body body: QuickChatRequest,
+    ): QuickChatResponse
 }

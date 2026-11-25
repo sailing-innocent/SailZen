@@ -311,10 +311,7 @@ def cmd_bench_local(args: argparse.Namespace) -> int:
         get_transaction_stats_batch_impl,
         read_transactions_impl,
     )
-    from sail_server.model.rhythm_planner import (
-        get_dashboard_impl,
-        get_week_review_impl,
-    )
+    from sail_server.model.rhythm import get_dashboard_impl
     from sail_server.model.telemetry import get_api_profile_impl, get_modules_profile_impl
     from sail_server.model.text import get_works_impl
 
@@ -341,7 +338,6 @@ def cmd_bench_local(args: argparse.Namespace) -> int:
         ("GET /telemetry/profile/modules", lambda db: get_modules_profile_impl(db, window_days=7)),
         ("GET /text/work (limit=20)", lambda db: get_works_impl(db, skip=0, limit=20)),
         ("GET /finance/transaction (all)", lambda db: read_transactions_impl(db, skip=0, limit=-1)),
-        ("GET /rhythm/review/week", lambda db: get_week_review_impl(db, target_day)),
         ("GET /rhythm/dashboard", lambda db: get_dashboard_impl(db, target_day)),
         ("GET /telemetry/profile/api (72h)", lambda db: get_api_profile_impl(db, window_hours=72)),
     ]

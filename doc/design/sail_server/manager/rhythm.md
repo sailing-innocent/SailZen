@@ -1,501 +1,95 @@
-# Rhythm — 生活/工作节奏综合优先级调节工具
+# Rhythm v2 — SailTick 驱动的极简可视化日程画布与项目倒排底座
 
-> **版本**: v1.1 | **更新**: 2026-09-06 | **状态**: ✅ M1(服务端)/M2(CLI) 已实现；M3 前端重构 + 契约加固已完成
-> **实现**: `sail_server/{infrastructure/orm,application/dto,model,controller,router}/rhythm.py` + `sail_server/model/rhythm_planner.py` + `sailzen/cli/rhythm_client.py` + `tests/server/test_rhythm_*.py` + `scripts/rhythm_smoke.py` + `scripts/rhythm_diagnose.py`（M3 只读健康巡检）
->
-> **v1.1 变更摘要**：dashboard 新增 `degraded[]` 降级字段与结构化 `PlanWarning`；
-> `PUT /affair/{id}` 三态更新语义 + `clear_*` 显式清除；`kind_meta` 明确为整体替换；
-> venture 目标日写时同步规则细化（含级联清空）；`rhythm_energy_profiles.is_default`
-> 落为真实列并配 SQL 迁移；里程碑单一来源改为 progress API 派生。
-
-生活与工作同等重要。Rhythm 把生活必须项（戒律/习惯/基础节奏/刚性规划）与工作事项
-（一次性任务/长期维护）及个人长期事业（venture）放进**同一优先级坐标系**，
-通过统一事务模型 `Affair` + 日时间线 `TimeBlock` + 确定性排程器 `plan_day`
-实现"生活地板不可侵占"的每日编排。AI 后台只通过 HTTP API / `sailzen rhythm` CLI
-消费服务并产出"建议"，人确认后生效（Human-in-the-loop）。
+> **版本**: v2.0 | **更新**: 2026-11-24 | **状态**: ✅ Phase 1 已落地（Backend + SailTick 智能体接管 + Web 前端重构）；Android 端作为 Phase 2 跟进
+> **关联文档**: [SailTick Personal Agent 设计文档](../../agent-system/sailtick.md)
+> **实现**: `packages/py/sailzen-orm/sailzen_orm/rhythm.py` · `sail_server/{application/dto,model,controller,router}/rhythm.py` · `sailtick/{rhythm_client,rhythm_analytics,tick_engine,quick_agent,nightly,datascan}.py` · `site/src/pages/rhythm.tsx` · `tests/server/test_rhythm_v2.py` · `tests/sailtick/test_rhythm_integration.py`
 
 ---
 
-## 1. 事务分类学（AffairKind，10 类）
+## 1. 重构背景与核心原则
 
-两个正交维度：
+Rhythm v1 试图用确定性公式（`importance/urgency/domain_balance/energy_fit` 权重 + 8 步铺底硬排）管理全部工作与生活，但实践暴露出三大问题：
 
-- **domain（域）**: `life`（生活）/ `work`（工作）/ `career`（个人长期事业，业余推进）。
-  用于三域平衡计量（§5.1）。
-- **kind（事务种类）**: 决定生命周期形态、排程行为、元数据 schema、复盘指标。
+1. **PM 管理税过重**：人需要不断维护 10 类 `AffairKind`、精力曲线、骨架模板、守护策略与权重比例，精力消耗在“伺候系统”而非推动事情。
+2. **意外情况无法公式化**：临时加会、没睡好、项目卡壳、提前下班等高频变动超出规则排程能力，生成的日程一旦不贴合当下状态，人就无法遵循。
+3. **机械定时提醒打扰**：`reminder_scheduler.py` 写死的固定点位提醒脱离上下文，与 SailTick 冲突。
 
-| kind | 中文 | 典型 domain | 生命周期 | 排程行为 | 示例 |
-|------|------|------------|----------|----------|------|
-| `base_rhythm` | 基础节奏 | life/work | 长期 | 每日骨架：由 DayTemplate 实例化，plan_day 最早铺底；定义通勤、工作窗、午间休息、90/15 微节律 | 08:20–09:00 通勤；09:00–12:00 工作窗 |
-| `precept` | 戒律 | life | 长期 | 按日/按周规则：轻量打卡块 + 到点核销提醒；severity=hard 参与铺底（生活地板） | 23:30 前入睡；三餐定时；每周一天无零食日 |
-| `habit` | 习惯养成 | life | 长期 | 频率目标制：每周 N 次、单次最小时长、偏好槽位；按"周缺口压力"竞争弹性区；streak 激励 | 每周运动 3 次，每次 ≥30min，偏好 19:00–21:00 |
-| `fixed_plan` | 刚性规划 | life/work | 一次性 | 刚性钉：固定起止 immovable，排程器绕开它；禁 defer；可挂子事务（行程段） | 10.1–10.5 家人旅行；周四 14:00 高铁赴沪 |
-| `task_oneoff` | 一次性工作任务 | work | 一次性 | 按 ddl 紧迫度竞争弹性工作区（工作窗内优先，超窗标记 overtime） | 写季度总结；修复线上 bug |
-| `task_maintenance` | 长期维护任务 | work | 长期 | SLA 周期制：interval_days + last_done_at，越接近/超期紧迫度越高 | 每周代码巡检；服务器月度维护 |
-| `venture` | 长期事业 | career | 长期，可毕业 | 目标日倒排：target_date + 每周业余小时预算 + 里程碑链；仅排业余时间区 | 2027-04 独立游戏上线：每周 8h |
-| `async_callback` | 异步回调 | work/career | 长期，多阶段 | 阶段化排程：KICKOFF/REVIEWING 排实时窗（work_hours_only 限工作窗）；DELEGATED 画 informational 提醒块；round+1 返工，max_rounds 上限 | 让 AI 起草方案→24h 后审阅→不满意返工 |
-| `buffer` | 系统缓冲 | — | 系统生成 | 强制留白(min_buffer_ratio)，分散插入，只读禁编辑 | — |
-| `generic` | 未分类 | 待定 | 一次性 | 捕获默认值；停留 INBOX 等待 AI 分拣 + 人确认改判 | "给车做保养"（一句话捕获） |
+**Rhythm v2 核心范式**：
 
-**分拣判定规则（precept vs habit 边界）**：
+- **最终的日程只是一个可视化的前端，排布日程实际上是与 AI 长期交流、逐渐分析理解的过程。**
+- **Rhythm 退居为“结构化项目/任务事实库 + 可视化日程画布”**：彻底移除旧公式排程器（`rhythm_planner.py` / `rhythm_scheduler.py`）、骨架模板表、精力权重配置表、守护策略表与评分快照表，关闭 `reminder_scheduler.py` 的机械日常提醒。
+- **SailTick 升级为统一 Personal Agent 大脑**：慢脑（`TickEngine` + 夜间 `RhythmAnalyticsEngine`）负责长期学习真实高效/易打断时段与项目倒排风险，快脑（`QuickCoachAgent`）负责 1–3 秒响应突发变动并直接调 Rhythm API 写回时间线。
 
-- 惩罚性/禁止性规则（不吃零食、23:30 前睡）→ `precept`
-- 建设性/累计性目标（每周 3 次运动）→ `habit`
-- 固定起止不可移动（旅行/车票）→ `fixed_plan`
-- 业余长期推进且有目标日 → `venture`(career)
-- 工作一次性交付 → `task_oneoff`(work)；周期性维护 → `task_maintenance`(work)
-- 多阶段 + 含等待期 + 可返工（构思→委托→审阅→返工） → `async_callback`(work，对外业务回调置 work_hours_only=true)
+---
 
-`python -m sailzen rhythm kinds` 输出即为本表的权威机器可读版本（文档/CLI/prompt 三处同源）。
+## 2. 极简数据模型（7 表 → 3 表）
 
-### kind_meta（JSON，写入时按 kind 分发校验）
+| 表名 | ORM | 职责 |
+|---|---|---|
+| `rhythm_affairs` | `RhythmAffair` | 极简项目（`venture` + 目标日倒排）、一次性任务（`task_oneoff`）、刚性安排（`fixed_plan`）、轻量习惯（`habit`/`precept`）与随手记（`generic`） |
+| `rhythm_time_blocks` | `RhythmTimeBlock` | 日可视化时间线画布（SailTick 自主落库，`plan_version` 版本化归档旧块，`pinned` 标记会议/请假等刚性块，`ref.ai_rationale` 记录当日排程说明） |
+| `rhythm_discipline_logs` | `RhythmDisciplineLog` | 轻量习惯与健康计划连续打卡记录 |
 
-| kind | kind_meta 字段 |
-|------|----------------|
-| base_rhythm | `{"template_id": int?}` |
-| precept | `{"rule_text": str, "cycle": "daily"\|"weekly", "weekday_mask": [7], "check_time": "HH:MM", "severity": "hard"\|"soft", "block_minutes": int}` |
-| habit | `{"freq_per_week": int, "min_session_minutes": int, "preferred_slots": ["HH:MM-HH:MM"], "streak": int, "best_streak": int, "last_done_date": date?}` |
-| task_maintenance | `{"interval_days": int, "last_done_at": datetime?, "session_minutes": int}` |
-| venture | `{"target_date": date, "weekly_budget_hours": float, "spare_time_only": bool, "total_est_hours": float}` |
-| fixed_plan | `{"immovable": bool, "fixed_start": datetime, "fixed_end": datetime, "legs": [int]}` |
-| async_callback | `{"phases": [{"name","est_minutes","energy_cost"}×3], "current_phase": str, "round": int, "max_rounds": int, "work_hours_only": bool, "delegate_to": str, "est_wait_hours": float, "last_handoff_at": dt?, "last_return_at": dt?, "next_review_at": dt?, "revision_history": [...]}` |
-| task_oneoff / generic / buffer | `{}`（无额外约束） |
+已从 ORM 与代码中移除：`RhythmDayTemplate`、`RhythmEnergyProfile`、`RhythmPolicy`、`RhythmReview`、`rhythm_planner.py`、`rhythm_scheduler.py`。
 
-校验策略：M1 宽松（缺字段补默认值；类型错误 400），M2 起 CLI `hint`/`capture`/`split`
-与服务端写入共用 `sail_server.application.dto.rhythm.validate_kind_meta` 同源校验。
+---
 
-### venture 目标日同步约定（写时同步 + 更新级联清空）
+## 3. REST API 契约（`/api/v1/rhythm`）
 
-`venture` 的目标日同时存在于两个字段：
+```text
+# 可视化聚合入口
+GET    /dashboard?date=YYYY-MM-DD            今日时间线 + 活跃项目倒排 + 焦点待办 + 占用 + 打卡
 
-- `kind_meta.target_date`：venture 专属目标日，排程器与进度统计消费它。
-- `urgency_ddl`：通用截止时间，列表过滤、逾期检测、DDL 范围查询消费它。
+# AI 自主编排与时间线画布
+GET    /timeline/day?date=YYYY-MM-DD         当日时间线（含 ai_rationale / completed_minutes / planned_minutes）
+GET    /timeline/range?start_date=&end_date= 多日执行历史（供 SailTick 夜间学习真实高效与易打断时段）
+GET    /timeline/day-view?date=YYYY-MM-DD    轻量日视图（兼容首页与 Android 端）
+POST   /timeline/ai-sync                     【核心】SailTick AI 自主编排落库（保留 DONE/DOING 与 pinned，旧块置 MOVED 且 plan_version+1，自动推进关联任务为 SCHEDULED）
+POST   /timeline/block                       手动/AI 补单块
+DELETE /timeline/block/{id}                  移除时间块
+POST   /timeline/block/{id}/status           标记 DONE / DOING / SKIPPED / PLANNED（habit 块 DONE 自动记打卡）
+POST   /timeline/block/{id}/move             微调起止时间（pinned 拒绝 409）
 
-写入侧规则（`create_affair_impl` / `update_affair_impl` 统一经
-`_sync_venture_target_date(affair, touched, ddl_wins)`）：
+# 重要项目倒排（Venture）
+GET    /venture/projects                     全部活跃项目倒排进度与里程碑
+GET    /venture/{id}/progress                单个项目倒排进度（days_left / recent_14d_hours / milestones / completion_ratio）
+POST   /venture/{id}/milestone               添加里程碑子任务
+POST   /venture/milestone/{mid}/done         一键勾选里程碑完成
 
-1. 仅对 `kind==venture` 生效；非 venture 不做任何联动。
-2. `touched=True`（本次请求显式携带 `kind_meta` 或 `urgency_ddl`）时：
-   - `kind_meta.target_date` 有值 → 以其为准同步 `urgency_ddl`（当天 00:00:00）。
-   - `target_date` 为空但 `urgency_ddl` 有值 → 反向补全 `target_date`（取 ddl 日期部分）。
-   - 两者皆空 → 保持不变。
-3. `ddl_wins=True`（请求显式携带 `urgency_ddl` 且未整体替换 kind_meta）时方向反转：
-   以 `urgency_ddl` 为准回写 `target_date`。
-4. **级联清空**：`kind_meta` 是整体替换语义（见下节），替换后缺失 `target_date`
-   即视为"目标日已清空"，更新层联动清空 `urgency_ddl` 并输出 WARNING 日志
-   `venture #N: target_date 已清空，联动清空 urgency_ddl`。反向仅补全、不联动清空。
+# 极简事务（Affair）
+POST   /affair/                              创建（默认 task_oneoff→PLANNED, venture/habit→ACTIVE, generic→INBOX）
+GET    /affair/                              列表过滤（state/domain/kind/parent_id/urgency_ddl）
+GET/PUT/DELETE /affair/{id}                  详情 / 三态编辑 / 删除
+POST   /affair/{id}/state                    状态转移（finish/start/defer/pause/resume/graduate/cancel 等）
+POST   /affair/{id}/split                    拆分子任务
 
-读取侧（`venture_progress_impl`、`compute_urgency` 的 VENTURE 分支）对旧数据做
-兜底回退：当 `kind_meta.target_date` 缺失时，使用 `urgency_ddl` 的日期部分。
+# 刚性占用（会议/请假/出行）
+POST   /occupancy/                           钉入刚性占用（幂等，AI 重排时强制保留）
+GET    /occupancy/?date=                     查询某日占用
+DELETE /occupancy/{block_id}                 删除占用
 
-### 更新语义（PUT /affair/{id}：三态 + clear_* 显式清除）
-
-`AffairUpdateRequest` 可空字段遵循**三态语义**（按 `model_fields_set` 判定，
-避免 "null 到底是清空还是没传" 的歧义）：
-
-- 字段**未出现**（unset）→ 保留原值；
-- 字段显式为 **null** → 清空该字段；
-- 字段为**具体值** → 覆盖赋值。
-
-对 `urgency_ddl`、`window`（起止窗口）这类语义易混淆的字段，另设显式清除开关
-`clear_urgency_ddl: bool`、`clear_window: bool`：置 `true` 无条件清空对应字段
-并记 WARNING 日志，优先级高于三态赋值。前端 DTO（`AffairUpdateProps`）据此生成
-`clear_*` 标志。
-
-**`kind_meta` 整体替换（wholesale replace）**：请求中给出即全量覆盖，未给出的键
-视为删除；服务端按 kind 分发校验（M1 宽松：缺字段补默认值、类型错误 400），
-`kind` 改判时按新 kind 重新校验。前端编辑表单必须"读全量 → 改局部 → 写全量"。
-
-## 2. 双生命周期状态机
-
-**一次性流**（fixed_plan / task_oneoff / generic / venture 里程碑子项）:
-
-```
-INBOX ──confirm──► PLANNED ──plan-day──► SCHEDULED ──start──► DOING ──finish──► DONE(终)
-  │                  │                      │  │
-  ├─dismiss─► CANCELED(终)                  │  └─defer──► DEFERRED ──replan──► PLANNED
-  └─AI triage 仅写 ai_hint，不改状态        └─rebalance 内移动保持 SCHEDULED
+# 轻量打卡与健康速记
+POST   /checkin/                             打卡记录
+GET    /checkin/                             打卡查询
+GET    /checkin/today?date=                  今日待打卡习惯
+POST   /checkin/health                       健康速记双写
 ```
 
-- `defer` 必须携带 `defer_to`（新窗口写入 window_start/window_end），否则 400。
-- `fixed_plan` 特例：confirm 后按 kind_meta.fixed_start/end **直接钉入 SCHEDULED**
-  （每日切一片 pinned 块），跳过排程竞争；`defer` 被拒绝（409），只能 cancel
-  或人工改 fixed_start/end。
-- `generic` 未分拣禁止 confirm/start/finish/defer（409），先 confirm-hint 或 PUT 改判。
+---
 
-**长期流**（base_rhythm / precept / habit / task_maintenance / venture 本体）:
+## 4. SailTick 调度闭环
 
-```
-INBOX ──confirm──► ACTIVE ⇄ PAUSED ──► ARCHIVED(终)
-                     │（venture 限定）graduate ──► DONE(终/毕业)
-```
+- **客户端隔离**：`sailtick/rhythm_client.py` 严格经 HTTP 调用 `/api/v1/rhythm/*`，绝不直连主库。
+- **夜间深度学习（`sailtick/rhythm_analytics.py`）**：统计近 21 天时间块完成率，自动识别「高效黄金时段」「易被打断时段」「过载减负信号」与「重要项目延期/停滞风险」，编译进统一 `expert_brief`。
+- **慢脑异步排程（`TickEngine`）**：早间自动落库清爽今日画布、午间按上午实况弹性重排下午、晚间盘点并预排明日、睡前生成一份「健康 + 节奏」综合日报。日常排程直接落库，仅在重大项目取舍或明显延期风险时发最多 1 张轻量票据协商。
+- **快脑实时应变（`QuickCoachAgent`）**：支持 `/today`、`/projects` 快捷指令，以及自然语言秒级处理临时加会、疲惫减负、新建项目/待办与重排当日剩余时间线。
 
-- ACTIVE 期间由 plan_day 每日/每周实例化 occurrence（TimeBlock；precept/habit 另有
-  DisciplineLog 核销）。
-- PAUSED 暂停实例化（如旅行期间暂停运动 habit）；合规统计对 PAUSED 周期记 exempt。
-- `buffer` 由系统生成，禁止人工创建/编辑/删除（400）。
+---
 
-**async_callback 阶段机**（长期流子集，独立状态机；CONFIRM→ACTIVE 即 KICKOFF 起步）:
+## 5. Web 前端（`site/src/pages/rhythm.tsx`）
 
-```
-INBOX ──confirm──► ACTIVE(=KICKOFF) ──handoff──► DELEGATED ──return_review──► REVIEWING
-                                  │                                              │
-                                  │                                              ├─approve──► COMPLETED(终)
-                                  │                                              └─request_revision──► DELEGATED（round+1，≤max_rounds）
-                                  └─pause──► PAUSED ──resume──► ACTIVE
-```
+由原 8 个重配置 Tab 精简为单一清爽可视化工作台：
 
-- KICKOFF/REVIEWING 阶段排实时窗（work_hours_only=true 时仅进 work_window）。
-- DELEGATED 阶段不占实时窗，由 plan_day 在 next_review_at 落点画 informational
-  `async_wait` 提醒块（0 精力，允许 focus 跨越）。
-- `REQUEST_REVISION` 触发 round+1 并回 DELEGATED；超过 max_rounds → 400 拒绝（建议 APPROVE 接受或 CANCEL）。
-- work_hours_only 事务的 next_review_at 自动顺延到下个工作窗（09-12/14-18 工作日）。
-
-## 3. 数据模型（7 张表，前缀 rhythm_）
-
-| 表 | 说明 |
-|----|------|
-| `rhythm_affairs` | 统一事务（kind/kind_meta/state/importance/urgency_ddl/energy_cost/money_cost/budget_id/est_minutes/window/splittable/fallback_plan/recurrence_rule_id/mission_id/day_id/timespan_id/parent_id/ai_hint/score） |
-| `rhythm_time_blocks` | 日时间线块（day_id/affair_id?/block_type×14/start/end/status/pinned/plan_version/ref） |
-| `rhythm_day_templates` | 基础节奏骨架模板（name/weekday_mask/slots[label,start,end,block_type,micro_cycle]/enabled/priority） |
-| `rhythm_discipline_logs` | 戒律/习惯打卡日志（affair_id/log_date/cycle_key/result/note/source） |
-| `rhythm_energy_profiles` | 精力画像（单行：daily_energy_budget/curve_template/sleep_start/end/work_hours_cap/spare_time_windows/min_buffer_ratio/三域权重/score_weights/is_default + v2 配置 work_windows/morning_health_window/career_buffer_minutes/work_gap_minutes） |
-| `rhythm_policies` | 守护策略（rule_type×5/params/scope/enabled） |
-| `rhythm_reviews` | 节奏复盘快照（scope/period_key/rhythm_score/domain_minutes/四项明细/encroachments/ai_summary） |
-
-- block_type: `sleep/commute/work_window/micro_rest/meal/precept/habit/fixed/focus/light/career/rest/buffer/async_kickoff/async_review/async_wait/occupied`
-- 打卡 result: precept → `kept/violated/exempt`；habit → `done/missed/exempt`
-- cycle_key: daily → `2026-10-26`；weekly → `W2026-44`（ISO 周）
-- 迁移 SQL: `sail_server/migration/20261026_add_rhythm.sql`（PG）；SQLite 由 create_all 自动建表
-  - SQL 迁移 `sail_server/migration/20260906_add_rhythm_is_default.sql`：幂等为
-    `rhythm_energy_profiles` 增加 `is_default` 列并把 `name='default'` 行回填为 true；
-    由启动迁移 runner（`run_migrations`，PG 后端）自动执行，`server.py` 的
-    `_ensure_rhythm_schema` 启动期兜底复检（7 表存在性检查），失败只记日志、不阻断启动。
-      （Python 迁移机制已整体移除，不再支持，不要再新增 Python 迁移脚本。）
-      里程碑不落 kind_meta：单一来源为服务端 progress 派生
-    （子事务行），`kind_meta.milestones` 已废弃
-
-## 4. 核心算法（model/rhythm_planner.py，服务端确定性）
-
-### 4.1 统一优先级评分
-
-分类紧迫度 u(kind)：
-
-| kind | u |
-|------|---|
-| task_oneoff | ddl≤1d→1.0, ≤3d→0.8, ≤7d→0.5, else 0.2 |
-| task_maintenance | clamp((now-last_done_at)/interval_days, 0, 1.2)；从未完成→1.0 |
-| habit | 本周剩余目标次数 / 本周剩余可排日数（封顶 1.2） |
-| venture | 剩余估算工时 / (剩余周数 × weekly_budget_hours)（封顶 1.2） |
-| async_callback | DELEGATED→0；kickoff/review 按 ddl≤1d→1.0/≤3d→0.8/≤7d→0.5，无 ddl 用 next_review_at 反推（≤6h→1.0/≤24h→0.8/≤72h→0.5），否则 0.3 |
-| fixed/precept/base_rhythm/buffer | 不参与评分（刚性/规则铺底） |
-
-```
-score = 100 * ( w_i*importance/5 + w_u*u + w_b*domain_balance_boost
-              + w_e*energy_fit + w_s*streak_boost )
-默认权重 w_i=0.30 w_u=0.30 w_b=0.20 w_e=0.15 w_s=0.05（profile.score_weights 可调）
-domain_balance_boost：最近 7 天三域实际比 vs 目标权重的欠投入度 0..1
-energy_fit：候选小时的能量曲线系数 0..1
-streak_boost：habit streak≥3 → 1.0
-生活地板：未达周目标的 habit，score 抬升至当日 work/career 事务最高分之上
-```
-
-### 4.2 精力模型
-
-每日 100 点；energy_cost 粗刻度：轻量 5 / 常规 10 / 深度 25 / 重决策 40；
-运动 habit 15–25；通勤 micro 5。曲线 curve_template 分 weekday/weekend 各 24 段。
-当日已排+DONE 精力 > 预算 110% → `energy_overload` warning。
-
-### 4.3 财力校验
-
-money_cost>0 且指定 budget_id：查 finance 预算（total_amount − 关联 transaction 合计）。
-不足 → `budget_insufficient` warning；非 force 时该事务 unplaced(预算不足)；
-fixed_plan 超预算只警告不阻止钉入。
-
-### 4.4 plan_day 八步铺底（顺序即优先级；v2 纯内核见 model/rhythm_scheduler.py）
-
-1. **睡眠守护**：profile 睡眠窗 → 晨/夜两个 pinned sleep 块
-2. **基础节奏骨架**：命中模板（weekday_mask，priority 高者优先）实例化槽位；
-   work_window 是“容器”（不占排程空间，focus 排入其中）；micro_cycle 生成
-   informational 微休息提示块（允许 focus 跨越）
-2.5 **特殊占用扣除（v2）**：occupancy_api 来源的 occupied 块 → 占用区间；
-   有效工作窗权威：`profile.work_windows[weekday|weekend]` > 模板 work_window 槽位 > 空；
-   有效工作窗 = 基准 − 占用；占用清空全部有效窗且含 leave/whole_day → `day_leave`
-   （当日 work 域任务全部 unplaced「当日请假/占用」，force 不救援）；
-   同时解析早间健康窗 `[max(sleep_end, cfg.start), cfg.end)`（默认 07:00-10:00）
-3. **刚性钉**：fixed_plan 钉入；与骨架/他块冲突 → `fixed_conflict` warning，**不移动**
-4. **戒律打卡块**：soft precept（block_minutes>0）避开工作窗排轻量块
-5. **缓冲扣除**：min_buffer_ratio × 清醒窗，锚点取有效工作窗末尾/睡前，
-   不足 → `buffer_short` warning
-6. **事业块**：ACTIVE venture 仅排 spare_time_windows，且
-   end ≤ sleep_start − career_buffer_minutes（默认 45）；全被缓冲裁掉 →
-   `career_buffer_insufficient` warning + unplaced
-6.5 **异步等待提示**：DELEGATED async_callback 画 informational async_wait 块
-   （0 精力，不占排程空间）
-7a. **habit**：健康类（category=health 或 info_collection_type=exercise）优先落
-   早间健康窗；非健康 habit 避开早间健康窗（无替代位时才落入）
-7b. **task / async kickoff / async review（work 域）**：只能排入有效工作窗
-   （day_leave 除外）；DayTimeline 维护自由区 + focus 间隙预留
-   （work_gap_minutes 默认 15，预留只挡后续 focus，不挡 habit/light/buffer）；
-   多片段按精力曲线 best-fit（同分取最早，保证确定性）；单段放不下且 splittable →
-   跨片段拆分（每段 ≥ min_chunk_minutes）；仍放不下 → unplaced +
-   `work_window_full` warning（v2 默认禁止超窗，不再生成 overtime 块）；
-   force=true 逃生舱可超窗落自由区（块标记 overtime + `overtime` warning）；
-   `max_consecutive_focus` policy（params.minutes）超长的 focus 块后强制插 15min rest
-7c. **间隙物化（v2）**：仍空闲的 gap 预留（≥10min）物化为 rest 块
-   （ref.label=任务间缓冲，ref.gap_of=前序任务标题），计入时间线 buffer_total_minutes
-8. **产出** `PlanDayResponse{blocks, warnings, unplaced}`；plan_version+1，
-   旧 PLANNED 非 pinned 块置 MOVED（可回滚）；pinned 与 DONE/DOING 冻结；
-   `domain_cap` policy（params.domain/hours）按域核算实际占用（容器块不计），
-   超限 → `domain_cap_exceeded` warning
-
-> policy 职责分工：`spare_time_guard`（默认启用）与 `max_consecutive_focus`、
-> `domain_cap` 由排程器消费；`protect_window` 由侵占检测消费；
-> `kind_min_freq` 由 habit 周缺口压力等效覆盖（agent habit_watch 管线巡检）。
-
-### 4.5 侵占检测与再平衡
-
-- `GET /plan/conflicts?date=`：protect_window 穿透 / career 越界 / fixed 被挤 / overtime
-  （force 超窗块）/ occupied 穿透睡眠守护窗（`occupied_overlap_sleep`）/
-  work 块压占用（`work_overlap_occupancy`，force 超窗或历史数据）
-- `POST /plan/rebalance`：增量重跑 plan_day（pinned + DONE/DOING 冻结），
-  diff 由 plan_version 推导
-
-### 4.6 节奏评分（Review）
-
-```
-rhythm_score = 0.25*precept_compliance_rate + 0.20*habit_consistency
-             + 0.15*sleep_window_keeping   + 0.15*(1−三域偏离度)
-             + 0.15*min(venture_budget_fulfillment,1.0) + 0.10*(1−buffer_consumed)
-（无 ACTIVE venture 时 0.15 并入三域偏离项 → 0.30）
-```
-
-日评 `scope=day`（period_key=2026-10-26）；周评 `scope=week`（period_key=W2026-44），
-计算后 upsert 落库 rhythm_reviews；`PUT /review/{scope}/{key}/summary` 供 Agent 写回周评。
-
-## 5. REST API（/api/v1/rhythm）
-
-```
-# 事务
-POST   /affair/                     快速捕获（仅 title 即可，kind=generic → INBOX）
-GET    /affair/                     列表（state/domain/kind[多值]/day_id/parent_id）
-GET    /affair/{id}                 详情
-PUT    /affair/{id}                 编辑（三态语义 + clear_urgency_ddl/clear_window + kind_meta 整体替换 + kind 改判重校验 + ai_hint 写回）
-DELETE /affair/{id}                 删除
-POST   /affair/{id}/state           状态转移 {action, defer_to?, defer_end?, force?}
-POST   /affair/{id}/confirm-hint    采纳/驳回 AI 建议 {accept, overrides?}
-POST   /affair/{id}/split           拆分落地 {children[]}
-# 模板
-GET/POST /template/                 列表 / upsert（按 name）
-GET    /template/{id}               详情
-PUT    /template/{id}               更新
-DELETE /template/{id}               删除
-GET    /template/active?date=       某日命中模板
-# 打卡
-POST   /checkin/                    打卡 {affair_id, result, log_date?, note?, source?}
-GET    /checkin/                    日志查询
-GET    /checkin/today?date=         今日待打卡清单
-# 事业
-GET    /venture/{id}/progress       倒排进度（含里程碑列表——里程碑单一来源，前端只经此读写）
-POST   /venture/{id}/milestone      添加里程碑（timespan_id 锚定；落库后由 progress 派生）
-POST   /venture/milestone/{mid}/done  勾选里程碑完成
-# 时间线
-GET    /timeline/day?date=          日时间线（blocks+三域统计+待打卡）
-POST   /timeline/block              手动建块
-POST   /timeline/block/{id}/status  块反馈 {status: DONE|SKIPPED|DOING|PLANNED}
-POST   /timeline/block/{id}/move    手动拖改（pinned → 409）
-# 占用（特殊占用；存储形态 = pinned occupied 时间块，affair_id=None，ref.source=occupancy_api，无新表）
-POST   /occupancy/                  创建 {date, start?, end?, whole_day?, occupancy_type, label?, note?}
-                                    （幂等：同日同起止同类型返回已有块；whole_day 或 leave 未给起止时
-                                     覆盖工作时段 10:00-19:00；与睡眠守护窗重叠 → 400）
-GET    /occupancy/?date=            某日占用列表
-DELETE /occupancy/{block_id}        删除（仅 occupancy_api 来源可删，否则 400；不存在 404）
-# 计划
-POST   /plan/day                    生成/重生成日计划 {date, preserve_done?, force?}
-POST   /plan/rebalance              再平衡 {date, trigger}
-GET    /plan/conflicts?date=        侵占报告
-# 配置
-GET/PUT /energy/profile             精力画像（单行 upsert；含 v2 配置 work_windows /
-                                    morning_health_window / career_buffer_minutes / work_gap_minutes）
-GET/POST/PUT/DELETE /policy/...     守护策略 CRUD + 启停
-# 复盘
-GET    /review/day?date=            日评分（即时计算并落库）
-GET    /review/week?span=           周评分（span=W2026-44 或日期；缺省本周）
-PUT    /review/{scope}/{key}/summary Agent 写回周评语
-GET    /review/encroachments        侵占事件列表（默认最近 7 天）
-```
-
-鉴权：`SAILZEN_API_TOKEN` 非空时校验 `Authorization: Bearer <token>`（复用 reminder 模式）。
-
-## 6. CLI（python -m sailzen rhythm …）
-
-全命令支持 `--json`（AI 解析，stdout 纯 JSON）与默认人类可读表格。
-
-```
-sailzen rhythm capture "给车做保养" [--kind habit --meta '{...}' --domain life]
-sailzen rhythm kinds                          # 分类学权威输出（分拣 prompt 同源）
-sailzen rhythm inbox [--limit 50]
-sailzen rhythm suggest-triage [--limit 20]    # 【AI】拉 INBOX + 分类学/schema 规范
-sailzen rhythm hint <id> --kind habit --meta '{...}' [--importance 4 --energy 15
-                        --est 60 --money 200 --window start/end --fallback "..." --reason "..."]
-sailzen rhythm suggest-split <id>             # 【AI】拆分草案（不落库）
-sailzen rhythm split <id> --file split.json   # 确认后落库（CLI 侧先校验）
-sailzen rhythm confirm <id> [--accept-hint]
-sailzen rhythm defer <id> --to 2026-10-29
-sailzen rhythm template list|show <id>|upsert --file t.json|active --date D
-sailzen rhythm checkin <id> --result kept|violated|done|missed [--note "..."]
-sailzen rhythm checkin today
-sailzen rhythm habit board
-sailzen rhythm venture status [<id>]
-sailzen rhythm venture milestone <id> --title "demo 完成" [--span Y2027Q2|B0049]
-sailzen rhythm plan today|YYYY-MM-DD [--force]
-sailzen rhythm timeline [today]
-sailzen rhythm done <block_id> | skip <block_id>
-sailzen rhythm rebalance [today] [--trigger manual]
-sailzen rhythm score [--week] [--span W2026-44]
-sailzen rhythm review --week --md             # Markdown 周报（供 notes 归档）
-sailzen rhythm conflicts [today]              # 冲突/侵占报告
-sailzen rhythm summary --scope week [--key W2026-44] [--file s.md | --text "..."]
-                                              # 【AI】写回复盘评语 ai_summary
-sailzen rhythm profile show | set [--work-cap 7 --buffer 0.2 --career-weight 0.6 ...]
-sailzen rhythm policy list | add --name X --rule-type spare_time_guard | toggle <id>
-```
-
-服务器地址解析：`SAIL_SERVER_URL` > `.env.prod/.env.dev` 的 SERVER_HOST/PORT > `http://localhost:8000`；
-token 取 `SAILZEN_API_TOKEN`。
-
-## 7. AI 调用契约
-
-**隔离红线**：Agent 只调 CLI/HTTP，绝不直连主库。LLM 配置走 Agent 自带 LLMGateway。
-
-1. **分拣**：Agent 调 `sailzen rhythm suggest-triage --json` → 获得 INBOX 事务 +
-   kinds 分类定义 + hint_schema → LLM 按固定 JSON Schema 产出建议：
-   `{kind(九选一), domain, kind_meta(按 kind), importance(1-5), energy_cost(5/10/25/40),
-     est_minutes, window, fallback_plan, split_children[]}`
-   → 逐项 `sailzen rhythm hint <id> ...` 写回（CLI 同源校验 kind_meta，非法即拒绝，
-   exit code 2）→ 人在 Android/CLI `confirm --accept-hint` 采纳生效。
-2. **拆分**：`suggest-split <id>` 出草案 → 人确认 → `split <id> --file split.json` 落库。
-3. **周评**：`review --week --md` → LLM 生成周评 → `PUT /review/week/{key}/summary` 写回
-   → notes 归档。
-4. **prompt 模板**（分拣系统提示节选）：
-
-   ```
-   你是节奏分拣员。按 kinds 定义把 INBOX 事务分拣为恰好一种 kind 并给出 kind_meta 草案。
-   规则：惩罚性/禁止性 → precept；建设性/累计性 → habit；固定起止 → fixed_plan；
-   业余长期事业 → venture；工作一次性 → task_oneoff；周期维护 → task_maintenance。
-   输出严格 JSON（不要多余文字）：{"kind": "...", "domain": "...", "kind_meta": {...},
-   "importance": 1-5, "energy_cost": 5|10|25|40, "est_minutes": int,
-   "window": "start/end"|null, "fallback_plan": "...", "reason": "..."}
-   ```
-
-## 8. Android 端（M3）
-
-> M3.5 起三页合并为统一规划页 `feature/plan/`（原 timeline/checkin/affair-home 三个底部 Tab 合并，底部导航 6→4：规划/收件箱/健康/阅读），页内 PrimaryTabRow 对齐本文档 §11.2「时间线/事务中心/事业」信息架构。捕获 → 分拣 → 排程 → 打卡 → 复盘同页闭环；单 ViewModel 走 dayView 聚合接口 + DataChangeBus 统一刷新。详见 `doc/design/android_app/README.md` §3.7。
-
-- `feature/plan/`（规划页三合一）
-  - 今日：吸顶 CaptureBar 快速捕获（可选 kind，默认 generic 交 AI 分拣）、待分拣 INBOX + AI 建议采纳/驳回卡、周节奏卡（rhythm_score 环形图 + 三指标点击看周报）、紧凑打卡（戒律 kept/violated + 备注、习惯 done/missed、streak 火焰，数据来自 dayView.checkins）、时间线块（按 block_type 着色、滑动 done/defer、长按 Plan B）
-  - 事务：状态筛选 chips + 逾期优先排序 + 状态机动作（`core/rhythm/AffairRules`）
-  - 事业：待分拣启动 + 进行中事业卡（倒计时、周预算进度条、里程碑、倒排压力灯）
-- `feature/affair/AffairDetailScreen`（事务详情，共享 AffairRules 状态机动作）
-- `core/rhythm/AffairRules.kt`（VENTURE_KIND / TASK_STATE_FILTERS / isTerminal / isOverdue / availableActions / jsonObjectOf 纯函数）
-- `core/network/RhythmApi`（Retrofit，仿 ReminderApi）；done/defer/checkin/capture 离线排队补传（flushPending）
-
-  ## 9. Agent 管线（M4，旧 sailzen/autonomous_agent，已归档至 archive/autonomous_agent）
-
-| 管线 | 调度 | 流程 |
-|------|------|------|
-| rhythm_nightly_plan | 0 22 * * * | 明日模板+INBOX/PLANNED/ACTIVE → LLM 预审 hint → plan tomorrow → warnings 非空 → reminder |
-| rhythm_precept_check | 0 22:30 * * * | 当日戒律未核销 → reminder；连续破戒 ≥3 天 → LLM 归因建议 |
-| rhythm_habit_watch | 0 20 * * * | habit 周缺口压力 >0.8 → 提醒/最小剂量 fallback 建议 |
-| rhythm_venture_weekly | 0 20 * * 0 | 预算达成/倒排压力 → LLM 下周事业安排建议（待确认） |
-| rhythm_goal_decompose | 0 9 * * 1 | venture 按双周拆里程碑草案 → suggest-split 待确认 |
-| rhythm_encroachment_watch | 每小时 | plan/conflicts → high 优先级 reminder |
-| rhythm_weekly_review | 0 21 * * 0 | review --week --md → LLM 周评 → `summary` 写回 ai_summary → `notes write` 归档 → 推送 |
-| rhythm_evening_check | 0 21 * * * | hard precept 未守/habit 未完且窗口将尽 → fallback/defer 提示 |
-
-## 10. 风险与开放问题
-
-| 风险/问题 | 对策 |
-|-----------|------|
-| 分类学理解成本 | generic 兜底 + AI 分拣；kinds 与文档/CLI 同源；M1 宽松校验，M2 CLI 收紧 |
-| base_rhythm 模板 vs policy 职责重叠 | 模板负责"生成骨架"，policy 负责"校验约束"；模板不校验、policy 不生成 |
-| 精力点数估计主观 | M1 粗刻度；M4 后用睡眠/体重/完成率回归校准 curve_template |
-| 与 Mission 双写一致性 | affair.mission_id 单向引用，最终一致（M1 接受） |
-| venture 与家庭 fixed_plan 冲突周 | travel_day 模板 + habit/venture 建议 PAUSED；周报记 exempt |
-| plan_day 贪心次优 | 预留 strategy 参数，后续可换 CP-SAT（scipy 已在栈内） |
-| 隐私 | 全部本地/局域网；SAILZEN_API_TOKEN 复用 reminder 鉴权 |
-| 时间口径 | 全链路 naive local（对齐 reminder `_now()` 约定） |
-
-## 11. Dashboard 后台（M5）
-
-### 11.1 共享聚合入口 `/dashboard`
-
-`GET /api/v1/rhythm/dashboard?date=YYYY-MM-DD` 是 PC Dashboard 与 Android 提醒端唯一的共享数据入口，一次性返回当日全部数据：
-
-- `timeline`: 当日时间线（blocks + 三域分钟 + 缓冲 + 未放置 + warnings；`warnings` 为结构化 `PlanWarning{code, message, affair_id?}` 对象数组，不再是字符串）
-- `day_review`: 当日节奏评分（即时计算并落库）
-- `week_review`: 本周节奏评分
-- `today_checkins`: 今日 precept/habit 待打卡清单
-- `energy_profile`: 当前精力画像（`is_default=true` 表示默认导入未校准；该字段是真实列，由迁移 `20260906_add_rhythm_is_default` 回填，`POST /admin/recalibrate-profile` 采用当前值后将其置 false）
-- `policies`: 启用的守护策略列表
-- `conflicts`: 今日冲突/侵占报告
-- `inbox_summary`: INBOX 优先级事务摘要
-- `overdue_summary`: 逾期事务摘要
-- `today_due_summary`: 今日截止事务摘要
-- `degraded`: 字符串数组——dashboard 的 10 个子装配（timeline/day_review/week_review/today_checkins/energy_profile/policies/conflicts/inbox_summary/overdue_summary/today_due_summary）中 `_safe` 降级兜底的段落名；正常为 `[]`。前端据此显示"部分数据降级"横幅并支持分段重试；Android 端可忽略（additive）。
-
-所有字段同时服务于 Dashboard 可视化与 Android 提醒通知，新增字段需评估双端影响。
-`warnings` 字段从 `List[str]` 升级为 `PlanWarning[]` 是**破坏性变更**，需前后端同迭代发布。
-
-### 11.2 Dashboard 页面结构
-
-`/rhythm` 页面使用 Tabs 组织：
-
-1. **概览**: 今日节奏分、精力预算、三域饼图、告警、待处理计数。
-2. **时间线**: 时间块列表、块状态反馈（DONE/SKIPPED/DOING）、非 pinned 块手动拖拽移动、未放置事务。
-3. **事务中心**: 按 kind 分组 Kanban / 列表视图、事务创建/编辑、状态转移、删除。
-4. **事业**: 事业列表、里程碑树、倒排进度、燃尽图。
-5. **戒律/习惯**: 今日待打卡、历史打卡、habit 热力图、precept 合规率。
-6. **基础配置**: 精力画像编辑器、DayTemplate 管理、守护策略 CRUD。
-7. **复盘统计**: 日/周评分卡片、encroachment 列表、三域时长趋势、精力预算 vs 实际。
-
-### 11.3 旧数据校准与迁移
-
-首次进入 Dashboard 时，若 `energy_profile.is_default=true` 或缺少 templates，顶部 Banner 提示校准：
-
-- `POST /api/v1/rhythm/admin/recalibrate-profile`: 采用当前画像值覆盖/创建 `name='default'` 行，成功后 `is_default=false`（前端不再强制写死 name，直接提交编辑器当前字段）。
-- `POST /api/v1/rhythm/admin/ensure-default-templates`: 幂等生成 weekday/weekend/travel_day 三套默认模板。
-- `POST /api/v1/rhythm/admin/migrate-legacy-missions`: 将旧 `project.projects` / `project.missions` 映射为 `rhythm_affairs`（venture / task_oneoff），按 `mission_id` 与 `ref.legacy_id` 幂等去重。
-
-### 11.4 统计增强端点
-
-- `GET /api/v1/rhythm/checkin/heatmap?affair_id=&start_date=&end_date=`: habit/precept 每日打卡矩阵。
-- `GET /api/v1/rhythm/review/domain-trend?start_date=&end_date=`: 按天返回 life/work/career 投入分钟数。
-- `GET /api/v1/rhythm/venture/{id}/burndown`: 事业每周计划/实际投入小时 + 里程碑完成数。
-
-### 11.5 健康诊断脚本
-
-`scripts/rhythm_diagnose.py` 以只读方式巡检 10 个 GET 端点（dashboard、timeline、
-day-view、checkin/today、venture progress、plan conflicts、review/day、review/week、
-energy/profile、review/domain-trend 等），逐步输出 `[OK|FAIL] 状态码 耗时 摘要`，
-摘要包含 dashboard degraded/blocks/inbox/overdue/today/profile.is_default 等关键计数；
-任一步非 2xx 即以 exit code 1 结束，可接入定时巡检：
-
-```
-SAILZEN_API_TOKEN=xxx uv run python scripts/rhythm_diagnose.py --url http://127.0.0.1:1974 --date 2026-09-06
-```
-
-### 11.6 前端实现文件
-
-| 文件 | 职责 |
-|------|------|
-| `site/src/pages/rhythm.tsx` | Dashboard 页面入口 |
-| `site/src/lib/api/rhythm.ts` | Dashboard API 客户端 |
-| `site/src/lib/data/rhythm.ts` | Dashboard DTO 类型 |
-| `site/src/lib/store/rhythm.ts` | 统一 Rhythm Zustand store |
-| `site/src/components/rhythm/*.tsx` | Dashboard 各视图组件 |
-
-前端分层：`pages/rhythm.tsx` → `components/rhythm/*` + `lib/store/rhythm.ts`（7 个
-分片 + 段级 loading/error + `degraded` 状态 + 事务过滤器）→ `lib/api/{rhythm,affair}.ts`
-→ `lib/data/{rhythm,affair}.ts`（DTO 类型 + `syncVentureTargetDate` 目标日联动）。
-
+1. **顶部 SailTick 即时协商条**：一句话对话直接调用 `/api/v1/tick/quick-chat` 调整日程或项目（daemon 离线时自动降级写入异步消息箱），更新后自动刷新画布。
+2. **左侧当日日程画布（`TimelineView`）**：展示 AI 排程说明（`ai_rationale`）、时间块列表、一键完成/进行中/跳过/改时间/删除，以及「钉占用」「补一块」快捷操作。
+3. **右侧项目倒排与焦点待办**：只需填写项目名与目标日即可追踪倒计时与里程碑，支持随手记待办与轻量习惯打卡。

@@ -1,32 +1,26 @@
 # -*- coding: utf-8 -*-
 # @file rhythm.py
-# @brief Rhythm Router (生活/工作节奏综合优先级调节工具)
+# @brief Rhythm v2 Router (极简项目/事务 + AI 可视化时间线 + 占用 + 轻量打卡)
 # @author sailing-innocent
-# @date 2026-10-26
-# @version 1.0
+# @date 2026-11-24
+# @version 2.0
 # ---------------------------------
 
 """
-节奏（Rhythm）路由
+节奏（Rhythm v2）路由
 
-注册统一事务/时间线/模板/打卡/事业/精力/策略/计划/复盘控制器到
-/api/v1/rhythm 路径下。
+注册精简后的 6 个核心控制器到 /api/v1/rhythm：
+Dashboard / Affair / Venture / Timeline / Occupancy / Checkin
 """
 
 from litestar import Router
 from litestar.di import Provide
 
 from sail_server.controller.rhythm import (
-    AdminController,
     AffairController,
     CheckinController,
     DashboardController,
-    EnergyController,
     OccupancyController,
-    PlanController,
-    PolicyController,
-    ReviewController,
-    TemplateController,
     TimelineController,
     VentureController,
 )
@@ -38,16 +32,10 @@ router = Router(
     dependencies={"router_dependency": Provide(get_db_dependency)},
     route_handlers=[
         DashboardController,
-        AdminController,
         AffairController,
-        TimelineController,
-        TemplateController,
-        CheckinController,
         VentureController,
-        EnergyController,
-        PolicyController,
-        PlanController,
-        ReviewController,
+        TimelineController,
         OccupancyController,
+        CheckinController,
     ],
 )

@@ -126,35 +126,28 @@ fun AffairDetailScreen(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1))) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text("倒排进度", fontWeight = FontWeight.Bold)
+                            Text("项目进度", fontWeight = FontWeight.Bold)
                             Text(
                                 "目标日 ${progress.targetDate ?: "未定"}" +
-                                    (progress.weeksLeft?.let { " · 剩余 %.1f 周".format(it) } ?: ""),
+                                    (progress.daysLeft?.let { d ->
+                                        if (d < 0) " · 超期 ${-d} 天" else " · 剩 $d 天"
+                                    } ?: ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray,
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "本周 %.1fh / %.1fh · 累计 %.1fh / 预估 %.0fh".format(
-                                    progress.weekConsumedHours,
-                                    progress.weeklyBudgetHours,
+                                "近14天投入 %.1fh · 累计 %.1fh · 里程碑 %.0f%%".format(
+                                    progress.recent14dHours,
                                     progress.totalDoneHours,
-                                    progress.totalEstHours,
+                                    progress.completionRatio * 100,
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             LinearProgressIndicator(
-                                progress = { progress.completionRatio.toFloat() },
+                                progress = { progress.completionRatio.toFloat().coerceIn(0f, 1f) },
                                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
                             )
-                            progress.countdownPressure?.let {
-                                Text(
-                                    "倒排压力 %.2f".format(it),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (it > 1.0) Color(0xFFE53935) else Color.Gray,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
                         }
                     }
                 }

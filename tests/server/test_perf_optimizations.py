@@ -17,7 +17,7 @@ from sail_server.model.finance.transaction import (
     get_transaction_stats_batch_impl,
     get_transaction_stats_impl,
 )
-from sail_server.model.rhythm_planner import get_week_review_impl
+from sail_server.model.rhythm import get_dashboard_impl
 from sail_server.model.text import get_works_impl
 from sailzen_orm.finance import Transaction
 from sailzen_orm.text import DocumentNode, Edition, Work
@@ -168,18 +168,17 @@ def test_get_works_eliminates_n_plus_1(db):
     assert by_slug["work-5"].total_chars == 6000
 
 
-def test_week_review_skips_noop_commit(db):
+def test_rhythm_v2_dashboard_query_budget(db):
     target = date(2026, 11, 22)
-    r1 = get_week_review_impl(db, target, persist=True)
-    assert r1.id is not None
+    d1 = get_dashboard_impl(db, target)
+    assert d1.degraded == []
 
-    # 第二次读取内容完全未变时，不应产生 UPDATE/COMMIT 写放大
+    # 极简 Rhythm v2 聚合查询轻量无 N+1 放大
     with _SqlCounter(db.get_bind()) as counter:
-        r2 = get_week_review_impl(db, target, persist=True)
+        d2 = get_dashboard_impl(db, target)
 
-    assert r2.id == r1.id
-    assert r2.rhythm_score == r1.rhythm_score
-    assert counter.count <= 8
+    assert d2.degraded == []
+    assert counter.count <= 10
 
 
 def test_perf_loop_analyze_and_compare_snapshots():

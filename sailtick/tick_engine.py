@@ -38,6 +38,7 @@ from sailtick.llm import LLMGateway
 from sailtick.memory import AgentMemory
 from sailtick.nightly import NightlySelfMaintenance
 from sailtick.notify import NotificationEngine
+from sailtick.rhythm_client import RhythmClient
 from sailtick.state import DependencyState
 from sailtick.tracer import TickTraceRecorder
 
@@ -118,6 +119,7 @@ class TickEngine:
         dev_runner: Any = None,
         canary: Optional[CanaryController] = None,
         nightly: Optional[NightlySelfMaintenance] = None,
+        rhythm: Optional[RhythmClient] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -132,6 +134,11 @@ class TickEngine:
         self.dev_runner = dev_runner
         self.canary = canary
         self._nightly = nightly
+        self.rhythm = rhythm or RhythmClient(
+            config.sail_server.api_base,
+            config.sail_server.auth_token,
+            clock=clock,
+        )
         self._clock = clock
         self._current_tick: Optional[dict] = None
         self._prompts_dir = config.prompts_dir
@@ -736,6 +743,10 @@ class TickEngine:
         ap = pkg.get("active_plan") or {}
         diets = pkg.get("diet") or []
         msgs = context.get("unread_messages") or []
+        rhythm = pkg.get("rhythm") if isinstance(pkg.get("rhythm"), dict) else {}
+        t_blocks = rhythm.get("today_blocks") or []
+        done_blocks = [b for b in t_blocks if b.get("status") == "DONE"]
+        projects = rhythm.get("projects") or []
 
         latest_kg = wm.get("latest_kg")
         delta = wm.get("delta_from_prev")
@@ -763,12 +774,17 @@ class TickEngine:
             if all_intake
             else "今日暂无饮食文字记录"
         )
-        summary = f"{weight_line}；{intake_line}。早点休息，明天继续保持轻松节奏。"
+        rhythm_line = (
+            f"日程完成 {len(done_blocks)}/{len(t_blocks)} 块（{rhythm.get('completed_minutes', 0)} 分钟）"
+            if t_blocks
+            else "今日未排定固定时间块"
+        )
+        summary = f"{weight_line}；{intake_line}；{rhythm_line}。早点休息，明天继续轻松推进。"
 
         md_lines = [
-            f"## {report_date} 睡前体重与健康日报",
+            f"## {report_date} 睡前健康与节奏日报",
             "",
-            "### 1. 体重与趋势",
+            "### 1. 体重与健康趋势",
             f"- {weight_line}",
             "",
             "### 2. 今日餐饮与状态整合",
@@ -780,16 +796,28 @@ class TickEngine:
         md_lines.extend(
             [
                 "",
-                "### 3. 动态计划与明日建议",
+                "### 3. 今日节奏与项目推进",
+                f"- {rhythm_line}",
+            ]
+        )
+        if projects:
+            for p in projects[:4]:
+                md_lines.append(
+                    f"- 项目「{p.get('title')}」：目标 {p.get('target_date') or '未定'}（剩 {p.get('days_left')} 天），里程碑完成 {int((p.get('completion') or 0)*100)}%"
+                )
+        md_lines.extend(
+            [
+                "",
+                "### 4. 动态计划与明日焦点",
                 f"- 当前阶段：{ap.get('phase_name') or '动态适应期'}（目标 {ap.get('target_weight') or '70'}kg）",
-                "- 明天晨起空腹称一次体重，午餐/晚餐随手发一条简短记录即可。",
+                "- 明天聚焦 1-2 件最重要推进项，顺手称重与保持睡眠。",
             ]
         )
 
         return {
             "kind": "daily_report",
             "report_date": report_date,
-            "title": f"{report_date} 睡前体重与健康日报",
+            "title": f"{report_date} 睡前健康与节奏日报",
             "summary": summary,
             "body_markdown": "\n".join(md_lines),
             "weight_snapshot": {
@@ -854,7 +882,7 @@ class TickEngine:
                 input_summary=f"prompt_chars={len(prompt)} expect_json=True",
             ) as llm_sp:
                 try:
-                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=3000)
+                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=6000)
                     usage = getattr(resp, "usage", None) or {}
                     p_tok = int(usage.get("prompt_tokens", 0) or 0)
                     c_tok = int(usage.get("completion_tokens", 0) or 0)
@@ -900,7 +928,7 @@ class TickEngine:
                     context["llm_error"] = str(exc)
         else:
             try:
-                resp = await self.llm.chat(prompt, expect_json=True, max_tokens=3000)
+                resp = await self.llm.chat(prompt, expect_json=True, max_tokens=6000)
                 plan = json.loads(self._extract_json(resp.content))
                 self._validate_plan(plan)
                 context["plan_source"] = "llm"
@@ -1038,7 +1066,14 @@ class TickEngine:
     {{"kind": "memory", "memory_type": "semantic", "key": "diet_pattern", "value": "..."}},
     {{"kind": "diet_log", "meal_type": "lunch", "description": "食堂鸡胸肉+米饭半碗", "calories": 550}},
     {{"kind": "plan_update", "plan_version": "v1.1", "target_weight": "70.0", "phase_name": "稳态适应期", "phase_rationale": "原因", "focus_notes": "关注点", "tolerance_kg": 0.7, "ai_summary": "健康页一句话评语", "daily_targets": {{"{tick.get('tick_date')}": 74.5}}, "content": "完整计划 Markdown"}},
-    {{"kind": "daily_report", "report_date": "{tick.get('tick_date')}", "title": "{tick.get('tick_date')} 睡前体重与健康日报", "summary": "1-2句睡前摘要", "body_markdown": "完整日报 Markdown", "weight_snapshot": {{}}, "diet_summary": {{}}, "plan_update": {{}}, "tomorrow_focus": ["建议1", "建议2"], "push": true}},
+    {{"kind": "daily_report", "report_date": "{tick.get('tick_date')}", "title": "{tick.get('tick_date')} 睡前健康与节奏日报", "summary": "1-2句睡前摘要", "body_markdown": "完整日报 Markdown", "weight_snapshot": {{}}, "diet_summary": {{}}, "plan_update": {{}}, "tomorrow_focus": ["建议1", "建议2"], "push": true}},
+    {{"kind": "rhythm_sync_timeline", "date": "{tick.get('tick_date')}", "rationale": "一句温和说明为何这样排布今天/明天", "blocks": [{{"title": "项目核心推进", "start": "10:00", "end": "11:30", "block_type": "focus", "affair_id": 12, "note": "先完成最小原型"}}]}},
+    {{"kind": "rhythm_upsert_affair", "id": null, "title": "项目/任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": "简短说明", "milestones": ["里程碑1"]}},
+    {{"kind": "rhythm_transit_affair", "affair_id": 12, "action": "finish|start|defer|pause|resume|graduate|cancel", "defer_to": "2026-11-28T09:00:00"}},
+    {{"kind": "rhythm_milestone_done", "milestone_id": 34}},
+    {{"kind": "rhythm_occupancy", "date": "{tick.get('tick_date')}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "评审会"}},
+    {{"kind": "rhythm_block_status", "block_id": 56, "status": "DONE|SKIPPED|DOING"}},
+    {{"kind": "rhythm_checkin", "affair_id": 7, "result": "done|kept|missed", "note": ""}},
     {{"kind": "resolve_ticket", "ticket_id": 1, "resolution": "已吸收至画像"}},
     {{"kind": "episode", "content": "要记入事件流的内容"}}
   ],
@@ -1047,8 +1082,9 @@ class TickEngine:
 }}
 注意：
 1. actions 仅输出本窗口真正需要的项（不需要的类别直接不放）；
-2. tickets 最多 1 张提问（总数最多 2 张）；若已有未回复提问或处于睡前/夜间窗口，tickets 留空 []；
-3. 保持温和不苛责的语气，压力与睡眠优先于热量。"""
+2. 日程排布权：你有权直接通过 `rhythm_sync_timeline` 写出或更新今日/明日可视化时间线（系统会自动保留用户已完成/进行中与刚性钉块），原则是少而精、留足缓冲、睡眠/压力差时主动减负；只有遇到重大项目取舍或明显延期风险时才开 1 张轻量票据协商；
+3. tickets 最多 1 张提问（总数最多 2 张，健康与节奏共享配额）；若已有未回复提问或处于睡前/夜间窗口，tickets 留空 []；
+4. 保持温和不苛责的语气，压力与睡眠优先于热量和满负荷工作。"""
 
     @staticmethod
     def _extract_json(content: str) -> str:
@@ -1336,6 +1372,139 @@ class TickEngine:
                             logger.warning("WORK resolve_ticket #%s failed: %s", tid, exc)
                             work_results.append({"kind": "resolve_ticket", "ticket_id": tid, "ok": False, "error": str(exc)})
 
+                elif kind == "rhythm_sync_timeline" and context.get("server_ok"):
+                    try:
+                        target_date = str(a.get("date") or tick.get("tick_date") or self._clock().strftime("%Y-%m-%d"))
+                        blocks_in = [b for b in (a.get("blocks") or []) if isinstance(b, dict)]
+                        res = await self.rhythm.sync_ai_timeline(
+                            target_date=target_date,
+                            blocks=blocks_in,
+                            rationale=str(a.get("rationale") or ""),
+                            preserve_done=bool(a.get("preserve_done", True)),
+                            preserve_pinned=bool(a.get("preserve_pinned", True)),
+                            source=f"sailtick:{tick['slot']}",
+                        )
+                        work_results.append(
+                            {
+                                "kind": "rhythm_sync_timeline",
+                                "date": target_date,
+                                "plan_version": res.get("plan_version"),
+                                "created_count": res.get("created_count", 0),
+                                "ok": True,
+                            }
+                        )
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_sync_timeline failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_sync_timeline", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_upsert_affair" and context.get("server_ok"):
+                    try:
+                        aid = a.get("id") or a.get("affair_id")
+                        if aid is not None:
+                            updates = {
+                                k: a[k]
+                                for k in ("title", "description", "domain", "urgency_ddl", "est_minutes", "importance", "kind_meta")
+                                if k in a and a[k] is not None
+                            }
+                            if a.get("kind_name"):
+                                updates["kind"] = str(a["kind_name"])
+                            res = await self.rhythm.update_affair(int(aid), updates)
+                            affair_id = res.get("id", int(aid))
+                        else:
+                            k_name = str(a.get("kind_name") or a.get("affair_kind") or "task_oneoff")
+                            k_meta = dict(a.get("kind_meta") or {})
+                            if k_name == "venture" and a.get("target_date") and not k_meta.get("target_date"):
+                                k_meta["target_date"] = str(a["target_date"])[:10]
+                            res = await self.rhythm.create_affair(
+                                title=str(a.get("title") or "未命名事项"),
+                                kind=k_name,
+                                domain=a.get("domain"),
+                                description=str(a.get("description") or ""),
+                                urgency_ddl=a.get("urgency_ddl"),
+                                est_minutes=int(a.get("est_minutes") or 30),
+                                importance=int(a.get("importance") or 3),
+                                kind_meta=k_meta,
+                                state=a.get("state"),
+                            )
+                            affair_id = res.get("id")
+                            # 若为新项目且附带里程碑列表，顺手建好
+                            if k_name == "venture" and affair_id and isinstance(a.get("milestones"), list):
+                                for ms_item in a["milestones"][:8]:
+                                    ms_title = ms_item.get("title") if isinstance(ms_item, dict) else str(ms_item)
+                                    if ms_title and ms_title.strip():
+                                        await self.rhythm.add_milestone(int(affair_id), ms_title.strip())
+                        work_results.append({"kind": "rhythm_upsert_affair", "affair_id": affair_id, "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_upsert_affair failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_upsert_affair", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_transit_affair" and context.get("server_ok"):
+                    try:
+                        aid = int(a["affair_id"])
+                        act_name = str(a.get("action") or "finish")
+                        res = await self.rhythm.transit_affair(
+                            aid,
+                            act_name,
+                            defer_to=a.get("defer_to"),
+                            defer_end=a.get("defer_end"),
+                        )
+                        work_results.append(
+                            {"kind": "rhythm_transit_affair", "affair_id": aid, "state": res.get("state"), "ok": True}
+                        )
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_transit_affair failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_transit_affair", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_milestone_done" and context.get("server_ok"):
+                    try:
+                        mid = int(a["milestone_id"])
+                        res = await self.rhythm.milestone_done(mid)
+                        work_results.append({"kind": "rhythm_milestone_done", "milestone_id": mid, "state": res.get("state"), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_milestone_done failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_milestone_done", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_occupancy" and context.get("server_ok"):
+                    try:
+                        target_date = str(a.get("date") or tick.get("tick_date") or self._clock().strftime("%Y-%m-%d"))
+                        res = await self.rhythm.create_occupancy(
+                            target_date=target_date,
+                            occupancy_type=str(a.get("occupancy_type") or "meeting"),
+                            start=a.get("start"),
+                            end=a.get("end"),
+                            whole_day=bool(a.get("whole_day", False)),
+                            label=str(a.get("label") or ""),
+                            note=str(a.get("note") or ""),
+                        )
+                        work_results.append({"kind": "rhythm_occupancy", "id": res.get("id"), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_occupancy failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_occupancy", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_block_status" and context.get("server_ok"):
+                    try:
+                        bid = int(a["block_id"])
+                        res = await self.rhythm.set_block_status(bid, str(a.get("status") or "DONE"))
+                        work_results.append({"kind": "rhythm_block_status", "block_id": bid, "status": res.get("status"), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_block_status failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_block_status", "ok": False, "error": str(exc)})
+
+                elif kind == "rhythm_checkin" and context.get("server_ok"):
+                    try:
+                        aid = int(a["affair_id"])
+                        res = await self.rhythm.checkin(
+                            aid,
+                            result=str(a.get("result") or "done"),
+                            log_date=a.get("log_date") or tick.get("tick_date"),
+                            note=str(a.get("note") or ""),
+                            source="agent",
+                        )
+                        work_results.append({"kind": "rhythm_checkin", "id": res.get("id"), "ok": True})
+                    except Exception as exc:
+                        logger.warning("WORK rhythm_checkin failed (non-fatal): %s", exc)
+                        work_results.append({"kind": "rhythm_checkin", "ok": False, "error": str(exc)})
+
                 elif kind == "dev_task" and self.dev_runner is not None:
                     if not policy.get("allow_self_dev", True):
                         await self.memory.save_episode(
@@ -1420,6 +1589,7 @@ class TickEngine:
                     deep_pkg=stage1.get("deep_pkg"),
                     model_result=stage1.get("modeling"),
                     saved_snapshot=stage1.get("saved_snapshot"),
+                    rhythm_result=stage1.get("rhythm"),
                     tick_id=tick["id"],
                     tracer=tracer,
                 )

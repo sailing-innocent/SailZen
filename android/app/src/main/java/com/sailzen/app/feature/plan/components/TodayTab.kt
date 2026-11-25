@@ -1,5 +1,6 @@
 package com.sailzen.app.feature.plan.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,13 +10,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,96 +42,123 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sailzen.app.R
+import com.sailzen.app.core.network.dto.CheckinTodayItemDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.feature.plan.PlanViewModel
 
+private val QUICK_NEGOTIATION_PROMPTS = listOf(
+    "看看今天怎么排" to "/today",
+    "下午临时加会重排" to "下午临时加了会，帮我把剩下的安排重新排一下",
+    "今天太累减负" to "今天状态有点累，帮我减负，只保留最关键的一两件事",
+    "看看重点项目" to "/projects",
+)
+
 /**
- * 今日 Tab：捕获 → 待分拣 → 周节奏 → 打卡 → 时间线 → 页脚，同帧联动刷新。
- * 未配置服务器 / 离线队列提示置于最顶（沿用旧时间线页行为）。
+ * 今日 Tab（Rhythm v2 + SailTick Personal Agent）：
+ * 顶部 SailTick 随身协商卡 → AI 排程思路横幅 + 今日日程画布 → 待分拣（按需展示）→ 打卡 → 今日健康信号。
  */
 @Composable
 fun TodayTab(
     state: PlanViewModel.UiState,
-    onCapture: (String, String) -> Unit,
+    onQuickChat: (String) -> Unit,
+    onDismissChatReply: () -> Unit,
     onAcceptHint: (Int) -> Unit,
     onRejectHint: (Int) -> Unit,
     onConfirmInbox: (Int) -> Unit,
     onCancelInbox: (Int) -> Unit,
-    onOpenWeekReview: () -> Unit,
-    onPreceptKept: (com.sailzen.app.core.network.dto.CheckinTodayItemDto) -> Unit,
-    onPreceptViolated: (com.sailzen.app.core.network.dto.CheckinTodayItemDto) -> Unit,
-    onHabitDone: (com.sailzen.app.core.network.dto.CheckinTodayItemDto) -> Unit,
-    onHabitMissed: (com.sailzen.app.core.network.dto.CheckinTodayItemDto) -> Unit,
+    onPreceptKept: (CheckinTodayItemDto) -> Unit,
+    onPreceptViolated: (CheckinTodayItemDto) -> Unit,
+    onHabitDone: (CheckinTodayItemDto) -> Unit,
+    onHabitMissed: (CheckinTodayItemDto) -> Unit,
     onDoneBlock: (Int) -> Unit,
     onDeferBlock: (TimeBlockDto) -> Unit,
+    onDeleteBlock: (TimeBlockDto) -> Unit,
     onPlanB: (TimeBlockDto) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp),
-        contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (!state.configured) {
-            item {
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))) {
-                    Text(
-                        "未配置服务器地址，请到设置页填写",
-                        modifier = Modifier.padding(12.dp),
-                        color = Color(0xFFE65100),
-                    )
-                }
-            }
-        }
         if (state.queuedCount > 0) {
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(
                         "离线队列 ${state.queuedCount} 条待补传",
                         modifier = Modifier.padding(12.dp),
-                        color = Color(0xFF1565C0),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
         }
 
-        // ---------------- 吸顶捕获栏（核心入口） ----------------
+        // ---------------- SailTick 随身协商卡（移动端核心入口） ----------------
         item {
-            CaptureBar(onCapture = onCapture)
-        }
-
-        // ---------------- 待分拣（INBOX + AI 建议） ----------------
-        item {
-            InboxSection(
-                inbox = state.inbox,
-                onAcceptHint = { onAcceptHint(it.id) },
-                onRejectHint = { onRejectHint(it.id) },
-                onConfirm = { onConfirmInbox(it.id) },
-                onCancel = { onCancelInbox(it.id) },
+            SailTickNegotiationCard(
+                busy = state.chatBusy,
+                reply = state.chatReply,
+                isAsyncFallback = state.chatIsAsyncFallback,
+                onSend = onQuickChat,
+                onDismissReply = onDismissChatReply,
             )
         }
 
-        // ---------------- 周节奏卡 ----------------
-        state.weekReview?.let { review ->
-            item {
-                WeekRhythmCard(review = review, onClick = onOpenWeekReview)
-            }
+        // ---------------- 当日日程画布 ----------------
+        item { TimelineSectionHeader(state.timeline) }
+
+        val rationale = state.timeline?.aiRationale.orEmpty()
+        if (rationale.isNotBlank()) {
+            item { AiRationaleBanner(rationale = rationale) }
         }
 
-        // ---------------- 今日健康信号摘要 ----------------
-        if (state.healthSignals.isNotEmpty()) {
+        val blocks = state.timeline?.blocks
+            ?.filter { it.status != "MOVED" }
+            ?.sortedBy { it.startTime }
+            ?: emptyList()
+        if (blocks.isEmpty()) {
             item {
-                Text(
-                    stringResource(R.string.health_signals_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        "今日尚无时间块。在上方跟 SailTick 说一句今天的状态或想推进的事，马上帮你排妥。",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            items(state.healthSignals, key = { "hs-${it.refId}-${it.signalType}" }) { signal ->
-                HealthSignalCard(signal = signal)
+        }
+        items(blocks, key = { "block-${it.id}" }) { block ->
+            TimelineBlockItem(
+                block = block,
+                onDone = { onDoneBlock(block.id) },
+                onDefer = { onDeferBlock(block) },
+                onDelete = { onDeleteBlock(block) },
+                onLongPress = { onPlanB(block) },
+            )
+        }
+
+        // ---------------- 待分拣（仅当存在未分拣事项时出现） ----------------
+        if (state.inbox.isNotEmpty()) {
+            item {
+                InboxSection(
+                    inbox = state.inbox,
+                    onAcceptHint = { onAcceptHint(it.id) },
+                    onRejectHint = { onRejectHint(it.id) },
+                    onConfirm = { onConfirmInbox(it.id) },
+                    onCancel = { onCancelInbox(it.id) },
+                )
             }
         }
 
@@ -127,39 +173,161 @@ fun TodayTab(
             )
         }
 
-        // ---------------- 当日时间线 ----------------
-        item { TimelineSectionHeader(state.timeline) }
-        val blocks = state.timeline?.blocks
-            ?.filter { it.status != "MOVED" }
-            ?.sortedBy { it.startTime }
-            ?: emptyList()
-        if (blocks.isEmpty()) {
+        // ---------------- 今日健康信号摘要 ----------------
+        if (state.healthSignals.isNotEmpty()) {
             item {
-                Card {
-                    Text(
-                        "当日尚无编排。点右上角 ▶ 生成日计划，或先在顶部捕获事务。",
-                        modifier = Modifier.padding(16.dp),
-                        color = Color.Gray,
+                Text(
+                    stringResource(R.string.health_signals_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+            items(state.healthSignals, key = { "hs-${it.refId}-${it.signalType}" }) { signal ->
+                HealthSignalCard(signal = signal)
+            }
+        }
+
+        item { Spacer(Modifier.height(64.dp)) }
+    }
+}
+
+@Composable
+private fun SailTickNegotiationCard(
+    busy: Boolean,
+    reply: String?,
+    isAsyncFallback: Boolean,
+    onSend: (String) -> Unit,
+    onDismissReply: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    "与 SailTick 协商今天",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    placeholder = {
+                        Text(
+                            "临时加会、想推进哪件事、累了想减负…",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    },
+                    singleLine = true,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+                FilledTonalIconButton(
+                    onClick = {
+                        val text = input.trim()
+                        if (text.isNotEmpty()) {
+                            onSend(text)
+                            input = ""
+                        }
+                    },
+                    enabled = !busy && input.isNotBlank(),
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送给 SailTick")
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                QUICK_NEGOTIATION_PROMPTS.forEach { (label, prompt) ->
+                    AssistChip(
+                        onClick = { if (!busy) onSend(prompt) },
+                        enabled = !busy,
+                        label = { Text(label, style = MaterialTheme.typography.labelMedium) },
                     )
                 }
             }
-        }
-        items(blocks, key = { "block-${it.id}" }) { block ->
-            TimelineBlockItem(
-                block = block,
-                onDone = { onDoneBlock(block.id) },
-                onDefer = { onDeferBlock(block) },
-                onLongPress = { onPlanB(block) },
-            )
-        }
 
-        // ---------------- 缓冲余量页脚 ----------------
-        state.timeline?.let { tl ->
-            if (tl.bufferTotalMinutes > 0) {
-                item { TimelineBufferFooter(tl) }
+            if (!reply.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isAsyncFallback) {
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (isAsyncFallback) "已转入异步消息箱" else "SailTick 回复",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            IconButton(
+                                onClick = onDismissReply,
+                                modifier = Modifier.size(22.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "收起回复",
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        }
+                        Text(
+                            text = reply,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
             }
         }
-        item { Spacer(Modifier.height(80.dp)) }
     }
 }
 
@@ -202,7 +370,7 @@ private fun HealthSignalCard(signal: HealthSignalItemDto) {
 }
 
 private fun formatHealthSignalSummary(signal: HealthSignalItemDto): String {
-    val obj = signal.valueJson as? kotlinx.serialization.json.JsonObject ?: return signal.valueJson.toString()
+    val obj = signal.valueJson as? kotlinx.serialization.json.JsonObject ?: return ""
     fun str(key: String): String? =
         (obj[key] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }
 

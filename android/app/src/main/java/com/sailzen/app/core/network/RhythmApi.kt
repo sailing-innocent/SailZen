@@ -15,10 +15,10 @@ import com.sailzen.app.core.network.dto.DayTimelineDto
 import com.sailzen.app.core.network.dto.DeleteResponse
 import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
-import com.sailzen.app.core.network.dto.PlanDayDto
-import com.sailzen.app.core.network.dto.PlanDayRequest
-import com.sailzen.app.core.network.dto.ReviewDto
-import com.sailzen.app.core.network.dto.ReviewTimespanDto
+import com.sailzen.app.core.network.dto.OccupancyCreateRequest
+import com.sailzen.app.core.network.dto.OccupancyDto
+import com.sailzen.app.core.network.dto.OccupancyListResponse
+import com.sailzen.app.core.network.dto.RhythmDashboardDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.network.dto.VentureMilestoneRequest
@@ -32,10 +32,14 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
- * 节奏 REST API（前缀 /api/v1/rhythm，契约见服务端 controller/rhythm.py
- * 与设计文档 doc/design/manager/rhythm.md §5）。
+ * 节奏 v2 REST API（前缀 /api/v1/rhythm，由 SailTick Personal Agent 自主编排日程）。
  */
 interface RhythmApi {
+
+    // ---------------- Dashboard ----------------
+
+    @GET("api/v1/rhythm/dashboard")
+    suspend fun dashboard(@Query("date") date: String): RhythmDashboardDto
 
     // ---------------- Affair ----------------
 
@@ -68,7 +72,7 @@ interface RhythmApi {
     @POST("api/v1/rhythm/affair/{id}/confirm-hint")
     suspend fun confirmHint(@Path("id") id: Int, @Body body: ConfirmHintRequest): AffairDto
 
-    // ---------------- Timeline / Plan ----------------
+    // ---------------- Timeline ----------------
 
     @GET("api/v1/rhythm/timeline/day")
     suspend fun timelineDay(@Query("date") date: String): DayTimelineDto
@@ -79,8 +83,19 @@ interface RhythmApi {
     @POST("api/v1/rhythm/timeline/block/{id}/move")
     suspend fun blockMove(@Path("id") id: Int, @Body body: BlockMoveRequest): TimeBlockDto
 
-    @POST("api/v1/rhythm/plan/day")
-    suspend fun planDay(@Body body: PlanDayRequest): PlanDayDto
+    @DELETE("api/v1/rhythm/timeline/block/{id}")
+    suspend fun deleteBlock(@Path("id") id: Int): DeleteResponse
+
+    // ---------------- Occupancy ----------------
+
+    @POST("api/v1/rhythm/occupancy/")
+    suspend fun createOccupancy(@Body body: OccupancyCreateRequest): OccupancyDto
+
+    @GET("api/v1/rhythm/occupancy/")
+    suspend fun listOccupancies(@Query("date") date: String): OccupancyListResponse
+
+    @DELETE("api/v1/rhythm/occupancy/{id}")
+    suspend fun deleteOccupancy(@Path("id") id: Int): DeleteResponse
 
     // ---------------- Checkin ----------------
 
@@ -90,7 +105,10 @@ interface RhythmApi {
     @GET("api/v1/rhythm/checkin/today")
     suspend fun checkinToday(@Query("date") date: String? = null): CheckinTodayDto
 
-    // ---------------- Venture ----------------
+    // ---------------- Venture / Projects ----------------
+
+    @GET("api/v1/rhythm/venture/projects")
+    suspend fun listProjects(): List<VentureProgressDto>
 
     @GET("api/v1/rhythm/venture/{id}/progress")
     suspend fun ventureProgress(@Path("id") id: Int): VentureProgressDto
@@ -103,17 +121,6 @@ interface RhythmApi {
 
     @POST("api/v1/rhythm/venture/milestone/{id}/done")
     suspend fun milestoneDone(@Path("id") id: Int): AffairDto
-
-    // ---------------- Review ----------------
-
-    @GET("api/v1/rhythm/review/day")
-    suspend fun reviewDay(@Query("date") date: String): ReviewDto
-
-    @GET("api/v1/rhythm/review/week")
-    suspend fun reviewWeek(@Query("span") span: String? = null): ReviewDto
-
-    @GET("api/v1/rhythm/review/timespan/{id}")
-    suspend fun reviewTimespan(@Path("id") id: Int): ReviewTimespanDto
 
     // ---------------- Day View / Health ----------------
 

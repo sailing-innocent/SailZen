@@ -30,10 +30,9 @@ import com.sailzen.app.core.network.dto.HealthCheckinRequest
 import com.sailzen.app.core.network.dto.HealthCheckinResponse
 import com.sailzen.app.core.network.dto.InfoCollectionType
 import com.sailzen.app.core.network.dto.MedicationCreateRequest
-import com.sailzen.app.core.network.dto.PlanDayDto
-import com.sailzen.app.core.network.dto.PlanDayRequest
-import com.sailzen.app.core.network.dto.ReviewDto
-import com.sailzen.app.core.network.dto.ReviewTimespanDto
+import com.sailzen.app.core.network.dto.OccupancyCreateRequest
+import com.sailzen.app.core.network.dto.OccupancyDto
+import com.sailzen.app.core.network.dto.RhythmDashboardDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
 import com.sailzen.app.core.network.dto.SleepCreateRequest
 import com.sailzen.app.core.network.dto.VentureMilestoneRequest
@@ -121,7 +120,7 @@ class RhythmRepository private constructor(private val context: Context) {
      * 快速捕获一条事务。
      * @return Success(true) 服务端确认；Success(false) 离线已入队；Failure 发生错误。
      */
-    suspend fun capture(title: String, kind: String = "generic", domain: String? = null): OperationResult<Boolean> {
+    suspend fun capture(title: String, kind: String = "task_oneoff", domain: String? = null): OperationResult<Boolean> {
         val api = apiOrNull()
         if (api != null) {
             try {
@@ -237,8 +236,15 @@ class RhythmRepository private constructor(private val context: Context) {
     )
 
     // ------------------------------------------------------------------
-    // 时间线 / 计划
+    // 聚合看板 / 时间线 / 临时占用（Rhythm v2）
     // ------------------------------------------------------------------
+
+    suspend fun dashboard(date: LocalDate = LocalDate.now()): RhythmDashboardDto? = try {
+        apiOrNull()?.dashboard(date.toString())
+    } catch (e: Exception) {
+        Log.w(TAG, "dashboard failed: ${e.message}")
+        null
+    }
 
     suspend fun timeline(date: LocalDate = LocalDate.now()): DayTimelineDto? = try {
         apiOrNull()?.timelineDay(date.toString())
@@ -247,9 +253,45 @@ class RhythmRepository private constructor(private val context: Context) {
         null
     }
 
-    suspend fun planDay(date: LocalDate = LocalDate.now(), force: Boolean = false): OperationResult<PlanDayDto> = write(
-        block = { apiOrNull()?.planDay(PlanDayRequest(date = date.toString(), force = force)) ?: error("生成日计划失败") },
+    suspend fun deleteBlock(blockId: Int): OperationResult<Boolean> = write(
+        block = {
+            val resp = apiOrNull()?.deleteBlock(blockId)
+            if (resp?.status == "success") true else error("删除时间块失败")
+        },
+        event = { DataChangeEvent.DayViewChanged() },
+    )
+
+    suspend fun createOccupancy(
+        date: LocalDate = LocalDate.now(),
+        occupancyType: String = "meeting",
+        start: String? = null,
+        end: String? = null,
+        wholeDay: Boolean = false,
+        label: String = "",
+        note: String = "",
+    ): OperationResult<OccupancyDto> = write(
+        block = {
+            apiOrNull()?.createOccupancy(
+                OccupancyCreateRequest(
+                    date = date.toString(),
+                    start = if (wholeDay) null else start,
+                    end = if (wholeDay) null else end,
+                    wholeDay = wholeDay,
+                    occupancyType = occupancyType,
+                    label = label,
+                    note = note,
+                ),
+            ) ?: error("创建占用失败")
+        },
         event = { DataChangeEvent.DayViewChanged(date = date) },
+    )
+
+    suspend fun deleteOccupancy(blockId: Int): OperationResult<Boolean> = write(
+        block = {
+            val resp = apiOrNull()?.deleteOccupancy(blockId)
+            if (resp?.status == "success") true else error("删除占用失败")
+        },
+        event = { DataChangeEvent.DayViewChanged() },
     )
 
     // ------------------------------------------------------------------
@@ -343,8 +385,15 @@ class RhythmRepository private constructor(private val context: Context) {
     }
 
     // ------------------------------------------------------------------
-    // 事业 / 复盘
+    // 项目 / 里程碑
     // ------------------------------------------------------------------
+
+    suspend fun listProjects(): List<VentureProgressDto> = try {
+        apiOrNull()?.listProjects() ?: emptyList()
+    } catch (e: Exception) {
+        Log.w(TAG, "listProjects failed: ${e.message}")
+        emptyList()
+    }
 
     suspend fun activeVentures(): List<AffairDto> = try {
         apiOrNull()?.listAffairs(state = "ACTIVE", kinds = listOf("venture"))?.affairs
@@ -402,21 +451,6 @@ class RhythmRepository private constructor(private val context: Context) {
                 )
             }
     }
-
-    suspend fun reviewWeek(span: String? = null): ReviewDto? = try {
-        apiOrNull()?.reviewWeek(span)
-    } catch (e: Exception) {
-        Log.w(TAG, "reviewWeek failed: ${e.message}")
-        null
-    }
-
-    suspend fun reviewTimespan(timespanId: Int): ReviewTimespanDto? = try {
-        apiOrNull()?.reviewTimespan(timespanId)
-    } catch (e: Exception) {
-        Log.w(TAG, "reviewTimespan failed: ${e.message}")
-        null
-    }
-
 
     // ------------------------------------------------------------------
     // 统一日视图 / 健康速记

@@ -27,6 +27,7 @@ from sailtick.datascan import DataScanner
 from sailtick.db import TickDatabase
 from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.memory import AgentMemory
+from sailtick.rhythm_analytics import RhythmAnalyticsEngine
 from sailtick.tracer import TickTraceRecorder
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ class NightlySelfMaintenance:
         llm: Any = None,
         knowledge: Optional[HealthKnowledgeManager] = None,
         modeling: Optional[WeightModelingEngine] = None,
+        rhythm_analytics: Optional[RhythmAnalyticsEngine] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -53,6 +55,7 @@ class NightlySelfMaintenance:
         self.llm = llm
         self._clock = clock
         self.modeling = modeling or WeightModelingEngine(clock=clock)
+        self.rhythm_analytics = rhythm_analytics or RhythmAnalyticsEngine(clock=clock)
         self.knowledge = knowledge or HealthKnowledgeManager(
             db=db,
             llm=llm,
@@ -109,9 +112,40 @@ class NightlySelfMaintenance:
         else:
             saved_snapshot = await self.db.get_latest_model_snapshot()
 
+        rhythm_result: Optional[Dict[str, Any]] = None
+        if data_ok:
+            rhythm_result = self.rhythm_analytics.analyze(deep_pkg)
+            if tracer is not None:
+                tracer.record_instant_span(
+                    "nightly_rhythm_analytics",
+                    "夜间节奏与项目倒排分析",
+                    status="ok",
+                    input_summary=f"days={rhythm_result['days_analyzed']} projects={rhythm_result['active_projects_count']}",
+                    output_summary=(
+                        f"adherence={rhythm_result['adherence_rate']} "
+                        f"overload={rhythm_result['overload_signal']} "
+                        f"projects={rhythm_result['active_projects_count']}"
+                    ),
+                    payload=rhythm_result,
+                )
+            await self.memory.update(
+                "semantic",
+                "nightly_rhythm_latest",
+                {
+                    "date": rhythm_result["snapshot_date"],
+                    "adherence_rate": rhythm_result["adherence_rate"],
+                    "golden_windows": rhythm_result["golden_windows"],
+                    "low_adherence_windows": rhythm_result["low_adherence_windows"],
+                    "overload_signal": rhythm_result["overload_signal"],
+                    "active_projects_count": rhythm_result["active_projects_count"],
+                    "insights": rhythm_result["insights"][:4],
+                },
+            )
+
         expert_brief = await self.compile_expert_brief(
             model_result=model_result,
             saved_snapshot=saved_snapshot,
+            rhythm_result=rhythm_result,
             deep_pkg=deep_pkg if data_ok else None,
             profile_dict=profile_dict,
             active_plan=active_plan,
@@ -138,6 +172,7 @@ class NightlySelfMaintenance:
             "seeded": seed_res,
             "deep_pkg": deep_pkg,
             "modeling": model_result,
+            "rhythm": rhythm_result,
             "saved_snapshot": saved_snapshot,
             "expert_brief": expert_brief,
         }
@@ -147,6 +182,7 @@ class NightlySelfMaintenance:
         deep_pkg: Optional[Dict[str, Any]] = None,
         model_result: Optional[Dict[str, Any]] = None,
         saved_snapshot: Optional[Dict[str, Any]] = None,
+        rhythm_result: Optional[Dict[str, Any]] = None,
         tick_id: Optional[str] = None,
         tracer: Optional[TickTraceRecorder] = None,
         explicit_foods: Optional[List[str]] = None,
@@ -200,6 +236,7 @@ class NightlySelfMaintenance:
         expert_brief = await self.compile_expert_brief(
             model_result=model_result,
             saved_snapshot=saved_snapshot,
+            rhythm_result=rhythm_result,
             deep_pkg=deep_pkg if data_ok else None,
             food_res=food_res,
             kn_res=kn_res,
@@ -240,6 +277,7 @@ class NightlySelfMaintenance:
                 deep_pkg=stage1["deep_pkg"],
                 model_result=stage1["modeling"],
                 saved_snapshot=stage1["saved_snapshot"],
+                rhythm_result=stage1.get("rhythm"),
                 tick_id=tick_id,
                 tracer=tracer,
             )
@@ -258,6 +296,7 @@ class NightlySelfMaintenance:
             "data_ok": stage1["data_ok"],
             "seeded": stage1["seeded"],
             "modeling": stage1["modeling"],
+            "rhythm": stage1.get("rhythm"),
             "food_research": food_res,
             "knowledge_curation": kn_res,
             "expert_brief": expert_brief,
@@ -267,6 +306,7 @@ class NightlySelfMaintenance:
         self,
         model_result: Optional[Dict[str, Any]] = None,
         saved_snapshot: Optional[Dict[str, Any]] = None,
+        rhythm_result: Optional[Dict[str, Any]] = None,
         deep_pkg: Optional[Dict[str, Any]] = None,
         profile_dict: Optional[Dict[str, Any]] = None,
         active_plan: Optional[Dict[str, Any]] = None,
@@ -330,10 +370,30 @@ class NightlySelfMaintenance:
             "afternoon_craving": (
                 "下午犯困/嘴馋先喝 300ml 水起身走 3 分钟，真饿选无糖酸奶/卤蛋/10颗原味坚果，想喝奶茶改中杯无糖轻乳茶不加小料。"
             ),
+            "unexpected_meeting": (
+                "临时加会/突发打断：立刻把会议钉成刚性占用，把原定非核心任务顺延，只保留今天最关键的 1 个 45-60 分钟深度块，绝不硬塞加班。"
+            ),
+            "low_energy_day": (
+                "睡眠不足或状态差时：立刻主动减负，把大项目拆成一个 20 分钟最小起步块或改做轻量整理，保护休息与晚间睡眠。"
+            ),
+            "project_stuck": (
+                "重要项目推进卡壳：先问清楚是阻塞点、范围太大还是优先级变了，拆出 1 个 30 分钟内可见产出的极小里程碑，不给宏大空泛计划。"
+            ),
         }
 
         fin = ((m or {}).get("metrics") or {}).get("finance_food") or {}
         life = ((m or {}).get("metrics") or {}).get("lifestyle") or {}
+        rhy = rhythm_result or (
+            self.rhythm_analytics.analyze(deep_pkg) if isinstance(deep_pkg, dict) else {}
+        )
+        merged_insights = (
+            list((m or {}).get("insights") or [])[:4]
+            + list((rhy or {}).get("insights") or [])[:4]
+        )
+        merged_questions = (
+            list((m or {}).get("suggested_questions") or [])[:2]
+            + list((rhy or {}).get("suggested_questions") or [])[:2]
+        )
 
         return {
             "generated_at": now.isoformat(),
@@ -361,6 +421,16 @@ class NightlySelfMaintenance:
                 "forecast_points": (m or {}).get("forecast_points", []),
                 "daily_targets_14d": (m or {}).get("daily_targets_14d", {}),
             },
+            "rhythm": {
+                "adherence_rate": (rhy or {}).get("adherence_rate"),
+                "avg_blocks_per_day": (rhy or {}).get("avg_blocks_per_day", 0.0),
+                "golden_windows": (rhy or {}).get("golden_windows", []),
+                "low_adherence_windows": (rhy or {}).get("low_adherence_windows", []),
+                "overload_signal": bool((rhy or {}).get("overload_signal", False)),
+                "overdue_tasks_count": (rhy or {}).get("overdue_tasks_count", 0),
+                "active_projects_count": (rhy or {}).get("active_projects_count", 0),
+                "project_risks": (rhy or {}).get("project_risks", []),
+            },
             "plan_context": {
                 "phase_name": phase_name,
                 "plan_version": plan_version,
@@ -377,8 +447,8 @@ class NightlySelfMaintenance:
                 "avg_sleep_hours": life.get("avg_sleep_hours"),
                 "weekly_exercise_freq": life.get("weekly_exercise_freq"),
             },
-            "insights": list((m or {}).get("insights") or [])[:6],
-            "suggested_questions": list((m or {}).get("suggested_questions") or [])[:3],
+            "insights": merged_insights[:6],
+            "suggested_questions": merged_questions[:3],
             "profile_highlights": profile_highlights,
             "flexible_playbooks": flexible_playbooks,
             "knowledge_stats": {
@@ -456,6 +526,28 @@ class NightlySelfMaintenance:
             beh_parts.append(f"运动{beh['weekly_exercise_freq']}次/周")
         if beh_parts:
             lines.append("长周期行为画像: " + "，".join(beh_parts))
+
+        rhy = brief.get("rhythm") or {}
+        if isinstance(rhy, dict) and (
+            rhy.get("adherence_rate") is not None or rhy.get("project_risks")
+        ):
+            r_parts = []
+            if rhy.get("adherence_rate") is not None:
+                r_parts.append(f"近21天日程遵循率{int(rhy['adherence_rate'] * 100)}%")
+            if rhy.get("golden_windows"):
+                r_parts.append(f"高效时段:{'、'.join(rhy['golden_windows'])}")
+            if rhy.get("low_adherence_windows"):
+                r_parts.append(f"易打断时段:{'、'.join(rhy['low_adherence_windows'])}")
+            if rhy.get("overload_signal"):
+                r_parts.append("⚠近期排程过满需减量留白")
+            if r_parts:
+                lines.append("节奏执行画像: " + "，".join(r_parts))
+            for pr in (rhy.get("project_risks") or [])[:4]:
+                lines.append(
+                    f"  - 项目「{pr.get('title')}」[{pr.get('risk')}] "
+                    f"目标:{pr.get('target_date') or '未定'}(剩{pr.get('days_left')}天) "
+                    f"完成{int((pr.get('completion_ratio') or 0)*100)}% | {pr.get('action_hint', '')}"
+                )
 
         insights = brief.get("insights") or []
         if insights:

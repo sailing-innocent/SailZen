@@ -130,14 +130,13 @@ data class DayTimelineDto(
     val date: String,
     @SerialName("day_id") val dayId: Int,
     @SerialName("plan_version") val planVersion: Int = 0,
+    @SerialName("ai_rationale") val aiRationale: String = "",
+    @SerialName("ai_updated_at") val aiUpdatedAt: String? = null,
     val blocks: List<TimeBlockDto> = emptyList(),
+    @SerialName("completed_minutes") val completedMinutes: Int = 0,
+    @SerialName("planned_minutes") val plannedMinutes: Int = 0,
     @SerialName("domain_minutes") val domainMinutes: DomainMinutesDto = DomainMinutesDto(),
-    @SerialName("energy_consumed") val energyConsumed: Int = 0,
-    @SerialName("energy_budget") val energyBudget: Int = 100,
-    @SerialName("buffer_total_minutes") val bufferTotalMinutes: Int = 0,
-    @SerialName("buffer_free_minutes") val bufferFreeMinutes: Int = 0,
     val checkins: CheckinTodayDto? = null,
-    val warnings: List<String> = emptyList(),
 )
 
 @Serializable
@@ -152,34 +151,32 @@ data class BlockMoveRequest(
 )
 
 @Serializable
-data class PlanDayRequest(
+data class OccupancyCreateRequest(
     val date: String,
-    @SerialName("preserve_done") val preserveDone: Boolean = true,
-    val force: Boolean = false,
+    val start: String? = null,
+    val end: String? = null,
+    @SerialName("whole_day") val wholeDay: Boolean = false,
+    @SerialName("occupancy_type") val occupancyType: String = "meeting",
+    val label: String = "",
+    val note: String = "",
 )
 
 @Serializable
-data class PlanWarningDto(
-    val code: String,
-    val message: String,
-    @SerialName("affair_id") val affairId: Int? = null,
-)
-
-@Serializable
-data class UnplacedDto(
-    @SerialName("affair_id") val affairId: Int,
-    val title: String,
-    val reason: String,
-)
-
-@Serializable
-data class PlanDayDto(
+data class OccupancyDto(
+    val id: Int,
     val date: String,
-    @SerialName("day_id") val dayId: Int,
-    @SerialName("plan_version") val planVersion: Int,
-    val blocks: List<TimeBlockDto> = emptyList(),
-    val warnings: List<PlanWarningDto> = emptyList(),
-    val unplaced: List<UnplacedDto> = emptyList(),
+    val start: String? = null,
+    val end: String? = null,
+    @SerialName("whole_day") val wholeDay: Boolean = false,
+    @SerialName("occupancy_type") val occupancyType: String = "other",
+    val label: String = "",
+    val note: String = "",
+)
+
+@Serializable
+data class OccupancyListResponse(
+    val date: String,
+    val occupancies: List<OccupancyDto> = emptyList(),
 )
 
 @Serializable
@@ -221,31 +218,31 @@ data class CheckinTodayDto(
 data class VentureProgressDto(
     @SerialName("affair_id") val affairId: Int,
     val title: String,
+    val description: String = "",
+    val state: String = "ACTIVE",
     @SerialName("target_date") val targetDate: String? = null,
+    @SerialName("days_left") val daysLeft: Int? = null,
     @SerialName("weeks_left") val weeksLeft: Double? = null,
     @SerialName("weekly_budget_hours") val weeklyBudgetHours: Double = 0.0,
     @SerialName("week_consumed_hours") val weekConsumedHours: Double = 0.0,
+    @SerialName("recent_14d_hours") val recent14dHours: Double = 0.0,
     @SerialName("total_done_hours") val totalDoneHours: Double = 0.0,
     @SerialName("total_est_hours") val totalEstHours: Double = 0.0,
-    @SerialName("countdown_pressure") val countdownPressure: Double? = null,
     val milestones: List<AffairDto> = emptyList(),
     @SerialName("completion_ratio") val completionRatio: Double = 0.0,
 )
 
 @Serializable
-data class ReviewDto(
-    val id: Int? = null,
-    val scope: String,
-    @SerialName("period_key") val periodKey: String,
-    @SerialName("rhythm_score") val rhythmScore: Double = 0.0,
-    @SerialName("domain_minutes") val domainMinutes: JsonObject = JsonObject(emptyMap()),
-    @SerialName("precept_compliance_rate") val preceptComplianceRate: Double = 0.0,
-    @SerialName("habit_consistency") val habitConsistency: Double = 0.0,
-    @SerialName("sleep_window_keeping") val sleepWindowKeeping: Double = 0.0,
-    @SerialName("venture_budget_fulfillment") val ventureBudgetFulfillment: Double = 0.0,
-    @SerialName("buffer_consumed") val bufferConsumed: Double = 0.0,
-    val encroachments: List<JsonElement> = emptyList(),
-    @SerialName("ai_summary") val aiSummary: String = "",
+data class RhythmDashboardDto(
+    val date: String,
+    val timeline: DayTimelineDto,
+    val projects: List<VentureProgressDto> = emptyList(),
+    @SerialName("focus_affairs") val focusAffairs: List<AffairDto> = emptyList(),
+    @SerialName("overdue_affairs") val overdueAffairs: List<AffairDto> = emptyList(),
+    @SerialName("inbox_affairs") val inboxAffairs: List<AffairDto> = emptyList(),
+    val occupancies: List<OccupancyDto> = emptyList(),
+    @SerialName("today_checkins") val todayCheckins: CheckinTodayDto = CheckinTodayDto(date = ""),
+    val degraded: List<String> = emptyList(),
 )
 
 @Serializable
@@ -261,18 +258,12 @@ data class RhythmDayViewDto(
     val date: String,
     @SerialName("day_id") val dayId: Int,
     @SerialName("plan_version") val planVersion: Int = 0,
+    @SerialName("ai_rationale") val aiRationale: String = "",
     val blocks: List<TimeBlockDto> = emptyList(),
     @SerialName("domain_minutes") val domainMinutes: DomainMinutesDto = DomainMinutesDto(),
-    @SerialName("energy_consumed") val energyConsumed: Int = 0,
-    @SerialName("energy_budget") val energyBudget: Int = 100,
-    @SerialName("energy_available") val energyAvailable: Int = 100,
-    @SerialName("buffer_total_minutes") val bufferTotalMinutes: Int = 0,
-    @SerialName("buffer_free_minutes") val bufferFreeMinutes: Int = 0,
     val checkins: CheckinTodayDto? = null,
     @SerialName("health_signals") val healthSignals: List<HealthSignalItemDto> = emptyList(),
     val insights: List<String> = emptyList(),
-    val warnings: List<String> = emptyList(),
-    val note: String? = null,
 )
 
 @Serializable
@@ -292,23 +283,6 @@ data class HealthCheckinResponse(
     @SerialName("affair_id") val affairId: Int? = null,
     val note: String = "",
     @SerialName("created_at") val createdAt: String? = null,
-)
-
-@Serializable
-data class ReviewTimespanDto(
-    val id: Int? = null,
-    val scope: String,
-    @SerialName("period_key") val periodKey: String,
-    @SerialName("timespan_id") val timespanId: Int,
-    @SerialName("rhythm_score") val rhythmScore: Double = 0.0,
-    @SerialName("domain_minutes") val domainMinutes: JsonObject = JsonObject(emptyMap()),
-    @SerialName("precept_compliance_rate") val preceptComplianceRate: Double = 0.0,
-    @SerialName("habit_consistency") val habitConsistency: Double = 0.0,
-    @SerialName("sleep_window_keeping") val sleepWindowKeeping: Double = 0.0,
-    @SerialName("venture_budget_fulfillment") val ventureBudgetFulfillment: Double = 0.0,
-    @SerialName("buffer_consumed") val bufferConsumed: Double = 0.0,
-    val encroachments: List<JsonElement> = emptyList(),
-    @SerialName("ai_summary") val aiSummary: String = "",
 )
 
 /** 快速捕获磁贴等场景的可选 kind 列表（与服务端九类对齐） */

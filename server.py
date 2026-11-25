@@ -318,11 +318,7 @@ class SailServer:
             rhythm_tables = {
                 "rhythm_affairs",
                 "rhythm_time_blocks",
-                "rhythm_day_templates",
                 "rhythm_discipline_logs",
-                "rhythm_energy_profiles",
-                "rhythm_policies",
-                "rhythm_reviews",
             }
             missing = sorted(rhythm_tables - tables)
             if missing:

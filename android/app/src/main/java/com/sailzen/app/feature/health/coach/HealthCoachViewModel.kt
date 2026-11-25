@@ -35,6 +35,9 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
         val selectedReportDate: String? = null,
         val loading: Boolean = false,
         val sending: Boolean = false,
+        val quickChatBusy: Boolean = false,
+        val quickChatReply: String? = null,
+        val quickChatAsyncFallback: Boolean = false,
         val analyzingImage: Boolean = false,
         val committingDraft: Boolean = false,
         val activeDraft: ImageIntakeDraftDto? = null,
@@ -370,5 +373,38 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
 
     fun clearFeedback() {
         _uiState.update { it.copy(feedbackMessage = null) }
+    }
+
+    fun sendQuickChat(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || _uiState.value.quickChatBusy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(quickChatBusy = true) }
+            repo.quickChat(trimmed).fold(
+                onSuccess = { res ->
+                    _uiState.update {
+                        it.copy(
+                            quickChatBusy = false,
+                            quickChatReply = res.reply,
+                            quickChatAsyncFallback = res.fallbackAsync,
+                            feedbackMessage = if (res.rhythmUpdated) "已同步更新今日日程" else null,
+                        )
+                    }
+                    refresh()
+                },
+                onFailure = { err ->
+                    _uiState.update {
+                        it.copy(
+                            quickChatBusy = false,
+                            errorBanner = "发送对话失败：${err.message ?: "请检查网络与服务器配置"}",
+                        )
+                    }
+                },
+            )
+        }
+    }
+
+    fun clearQuickChatReply() {
+        _uiState.update { it.copy(quickChatReply = null, quickChatAsyncFallback = false) }
     }
 }

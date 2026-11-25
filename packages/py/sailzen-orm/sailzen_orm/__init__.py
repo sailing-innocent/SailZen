@@ -89,15 +89,11 @@ from sailzen_orm.finance import (
     FinanceTag,
 )
 
-# Rhythm Models
+# Rhythm Models (v2 极简核心 3 表)
 from sailzen_orm.rhythm import (
     RhythmAffair,
     RhythmTimeBlock,
-    RhythmDayTemplate,
     RhythmDisciplineLog,
-    RhythmEnergyProfile,
-    RhythmPolicy,
-    RhythmReview,
 )
 # SailTick Models
 from sailzen_orm.tick import (
@@ -181,11 +177,7 @@ __all__ = [
     # Rhythm
     "RhythmAffair",
     "RhythmTimeBlock",
-    "RhythmDayTemplate",
     "RhythmDisciplineLog",
-    "RhythmEnergyProfile",
-      "RhythmPolicy",
-      "RhythmReview",
     # SailTick
     "SailTickTicket",
     "SailTickMessage",

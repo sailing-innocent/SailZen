@@ -42,6 +42,7 @@ from sailtick.nightly import NightlySelfMaintenance
 from sailtick.notify import NotificationEngine
 from sailtick.qq_bot import OneBotQQAdapter
 from sailtick.quick_agent import QuickCoachAgent
+from sailtick.rhythm_client import RhythmClient
 from sailtick.scheduler import TickScheduler
 from sailtick.state import DependencyState
 from sailtick.tick_engine import TickEngine
@@ -71,6 +72,9 @@ class SailTickDaemon:
             self.config.sail_server.api_base, self.config.sail_server.auth_token
         )
         self.scanner = DataScanner(
+            self.config.sail_server.api_base, self.config.sail_server.auth_token
+        )
+        self.rhythm = RhythmClient(
             self.config.sail_server.api_base, self.config.sail_server.auth_token
         )
         self.notifier = NotificationEngine(self.config.notify, inbox=self.inbox)
@@ -114,6 +118,7 @@ class SailTickDaemon:
             inbox=self.inbox,
             llm=self.llm,
             knowledge=self.knowledge,
+            rhythm=self.rhythm,
         )
         self.qq_bot = OneBotQQAdapter(
             config=self.config.qq_bot,
@@ -134,6 +139,7 @@ class SailTickDaemon:
             dev_runner=dev_runner,
             canary=self.canary,
             nightly=self.nightly,
+            rhythm=self.rhythm,
         )
         self.scheduler = TickScheduler(self.db, timezone=self.config.timezone)
 
@@ -216,6 +222,7 @@ class SailTickDaemon:
         await self.llm.close()
         await self.inbox.close()
         await self.scanner.close()
+        await self.rhythm.close()
         await self.db.close()
         logger.info("SailTick Daemon stopped")
 

@@ -109,23 +109,8 @@ def _to_device_response(d: Device) -> UserDeviceResponse:
 
 
 def _seed_health_profile_hints(db: Session) -> Dict[str, Any]:
-    """初次引导默认用户时，尽力从现有 RhythmEnergyProfile 与 WeightPlan 吸收基础画像（非致命）。"""
+    """初次引导默认用户时，尽力从现有 WeightPlan 吸收基础画像（非致命）。"""
     hints: Dict[str, Any] = {}
-    try:
-        from sailzen_orm.rhythm import RhythmEnergyProfile
-
-        rp = (
-            db.query(RhythmEnergyProfile)
-            .filter(RhythmEnergyProfile.is_default == True)  # noqa: E712
-            .first()
-        )
-        if rp is not None:
-            if getattr(rp, "sleep_start", None):
-                hints["sleep_time"] = str(rp.sleep_start)
-            if getattr(rp, "sleep_end", None):
-                hints["wake_time"] = str(rp.sleep_end)
-    except Exception:
-        pass
     try:
         from sailzen_orm.health import WeightPlan
 

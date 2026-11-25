@@ -1,571 +1,527 @@
+/**
+ * @file rhythm.tsx
+ * @brief Rhythm v2 页面 — SailTick 驱动的可视化日程画布 + 重要项目倒排 + 即时协商入口
+ */
+
+import { useEffect, useState } from 'react'
 import PageLayout from '@components/page_layout'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DatePicker from '@components/date_picker'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import DatePicker from '@components/date_picker'
-import type { RhythmSection } from '@lib/store/rhythm'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { useRhythmStore } from '@lib/store/rhythm'
-import type { AffairDomainValue, AffairKindValue, AffairStateValue } from '@lib/data/affair'
-import { AffairDomain, AffairKind } from '@lib/data/affair'
-import { useEffect, useState } from 'react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  OverviewCard,
-  DomainPieChart,
-  WarningList,
-} from '@components/rhythm/overview_card'
 import { TimelineView } from '@components/rhythm/timeline_view'
+import { api_quick_chat, api_send_coach_message } from '@lib/api/tick'
 import {
-  AffairKanban,
-  AffairList,
-  AffairEditDialog,
-  AffairCreateButton,
-} from '@components/rhythm/affair_views'
-import {
-  VentureCard,
-  VentureDetail,
-} from '@components/rhythm/venture_views'
-import {
-  CheckinPanel,
-  HabitHeatmap,
-  PreceptComplianceChart,
-} from '@components/rhythm/discipline_views'
-import {
-  EnergyProfileEditor,
-  TemplateEditor,
-  PolicyEditor,
-} from '@components/rhythm/foundation_views'
-import {
-  ReviewCard,
-  ReviewSummaryEditor,
-  WeekReviewCard,
-  EncroachmentList,
-  DomainTrendChart,
-  EnergyActualChart,
-} from '@components/rhythm/review_views'
-import { EnergyTab } from '@components/rhythm/energy_tab'
-import type { AffairData } from '@lib/data/affair'
-import {
-  LayoutDashboard,
-  Clock,
-  Briefcase,
-  Target,
-  Settings,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
-  RotateCcw,
   Sparkles,
-  AlertCircle,
-  CheckCircle2,
-  Zap,
-  Search,
+  Send,
+  Target,
+  Check,
+  Plus,
+  Trash2,
+  MessageCircle,
+  RefreshCw,
 } from 'lucide-react'
 
-const tabDefs = [
-  { value: 'overview', label: '概览', icon: LayoutDashboard },
-  { value: 'timeline', label: '时间线', icon: Clock },
-  { value: 'energy', label: '精力', icon: Zap },
-  { value: 'affairs', label: '事务中心', icon: Briefcase },
-  { value: 'ventures', label: '事业', icon: Target },
-  { value: 'discipline', label: '戒律/习惯', icon: CheckCircle2 },
-  { value: 'foundation', label: '基础配置', icon: Settings },
-  { value: 'review', label: '复盘统计', icon: BarChart3 },
-] as const
-
-type TabValue = typeof tabDefs[number]['value']
+const QUICK_PROMPTS = [
+  '帮我看看今天怎么排最轻松高效',
+  '下午 2:00-4:00 临时加会，帮我重排一下',
+  '今天有点累，晚上只留轻任务和休息',
+]
 
 const RhythmPage = () => {
-  const [activeTab, setActiveTab] = useState<TabValue>('overview')
   const selectedDate = useRhythmStore((s) => s.selectedDate)
   const setSelectedDate = useRhythmStore((s) => s.setSelectedDate)
   const dashboard = useRhythmStore((s) => s.dashboard)
+  const loading = useRhythmStore((s) => s.loading)
   const error = useRhythmStore((s) => s.error)
-  const degraded = useRhythmStore((s) => s.degraded)
   const fetchDashboard = useRhythmStore((s) => s.fetchDashboard)
-  const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
-  const fetchTodayCheckins = useRhythmStore((s) => s.fetchTodayCheckins)
-  const retrySection = useRhythmStore((s) => s.retrySection)
-  const planDay = useRhythmStore((s) => s.planDay)
-  const rebalanceDay = useRhythmStore((s) => s.rebalanceDay)
+  const quickAddProject = useRhythmStore((s) => s.quickAddProject)
+  const addMilestone = useRhythmStore((s) => s.addMilestone)
+  const markMilestoneDone = useRhythmStore((s) => s.markMilestoneDone)
+  const quickAddTask = useRhythmStore((s) => s.quickAddTask)
+  const finishAffair = useRhythmStore((s) => s.finishAffair)
+  const deleteAffair = useRhythmStore((s) => s.deleteAffair)
+  const checkin = useRhythmStore((s) => s.checkin)
+
+  // SailTick 快反协商框状态
+  const [chatInput, setChatInput] = useState('')
+  const [chatBusy, setChatBusy] = useState(false)
+  const [chatReply, setChatReply] = useState<string | null>(null)
+  const [chatNote, setChatNote] = useState<string | null>(null)
+
+  // 极简新建项目
+  const [projOpen, setProjOpen] = useState(false)
+  const [projTitle, setProjTitle] = useState('')
+  const [projTargetDate, setProjTargetDate] = useState('')
+  const [projDesc, setProjDesc] = useState('')
+
+  // 极简新建里程碑
+  const [msDrafts, setMsDrafts] = useState<Record<number, string>>({})
+
+  // 极简随手记待办
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDdl, setTaskDdl] = useState('')
 
   useEffect(() => {
     fetchDashboard(selectedDate).catch(() => {})
   }, [selectedDate, fetchDashboard])
 
-  // 分片数据在 tab 激活时由父组件拉取，而不是在子组件 mount 时拉取：
-  // SectionGuard 会在 loading 时卸载 children，若由被卸载的子组件自身发起拉取，
-  // 响应到达后子组件重挂载会再次触发拉取，形成每轮一次 HTTP 请求的死循环。
-  const handleTabChange = (v: TabValue) => {
-    setActiveTab(v)
-    if (v === 'affairs' || v === 'ventures') {
-      fetchAffairsByKind().catch(() => {})
-    } else if (v === 'discipline') {
-      fetchTodayCheckins().catch(() => {})
+  const shiftDay = (delta: number) => {
+    const d = new Date(`${selectedDate}T00:00:00`)
+    d.setDate(d.getDate() + delta)
+    setSelectedDate(d)
+  }
+
+  const sendToSailTick = async (rawText?: string) => {
+    const text = (rawText ?? chatInput).trim()
+    if (!text || chatBusy) return
+    setChatBusy(true)
+    setChatNote(null)
+    try {
+      const res = await api_quick_chat(text, { channel: 'web_rhythm', session_id: 'web:rhythm' })
+      setChatReply(res.reply)
+      setChatInput('')
+      if (res.rhythm_updated) {
+        setChatNote('SailTick 已直接更新日程画布 ✓')
+        await fetchDashboard()
+      }
+    } catch {
+      // 若同机 SailTick daemon 离线，降级写入异步消息队列由下次 Tick 吸收
+      try {
+        await api_send_coach_message({
+          content: `[日程协商] ${text}`,
+          category: 'daily_info',
+          source_channel: 'web',
+          auto_log_diet: false,
+        })
+        setChatReply('SailTick 实时快脑暂未在线，已将你的想法写入异步消息箱，下次 Tick 唤醒时会自动吸收并重排日程。')
+        setChatInput('')
+      } catch (e) {
+        setChatNote(`发送失败：${e instanceof Error ? e.message : String(e)}`)
+      }
+    } finally {
+      setChatBusy(false)
     }
   }
 
-  const handlePrevDay = () => {
-    const d = new Date(selectedDate)
-    d.setDate(d.getDate() - 1)
-    setSelectedDate(d)
+  const handleCreateProject = async () => {
+    if (!projTitle.trim()) return
+    await quickAddProject(projTitle, projTargetDate || undefined, projDesc)
+    setProjTitle('')
+    setProjTargetDate('')
+    setProjDesc('')
+    setProjOpen(false)
   }
 
-  const handleNextDay = () => {
-    const d = new Date(selectedDate)
-    d.setDate(d.getDate() + 1)
-    setSelectedDate(d)
+  const handleAddMilestone = async (ventureId: number) => {
+    const t = (msDrafts[ventureId] ?? '').trim()
+    if (!t) return
+    await addMilestone(ventureId, t)
+    setMsDrafts((prev) => ({ ...prev, [ventureId]: '' }))
   }
 
-  const handleToday = () => {
-    setSelectedDate(new Date())
+  const handleQuickAddTask = async () => {
+    if (!taskTitle.trim()) return
+    await quickAddTask(taskTitle, taskDdl || undefined)
+    setTaskTitle('')
+    setTaskDdl('')
   }
 
-  const handlePlanDay = async () => {
-    await planDay()
-  }
-
-  const handleRebalance = async () => {
-    await rebalanceDay(undefined, 'manual')
-  }
-
-  const profile = dashboard?.energy_profile
-  const needsCalibration = profile?.is_default
-  const conflictCount = dashboard?.conflicts.encroachments.length ?? 0
-  const inboxCount = dashboard?.inbox_summary.length ?? 0
-  const overdueCount = dashboard?.overdue_summary.length ?? 0
-  const todayDueCount = dashboard?.today_due_summary.length ?? 0
+  const projects = dashboard?.projects ?? []
+  const focusAffairs = dashboard?.focus_affairs ?? []
+  const overdueAffairs = dashboard?.overdue_affairs ?? []
+  const habits = dashboard?.today_checkins?.habits ?? []
 
   return (
     <PageLayout>
-      <header className="flex flex-col gap-4 px-2 md:px-0 shrink-0">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-bold">Rhythm 后台</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleToday}>
-              今日
+      <div className="p-4 mx-auto w-full max-w-6xl space-y-4">
+        {/* 顶栏：日期导航 + SailTick 联动 */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+              Rhythm 日程画布
+              <Badge variant="secondary" className="text-xs font-normal">
+                SailTick 驱动
+              </Badge>
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              排布日程是与 AI 长期交流理解的过程，这里只保留清晰画布与随手微调
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedDate(new Date())}>
+              今天
             </Button>
-            <Button variant="ghost" size="icon" onClick={handlePrevDay}>
+            <Button variant="ghost" size="icon" onClick={() => shiftDay(-1)}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <DatePicker
               label=""
               placeholder="选择日期"
-              value={new Date(selectedDate)}
+              value={new Date(`${selectedDate}T00:00:00`)}
               onChange={(date) => setSelectedDate(date)}
             />
-            <Button variant="ghost" size="icon" onClick={handleNextDay}>
+            <Button variant="ghost" size="icon" onClick={() => shiftDay(1)}>
               <ChevronRight className="h-4 w-4" />
             </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handlePlanDay}>
-            <Sparkles className="h-4 w-4 mr-1" />
-            生成日计划
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleRebalance}>
-            <RotateCcw className="h-4 w-4 mr-1" />
-            再平衡
-          </Button>
-          <Button variant="link" size="sm" onClick={() => setActiveTab('timeline')}>
-            跳转时间线
-          </Button>
-          {needsCalibration && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-destructive text-destructive hover:bg-destructive/10"
-              onClick={() => setActiveTab('foundation')}
-            >
-              <AlertCircle className="h-3 w-3 mr-1" />
-              精力画像为默认导入，建议校准
+            <Button variant="outline" size="sm" onClick={() => fetchDashboard()} disabled={loading}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              刷新
             </Button>
-          )}
-          {conflictCount > 0 && <Badge variant="destructive">冲突 {conflictCount}</Badge>}
-          {inboxCount > 0 && <Badge variant="secondary">INBOX {inboxCount}</Badge>}
-          {overdueCount > 0 && <Badge variant="destructive">逾期 {overdueCount}</Badge>}
-          {todayDueCount > 0 && <Badge>今日截止 {todayDueCount}</Badge>}
-        </div>
-
-        {/* dashboard 子模块降级提示：部分数据为占位值，可整体重试 */}
-        {degraded.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 p-2 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span className="flex-1">
-              以下模块暂时降级：{degraded.join('、')}（显示为占位数据）
-            </span>
-            <Button variant="outline" size="sm" onClick={() => retrySection('dashboard').catch(() => {})}>
-              <RotateCcw className="h-3 w-3 mr-1" />
-              重试
+            <Button variant="ghost" size="sm" asChild>
+              <a href="/tick">
+                <MessageCircle className="h-3.5 w-3.5 mr-1" />
+                SailTick 票据
+              </a>
             </Button>
           </div>
+        </header>
+
+        {error && (
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+            加载失败：{error}
+          </div>
         )}
-      </header>
 
-      {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {error}
-        </div>
-      )}
-
-      <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as TabValue)} className="w-full">
-        <TabsList className="flex w-full flex-wrap h-auto gap-1 justify-start">
-          {tabDefs.map((tab) => {
-            const Icon = tab.icon
-            return (
-              <TabsTrigger key={tab.value} value={tab.value} className="gap-1">
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-4">
-          <SectionGuard section="dashboard">
-            <OverviewTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="timeline" className="mt-4">
-          <SectionGuard section="timeline">
-            <TimelineTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="energy" className="mt-4">
-          <EnergyTab />
-        </TabsContent>
-        <TabsContent value="affairs" className="mt-4">
-          <SectionGuard section="affairs">
-            <AffairsTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="ventures" className="mt-4">
-          <SectionGuard section="ventures">
-            <VenturesTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="discipline" className="mt-4">
-          <SectionGuard section="checkins">
-            <DisciplineTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="foundation" className="mt-4">
-          <SectionGuard section="config">
-            <FoundationTab />
-          </SectionGuard>
-        </TabsContent>
-        <TabsContent value="review" className="mt-4">
-          <SectionGuard section="review">
-            <ReviewTab />
-          </SectionGuard>
-        </TabsContent>
-      </Tabs>
-    </PageLayout>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Section guard：分片级 loading / error / retry
-// ---------------------------------------------------------------------------
-
-const SectionGuard = ({
-  section,
-  children,
-}: {
-  section: RhythmSection
-  children: React.ReactNode
-}) => {
-  const status = useRhythmStore((s) => s.sections[section])
-  const retrySection = useRhythmStore((s) => s.retrySection)
-  // 首次成功渲染 children 后锁定：之后刷新导致的 loading 切换不再卸载子树。
-  // 否则「子组件 mount 拉取 → guard 切 loading 分支卸载子组件 → 响应到达重挂载 →
-  // 再次拉取」会形成每轮一次 HTTP 请求的死循环（事务中心卡死、后端日志刷屏的根因）。
-  const [settled, setSettled] = useState(false)
-  useEffect(() => {
-    if (!status.loading && !status.error) setSettled(true)
-  }, [status.loading, status.error])
-
-  if (!settled) {
-    if (status.loading && status.error === null) {
-      return <div className="p-6 text-sm text-muted-foreground">加载中...</div>
-    }
-
-    if (status.error) {
-      return (
-        <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span className="flex-1">{status.error}</span>
-          <Button variant="outline" size="sm" onClick={() => retrySection(section).catch(() => {})}>
-            <RotateCcw className="h-3 w-3 mr-1" />
-            重试
-          </Button>
-        </div>
-      )
-    }
-  }
-
-  return <>{children}</>
-}
-
-// ---------------------------------------------------------------------------
-// Tab implementations
-// ---------------------------------------------------------------------------
-
-const OverviewTab = () => {
-  const dashboard = useRhythmStore((s) => s.dashboard)
-  return (
-    <div className="space-y-4">
-      <OverviewCard dashboard={dashboard} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DomainPieChart
-          minutes={dashboard?.timeline.domain_minutes ?? { life: 0, work: 0, career: 0 }}
-          profile={dashboard?.energy_profile ?? null}
-        />
-        <WarningList dashboard={dashboard} />
-      </div>
-    </div>
-  )
-}
-
-const TimelineTab = () => <TimelineView />
-
-const FILTER_STATE_OPTIONS: AffairStateValue[] = [
-  'INBOX',
-  'PLANNED',
-  'SCHEDULED',
-  'DOING',
-  'DEFERRED',
-  'ACTIVE',
-  'PAUSED',
-  'KICKOFF',
-  'DELEGATED',
-  'REVIEWING',
-]
-
-const AffairsFilterBar = () => {
-  const filters = useRhythmStore((s) => s.affairFilters)
-  const setAffairFilters = useRhythmStore((s) => s.setAffairFilters)
-  const resetAffairFilters = useRhythmStore((s) => s.resetAffairFilters)
-
-  const hasFilters =
-    filters.search.trim() !== '' ||
-    filters.states.length > 0 ||
-    filters.domains.length > 0 ||
-    filters.kinds.length > 0
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
-      <div className="relative">
-        <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={filters.search}
-          onChange={(e) => setAffairFilters({ search: e.target.value })}
-          placeholder="搜索标题..."
-          className="h-8 w-44 pl-7 text-sm"
-        />
-      </div>
-      <Select
-        value={filters.states[0] ?? 'all'}
-        onValueChange={(v) => setAffairFilters({ states: v === 'all' ? [] : [v as AffairStateValue] })}
-      >
-        <SelectTrigger className="h-8 w-32 text-sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">全部状态</SelectItem>
-          {FILTER_STATE_OPTIONS.map((s) => (
-            <SelectItem key={s} value={s}>
-              {s}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={filters.domains[0] ?? 'all'}
-        onValueChange={(v) => setAffairFilters({ domains: v === 'all' ? [] : [v as AffairDomainValue] })}
-      >
-        <SelectTrigger className="h-8 w-32 text-sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">全部域</SelectItem>
-          {Object.values(AffairDomain).map((d) => (
-            <SelectItem key={d} value={d}>
-              {d}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select
-        value={filters.kinds[0] ?? 'all'}
-        onValueChange={(v) => setAffairFilters({ kinds: v === 'all' ? [] : [v as AffairKindValue] })}
-      >
-        <SelectTrigger className="h-8 w-36 text-sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">全部类型</SelectItem>
-          {Object.values(AffairKind).map((k) => (
-            <SelectItem key={k} value={k}>
-              {k}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {hasFilters && (
-        <Button variant="ghost" size="sm" onClick={resetAffairFilters}>
-          重置
-        </Button>
-      )}
-    </div>
-  )
-}
-
-// 数据由 RhythmPage 在 tab 激活时拉取（见 handleTabChange），本组件仅消费 store，
-// 不在 mount 时发起拉取（否则会被 SectionGuard 的 loading 分支卸载后重挂载，造成请求死循环）。
-const AffairsTab = () => {
-  const allAffairs = useRhythmStore((s) => s.allAffairs)
-  const affairFilters = useRhythmStore((s) => s.affairFilters)
-  const [view, setView] = useState<'kanban' | 'list'>('kanban')
-  const [editing, setEditing] = useState<AffairData | null>(null)
-
-  const hasFilters =
-    affairFilters.search.trim() !== '' ||
-    affairFilters.states.length > 0 ||
-    affairFilters.domains.length > 0 ||
-    affairFilters.kinds.length > 0
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <AffairCreateButton />
-        <Button variant={view === 'kanban' ? 'default' : 'outline'} size="sm" onClick={() => setView('kanban')}>
-          看板
-        </Button>
-        <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}>
-          列表
-        </Button>
-      </div>
-      <AffairsFilterBar />
-      {view === 'kanban' ? (
-        <AffairKanban affairs={allAffairs} onEdit={(a) => setEditing(a)} />
-      ) : (
-        <AffairList affairs={allAffairs} onEdit={(a) => setEditing(a)} />
-      )}
-      {hasFilters && allAffairs.length === 0 && (
-        <div className="text-sm text-muted-foreground">当前筛选条件下暂无事务</div>
-      )}
-      <AffairEditDialog
-        affair={editing}
-        open={!!editing}
-        onOpenChange={(open) => !open && setEditing(null)}
-      />
-    </div>
-  )
-}
-
-const VenturesTab = () => {
-  const ventures = useRhythmStore((s) => s.ventures)
-  const fetchAffairsByKind = useRhythmStore((s) => s.fetchAffairsByKind)
-  const [selected, setSelected] = useState<AffairData | null>(null)
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-1 space-y-4">
-        <div className="font-semibold">事业列表</div>
-        {ventures.map((v) => (
-          <VentureCard
-            key={v.id}
-            venture={v}
-            selected={selected?.id === v.id}
-            onSelect={setSelected}
-          />
-        ))}
-        {ventures.length === 0 && (
-          <div className="text-sm text-muted-foreground border rounded-md p-4">暂无进行中的事业</div>
-        )}
-      </div>
-      <div className="lg:col-span-2">
-        {selected ? (
-          <VentureDetail
-            venture={selected}
-            onRefresh={() => fetchAffairsByKind()}
-          />
-        ) : (
-          <div className="text-muted-foreground p-4 border rounded-md">选择事业查看详情</div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-const DisciplineTab = () => {
-  const habits = useRhythmStore((s) => s.habits)
-  const [selectedHabit, setSelectedHabit] = useState<number | null>(null)
-
-  return (
-    <div className="space-y-4">
-      <CheckinPanel />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PreceptComplianceChart />
-        <div className="border rounded-md p-4">
-          <h3 className="font-semibold mb-2">习惯热力图</h3>
-          <div className="flex gap-2 mb-2 flex-wrap">
-            {habits.slice(0, 5).map((h) => (
-              <Button
-                key={h.id}
-                variant={selectedHabit === h.id ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedHabit(h.id)}
-              >
-                {h.title}
+        {/* SailTick 即时协商条（应对所有临时加会/疲惫减负/新增项目） */}
+        <Card className="border-primary/20">
+          <CardContent className="pt-4 space-y-2.5">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <span>跟 SailTick 说一声，直接调整日程或项目</span>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="例如：下午 2-4 点临时加会帮我重排 / 新建项目：下月底上线 v2 / 今天好累减负"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendToSailTick()}
+                disabled={chatBusy}
+              />
+              <Button onClick={() => sendToSailTick()} disabled={chatBusy || !chatInput.trim()}>
+                <Send className="h-4 w-4 mr-1" />
+                {chatBusy ? '协商中' : '发送'}
               </Button>
-            ))}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_PROMPTS.map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={chatBusy}
+                  onClick={() => sendToSailTick(p)}
+                >
+                  {p}
+                </Button>
+              ))}
+            </div>
+            {chatReply && (
+              <div className="rounded-md bg-muted/60 p-3 text-sm whitespace-pre-wrap">
+                {chatReply}
+                {chatNote && (
+                  <div className="text-xs text-primary mt-1 font-medium">{chatNote}</div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 主画布：左可视化时间线 + 右项目倒排与焦点待办 */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          <div className="lg:col-span-7 space-y-4">
+            <TimelineView timeline={dashboard?.timeline ?? null} />
           </div>
-          {selectedHabit && <HabitHeatmap affairId={selectedHabit} />}
+
+          <div className="lg:col-span-5 space-y-4">
+            {/* 重要项目倒排 */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-1.5">
+                      <Target className="h-4 w-4 text-primary" />
+                      重要项目倒排
+                    </CardTitle>
+                    <CardDescription>只需定好目标日，SailTick 负责日常拆解与跟进</CardDescription>
+                  </div>
+                  <Dialog open={projOpen} onOpenChange={setProjOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        新项目
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>新建重要项目</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-3 py-2">
+                        <div className="space-y-1.5">
+                          <Label>项目名称</Label>
+                          <Input
+                            placeholder="例如：SailZen 3.0 正式上线"
+                            value={projTitle}
+                            onChange={(e) => setProjTitle(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>目标完成日期（倒排依据）</Label>
+                          <Input
+                            type="date"
+                            value={projTargetDate}
+                            onChange={(e) => setProjTargetDate(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>一句话背景（可选）</Label>
+                          <Input
+                            placeholder="核心目标或交付标准"
+                            value={projDesc}
+                            onChange={(e) => setProjDesc(e.target.value)}
+                          />
+                        </div>
+                        <Button onClick={handleCreateProject} disabled={!projTitle.trim()} className="w-full">
+                          创建项目
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {projects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-3 text-center">
+                    暂无登记中的重要项目，点右上角新建或直接跟 SailTick 说一句即可。
+                  </p>
+                ) : (
+                  projects.map((p) => {
+                    const pct = Math.round((p.completion_ratio ?? 0) * 100)
+                    return (
+                      <div key={p.affair_id} className="rounded-lg border p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-medium text-sm">{p.title}</div>
+                          {p.target_date ? (
+                            <Badge
+                              variant={
+                                p.days_left !== null && p.days_left !== undefined && p.days_left <= 7
+                                  ? 'destructive'
+                                  : 'secondary'
+                              }
+                            >
+                              {p.days_left !== null && p.days_left !== undefined
+                                ? p.days_left < 0
+                                  ? `超期 ${Math.abs(p.days_left)} 天`
+                                  : `剩 ${p.days_left} 天`
+                                : p.target_date}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">未定目标日</Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <span>
+                            目标 {p.target_date || '待定'} · 近14天投入 {p.recent_14d_hours}h
+                          </span>
+                          <span>里程碑 {pct}%</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        {p.milestones.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            {p.milestones.map((m) => {
+                              const done = m.state === 'DONE'
+                              return (
+                                <div
+                                  key={m.id}
+                                  className="flex items-center justify-between gap-2 text-xs"
+                                >
+                                  <span
+                                    className={
+                                      done ? 'line-through text-muted-foreground' : 'text-foreground'
+                                    }
+                                  >
+                                    • {m.title}
+                                  </span>
+                                  {!done && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2 text-xs"
+                                      onClick={() => markMilestoneDone(m.id)}
+                                    >
+                                      <Check className="h-3 w-3 mr-0.5" />
+                                      完成
+                                    </Button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <div className="flex gap-1.5 pt-1">
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="随手加一个里程碑…"
+                            value={msDrafts[p.affair_id] ?? ''}
+                            onChange={(e) =>
+                              setMsDrafts((prev) => ({ ...prev, [p.affair_id]: e.target.value }))
+                            }
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddMilestone(p.affair_id)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => handleAddMilestone(p.affair_id)}
+                          >
+                            加
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 焦点待办 + 随手捕获 */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">
+                  待办焦点
+                  {overdueAffairs.length > 0 && (
+                    <Badge variant="destructive" className="ml-2 text-xs">
+                      逾期 {overdueAffairs.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>随手记下就行，不需要填权重和精力点数</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-1.5">
+                  <Input
+                    className="h-8 text-sm"
+                    placeholder="随手记一件要做的事…"
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleQuickAddTask()}
+                  />
+                  <Input
+                    type="date"
+                    className="h-8 w-36 text-xs"
+                    value={taskDdl}
+                    onChange={(e) => setTaskDdl(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 shrink-0"
+                    onClick={handleQuickAddTask}
+                    disabled={!taskTitle.trim()}
+                  >
+                    添加
+                  </Button>
+                </div>
+
+                {focusAffairs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-3">
+                    当前没有积压待办，保持轻松。
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {focusAffairs.slice(0, 12).map((a) => (
+                      <div
+                        key={a.id}
+                        className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{a.title}</div>
+                          {a.urgency_ddl && (
+                            <div className="text-xs text-muted-foreground">
+                              截止 {a.urgency_ddl.slice(0, 10)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="标记完成"
+                            onClick={() => finishAffair(a.id)}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            title="删除"
+                            onClick={() => deleteAffair(a.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* 轻量习惯打卡（仅在有活跃习惯时展示） */}
+            {habits.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">今日习惯</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {habits.map((h) => (
+                    <div
+                      key={h.affair.id}
+                      className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <div className="font-medium">{h.affair.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          本周 {h.week_done_count}/{h.week_target ?? 3} 次
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={h.done_today ? 'secondary' : 'outline'}
+                        disabled={h.done_today}
+                        onClick={() => checkin(h.affair.id, 'done')}
+                      >
+                        {h.done_today ? '已打卡 ✓' : '打卡'}
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-const FoundationTab = () => (
-  <div className="space-y-4">
-    <EnergyProfileEditor />
-    <TemplateEditor />
-    <PolicyEditor />
-  </div>
-)
-
-const ReviewTab = () => {
-  const dayReview = useRhythmStore((s) => s.dayReview)
-  const weekReview = useRhythmStore((s) => s.weekReview)
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-        <div className="space-y-2">
-          <ReviewCard review={dayReview} title="日评分" />
-          <ReviewSummaryEditor scope="day" review={dayReview} />
-        </div>
-        {weekReview ? (
-          <WeekReviewCard />
-        ) : (
-          <ReviewCard review={weekReview} title="周评分" />
-        )}
-      </div>
-      <EncroachmentList />
-      <DomainTrendChart />
-      <EnergyActualChart />
-    </div>
+    </PageLayout>
   )
 }
 

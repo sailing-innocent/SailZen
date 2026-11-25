@@ -168,3 +168,20 @@ data class HealthCoachSummaryDto(
     @SerialName("today_messages") val todayMessages: List<TickMessageDto> = emptyList(),
     @SerialName("pending_intake_drafts") val pendingIntakeDrafts: List<ImageIntakeDraftDto> = emptyList(),
 )
+
+@Serializable
+data class QuickChatRequest(
+    val text: String,
+    val channel: String = "android",
+    @SerialName("user_id") val userId: String = "owner",
+    @SerialName("session_id") val sessionId: String? = "android:owner",
+)
+
+@Serializable
+data class QuickChatResponse(
+    val reply: String = "",
+    @SerialName("rhythm_updated") val rhythmUpdated: Boolean = false,
+    val source: String = "",
+    @SerialName("session_id") val sessionId: String? = null,
+    @SerialName("latency_ms") val latencyMs: Double = 0.0,
+)

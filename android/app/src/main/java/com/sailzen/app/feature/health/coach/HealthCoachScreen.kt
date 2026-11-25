@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
@@ -27,8 +30,10 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,9 +44,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -166,7 +173,7 @@ fun HealthCoachScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SailTick AI 健康教练") },
+                title = { Text("SailTick Personal Agent") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -228,7 +235,18 @@ fun HealthCoachScreen(
                     }
                 }
 
-                // 0. 核心入口：拍照 / 选截图 AI 智能识图记录
+                // 0a. 随时对话（日程 · 项目 · 健康 · 提醒统一随身快脑）
+                item {
+                    PersonalAgentQuickChatCard(
+                        busy = state.quickChatBusy,
+                        reply = state.quickChatReply,
+                        isAsyncFallback = state.quickChatAsyncFallback,
+                        onSend = { viewModel.sendQuickChat(it) },
+                        onDismissReply = { viewModel.clearQuickChatReply() },
+                    )
+                }
+
+                // 0b. 拍照 / 选截图 AI 智能识图记录
                 item {
                     ImageIntakeCaptureCard(
                         note = imageNote,
@@ -638,6 +656,143 @@ private fun DailyReportCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+        }
+    }
+}
+
+private val AGENT_QUICK_COMMANDS = listOf(
+    "今日日程" to "/today",
+    "重点项目" to "/projects",
+    "昨夜复盘简报" to "/brief",
+    "今日减重与日程建议" to "结合我今天的体重和日程状态，给我一个最轻量的今日执行建议",
+)
+
+@Composable
+private fun PersonalAgentQuickChatCard(
+    busy: Boolean,
+    reply: String?,
+    isAsyncFallback: Boolean,
+    onSend: (String) -> Unit,
+    onDismissReply: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    "随时对话（日程 · 项目 · 健康 · 提醒）",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    placeholder = {
+                        Text(
+                            "说一句日程变动、项目想法或身体状态…",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    },
+                    singleLine = true,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+                FilledTonalIconButton(
+                    onClick = {
+                        val trimmed = text.trim()
+                        if (trimmed.isNotEmpty()) {
+                            onSend(trimmed)
+                            text = ""
+                        }
+                    },
+                    enabled = !busy && text.isNotBlank(),
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "发送")
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                AGENT_QUICK_COMMANDS.forEach { (label, prompt) ->
+                    AssistChip(
+                        onClick = { if (!busy) onSend(prompt) },
+                        enabled = !busy,
+                        label = { Text(label) },
+                    )
+                }
+            }
+            if (!reply.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isAsyncFallback) {
+                        MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = if (isAsyncFallback) "已写入异步消息箱" else "SailTick 回复",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            IconButton(
+                                onClick = onDismissReply,
+                                modifier = Modifier.size(22.dp),
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "关闭回复",
+                                    modifier = Modifier.size(15.dp),
+                                )
+                            }
+                        }
+                        Text(reply, style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }

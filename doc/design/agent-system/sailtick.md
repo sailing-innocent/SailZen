@@ -316,7 +316,16 @@ sailtick:
   - **一句话定时提醒**：解析「下班前」「30分钟后」「明早8点半」等中文时间，落库 `sail_server` `POST /api/v1/reminder/`（Android 到点推送）并写入本地 `st_scheduled_nudges`（启用 QQ Bot 时到点同步私聊提醒，双保险）；
   - **快脑提需求 → 慢脑夜间查证**：白天问到未收录食物热量时，先给估算并将食物入队 `pending_food_research`，夜间自动联网核查补全。
 
-## 14. 附录：目录结构
+## 14. 统一 Personal Agent 演进：接管 Rhythm 体系（v3.0）
+
+SailTick 从单一「减肥监督教练」升级为**健康 + 项目与日程节奏（Rhythm）统一 Personal Agent 大脑**，共享 4 层记忆、防轰炸票据配额与每日睡前综合日报（身体睡眠/压力状态直接联动调节当日日程负载）：
+
+- **严格 HTTP 调度客户端（`sailtick/rhythm_client.py`）**：只通过 `/api/v1/rhythm/*` 读写，绝不直连主库。
+- **夜间节奏规律引擎（`sailtick/rhythm_analytics.py`）**：接入 `NightlySelfMaintenance`，从近 21 天 `/rhythm/timeline/range` 与活跃项目中自动学习「高效黄金时段」「易被打断时段」「过载减负信号」及「项目倒排风险（`on_track` / `attention` / `at_risk` / `stalled` / `overdue`）」，编译进统一 `expert_brief`，彻底取代人工维护精力曲线与权重公式。
+- **慢脑自主排程权（`TickEngine` WORK 动作）**：新增 7 类 Rhythm 动作（`rhythm_sync_timeline`、`rhythm_upsert_affair`、`rhythm_transit_affair`、`rhythm_milestone_done`、`rhythm_occupancy`、`rhythm_block_status`、`rhythm_checkin`），日常直接调用 `POST /api/v1/rhythm/timeline/ai-sync` 落库可视化日程（自动保留已完成与刚性钉块），仅在重大项目取舍或明显延期风险时发轻量票据协商；`pre_sleep_report` 合并输出「健康 + 节奏」综合睡前日报。
+- **快脑实时日程应变（`QuickCoachAgent`）**：新增 `/today`、`/projects` 快捷指令与实时 Rhythm 上下文注入，支持白天一句话钉入临时会议/请假、新建项目/任务、反馈完成状态或直接秒级重排今日剩余时间线（返回 `rhythm_updated: true` 触发前端即时刷新）。
+
+## 15. 附录：目录结构
 
 ```
 sailtick/

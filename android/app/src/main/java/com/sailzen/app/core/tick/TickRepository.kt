@@ -15,6 +15,7 @@ import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeCommitResponse
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.QuickChatRequest
 import com.sailzen.app.core.network.dto.TickMessageCreateRequest
 import com.sailzen.app.core.network.dto.TickMessageDto
 import com.sailzen.app.core.network.dto.TickTicketDto
@@ -29,9 +30,18 @@ import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
+/** SailTick 实时快脑协商结果（支持 daemon 离线时自动降级写入异步消息箱）。 */
+data class QuickChatResult(
+    val reply: String,
+    val rhythmUpdated: Boolean = false,
+    val fallbackAsync: Boolean = false,
+    val source: String = "",
+)
+
 /**
- * SailTick AI 教练数据仓库：
- * - 获取健康页 AI 教练聚合摘要（动态计划 + 最新睡前日报 + 待回提问 + 今日主动记录）
+ * SailTick Personal Agent 数据仓库：
+ * - 实时快脑随身对话（协商日程、项目、临时占用与健康状态；daemon 离线自动降级为异步消息）
+ * - 获取 AI 教练聚合摘要（动态计划 + 最新睡前日报 + 待回提问 + 今日主动记录）
  * - 回复/暂缓 AI 提问票据
  * - 主动静默发送餐饮/日常状态消息（无需等待 AI 即时回复）
  * - 浏览历史睡前体重与健康日报
@@ -134,6 +144,66 @@ class TickRepository private constructor(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "sendSilentMessage failed: ${e.message}")
             null
+        }
+    }
+
+    /**
+     * 与 SailTick Personal Agent 实时对话协商（支持日程重排、临时占用、项目创建与状态查询）。
+     * 若后端 SailTick daemon 暂未在线（如 503），自动降级写入异步消息箱，保证移动端“说了不丢”。
+     */
+    suspend fun quickChat(
+        text: String,
+        channel: String = "android",
+        sessionId: String = "android:owner",
+    ): Result<QuickChatResult> {
+        val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return Result.failure(IllegalArgumentException("消息内容不能为空"))
+        return try {
+            val res = client.quickChat(
+                QuickChatRequest(
+                    text = trimmed,
+                    channel = channel,
+                    sessionId = sessionId,
+                ),
+            )
+            if (res.rhythmUpdated) {
+                bus.emit(DataChangeEvent.DayViewChanged())
+                bus.emit(DataChangeEvent.AffairChanged(action = "ai_quick_chat"))
+            }
+            Result.success(
+                QuickChatResult(
+                    reply = res.reply.ifBlank { "已收到，日程与状态已同步。" },
+                    rhythmUpdated = res.rhythmUpdated,
+                    fallbackAsync = false,
+                    source = res.source,
+                ),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "quickChat failed, falling back to async inbox: ${e.message}")
+            try {
+                client.sendMessage(
+                    TickMessageCreateRequest(
+                        direction = "user_to_agent",
+                        category = "daily_info",
+                        content = "[日程协商] $trimmed",
+                        sourceChannel = channel,
+                        autoLogDiet = false,
+                    ),
+                )
+                bus.emit(DataChangeEvent.HealthSignalChanged("tick"))
+                Result.success(
+                    QuickChatResult(
+                        reply = "SailTick 实时快脑暂未在线，已将你的想法写入异步消息箱，下次 Tick 唤醒时会自动吸收并重排日程。",
+                        rhythmUpdated = false,
+                        fallbackAsync = true,
+                        source = "async_inbox",
+                    ),
+                )
+            } catch (fallbackErr: Exception) {
+                Log.w(TAG, "quickChat async fallback also failed: ${fallbackErr.message}")
+                Result.failure(e)
+            }
         }
     }
 

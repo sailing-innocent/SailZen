@@ -3,6 +3,7 @@ package com.sailzen.app.feature.plan.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
@@ -25,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,13 +39,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sailzen.app.core.network.dto.AffairDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import com.sailzen.app.core.network.dto.kindLabel
 import com.sailzen.app.feature.plan.PlanViewModel
 
-/** 事业 Tab：待分拣事业（启动）+ 进行中事业卡（倒排灯 / 周预算 / 里程碑） */
+/** 项目 Tab：轻量化长期项目视图（目标日倒计时 + 里程碑进度 + 近 14 天投入，去除重型周预算与倒排压力公式） */
 @Composable
 fun VenturesTab(
     state: PlanViewModel.UiState,
@@ -51,24 +55,30 @@ fun VenturesTab(
     onConfirmVenture: (Int) -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp),
+        contentPadding = PaddingValues(top = 8.dp, bottom = 84.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (state.refreshing && state.ventures.isEmpty() && state.inboxVentures.isEmpty()) {
             item {
                 Box(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
                     contentAlignment = Alignment.Center,
                 ) { CircularProgressIndicator() }
             }
         }
         if (!state.refreshing && state.ventures.isEmpty() && state.inboxVentures.isEmpty()) {
             item {
-                Card {
+                Card(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        "暂无长期事业。点右下角 + 新建，或在今日 Tab 待分拣中确认已有的事业。",
+                        "暂无进行中的长期项目。点右下角 + 新建，或在今日页直接告诉 SailTick「我想启动一个新项目」。",
                         modifier = Modifier.padding(16.dp),
-                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -76,12 +86,13 @@ fun VenturesTab(
         if (state.inboxVentures.isNotEmpty()) {
             item {
                 Text(
-                    "待分拣事业",
+                    "待启动项目",
                     style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
-            items(state.inboxVentures, key = { it.id }) { venture ->
+            items(state.inboxVentures, key = { "inbox-v-${it.id}" }) { venture ->
                 InboxVentureCard(
                     venture = venture,
                     onOpenDetail = { onOpenDetail(venture.id) },
@@ -92,9 +103,10 @@ fun VenturesTab(
         if (state.ventures.isNotEmpty()) {
             item {
                 Text(
-                    "进行中",
+                    "重点项目（${state.ventures.size}）",
                     style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
@@ -105,7 +117,6 @@ fun VenturesTab(
                 onMilestoneDone = onMilestoneDone,
             )
         }
-        item { Spacer(Modifier.height(80.dp)) }
     }
 }
 
@@ -116,69 +127,99 @@ private fun VentureCard(
     onClick: () -> Unit,
     onMilestoneDone: (Int) -> Unit,
 ) {
-    val pressure = progress.countdownPressure
-    val (lampColor, lampText) = when {
-        pressure == null -> Color.Gray to "—"
-        pressure > 1.0 -> Color(0xFFE53935) to "倒排超压 %.2f".format(pressure)
-        pressure > 0.8 -> Color(0xFFFFB300) to "倒排偏紧 %.2f".format(pressure)
-        else -> Color(0xFF4CAF50) to "倒排健康 %.2f".format(pressure)
-    }
+    val (deadlineLabel, isUrgent) = PlanViewModel.projectDeadlineBadge(progress.daysLeft)
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         progress.title,
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
+                    if (progress.description.isNotBlank()) {
+                        Text(
+                            progress.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (isUrgent) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                ) {
                     Text(
-                        "目标日 ${progress.targetDate ?: "未定"}" +
-                            (progress.weeksLeft?.let { " · 剩余 %.1f 周".format(it) } ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
+                        text = deadlineLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isUrgent) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                     )
                 }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(
-                    lampText,
-                    color = lampColor,
+                    text = "目标日 ${progress.targetDate ?: "未定"}",
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = "近14天投入 %.1fh · 累计 %.1fh".format(progress.recent14dHours, progress.totalDoneHours),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
-            Spacer(Modifier.height(10.dp))
-            val weekRatio = if (progress.weeklyBudgetHours > 0) {
-                (progress.weekConsumedHours / progress.weeklyBudgetHours).coerceAtMost(1.0)
-            } else {
-                0.0
-            }
-            Text(
-                "本周预算 %.1fh / %.1fh".format(progress.weekConsumedHours, progress.weeklyBudgetHours),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            LinearProgressIndicator(
-                progress = { weekRatio.toFloat() },
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                color = Color(0xFFFF9800),
-            )
-            Text(
-                "累计 %.1fh / 预估 %.0fh".format(progress.totalDoneHours, progress.totalEstHours),
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-
             if (progress.milestones.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    "里程碑（完成 %.0f%%）".format(progress.completionRatio * 100),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "里程碑进度",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "%.0f%%".format(progress.completionRatio * 100),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { progress.completionRatio.toFloat().coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp, bottom = 6.dp),
                 )
                 progress.milestones.take(3).forEach { milestone ->
                     MilestoneRow(milestone = milestone, onDone = { onMilestoneDone(milestone.id) })
@@ -187,7 +228,7 @@ private fun VentureCard(
                     Text(
                         "共 ${progress.milestones.size} 个里程碑，点击查看全部",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -204,25 +245,26 @@ private fun InboxVentureCard(
 ) {
     Card(
         onClick = onOpenDetail,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        venture.title,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        "待分拣 · ${kindLabel(venture.kind)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                    )
-                }
-                TextButton(onClick = onConfirm) { Text("启动") }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(14.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    venture.title,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    "待启动 · ${kindLabel(venture.kind)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            TextButton(onClick = onConfirm) { Text("启动") }
         }
     }
 }
@@ -255,7 +297,7 @@ fun MilestoneRow(milestone: AffairDto, onDone: () -> Unit) {
         Text(
             milestone.title,
             style = MaterialTheme.typography.bodySmall,
-            color = if (done) Color.Gray else Color.Unspecified,
+            color = if (done) Color.Gray else MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -263,33 +305,37 @@ fun MilestoneRow(milestone: AffairDto, onDone: () -> Unit) {
 @Composable
 fun CreateVentureDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String, String?, Double) -> Unit,
+    onConfirm: (title: String, targetDate: String?, description: String) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
     var targetDate by remember { mutableStateOf("") }
-    var weeklyHours by remember { mutableStateOf("8") }
+    var description by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新建长期事业") },
+        title = { Text("新建项目") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("事业名称") },
+                    label = { Text("项目名称") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = targetDate,
                     onValueChange = { targetDate = it },
-                    label = { Text("目标日 YYYY-MM-DD（可留空）") },
+                    label = { Text("目标日 YYYY-MM-DD（可选）") },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
-                    value = weeklyHours,
-                    onValueChange = { weeklyHours = it },
-                    label = { Text("每周投入预算（小时）") },
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("一句话背景（可选，便于 SailTick 理解）") },
+                    minLines = 2,
+                    maxLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -300,7 +346,7 @@ fun CreateVentureDialog(
                     onConfirm(
                         title.trim(),
                         targetDate.trim().ifBlank { null },
-                        weeklyHours.toDoubleOrNull() ?: 8.0,
+                        description.trim(),
                     )
                 },
                 enabled = title.isNotBlank(),

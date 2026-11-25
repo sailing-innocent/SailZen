@@ -39,6 +39,7 @@ SIGNAL_PRIORITY = [
     "weight_monitor",
     "weight",
     "user_messages",
+    "rhythm",
     "diet",
     "active_plan",
     "sleep",
@@ -164,11 +165,16 @@ class DataScanner:
             "/tick/messages", {"status": "unread", "direction": "user_to_agent", "limit": 50}
         )
 
-        # 5. 餐饮消费与节奏打卡（优先使用支持时间过滤的分页路由，回退旧路由）
+        # 5. 餐饮消费、节奏全景（今日/明日时间线 + 重要项目倒排 + 焦点事务 + 占用）与打卡
         finance_raw = await self._fetch_transactions_window(
             start_ts=start_ts, end_ts=end_ts, max_pages=1, page_size=80
         )
         rhythm_raw = await self._fetch("/rhythm/checkin", {"limit": 20})
+        today_str = now.strftime("%Y-%m-%d")
+        tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        rhythm_dash_raw = await self._fetch("/rhythm/dashboard", {"date": today_str})
+        rhythm_tomorrow_raw = await self._fetch("/rhythm/timeline/day", {"date": tomorrow_str})
+        rhythm_snapshot = self._simplify_rhythm(rhythm_dash_raw, rhythm_tomorrow_raw, today_str)
 
         weight_series = self._simplify_series(weight_raw, limit=21)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
@@ -183,6 +189,7 @@ class DataScanner:
             "active_plan": self._simplify_plan(plan_progress),
             "diet": diet_items,
             "user_messages": msg_items,
+            "rhythm": rhythm_snapshot,
             "sleep": self._simplify_list(sleep, limit=10),
             "exercise": self._simplify_list(exercise, limit=10),
             "mood": self._simplify_list(mood, limit=10),
@@ -282,6 +289,21 @@ class DataScanner:
             "/tick/messages", {"direction": "user_to_agent", "limit": 100}
         )
 
+        # 6. 近 21 天 Rhythm 执行历史 + 活跃项目 + 焦点事务（供夜间节奏分析器学习作息与风险）
+        rhythm_start = (now - timedelta(days=20)).strftime("%Y-%m-%d")
+        rhythm_end = now.strftime("%Y-%m-%d")
+        rhythm_history = await self._fetch(
+            "/rhythm/timeline/range",
+            {"start_date": rhythm_start, "end_date": rhythm_end},
+        )
+        rhythm_projects = await self._fetch("/rhythm/venture/projects")
+        rhythm_affairs_raw = await self._fetch("/rhythm/affair", {"limit": 100})
+        rhythm_affairs = (
+            rhythm_affairs_raw.get("affairs", [])
+            if isinstance(rhythm_affairs_raw, dict)
+            else (rhythm_affairs_raw if isinstance(rhythm_affairs_raw, list) else [])
+        )
+
         food_tx = self._classify_food_transactions(tx_all)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
 
@@ -299,6 +321,9 @@ class DataScanner:
             "transactions_total": len(tx_all),
             "finance_food": food_tx,
             "user_messages": self._simplify_messages(recent_messages, limit=100) or [],
+            "rhythm_history": rhythm_history if isinstance(rhythm_history, dict) else {},
+            "rhythm_projects": rhythm_projects if isinstance(rhythm_projects, list) else [],
+            "rhythm_affairs": rhythm_affairs,
         }
 
     @classmethod
@@ -604,6 +629,109 @@ class DataScanner:
                 out.append(row)
         return out
 
+    @staticmethod
+    def _simplify_blocks(blocks: Any, limit: int = 16) -> List[Dict[str, Any]]:
+        if not isinstance(blocks, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for b in blocks[:limit]:
+            if not isinstance(b, dict):
+                continue
+            ref = b.get("ref") if isinstance(b.get("ref"), dict) else {}
+            start_s = str(b.get("start_time") or "")
+            end_s = str(b.get("end_time") or "")
+            out.append(
+                {
+                    "id": b.get("id"),
+                    "affair_id": b.get("affair_id"),
+                    "title": b.get("affair_title") or ref.get("label") or b.get("block_type") or "",
+                    "type": b.get("block_type"),
+                    "start": start_s[11:16] if len(start_s) >= 16 else start_s,
+                    "end": end_s[11:16] if len(end_s) >= 16 else end_s,
+                    "status": b.get("status"),
+                    "pinned": bool(b.get("pinned")),
+                }
+            )
+        return out
+
+    @classmethod
+    def _simplify_rhythm(
+        cls,
+        dash_raw: Any,
+        tomorrow_raw: Any,
+        today_str: str,
+    ) -> Optional[Dict[str, Any]]:
+        if not isinstance(dash_raw, dict):
+            return None
+        tl = dash_raw.get("timeline") if isinstance(dash_raw.get("timeline"), dict) else {}
+        projects_out: List[Dict[str, Any]] = []
+        for p in (dash_raw.get("projects") or [])[:8]:
+            if not isinstance(p, dict):
+                continue
+            ms = p.get("milestones") or []
+            pending_ms = [
+                {"id": m.get("id"), "title": m.get("title")}
+                for m in ms
+                if isinstance(m, dict) and m.get("state") not in ("DONE", "CANCELED")
+            ][:3]
+            projects_out.append(
+                {
+                    "id": p.get("affair_id"),
+                    "title": p.get("title"),
+                    "target_date": p.get("target_date"),
+                    "days_left": p.get("days_left"),
+                    "completion": p.get("completion_ratio"),
+                    "recent_14d_hours": p.get("recent_14d_hours"),
+                    "next_milestones": pending_ms,
+                }
+            )
+
+        def _compact_affairs(raw_list: Any, limit: int) -> List[Dict[str, Any]]:
+            if not isinstance(raw_list, list):
+                return []
+            res = []
+            for a in raw_list[:limit]:
+                if not isinstance(a, dict):
+                    continue
+                res.append(
+                    {
+                        "id": a.get("id"),
+                        "title": a.get("title"),
+                        "kind": a.get("kind"),
+                        "state": a.get("state"),
+                        "ddl": str(a.get("urgency_ddl") or "")[:16] or None,
+                        "est_minutes": a.get("est_minutes"),
+                    }
+                )
+            return res
+
+        return {
+            "today_date": today_str,
+            "ai_rationale": tl.get("ai_rationale") or "",
+            "completed_minutes": tl.get("completed_minutes", 0),
+            "planned_minutes": tl.get("planned_minutes", 0),
+            "today_blocks": cls._simplify_blocks(tl.get("blocks"), limit=16),
+            "tomorrow_blocks": cls._simplify_blocks(
+                tomorrow_raw.get("blocks") if isinstance(tomorrow_raw, dict) else [],
+                limit=10,
+            ),
+            "projects": projects_out,
+            "focus_affairs": _compact_affairs(dash_raw.get("focus_affairs"), 10),
+            "overdue_affairs": _compact_affairs(dash_raw.get("overdue_affairs"), 6),
+            "inbox_affairs": _compact_affairs(dash_raw.get("inbox_affairs"), 6),
+            "occupancies": [
+                {
+                    "id": o.get("id"),
+                    "start": o.get("start"),
+                    "end": o.get("end"),
+                    "type": o.get("occupancy_type"),
+                    "label": o.get("label"),
+                }
+                for o in (dash_raw.get("occupancies") or [])[:6]
+                if isinstance(o, dict)
+            ],
+        }
+
     def truncate(self, package: Dict[str, Any]) -> Dict[str, Any]:
         """按 SIGNAL_PRIORITY 截断到 token 预算内。"""
         result: Dict[str, Any] = {
@@ -695,6 +823,48 @@ class DataScanner:
                 for m in msgs[:10]
             )
             lines.append(f"用户主动发来的待整合消息({len(msgs)}条): {preview}")
+
+        rhythm = package.get("rhythm")
+        if isinstance(rhythm, dict):
+            t_blocks = rhythm.get("today_blocks") or []
+            if t_blocks:
+                blk_str = "; ".join(
+                    f"#{b.get('id')}[{b.get('start')}-{b.get('end')} {b.get('status')}{' 📌' if b.get('pinned') else ''}] {b.get('title')}"
+                    for b in t_blocks[:10]
+                )
+                lines.append(
+                    f"今日日程({rhythm.get('today_date')}, 已完成{rhythm.get('completed_minutes', 0)}/{rhythm.get('planned_minutes', 0)}min): {blk_str}"
+                )
+            else:
+                lines.append(f"今日日程({rhythm.get('today_date')}): 尚未排布（可由 SailTick 通过 rhythm_sync_timeline 自主落库）")
+            if rhythm.get("ai_rationale"):
+                lines.append(f"当前日程排布说明: {rhythm['ai_rationale']}")
+            occs = rhythm.get("occupancies") or []
+            if occs:
+                occ_str = "; ".join(f"{o.get('start')}-{o.get('end')} {o.get('label')}" for o in occs)
+                lines.append(f"今日刚性占用(会议/请假): {occ_str}")
+            projs = rhythm.get("projects") or []
+            if projs:
+                proj_str = "; ".join(
+                    f"#{p.get('id')}「{p.get('title')}」(目标:{p.get('target_date') or '未定'}, 剩{p.get('days_left')}天, 完成{int((p.get('completion') or 0)*100)}%, 近14d:{p.get('recent_14d_hours')}h)"
+                    for p in projs[:6]
+                )
+                lines.append(f"活跃重要项目({len(projs)}个): {proj_str}")
+            overdue = rhythm.get("overdue_affairs") or []
+            if overdue:
+                ov_str = "; ".join(f"#{a.get('id')}{a.get('title')}(ddl:{a.get('ddl')})" for a in overdue[:5])
+                lines.append(f"逾期事务({len(overdue)}项): {ov_str}")
+            focus = rhythm.get("focus_affairs") or []
+            if focus:
+                f_str = "; ".join(
+                    f"#{a.get('id')}{a.get('title')}({a.get('est_minutes')}min{', ddl:'+str(a.get('ddl')) if a.get('ddl') else ''})"
+                    for a in focus[:8]
+                )
+                lines.append(f"待办焦点({len(focus)}项): {f_str}")
+            inbox_af = rhythm.get("inbox_affairs") or []
+            if inbox_af:
+                ib_str = "; ".join(f"#{a.get('id')}{a.get('title')}" for a in inbox_af[:5])
+                lines.append(f"待整理随手记({len(inbox_af)}项): {ib_str}")
 
         for key, label in (
             ("sleep", "睡眠"),

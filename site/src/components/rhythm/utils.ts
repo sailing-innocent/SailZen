@@ -37,6 +37,7 @@ export const blockTypeColor = (type: string): string => {
     async_kickoff: 'bg-violet-500',
     async_review: 'bg-violet-400',
     async_wait: 'bg-violet-200',
+    occupied: 'bg-rose-400',
   }
   return map[type] ?? 'bg-gray-400'
 }
@@ -53,12 +54,13 @@ export const blockTypeLabel = (type: string): string => {
     fixed: '刚性',
     focus: '专注',
     light: '轻松',
-    career: '事业',
+    career: '项目',
     rest: '休息',
     buffer: '缓冲',
     async_kickoff: '回调启动',
     async_review: '回调审阅',
     async_wait: '回调等待',
+    occupied: '占用',
   }
   return map[type] ?? type
 }

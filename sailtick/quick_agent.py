@@ -35,6 +35,7 @@ from sailtick.inbox import TicketInbox
 from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.memory import AgentMemory
 from sailtick.nightly import NightlySelfMaintenance
+from sailtick.rhythm_client import RhythmClient
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,7 @@ class QuickCoachAgent:
         inbox: TicketInbox,
         llm: Any = None,
         knowledge: Optional[HealthKnowledgeManager] = None,
+        rhythm: Optional[RhythmClient] = None,
         clock: Callable[[], datetime] = datetime.now,
     ):
         self.config = config
@@ -164,6 +166,11 @@ class QuickCoachAgent:
         self.inbox = inbox
         self.llm = llm
         self._clock = clock
+        self.rhythm = rhythm or RhythmClient(
+            config.sail_server.api_base,
+            config.sail_server.auth_token,
+            clock=clock,
+        )
         self.knowledge = knowledge or HealthKnowledgeManager(
             db=db,
             llm=llm,
@@ -206,7 +213,7 @@ class QuickCoachAgent:
                 "latency_ms": latency_ms,
             }
 
-        # 2. 装载专家简报 + 匹配食物热量 + 相关健康知识 + 短期对话上下文
+        # 2. 装载专家简报 + 实时 Rhythm 日程/项目 + 食物热量 + 知识 + 短期对话上下文
         brief = await self.db.get_runtime_state("expert_brief")
         profile_dict = await self.memory.all_profile()
         matched_foods = await self.knowledge.lookup_foods_in_text(clean_text, limit=4)
@@ -214,6 +221,7 @@ class QuickCoachAgent:
         history = await self.db.list_quick_chat_history(
             sess_key, limit=max(2, self.config.quick_chat.history_turns)
         )
+        rhythm_dash = await self._load_live_rhythm()
 
         # 3. 决策回复与动作（优先快模型，无 LLM 时自动规则兜底）
         plan_source = "rule_fallback"
@@ -233,6 +241,7 @@ class QuickCoachAgent:
                     profile_dict=profile_dict,
                     matched_foods=matched_foods,
                     matched_knowledge=matched_knowledge,
+                    rhythm_dash=rhythm_dash,
                     history=history,
                 )
                 if llm_out and llm_out.get("reply"):
@@ -249,13 +258,15 @@ class QuickCoachAgent:
                 profile_dict=profile_dict,
                 matched_foods=matched_foods,
                 matched_knowledge=matched_knowledge,
+                rhythm_dash=rhythm_dash,
             )
             reply_text = fb["reply"]
             raw_actions = fb["actions"]
 
-        # 4. 执行轻量工具动作（创建提醒 / 同步计划微调给慢脑 / 记体重 / 记饮食 / 入队待查食物）
+        # 4. 执行轻量工具动作（Rhythm 排程/占用/项目/块状态 + 提醒 + 体重/饮食 + 慢脑同步）
         executed_actions: List[Dict[str, Any]] = []
         reminders_created: List[Dict[str, Any]] = []
+        rhythm_updated = False
         for act in raw_actions:
             if not isinstance(act, dict):
                 continue
@@ -271,6 +282,8 @@ class QuickCoachAgent:
                 executed_actions.append(res)
                 if res.get("kind") == "create_reminder" and res.get("ok"):
                     reminders_created.append(res)
+                if str(res.get("kind", "")).startswith("rhythm_") and res.get("ok"):
+                    rhythm_updated = True
 
         # 5. 保存短期对话历史（供下轮追问）
         await self.db.append_quick_chat(
@@ -290,12 +303,21 @@ class QuickCoachAgent:
             "reply": reply_text,
             "actions": executed_actions,
             "reminders_created": reminders_created,
+            "rhythm_updated": rhythm_updated,
             "expert_brief_date": (brief or {}).get("snapshot_date") if isinstance(brief, dict) else None,
             "foods_matched": [f["name"] for f in matched_foods],
             "source": plan_source,
             "session_id": sess_key,
             "latency_ms": latency_ms,
         }
+
+    async def _load_live_rhythm(self) -> Optional[Dict[str, Any]]:
+        try:
+            if await self.rhythm.health():
+                return await self.rhythm.get_dashboard(self._clock().date())
+        except Exception as exc:
+            logger.debug("QuickCoachAgent load live rhythm skipped: %s", exc)
+        return None
 
     # ── 快捷指令（零 LLM 延迟） ───────────────────────────────────────
 
@@ -304,12 +326,68 @@ class QuickCoachAgent:
         if low in ("/help", "/帮助", "帮助"):
             return {
                 "reply": (
-                    "SailTick 快反助手在线！你可以直接像聊天一样说：\n"
-                    "• 临时变动：「今天能早下班，下班后怎么安排？」「今晚同学聚餐计划怎么调？」\n"
-                    "• 顺手设提醒：「下班前提醒我别忘了买洗衣液和七号电池」「30分钟后提醒我喝水」\n"
-                    "• 查热量/记数据：「牛肉面多少大卡」「今早体重 73.6」\n"
-                    "• 快捷命令：/brief 专家简报 · /predict 体重预测 · /food 食物名 · /remind 待办提醒"
+                    "SailTick 快反助手（Personal Agent）在线！直接像聊天一样说就行：\n"
+                    "• 日程突发变动：「下午2点到4点临时加会，帮我重排今天」「今天太累了晚上只留轻任务」\n"
+                    "• 重要项目/待办：「新增项目：下月15号前上线新版本」「把评审文档标完成」\n"
+                    "• 生活变动与提醒：「今天早下班怎么安排」「今晚聚餐」「下班前提醒我买洗衣液」\n"
+                    "• 快捷命令：/today 今日日程 · /projects 重要项目 · /brief 专家简报 · /predict 体重预测 · /food 食物 · /remind 提醒"
                 ),
+                "actions": [],
+                "reminders_created": [],
+                "source": "command",
+            }
+
+        if low in ("/today", "/日程", "今日日程", "今日安排", "今天干嘛"):
+            dash = await self._load_live_rhythm()
+            if not dash:
+                return {
+                    "reply": "暂时连不上 Rhythm 日程服务，稍后再试。",
+                    "actions": [],
+                    "reminders_created": [],
+                    "source": "command",
+                }
+            tl = dash.get("timeline") or {}
+            blocks = tl.get("blocks") or []
+            lines = [f"【今日日程 {dash.get('date', '')}】"]
+            if tl.get("ai_rationale"):
+                lines.append(f"💡 {tl['ai_rationale']}")
+            if blocks:
+                for b in blocks[:12]:
+                    st = str(b.get("start_time") or "")[11:16]
+                    ed = str(b.get("end_time") or "")[11:16]
+                    title = b.get("affair_title") or (b.get("ref") or {}).get("label") or b.get("block_type")
+                    status = b.get("status", "PLANNED")
+                    mark = "✅" if status == "DONE" else ("⏭" if status == "SKIPPED" else ("📌" if b.get("pinned") else "•"))
+                    lines.append(f"{mark} {st}-{ed} {title} (#{b.get('id')})")
+            else:
+                lines.append("今天还没有排好的时间块，跟我说一句你今天最想推进的事，我马上帮你排好。")
+            return {
+                "reply": "\n".join(lines),
+                "actions": [],
+                "reminders_created": [],
+                "source": "command",
+            }
+
+        if low in ("/projects", "/项目", "项目进度", "重要项目"):
+            try:
+                projects = await self.rhythm.list_projects() if await self.rhythm.health() else []
+            except Exception:
+                projects = []
+            if not projects:
+                return {
+                    "reply": "目前还没有登记的长期重要项目，直接跟我说「新建项目：xxx，目标下月底前完成」就行。",
+                    "actions": [],
+                    "reminders_created": [],
+                    "source": "command",
+                }
+            lines = ["【重要项目倒排进度】"]
+            for p in projects[:8]:
+                dleft = p.get("days_left")
+                ddl_part = f"目标 {p.get('target_date')} (剩{dleft}天)" if p.get("target_date") else "未设目标日"
+                pct = int((p.get("completion_ratio") or 0) * 100)
+                lines.append(f"• #{p.get('affair_id')} {p.get('title')} — {ddl_part} · 里程碑 {pct}% · 近14d投入 {p.get('recent_14d_hours', 0)}h")
+            return {
+                "reply": "\n".join(lines),
                 "actions": [],
                 "reminders_created": [],
                 "source": "command",
@@ -416,6 +494,43 @@ class QuickCoachAgent:
 
     # ── 快速 LLM 推理 ─────────────────────────────────────────────────
 
+    @staticmethod
+    def _format_live_rhythm_for_prompt(dash: Optional[Dict[str, Any]]) -> str:
+        if not isinstance(dash, dict):
+            return "(暂未获取到今日实时日程)"
+        tl = dash.get("timeline") or {}
+        lines: List[str] = [f"日期: {dash.get('date', '')}"]
+        if tl.get("ai_rationale"):
+            lines.append(f"当前排程说明: {tl['ai_rationale']}")
+        blocks = tl.get("blocks") or []
+        if blocks:
+            lines.append("今日时间块:")
+            for b in blocks[:12]:
+                st = str(b.get("start_time") or "")[11:16]
+                ed = str(b.get("end_time") or "")[11:16]
+                title = b.get("affair_title") or (b.get("ref") or {}).get("label") or b.get("block_type")
+                lines.append(
+                    f"  - block#{b.get('id')} [{st}-{ed} {b.get('block_type')} {b.get('status')}{' pinned' if b.get('pinned') else ''}] {title}"
+                    + (f" (affair#{b.get('affair_id')})" if b.get("affair_id") else "")
+                )
+        else:
+            lines.append("今日时间块: (空)")
+        projects = dash.get("projects") or []
+        if projects:
+            lines.append("活跃重要项目:")
+            for p in projects[:6]:
+                lines.append(
+                    f"  - project#{p.get('affair_id')}「{p.get('title')}」 目标:{p.get('target_date') or '未定'}(剩{p.get('days_left')}天) 进度:{int((p.get('completion_ratio') or 0)*100)}%"
+                )
+        focus = dash.get("focus_affairs") or []
+        if focus:
+            lines.append("焦点待办:")
+            for a in focus[:8]:
+                lines.append(
+                    f"  - affair#{a.get('id')}「{a.get('title')}」({a.get('est_minutes')}min, ddl:{str(a.get('urgency_ddl') or '')[:10] or '-'})"
+                )
+        return "\n".join(lines)
+
     async def _ask_fast_llm(
         self,
         clean_text: str,
@@ -423,13 +538,16 @@ class QuickCoachAgent:
         profile_dict: Dict[str, Any],
         matched_foods: List[Dict[str, Any]],
         matched_knowledge: List[Dict[str, Any]],
+        rhythm_dash: Optional[Dict[str, Any]],
         history: List[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
         now = self._clock()
+        today_str = now.strftime("%Y-%m-%d")
         offwork = self._resolve_offwork_time(profile_dict)
         brief_text = NightlySelfMaintenance.format_brief_for_prompt(brief)
         playbooks = (brief or {}).get("flexible_playbooks") if isinstance(brief, dict) else {}
-        playbook_text = "\n".join(f"- {k}: {v}" for k, v in (playbooks or {}).items()) or "(默认温和健康教练策略)"
+        playbook_text = "\n".join(f"- {k}: {v}" for k, v in (playbooks or {}).items()) or "(默认温和策略)"
+        rhythm_text = self._format_live_rhythm_for_prompt(rhythm_dash)
 
         food_text = "\n".join(
             f"- {f['name']}({f.get('serving_desc')}): 约{f.get('kcal_per_serving')}kcal "
@@ -442,14 +560,18 @@ class QuickCoachAgent:
             for k in matched_knowledge
         ) or "(无)"
 
-        system_prompt = f"""你是 SailTick 的「白天快速反应助手」（常驻 QQ / 快捷对话端）。
-你的核心职责是：快速查询并转达 SailTick 夜间专家的建模结论与专业策略，灵活回应用户白天的临时变动（早下班安排、突发同学聚餐、热量询问、情绪安抚），并帮用户顺手设置定时提醒或记录体重/饮食。
+        system_prompt = f"""你是 SailTick Personal Agent 的「白天快速反应助手」（常驻 Web / QQ / 快捷对话端）。
+你统一协助用户处理**日程与项目突发变动（Rhythm）**和**健康减重日常（饮食/运动/体重）**。
+你有权直接调用 Rhythm API 帮用户更新今日/明日可视化时间线、钉入临时会议/请假、新建或更新重要项目/待办、标记完成或跳过——让用户用自然语言一句话就能搞定，绝不让用户去填复杂 PM 表单。
 
 当前时间：{now.strftime('%Y-%m-%d %H:%M')}（星期{'一二三四五六日'[now.weekday()]}）
 默认下班时间：{offwork}（若用户说「下班前提醒我...」，默认提前 {self.config.quick_chat.offwork_lead_minutes} 分钟触发）
 
-【SailTick 专家最新简报】
+【SailTick 夜间专家简报（健康 + 节奏）】
 {brief_text}
+
+【今日实时可视化日程与活跃项目】
+{rhythm_text}
 
 【专家应急预案】
 {playbook_text}
@@ -460,19 +582,25 @@ class QuickCoachAgent:
 【命中的专业健康师知识】
 {kn_text}
 
-回复风格要求：
-1. 适合手机/QQ 快速阅读：温和、口语化、有同理心、不苛责、不长篇大论（一般 3-6 行，必要时用短要点）。
-2. 如果用户询问早下班安排，给出 2 个按精力分档的轻量可执行方案（运动+晚餐衔接）。
-3. 如果用户临时要同学聚餐/应酬，先肯定开心赴约，再给 2-3 条零压力控损技巧和次日回稳提示，并附带 `plan_adjust_signal` action 通知慢脑在晚间同步微调计划。
-4. 如果用户要求设提醒（如买洗衣液、七号电池、喝水、拿快递等生活杂事也完全支持！），必须输出 `create_reminder` action，算出精确的本地 ISO 时间 `YYYY-MM-DDTHH:MM:00`，并在回复中明确告知设好的提醒时间和内容。
-5. 如果用户问了食物热量但【命中的食物热量库】为空，先给合理估算，同时附带 `enqueue_food_research` 让夜间慢脑今晚深入查证。
+回复与行动原则：
+1. 适合快速阅读：温和、口语化、有同理心、不苛责（3-6 行，必要时短要点）。
+2. **日程突发变动（加会/请假/早下班/太累了/卡壳/想重排）**：立刻调用 `rhythm_occupancy`（如有新会议/请假）和/或 `rhythm_sync_timeline` 直接重排今日剩余可视化时间线（系统会自动保留已完成和刚性钉块，你只需给出当前时刻之后的新排程块和一句 `rationale`），并附带 `plan_adjust_signal` 同步给慢脑！
+3. **新增项目或任务**：用户口述新目标/项目/任务时，用 `rhythm_upsert_affair` 直接落库（长期目标用 `venture` + `target_date`，一次性任务用 `task_oneoff`），不必追问一堆权重参数。
+4. **反馈完成/跳过**：用户说某件事做完了或不想做了，用 `rhythm_block_status` 或 `rhythm_transit_affair` 直接更新。
+5. **设提醒**：用户要求设提醒时，必须输出 `create_reminder` action，算出精确本地 ISO 时间 `YYYY-MM-DDTHH:MM:00`。
+6. **食物热量/体重/饮食**：命中食物库直接答；未命中先估算并输出 `enqueue_food_research`；报体重/饮食直接落库。
 
 严格只输出 JSON：
 {{
   "reply": "直接发给用户的回复文本",
   "actions": [
-    {{"kind": "create_reminder", "title": "买洗衣液和七号电池", "body": "下班顺路买洗衣液和七号电池", "trigger_time": "2026-11-23T17:40:00", "priority": "normal"}},
-    {{"kind": "plan_adjust_signal", "scene": "social_dining|early_offwork|stress|other", "summary": "一句话记录今日计划微调"}},
+    {{"kind": "rhythm_occupancy", "date": "{today_str}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "临时评审会"}},
+    {{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "一句温和排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus", "affair_id": null, "note": ""}}]}},
+    {{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": ""}},
+    {{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}},
+    {{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate", "defer_to": "2026-11-26T09:00:00"}},
+    {{"kind": "create_reminder", "title": "买洗衣液", "body": "下班顺路买洗衣液", "trigger_time": "{today_str}T17:40:00", "priority": "normal"}},
+    {{"kind": "plan_adjust_signal", "scene": "unexpected_meeting|early_offwork|social_dining|low_energy|other", "summary": "一句话记录今日变动"}},
     {{"kind": "log_diet", "meal_type": "breakfast|lunch|dinner|snack", "description": "饮食内容", "calories": 500}},
     {{"kind": "log_weight", "weight_kg": 73.6}},
     {{"kind": "enqueue_food_research", "foods": ["未知食物名"]}}
@@ -507,10 +635,76 @@ class QuickCoachAgent:
         profile_dict: Dict[str, Any],
         matched_foods: List[Dict[str, Any]],
         matched_knowledge: List[Dict[str, Any]],
+        rhythm_dash: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         now = self._clock()
+        today_str = now.strftime("%Y-%m-%d")
         offwork = self._resolve_offwork_time(profile_dict)
         actions: List[Dict[str, Any]] = []
+
+        # 0a. 临时会议/请假占用识别
+        if any(k in clean_text for k in ("加会", "开会", "评审会", "请假", "出差")):
+            m_rng = re.search(r"(\d{1,2})[:：]?(\d{2})?\s*[-到至~]\s*(\d{1,2})[:：]?(\d{2})?", clean_text)
+            occ_type = "leave" if "请假" in clean_text else ("travel" if "出差" in clean_text else "meeting")
+            occ_act: Dict[str, Any] = {
+                "kind": "rhythm_occupancy",
+                "date": today_str,
+                "occupancy_type": occ_type,
+                "label": clean_text[:28],
+            }
+            if m_rng:
+                sh, sm = int(m_rng.group(1)), int(m_rng.group(2) or 0)
+                eh, em = int(m_rng.group(3)), int(m_rng.group(4) or 0)
+                if ("下午" in clean_text or "晚上" in clean_text) and 1 <= sh <= 11:
+                    sh += 12
+                if ("下午" in clean_text or "晚上" in clean_text) and 1 <= eh <= 11:
+                    eh += 12
+                if eh <= sh:
+                    eh = min(23, sh + 1)
+                occ_act["start"] = f"{sh:02d}:{sm:02d}"
+                occ_act["end"] = f"{eh:02d}:{em:02d}"
+            elif occ_type == "leave":
+                occ_act["whole_day"] = True
+            else:
+                st = (now + timedelta(minutes=15)).replace(second=0, microsecond=0)
+                ed = st + timedelta(hours=1)
+                occ_act["start"] = st.strftime("%H:%M")
+                occ_act["end"] = ed.strftime("%H:%M")
+            actions.append(occ_act)
+            actions.append(
+                {
+                    "kind": "plan_adjust_signal",
+                    "scene": "unexpected_meeting",
+                    "summary": f"用户临时占用/变动：{clean_text[:120]}",
+                }
+            )
+            return {
+                "reply": (
+                    f"收到！已把这段「{occ_act['label']}」钉进今天的时间线占位"
+                    + (f"（{occ_act.get('start')}-{occ_act.get('end')}）" if occ_act.get("start") else "（全天）")
+                    + "，并通知 SailTick 慢脑同步顺延非核心事项，别给自己太大压力。"
+                ),
+                "actions": actions,
+            }
+
+        # 0b. 一句话新建项目或待办
+        m_new = re.search(r"(?:新建|添加|加一个|帮我记)(?:重要)?(项目|任务|待办)[：:\s]*(.+)", clean_text)
+        if m_new:
+            is_proj = m_new.group(1) == "项目"
+            title = m_new.group(2).strip(" ，。！？")[:100]
+            actions.append(
+                {
+                    "kind": "rhythm_upsert_affair",
+                    "title": title,
+                    "kind_name": "venture" if is_proj else "task_oneoff",
+                    "domain": "career" if is_proj else "work",
+                    "est_minutes": 60 if is_proj else 30,
+                }
+            )
+            return {
+                "reply": f"已帮你记进 Rhythm {'重要项目' if is_proj else '待办'}：「{title}」。后续我会结合你的真实精力与空档自动帮你排进日程。",
+                "actions": actions,
+            }
 
         # 1. 定时提醒识别
         if "提醒" in clean_text:
@@ -742,6 +936,104 @@ class QuickCoachAgent:
             foods = [str(f) for f in (act.get("foods") or []) if str(f).strip()]
             q = await self.knowledge.enqueue_food_research(foods)
             return {"kind": "enqueue_food_research", "ok": True, "queued": foods, "queue_size": len(q)}
+
+        if kind == "rhythm_sync_timeline":
+            target_date = str(act.get("date") or self._clock().strftime("%Y-%m-%d"))
+            blocks_in = [b for b in (act.get("blocks") or []) if isinstance(b, dict)]
+            try:
+                if await self.rhythm.health():
+                    res = await self.rhythm.sync_ai_timeline(
+                        target_date=target_date,
+                        blocks=blocks_in,
+                        rationale=str(act.get("rationale") or ""),
+                        preserve_done=bool(act.get("preserve_done", True)),
+                        preserve_pinned=bool(act.get("preserve_pinned", True)),
+                        source=f"sailtick:quick_chat:{channel}",
+                    )
+                    return {
+                        "kind": "rhythm_sync_timeline",
+                        "ok": True,
+                        "date": target_date,
+                        "plan_version": res.get("plan_version"),
+                        "created_count": res.get("created_count", 0),
+                    }
+            except Exception as exc:
+                logger.warning("QuickCoachAgent rhythm_sync_timeline failed: %s", exc)
+            return {"kind": "rhythm_sync_timeline", "ok": False}
+
+        if kind == "rhythm_occupancy":
+            target_date = str(act.get("date") or self._clock().strftime("%Y-%m-%d"))
+            try:
+                if await self.rhythm.health():
+                    res = await self.rhythm.create_occupancy(
+                        target_date=target_date,
+                        occupancy_type=str(act.get("occupancy_type") or "meeting"),
+                        start=act.get("start"),
+                        end=act.get("end"),
+                        whole_day=bool(act.get("whole_day", False)),
+                        label=str(act.get("label") or raw_text[:30]),
+                        note=str(act.get("note") or ""),
+                    )
+                    return {"kind": "rhythm_occupancy", "ok": True, "id": res.get("id"), "label": res.get("label")}
+            except Exception as exc:
+                logger.warning("QuickCoachAgent rhythm_occupancy failed: %s", exc)
+            return {"kind": "rhythm_occupancy", "ok": False}
+
+        if kind == "rhythm_upsert_affair":
+            try:
+                if await self.rhythm.health():
+                    aid = act.get("id") or act.get("affair_id")
+                    if aid is not None:
+                        updates = {
+                            k: act[k]
+                            for k in ("title", "description", "domain", "urgency_ddl", "est_minutes", "importance", "kind_meta")
+                            if k in act and act[k] is not None
+                        }
+                        res = await self.rhythm.update_affair(int(aid), updates)
+                        return {"kind": "rhythm_upsert_affair", "ok": True, "affair_id": res.get("id")}
+                    k_name = str(act.get("kind_name") or "task_oneoff")
+                    k_meta = dict(act.get("kind_meta") or {})
+                    if k_name == "venture" and act.get("target_date") and not k_meta.get("target_date"):
+                        k_meta["target_date"] = str(act["target_date"])[:10]
+                    res = await self.rhythm.create_affair(
+                        title=str(act.get("title") or raw_text[:80]),
+                        kind=k_name,
+                        domain=act.get("domain"),
+                        description=str(act.get("description") or ""),
+                        urgency_ddl=act.get("urgency_ddl"),
+                        est_minutes=int(act.get("est_minutes") or 30),
+                        importance=int(act.get("importance") or 3),
+                        kind_meta=k_meta,
+                    )
+                    return {"kind": "rhythm_upsert_affair", "ok": True, "affair_id": res.get("id"), "title": res.get("title")}
+            except Exception as exc:
+                logger.warning("QuickCoachAgent rhythm_upsert_affair failed: %s", exc)
+            return {"kind": "rhythm_upsert_affair", "ok": False}
+
+        if kind == "rhythm_block_status":
+            try:
+                bid = int(act["block_id"])
+                if await self.rhythm.health():
+                    res = await self.rhythm.set_block_status(bid, str(act.get("status") or "DONE"))
+                    return {"kind": "rhythm_block_status", "ok": True, "block_id": bid, "status": res.get("status")}
+            except Exception as exc:
+                logger.warning("QuickCoachAgent rhythm_block_status failed: %s", exc)
+            return {"kind": "rhythm_block_status", "ok": False}
+
+        if kind == "rhythm_transit_affair":
+            try:
+                aid = int(act["affair_id"])
+                if await self.rhythm.health():
+                    res = await self.rhythm.transit_affair(
+                        aid,
+                        str(act.get("action") or "finish"),
+                        defer_to=act.get("defer_to"),
+                        defer_end=act.get("defer_end"),
+                    )
+                    return {"kind": "rhythm_transit_affair", "ok": True, "affair_id": aid, "state": res.get("state")}
+            except Exception as exc:
+                logger.warning("QuickCoachAgent rhythm_transit_affair failed: %s", exc)
+            return {"kind": "rhythm_transit_affair", "ok": False}
 
         return None
 

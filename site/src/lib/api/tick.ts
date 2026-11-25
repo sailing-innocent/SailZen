@@ -334,3 +334,32 @@ export const api_quick_log_weight = async (weight: number): Promise<void> => {
     throw new ApiError(response.status, response.statusText, parseErrorDetail(await response.text()))
   }
 }
+
+// ── 白天快反对话 & 专家简报（直连 SailTick daemon :9070） ──────────────────
+
+export interface QuickChatResponse {
+  reply: string
+  actions: Array<Record<string, unknown>>
+  reminders_created: Array<Record<string, unknown>>
+  rhythm_updated?: boolean
+  expert_brief_date?: string | null
+  source: string
+  session_id?: string
+  latency_ms?: number
+}
+
+export const api_quick_chat = (
+  text: string,
+  options?: { channel?: string; session_id?: string },
+): Promise<QuickChatResponse> =>
+  request<QuickChatResponse>('/quick-chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      text,
+      channel: options?.channel ?? 'web',
+      session_id: options?.session_id ?? 'web:owner',
+    }),
+  })
+
+export const api_get_expert_brief = (): Promise<Record<string, unknown>> =>
+  request<Record<string, unknown>>('/expert-brief')
