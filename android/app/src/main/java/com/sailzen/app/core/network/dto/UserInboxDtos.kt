@@ -45,6 +45,9 @@ data class UserDeviceRegisterRequest(
     @SerialName("client_type") val clientType: String = "android",
     @SerialName("app_version") val appVersion: String = "",
     @SerialName("push_token") val pushToken: String? = null,
+    val fingerprint: String = "",
+    @SerialName("is_emulator") val isEmulator: Boolean = false,
+    val capabilities: Map<String, JsonElement> = emptyMap(),
 )
 
 @Serializable

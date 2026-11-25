@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from sail_server.application.dto.user import (
     UserBootstrapResponse,
+    UserDeviceCleanupRequest,
+    UserDeviceCleanupResponse,
     UserDeviceRegisterRequest,
     UserDeviceResponse,
     UserProfileResponse,
@@ -26,6 +28,7 @@ from sail_server.application.dto.user import (
 from sail_server.model.user import (
     UserBadRequestError,
     UserNotFoundError,
+    cleanup_user_devices_impl,
     deactivate_user_device_impl,
     get_user_bootstrap_impl,
     get_user_profile_impl,
@@ -111,6 +114,19 @@ class UserController(Controller):
         ctx = resolve_user_context(request, db)
         with _map_errors():
             return register_user_device_impl(db, ctx.user_id, data)
+
+    @post("/devices/cleanup")
+    async def cleanup_devices(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        data: UserDeviceCleanupRequest | None = None,
+    ) -> UserDeviceCleanupResponse:
+        """一键去重、清理模拟器与长期离线僵尸终端。"""
+        db = next(router_dependency)
+        ctx = resolve_user_context(request, db)
+        with _map_errors():
+            return cleanup_user_devices_impl(db, ctx.user_id, data)
 
     @delete("/devices/{device_id:str}", status_code=200)
     async def remove_device(

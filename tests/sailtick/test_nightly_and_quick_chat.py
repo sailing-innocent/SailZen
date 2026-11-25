@@ -600,3 +600,144 @@ async def test_onebot_qq_webhook_security_and_due_nudge_push(tmp_path):
     finally:
         await d.qq_bot.close()
         await d.db.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  6. 快脑多轮防复读、提醒改期/取消闭环、画像持久化与 AI Trace 落盘回归
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_parse_explicit_offwork_hour_in_sentence():
+    """用户明确说「7点下班，下班回去的路上提醒...」时，必须推算为 18:40 而非次日 07:00。"""
+    now = datetime(2026, 11, 25, 11, 51)
+    dt, _ = parse_reminder_time(
+        "今天预计能够正常7点下班，记得提醒我要在下班回去的路上购买7号电池和洗衣液",
+        now=now,
+        default_offwork_time="18:00",
+        offwork_lead_minutes=20,
+    )
+    assert dt == datetime(2026, 11, 25, 18, 40)
+
+
+@pytest.mark.asyncio
+async def test_quick_chat_idempotent_dedup_reschedule_cancel_profile_and_trace(tmp_path):
+    """复现并根治「买7号电池和洗衣液」3轮产生3条提醒 + 重复事务 + 缺失 Trace 的线上问题。"""
+    clock = VirtualClock(datetime(2026, 11, 25, 11, 51))
+    server = SimulatedSailServer(clock=clock)
+
+    # 模拟快模型依次输出：
+    # Turn 1: 建 17:40 提醒
+    # Turn 2: 纠正作息 19:00（update_profile + 同主题改期到 18:40，即使仍输出 create_reminder 也应自动改期替换而非双建！）
+    # Turn 3: 纯聊天总结却误重放带空格标题的 create_reminder@18:40 → 执行层强幂等跳过！
+    # Turn 4: 显式 cancel_reminder → 云端与本地 Nudge 双向取消！
+    llm = FakeFastLLM(
+        responses=[
+            json.dumps(
+                {
+                    "reply": "收到，17:40 提醒你买7号电池和洗衣液。",
+                    "actions": [
+                        {
+                            "kind": "create_reminder",
+                            "title": "下班路上买7号电池和洗衣液",
+                            "body": "下班回家路上顺路购买",
+                            "trigger_time": "2026-11-25T17:40:00",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "reply": "记下你 19:00 下班啦，提醒已顺延到 18:40。",
+                    "actions": [
+                        {"kind": "update_profile", "key": "offwork_time", "value": "19:00"},
+                        {
+                            "kind": "create_reminder",
+                            "title": "下班路上买7号电池和洗衣液",
+                            "body": "下班回去的路上顺路购买",
+                            "trigger_time": "2026-11-25T18:40:00",
+                        },
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "reply": "明白，前期先慢慢磨合；今天 18:40 的买电池洗衣液提醒照旧。",
+                    "actions": [
+                        {
+                            "kind": "create_reminder",
+                            "title": "下班路上买 7 号电池和洗衣液",
+                            "body": "重复复读测试",
+                            "trigger_time": "2026-11-25T18:40:00",
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "reply": "好的，已经帮你取消买7号电池和洗衣液的提醒了。",
+                    "actions": [
+                        {"kind": "cancel_reminder", "match_title": "买7号电池和洗衣液"},
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        ]
+    )
+
+    d = _build_daemon(tmp_path, clock, server, llm=llm)
+    await d.db.connect()
+    try:
+        # Turn 1: 首次创建 17:40
+        r1 = await d.quick_agent.handle_message("下班提醒我买7号电池和洗衣液", channel="android", user_id="owner")
+        assert r1["trace_id"]
+        assert len([r for r in server.reminders if r["state"] != "CANCELED"]) == 1
+        assert len(await d.db.list_pending_nudges()) == 1
+
+        # Turn 2: 纠正作息 19:00 + 改期到 18:40 → 旧 17:40 被自动取消，只剩 1 条 18:40！
+        clock.advance(minutes=2)
+        r2 = await d.quick_agent.handle_message("我们正常下班是19:00", channel="android", user_id="owner")
+        assert any(a.get("kind") == "update_profile" and a.get("ok") for a in r2["actions"])
+        assert any(a.get("rescheduled") is True for a in r2["actions"])
+        # 验证 profile 已持久化
+        prof = await d.memory.all_profile()
+        assert prof["offwork_time"]["value"] == "19:00"
+        # 验证云端仅剩 1 条活跃提醒（旧的已 CANCELED），本地也仅 1 条 pending nudge
+        active_rems = [r for r in server.reminders if r["state"] != "CANCELED"]
+        assert len(active_rems) == 1
+        assert active_rems[0]["trigger_time"] == "2026-11-25T18:40:00"
+        nudges_t2 = await d.db.list_pending_nudges()
+        assert len(nudges_t2) == 1
+        assert nudges_t2[0]["trigger_at"] == "2026-11-25T18:40:00"
+
+        # 验证 Turn 2 传给 LLM 的历史中携带了 Turn 1 的系统回执 + 当前待触发提醒列表
+        assert "系统回执-该轮已执行" in str(llm.calls[1])
+        assert "当前已生效的待触发提醒" in str(llm.calls[1])
+
+        # Turn 3: 即使 LLM 误重放带空格标题的 18:40 提醒，执行层强幂等跳过，不新增任何提醒！
+        clock.advance(minutes=10)
+        r3 = await d.quick_agent.handle_message("前期多磨合，不必过快规划", channel="android", user_id="owner")
+        assert r3["actions"][0]["deduplicated"] is True
+        assert r3["reminders_created"] == []
+        assert len([r for r in server.reminders if r["state"] != "CANCELED"]) == 1
+        assert len(await d.db.list_pending_nudges()) == 1
+
+        # Turn 4: 取消提醒 → 云端与本地双清
+        clock.advance(minutes=5)
+        r4 = await d.quick_agent.handle_message("电池已经买好了，取消提醒吧", channel="android", user_id="owner")
+        assert r4["actions"][0]["kind"] == "cancel_reminder"
+        assert r4["actions"][0]["ok"] is True
+        assert len([r for r in server.reminders if r["state"] != "CANCELED"]) == 0
+        assert len(await d.db.list_pending_nudges()) == 0
+
+        # 验证 4 轮快脑对话全部写入 st_ai_traces（可观测性闭环）
+        traces = await d.db.list_traces(limit=10)
+        qc_traces = [t for t in traces if t["slot"] == "quick_chat"]
+        assert len(qc_traces) == 4
+        detail = await d.db.get_trace(r3["trace_id"])
+        assert detail is not None
+        assert any(sp["name"] == "action:create_reminder" and "deduplicated" in sp["output_summary"] for sp in detail["spans"])
+    finally:
+        await d.db.close()

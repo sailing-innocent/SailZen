@@ -66,6 +66,11 @@
             android:name=".core.reminder.AlarmReceiver"
             android:exported="false" />
 
+        <!-- 应用内 OTA PackageInstaller.Session 安装结果回调 -->
+        <receiver
+            android:name=".core.update.AppInstallReceiver"
+            android:exported="false" />
+
         <!-- 开机自启（系统广播，必须 exported） -->
         <receiver
             android:name=".core.bg.BootReceiver"

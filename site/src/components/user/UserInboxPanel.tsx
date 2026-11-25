@@ -398,6 +398,8 @@ export const UserProfileDialogButton: React.FC<{ compact?: boolean }> = ({ compa
   const authMode = useUserInboxStore((s) => s.authMode)
   const updateProfile = useUserInboxStore((s) => s.updateProfile)
   const refreshProfile = useUserInboxStore((s) => s.refreshProfile)
+  const removeDevice = useUserInboxStore((s) => s.removeDevice)
+  const cleanupDevices = useUserInboxStore((s) => s.cleanupDevices)
 
   const [open, setOpen] = useState(false)
   const [displayName, setDisplayName] = useState('')
@@ -406,6 +408,7 @@ export const UserProfileDialogButton: React.FC<{ compact?: boolean }> = ({ compa
   const [quietEnd, setQuietEnd] = useState('08:00')
   const [autoResolve, setAutoResolve] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [cleaningDevices, setCleaningDevices] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
   const handleOpenChange = (next: boolean) => {
@@ -523,25 +526,81 @@ export const UserProfileDialogButton: React.FC<{ compact?: boolean }> = ({ compa
           </div>
 
           <div className="space-y-1.5">
-            <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <Smartphone className="h-3.5 w-3.5" />
-              已绑定终端（{devices.length}）
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Smartphone className="h-3.5 w-3.5" />
+                已绑定终端（{devices.length}）
+              </div>
+              {devices.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  disabled={cleaningDevices}
+                  onClick={async () => {
+                    setCleaningDevices(true)
+                    setFeedback(null)
+                    try {
+                      const res = await cleanupDevices()
+                      setFeedback(
+                        res.deactivated_count > 0
+                          ? `已清理 ${res.deactivated_count} 个重复/过期终端，剩余 ${res.remaining_count} 个`
+                          : '终端列表很干净，无需清理',
+                      )
+                    } catch (e) {
+                      setFeedback(`清理失败：${e instanceof Error ? e.message : String(e)}`)
+                    } finally {
+                      setCleaningDevices(false)
+                    }
+                  }}
+                >
+                  {cleaningDevices ? '清理中...' : '去重清理'}
+                </Button>
+              )}
             </div>
-            <div className="max-h-32 overflow-y-auto space-y-1">
+            <div className="max-h-40 overflow-y-auto space-y-1">
               {devices.length === 0 ? (
                 <div className="text-xs text-muted-foreground">暂无设备记录</div>
               ) : (
                 devices.map((d) => (
                   <div
                     key={d.device_id}
-                    className="flex items-center justify-between text-xs rounded border px-2.5 py-1.5"
+                    className="flex items-center justify-between gap-2 text-xs rounded border px-2.5 py-1.5"
                   >
-                    <span className="truncate">
-                      {d.device_name || d.device_id} ({d.client_type})
-                    </span>
-                    <Badge variant={d.is_online ? 'default' : 'secondary'} className="text-[10px]">
-                      {d.is_online ? '在线' : '离线'}
-                    </Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">
+                        {d.device_name || d.device_id}
+                        {d.app_version && d.app_version !== 'site' ? ` · v${d.app_version}` : ''}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {d.client_type}
+                        {d.is_emulator ? ' · 模拟器' : ''}
+                        {d.last_seen_at ? ` · ${d.last_seen_at.slice(0, 16).replace('T', ' ')}` : ''}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Badge variant={d.is_online ? 'default' : 'secondary'} className="text-[10px]">
+                        {d.is_online ? '在线' : '离线'}
+                      </Badge>
+                      {!d.is_online && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          title="解绑此终端"
+                          onClick={async () => {
+                            try {
+                              await removeDevice(d.device_id)
+                              setFeedback(`已解绑 ${d.device_name || d.device_id}`)
+                            } catch (e) {
+                              setFeedback(`解绑失败：${e instanceof Error ? e.message : String(e)}`)
+                            }
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))
               )}

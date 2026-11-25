@@ -28,6 +28,8 @@ import com.sailzen.app.core.reminder.ReminderActionReceiver
 import com.sailzen.app.core.rhythm.QuickCaptureTileService
 import com.sailzen.app.core.tick.SharedImageInbox
 import com.sailzen.app.core.tick.SharedImagePayload
+import com.sailzen.app.core.update.AppInstallEvent
+import com.sailzen.app.core.update.AppInstallReceiver
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
 import com.sailzen.app.core.user.UserInboxRepository
@@ -52,6 +54,10 @@ class MainActivity : ComponentActivity() {
 
     /** 系统分享图片跳入 AI 教练页的时间戳触发器 */
     private val openCoachForShareToken = mutableLongStateOf(0L)
+
+    /** 前台恢复时间戳触发器（保活切回前台时节流检查云端 OTA 更新） */
+    private val foregroundResumeToken = mutableLongStateOf(0L)
+    private var lastAutoUpdateCheckMs: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -107,20 +113,82 @@ class MainActivity : ComponentActivity() {
                     openCapture = openCaptureState.value,
                 )
 
-                // 启动静默检查云端 APK 更新（静默失败，不打扰日常使用）
+                // 前台恢复静默检查云端 APK 更新（冷启动立即检查，保活切回前台按 10 分钟节流检查）
                 var updateState by remember { mutableStateOf<AppUpdateState>(AppUpdateState.Idle) }
                 val updateScope = rememberCoroutineScope()
                 val settings = remember { SettingsManager.get(applicationContext) }
+                val resumeTick by foregroundResumeToken
 
+                // 订阅 PackageInstaller.Session 安装结果回调
                 LaunchedEffect(Unit) {
+                    AppInstallReceiver.events.collect { ev ->
+                        when (ev) {
+                            is AppInstallEvent.PendingUserAction -> {
+                                val cur = updateState
+                                if (cur is AppUpdateState.Installing) {
+                                    updateState = cur.copy(hint = "已提交至系统安装器，请在系统弹窗中确认安装")
+                                }
+                            }
+                            is AppInstallEvent.Success -> {
+                                updateState = AppUpdateState.Idle
+                            }
+                            is AppInstallEvent.Failure -> {
+                                updateState = AppUpdateState.Error(ev.message)
+                                ReminderService.ensureStarted(applicationContext)
+                            }
+                        }
+                    }
+                }
+
+                LaunchedEffect(resumeTick) {
+                    // 若刚从“安装未知应用”权限设置页返回，刷新权限状态
+                    val cur = updateState
+                    if (cur is AppUpdateState.ReadyToInstall && cur.needsInstallPermission) {
+                        if (AppUpdateManager.canInstallPackages(applicationContext)) {
+                            updateState = cur.copy(needsInstallPermission = false)
+                        }
+                    }
+                    // 已在展示/下载/安装流程中时不再重复打扰
+                    if (updateState !is AppUpdateState.Idle) return@LaunchedEffect
+
+                    val nowMs = System.currentTimeMillis()
+                    if (!AppUpdateManager.shouldAutoCheckUpdate(lastAutoUpdateCheckMs, nowMs)) {
+                        return@LaunchedEffect
+                    }
                     val baseUrl = settings.serverUrl()
                     if (baseUrl.isBlank()) return@LaunchedEffect
                     val token = settings.apiToken()
                     val ignoredCode = settings.ignoredUpdateVersionCode()
+                    lastAutoUpdateCheckMs = nowMs
                     AppUpdateManager.checkForUpdate(baseUrl, token).onSuccess { release ->
                         if (release != null && release.versionCode != ignoredCode) {
                             updateState = AppUpdateState.UpdateAvailable(release)
                         }
+                    }
+                }
+
+                fun launchSessionInstall(release: com.sailzen.app.core.network.AppReleaseDto, apkFile: File) {
+                    updateScope.launch {
+                        updateState = AppUpdateState.Installing(
+                            release = release,
+                            apkFile = apkFile,
+                            hint = "正在写入系统安装会话，稍后弹出系统确认框…",
+                        )
+                        AppUpdateManager.installApkViaSession(this@MainActivity, apkFile)
+                            .onFailure { err ->
+                                runCatching {
+                                    AppUpdateManager.installApk(this@MainActivity, apkFile)
+                                    updateState = AppUpdateState.ReadyToInstall(
+                                        release = release,
+                                        apkFile = apkFile,
+                                        needsInstallPermission = false,
+                                    )
+                                }.onFailure { fallbackErr ->
+                                    updateState = AppUpdateState.Error(
+                                        "拉起安装器失败: ${fallbackErr.message ?: err.message}",
+                                    )
+                                }
+                            }
                     }
                 }
 
@@ -142,17 +210,14 @@ class MainActivity : ComponentActivity() {
                             result.fold(
                                 onSuccess = { apkFile ->
                                     val canInstall = AppUpdateManager.canInstallPackages(applicationContext)
-                                    updateState = AppUpdateState.ReadyToInstall(
-                                        release = release,
-                                        apkFile = apkFile,
-                                        needsInstallPermission = !canInstall,
-                                    )
                                     if (canInstall) {
-                                        runCatching {
-                                            AppUpdateManager.installApk(this@MainActivity, apkFile)
-                                        }.onFailure { err ->
-                                            updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}")
-                                        }
+                                        launchSessionInstall(release, apkFile)
+                                    } else {
+                                        updateState = AppUpdateState.ReadyToInstall(
+                                            release = release,
+                                            apkFile = apkFile,
+                                            needsInstallPermission = true,
+                                        )
                                     }
                                 },
                                 onFailure = { err ->
@@ -168,12 +233,14 @@ class MainActivity : ComponentActivity() {
                                 startActivity(AppUpdateManager.buildInstallPermissionIntent(this@MainActivity))
                             }
                         } else {
-                            updateState = ready.copy(needsInstallPermission = false)
-                            runCatching {
-                                AppUpdateManager.installApk(this@MainActivity, ready.apkFile)
-                            }.onFailure { err ->
-                                updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}")
-                            }
+                            launchSessionInstall(ready.release, ready.apkFile)
+                        }
+                    },
+                    onInstallFallback = { apkFile ->
+                        runCatching {
+                            AppUpdateManager.installApk(this@MainActivity, apkFile)
+                        }.onFailure { err ->
+                            updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}")
                         }
                     },
                     onOpenPermissionSettings = {
@@ -193,6 +260,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        foregroundResumeToken.longValue = System.currentTimeMillis()
         // 前台生命周期保证 ReminderService 一定能正常拉起，并静默引导 UserProfile 与对账收件箱
         lifecycleScope.launch(Dispatchers.IO) {
             if (SettingsManager.get(applicationContext).serverUrl().isNotBlank()) {

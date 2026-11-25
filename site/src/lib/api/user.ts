@@ -5,7 +5,7 @@
  * @date 2026-11-24
  */
 
-import { API_BASE, ApiError, SERVER_URL, authHeaders, parseErrorDetail } from './config'
+import { API_BASE, ApiError, SERVER_URL, authHeaders, getWebDeviceFingerprint, parseErrorDetail } from './config'
 
 const USER_API_BASE = `${SERVER_URL}/${API_BASE}/user`
 
@@ -52,11 +52,20 @@ export interface UserDevice {
   platform: string
   client_type: string
   app_version: string
+  fingerprint?: string
+  is_emulator?: boolean
   capabilities: Record<string, unknown>
   is_active: boolean
   is_online: boolean
   last_sync_seq: number
   last_seen_at?: string | null
+}
+
+export interface UserDeviceCleanupResponse {
+  deactivated_count: number
+  remaining_count: number
+  deactivated_device_ids: string[]
+  kept_devices: UserDevice[]
 }
 
 export interface UserBootstrapResponse {
@@ -104,24 +113,26 @@ export async function api_update_user_profile(
 }
 
 export async function api_register_web_device(deviceId: string): Promise<UserDevice> {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'Web'
-  const browserName = ua.includes('Edg/')
-    ? 'Edge Web'
-    : ua.includes('Chrome/')
-      ? 'Chrome Web'
-      : ua.includes('Firefox/')
-        ? 'Firefox Web'
-        : 'Browser Web'
+  const { fingerprint, browserName, osName, displayName } = getWebDeviceFingerprint()
   const resp = await fetch(`${USER_API_BASE}/devices/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       device_id: deviceId,
-      device_name: browserName,
+      device_name: displayName,
       platform: 'web',
       client_type: 'web',
       app_version: 'site',
-      capabilities: { push_ws: true, system_notification: false },
+      fingerprint,
+      is_emulator: false,
+      capabilities: {
+        identity_v: 2,
+        fingerprint,
+        browser: browserName,
+        os: osName,
+        push_ws: true,
+        system_notification: false,
+      },
     }),
   })
   return handleJson<UserDevice>(resp)
@@ -132,4 +143,30 @@ export async function api_list_user_devices(): Promise<UserDevice[]> {
     headers: authHeaders(),
   })
   return handleJson<UserDevice[]>(resp)
+}
+
+export async function api_remove_user_device(deviceId: string): Promise<{ ok: boolean; device_id: string }> {
+  const resp = await fetch(`${USER_API_BASE}/devices/${encodeURIComponent(deviceId)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  return handleJson<{ ok: boolean; device_id: string }>(resp)
+}
+
+export async function api_cleanup_user_devices(options?: {
+  deduplicate?: boolean
+  remove_emulators?: boolean
+  stale_days?: number | null
+}): Promise<UserDeviceCleanupResponse> {
+  const resp = await fetch(`${USER_API_BASE}/devices/cleanup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({
+      deduplicate: options?.deduplicate ?? true,
+      remove_emulators: options?.remove_emulators ?? true,
+      stale_days: options?.stale_days ?? 30,
+      keep_online: true,
+    }),
+  })
+  return handleJson<UserDeviceCleanupResponse>(resp)
 }

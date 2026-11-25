@@ -658,26 +658,31 @@ def update_rule_impl(
 
 
 def register_device_impl(db: Session, req: DeviceRegisterRequest) -> DeviceResponse:
-    """设备注册/心跳：按 device_id upsert，刷新 last_seen_at"""
-    device = db.query(Device).filter(Device.device_id == req.device_id).first()
-    if device is None:
-        device = Device(device_id=req.device_id, platform="android")
-        db.add(device)
-    device.device_name = req.device_name
-    device.app_version = req.app_version
-    if req.push_token is not None:
-        device.push_token = req.push_token
-    device.last_seen_at = _now()
-    db.commit()
-    db.refresh(device)
+    """设备注册/心跳：统一委托至 UserProfile Device Identity v2 逻辑（自动指纹/型号去重）。"""
+    from sail_server.application.dto.user import UserDeviceRegisterRequest
+    from sail_server.model.user import ensure_default_user_profile, register_user_device_impl
+
+    owner = ensure_default_user_profile(db)
+    resp = register_user_device_impl(
+        db,
+        owner.id,
+        UserDeviceRegisterRequest(
+            device_id=req.device_id,
+            device_name=req.device_name or "",
+            platform="android",
+            client_type="android",
+            app_version=req.app_version or "",
+            push_token=req.push_token,
+        ),
+    )
     return DeviceResponse(
-        id=device.id,
-        device_id=device.device_id,
-        device_name=device.device_name or "",
-        platform=device.platform or "android",
-        app_version=device.app_version or "",
-        push_token=device.push_token,
-        last_seen_at=device.last_seen_at,
+        id=resp.id,
+        device_id=resp.device_id,
+        device_name=resp.device_name or "",
+        platform=resp.platform or "android",
+        app_version=resp.app_version or "",
+        push_token=resp.push_token,
+        last_seen_at=resp.last_seen_at,
     )
 
 

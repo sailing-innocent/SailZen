@@ -73,6 +73,8 @@ class UserDeviceRegisterRequest(BaseModel):
     client_type: str = "android"
     app_version: str = ""
     push_token: Optional[str] = None
+    fingerprint: str = ""
+    is_emulator: Optional[bool] = None
     capabilities: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -89,11 +91,35 @@ class UserDeviceResponse(BaseModel):
     client_type: str = "android"
     app_version: str = ""
     push_token: Optional[str] = None
+    fingerprint: str = ""
+    is_emulator: bool = False
     capabilities: Dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
     is_online: bool = False
     last_sync_seq: int = 0
     last_seen_at: Optional[datetime] = None
+
+
+class UserDeviceCleanupRequest(BaseModel):
+    """批量去重与僵尸终端清理请求。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    deduplicate: bool = True
+    remove_emulators: bool = True
+    stale_days: Optional[int] = 30
+    keep_online: bool = True
+
+
+class UserDeviceCleanupResponse(BaseModel):
+    """批量清理结果。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    deactivated_count: int = 0
+    remaining_count: int = 0
+    deactivated_device_ids: List[str] = Field(default_factory=list)
+    kept_devices: List[UserDeviceResponse] = Field(default_factory=list)
 
 
 class UserBootstrapResponse(BaseModel):

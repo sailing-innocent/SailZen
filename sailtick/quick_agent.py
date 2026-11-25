@@ -36,8 +36,44 @@ from sailtick.knowledge import HealthKnowledgeManager
 from sailtick.memory import AgentMemory
 from sailtick.nightly import NightlySelfMaintenance
 from sailtick.rhythm_client import RhythmClient
+from sailtick.tracer import TickTraceRecorder
 
 logger = logging.getLogger(__name__)
+
+_CN_DIGIT_MAP = str.maketrans("零一二三四五六七八九０１２３４５６７８９", "01234567890123456789")
+_TITLE_NOISE_RE = re.compile(r"[\s，。！？、,.;:：()（）\[\]【】\"'“”‘’/\-—_~`]+")
+_REMINDER_PREFIX_RE = re.compile(r"^(?:提醒我?|到点提醒|记得|别忘了|不要忘了|下班(?:前|后|路上|回去的?路上)?)+")
+
+
+def normalize_semantic_title(title: str) -> str:
+    """将提醒/事务标题做语义归一化（去空白标点、统一全角与中文数字），用于幂等防重。"""
+    s = (title or "").strip().lower().translate(_CN_DIGIT_MAP)
+    s = _TITLE_NOISE_RE.sub("", s)
+    return s
+
+
+def titles_match_semantically(a: str, b: str, *, strip_reminder_prefix: bool = False) -> bool:
+    """判断两个提醒或事务标题是否指向同一件事。"""
+    na = normalize_semantic_title(a)
+    nb = normalize_semantic_title(b)
+    if strip_reminder_prefix:
+        na = _REMINDER_PREFIX_RE.sub("", na) or na
+        nb = _REMINDER_PREFIX_RE.sub("", nb) or nb
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    if min(len(na), len(nb)) >= 4 and (na in nb or nb in na):
+        return True
+    # 2-gram Jaccard 相似度（兼容轻微措辞变化，如「顺路购买」vs「顺路买」）
+    if min(len(na), len(nb)) >= 4:
+        ga = {na[i : i + 2] for i in range(len(na) - 1)}
+        gb = {nb[i : i + 2] for i in range(len(nb) - 1)}
+        inter = len(ga & gb)
+        union = len(ga | gb)
+        if union > 0 and (inter / union) >= 0.72:
+            return True
+    return False
 
 
 def parse_reminder_time(
@@ -93,11 +129,16 @@ def parse_reminder_time(
             hh += 12
         elif period == "中午" and 1 <= hh <= 3:
             hh += 12
+        elif not period and "下班" in s and 4 <= hh <= 11:
+            # 如「今天预计正常7点下班，下班路上提醒我...」→ 推断为 19:00
+            hh += 12
         if 0 <= hh <= 23 and 0 <= mm <= 59:
             dt = datetime(target_date.year, target_date.month, target_date.day, hh, mm)
+            if "下班" in s and ("下班前" in s or "下班回去" in s or "下班路上" in s):
+                dt -= timedelta(minutes=offwork_lead_minutes)
             if day_offset == 0 and dt <= now:
                 dt += timedelta(days=1)
-            return dt, dt.strftime("%m-%d %H:%M")
+            return dt.replace(second=0, microsecond=0), dt.strftime("%m-%d %H:%M")
 
     # 4. 语义锚点：「下班前」「下班时」「午休前」「睡前」「明早」
     if "下班" in s:
@@ -213,15 +254,32 @@ class QuickCoachAgent:
                 "latency_ms": latency_ms,
             }
 
-        # 2. 装载专家简报 + 实时 Rhythm 日程/项目 + 食物热量 + 知识 + 短期对话上下文
-        brief = await self.db.get_runtime_state("expert_brief")
-        profile_dict = await self.memory.all_profile()
-        matched_foods = await self.knowledge.lookup_foods_in_text(clean_text, limit=4)
-        matched_knowledge = await self.knowledge.retrieve_knowledge(clean_text, limit=3)
-        history = await self.db.list_quick_chat_history(
-            sess_key, limit=max(2, self.config.quick_chat.history_turns)
+        # 2. 装载专家简报 + 实时 Rhythm 日程/项目 + 当前待触发提醒 + 食物热量 + 知识 + 短期对话上下文
+        now = self._clock()
+        tracer = TickTraceRecorder(
+            slot="quick_chat",
+            tick_date=now.strftime("%Y-%m-%d"),
+            mode="live",
+            trigger_source=f"quick_chat:{channel}",
+            tick_id=f"qc-{now.strftime('%Y%m%d%H%M%S')}",
+            clock=self._clock,
         )
-        rhythm_dash = await self._load_live_rhythm()
+        tracer.meta = {"session_id": sess_key, "channel": channel, "user_id": str(user_id or "owner")}
+
+        with tracer.span("context", "load_quick_context", input_summary=clean_text[:200]) as ctx_sp:
+            brief = await self.db.get_runtime_state("expert_brief")
+            profile_dict = await self.memory.all_profile()
+            matched_foods = await self.knowledge.lookup_foods_in_text(clean_text, limit=4)
+            matched_knowledge = await self.knowledge.retrieve_knowledge(clean_text, limit=3)
+            history = await self.db.list_quick_chat_history(
+                sess_key, limit=max(2, self.config.quick_chat.history_turns)
+            )
+            rhythm_dash = await self._load_live_rhythm()
+            pending_reminders = await self._load_pending_reminders()
+            ctx_sp.set_output(
+                f"history={len(history)} pending_reminders={len(pending_reminders)} "
+                f"rhythm={'ok' if rhythm_dash else 'none'} foods={len(matched_foods)}"
+            )
 
         # 3. 决策回复与动作（优先快模型，无 LLM 时自动规则兜底）
         plan_source = "rule_fallback"
@@ -234,58 +292,95 @@ class QuickCoachAgent:
             and self.llm.config.providers
         )
         if llm_ready:
-            try:
-                llm_out = await self._ask_fast_llm(
+            with tracer.span("llm", "fast_llm_chat", input_summary=clean_text[:300]) as llm_sp:
+                try:
+                    llm_out, llm_meta = await self._ask_fast_llm(
+                        clean_text=clean_text,
+                        brief=brief,
+                        profile_dict=profile_dict,
+                        matched_foods=matched_foods,
+                        matched_knowledge=matched_knowledge,
+                        rhythm_dash=rhythm_dash,
+                        pending_reminders=pending_reminders,
+                        history=history,
+                    )
+                    if llm_meta:
+                        tracer.add_llm_usage(
+                            prompt_tokens=llm_meta.get("prompt_tokens", 0),
+                            completion_tokens=llm_meta.get("completion_tokens", 0),
+                            total_tokens=llm_meta.get("total_tokens", 0),
+                            cost_usd=llm_meta.get("cost_usd", 0.0),
+                        )
+                        llm_sp.set_payload(llm_meta)
+                    if llm_out and llm_out.get("reply"):
+                        reply_text = str(llm_out["reply"]).strip()
+                        raw_actions = list(llm_out.get("actions") or [])
+                        plan_source = "fast_llm"
+                        llm_sp.set_output(f"reply_len={len(reply_text)} raw_actions={len(raw_actions)}")
+                    else:
+                        llm_sp.mark_status("skipped", "empty or unparseable JSON reply")
+                except Exception as exc:
+                    logger.warning("QuickCoachAgent fast LLM failed, using rule fallback: %s", exc)
+                    llm_sp.mark_status("error", f"{type(exc).__name__}: {exc}")
+
+        if not reply_text:
+            with tracer.span("plan", "rule_fallback", input_summary=clean_text[:200]) as fb_sp:
+                fb = self._rule_fallback(
                     clean_text=clean_text,
                     brief=brief,
                     profile_dict=profile_dict,
                     matched_foods=matched_foods,
                     matched_knowledge=matched_knowledge,
                     rhythm_dash=rhythm_dash,
-                    history=history,
                 )
-                if llm_out and llm_out.get("reply"):
-                    reply_text = str(llm_out["reply"]).strip()
-                    raw_actions = list(llm_out.get("actions") or [])
-                    plan_source = "fast_llm"
-            except Exception as exc:
-                logger.warning("QuickCoachAgent fast LLM failed, using rule fallback: %s", exc)
+                reply_text = fb["reply"]
+                raw_actions = fb["actions"]
+                fb_sp.set_output(f"actions={len(raw_actions)}")
 
-        if not reply_text:
-            fb = self._rule_fallback(
-                clean_text=clean_text,
-                brief=brief,
-                profile_dict=profile_dict,
-                matched_foods=matched_foods,
-                matched_knowledge=matched_knowledge,
-                rhythm_dash=rhythm_dash,
-            )
-            reply_text = fb["reply"]
-            raw_actions = fb["actions"]
+        tracer.plan_source = plan_source
 
-        # 4. 执行轻量工具动作（Rhythm 排程/占用/项目/块状态 + 提醒 + 体重/饮食 + 慢脑同步）
+        # 4. 执行轻量工具动作（带强幂等防重闸门 + 逐动作 Trace 记录）
         executed_actions: List[Dict[str, Any]] = []
         reminders_created: List[Dict[str, Any]] = []
         rhythm_updated = False
         for act in raw_actions:
             if not isinstance(act, dict):
                 continue
-            res = await self._execute_action(
-                act=act,
-                raw_text=clean_text,
-                channel=channel,
-                target_type=target_type,
-                target_id=reply_target_id,
-                profile_dict=profile_dict,
-            )
-            if res:
-                executed_actions.append(res)
-                if res.get("kind") == "create_reminder" and res.get("ok"):
-                    reminders_created.append(res)
-                if str(res.get("kind", "")).startswith("rhythm_") and res.get("ok"):
-                    rhythm_updated = True
+            act_kind = str(act.get("kind") or "unknown").strip()
+            with tracer.span("work", f"action:{act_kind}", input_summary=json.dumps(act, ensure_ascii=False)[:400]) as act_sp:
+                res = await self._execute_action(
+                    act=act,
+                    raw_text=clean_text,
+                    channel=channel,
+                    target_type=target_type,
+                    target_id=reply_target_id,
+                    profile_dict=profile_dict,
+                    rhythm_dash=rhythm_dash,
+                    pending_reminders=pending_reminders,
+                )
+                if res:
+                    executed_actions.append(res)
+                    act_sp.set_payload({"request": act, "result": res})
+                    if res.get("ok"):
+                        tracer.actions_executed += 1
+                        if res.get("deduplicated"):
+                            act_sp.set_output(f"deduplicated ({res.get('action_taken', 'reused')})")
+                        elif res.get("rescheduled"):
+                            act_sp.set_output(f"rescheduled -> {res.get('trigger_time')}")
+                        else:
+                            act_sp.set_output("ok")
+                    else:
+                        tracer.actions_failed += 1
+                        act_sp.mark_status("error", str(res.get("error") or "action failed"))
+                    if res.get("kind") in ("create_reminder", "update_reminder") and res.get("ok"):
+                        if not res.get("deduplicated"):
+                            reminders_created.append(res)
+                    if str(res.get("kind", "")).startswith("rhythm_") and res.get("ok") and not res.get("deduplicated"):
+                        rhythm_updated = True
+                else:
+                    act_sp.mark_status("skipped", "unsupported or disabled action")
 
-        # 5. 保存短期对话历史（供下轮追问）
+        # 5. 保存短期对话历史（供下轮追问）+ 持久化全链路 AI Trace
         await self.db.append_quick_chat(
             sess_key, "user", clean_text, channel=channel, user_id=str(user_id or "")
         )
@@ -298,6 +393,12 @@ class QuickCoachAgent:
             actions=executed_actions,
         )
 
+        trace_dict = tracer.finish(
+            status="completed",
+            summary=f"[{channel}] {clean_text[:80]} -> {len(executed_actions)} actions ({plan_source})",
+        )
+        await self._persist_trace(trace_dict)
+
         latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
         return {
             "reply": reply_text,
@@ -308,8 +409,21 @@ class QuickCoachAgent:
             "foods_matched": [f["name"] for f in matched_foods],
             "source": plan_source,
             "session_id": sess_key,
+            "trace_id": tracer.trace_id,
             "latency_ms": latency_ms,
         }
+
+    async def _persist_trace(self, trace_dict: Dict[str, Any]) -> None:
+        try:
+            if hasattr(self.db, "save_trace") and getattr(self.db, "_engine", None) is not None:
+                await self.db.save_trace(trace_dict)
+        except Exception as exc:
+            logger.debug("QuickCoachAgent save_trace skipped: %s", exc)
+        try:
+            if hasattr(self.inbox, "report_ai_trace") and await self.inbox.health():
+                await self.inbox.report_ai_trace(trace_dict)
+        except Exception as exc:
+            logger.debug("QuickCoachAgent report_ai_trace skipped: %s", exc)
 
     async def _load_live_rhythm(self) -> Optional[Dict[str, Any]]:
         try:
@@ -318,6 +432,90 @@ class QuickCoachAgent:
         except Exception as exc:
             logger.debug("QuickCoachAgent load live rhythm skipped: %s", exc)
         return None
+
+    async def _load_pending_reminders(self) -> List[Dict[str, Any]]:
+        """汇总本地 pending nudges 与云端 pending reminders，供 Prompt 感知与幂等去重。"""
+        merged: List[Dict[str, Any]] = []
+        seen_server_ids: set[int] = set()
+        try:
+            nudges = await self.db.list_pending_nudges(limit=30)
+            for n in nudges:
+                sid = n.get("server_reminder_id")
+                if sid is not None:
+                    seen_server_ids.add(int(sid))
+                merged.append(
+                    {
+                        "nudge_id": n.get("id"),
+                        "server_reminder_id": sid,
+                        "title": str(n.get("title") or ""),
+                        "body": str(n.get("body") or ""),
+                        "trigger_at": str(n.get("trigger_at") or ""),
+                    }
+                )
+        except Exception as exc:
+            logger.debug("QuickCoachAgent list_pending_nudges skipped: %s", exc)
+
+        try:
+            if hasattr(self.inbox, "list_pending_reminders") and await self.inbox.health():
+                for r in await self.inbox.list_pending_reminders():
+                    rid = r.get("id")
+                    if rid is not None and int(rid) in seen_server_ids:
+                        continue
+                    merged.append(
+                        {
+                            "nudge_id": None,
+                            "server_reminder_id": rid,
+                            "title": str(r.get("title") or ""),
+                            "body": str(r.get("body") or ""),
+                            "trigger_at": str(r.get("trigger_time") or ""),
+                        }
+                    )
+        except Exception as exc:
+            logger.debug("QuickCoachAgent list_pending_reminders skipped: %s", exc)
+        return merged
+
+    @staticmethod
+    def _format_pending_reminders_for_prompt(pending_reminders: List[Dict[str, Any]]) -> str:
+        if not pending_reminders:
+            return "(当前无待触发提醒)"
+        lines: List[str] = []
+        for item in pending_reminders[:15]:
+            rid = item.get("server_reminder_id")
+            nid = item.get("nudge_id")
+            tag = f"reminder#{rid}" if rid is not None else f"nudge#{str(nid or '')[:8]}"
+            trig = str(item.get("trigger_at") or "")[:16].replace("T", " ")
+            lines.append(f"- {tag} [{trig}] {item.get('title') or ''}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_history_for_llm(history: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        """将短期对话历史格式化为 LLM 消息，并在 assistant 轮次附带已执行动作回执以杜绝复读重放。"""
+        out: List[Dict[str, str]] = []
+        for h in history[-6:]:
+            role = str(h.get("role") or "user")
+            content = str(h.get("content") or "")
+            if role == "assistant":
+                acts = h.get("actions") or []
+                receipts: List[str] = []
+                for a in acts:
+                    if not isinstance(a, dict) or not a.get("ok"):
+                        continue
+                    k = a.get("kind")
+                    if k in ("create_reminder", "update_reminder"):
+                        rid = a.get("server_reminder_id") or str(a.get("nudge_id") or "")[:8]
+                        receipts.append(f"{k}#{rid}@{str(a.get('trigger_time') or '')[11:16]}({a.get('title') or ''})")
+                    elif k == "cancel_reminder":
+                        receipts.append(f"cancel_reminder({a.get('title') or a.get('server_reminder_id')})")
+                    elif k == "rhythm_upsert_affair":
+                        receipts.append(f"affair#{a.get('affair_id')}({a.get('title') or ''})")
+                    elif k == "update_profile":
+                        receipts.append(f"profile.{a.get('key')}={a.get('value')}")
+                    elif k:
+                        receipts.append(str(k))
+                if receipts:
+                    content = f"{content}\n[系统回执-该轮已执行，勿重复创建: {'; '.join(receipts)}]"
+            out.append({"role": role, "content": content})
+        return out
 
     # ── 快捷指令（零 LLM 延迟） ───────────────────────────────────────
 
@@ -539,8 +737,9 @@ class QuickCoachAgent:
         matched_foods: List[Dict[str, Any]],
         matched_knowledge: List[Dict[str, Any]],
         rhythm_dash: Optional[Dict[str, Any]],
+        pending_reminders: List[Dict[str, Any]],
         history: List[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
         now = self._clock()
         today_str = now.strftime("%Y-%m-%d")
         offwork = self._resolve_offwork_time(profile_dict)
@@ -548,6 +747,7 @@ class QuickCoachAgent:
         playbooks = (brief or {}).get("flexible_playbooks") if isinstance(brief, dict) else {}
         playbook_text = "\n".join(f"- {k}: {v}" for k, v in (playbooks or {}).items()) or "(默认温和策略)"
         rhythm_text = self._format_live_rhythm_for_prompt(rhythm_dash)
+        pending_rem_text = self._format_pending_reminders_for_prompt(pending_reminders)
 
         food_text = "\n".join(
             f"- {f['name']}({f.get('serving_desc')}): 约{f.get('kcal_per_serving')}kcal "
@@ -560,12 +760,15 @@ class QuickCoachAgent:
             for k in matched_knowledge
         ) or "(无)"
 
-        system_prompt = f"""你是 SailTick Personal Agent 的「白天快速反应助手」（常驻 Web / QQ / 快捷对话端）。
+        system_prompt = f"""你是 SailTick Personal Agent 的「白天快速反应助手」（常驻 Android / Web / QQ 快捷对话端）。
 你统一协助用户处理**日程与项目突发变动（Rhythm）**和**健康减重日常（饮食/运动/体重）**。
-你有权直接调用 Rhythm API 帮用户更新今日/明日可视化时间线、钉入临时会议/请假、新建或更新重要项目/待办、标记完成或跳过——让用户用自然语言一句话就能搞定，绝不让用户去填复杂 PM 表单。
+你有权直接调用 Rhythm API、提醒工具与画像更新工具——让用户用自然语言一句话就能搞定，绝不让用户去填复杂 PM 表单。
 
 当前时间：{now.strftime('%Y-%m-%d %H:%M')}（星期{'一二三四五六日'[now.weekday()]}）
-默认下班时间：{offwork}（若用户说「下班前提醒我...」，默认提前 {self.config.quick_chat.offwork_lead_minutes} 分钟触发）
+画像记录的常规下班时间：{offwork}（⚠️ 硬规则：若用户本轮原话已明确给出时间，如「今天7点下班」「19:00下班」，**必须严格以用户原话为准**；仅当用户未提具体时刻时才用常规值并提前 {self.config.quick_chat.offwork_lead_minutes} 分钟）
+
+【当前已生效的待触发提醒（严禁重复创建）】
+{pending_rem_text}
 
 【SailTick 夜间专家简报（健康 + 节奏）】
 {brief_text}
@@ -582,24 +785,34 @@ class QuickCoachAgent:
 【命中的专业健康师知识】
 {kn_text}
 
-回复与行动原则：
+回复与行动硬原则：
 1. 适合快速阅读：温和、口语化、有同理心、不苛责（3-6 行，必要时短要点）。
-2. **日程突发变动（加会/请假/早下班/太累了/卡壳/想重排）**：立刻调用 `rhythm_occupancy`（如有新会议/请假）和/或 `rhythm_sync_timeline` 直接重排今日剩余可视化时间线（系统会自动保留已完成和刚性钉块，你只需给出当前时刻之后的新排程块和一句 `rationale`），并附带 `plan_adjust_signal` 同步给慢脑！
-3. **新增项目或任务**：用户口述新目标/项目/任务时，用 `rhythm_upsert_affair` 直接落库（长期目标用 `venture` + `target_date`，一次性任务用 `task_oneoff`），不必追问一堆权重参数。
-4. **反馈完成/跳过**：用户说某件事做完了或不想做了，用 `rhythm_block_status` 或 `rhythm_transit_affair` 直接更新。
-5. **设提醒**：用户要求设提醒时，必须输出 `create_reminder` action，算出精确本地 ISO 时间 `YYYY-MM-DDTHH:MM:00`。
-6. **食物热量/体重/饮食**：命中食物库直接答；未命中先估算并输出 `enqueue_food_research`；报体重/饮食直接落库。
+2. **⚠️ 严禁复读重放历史动作（最重要！）**：
+   - `actions` **只能包含针对用户本轮最新消息中「新增、修改或取消」的意图**！
+   - 若对话历史已有 `[系统回执-该轮已执行]` 或上方「当前已生效的待触发提醒 / 活跃项目」里已经存在，就算你在 `reply` 里口头总结确认，**也绝对不要**再次输出 `create_reminder` 或 `rhythm_upsert_affair`！
+   - 当用户只是在聊策略、原则、阶段目标、闲聊或确认时，`actions` 必须为 `[]`（最多加一条 `plan_adjust_signal` 记录偏好）。
+3. **提醒的增/改/删闭环**：
+   - 新建提醒才用 `create_reminder`（精确本地 ISO `YYYY-MM-DDTHH:MM:00`）；
+   - 要修改已有提醒的时间/内容时，**必须用 `update_reminder`**（填 `server_reminder_id` 或 `match_title`），严禁新建第二条造成双倍提醒；
+   - 要取消/完结已有提醒时，用 `cancel_reminder`。
+4. **用户纠正长期作息或习惯**：立即调用 `update_profile` 落库（如 `key="offwork_time", value="19:00"`、`key="work_schedule", value="..."`），并顺手把当天受影响的已有提醒用 `update_reminder` 改期，不要把纯作息规律重复建多条事务。
+5. **日程突发变动（加会/请假/早下班/太累了/想重排）**：调用 `rhythm_occupancy` 和/或 `rhythm_sync_timeline` 重排今日剩余可视化时间线，附带 `plan_adjust_signal` 同步给慢脑。
+6. **新增项目或任务 / 反馈完成**：口述新目标用 `rhythm_upsert_affair`（先核对上方列表是否已存在，已存在传 `affair_id` 更新），反馈完成用 `rhythm_block_status` 或 `rhythm_transit_affair`。
+7. **食物热量/体重/饮食**：命中食物库直接答；未命中先估算并输出 `enqueue_food_research`；报体重/饮食直接落库。
 
 严格只输出 JSON：
 {{
   "reply": "直接发给用户的回复文本",
   "actions": [
+    {{"kind": "create_reminder", "title": "买洗衣液", "body": "下班顺路买洗衣液", "trigger_time": "{today_str}T18:40:00", "priority": "normal"}},
+    {{"kind": "update_reminder", "server_reminder_id": 418, "match_title": "买7号电池和洗衣液", "title": "下班路上买7号电池和洗衣液", "trigger_time": "{today_str}T18:40:00"}},
+    {{"kind": "cancel_reminder", "server_reminder_id": 418, "match_title": "买7号电池和洗衣液"}},
+    {{"kind": "update_profile", "key": "offwork_time", "value": "19:00"}},
     {{"kind": "rhythm_occupancy", "date": "{today_str}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "临时评审会"}},
     {{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "一句温和排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus", "affair_id": null, "note": ""}}]}},
     {{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": ""}},
     {{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}},
     {{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate", "defer_to": "2026-11-26T09:00:00"}},
-    {{"kind": "create_reminder", "title": "买洗衣液", "body": "下班顺路买洗衣液", "trigger_time": "{today_str}T17:40:00", "priority": "normal"}},
     {{"kind": "plan_adjust_signal", "scene": "unexpected_meeting|early_offwork|social_dining|low_energy|other", "summary": "一句话记录今日变动"}},
     {{"kind": "log_diet", "meal_type": "breakfast|lunch|dinner|snack", "description": "饮食内容", "calories": 500}},
     {{"kind": "log_weight", "weight_kg": 73.6}},
@@ -608,7 +821,7 @@ class QuickCoachAgent:
 }}
 不需要动作时 actions 输出 []。"""
 
-        hist_msgs = [{"role": h["role"], "content": h["content"]} for h in history[-6:]]
+        hist_msgs = self._format_history_for_llm(history)
         if hasattr(self.llm, "chat_fast"):
             resp = await self.llm.chat_fast(
                 clean_text,
@@ -623,8 +836,19 @@ class QuickCoachAgent:
                 expect_json=True,
                 max_tokens=900,
             )
-        parsed = HealthKnowledgeManager._parse_json_safe(getattr(resp, "content", ""))
-        return parsed
+        raw_content = getattr(resp, "content", "") or ""
+        parsed = HealthKnowledgeManager._parse_json_safe(raw_content)
+        llm_meta: Dict[str, Any] = {
+            "provider": getattr(resp, "provider", ""),
+            "model": getattr(resp, "model", ""),
+            "prompt_tokens": int(getattr(resp, "prompt_tokens", 0) or 0),
+            "completion_tokens": int(getattr(resp, "completion_tokens", 0) or 0),
+            "total_tokens": int(getattr(resp, "total_tokens", 0) or 0),
+            "cost_usd": float(getattr(resp, "cost_usd", 0.0) or 0.0),
+            "history_turns": len(hist_msgs),
+            "raw_response": raw_content[:4000],
+        }
+        return parsed, llm_meta
 
     # ── 无 LLM 确定性规则兜底 ─────────────────────────────────────────
 
@@ -814,6 +1038,181 @@ class QuickCoachAgent:
 
     # ── 工具动作执行 ──────────────────────────────────────────────────
 
+    @staticmethod
+    def _find_matching_pending_reminder(
+        pending_reminders: List[Dict[str, Any]],
+        *,
+        server_reminder_id: Optional[int] = None,
+        nudge_id: Optional[str] = None,
+        title: str = "",
+        target_date: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """在活跃待触发提醒中按 ID 或语义标题匹配已有条目。"""
+        if server_reminder_id is not None:
+            for item in pending_reminders:
+                if item.get("server_reminder_id") is not None and int(item["server_reminder_id"]) == int(server_reminder_id):
+                    return item
+        if nudge_id:
+            for item in pending_reminders:
+                if item.get("nudge_id") and str(item["nudge_id"]) == str(nudge_id):
+                    return item
+        if title:
+            for item in pending_reminders:
+                if target_date and str(item.get("trigger_at") or "")[:10] != target_date:
+                    continue
+                if titles_match_semantically(title, str(item.get("title") or ""), strip_reminder_prefix=True):
+                    return item
+        return None
+
+    async def _reschedule_or_create_reminder(
+        self,
+        *,
+        existing: Optional[Dict[str, Any]],
+        title: str,
+        body: str,
+        priority: str,
+        trig_dt: datetime,
+        channel: str,
+        target_type: str,
+        target_id: str,
+        pending_reminders: List[Dict[str, Any]],
+        action_kind: str = "create_reminder",
+    ) -> Dict[str, Any]:
+        """创建或原地改期提醒（同日同主题自动幂等复用或替换，绝不产生多条重复提醒）。"""
+        if existing is not None:
+            old_iso = str(existing.get("trigger_at") or "")
+            old_dt: Optional[datetime] = None
+            try:
+                old_dt = datetime.fromisoformat(old_iso.replace("Z", "+00:00"))
+                if old_dt.tzinfo is not None:
+                    old_dt = old_dt.astimezone().replace(tzinfo=None)
+            except ValueError:
+                old_dt = None
+
+            # 1. 同主题且触发时间相差 <= 5 分钟：强幂等跳过（杜绝多轮复读重放）
+            if old_dt is not None and abs((old_dt - trig_dt).total_seconds()) <= 300:
+                return {
+                    "kind": action_kind,
+                    "ok": True,
+                    "deduplicated": True,
+                    "action_taken": "reused_existing",
+                    "title": existing.get("title") or title,
+                    "trigger_time": old_iso or trig_dt.isoformat(),
+                    "server_reminder_id": existing.get("server_reminder_id"),
+                    "server_synced": existing.get("server_reminder_id") is not None,
+                    "nudge_id": existing.get("nudge_id"),
+                }
+
+            # 2. 同主题但时间改变：撤销旧云端提醒 → 新建新时间提醒 → 原地更新本地 Nudge
+            old_sid = existing.get("server_reminder_id")
+            server_ok = False
+            new_sid: Optional[int] = None
+            try:
+                if await self.inbox.health():
+                    if old_sid is not None and hasattr(self.inbox, "cancel_reminder"):
+                        await self.inbox.cancel_reminder(int(old_sid))
+                    rem = await self.inbox.create_reminder(
+                        title=title,
+                        trigger_time=trig_dt,
+                        body=body,
+                        priority=priority,
+                        rem_type="agent.quick_reminder",
+                        payload={"channel": channel, "from_quick_chat": True, "replaced_reminder_id": old_sid},
+                    )
+                    new_sid = rem.get("id")
+                    server_ok = True
+            except Exception as exc:
+                logger.warning("QuickCoachAgent reschedule reminder on sail_server failed: %s", exc)
+
+            old_nid = existing.get("nudge_id")
+            if old_nid and hasattr(self.db, "update_scheduled_nudge"):
+                nudge = await self.db.update_scheduled_nudge(
+                    str(old_nid),
+                    title=title,
+                    body=body,
+                    trigger_at=trig_dt.isoformat(),
+                    server_reminder_id=new_sid if new_sid is not None else old_sid,
+                )
+                nudge_id = nudge["id"] if nudge else old_nid
+            else:
+                nudge_channel = "qq" if (channel == "qq" or self.config.qq_bot.enabled) else channel
+                nudge = await self.db.create_scheduled_nudge(
+                    title=title,
+                    body=body,
+                    trigger_at=trig_dt.isoformat(),
+                    channel=nudge_channel,
+                    target_id=target_id,
+                    target_type=target_type,
+                    server_reminder_id=new_sid,
+                )
+                nudge_id = nudge["id"]
+
+            # 刷新内存视图，避免同一轮多条动作继续撞车
+            existing["title"] = title
+            existing["body"] = body
+            existing["trigger_at"] = trig_dt.isoformat()
+            existing["server_reminder_id"] = new_sid if new_sid is not None else old_sid
+            existing["nudge_id"] = nudge_id
+
+            return {
+                "kind": action_kind,
+                "ok": True,
+                "rescheduled": True,
+                "replaced_reminder_id": old_sid,
+                "title": title,
+                "trigger_time": trig_dt.isoformat(),
+                "server_reminder_id": new_sid,
+                "server_synced": server_ok,
+                "nudge_id": nudge_id,
+            }
+
+        # 3. 全新提醒：正常双写并更新内存待触发列表
+        server_rem_id: Optional[int] = None
+        server_ok = False
+        try:
+            if await self.inbox.health():
+                rem = await self.inbox.create_reminder(
+                    title=title,
+                    trigger_time=trig_dt,
+                    body=body,
+                    priority=priority,
+                    rem_type="agent.quick_reminder",
+                    payload={"channel": channel, "from_quick_chat": True},
+                )
+                server_rem_id = rem.get("id")
+                server_ok = True
+        except Exception as exc:
+            logger.warning("QuickCoachAgent create_reminder on sail_server failed: %s", exc)
+
+        nudge_channel = "qq" if (channel == "qq" or self.config.qq_bot.enabled) else channel
+        nudge = await self.db.create_scheduled_nudge(
+            title=title,
+            body=body,
+            trigger_at=trig_dt.isoformat(),
+            channel=nudge_channel,
+            target_id=target_id,
+            target_type=target_type,
+            server_reminder_id=server_rem_id,
+        )
+        pending_reminders.append(
+            {
+                "nudge_id": nudge["id"],
+                "server_reminder_id": server_rem_id,
+                "title": title,
+                "body": body,
+                "trigger_at": trig_dt.isoformat(),
+            }
+        )
+        return {
+            "kind": action_kind,
+            "ok": True,
+            "title": title,
+            "trigger_time": trig_dt.isoformat(),
+            "server_reminder_id": server_rem_id,
+            "server_synced": server_ok,
+            "nudge_id": nudge["id"],
+        }
+
     async def _execute_action(
         self,
         act: Dict[str, Any],
@@ -822,10 +1221,13 @@ class QuickCoachAgent:
         target_type: str,
         target_id: str,
         profile_dict: Dict[str, Any],
+        rhythm_dash: Optional[Dict[str, Any]] = None,
+        pending_reminders: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[Dict[str, Any]]:
         kind = str(act.get("kind") or "").strip()
         if not kind:
             return None
+        pending_list = pending_reminders if pending_reminders is not None else []
 
         if kind == "create_reminder" and self.config.quick_chat.allow_reminder_create:
             title = str(act.get("title") or extract_reminder_subject(raw_text)).strip()
@@ -834,43 +1236,104 @@ class QuickCoachAgent:
             trig_dt = self._parse_iso_or_fallback(
                 act.get("trigger_time"), raw_text, profile_dict
             )
-            server_rem_id: Optional[int] = None
-            server_ok = False
-            try:
-                if await self.inbox.health():
-                    rem = await self.inbox.create_reminder(
-                        title=title,
-                        trigger_time=trig_dt,
-                        body=body,
-                        priority=priority,
-                        rem_type="agent.quick_reminder",
-                        payload={"channel": channel, "from_quick_chat": True},
-                    )
-                    server_rem_id = rem.get("id")
-                    server_ok = True
-            except Exception as exc:
-                logger.warning("QuickCoachAgent create_reminder on sail_server failed: %s", exc)
-
-            # 同步写入本地 Nudge 队列（若来自 QQ 或启用了 QQ Bot，到点同时发 QQ 私聊提醒）
-            nudge_channel = "qq" if (channel == "qq" or self.config.qq_bot.enabled) else channel
-            nudge = await self.db.create_scheduled_nudge(
+            existing = self._find_matching_pending_reminder(
+                pending_list,
+                title=title,
+                target_date=trig_dt.strftime("%Y-%m-%d"),
+            )
+            return await self._reschedule_or_create_reminder(
+                existing=existing,
                 title=title,
                 body=body,
-                trigger_at=trig_dt.isoformat(),
-                channel=nudge_channel,
-                target_id=target_id,
+                priority=priority,
+                trig_dt=trig_dt,
+                channel=channel,
                 target_type=target_type,
-                server_reminder_id=server_rem_id,
+                target_id=target_id,
+                pending_reminders=pending_list,
+                action_kind="create_reminder",
             )
+
+        if kind == "update_reminder" and self.config.quick_chat.allow_reminder_create:
+            sid_raw = act.get("server_reminder_id") or act.get("reminder_id")
+            sid = int(sid_raw) if sid_raw is not None and str(sid_raw).isdigit() else None
+            nid = str(act.get("nudge_id") or "").strip() or None
+            match_title = str(act.get("match_title") or act.get("title") or "").strip()
+            existing = self._find_matching_pending_reminder(
+                pending_list,
+                server_reminder_id=sid,
+                nudge_id=nid,
+                title=match_title,
+            )
+            title = str(act.get("title") or (existing or {}).get("title") or match_title or extract_reminder_subject(raw_text)).strip()
+            body = str(act.get("body") or (existing or {}).get("body") or f"提醒：{title}").strip()
+            priority = str(act.get("priority") or "normal")
+            trig_dt = self._parse_iso_or_fallback(
+                act.get("trigger_time"), raw_text, profile_dict
+            )
+            return await self._reschedule_or_create_reminder(
+                existing=existing,
+                title=title,
+                body=body,
+                priority=priority,
+                trig_dt=trig_dt,
+                channel=channel,
+                target_type=target_type,
+                target_id=target_id,
+                pending_reminders=pending_list,
+                action_kind="update_reminder",
+            )
+
+        if kind == "cancel_reminder" and self.config.quick_chat.allow_reminder_create:
+            sid_raw = act.get("server_reminder_id") or act.get("reminder_id")
+            sid = int(sid_raw) if sid_raw is not None and str(sid_raw).isdigit() else None
+            nid = str(act.get("nudge_id") or "").strip() or None
+            match_title = str(act.get("match_title") or act.get("title") or "").strip()
+            existing = self._find_matching_pending_reminder(
+                pending_list,
+                server_reminder_id=sid,
+                nudge_id=nid,
+                title=match_title,
+            )
+            target_sid = sid if sid is not None else (existing or {}).get("server_reminder_id")
+            target_nid = nid or (existing or {}).get("nudge_id")
+            if target_sid is None and not target_nid:
+                return {"kind": "cancel_reminder", "ok": False, "error": "no matching pending reminder"}
+            server_canceled = False
+            if target_sid is not None and hasattr(self.inbox, "cancel_reminder"):
+                try:
+                    if await self.inbox.health():
+                        server_canceled = await self.inbox.cancel_reminder(int(target_sid))
+                except Exception as exc:
+                    logger.warning("QuickCoachAgent cancel_reminder failed: %s", exc)
+            local_canceled = False
+            if target_nid:
+                local_canceled = await self.db.mark_nudge_status(str(target_nid), "canceled")
+            elif target_sid is not None and hasattr(self.db, "cancel_nudges_by_server_reminder_id"):
+                local_canceled = (await self.db.cancel_nudges_by_server_reminder_id(int(target_sid))) > 0
+            if existing is not None and existing in pending_list:
+                pending_list.remove(existing)
             return {
-                "kind": "create_reminder",
-                "ok": True,
-                "title": title,
-                "trigger_time": trig_dt.isoformat(),
-                "server_reminder_id": server_rem_id,
-                "server_synced": server_ok,
-                "nudge_id": nudge["id"],
+                "kind": "cancel_reminder",
+                "ok": bool(server_canceled or local_canceled),
+                "server_reminder_id": target_sid,
+                "nudge_id": target_nid,
+                "title": (existing or {}).get("title") or match_title,
             }
+
+        if kind == "update_profile":
+            key = str(act.get("key") or "").strip()[:64]
+            val = act.get("value")
+            if not key or val is None or (isinstance(val, str) and not val.strip()):
+                return {"kind": "update_profile", "ok": False, "error": "empty key or value"}
+            await self.memory.set_profile(
+                key,
+                val,
+                confidence=0.95,
+                source=f"quick_chat:{channel}",
+            )
+            profile_dict[key] = {"value": val, "confidence": 0.95, "source": f"quick_chat:{channel}"}
+            return {"kind": "update_profile", "ok": True, "key": key, "value": val}
 
         if kind == "plan_adjust_signal" and self.config.quick_chat.allow_plan_adjust_signal:
             summary = str(act.get("summary") or raw_text).strip()
@@ -983,20 +1446,53 @@ class QuickCoachAgent:
             try:
                 if await self.rhythm.health():
                     aid = act.get("id") or act.get("affair_id")
+                    title_in = str(act.get("title") or raw_text[:80]).strip()
+                    k_name = str(act.get("kind_name") or "task_oneoff")
+
+                    # 未传 id 时，按语义标题在现有活跃事务/项目中判重，真正实现 Upsert 而非盲目 Insert
+                    if aid is None and title_in:
+                        existing_match = await self._find_existing_affair_by_title(
+                            title_in, rhythm_dash=rhythm_dash
+                        )
+                        if existing_match is not None:
+                            aid = existing_match.get("id") or existing_match.get("affair_id")
+                            # 若关键信息无实质变化，幂等复用不重复写库
+                            same_desc = not act.get("description") or str(act.get("description")) == str(existing_match.get("description") or "")
+                            same_ddl = not act.get("urgency_ddl") or str(act.get("urgency_ddl")) == str(existing_match.get("urgency_ddl") or "")
+                            if same_desc and same_ddl and not act.get("target_date"):
+                                return {
+                                    "kind": "rhythm_upsert_affair",
+                                    "ok": True,
+                                    "deduplicated": True,
+                                    "action_taken": "reused_existing",
+                                    "affair_id": int(aid),
+                                    "title": existing_match.get("title") or title_in,
+                                }
+
                     if aid is not None:
                         updates = {
                             k: act[k]
                             for k in ("title", "description", "domain", "urgency_ddl", "est_minutes", "importance", "kind_meta")
                             if k in act and act[k] is not None
                         }
+                        if k_name == "venture" and act.get("target_date"):
+                            km = dict(updates.get("kind_meta") or {})
+                            km.setdefault("target_date", str(act["target_date"])[:10])
+                            updates["kind_meta"] = km
                         res = await self.rhythm.update_affair(int(aid), updates)
-                        return {"kind": "rhythm_upsert_affair", "ok": True, "affair_id": res.get("id")}
-                    k_name = str(act.get("kind_name") or "task_oneoff")
+                        return {
+                            "kind": "rhythm_upsert_affair",
+                            "ok": True,
+                            "updated": True,
+                            "affair_id": res.get("id"),
+                            "title": res.get("title") or title_in,
+                        }
+
                     k_meta = dict(act.get("kind_meta") or {})
                     if k_name == "venture" and act.get("target_date") and not k_meta.get("target_date"):
                         k_meta["target_date"] = str(act["target_date"])[:10]
                     res = await self.rhythm.create_affair(
-                        title=str(act.get("title") or raw_text[:80]),
+                        title=title_in,
                         kind=k_name,
                         domain=act.get("domain"),
                         description=str(act.get("description") or ""),
@@ -1005,6 +1501,9 @@ class QuickCoachAgent:
                         importance=int(act.get("importance") or 3),
                         kind_meta=k_meta,
                     )
+                    # 同步放进当前轮 rhythm_dash 缓存，防同轮重复创建
+                    if isinstance(rhythm_dash, dict):
+                        rhythm_dash.setdefault("focus_affairs", []).append(res)
                     return {"kind": "rhythm_upsert_affair", "ok": True, "affair_id": res.get("id"), "title": res.get("title")}
             except Exception as exc:
                 logger.warning("QuickCoachAgent rhythm_upsert_affair failed: %s", exc)
@@ -1035,6 +1534,34 @@ class QuickCoachAgent:
                 logger.warning("QuickCoachAgent rhythm_transit_affair failed: %s", exc)
             return {"kind": "rhythm_transit_affair", "ok": False}
 
+        return None
+
+    async def _find_existing_affair_by_title(
+        self, title: str, rhythm_dash: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
+        """在活跃 Rhythm 事务/项目中按语义标题判重，防止多轮对话反复新建同名事务。"""
+        terminal = {"DONE", "CANCELED", "ARCHIVED", "COMPLETED"}
+        pool: List[Dict[str, Any]] = []
+        if isinstance(rhythm_dash, dict):
+            for key in ("focus_affairs", "inbox_affairs", "overdue_affairs", "projects"):
+                for item in rhythm_dash.get(key) or []:
+                    if isinstance(item, dict):
+                        pool.append(item)
+        # 兜底查全量活跃事务（覆盖未进 focus_affairs 的 base_rhythm/habit 等）
+        try:
+            if hasattr(self.rhythm, "list_affairs"):
+                for item in await self.rhythm.list_affairs(limit=100):
+                    if isinstance(item, dict):
+                        pool.append(item)
+        except Exception:
+            pass
+        for item in pool:
+            st = str(item.get("state") or "").upper()
+            if st in terminal:
+                continue
+            existing_title = str(item.get("title") or "")
+            if titles_match_semantically(title, existing_title):
+                return item
         return None
 
     def _resolve_offwork_time(self, profile_dict: Dict[str, Any]) -> str:

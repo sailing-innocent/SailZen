@@ -25,6 +25,7 @@ fun AppUpdateDialog(
     state: AppUpdateState,
     onStartDownload: (AppReleaseDto) -> Unit,
     onInstallNow: (AppUpdateState.ReadyToInstall) -> Unit,
+    onInstallFallback: (java.io.File) -> Unit = {},
     onOpenPermissionSettings: () -> Unit,
     onSkipVersion: (Int) -> Unit,
     onDismiss: () -> Unit,
@@ -172,6 +173,38 @@ fun AppUpdateDialog(
                     }
                     TextButton(onClick = onDismiss) {
                         Text(stringResource(R.string.update_later))
+                    }
+                },
+            )
+        }
+
+        is AppUpdateState.Installing -> {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                title = {
+                    Text(
+                        stringResource(
+                            R.string.update_available_title,
+                            state.release.versionName,
+                            state.release.versionCode,
+                        ),
+                    )
+                },
+                text = {
+                    Column {
+                        Text(text = state.hint, style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { onInstallFallback(state.apkFile) }) {
+                        Text("系统安装器重试")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismiss) {
+                        Text("关闭")
                     }
                 },
             )

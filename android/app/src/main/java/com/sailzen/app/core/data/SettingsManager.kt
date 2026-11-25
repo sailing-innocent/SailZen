@@ -96,9 +96,20 @@ class SettingsManager private constructor(private val context: Context) {
     suspend fun apiToken(): String =
         context.dataStore.data.first()[KEY_API_TOKEN] ?: ""
 
-    /** deviceId 首启生成 UUID 并持久化 */
+    /**
+     * 获取稳定设备标识（Device Identity v2）：
+     * - 优先采用基于 ANDROID_ID + 厂商/型号派生的确定性 ID，卸载重装不漂移；
+     * - 无法获取时回退 DataStore 持久化 UUID。
+     */
     suspend fun getOrCreateDeviceId(): String {
+        val stable = DeviceIdentity.resolve(context).stableDeviceId
         val existing = context.dataStore.data.first()[KEY_DEVICE_ID]
+        if (!stable.isNullOrBlank()) {
+            if (existing != stable) {
+                context.dataStore.edit { it[KEY_DEVICE_ID] = stable }
+            }
+            return stable
+        }
         if (!existing.isNullOrBlank()) return existing
         val id = UUID.randomUUID().toString()
         context.dataStore.edit { it[KEY_DEVICE_ID] = id }
