@@ -1,9 +1,10 @@
 package com.sailzen.app.core.user
 
 import android.content.Context
-import android.os.Build
 import android.util.Log
+import com.sailzen.app.core.data.DeviceIdentity
 import com.sailzen.app.core.data.SettingsManager
+import kotlinx.serialization.json.JsonPrimitive
 import com.sailzen.app.core.data.db.AppDatabase
 import com.sailzen.app.core.data.db.CachedInboxItem
 import com.sailzen.app.core.network.ApiClient
@@ -111,14 +112,27 @@ class UserInboxRepository private constructor(private val context: Context) {
         return try {
             val boot = api.bootstrap()
             applyProfileLocally(boot.user)
+            val identity = DeviceIdentity.resolve(context)
             runCatching {
                 api.registerDevice(
                     UserDeviceRegisterRequest(
                         deviceId = settings.getOrCreateDeviceId(),
-                        deviceName = Build.MODEL ?: "android",
+                        deviceName = identity.displayName,
                         platform = "android",
                         clientType = "android",
                         appVersion = appVersion(),
+                        fingerprint = identity.fingerprint,
+                        isEmulator = identity.isEmulator,
+                        capabilities = buildMap {
+                            put("identity_v", JsonPrimitive(2))
+                            if (identity.fingerprint.isNotBlank()) put("fingerprint", JsonPrimitive(identity.fingerprint))
+                            put("manufacturer", JsonPrimitive(identity.manufacturer))
+                            put("model", JsonPrimitive(identity.model))
+                            put("os_version", JsonPrimitive(identity.osVersion))
+                            put("is_emulator", JsonPrimitive(identity.isEmulator))
+                            put("push_ws", JsonPrimitive(true))
+                            put("system_notification", JsonPrimitive(true))
+                        },
                     )
                 )
             }

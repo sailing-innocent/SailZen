@@ -376,6 +376,23 @@ fun SettingsScreen(
                     }
                 }
 
+                is AppUpdateState.Installing -> {
+                    Text(
+                        text = update.hint,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = viewModel::triggerFallbackInstall,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("未弹出安装框？用系统安装器重试")
+                    }
+                }
+
                 is AppUpdateState.Error -> {
                     Text(
                         text = update.message,

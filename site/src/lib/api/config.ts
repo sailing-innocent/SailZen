@@ -26,24 +26,88 @@ export const AUTH_TOKEN = process.env.VITE_SAILZEN_API_TOKEN ?? ''
 
 const WEB_DEVICE_ID_KEY = 'sailzen_web_device_id'
 
-/** 获取或生成持久化的浏览器端设备标识（用于多端 WS 同步与在线设备观测）。 */
+/** 计算稳定浏览器环境指纹（换端口、清缓存或不同路径重开同浏览器时，服务端可自动归并同一终端）。 */
+export const getWebDeviceFingerprint = (): {
+  fingerprint: string
+  browserName: string
+  osName: string
+  displayName: string
+} => {
+  if (typeof navigator === 'undefined') {
+    return {
+      fingerprint: 'web:ssr',
+      browserName: 'Web',
+      osName: 'SSR',
+      displayName: 'Web',
+    }
+  }
+  const ua = navigator.userAgent || ''
+  const browserName = ua.includes('Edg/')
+    ? 'Edge'
+    : ua.includes('Chrome/')
+      ? 'Chrome'
+      : ua.includes('Firefox/')
+        ? 'Firefox'
+        : ua.includes('Safari/')
+          ? 'Safari'
+          : 'Browser'
+  const osName = /Windows/i.test(ua)
+    ? 'Windows'
+    : /Android/i.test(ua)
+      ? 'Android'
+      : /iPhone|iPad|iPod/i.test(ua)
+        ? 'iOS'
+        : /Mac OS X|Macintosh/i.test(ua)
+          ? 'macOS'
+          : /Linux/i.test(ua)
+            ? 'Linux'
+            : 'Unknown'
+  const lang = (navigator.language || 'zh-CN').toLowerCase()
+  const cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 0
+  const tz = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    } catch {
+      return 'UTC'
+    }
+  })()
+  const screenBucket =
+    typeof window !== 'undefined' && window.screen
+      ? `${Math.max(window.screen.width, window.screen.height)}x${Math.min(window.screen.width, window.screen.height)}`
+      : '0x0'
+  const raw = `${browserName.toLowerCase()}|${osName.toLowerCase()}|${lang}|${cores}c|${screenBucket}|${tz}`
+  // FNV-1a 32-bit 稳定短摘要，避免暴露细粒度设备信息
+  let hash = 0x811c9dc5
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  const hex = (hash >>> 0).toString(16).padStart(8, '0')
+  const fingerprint = `web:${browserName.toLowerCase()}-${osName.toLowerCase()}-${hex}`
+  return {
+    fingerprint,
+    browserName,
+    osName,
+    displayName: `${browserName} · ${osName}`,
+  }
+}
+
+/** 获取或生成持久化的浏览器端设备标识（优先基于稳定指纹，换端口/清缓存后仍收敛为同一 ID）。 */
 export const getWebDeviceId = (): string => {
   if (typeof window === 'undefined' || !window.localStorage) {
     return 'web-ssr'
   }
+  const { fingerprint } = getWebDeviceFingerprint()
+  const stableId = fingerprint.replace(':', '-')
   try {
-    let id = window.localStorage.getItem(WEB_DEVICE_ID_KEY)
-    if (!id) {
-      const rand =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-      id = `web-${rand}`
-      window.localStorage.setItem(WEB_DEVICE_ID_KEY, id)
+    const existing = window.localStorage.getItem(WEB_DEVICE_ID_KEY)
+    if (existing && existing === stableId) {
+      return existing
     }
-    return id
+    window.localStorage.setItem(WEB_DEVICE_ID_KEY, stableId)
+    return stableId
   } catch {
-    return 'web-ephemeral'
+    return stableId
   }
 }
 

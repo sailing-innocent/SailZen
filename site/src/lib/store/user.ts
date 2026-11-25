@@ -7,11 +7,14 @@
 
 import { create } from 'zustand'
 import {
+  api_cleanup_user_devices,
   api_list_user_devices,
   api_register_web_device,
+  api_remove_user_device,
   api_update_user_profile,
   api_user_bootstrap,
   type UserDevice,
+  type UserDeviceCleanupResponse,
   type UserProfile,
   type UserProfileUpdatePayload,
 } from '@lib/api/user'
@@ -50,6 +53,8 @@ export interface UserInboxState {
   bootstrap: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (payload: UserProfileUpdatePayload) => Promise<UserProfile | null>
+  removeDevice: (deviceId: string) => Promise<void>
+  cleanupDevices: () => Promise<UserDeviceCleanupResponse>
   syncInbox: (full?: boolean) => Promise<void>
   replyItem: (itemId: number, reply: string, source?: string) => Promise<void>
   resolveItem: (itemId: number, summary?: string, source?: string) => Promise<void>
@@ -145,6 +150,23 @@ export const useUserInboxStore = create<UserInboxState>((set, get) => ({
     const updated = await api_update_user_profile(payload)
     set({ profile: updated })
     return updated
+  },
+
+  removeDevice: async (deviceId) => {
+    await api_remove_user_device(deviceId)
+    set((s) => ({
+      devices: s.devices.filter((d) => d.device_id !== deviceId),
+    }))
+  },
+
+  cleanupDevices: async () => {
+    const res = await api_cleanup_user_devices({
+      deduplicate: true,
+      remove_emulators: true,
+      stale_days: 30,
+    })
+    set({ devices: res.kept_devices })
+    return res
   },
 
   syncInbox: async (full = false) => {

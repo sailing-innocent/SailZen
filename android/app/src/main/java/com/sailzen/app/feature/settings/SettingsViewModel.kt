@@ -9,6 +9,8 @@ import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.AppReleaseDto
 import com.sailzen.app.core.network.ReminderWebSocket
+import com.sailzen.app.core.update.AppInstallEvent
+import com.sailzen.app.core.update.AppInstallReceiver
 import com.sailzen.app.core.update.AppUpdateManager
 import com.sailzen.app.core.update.AppUpdateState
 import com.sailzen.app.core.user.UserInboxRepository
@@ -90,6 +92,33 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             ReminderService.connectionDetail.collect { detail ->
                 _uiState.update { it.copy(connectionDetail = detail) }
+            }
+        }
+        viewModelScope.launch {
+            AppInstallReceiver.events.collect { ev ->
+                when (ev) {
+                    is AppInstallEvent.PendingUserAction -> {
+                        val cur = _uiState.value.updateState
+                        if (cur is AppUpdateState.Installing) {
+                            _uiState.update {
+                                it.copy(
+                                    updateState = cur.copy(
+                                        hint = "已提交至系统安装器，请在系统弹窗中确认安装",
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    is AppInstallEvent.Success -> {
+                        _uiState.update { it.copy(updateState = AppUpdateState.Idle) }
+                    }
+                    is AppInstallEvent.Failure -> {
+                        _uiState.update {
+                            it.copy(updateState = AppUpdateState.Error(ev.message))
+                        }
+                        ReminderService.ensureStarted(getApplication())
+                    }
+                }
             }
         }
     }
@@ -246,22 +275,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             result.fold(
                 onSuccess = { apkFile ->
                     val canInstall = AppUpdateManager.canInstallPackages(app)
-                    _uiState.update {
-                        it.copy(
-                            updateState = AppUpdateState.ReadyToInstall(
-                                release = release,
-                                apkFile = apkFile,
-                                needsInstallPermission = !canInstall,
-                            ),
-                        )
-                    }
                     if (canInstall) {
-                        runCatching { AppUpdateManager.installApk(app, apkFile) }
-                            .onFailure { err ->
-                                _uiState.update {
-                                    it.copy(updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}"))
-                                }
-                            }
+                        launchSessionInstall(release, apkFile)
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                updateState = AppUpdateState.ReadyToInstall(
+                                    release = release,
+                                    apkFile = apkFile,
+                                    needsInstallPermission = true,
+                                ),
+                            )
+                        }
                     }
                 },
                 onFailure = { err ->
@@ -270,6 +295,44 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                     }
                 },
             )
+        }
+    }
+
+    private fun launchSessionInstall(release: AppReleaseDto, apkFile: java.io.File) {
+        viewModelScope.launch {
+            val app = getApplication<Application>()
+            _uiState.update {
+                it.copy(
+                    updateState = AppUpdateState.Installing(
+                        release = release,
+                        apkFile = apkFile,
+                        hint = "正在写入系统安装会话，稍后弹出系统确认框…",
+                    ),
+                )
+            }
+            AppUpdateManager.installApkViaSession(app, apkFile)
+                .onFailure { err ->
+                    runCatching {
+                        AppUpdateManager.installApk(app, apkFile)
+                        _uiState.update {
+                            it.copy(
+                                updateState = AppUpdateState.ReadyToInstall(
+                                    release = release,
+                                    apkFile = apkFile,
+                                    needsInstallPermission = false,
+                                ),
+                            )
+                        }
+                    }.onFailure { fallbackErr ->
+                        _uiState.update {
+                            it.copy(
+                                updateState = AppUpdateState.Error(
+                                    "拉起安装器失败: ${fallbackErr.message ?: err.message}",
+                                ),
+                            )
+                        }
+                    }
+                }
         }
     }
 
@@ -283,8 +346,17 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             runCatching { app.startActivity(AppUpdateManager.buildInstallPermissionIntent(app)) }
             return
         }
-        _uiState.update { it.copy(updateState = ready.copy(needsInstallPermission = false)) }
-        runCatching { AppUpdateManager.installApk(app, ready.apkFile) }
+        launchSessionInstall(ready.release, ready.apkFile)
+    }
+
+    fun triggerFallbackInstall() {
+        val apkFile = when (val st = _uiState.value.updateState) {
+            is AppUpdateState.Installing -> st.apkFile
+            is AppUpdateState.ReadyToInstall -> st.apkFile
+            else -> return
+        }
+        val app = getApplication<Application>()
+        runCatching { AppUpdateManager.installApk(app, apkFile) }
             .onFailure { err ->
                 _uiState.update {
                     it.copy(updateState = AppUpdateState.Error("拉起安装器失败: ${err.message}"))

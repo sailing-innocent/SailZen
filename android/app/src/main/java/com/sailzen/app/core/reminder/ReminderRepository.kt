@@ -188,10 +188,11 @@ class ReminderRepository private constructor(private val context: Context) {
     suspend fun registerDevice(): Boolean {
         val api = apiOrNull() ?: return false
         return try {
+            val identity = com.sailzen.app.core.data.DeviceIdentity.resolve(context)
             api.registerDevice(
                 DeviceRegisterRequest(
                     deviceId = settings.getOrCreateDeviceId(),
-                    deviceName = Build.MODEL ?: "android",
+                    deviceName = identity.displayName,
                     appVersion = appVersion(),
                 )
             )

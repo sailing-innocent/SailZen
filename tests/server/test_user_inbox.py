@@ -432,3 +432,116 @@ def test_http_e2e_user_bootstrap_and_cross_channel_inbox_sync(db: Session):
         assert s2["changes"][0]["status"] == "answered"
         assert "牛肉面" in s2["changes"][0]["resolution_summary"]
 
+
+def test_device_identity_v2_fingerprint_takeover_and_cleanup(db: Session):
+    """Device Identity v2：验证稳定指纹原地接管、旧版同型号防重与一键清理重复/模拟器/僵尸终端。"""
+    from sail_server.application.dto.user import UserDeviceCleanupRequest
+    from sail_server.model.user import cleanup_user_devices_impl, list_user_devices_impl
+    from sailzen_orm.reminder import Device
+
+    # 1. 模拟旧版历史残留：同一型号手机 PNM-AN10 多次重装产生 3 条离线记录 + 1 个模拟器 + 2 个重复 Chrome Web
+    now = datetime.now()
+    db.add_all(
+        [
+            Device(
+                user_id=1,
+                device_id="old-uuid-1",
+                device_name="PNM-AN10",
+                platform="android",
+                client_type="android",
+                app_version="0.1.0",
+                is_active=True,
+                last_seen_at=now - timedelta(days=60),
+            ),
+            Device(
+                user_id=1,
+                device_id="old-uuid-2",
+                device_name="PNM-AN10",
+                platform="android",
+                client_type="android",
+                app_version="0.3.0",
+                is_active=True,
+                last_seen_at=now - timedelta(hours=1),
+            ),
+            Device(
+                user_id=1,
+                device_id="emu-uuid-1",
+                device_name="sdk_gphone64_x86_64",
+                platform="android",
+                client_type="android",
+                app_version="0.2.0",
+                is_active=True,
+                last_seen_at=now - timedelta(hours=2),
+            ),
+            Device(
+                user_id=1,
+                device_id="web-old-1",
+                device_name="Chrome Web",
+                platform="web",
+                client_type="web",
+                app_version="site",
+                is_active=True,
+                last_seen_at=now - timedelta(hours=3),
+            ),
+            Device(
+                user_id=1,
+                device_id="web-old-2",
+                device_name="Chrome Web",
+                platform="web",
+                client_type="web",
+                app_version="site",
+                is_active=True,
+                last_seen_at=now - timedelta(minutes=5),
+            ),
+        ]
+    )
+    db.commit()
+
+    # 2. 新版 Android 客户端携带稳定硬件指纹注册：原地接管最近 PNM-AN10 并停用旧重复记录
+    d1 = register_user_device_impl(
+        db,
+        1,
+        UserDeviceRegisterRequest(
+            device_id="android-fp-aabbcc1122334455",
+            device_name="HONOR PNM-AN10",
+            platform="android",
+            client_type="android",
+            app_version="0.3.1",
+            fingerprint="android:aabbcc1122334455",
+            is_emulator=False,
+            capabilities={"identity_v": 2, "model": "PNM-AN10"},
+        ),
+    )
+    assert d1.device_id == "android-fp-aabbcc1122334455"
+    assert d1.fingerprint == "android:aabbcc1122334455"
+
+    # 即使再次换 device_id 但指纹一致，也必须原地接管同一行（不增加新行）
+    d2 = register_user_device_impl(
+        db,
+        1,
+        UserDeviceRegisterRequest(
+            device_id="android-fp-reinstalled-id",
+            device_name="HONOR PNM-AN10",
+            platform="android",
+            client_type="android",
+            app_version="0.3.2",
+            fingerprint="android:aabbcc1122334455",
+            is_emulator=False,
+            capabilities={"identity_v": 2, "model": "PNM-AN10"},
+        ),
+    )
+    assert d2.id == d1.id
+    assert d2.device_id == "android-fp-reinstalled-id"
+
+    # 3. 执行一键去重清理：清除模拟器与重复 Chrome Web，仅保留 1 部手机 + 1 个 Chrome
+    cleaned = cleanup_user_devices_impl(
+        db,
+        1,
+        UserDeviceCleanupRequest(deduplicate=True, remove_emulators=True, stale_days=30),
+    )
+    assert cleaned.deactivated_count == 2  # emu-uuid-1 + web-old-1
+    assert cleaned.remaining_count == 2
+    remaining = list_user_devices_impl(db, 1, active_only=True)
+    assert {r.device_id for r in remaining} == {"android-fp-reinstalled-id", "web-old-2"}
+
+

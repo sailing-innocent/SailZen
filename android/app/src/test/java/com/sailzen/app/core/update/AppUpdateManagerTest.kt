@@ -57,4 +57,23 @@ class AppUpdateManagerTest {
         assertEquals("2.0 KB", AppUpdateManager.formatFileSize(2048))
         assertEquals("12.5 MB", AppUpdateManager.formatFileSize((12.5 * 1024 * 1024).toLong()))
     }
+
+    @Test
+    fun `shouldAutoCheckUpdate checks immediately on cold start and throttles foreground resumes`() {
+        assertTrue(AppUpdateManager.shouldAutoCheckUpdate(lastCheckMs = 0L, nowMs = 1_000L))
+        assertFalse(
+            AppUpdateManager.shouldAutoCheckUpdate(
+                lastCheckMs = 10_000L,
+                nowMs = 10_000L + 5 * 60_000L,
+                minIntervalMs = 10 * 60_000L,
+            ),
+        )
+        assertTrue(
+            AppUpdateManager.shouldAutoCheckUpdate(
+                lastCheckMs = 10_000L,
+                nowMs = 10_000L + 10 * 60_000L,
+                minIntervalMs = 10 * 60_000L,
+            ),
+        )
+    }
 }

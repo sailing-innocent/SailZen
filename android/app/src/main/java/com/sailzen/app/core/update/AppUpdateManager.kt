@@ -1,11 +1,17 @@
 package com.sailzen.app.core.update
 
+import android.app.PendingIntent
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.sailzen.app.BuildConfig
+import com.sailzen.app.core.bg.ReminderService
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.AppReleaseDto
 import java.io.File
@@ -32,6 +38,11 @@ sealed interface AppUpdateState {
         val apkFile: File,
         val needsInstallPermission: Boolean = false,
     ) : AppUpdateState
+    data class Installing(
+        val release: AppReleaseDto,
+        val apkFile: File,
+        val hint: String = "正在写入系统安装会话…",
+    ) : AppUpdateState
     data class Error(val message: String) : AppUpdateState
 }
 
@@ -43,8 +54,17 @@ sealed interface AppUpdateState {
  */
 object AppUpdateManager {
 
+    private const val TAG = "AppUpdateManager"
     private const val UPDATES_SUBDIR = "updates"
     private const val APK_MIME = "application/vnd.android.package-archive"
+    const val AUTO_CHECK_INTERVAL_MS = 10 * 60_000L
+
+    /** 判断是否应触发前台自动检查更新（首次立即检查，之后按间隔节流避免打扰）。 */
+    fun shouldAutoCheckUpdate(
+        lastCheckMs: Long,
+        nowMs: Long,
+        minIntervalMs: Long = AUTO_CHECK_INTERVAL_MS,
+    ): Boolean = lastCheckMs <= 0L || (nowMs - lastCheckMs) >= minIntervalMs
 
     /** 判断远端版本是否高于本地安装版本。 */
     fun isUpdateAvailable(
@@ -235,15 +255,85 @@ object AppUpdateManager {
             Uri.parse("package:${context.packageName}"),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
-    /** 通过 FileProvider 唤起系统原生 APK 安装器。 */
+    /**
+     * 推荐安装方式（PackageInstaller.Session 流式安装）：
+     * 1. 先将完整 APK 写入系统受管安装会话（/data/app/vmdl*.tmp），彻底解除系统安装器对本应用 FileProvider 存活的依赖；
+     * 2. 提交安装前优雅停止常驻前台服务 ReminderService，避免 MagicOS / ColorOS 自我覆盖时卡死在「正在安装」；
+     * 3. 由 [AppInstallReceiver] 接收 STATUS_PENDING_USER_ACTION 并拉起系统确认安装弹窗。
+     */
+    suspend fun installApkViaSession(context: Context, apkFile: File): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                if (!apkFile.isFile || apkFile.length() <= 0L) {
+                    error("安装包文件不存在或为空，请重新下载")
+                }
+                val appContext = context.applicationContext
+                val installer = appContext.packageManager.packageInstaller
+                val params = PackageInstaller.SessionParams(
+                    PackageInstaller.SessionParams.MODE_FULL_INSTALL,
+                ).apply {
+                    setSize(apkFile.length())
+                    setAppPackageName(appContext.packageName)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                    }
+                }
+                val sessionId = installer.createSession(params)
+                val session = installer.openSession(sessionId)
+                try {
+                    session.openWrite("sailzen_update.apk", 0L, apkFile.length()).use { out ->
+                        apkFile.inputStream().use { input ->
+                            val buf = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n <= 0) break
+                                out.write(buf, 0, n)
+                            }
+                        }
+                        session.fsync(out)
+                    }
+                    // 提交前优雅停止常驻前台服务，避免国产 ROM 自我覆盖安装时挂起卡死
+                    runCatching { ReminderService.stop(appContext) }
+
+                    val callbackIntent = Intent(appContext, AppInstallReceiver::class.java).apply {
+                        action = AppInstallReceiver.ACTION_INSTALL_RESULT
+                    }
+                    val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            PendingIntent.FLAG_MUTABLE
+                        } else {
+                            0
+                        }
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        appContext,
+                        sessionId,
+                        callbackIntent,
+                        flags,
+                    )
+                    session.commit(pendingIntent.intentSender)
+                } catch (e: Exception) {
+                    runCatching { session.abandon() }
+                    throw e
+                } finally {
+                    runCatching { session.close() }
+                }
+            }.onFailure { err ->
+                Log.w(TAG, "installApkViaSession failed: ${err.message}", err)
+            }
+        }
+
+    /** 兜底方式：通过 FileProvider + ACTION_VIEW 唤起系统原生 APK 安装器（附带 ClipData 授权）。 */
     fun installApk(context: Context, apkFile: File) {
+        val appContext = context.applicationContext
+        runCatching { ReminderService.stop(appContext) }
         val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
+            appContext,
+            "${appContext.packageName}.fileprovider",
             apkFile,
         )
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, APK_MIME)
+            clipData = ClipData.newRawUri("apk", uri)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
