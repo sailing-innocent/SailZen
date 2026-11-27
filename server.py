@@ -123,6 +123,7 @@ class SailServer:
         from sail_server.router.telemetry import router as telemetry_router
         from sail_server.router.user import router as user_router
         from sail_server.router.inbox import router as inbox_router
+        from sail_server.router.workbench import router as workbench_router
 
         self.api_router = Router(
             path=self.api_endpoint,
@@ -141,6 +142,7 @@ class SailServer:
                 reminder_router,
                 rhythm_router,
                 tick_router,
+                workbench_router,
                 app_release_router,
                 telemetry_router,
             ],

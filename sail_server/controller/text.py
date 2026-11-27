@@ -78,6 +78,11 @@ from typing import Generator, List, Optional
 from pydantic import BaseModel, Field
 from pathlib import Path
 
+from sail_server.application.dto.workbench import (
+    ChapterSyncRequest,
+    ChapterSyncResponse,
+)
+from sail_server.model.workbench import sync_edition_chapter_impl
 from sail_server.utils.note_links import build_link_graph
 from sail_server.config.paths import SERVER_DATA_DIR
 
@@ -519,6 +524,24 @@ class EditionController(Controller):
         if not toc:
             raise NotFoundException(detail=f"Edition {edition_id} not found")
         return toc
+
+    @put("/{edition_id:int}/chapter-sync")
+    async def sync_chapter(
+        self,
+        edition_id: int,
+        data: ChapterSyncRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> ChapterSyncResponse:
+        """原创作品单章幂等创建/更新（供 VS Code 工作台回写）"""
+        db = next(router_dependency)
+        result = sync_edition_chapter_impl(db, edition_id, data)
+        if not result:
+            raise NotFoundException(detail=f"Edition {edition_id} not found")
+        logger.info(
+            f"Synced chapter ({result.action}) node={result.node.id} in edition {edition_id}"
+        )
+        return result
 
     @post("/{edition_id:int}/volumes")
     async def create_volume(

@@ -1,0 +1,296 @@
+{
+  "name": "sailzen-workbench",
+  "displayName": "SailZen Workbench",
+  "description": "SailZen 3.0 Work & Creation Workbench — fast dot-hierarchy notes, Rhythm v2 + SailTick, Content 2.0, and multi-machine project workflows.",
+  "version": "0.1.0",
+  "publisher": "SailingInnocent",
+  "license": "MIT",
+  "private": false,
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=18.0.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "sailzen",
+    "workbench",
+    "markdown",
+    "notes",
+    "rhythm",
+    "writing"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sailzen-workbench",
+          "title": "SailZen",
+          "icon": "media/icons/sailzen.svg"
+        }
+      ]
+    },
+    "views": {
+      "sailzen-workbench": [
+        {
+          "id": "sailzen.rhythmView",
+          "name": "Today & Rhythm"
+        },
+        {
+          "id": "sailzen.quickChatView",
+          "name": "SailTick QuickChat",
+          "type": "webview"
+        },
+        {
+          "id": "sailzen.projectsView",
+          "name": "Projects & Content"
+        },
+        {
+          "id": "sailzen.vaultTreeView",
+          "name": "Vault Tree"
+        },
+        {
+          "id": "sailzen.calendarView",
+          "name": "Calendar",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "sailzen.lookupNote",
+        "title": "SailZen: Lookup / Create Note",
+        "icon": "$(search)"
+      },
+      {
+        "command": "sailzen.gotoToday",
+        "title": "SailZen: Open Today's Journal",
+        "icon": "$(calendar)"
+      },
+      {
+        "command": "sailzen.createNote",
+        "title": "SailZen: Create Note",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "sailzen.renameNote",
+        "title": "SailZen: Rename Note (Update Links)"
+      },
+      {
+        "command": "sailzen.refactorHierarchy",
+        "title": "SailZen: Refactor Hierarchy (Update Links)"
+      },
+      {
+        "command": "sailzen.copyNoteLink",
+        "title": "SailZen: Copy Note Wikilink"
+      },
+      {
+        "command": "sailzen.goUpHierarchy",
+        "title": "SailZen: Go Up Hierarchy"
+      },
+      {
+        "command": "sailzen.reloadVault",
+        "title": "SailZen: Reload Vault Index",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "sailzen.switchVault",
+        "title": "SailZen: Switch Active Vault (Private / Work)"
+      },
+      {
+        "command": "sailzen.toggleTreeProjectFilter",
+        "title": "SailZen: Toggle Project Filter in Vault Tree",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "sailzen.refreshRhythm",
+        "title": "SailZen: Refresh Rhythm & Projects",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "sailzen.blockSetStatus",
+        "title": "SailZen: Set Rhythm Block Status"
+      },
+      {
+        "command": "sailzen.syncJournalRhythm",
+        "title": "SailZen: Pull Today's Rhythm into Journal"
+      },
+      {
+        "command": "sailzen.pushSelectionToRhythm",
+        "title": "SailZen: Push Selection to Rhythm Task"
+      },
+      {
+        "command": "sailzen.addQuickTask",
+        "title": "SailZen: Quick Add Rhythm Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "sailzen.completeMilestone",
+        "title": "SailZen: Complete Project Milestone",
+        "icon": "$(check)"
+      },
+      {
+        "command": "sailzen.bindProjectToCurrentFolder",
+        "title": "SailZen: Bind Venture Project to Current Folder",
+        "icon": "$(link)"
+      },
+      {
+        "command": "sailzen.copyContextPack",
+        "title": "SailZen: Copy AI Project Context Pack",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "sailzen.openMachineConfig",
+        "title": "SailZen: Open Machine Config (~/.sailzen/machine.json)",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "sailzen.showDiagnostics",
+        "title": "SailZen: Workbench Diagnostics"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "sailzen.addQuickTask",
+          "when": "view == sailzen.rhythmView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailzen.refreshRhythm",
+          "when": "view == sailzen.rhythmView || view == sailzen.projectsView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sailzen.bindProjectToCurrentFolder",
+          "when": "view == sailzen.projectsView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailzen.lookupNote",
+          "when": "view == sailzen.vaultTreeView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailzen.toggleTreeProjectFilter",
+          "when": "view == sailzen.vaultTreeView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sailzen.reloadVault",
+          "when": "view == sailzen.vaultTreeView",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sailzen.blockSetStatus",
+          "when": "view == sailzen.rhythmView && viewItem == rhythmBlock",
+          "group": "inline"
+        },
+        {
+          "command": "sailzen.completeMilestone",
+          "when": "view == sailzen.projectsView && viewItem == ventureMilestone",
+          "group": "inline"
+        },
+        {
+          "command": "sailzen.copyContextPack",
+          "when": "view == sailzen.projectsView && viewItem == ventureProject",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "sailzen.pushSelectionToRhythm",
+          "when": "editorHasSelection",
+          "group": "sailzen@1"
+        },
+        {
+          "command": "sailzen.syncJournalRhythm",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@2"
+        },
+        {
+          "command": "sailzen.copyNoteLink",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@3"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "sailzen.lookupNote",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l"
+      },
+      {
+        "command": "sailzen.gotoToday",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i"
+      },
+      {
+        "command": "sailzen.goUpHierarchy",
+        "key": "ctrl+alt+up",
+        "mac": "cmd+alt+up",
+        "when": "editorFocus && editorLangId == markdown"
+      }
+    ],
+    "configuration": {
+      "title": "SailZen Workbench",
+      "properties": {
+        "sailzen.server.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:1974",
+          "description": "SailZen 后端地址（如未在 ~/.sailzen/machine.json 中配置时回退使用）。"
+        },
+        "sailzen.server.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "可选 Bearer Token（SAILZEN_API_TOKEN），也可配置在 ~/.sailzen/machine.json 中。"
+        },
+        "sailzen.vault.privatePath": {
+          "type": "string",
+          "default": "",
+          "description": "私人 Vault 根目录（如 D:/vault），优先从 ~/.sailzen/machine.json 读取。"
+        },
+        "sailzen.vault.workPath": {
+          "type": "string",
+          "default": "",
+          "description": "工作 Vault 根目录（强制离线，禁止向个人云端上报）。"
+        },
+        "sailzen.rhythm.autoRefreshMinutes": {
+          "type": "number",
+          "default": 5,
+          "description": "Rhythm 与项目面板后台自动刷新间隔（分钟），0 表示仅手动刷新。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "package": "vsce package --no-dependencies",
+    "vscode:prepublish": "node esbuild.config.mjs --production"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "catalog:",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "catalog:",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "catalog:",
+    "jest": "catalog:",
+    "ts-jest": "catalog:",
+    "typescript": "catalog:"
+  }
+}
