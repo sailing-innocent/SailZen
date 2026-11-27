@@ -89,6 +89,11 @@ TICK_MEDIA_DIR: Path = Path(
     os.environ.get("TICK_MEDIA_PATH", str(SERVER_DATA_DIR / "tick_media"))
 ).resolve()
 
+# Content 2.0 论文 PDF / EPUB / 审美参考图附件存储目录
+CONTENT_ASSETS_DIR: Path = Path(
+    os.environ.get("CONTENT_ASSETS_PATH", str(SERVER_DATA_DIR / "content_assets"))
+).resolve()
+
 
 def get_app_releases_dir() -> Path:
     """动态解析 Android APK 发布包存储目录（支持运行期环境变量覆写）。"""
@@ -106,3 +111,12 @@ def get_tick_media_dir() -> Path:
         return Path(explicit).resolve()
     base = Path(os.environ.get("SERVER_DATA_DIR", str(SERVER_DATA_DIR))).resolve()
     return (base / "tick_media").resolve()
+
+
+def get_content_assets_dir() -> Path:
+    """动态解析 Content 2.0 附件存储目录（支持运行期环境变量覆写）。"""
+    explicit = os.environ.get("CONTENT_ASSETS_PATH", "").strip()
+    if explicit:
+        return Path(explicit).resolve()
+    base = Path(os.environ.get("SERVER_DATA_DIR", str(SERVER_DATA_DIR))).resolve()
+    return (base / "content_assets").resolve()

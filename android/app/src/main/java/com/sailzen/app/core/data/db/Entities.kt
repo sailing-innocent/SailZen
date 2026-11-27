@@ -103,6 +103,11 @@ data class CachedWork(
     val title: String,
     val author: String?,
     val synopsis: String?,
+    val workType: String = "web_novel",
+    val pillar: String = "fiction",
+    val readingStatus: String = "queued",
+    val readingTrack: String = "leisure",
+    val progressPct: Float = 0f,
     val updatedAt: String,
 )
 
@@ -133,6 +138,8 @@ data class CachedChapter(
     val title: String,
     val rawText: String,
     val charCount: Int?,
+    val parentId: Int? = null,
+    val volumeTitle: String? = null,
     val updatedAt: String,
 ) {
     /** 正文是否已离线缓存（章节目录接口返回的 stub rawText 恒为空串） */

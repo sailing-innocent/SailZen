@@ -9,6 +9,34 @@ import kotlinx.serialization.json.JsonElement
  */
 
 @Serializable
+data class ReadingProgressDto(
+    @SerialName("edition_id") val editionId: Int,
+    @SerialName("node_id") val nodeId: Int? = null,
+    @SerialName("sort_index") val sortIndex: Int = 0,
+    @SerialName("char_offset") val charOffset: Int = 0,
+    @SerialName("scroll_offset") val scrollOffset: Int = 0,
+    @SerialName("page_index") val pageIndex: Int = 0,
+    val mode: String = "scroll",
+    @SerialName("progress_pct") val progressPct: Float = 0f,
+    @SerialName("total_read_seconds") val totalReadSeconds: Int = 0,
+    @SerialName("client_device") val clientDevice: String = "",
+    @SerialName("last_read_at") val lastReadAt: String? = null,
+)
+
+@Serializable
+data class ReadingProgressUpsertDto(
+    @SerialName("edition_id") val editionId: Int,
+    @SerialName("node_id") val nodeId: Int? = null,
+    @SerialName("sort_index") val sortIndex: Int = 0,
+    @SerialName("char_offset") val charOffset: Int = 0,
+    @SerialName("scroll_offset") val scrollOffset: Int = 0,
+    @SerialName("page_index") val pageIndex: Int = 0,
+    val mode: String = "page",
+    @SerialName("client_device") val clientDevice: String = "android",
+    @SerialName("last_read_at") val lastReadAt: String? = null,
+)
+
+@Serializable
 data class WorkDto(
     val id: Int,
     val slug: String,
@@ -19,6 +47,11 @@ data class WorkDto(
     @SerialName("work_type") val workType: String = "web_novel",
     val status: String = "ongoing",
     val synopsis: String? = null,
+    val pillar: String = "fiction",
+    @SerialName("reading_status") val readingStatus: String = "queued",
+    @SerialName("reading_track") val readingTrack: String = "leisure",
+    val priority: Int = 3,
+    val progress: ReadingProgressDto? = null,
     @SerialName("meta_data") val metaData: Map<String, JsonElement?> = emptyMap(),
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
@@ -55,6 +88,8 @@ data class ChapterListItemDto(
     val title: String,
     @SerialName("char_count") val charCount: Int? = null,
     val path: String,
+    @SerialName("parent_id") val parentId: Int? = null,
+    @SerialName("volume_title") val volumeTitle: String? = null,
 )
 
 @Serializable

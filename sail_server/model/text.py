@@ -27,11 +27,15 @@ from sailzen_orm.text import (
     Edition,
     DocumentNode,
     NoteItem,
+    ReadingProgress,
+    ContentTopicWork,
+    ContentAsset,
 )
 from sail_server.application.dto.text import (
     WorkCreateRequest,
     WorkUpdateRequest,
     WorkResponse,
+    ReadingProgressSummary,
     EditionCreateRequest,
     EditionUpdateRequest,
     EditionResponse,
@@ -59,16 +63,83 @@ class ChapterListItem:
     title: Optional[str]
     char_count: Optional[int]
     path: str
-
-
-# ============================================================================
-# Text Import Request (Model-specific structure)
-# ============================================================================
+    parent_id: Optional[int] = None
+    volume_title: Optional[str] = None
 
 
 # ============================================================================
 # Work CRUD Operations
 # ============================================================================
+
+
+def _enrich_works_batch(
+    db: Session, works: List[Work], user_id: int = 1
+) -> List[WorkResponse]:
+    """批量将 Work ORM 对象组装为富响应（含章节统计、云端进度、专题关联与附件数，零 N+1）。"""
+    if not works:
+        return []
+    work_ids = [w.id for w in works]
+    stats_map = _calculate_works_stats_batch(db, work_ids)
+
+    prog_rows = (
+        db.query(ReadingProgress)
+        .filter(ReadingProgress.user_id == user_id, ReadingProgress.work_id.in_(work_ids))
+        .all()
+    )
+    prog_map = {
+        p.work_id: ReadingProgressSummary.model_validate(p) for p in prog_rows
+    }
+
+    topic_rows = (
+        db.query(ContentTopicWork.work_id, ContentTopicWork.topic_id)
+        .filter(ContentTopicWork.work_id.in_(work_ids))
+        .all()
+    )
+    topic_map: dict[int, List[int]] = {wid: [] for wid in work_ids}
+    for wid, tid in topic_rows:
+        topic_map.setdefault(wid, []).append(tid)
+
+    asset_rows = (
+        db.query(ContentAsset.work_id, func.count(ContentAsset.id))
+        .filter(ContentAsset.work_id.in_(work_ids))
+        .group_by(ContentAsset.work_id)
+        .all()
+    )
+    asset_map = {wid: int(cnt or 0) for wid, cnt in asset_rows}
+
+    result: List[WorkResponse] = []
+    for work in works:
+        stats = stats_map.get(
+            work.id, {"edition_count": 0, "chapter_count": 0, "total_chars": 0}
+        )
+        result.append(
+            WorkResponse(
+                id=work.id,
+                slug=work.slug,
+                title=work.title,
+                original_title=work.original_title,
+                author=work.author,
+                language_primary=work.language_primary or "zh",
+                work_type=work.work_type or "web_novel",
+                status=work.status or "ongoing",
+                synopsis=work.synopsis,
+                pillar=getattr(work, "pillar", None) or "fiction",
+                reading_status=getattr(work, "reading_status", None) or "queued",
+                reading_track=getattr(work, "reading_track", None) or "leisure",
+                priority=getattr(work, "priority", None) or 3,
+                source_url=getattr(work, "source_url", None),
+                vault_slug=getattr(work, "vault_slug", None),
+                is_original=bool(getattr(work, "is_original", False)),
+                meta_data=work.meta_data or {},
+                created_at=work.created_at,
+                updated_at=work.updated_at,
+                progress=prog_map.get(work.id),
+                topic_ids=topic_map.get(work.id, []),
+                asset_count=asset_map.get(work.id, 0),
+                **stats,
+            )
+        )
+    return result
 
 
 def create_work_impl(db: Session, work_data: WorkCreateRequest) -> WorkResponse:
@@ -82,27 +153,19 @@ def create_work_impl(db: Session, work_data: WorkCreateRequest) -> WorkResponse:
         work_type=work_data.work_type,
         status=work_data.status,
         synopsis=work_data.synopsis,
+        pillar=work_data.pillar,
+        reading_status=work_data.reading_status,
+        reading_track=work_data.reading_track,
+        priority=work_data.priority,
+        source_url=work_data.source_url,
+        vault_slug=work_data.vault_slug or f"read.{work_data.slug}",
+        is_original=work_data.is_original,
         meta_data=work_data.meta_data or {},
     )
     db.add(work)
     db.commit()
     db.refresh(work)
-    stats = _calculate_work_stats(db, work)
-    return WorkResponse(
-        id=work.id,
-        slug=work.slug,
-        title=work.title,
-        original_title=work.original_title,
-        author=work.author,
-        language_primary=work.language_primary,
-        work_type=work.work_type,
-        status=work.status,
-        synopsis=work.synopsis,
-        meta_data=work.meta_data or {},
-        created_at=work.created_at,
-        updated_at=work.updated_at,
-        **stats,
-    )
+    return _enrich_works_batch(db, [work])[0]
 
 
 def _calculate_works_stats_batch(db: Session, work_ids: List[int]) -> dict[int, dict]:
@@ -161,54 +224,35 @@ def get_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
     work = db.query(Work).filter(Work.id == work_id).first()
     if not work:
         return None
-
-    stats = _calculate_work_stats(db, work)
-    return WorkResponse(
-        id=work.id,
-        slug=work.slug,
-        title=work.title,
-        original_title=work.original_title,
-        author=work.author,
-        language_primary=work.language_primary,
-        work_type=work.work_type,
-        status=work.status,
-        synopsis=work.synopsis,
-        meta_data=work.meta_data or {},
-        created_at=work.created_at,
-        updated_at=work.updated_at,
-        **stats,
-    )
+    return _enrich_works_batch(db, [work])[0]
 
 
-def get_works_impl(db: Session, skip: int = 0, limit: int = 20) -> List[WorkResponse]:
-    """获取作品列表"""
-    works = (
-        db.query(Work).order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
-    )
-    stats_map = _calculate_works_stats_batch(db, [w.id for w in works])
-    result = []
-    for work in works:
-        stats = stats_map.get(
-            work.id, {"edition_count": 0, "chapter_count": 0, "total_chars": 0}
+def get_works_impl(
+    db: Session,
+    skip: int = 0,
+    limit: int = 50,
+    work_type: Optional[str] = None,
+    pillar: Optional[str] = None,
+    reading_status: Optional[str] = None,
+    reading_track: Optional[str] = None,
+    topic_id: Optional[int] = None,
+) -> List[WorkResponse]:
+    """获取作品列表（支持按素养、类型、阅读状态、轨道与专题筛选）。"""
+    q = db.query(Work)
+    if work_type:
+        q = q.filter(Work.work_type == work_type)
+    if pillar:
+        q = q.filter(Work.pillar == pillar)
+    if reading_status:
+        q = q.filter(Work.reading_status == reading_status)
+    if reading_track:
+        q = q.filter(Work.reading_track == reading_track)
+    if topic_id is not None:
+        q = q.join(ContentTopicWork, ContentTopicWork.work_id == Work.id).filter(
+            ContentTopicWork.topic_id == topic_id
         )
-        result.append(
-            WorkResponse(
-                id=work.id,
-                slug=work.slug,
-                title=work.title,
-                original_title=work.original_title,
-                author=work.author,
-                language_primary=work.language_primary,
-                work_type=work.work_type,
-                status=work.status,
-                synopsis=work.synopsis,
-                meta_data=work.meta_data or {},
-                created_at=work.created_at,
-                updated_at=work.updated_at,
-                **stats,
-            )
-        )
-    return result
+    works = q.order_by(Work.updated_at.desc()).offset(skip).limit(limit).all()
+    return _enrich_works_batch(db, works)
 
 
 def update_work_impl(
@@ -219,19 +263,30 @@ def update_work_impl(
     if not work:
         return None
 
-    # 仅更新传入的字段
-    if work_data.title is not None:
-        work.title = work_data.title
-    if work_data.author is not None:
-        work.author = work_data.author
-    if work_data.status is not None:
-        work.status = work_data.status
-    if work_data.synopsis is not None:
-        work.synopsis = work_data.synopsis
+    updatable = (
+        "title",
+        "original_title",
+        "author",
+        "work_type",
+        "status",
+        "synopsis",
+        "pillar",
+        "reading_status",
+        "reading_track",
+        "priority",
+        "source_url",
+        "vault_slug",
+        "is_original",
+        "meta_data",
+    )
+    for field_name in updatable:
+        val = getattr(work_data, field_name, None)
+        if val is not None:
+            setattr(work, field_name, val)
 
     db.commit()
     db.refresh(work)
-    return WorkResponse.model_validate(work)
+    return _enrich_works_batch(db, [work])[0]
 
 
 def delete_work_impl(db: Session, work_id: int) -> Optional[WorkResponse]:
@@ -339,7 +394,20 @@ def get_document_node_impl(
 
 
 def get_chapter_list_impl(db: Session, edition_id: int) -> List[ChapterListItem]:
-    """获取版本的章节列表（目录）"""
+    """获取版本的章节列表（目录，附带可选所属分卷信息，向后兼容扁平结构）。"""
+    volumes = (
+        db.query(DocumentNode)
+        .filter(
+            DocumentNode.edition_id == edition_id,
+            DocumentNode.node_type == "volume",
+        )
+        .all()
+    )
+    vol_title_map = {
+        v.id: (f"{v.label} {v.title}".strip() if v.label else (v.title or ""))
+        for v in volumes
+    }
+
     nodes = (
         db.query(DocumentNode)
         .filter(
@@ -357,6 +425,8 @@ def get_chapter_list_impl(db: Session, edition_id: int) -> List[ChapterListItem]
             title=node.title,
             char_count=node.char_count,
             path=node.path,
+            parent_id=node.parent_id,
+            volume_title=vol_title_map.get(node.parent_id) if node.parent_id else None,
         )
         for node in nodes
     ]
@@ -390,7 +460,8 @@ def update_document_node_impl(
     if not node:
         return None
 
-    # 仅更新传入的字段
+    if update_data.label is not None:
+        node.label = update_data.label
     if update_data.title is not None:
         node.title = update_data.title
     if update_data.raw_text is not None:
@@ -402,6 +473,10 @@ def update_document_node_impl(
         node.word_count = len(cleaned_text.split())
     if update_data.sort_order is not None:
         node.sort_index = update_data.sort_order
+    if update_data.parent_id is not None:
+        node.parent_id = update_data.parent_id or None
+    if update_data.meta_data is not None:
+        node.meta_data = update_data.meta_data
 
     db.commit()
     db.refresh(node)
@@ -595,6 +670,9 @@ class ChapterBatchItem:
     content: str
     chapter_type: str = "standard"
     meta_data: dict = field(default_factory=dict)
+    volume_label: Optional[str] = None
+    volume_title: Optional[str] = None
+    parent_id: Optional[int] = None
 
 
 def _make_slug(title: str, max_length: int = 50) -> str:
@@ -609,6 +687,14 @@ def create_work_with_edition_impl(
     author: Optional[str] = None,
     edition_name: str = "原始导入",
     language: str = "zh",
+    work_type: str = "web_novel",
+    source_format: str = "txt",
+    pillar: str = "fiction",
+    reading_status: str = "queued",
+    reading_track: str = "leisure",
+    synopsis: Optional[str] = None,
+    source_url: Optional[str] = None,
+    topic_id: Optional[int] = None,
     meta_data: Optional[dict] = None,
 ) -> Tuple[WorkResponse, EditionResponse]:
     slug = _make_slug(title)
@@ -620,6 +706,13 @@ def create_work_with_edition_impl(
         title=title,
         author=author,
         language_primary=language,
+        work_type=work_type,
+        synopsis=synopsis,
+        pillar=pillar,
+        reading_status=reading_status,
+        reading_track=reading_track,
+        source_url=source_url,
+        vault_slug=f"read.{slug}",
         meta_data=meta_data or {},
     )
     db.add(work)
@@ -629,14 +722,30 @@ def create_work_with_edition_impl(
         work_id=work.id,
         edition_name=edition_name,
         language=language,
+        source_format=source_format,
+        canonical=True,
         status="active",
         meta_data={},
     )
     db.add(edition)
+    db.flush()
+
+    if topic_id is not None:
+        exists_link = (
+            db.query(ContentTopicWork)
+            .filter(
+                ContentTopicWork.topic_id == topic_id,
+                ContentTopicWork.work_id == work.id,
+            )
+            .first()
+        )
+        if not exists_link:
+            db.add(ContentTopicWork(topic_id=topic_id, work_id=work.id, role="core"))
+
     db.commit()
     db.refresh(work)
     db.refresh(edition)
-    return WorkResponse.model_validate(work), EditionResponse.model_validate(edition)
+    return _enrich_works_batch(db, [work])[0], EditionResponse.model_validate(edition)
 
 
 def batch_insert_chapters_impl(
@@ -649,6 +758,21 @@ def batch_insert_chapters_impl(
     if not edition:
         return 0
 
+    # 预先加载已有分卷（按 (label, title) 复用，支持分批上传自动挂载同卷）
+    existing_volumes = (
+        db.query(DocumentNode)
+        .filter(
+            DocumentNode.edition_id == edition_id,
+            DocumentNode.node_type == "volume",
+        )
+        .order_by(DocumentNode.sort_index)
+        .all()
+    )
+    vol_cache: dict[tuple[str, str], DocumentNode] = {
+        ((v.label or "").strip(), (v.title or "").strip()): v for v in existing_volumes
+    }
+    next_vol_idx = len(existing_volumes)
+
     total_chars = 0
     total_words = 0
     for i, ch in enumerate(chapters):
@@ -657,20 +781,50 @@ def batch_insert_chapters_impl(
         total_chars += char_count
         total_words += len(content.split())
         sort_index = start_index + i
+
+        parent_id = ch.parent_id
+        vol_path_prefix = ""
+        if parent_id is None and (ch.volume_label or ch.volume_title):
+            v_key = ((ch.volume_label or "").strip(), (ch.volume_title or "").strip())
+            vol_node = vol_cache.get(v_key)
+            if vol_node is None:
+                vol_node = DocumentNode(
+                    edition_id=edition_id,
+                    parent_id=None,
+                    node_type="volume",
+                    sort_index=next_vol_idx,
+                    depth=0,
+                    label=v_key[0] or f"第{next_vol_idx + 1}卷",
+                    title=v_key[1] or v_key[0] or f"第{next_vol_idx + 1}卷",
+                    raw_text=None,
+                    word_count=0,
+                    char_count=0,
+                    path=f"V{next_vol_idx:04d}",
+                    status="active",
+                    meta_data={},
+                )
+                db.add(vol_node)
+                db.flush()
+                vol_cache[v_key] = vol_node
+                next_vol_idx += 1
+            parent_id = vol_node.id
+            vol_path_prefix = f"{vol_node.path}."
+
+        node_path = f"{vol_path_prefix}{sort_index:04d}"
         node = DocumentNode(
             edition_id=edition_id,
-            parent_id=None,
+            parent_id=parent_id,
             node_type="chapter",
             sort_index=sort_index,
-            depth=1,
+            depth=1 if parent_id is not None else 1,
             label=ch.label or "",
             title=ch.title or "",
             raw_text=content,
             word_count=len(content.split()),
             char_count=char_count,
-            path=f"{sort_index:04d}",
+            path=node_path,
             status="active",
-            meta_data=ch.meta_data or {},
+            meta_data={**(ch.meta_data or {}), "chapter_type": ch.chapter_type},
         )
         db.add(node)
 

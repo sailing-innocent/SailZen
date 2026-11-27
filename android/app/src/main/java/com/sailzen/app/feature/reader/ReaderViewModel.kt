@@ -199,6 +199,9 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
         val editionId = edition.id
 
+        // 同步云端最新阅读进度（Web 端推进后自动感知）
+        val cloudMerged = repository.pullCloudProgress(workId)
+
         if (repository.refreshChapterList(editionId)) {
             val freshChapters = repository.chaptersSnapshot(editionId).map { it.copy(rawText = "") }
             _uiState.update {
@@ -206,6 +209,13 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
                     chapters = freshChapters,
                     cachedChapterIds = repository.cachedChapterIds(editionId).toSet(),
                 )
+            }
+        }
+
+        if (cloudMerged != null && cloudMerged.sortIndex != _uiState.value.currentSortIndex) {
+            val targetMeta = _uiState.value.chapters.find { it.sortIndex == cloudMerged.sortIndex }
+            if (targetMeta != null) {
+                loadChapter(targetMeta, pageIndex = cloudMerged.pageIndex, charOffset = cloudMerged.scrollOffset.takeIf { it > 0 })
             }
         }
 

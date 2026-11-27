@@ -43,6 +43,7 @@ class SailServer:
             "/money",
             "/rhythm",
             "/text",
+            "/topics",
             "/analysis",
             "/necessity",
             "/file-storage",

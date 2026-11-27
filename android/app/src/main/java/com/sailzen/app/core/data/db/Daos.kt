@@ -184,9 +184,17 @@ interface ReaderDao {
     /** 仅更新章节的元信息（目录刷新用），不触碰已缓存正文 */
     @Query(
         "UPDATE cached_chapter SET label = :label, title = :title, charCount = :charCount, " +
-            "updatedAt = :updatedAt WHERE id = :id"
+            "parentId = :parentId, volumeTitle = :volumeTitle, updatedAt = :updatedAt WHERE id = :id"
     )
-    suspend fun updateChapterMeta(id: Int, label: String, title: String, charCount: Int?, updatedAt: String)
+    suspend fun updateChapterMeta(
+        id: Int,
+        label: String,
+        title: String,
+        charCount: Int?,
+        parentId: Int?,
+        volumeTitle: String?,
+        updatedAt: String,
+    )
 
     /** 清除某版本全部章节正文（保留目录），用于重新缓存 */
     @Query("UPDATE cached_chapter SET rawText = '' WHERE editionId = :editionId")

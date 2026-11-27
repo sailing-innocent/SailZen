@@ -412,7 +412,10 @@ Request:
   "title": "作品标题",
   "author": "作者名",
   "edition_name": "原始导入",
-  "language": "zh"
+  "language": "zh",
+  "work_type": "web_novel",
+  "pillar": "fiction",
+  "reading_track": "leisure"
 }
 ```
 

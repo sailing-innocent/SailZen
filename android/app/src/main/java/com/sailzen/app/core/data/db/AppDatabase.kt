@@ -18,7 +18,7 @@ import androidx.room.RoomDatabase
         ReadingProgress::class,
         CachedAnnotation::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

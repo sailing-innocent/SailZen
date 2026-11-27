@@ -44,8 +44,19 @@ from sailzen_orm.health import (
     SleepScheduleGoal,
 )
 
-# Text Models
-from sailzen_orm.text import Work, Edition, DocumentNode, NoteItem
+# Text & Content Models
+from sailzen_orm.text import (
+    Work,
+    Edition,
+    DocumentNode,
+    NoteItem,
+    ReadingProgress,
+    ReadingSession,
+    ContentTopic,
+    ContentTopicWork,
+    ContentAsset,
+    VaultNoteIndex,
+)
 
 # Necessity Models
 from sailzen_orm.necessity import (
@@ -141,11 +152,17 @@ __all__ = [
     "DietLog",
     "NutritionGoal",
     "SleepScheduleGoal",
-    # Text
+    # Text & Content
     "Work",
     "Edition",
     "DocumentNode",
     "NoteItem",
+    "ReadingProgress",
+    "ReadingSession",
+    "ContentTopic",
+    "ContentTopicWork",
+    "ContentAsset",
+    "VaultNoteIndex",
     # Necessity Enums
     "ResidenceType",
     "ContainerType",

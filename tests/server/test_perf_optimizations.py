@@ -160,8 +160,9 @@ def test_get_works_eliminates_n_plus_1(db):
         works = get_works_impl(db, skip=0, limit=20)
 
     assert len(works) == 6
-    # 1(works) + 1(editions agg) + 1(chapters agg) = 3 SQL
-    assert counter.count == 3
+    # O(1) 常量批量查询，零 N+1：
+    # 1(works) + 1(editions agg) + 1(chapters agg) + 1(progress) + 1(topic links) + 1(assets agg) = 6 SQL
+    assert counter.count == 6
     by_slug = {w.slug: w for w in works}
     assert by_slug["work-0"].chapter_count == 1
     assert by_slug["work-5"].chapter_count == 6

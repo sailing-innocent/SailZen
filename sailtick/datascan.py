@@ -48,6 +48,7 @@ SIGNAL_PRIORITY = [
     "mood",
     "finance_food",
     "rhythm_checkins",
+    "reading",
     "notes",
 ]
 
@@ -183,6 +184,8 @@ class DataScanner:
         rhythm_snapshot = self._simplify_rhythm(rhythm_dash_raw, rhythm_tomorrow_raw, today_str)
         finance_snapshot = self._simplify_finance(finance_overview_raw)
         notes_snapshot = self._simplify_vault_journals(vault_journals_raw, limit=7)
+        reading_overview_raw = await self._fetch("/text/progress/overview")
+        reading_snapshot = self._simplify_reading(reading_overview_raw)
 
         weight_series = self._simplify_series(weight_raw, limit=21)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
@@ -204,6 +207,7 @@ class DataScanner:
             "mood": self._simplify_list(mood, limit=10),
             "finance_food": self._filter_food_transactions(finance_raw, limit=12),
             "rhythm_checkins": self._simplify_list(rhythm_raw, limit=10),
+            "reading": reading_snapshot,
             "notes": notes_snapshot,
         }
 
@@ -315,12 +319,13 @@ class DataScanner:
             else (rhythm_affairs_raw if isinstance(rhythm_affairs_raw, list) else [])
         )
 
-        # 7. 近 45 天本地 Vault 日记轻量摘要（供财务异常/差旅账单背景归因）
+        # 7. 近 45 天本地 Vault 日记轻量摘要 + 内容阅读库素养概览
         vault_start = (now - timedelta(days=45)).strftime("%Y-%m-%d")
         vault_journals = await self._fetch(
             "/tick/vault/journals",
             {"start_date": vault_start, "end_date": rhythm_end, "limit": 60},
         )
+        reading_overview_raw = await self._fetch("/text/progress/overview")
 
         food_tx = self._classify_food_transactions(tx_all)
         weight_monitor = self._compute_weight_monitor(weight_series, plan_progress, now)
@@ -346,6 +351,45 @@ class DataScanner:
             "rhythm_projects": rhythm_projects if isinstance(rhythm_projects, list) else [],
             "rhythm_affairs": rhythm_affairs,
             "vault_journals": vault_journals if isinstance(vault_journals, list) else [],
+            "reading_overview": self._simplify_reading(reading_overview_raw) or {},
+        }
+
+    @staticmethod
+    def _simplify_reading(raw: Any) -> Optional[Dict[str, Any]]:
+        """压缩阅读库素养概览为紧凑信号，供 SailTick 感知主线停滞与素养分布。"""
+        if not isinstance(raw, dict):
+            return None
+        pillars = {}
+        for item in raw.get("pillar_stats") or []:
+            if isinstance(item, dict) and item.get("pillar"):
+                pillars[item["pillar"]] = {
+                    "works": int(item.get("work_count") or 0),
+                    "reading": int(item.get("reading_count") or 0),
+                    "min_7d": round(int(item.get("read_seconds_7d") or 0) / 60, 1),
+                }
+        mainline = [
+            {
+                "id": w.get("id"),
+                "title": w.get("title"),
+                "pillar": w.get("pillar"),
+                "pct": (w.get("progress") or {}).get("progress_pct", 0.0),
+            }
+            for w in (raw.get("mainline_reading") or [])[:5]
+            if isinstance(w, dict)
+        ]
+        stalled = [
+            w.get("title")
+            for w in (raw.get("stalled_mainline") or [])[:3]
+            if isinstance(w, dict) and w.get("title")
+        ]
+        return {
+            "total_works": int(raw.get("total_works") or 0),
+            "reading_count": int(raw.get("reading_count") or 0),
+            "active_topics": int(raw.get("active_topic_count") or 0),
+            "min_7d": round(int(raw.get("total_read_seconds_7d") or 0) / 60, 1),
+            "pillars": pillars,
+            "mainline": mainline,
+            "stalled_mainline": stalled,
         }
 
     @classmethod

@@ -593,6 +593,19 @@ def main():
     p_exp.add_argument("--overwrite", action="store_true", help="若文件已存在强制覆盖")
     p_exp.set_defaults(func=cmd_export_finance_review)
 
+    # ---- sync-content (Content 2.0 Vault <-> Cloud Reading & Topics Bridge) ----
+    p_sc = subparsers.add_parser(
+        "sync-content",
+        help="双向同步 D:\\vault 内容笔记索引 (read.*/topic.*/study.*) 与云端划线批注/阅读卡片",
+    )
+    p_sc.add_argument("--vault-dir", default=os.environ.get("SAILZEN_VAULT_DIR", r"D:\vault"), help="本地 Vault 根目录（默认 D:\\vault）")
+    p_sc.add_argument("--server", default=os.environ.get("SAIL_SERVER_URL", "http://127.0.0.1:1974"), help="sail_server 地址")
+    p_sc.add_argument("--token", default=os.environ.get("SAILZEN_API_TOKEN", ""), help="SAILZEN_API_TOKEN")
+    p_sc.add_argument("--work-id", type=int, default=None, help="仅导出指定作品的划线与卡片")
+    p_sc.add_argument("--skip-export", action="store_true", help="仅上传本地索引，不回写云端划线")
+    p_sc.add_argument("--dry-run", action="store_true", help="仅预览待同步变更，不发请求/不写文件")
+    p_sc.set_defaults(func=cmd_sync_content)
+
     # ----
     args = parser.parse_args()
 
@@ -781,6 +794,210 @@ def cmd_export_finance_review(args) -> None:
             sys.exit(1)
     target.write_text(md, encoding="utf-8")
     print(f"✓ 已导出 {data.get('month')} 财务复盘至：{target}（关联 {data.get('journals_linked', 0)} 篇日记）")
+
+
+# ============================================================================
+# Content 2.0: Local Vault (read.*/topic.*/study.*) <-> Cloud Bridge
+# ============================================================================
+
+_CONTENT_PREFIXES = ("read.", "topic.", "study.")
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|#]+)")
+_MANAGED_META_RE = re.compile(
+    r"(<!-- sailzen:managed:meta:start -->)(.*?)(<!-- sailzen:managed:meta:end -->)",
+    re.DOTALL,
+)
+
+
+def merge_managed_card_markdown(existing_text: str, fresh_card_markdown: str) -> str:
+    """安全更新读书总览卡：只替换 managed meta 围栏内区块，绝不触碰用户手写正文。"""
+    m_fresh = _MANAGED_META_RE.search(fresh_card_markdown)
+    if not m_fresh:
+        return existing_text
+    replacement_block = m_fresh.group(0)
+    if _MANAGED_META_RE.search(existing_text):
+        return _MANAGED_META_RE.sub(lambda _: replacement_block, existing_text, count=1)
+    # 若旧文件尚未插入围栏，不强行覆盖，直接保留原文
+    return existing_text
+
+
+def extract_content_note_index_from_file(path: Path) -> Optional[dict]:
+    """扫描单篇 read.*/topic.*/study.* Dendron 笔记，提取轻量元数据索引。"""
+    fname = path.stem
+    if not fname.startswith(_CONTENT_PREFIXES) or fname.endswith(".clips"):
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except Exception:
+        return None
+
+    namespace = fname.split(".", 1)[0]
+    title = fname
+    tags: list[str] = []
+    work_id: Optional[int] = None
+    topic_id: Optional[int] = None
+    pillar: Optional[str] = None
+    era: Optional[str] = None
+    year_start: Optional[int] = None
+    year_end: Optional[int] = None
+    body = raw
+
+    if raw.startswith("---"):
+        parts = raw.split("---", 2)
+        if len(parts) == 3:
+            fm, body = parts[1], parts[2]
+            tm = re.search(r"^title:\s*['\"]?([^'\"\r\n]+)['\"]?", fm, re.MULTILINE)
+            if tm:
+                title = tm.group(1).strip()
+            for key, caster in (
+                ("work_id", int),
+                ("topic_id", int),
+                ("year_start", int),
+                ("year_end", int),
+            ):
+                km = re.search(rf"^{key}:\s*(-?\d+)", fm, re.MULTILINE)
+                if km:
+                    val = caster(km.group(1))
+                    if key == "work_id":
+                        work_id = val
+                    elif key == "topic_id":
+                        topic_id = val
+                    elif key == "year_start":
+                        year_start = val
+                    elif key == "year_end":
+                        year_end = val
+            pm = re.search(r"^pillar:\s*['\"]?([a-zA-Z_]+)['\"]?", fm, re.MULTILINE)
+            if pm:
+                pillar = pm.group(1).strip()
+            em = re.search(r"^era:\s*['\"]?([^'\"\r\n]+)['\"]?", fm, re.MULTILINE)
+            if em:
+                era = em.group(1).strip()
+            tags = [
+                t.strip()
+                for t in re.findall(r"^\s*-\s*([A-Za-z0-9_\-\u4e00-\u9fff]+)\s*$", fm, re.MULTILINE)
+            ][:20]
+
+    # 从命名推断 pillar（如 study.history.ming -> history）
+    if not pillar and namespace == "study":
+        segs = fname.split(".")
+        if len(segs) >= 2 and segs[1] in ("tech", "history", "aesthetics", "fiction"):
+            pillar = segs[1]
+
+    links = sorted({m.strip() for m in _WIKILINK_RE.findall(body) if m.strip()})[:40]
+    clean_lines = [
+        ln.strip().lstrip("#-* >").strip()
+        for ln in body.splitlines()
+        if ln.strip() and not ln.strip().startswith("<!--")
+    ]
+    summary = "；".join(clean_lines[:5])[:500]
+    content_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+    return {
+        "fname": fname,
+        "namespace": namespace,
+        "title": title,
+        "summary": summary,
+        "tags": tags,
+        "links": links,
+        "work_id": work_id,
+        "topic_id": topic_id,
+        "pillar": pillar,
+        "era": era,
+        "year_start": year_start,
+        "year_end": year_end,
+        "content_hash": content_hash,
+    }
+
+
+def scan_local_vault_content_notes(vault_dir: Path) -> list[dict]:
+    notes_dir = vault_dir / "notes"
+    if not notes_dir.is_dir():
+        notes_dir = vault_dir
+    if not notes_dir.is_dir():
+        return []
+    out: list[dict] = []
+    for prefix in _CONTENT_PREFIXES:
+        for p in sorted(notes_dir.glob(f"{prefix}*.md")):
+            item = extract_content_note_index_from_file(p)
+            if item is not None:
+                out.append(item)
+    return out
+
+
+def cmd_sync_content(args) -> None:
+    vault_dir = Path(args.vault_dir)
+    notes_dir = vault_dir / "notes"
+    if not notes_dir.exists():
+        notes_dir = vault_dir
+    base = args.server.rstrip("/")
+    headers = _sail_headers(args.token)
+
+    # 1) Notes -> Cloud 轻量索引同步
+    items = scan_local_vault_content_notes(vault_dir)
+    print(f"扫描 {notes_dir} 内容笔记（read.*/topic.*/study.*）：发现 {len(items)} 篇")
+    if args.dry_run:
+        for it in items[:8]:
+            print(f"  - [{it['namespace']}] {it['fname']} ({it['title']})")
+    elif items:
+        resp = requests.post(
+            f"{base}/api/v1/text/vault/index/sync",
+            headers=headers,
+            json={"items": items, "source_vault": vault_dir.name or "local"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        res = resp.json()
+        print(
+            f"✓ Vault 索引上云完成：新增 {res.get('created', 0)} · 更新 {res.get('updated', 0)} · 跳过 {res.get('skipped', 0)}"
+        )
+
+    if args.skip_export:
+        return
+
+    # 2) Cloud -> Vault 划线批注与读书卡片受控回写
+    if args.work_id:
+        work_ids = [int(args.work_id)]
+    else:
+        w_resp = requests.get(f"{base}/api/v1/text/work", headers=headers, params={"limit": 100}, timeout=30)
+        w_resp.raise_for_status()
+        works = w_resp.json()
+        work_ids = [
+            w["id"]
+            for w in works
+            if isinstance(w, dict)
+            and (w.get("reading_status") in ("reading", "finished") or w.get("progress"))
+        ]
+
+    exported = 0
+    notes_dir.mkdir(parents=True, exist_ok=True)
+    for wid in work_ids:
+        e_resp = requests.get(f"{base}/api/v1/text/work/{wid}/export-clips", headers=headers, timeout=30)
+        if e_resp.status_code == 404:
+            continue
+        e_resp.raise_for_status()
+        data = e_resp.json()
+        clips_path = notes_dir / data["clips_filename"]
+        card_path = notes_dir / data["card_filename"]
+
+        if args.dry_run:
+            print(
+                f"  [DRY-RUN] 导出《{data['work_title']}》→ {clips_path.name} ({data['annotation_count']} 条批注) + {card_path.name}"
+            )
+            exported += 1
+            continue
+
+        if data.get("annotation_count", 0) > 0:
+            clips_path.write_text(data["clips_markdown"], encoding="utf-8")
+
+        if card_path.exists():
+            merged = merge_managed_card_markdown(
+                card_path.read_text(encoding="utf-8"), data["card_markdown"]
+            )
+            card_path.write_text(merged, encoding="utf-8")
+        else:
+            card_path.write_text(data["card_markdown"], encoding="utf-8")
+        exported += 1
+
+    print(f"✓ 已{'预览' if args.dry_run else '回写'} {exported} 部作品的阅读卡片与划线批注至 {notes_dir}")
 
 
 # ============================================================================

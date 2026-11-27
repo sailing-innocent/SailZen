@@ -70,7 +70,7 @@
 | 健康管理 | [manager/health.md](./design/sail_server/manager/health.md) | [api/health.md](./api/health.md) | ✅ 已实现 |
 | 节奏管理 (Rhythm) | [manager/rhythm.md](./design/sail_server/manager/rhythm.md) | — | ✅ M1/M2 已实现 |
 | 物资管理 | [manager/necessity.md](./design/sail_server/manager/necessity.md) | [api/necessity.md](./api/necessity.md) | ✅ 已实现 |
-| 文本管理 | [manager/text.md](./design/sail_server/manager/text.md) | [api/text.md](./api/text.md) | ✅ 已实现 |
+| 文本与内容 (Content 2.0) | [manager/content.md](./design/sail_server/manager/content.md) · [manager/text.md](./design/sail_server/manager/text.md) | [api/text.md](./api/text.md) | ✅ Phase 1 已实现 |
 | 天气服务 | [manager/weather.md](./design/sail_server/manager/weather.md) | — | ✅ 已实现 |
 
 ---

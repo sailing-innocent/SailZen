@@ -22,6 +22,13 @@ from sail_server.application.dto.text import (
     EditionResponse,
     DocumentNodeResponse,
     DocumentNodeUpdateRequest,
+    EditionTocResponse,
+    VolumeCreateRequest,
+    VolumeAssignRequest,
+    TocVolumeItem,
+    AutoVolumeRequest,
+    AutoVolumeResponse,
+    WorkClipsExportResponse,
     NoteItemCreateRequest,
     NoteItemUpdateRequest,
     NoteItemResponse,
@@ -29,6 +36,14 @@ from sail_server.application.dto.text import (
     NoteItemContentResponse,
     NoteLinkGraphResponse,
     NOTE_CATEGORIES,
+)
+from sail_server.model.content_library import (
+    get_edition_toc_impl,
+    create_volume_impl,
+    assign_chapters_to_volume_impl,
+    delete_volume_impl,
+    auto_volume_edition_impl,
+    export_work_clips_markdown_impl,
 )
 from sail_server.model.text import (
     create_work_impl,
@@ -91,6 +106,8 @@ class ChapterListItem(BaseModel):
     title: str = Field(description="章节标题")
     char_count: Optional[int] = Field(default=None, description="字符数")
     path: str = Field(description="节点路径")
+    parent_id: Optional[int] = Field(default=None, description="所属分卷节点ID")
+    volume_title: Optional[str] = Field(default=None, description="所属分卷标题")
 
 
 class AppendResponse(BaseModel):
@@ -106,6 +123,14 @@ class WorkEditionCreateRequest(BaseModel):
     author: Optional[str] = None
     edition_name: str = "原始导入"
     language: str = "zh"
+    work_type: str = "web_novel"
+    source_format: str = "txt"
+    pillar: str = "fiction"
+    reading_status: str = "queued"
+    reading_track: str = "leisure"
+    synopsis: Optional[str] = None
+    source_url: Optional[str] = None
+    topic_id: Optional[int] = None
     meta_data: Optional[dict] = None
 
 
@@ -119,6 +144,9 @@ class ChapterBatchUploadItem(BaseModel):
     title: str
     content: str
     chapter_type: str = "standard"
+    volume_label: Optional[str] = None
+    volume_title: Optional[str] = None
+    parent_id: Optional[int] = None
     meta_data: Optional[dict] = None
 
 
@@ -156,11 +184,25 @@ class WorkController(Controller):
         router_dependency: Generator[Session, None, None],
         request: Request,
         skip: int = 0,
-        limit: int = 20,
+        limit: int = 50,
+        work_type: Optional[str] = None,
+        pillar: Optional[str] = None,
+        reading_status: Optional[str] = None,
+        reading_track: Optional[str] = None,
+        topic_id: Optional[int] = None,
     ) -> List[WorkResponse]:
-        """获取作品列表"""
+        """获取作品列表（支持素养、类型、阅读状态、轨道与专题筛选）"""
         db = next(router_dependency)
-        works = get_works_impl(db, skip, limit)
+        works = get_works_impl(
+            db,
+            skip=skip,
+            limit=limit,
+            work_type=work_type,
+            pillar=pillar,
+            reading_status=reading_status,
+            reading_track=reading_track,
+            topic_id=topic_id,
+        )
         logger.info(f"Get works: {len(works)}")
         return works
 
@@ -237,6 +279,20 @@ class WorkController(Controller):
             raise NotFoundException(detail=f"Work with ID {work_id} not found")
         logger.info(f"Deleted work {work_id}")
         return work
+
+    @get("/{work_id:int}/export-clips")
+    async def export_work_clips(
+        self,
+        work_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> WorkClipsExportResponse:
+        """导出作品划线批注与阅读总览卡为 Dendron 规范 Markdown"""
+        db = next(router_dependency)
+        res = export_work_clips_markdown_impl(db, work_id)
+        if not res:
+            raise NotFoundException(detail=f"Work with ID {work_id} not found")
+        return res
 
 
 # ============================================================================
@@ -419,6 +475,9 @@ class EditionController(Controller):
                 title=ch.title,
                 content=ch.content,
                 chapter_type=ch.chapter_type,
+                volume_label=ch.volume_label,
+                volume_title=ch.volume_title,
+                parent_id=ch.parent_id,
                 meta_data=ch.meta_data or {},
             )
             for ch in data.chapters
@@ -446,6 +505,81 @@ class EditionController(Controller):
         db = next(router_dependency)
         count = get_chapter_count_impl(db, edition_id)
         return {"edition_id": edition_id, "count": count}
+
+    @get("/{edition_id:int}/toc")
+    async def get_edition_toc(
+        self,
+        edition_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> EditionTocResponse:
+        """获取版本分卷树形目录"""
+        db = next(router_dependency)
+        toc = get_edition_toc_impl(db, edition_id)
+        if not toc:
+            raise NotFoundException(detail=f"Edition {edition_id} not found")
+        return toc
+
+    @post("/{edition_id:int}/volumes")
+    async def create_volume(
+        self,
+        edition_id: int,
+        data: VolumeCreateRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> TocVolumeItem:
+        """创建分卷（并可选将区间章节归入该卷）"""
+        db = next(router_dependency)
+        vol = create_volume_impl(db, edition_id, data)
+        if not vol:
+            raise NotFoundException(detail=f"Edition {edition_id} not found")
+        return vol
+
+    @post("/{edition_id:int}/volumes/{volume_id:int}/assign")
+    async def assign_volume_chapters(
+        self,
+        edition_id: int,
+        volume_id: int,
+        data: VolumeAssignRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """批量将章节归入指定分卷"""
+        db = next(router_dependency)
+        cnt = assign_chapters_to_volume_impl(db, edition_id, volume_id, data)
+        if cnt is None:
+            raise NotFoundException(detail=f"Volume {volume_id} not found in edition {edition_id}")
+        return {"edition_id": edition_id, "volume_id": volume_id, "assigned": cnt}
+
+    @delete("/{edition_id:int}/volumes/{volume_id:int}", status_code=200)
+    async def delete_volume(
+        self,
+        edition_id: int,
+        volume_id: int,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> dict:
+        """删除分卷（安全解绑卷下章节，不删正文）"""
+        db = next(router_dependency)
+        ok = delete_volume_impl(db, edition_id, volume_id)
+        if not ok:
+            raise NotFoundException(detail=f"Volume {volume_id} not found in edition {edition_id}")
+        return {"deleted": True, "volume_id": volume_id}
+
+    @post("/{edition_id:int}/auto-volume")
+    async def auto_volume_edition(
+        self,
+        edition_id: int,
+        data: AutoVolumeRequest,
+        router_dependency: Generator[Session, None, None],
+        request: Request,
+    ) -> AutoVolumeResponse:
+        """自动识别/应用分卷结构（支持 dry_run 预览）"""
+        db = next(router_dependency)
+        res = auto_volume_edition_impl(db, edition_id, data)
+        if not res:
+            raise NotFoundException(detail=f"Edition {edition_id} not found")
+        return res
 
 
 # ============================================================================

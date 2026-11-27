@@ -18,6 +18,7 @@ import com.sailzen.app.core.network.dto.EditionDto
 import com.sailzen.app.core.network.dto.NoteContentUpdateRequest
 import com.sailzen.app.core.network.dto.NoteItemCreateRequest
 import com.sailzen.app.core.network.dto.NoteItemUpdateRequest
+import com.sailzen.app.core.network.dto.ReadingProgressUpsertDto
 import com.sailzen.app.core.network.dto.WorkDto
 import java.time.LocalDateTime
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +75,11 @@ class TextRepository private constructor(private val context: Context) {
             title = title,
             author = author,
             synopsis = synopsis,
+            workType = workType,
+            pillar = pillar,
+            readingStatus = readingStatus,
+            readingTrack = readingTrack,
+            progressPct = progress?.progressPct ?: 0f,
             updatedAt = updatedAt ?: nowIso(),
         )
 
@@ -95,10 +101,15 @@ class TextRepository private constructor(private val context: Context) {
             title = title,
             rawText = "",
             charCount = charCount,
+            parentId = parentId,
+            volumeTitle = volumeTitle,
             updatedAt = nowIso(),
         )
 
-        fun DocumentNodeDto.toCached(): CachedChapter = CachedChapter(
+        fun DocumentNodeDto.toCached(
+            existingParentId: Int? = null,
+            existingVolumeTitle: String? = null,
+        ): CachedChapter = CachedChapter(
             id = id,
             editionId = editionId,
             sortIndex = sortIndex,
@@ -106,6 +117,8 @@ class TextRepository private constructor(private val context: Context) {
             title = title,
             rawText = rawText ?: "",
             charCount = charCount,
+            parentId = parentId ?: existingParentId,
+            volumeTitle = existingVolumeTitle,
             updatedAt = updatedAt ?: nowIso(),
         )
     }
@@ -237,7 +250,7 @@ class TextRepository private constructor(private val context: Context) {
                 if (local != null && local.contentCached) {
                     // 已缓存全文的章节只更新元信息，不动 rawText
                     db.readerDao().updateChapterMeta(
-                        item.id, item.label, item.title, item.charCount, nowIso(),
+                        item.id, item.label, item.title, item.charCount, item.parentId, item.volumeTitle, nowIso(),
                     )
                 } else {
                     db.readerDao().upsertChapter(item.toCached(editionId))
@@ -258,8 +271,12 @@ class TextRepository private constructor(private val context: Context) {
         if (!onlineNow()) return null
         val api = apiOrNull() ?: return null
         return try {
+            val existing = db.readerDao().chapterByIndex(editionId, sortIndex)
             val node = api.chapterContent(editionId, sortIndex)
-            val chapter = node.toCached()
+            val chapter = node.toCached(
+                existingParentId = existing?.parentId,
+                existingVolumeTitle = existing?.volumeTitle,
+            )
             db.readerDao().upsertChapter(chapter)
             chapter
         } catch (e: Exception) {
@@ -326,15 +343,80 @@ class TextRepository private constructor(private val context: Context) {
     }
 
     // ------------------------------------------------------------------
-    // 阅读进度
+    // 阅读进度（本地秒写 + 后台云端双向同步）
     // ------------------------------------------------------------------
 
     suspend fun saveProgress(progress: ReadingProgress) {
-        db.readerDao().upsertProgress(progress.copy(updatedAt = nowIso()))
+        val stamped = progress.copy(updatedAt = nowIso())
+        db.readerDao().upsertProgress(stamped)
+        appScope.launch { pushProgressToCloud(stamped) }
     }
 
     suspend fun progressByWork(workId: Int): ReadingProgress? =
         db.readerDao().progressByWork(workId)
+
+    private suspend fun pushProgressToCloud(progress: ReadingProgress) {
+        if (!onlineNow()) return
+        val api = apiOrNull() ?: return
+        try {
+            val saved = api.upsertProgress(
+                progress.workId,
+                ReadingProgressUpsertDto(
+                    editionId = progress.editionId,
+                    nodeId = progress.nodeId.takeIf { it > 0 },
+                    sortIndex = progress.sortIndex,
+                    charOffset = progress.scrollOffset,
+                    scrollOffset = progress.scrollOffset,
+                    pageIndex = progress.pageIndex,
+                    mode = progress.mode,
+                    clientDevice = "android",
+                    lastReadAt = progress.updatedAt,
+                ),
+            )
+            val cachedWork = db.readerDao().workById(progress.workId)
+            if (cachedWork != null) {
+                db.readerDao().upsertWork(cachedWork.copy(progressPct = saved.progressPct))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "pushProgressToCloud(${progress.workId}) failed: ${e.message}")
+        }
+    }
+
+    /**
+     * 拉取云端最新阅读进度；若云端更新时间晚于本地，返回更新后的本地进度（保留本机字号/主题）。
+     */
+    suspend fun pullCloudProgress(workId: Int): ReadingProgress? {
+        if (!onlineNow()) return null
+        val api = apiOrNull() ?: return null
+        return try {
+            val remote = api.progress(workId)
+            val local = db.readerDao().progressByWork(workId)
+            val remoteTs = remote.lastReadAt ?: ""
+            val localTs = local?.updatedAt ?: ""
+            if (local == null || (remoteTs.isNotBlank() && remoteTs > localTs)) {
+                val merged = ReadingProgress(
+                    workId = workId,
+                    editionId = remote.editionId,
+                    nodeId = remote.nodeId ?: local?.nodeId ?: 0,
+                    sortIndex = remote.sortIndex,
+                    mode = local?.mode ?: remote.mode,
+                    pageIndex = remote.pageIndex,
+                    scrollOffset = if (remote.charOffset > 0) remote.charOffset else remote.scrollOffset,
+                    fontSize = local?.fontSize ?: 18,
+                    lineHeight = local?.lineHeight ?: 1.5f,
+                    theme = local?.theme ?: "light",
+                    updatedAt = remoteTs.ifBlank { nowIso() },
+                )
+                db.readerDao().upsertProgress(merged)
+                merged
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "pullCloudProgress($workId) skipped: ${e.message}")
+            null
+        }
+    }
 
     // ------------------------------------------------------------------
     // 批注（本地即写 + 后台同步）

@@ -9,6 +9,8 @@ import com.sailzen.app.core.network.dto.NoteItemCreateRequest
 import com.sailzen.app.core.network.dto.NoteItemDto
 import com.sailzen.app.core.network.dto.NoteItemListResponse
 import com.sailzen.app.core.network.dto.NoteItemUpdateRequest
+import com.sailzen.app.core.network.dto.ReadingProgressDto
+import com.sailzen.app.core.network.dto.ReadingProgressUpsertDto
 import com.sailzen.app.core.network.dto.WorkDto
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -28,8 +30,21 @@ interface TextApi {
     @GET("api/v1/text/work")
     suspend fun works(
         @Query("skip") skip: Int = 0,
-        @Query("limit") limit: Int = 20,
+        @Query("limit") limit: Int = 50,
     ): List<WorkDto>
+
+    // ---------------- Cloud Progress ----------------
+
+    @GET("api/v1/text/progress/{work_id}")
+    suspend fun progress(
+        @Path("work_id") workId: Int,
+    ): ReadingProgressDto
+
+    @PUT("api/v1/text/progress/{work_id}")
+    suspend fun upsertProgress(
+        @Path("work_id") workId: Int,
+        @Body body: ReadingProgressUpsertDto,
+    ): ReadingProgressDto
 
     // ---------------- Edition ----------------
 
