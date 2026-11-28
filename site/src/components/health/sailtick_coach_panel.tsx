@@ -22,6 +22,7 @@ import {
 } from '@lib/api/tick'
 import { BellOff, Check, ChevronDown, ChevronUp, Moon, Send, Sparkles, Utensils } from 'lucide-react'
 import { useUserInboxStore } from '@lib/store/user'
+import { DomainAssistantBar } from '@components/tick/DomainAssistantBar'
 
 interface SailTickCoachPanelProps {
   onDataChanged?: () => void
@@ -193,7 +194,19 @@ export const SailTickCoachPanel: React.FC<SailTickCoachPanelProps> = ({ onDataCh
         </Card>
       )}
 
-      {/* 2. 随手记饮食 / 主动发消息（静默收集，AI 无需立即回复） */}
+      {/* 2. 健康教练实时对话（owner:health 多端共享） */}
+      <DomainAssistantBar
+        domain="health"
+        surface="web_health"
+        title="与健康教练即时对话"
+        placeholder="例如：今天食堂红烧鸡腿配青菜大概多少大卡 / 晚上想加餐怎么选"
+        quickPrompts={['评估我今天的饮食热量', '给我一个低脂晚餐建议', '查看本周减脂趋势']}
+        showTickets={false}
+        showReportSection={false}
+        onDataChanged={onDataChanged}
+      />
+
+      {/* 3. 随手记饮食 / 主动发消息（静默收集，AI 无需立即回复） */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
@@ -290,10 +303,22 @@ export const SailTickCoachPanel: React.FC<SailTickCoachPanelProps> = ({ onDataCh
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="font-medium text-sm">{activeReport.title}</div>
+                <div className="font-medium text-sm">
+                  {activeReport.sections?.health?.title || activeReport.title}
+                </div>
                 <Badge variant="secondary" className="text-xs">{activeReport.report_date}</Badge>
               </div>
-              <p className="text-sm text-foreground/90 leading-relaxed">{activeReport.summary}</p>
+              <p className="text-sm text-foreground/90 leading-relaxed">
+                {activeReport.sections?.health?.summary || activeReport.summary}
+              </p>
+              {Array.isArray(activeReport.sections?.health?.highlights) &&
+                activeReport.sections.health.highlights.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-0.5 text-xs text-muted-foreground">
+                    {activeReport.sections.health.highlights.map((h, i) => (
+                      <li key={i}>{h}</li>
+                    ))}
+                  </ul>
+                )}
               {activeReport.tomorrow_focus && activeReport.tomorrow_focus.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {activeReport.tomorrow_focus.map((tip, i) => (

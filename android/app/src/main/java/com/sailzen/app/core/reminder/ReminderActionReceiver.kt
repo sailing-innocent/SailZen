@@ -22,12 +22,16 @@ class ReminderActionReceiver : BroadcastReceiver() {
         const val ACTION_DISMISS = "com.sailzen.app.action.DISMISS"
         const val EXTRA_REMINDER_ID = "reminder_id"
         const val EXTRA_AFFAIR_ID = "affair_id"
+        const val EXTRA_DEEP_LINK = "deep_link"
+        const val EXTRA_DOMAIN = "domain"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         val reminderId = intent.getIntExtra(EXTRA_REMINDER_ID, -1)
         if (reminderId <= 0) return
         val repository = ReminderRepository.get(context)
+        val deepLink = intent.getStringExtra(EXTRA_DEEP_LINK).orEmpty()
+        val domain = intent.getStringExtra(EXTRA_DOMAIN).orEmpty()
 
         when (intent.action) {
             ACTION_HANDLE -> {
@@ -36,6 +40,8 @@ class ReminderActionReceiver : BroadcastReceiver() {
                 val launch = Intent(context, MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     .putExtra(EXTRA_REMINDER_ID, reminderId)
+                    .putExtra(EXTRA_DEEP_LINK, deepLink)
+                    .putExtra(EXTRA_DOMAIN, domain)
                 context.startActivity(launch)
             }
 

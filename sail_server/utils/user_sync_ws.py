@@ -183,6 +183,7 @@ class UserSyncHub:
         item: Dict[str, Any],
         should_notify: bool = True,
         exclude_device_id: Optional[str] = None,
+        client_types: Optional[List[str]] = None,
     ) -> int:
         return await self.broadcast_to_user(
             user_id=user_id,
@@ -190,6 +191,7 @@ class UserSyncHub:
             data=item,
             extra={"should_notify": bool(should_notify)},
             exclude_device_id=exclude_device_id,
+            client_types=client_types,
         )
 
     async def broadcast_inbox_resolved(

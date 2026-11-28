@@ -90,10 +90,16 @@ export interface TicketDTO {
   id: number;
   tick_id: string;
   type: string;
+  topic?: string;
+  domain?: "health" | "rhythm" | "finance" | "general";
+  persona?: string;
+  target_clients?: string[];
+  deep_link?: string;
   priority: string;
   status: string;
   title: string;
   body: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface WorkbenchBootstrapDTO {

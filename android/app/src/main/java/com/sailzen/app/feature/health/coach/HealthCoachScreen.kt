@@ -66,6 +66,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sailzen.app.core.network.dto.DailyReportDto
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
 import com.sailzen.app.core.network.dto.TickTicketDto
 import java.io.File
 
@@ -173,7 +174,7 @@ fun HealthCoachScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("SailTick Personal Agent") },
+                title = { Text("SailTick 健康教练") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -235,11 +236,12 @@ fun HealthCoachScreen(
                     }
                 }
 
-                // 0a. 随时对话（日程 · 项目 · 健康 · 提醒统一随身快脑）
+                // 0a. 健康教练实时对话（多端共享 owner:health）
                 item {
                     PersonalAgentQuickChatCard(
                         busy = state.quickChatBusy,
                         reply = state.quickChatReply,
+                        history = state.quickChatHistory,
                         isAsyncFallback = state.quickChatAsyncFallback,
                         onSend = { viewModel.sendQuickChat(it) },
                         onDismissReply = { viewModel.clearQuickChatReply() },
@@ -616,13 +618,15 @@ private fun DailyReportCard(
                 )
                 return@Column
             }
+            val healthSectionTitle = report.sectionTitle("health").ifBlank { report.title }
+            val healthSectionSummary = report.sectionSummary("health").ifBlank { report.summary }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    report.title,
+                    healthSectionTitle,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
@@ -633,8 +637,8 @@ private fun DailyReportCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (report.summary.isNotBlank()) {
-                Text(report.summary, style = MaterialTheme.typography.bodyMedium)
+            if (healthSectionSummary.isNotBlank()) {
+                Text(healthSectionSummary, style = MaterialTheme.typography.bodyMedium)
             }
             if (report.tomorrowFocus.isNotEmpty()) {
                 Text(
@@ -663,16 +667,17 @@ private fun DailyReportCard(
 }
 
 private val AGENT_QUICK_COMMANDS = listOf(
-    "今日日程" to "/today",
-    "重点项目" to "/projects",
-    "昨夜复盘简报" to "/brief",
-    "今日减重与日程建议" to "结合我今天的体重和日程状态，给我一个最轻量的今日执行建议",
+    "今日热量评估" to "帮我评估一下今天的饮食热量和蛋白摄入够不够",
+    "晚餐低脂推荐" to "给我一个轻松好执行的低脂高蛋白晚餐建议",
+    "近期减脂趋势" to "结合我最近一周的体重和饮食状态，帮我看看减脂趋势",
+    "昨夜健康简报" to "/brief",
 )
 
 @Composable
 private fun PersonalAgentQuickChatCard(
     busy: Boolean,
     reply: String?,
+    history: List<QuickChatHistoryItemDto> = emptyList(),
     isAsyncFallback: Boolean,
     onSend: (String) -> Unit,
     onDismissReply: () -> Unit,
@@ -699,10 +704,32 @@ private fun PersonalAgentQuickChatCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
-                    "随时对话（日程 · 项目 · 健康 · 提醒）",
+                    "与健康教练随时对话（饮食 · 体重 · 运动 · 睡眠）",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
+            }
+            if (history.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    history.takeLast(4).forEach { msg ->
+                        val isUser = msg.role == "user"
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isUser) {
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = (if (isUser) "我：" else "教练：") + msg.content,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -714,7 +741,7 @@ private fun PersonalAgentQuickChatCard(
                     onValueChange = { text = it },
                     placeholder = {
                         Text(
-                            "说一句日程变动、项目想法或身体状态…",
+                            "问饮食热量、聚餐控损或身体恢复状态…",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     },

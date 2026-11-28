@@ -18,7 +18,9 @@
 from __future__ import annotations
 
 import calendar
+from contextlib import nullcontext
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -86,56 +88,70 @@ class NightlySelfMaintenance:
         else:
             deep_pkg = await self.scanner.scan(days=7)
         data_ok = bool(deep_pkg.get("health_ok"))
+        if data_ok and hasattr(self.memory, "save_raw_snapshot"):
+            snapshots_dir = os.path.join(self.config.data_dir, "snapshots")
+            await self.memory.save_raw_snapshot(
+                snapshots_dir,
+                tick_id=tick_id or "",
+                slot="nightly_maintenance",
+                tick_date=self._clock().strftime("%Y-%m-%d"),
+                kind="deep_90d",
+                payload=deep_pkg,
+            )
 
         model_result: Optional[Dict[str, Any]] = None
         saved_snapshot: Optional[Dict[str, Any]] = None
         if ncfg.enable_modeling and data_ok:
-            target_kg = self._extract_target_weight(active_plan, profile_dict, deep_pkg)
-            model_result = self.modeling.analyze(
-                deep_pkg, target_weight_kg=target_kg, profile=profile_dict
+            sp_ctx = (
+                tracer.span("nightly_modeling", "夜间数学建模与深度分析", input_summary=f"window={ncfg.deep_window_days}d")
+                if tracer is not None
+                else nullcontext(None)
             )
-            saved_snapshot = await self.db.save_model_snapshot(model_result)
-            if tracer is not None:
-                tracer.record_instant_span(
-                    "nightly_modeling",
-                    "夜间数学建模与深度分析",
-                    status="ok",
-                    input_summary=f"window={ncfg.deep_window_days}d samples={model_result['sample_count']}",
-                    output_summary=(
+            with sp_ctx as sp:
+                target_kg = self._extract_target_weight(active_plan, profile_dict, deep_pkg)
+                model_result = self.modeling.analyze(
+                    deep_pkg, target_weight_kg=target_kg, profile=profile_dict
+                )
+                saved_snapshot = await self.db.save_model_snapshot(model_result)
+                if sp is not None:
+                    sp.set_input(f"window={ncfg.deep_window_days}d samples={model_result['sample_count']}")
+                    sp.set_output(
                         f"model={model_result['model_type']} ewma={model_result['ewma_weight_kg']}kg "
                         f"rate={model_result['weekly_rate_kg']}kg/w eta={model_result['eta_date']}"
-                    ),
-                    payload={
-                        "model_type": model_result["model_type"],
-                        "sample_count": model_result["sample_count"],
-                        "ewma_weight_kg": model_result["ewma_weight_kg"],
-                        "weekly_rate_kg": model_result["weekly_rate_kg"],
-                        "eta_date": model_result["eta_date"],
-                        "confidence_score": model_result["confidence_score"],
-                        "plateau_detected": model_result["plateau_detected"],
-                        "insights": model_result["insights"],
-                    },
-                )
+                    )
+                    sp.set_payload(
+                        {
+                            "model_type": model_result["model_type"],
+                            "sample_count": model_result["sample_count"],
+                            "ewma_weight_kg": model_result["ewma_weight_kg"],
+                            "weekly_rate_kg": model_result["weekly_rate_kg"],
+                            "eta_date": model_result["eta_date"],
+                            "confidence_score": model_result["confidence_score"],
+                            "plateau_detected": model_result["plateau_detected"],
+                            "insights": model_result["insights"],
+                        }
+                    )
         else:
             saved_snapshot = await self.db.get_latest_model_snapshot()
 
         rhythm_result: Optional[Dict[str, Any]] = None
         finance_result: Optional[Dict[str, Any]] = None
         if data_ok:
-            rhythm_result = self.rhythm_analytics.analyze(deep_pkg)
-            if tracer is not None:
-                tracer.record_instant_span(
-                    "nightly_rhythm_analytics",
-                    "夜间节奏与项目倒排分析",
-                    status="ok",
-                    input_summary=f"days={rhythm_result['days_analyzed']} projects={rhythm_result['active_projects_count']}",
-                    output_summary=(
+            r_ctx = (
+                tracer.span("nightly_rhythm_analytics", "夜间节奏与项目倒排分析")
+                if tracer is not None
+                else nullcontext(None)
+            )
+            with r_ctx as sp:
+                rhythm_result = self.rhythm_analytics.analyze(deep_pkg)
+                if sp is not None:
+                    sp.set_input(f"days={rhythm_result['days_analyzed']} projects={rhythm_result['active_projects_count']}")
+                    sp.set_output(
                         f"adherence={rhythm_result['adherence_rate']} "
                         f"overload={rhythm_result['overload_signal']} "
                         f"projects={rhythm_result['active_projects_count']}"
-                    ),
-                    payload=rhythm_result,
-                )
+                    )
+                    sp.set_payload(rhythm_result)
             await self.memory.update(
                 "semantic",
                 "nightly_rhythm_latest",
@@ -148,37 +164,59 @@ class NightlySelfMaintenance:
                     "active_projects_count": rhythm_result["active_projects_count"],
                     "insights": rhythm_result["insights"][:4],
                 },
+                domain="rhythm",
+                summary=(
+                    f"近21天遵循率{int((rhythm_result.get('adherence_rate') or 0)*100)}%，"
+                    f"高效时段{','.join(rhythm_result.get('golden_windows') or []) or '待观察'}，"
+                    f"活跃项目{rhythm_result['active_projects_count']}个"
+                ),
+                salience=0.85,
             )
 
             # 夜间财务分级自治慢迭代：近期轻量巡检 + 按月倒推历史游标（带待审水位背压限流）
             backfill_progress: Optional[Dict[str, Any]] = None
             if self.finance_client is not None:
-                backfill_progress = await self._run_nightly_finance_backfill(
-                    deep_pkg=deep_pkg,
-                    tracer=tracer,
+                bf_ctx = (
+                    tracer.span("nightly_finance_backfill", "历史账单慢迭代")
+                    if tracer is not None
+                    else nullcontext(None)
                 )
+                with bf_ctx as sp:
+                    backfill_progress = await self._run_nightly_finance_backfill(
+                        deep_pkg=deep_pkg,
+                        tracer=None,
+                    )
+                    if sp is not None and isinstance(backfill_progress, dict):
+                        sp.set_input(f"month={backfill_progress.get('last_month_processed') or backfill_progress.get('cursor_month')}")
+                        sp.set_output(
+                            f"status={backfill_progress.get('status')} "
+                            f"auto_tagged={backfill_progress.get('last_month_auto_tagged', 0)} "
+                            f"reviews={backfill_progress.get('last_month_review_created', 0)}"
+                        )
+                        sp.set_payload(backfill_progress)
             else:
                 backfill_progress = await self.db.get_runtime_state("finance_backfill_progress")
 
             if backfill_progress is not None:
                 deep_pkg["finance_backfill_progress"] = backfill_progress
 
-            finance_result = self.finance_analytics.analyze(deep_pkg)
-            if backfill_progress is not None:
-                finance_result["backfill"] = backfill_progress
-            if tracer is not None:
-                tracer.record_instant_span(
-                    "nightly_finance_analytics",
-                    "夜间个人财务健康与习惯分析",
-                    status="ok",
-                    input_summary=f"txs={finance_result['transactions_analyzed']}",
-                    output_summary=(
+            fa_ctx = (
+                tracer.span("nightly_finance_analytics", "夜间个人财务健康与习惯分析")
+                if tracer is not None
+                else nullcontext(None)
+            )
+            with fa_ctx as sp:
+                finance_result = self.finance_analytics.analyze(deep_pkg)
+                if backfill_progress is not None:
+                    finance_result["backfill"] = backfill_progress
+                if sp is not None:
+                    sp.set_input(f"txs={finance_result['transactions_analyzed']}")
+                    sp.set_output(
                         f"mtd=¥{finance_result['mtd_expense']} "
                         f"snack=¥{finance_result['mtd_snack_total']} "
                         f"eom_proj=¥{finance_result['projected_eom_expense']}"
-                    ),
-                    payload=finance_result,
-                )
+                    )
+                    sp.set_payload(finance_result)
             await self.memory.update(
                 "semantic",
                 "nightly_finance_latest",
@@ -191,6 +229,13 @@ class NightlySelfMaintenance:
                     "tag_coverage_pct": finance_result["tag_coverage_pct"],
                     "insights": finance_result["insights"][:4],
                 },
+                domain="finance",
+                summary=(
+                    f"{finance_result['month']}真实支出¥{finance_result['mtd_expense']:.0f}"
+                    f"(预测¥{finance_result['projected_eom_expense']:.0f})，零食¥{finance_result['mtd_snack_total']:.0f}，"
+                    f"打标率{finance_result['tag_coverage_pct']}%"
+                ),
+                salience=0.85,
             )
 
         expert_brief = await self.compile_expert_brief(
@@ -203,6 +248,7 @@ class NightlySelfMaintenance:
             active_plan=active_plan,
         )
         await self.db.set_runtime_state("expert_brief", expert_brief)
+        await self.materialize_domain_briefs(expert_brief)
 
         if model_result and model_result.get("sample_count", 0) > 0:
             await self.memory.update(
@@ -217,7 +263,18 @@ class NightlySelfMaintenance:
                     "confidence_message": model_result["confidence_message"],
                     "insights": model_result["insights"][:5],
                 },
+                domain="health",
+                summary=(
+                    f"EWMA={model_result['ewma_weight_kg']}kg，速率{model_result['weekly_rate_kg']}kg/周，"
+                    f"预计达标{model_result['eta_date'] or '待定'}(信心{model_result['confidence_score']})"
+                ),
+                salience=0.9,
             )
+
+        # 夜间确定性记忆压实与冷归档（即便无 LLM 也照常防止记忆膨胀）
+        compaction_res: Dict[str, Any] = {}
+        if ncfg.enable_memory_compaction:
+            compaction_res = await self.run_memory_compaction_stage(tracer=tracer)
 
         return {
             "data_ok": data_ok,
@@ -228,7 +285,204 @@ class NightlySelfMaintenance:
             "finance": finance_result,
             "saved_snapshot": saved_snapshot,
             "expert_brief": expert_brief,
+            "memory_compaction": compaction_res,
         }
+
+    async def run_memory_compaction_stage(
+        self,
+        tracer: Optional[TickTraceRecorder] = None,
+    ) -> Dict[str, Any]:
+        """夜间记忆压实与冷归档：吸收未归档快脑对话 + 去重归并 st_memories + 冷归档旧事件与快照。"""
+        ncfg = self.config.nightly
+        ctx = (
+            tracer.span("nightly_memory_compaction", "夜间记忆压实与冷归档")
+            if tracer is not None
+            else nullcontext(None)
+        )
+        with ctx as sp:
+            # 1. 标记并轻量吸收未归档的快脑对话（将关键用户声明汇入 episodic / 释放待审游标）
+            qc_consolidated = 0
+            try:
+                if hasattr(self.db, "list_unconsolidated_quick_chats"):
+                    uncons = await self.db.list_unconsolidated_quick_chats(limit=100)
+                    if uncons:
+                        by_dom: Dict[str, List[str]] = {}
+                        for row in uncons:
+                            if row.get("role") == "user" and row.get("content"):
+                                by_dom.setdefault(row.get("domain") or "general", []).append(
+                                    str(row["content"])[:80]
+                                )
+                        if by_dom:
+                            await self.memory.save_episode(
+                                None,
+                                "quick_chat_digest",
+                                {d: msgs[:6] for d, msgs in by_dom.items()},
+                                tick_date=self._clock().strftime("%Y-%m-%d"),
+                            )
+                        qc_consolidated = await self.db.mark_quick_chats_consolidated(
+                            [r["id"] for r in uncons]
+                        )
+            except Exception as exc:
+                logger.warning("nightly quick_chat consolidation skipped: %s", exc)
+
+            # 2. st_memories 去重/回填 summary/每域配额归档
+            mem_res = await self.memory.compact_memories(
+                max_semantic_per_domain=ncfg.max_active_semantic_per_domain,
+                max_procedural_per_domain=ncfg.max_active_procedural_per_domain,
+                stale_days=ncfg.episode_retention_days,
+            )
+
+            # 3. 超过保留期的 st_episodes 压缩归档至 data/sailtick/archives/
+            archives_dir = os.path.join(self.config.data_dir, "archives")
+            archived_episodes = await self.memory.archive_old_episodes(
+                archives_dir, retention_days=ncfg.episode_retention_days
+            )
+
+            # 4. 清理超期冷快照文件
+            pruned_snapshots = 0
+            try:
+                cutoff_date = (self._clock() - timedelta(days=ncfg.snapshot_retention_days)).strftime("%Y-%m-%d")
+                old_paths = await self.db.prune_raw_snapshots_before(cutoff_date)
+                for p in old_paths:
+                    if p and os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except OSError:
+                            pass
+                pruned_snapshots = len(old_paths)
+            except Exception as exc:
+                logger.debug("prune_raw_snapshots_before skipped: %s", exc)
+
+            res = {
+                "quick_chats_consolidated": qc_consolidated,
+                **mem_res,
+                "episodes_archived": archived_episodes,
+                "snapshots_pruned": pruned_snapshots,
+            }
+            if sp is not None:
+                sp.set_output(
+                    f"qc={qc_consolidated} dedup={mem_res['deduped']} "
+                    f"arch_mem={mem_res['archived']} arch_ep={archived_episodes}"
+                )
+                sp.set_payload(res)
+            return res
+
+    async def materialize_domain_briefs(self, brief: Dict[str, Any]) -> Dict[str, dict]:
+        """将统一专家简报拆解物化为 4 份紧凑分域热视图（st_domain_briefs），单域 <=450 字。"""
+        if not isinstance(brief, dict) or not hasattr(self.db, "upsert_domain_brief"):
+            return {}
+        src_date = str(brief.get("snapshot_date") or self._clock().strftime("%Y-%m-%d"))
+        goal = brief.get("goal") or {}
+        mod = brief.get("modeling") or {}
+        beh = brief.get("behavior_summary") or {}
+        plan = brief.get("plan_context") or {}
+        rhy = brief.get("rhythm") or {}
+        fin = brief.get("finance") or {}
+
+        # 1. global_core（所有角色与 Slot 共享核心基线）
+        core_lines = [
+            f"日期:{src_date} | 阶段:{plan.get('phase_name', '')}({plan.get('plan_version', '')}) | 常规下班:{plan.get('default_offwork_time', '18:00')}",
+        ]
+        if goal.get("latest_weight_kg") is not None:
+            core_lines.append(f"体重:最新{goal.get('latest_weight_kg')}kg / 目标{goal.get('target_weight_kg', 70)}kg")
+        if beh.get("avg_sleep_hours"):
+            core_lines.append(f"均睡:{beh['avg_sleep_hours']}h" + (" | 过载需减负" if rhy.get("overload_signal") else ""))
+        elif rhy.get("overload_signal"):
+            core_lines.append("⚠ 近期日程过载，压力优先于热量与满负荷")
+        core_text = "\n".join(core_lines)[:420]
+
+        # 2. health
+        h_lines = []
+        if mod.get("confidence_message"):
+            h_lines.append(str(mod["confidence_message"])[:180])
+        if mod.get("confidence_score"):
+            h_lines.append(
+                f"模型:{mod.get('model_type')} 样本{mod.get('sample_count')} 周速率{mod.get('weekly_rate_kg')}kg/周 "
+                f"信心{mod.get('confidence_score')}/100"
+                + (" [平台期]" if mod.get("plateau_detected") else "")
+            )
+        b_parts = []
+        if beh.get("weekly_snack_freq"):
+            b_parts.append(f"零食{beh['weekly_snack_freq']}次/周")
+        if beh.get("weekly_social_freq"):
+            b_parts.append(f"聚餐{beh['weekly_social_freq']}次/周")
+        if beh.get("weekly_exercise_freq") is not None:
+            b_parts.append(f"运动{beh['weekly_exercise_freq']}次/周")
+        if beh.get("weekend_rebound_detected"):
+            b_parts.append("周末易反弹")
+        if b_parts:
+            h_lines.append("行为:" + "，".join(b_parts))
+        health_text = "\n".join(h_lines)[:450] or "(健康基线建立中)"
+
+        # 3. rhythm
+        r_lines = []
+        rp = []
+        if rhy.get("adherence_rate") is not None:
+            rp.append(f"21d遵循率{int(rhy['adherence_rate'] * 100)}%")
+        if rhy.get("golden_windows"):
+            rp.append("高效:" + "、".join(rhy["golden_windows"][:3]))
+        if rhy.get("low_adherence_windows"):
+            rp.append("易打断:" + "、".join(rhy["low_adherence_windows"][:2]))
+        if rhy.get("overload_signal"):
+            rp.append("⚠过载减负")
+        if rp:
+            r_lines.append("节奏:" + "，".join(rp))
+        for pr in (rhy.get("project_risks") or [])[:3]:
+            r_lines.append(
+                f"- 「{pr.get('title')}」[{pr.get('risk')}] 剩{pr.get('days_left')}天 完成{int((pr.get('completion_ratio') or 0)*100)}%"
+            )
+        rhythm_text = "\n".join(r_lines)[:450] or "(节奏规律积累中)"
+
+        # 4. finance
+        f_lines = []
+        if fin.get("month") or fin.get("mtd_expense") is not None:
+            f_lines.append(
+                f"{fin.get('month', '')}真实支出¥{fin.get('mtd_expense', 0):.0f} "
+                f"(预计月底¥{fin.get('projected_eom_expense', 0):.0f}) | "
+                f"真实零食¥{fin.get('mtd_snack_total', 0):.0f}({fin.get('mtd_snack_pct', 0)}%)"
+            )
+            f_lines.append(
+                f"打标率{fin.get('tag_coverage_pct', 100)}% | 待审清理{fin.get('pending_hygiene_count', 0)}条"
+            )
+        bf = fin.get("backfill")
+        if isinstance(bf, dict) and bf.get("status"):
+            f_lines.append(f"历史回填:{bf.get('status')} (累计补标{bf.get('cumulative_auto_tagged', 0)}笔)")
+        finance_text = "\n".join(f_lines)[:420] or "(财务基线积累中)"
+
+        saved: Dict[str, dict] = {}
+        saved["global_core"] = await self.db.upsert_domain_brief(
+            "global_core", core_text, {"goal": goal, "plan_context": plan}, src_date
+        )
+        saved["health"] = await self.db.upsert_domain_brief(
+            "health", health_text, {"goal": goal, "modeling": mod, "behavior_summary": beh}, src_date
+        )
+        saved["rhythm"] = await self.db.upsert_domain_brief(
+            "rhythm", rhythm_text, rhy, src_date
+        )
+        saved["finance"] = await self.db.upsert_domain_brief(
+            "finance", finance_text, fin, src_date
+        )
+        return saved
+
+    @staticmethod
+    def format_domain_briefs_for_prompt(
+        briefs_map: Dict[str, dict],
+        domains: List[str],
+    ) -> str:
+        """从 st_domain_briefs 按需拼装指定域的紧凑热视图文本。"""
+        if not briefs_map:
+            return ""
+        parts: List[str] = []
+        order = ["global_core"] + [d for d in domains if d != "global_core"]
+        seen = set()
+        for dom in order:
+            if dom in seen or dom not in briefs_map:
+                continue
+            seen.add(dom)
+            txt = str((briefs_map[dom] or {}).get("compact_text") or "").strip()
+            if txt:
+                parts.append(f"[{dom}]\n{txt}")
+        return "\n".join(parts)
 
     async def run_research_stage(
         self,
@@ -248,48 +502,78 @@ class NightlySelfMaintenance:
         if explicit_foods:
             await self.knowledge.enqueue_food_research(explicit_foods)
 
+        # 每日调研预算闸门：超 daily_research_cap 时跳过外部重型调研
+        daily_tokens_now = 0
+        try:
+            daily_tokens_now = await self.db.sum_cost_today(self._clock().strftime("%Y-%m-%d"))
+        except Exception:
+            pass
+        research_cap = int(getattr(self.config.llm, "daily_research_cap", 80_000) or 80_000)
+        research_budget_ok = daily_tokens_now < research_cap
+
         food_res: Dict[str, Any] = {"candidates": [], "researched_count": 0, "researched_names": []}
-        if ncfg.enable_food_research:
-            food_res = await self.knowledge.run_nightly_food_research(
-                deep_pkg if data_ok else {},
-                max_foods=ncfg.max_foods_per_night,
+        if ncfg.enable_food_research and research_budget_ok:
+            fr_ctx = (
+                tracer.span("nightly_food_research", "自主食物热量调研")
+                if tracer is not None
+                else nullcontext(None)
             )
-            if tracer is not None:
-                tracer.record_instant_span(
-                    "nightly_food_research",
-                    "自主食物热量调研",
-                    status="ok",
-                    input_summary=f"candidates={len(food_res['candidates'])}",
-                    output_summary=f"researched={food_res['researched_count']}",
-                    payload=food_res,
+            with fr_ctx as sp:
+                food_res = await self.knowledge.run_nightly_food_research(
+                    deep_pkg if data_ok else {},
+                    max_foods=ncfg.max_foods_per_night,
+                    concurrency=ncfg.food_research_concurrency,
+                    stage_timeout_seconds=ncfg.food_research_timeout_seconds,
                 )
+                u = food_res.get("llm_usage") or {}
+                if tracer is not None and int(u.get("total_tokens", 0) or 0) > 0:
+                    tracer.add_llm_usage(
+                        int(u.get("prompt_tokens", 0) or 0),
+                        int(u.get("completion_tokens", 0) or 0),
+                        int(u.get("total_tokens", 0) or 0),
+                        float(u.get("cost_usd", 0.0) or 0.0),
+                    )
+                if sp is not None:
+                    sp.set_input(f"candidates={len(food_res['candidates'])}")
+                    sp.set_output(
+                        f"researched={food_res['researched_count']} timed_out={food_res.get('timed_out', False)}"
+                    )
+                    sp.set_payload(food_res)
 
         kn_res: Dict[str, Any] = {"curated_count": 0, "curated_topics": []}
-        if ncfg.enable_knowledge_curation:
+        if ncfg.enable_knowledge_curation and research_budget_ok:
             focus_domains = (model_result or {}).get("focus_domains") or [
                 "diet",
                 "exercise",
                 "psychology",
             ]
             insights = (model_result or {}).get("insights") or []
-            kn_res = await self.knowledge.run_nightly_knowledge_curation(
-                focus_domains=focus_domains,
-                insights=insights,
-                max_items=ncfg.max_knowledge_per_night,
+            kn_ctx = (
+                tracer.span("nightly_knowledge", "健康师专业知识整理", input_summary=f"focus={','.join(focus_domains[:3])}")
+                if tracer is not None
+                else nullcontext(None)
             )
-            if tracer is not None:
-                tracer.record_instant_span(
-                    "nightly_knowledge",
-                    "健康师专业知识整理",
-                    status="ok",
-                    input_summary=f"focus={','.join(focus_domains[:3])}",
-                    output_summary=f"curated={kn_res['curated_count']}",
-                    payload=kn_res,
+            with kn_ctx as sp:
+                kn_res = await self.knowledge.run_nightly_knowledge_curation(
+                    focus_domains=focus_domains,
+                    insights=insights,
+                    max_items=ncfg.max_knowledge_per_night,
                 )
+                u = kn_res.get("llm_usage") or {}
+                if tracer is not None and int(u.get("total_tokens", 0) or 0) > 0:
+                    tracer.add_llm_usage(
+                        int(u.get("prompt_tokens", 0) or 0),
+                        int(u.get("completion_tokens", 0) or 0),
+                        int(u.get("total_tokens", 0) or 0),
+                        float(u.get("cost_usd", 0.0) or 0.0),
+                    )
+                if sp is not None:
+                    sp.set_output(f"curated={kn_res['curated_count']}")
+                    sp.set_payload(kn_res)
 
         # 阶段 2c：慢脑 LLM 对本晚推进的历史月份剩余长尾未标账单做温和语义研判（仅写入待审，受水位限流）
         fin_llm_res: Dict[str, Any] = {"month": None, "evaluated": 0, "proposals_created": 0}
-        if ncfg.enable_finance_backfill and self.finance_client is not None and self.llm is not None:
+        if ncfg.enable_finance_backfill and self.finance_client is not None and self.llm is not None and research_budget_ok:
             fin_llm_res = await self._run_nightly_finance_llm_longtail(
                 deep_pkg=deep_pkg if data_ok else {},
                 tracer=tracer,
@@ -305,6 +589,7 @@ class NightlySelfMaintenance:
             kn_res=kn_res,
         )
         await self.db.set_runtime_state("expert_brief", expert_brief)
+        await self.materialize_domain_briefs(expert_brief)
 
         await self.memory.save_episode(
             tick_id,
@@ -861,46 +1146,59 @@ class NightlySelfMaintenance:
             '严格输出 JSON：{"suggestions": [{"id": 123, "tags": "日用消耗", "confidence": 0.78, "reason": "简短理由"}]}'
         )
         created = 0
-        try:
-            resp = await self.llm.chat(prompt, expect_json=True, max_tokens=600)
-            parsed = HealthKnowledgeManager._parse_json_safe(getattr(resp, "content", "") or "")
-            suggestions = parsed.get("suggestions") if isinstance(parsed, dict) else []
-            cand_map = {int(tx["id"]): tx for tx in candidates if tx.get("id") is not None}
-            for s in (suggestions or []):
-                if created >= budget or not isinstance(s, dict):
-                    break
-                tid = s.get("id")
-                tag_s = str(s.get("tags") or "").strip()
-                conf = float(s.get("confidence") or 0.0)
-                if tid is None or int(tid) not in cand_map or not tag_s or conf < 0.70:
-                    continue
-                if not all(x.strip() in tag_vocab for x in tag_s.split(",") if x.strip()):
-                    continue
-                tx = cand_map[int(tid)]
-                res = await self.finance_client.create_hygiene_proposal(
-                    proposal_type="auto_tag",
-                    target_tx_ids=[int(tid)],
-                    title=f"历史慢迭代建议 #{tid}「{str(tx.get('description') or '')[:18]}」→ {tag_s}",
-                    reason=f"({win.get('month')}) ¥{tx.get('value')}；{str(s.get('reason') or '夜间慢脑语义推断')}",
-                    confidence=min(0.88, conf),
-                    after_payload={"tags": tag_s},
-                    created_by="sailtick_nightly_llm",
-                )
-                if res.get("created"):
-                    created += 1
-        except Exception as exc:
-            logger.warning("nightly finance llm longtail skipped: %s", exc)
-
-        result = {"month": win.get("month"), "evaluated": len(candidates), "proposals_created": created}
-        if tracer is not None:
-            tracer.record_instant_span(
+        sp_ctx = (
+            tracer.span(
                 "nightly_finance_llm_longtail",
                 f"慢脑长尾账单研判 ({win.get('month')})",
-                status="ok",
                 input_summary=f"candidates={len(candidates)} budget={budget}",
-                output_summary=f"proposals_created={created}",
-                payload=result,
             )
+            if tracer is not None
+            else nullcontext(None)
+        )
+        with sp_ctx as sp:
+            try:
+                if hasattr(self.llm, "chat_fast"):
+                    resp = await self.llm.chat_fast(prompt, expect_json=True, max_tokens=600)
+                else:
+                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=600)
+                if tracer is not None:
+                    u = getattr(resp, "usage", None) or {}
+                    p_tok = int(u.get("prompt_tokens", 0) or getattr(resp, "prompt_tokens", 0) or 0)
+                    c_tok = int(u.get("completion_tokens", 0) or getattr(resp, "completion_tokens", 0) or 0)
+                    t_tok = int(u.get("total_tokens", 0) or getattr(resp, "total_tokens", 0) or (p_tok + c_tok))
+                    if t_tok > 0:
+                        tracer.add_llm_usage(p_tok, c_tok, t_tok, float(getattr(resp, "cost_usd", 0.0) or 0.0))
+                parsed = HealthKnowledgeManager._parse_json_safe(getattr(resp, "content", "") or "")
+                suggestions = parsed.get("suggestions") if isinstance(parsed, dict) else []
+                cand_map = {int(tx["id"]): tx for tx in candidates if tx.get("id") is not None}
+                for s in (suggestions or []):
+                    if created >= budget or not isinstance(s, dict):
+                        break
+                    tid = s.get("id")
+                    tag_s = str(s.get("tags") or "").strip()
+                    conf = float(s.get("confidence") or 0.0)
+                    if tid is None or int(tid) not in cand_map or not tag_s or conf < 0.70:
+                        continue
+                    if not all(x.strip() in tag_vocab for x in tag_s.split(",") if x.strip()):
+                        continue
+                    tx = cand_map[int(tid)]
+                    res = await self.finance_client.create_hygiene_proposal(
+                        proposal_type="auto_tag",
+                        target_tx_ids=[int(tid)],
+                        title=f"历史慢迭代建议 #{tid}「{str(tx.get('description') or '')[:18]}」→ {tag_s}",
+                        reason=f"({win.get('month')}) ¥{tx.get('value')}；{str(s.get('reason') or '夜间慢脑语义推断')}",
+                        confidence=min(0.88, conf),
+                        after_payload={"tags": tag_s},
+                        created_by="sailtick_nightly_llm",
+                    )
+                    if res.get("created"):
+                        created += 1
+            except Exception as exc:
+                logger.warning("nightly finance llm longtail skipped: %s", exc)
+            result = {"month": win.get("month"), "evaluated": len(candidates), "proposals_created": created}
+            if sp is not None:
+                sp.set_output(f"proposals_created={created}")
+                sp.set_payload(result)
         return result
 
     @staticmethod

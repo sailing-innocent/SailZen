@@ -28,10 +28,18 @@ sailtick:
   # 决议：deepseek flash 级视为无限量；记账与软上限仅防代码 bug 失控。
   llm:
     default: deepseek
-    fast_provider: deepseek          # 白天快反代理 provider（留空沿用 default）
-    fast_model: deepseek-chat        # 白天快反代理模型（非推理低延迟，1-3s 响应）
+    fast_provider: deepseek          # 白天快反代理与日间轻量巡检 provider
+    fast_model: deepseek-chat        # 非推理低延迟模型（1-3s 响应）
+    slot_models:                     # Slot 级模型分层路由（fast | default | 具体模型名）
+      morning_checkin: fast
+      midday_checkin: fast
+      evening_review: default
+      pre_sleep_report: default
+      nightly_maintenance: default
     per_tick_token_cap: 200000       # 每 Tick 软上限
-    daily_token_cap: 1000000         # 每日软上限
+    daily_token_cap: 1000000         # 每日硬护栏
+    daily_soft_cap: 40000            # 超过软上限后剩余白天 Slot 自动切 fast
+    daily_research_cap: 80000        # 超过后暂停夜间非核心外部调研
     providers:
       deepseek:
         model: deepseek-reasoner

@@ -22,6 +22,9 @@ class InboxItemResponse(BaseModel):
     user_id: int = 1
     sync_seq: int = 0
     source_domain: str = "system"
+    target_domain: str = ""
+    persona: str = ""
+    target_clients: List[str] = Field(default_factory=list)
     item_kind: str = "notice"
     topic: str = ""
     dedup_key: str = ""
@@ -95,6 +98,9 @@ class InboxCreateRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     source_domain: str = "manual"
+    target_domain: str = ""
+    persona: str = ""
+    target_clients: List[str] = Field(default_factory=list)
     item_kind: str = "notice"
     topic: str = ""
     dedup_key: str = ""

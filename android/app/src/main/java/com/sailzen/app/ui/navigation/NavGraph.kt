@@ -208,6 +208,18 @@ fun SailZenNavGraph(
                     highlightReminderId = entry.arguments?.getInt("reminder_id") ?: -1,
                     onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onOpenHealthCoach = { navController.navigate(Routes.HEALTH_COACH) },
+                    onNavigateDomain = { domain, deepLink ->
+                        val target = when {
+                            deepLink.startsWith("/money") || domain == "finance" -> Routes.MONEY
+                            deepLink.startsWith("/rhythm") || domain == "rhythm" -> Routes.PLAN
+                            deepLink.startsWith("/health/coach") || domain == "health" -> Routes.HEALTH_COACH
+                            deepLink.startsWith("/health") -> Routes.HEALTH
+                            else -> Routes.HEALTH_COACH
+                        }
+                        navController.navigate(target) {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
             composable(Routes.MONEY) {

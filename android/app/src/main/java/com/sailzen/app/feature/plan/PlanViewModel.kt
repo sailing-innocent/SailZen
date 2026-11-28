@@ -17,9 +17,12 @@ import com.sailzen.app.core.network.dto.AffairStates
 import com.sailzen.app.core.network.dto.CheckinTodayDto
 import com.sailzen.app.core.network.dto.CheckinTodayItemDto
 import com.sailzen.app.core.network.dto.DayTimelineDto
+import com.sailzen.app.core.network.dto.DomainSummaryDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
 import com.sailzen.app.core.network.dto.OccupancyDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
 import com.sailzen.app.core.network.dto.RhythmDayViewDto
+import com.sailzen.app.core.network.dto.TickTicketDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.core.network.dto.VentureProgressDto
 import com.sailzen.app.core.rhythm.AffairRules
@@ -64,10 +67,13 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
         val healthSignals: List<HealthSignalItemDto> = emptyList(),
         val inbox: List<AffairDto> = emptyList(),
         val occupancies: List<OccupancyDto> = emptyList(),
-        // SailTick 实时协商
+        // SailTick 实时协商（节奏规划师分域：多端共享 owner:rhythm）
         val chatBusy: Boolean = false,
         val chatReply: String? = null,
+        val chatHistory: List<QuickChatHistoryItemDto> = emptyList(),
         val chatIsAsyncFallback: Boolean = false,
+        val domainSummary: DomainSummaryDto? = null,
+        val ticketBusyId: Int? = null,
         val occupancyDialogOpen: Boolean = false,
         val planBBlock: TimeBlockDto? = null,
         val planBText: String? = null,
@@ -205,6 +211,8 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
             val occupancies = dash?.occupancies ?: emptyList()
             val loadedAffairs = _uiState.value.affairsLoaded
             val loadedVentures = _uiState.value.venturesLoaded
+            val domainSum = tickRepository.loadDomainSummary("rhythm")
+            val chatHist = tickRepository.loadQuickChatHistory("rhythm", 10)
 
             _uiState.update { prev ->
                 prev.copy(
@@ -216,6 +224,8 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
                     occupancies = occupancies,
                     ventures = dash?.projects ?: prev.ventures,
                     venturesLoaded = if (dash != null) true else prev.venturesLoaded,
+                    domainSummary = domainSum ?: prev.domainSummary,
+                    chatHistory = if (chatHist.isNotEmpty()) chatHist else prev.chatHistory,
                     refreshing = false,
                     configured = settings.serverUrl().isNotBlank(),
                     serverUrl = settings.serverUrl(),
@@ -299,21 +309,41 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissMessage() = _uiState.update { it.copy(message = null) }
 
-    // ---------------- SailTick 实时协商 ----------------
+    // ---------------- SailTick 实时协商（节奏规划师分域） ----------------
 
     fun sendQuickChat(text: String) {
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _uiState.value.chatBusy) return
         viewModelScope.launch {
-            _uiState.update { it.copy(chatBusy = true) }
-            tickRepository.quickChat(trimmed).fold(
+            _uiState.update {
+                it.copy(
+                    chatBusy = true,
+                    chatHistory = (it.chatHistory + QuickChatHistoryItemDto(
+                        role = "user",
+                        content = trimmed,
+                        domain = "rhythm",
+                        surface = "android_plan",
+                    )).takeLast(12),
+                )
+            }
+            tickRepository.quickChat(
+                text = trimmed,
+                channel = "android",
+                domain = "rhythm",
+                surface = "android_plan",
+            ).fold(
                 onSuccess = { res ->
                     _uiState.update {
                         it.copy(
                             chatBusy = false,
                             chatReply = res.reply,
+                            chatHistory = (it.chatHistory + QuickChatHistoryItemDto(
+                                role = "assistant",
+                                content = res.reply,
+                                domain = res.domain,
+                            )).takeLast(12),
                             chatIsAsyncFallback = res.fallbackAsync,
-                            message = if (res.rhythmUpdated) "SailTick 已更新今日日程" else null,
+                            message = if (res.rhythmUpdated) "节奏规划师已更新今日日程" else null,
                         )
                     }
                     if (res.rhythmUpdated) refresh()
@@ -327,6 +357,37 @@ class PlanViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 },
             )
+        }
+    }
+
+    fun replyDomainTicket(ticketId: Int, reply: String) {
+        val trimmed = reply.trim()
+        if (trimmed.isEmpty() || _uiState.value.ticketBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(ticketBusyId = ticketId) }
+            val res = tickRepository.replyTicket(ticketId, trimmed)
+            _uiState.update {
+                it.copy(
+                    ticketBusyId = null,
+                    message = if (res != null) "已回复节奏规划师，多端同步关闭" else "回复失败，请检查网络",
+                )
+            }
+            if (res != null) refresh()
+        }
+    }
+
+    fun snoozeDomainTicket(ticketId: Int) {
+        if (_uiState.value.ticketBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(ticketBusyId = ticketId) }
+            val res = tickRepository.snoozeTicket(ticketId, 24)
+            _uiState.update {
+                it.copy(
+                    ticketBusyId = null,
+                    message = if (res != null) "已暂缓 24 小时" else "操作失败，请检查网络",
+                )
+            }
+            if (res != null) refresh()
         }
     }
 

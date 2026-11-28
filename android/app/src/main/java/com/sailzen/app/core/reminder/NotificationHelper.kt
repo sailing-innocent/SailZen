@@ -33,6 +33,10 @@ object NotificationHelper {
 
     const val CHANNEL_HEALTH = "health"
     const val CHANNEL_AFFAIR = "affair"
+    const val CHANNEL_SAILTICK_HEALTH = "sailtick_health"
+    const val CHANNEL_SAILTICK_RHYTHM = "sailtick_rhythm"
+    const val CHANNEL_SAILTICK_FINANCE = "sailtick_finance"
+    const val CHANNEL_SAILTICK_DIGEST = "sailtick_digest"
 
     const val SERVICE_NOTIFICATION_ID = 1
     const val AFFAIR_NOTIFICATION_ID_OFFSET = 10_000
@@ -78,6 +82,34 @@ object NotificationHelper {
                     description = context.getString(R.string.channel_affair_desc)
                 },
                 NotificationChannel(
+                    CHANNEL_SAILTICK_HEALTH,
+                    "健康教练",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "SailTick 健康教练提问、饮食/称重提醒"
+                },
+                NotificationChannel(
+                    CHANNEL_SAILTICK_RHYTHM,
+                    "节奏规划师",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "SailTick 日程排期、项目倒排与时间块提醒"
+                },
+                NotificationChannel(
+                    CHANNEL_SAILTICK_FINANCE,
+                    "财务秘书",
+                    NotificationManager.IMPORTANCE_DEFAULT,
+                ).apply {
+                    description = "SailTick 账单清理、余额核对与消费提醒"
+                },
+                NotificationChannel(
+                    CHANNEL_SAILTICK_DIGEST,
+                    "每日总览",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "SailTick 睡前今日生活总览（低打扰）"
+                },
+                NotificationChannel(
                     CHANNEL_SERVICE,
                     context.getString(R.string.channel_service_name),
                     NotificationManager.IMPORTANCE_MIN,
@@ -94,6 +126,8 @@ object NotificationHelper {
      * @param isQuiet 当前处于安静时段（仅影响非 urgent 的渠道选择）
      * @param source 提醒来源，用于匹配来源配置
      * @param sourceConfig 服务端来源配置缓存（为空时使用默认规则）
+     * @param domain 规范业务域（health|rhythm|finance|general）
+     * @param deepLink 点击通知后的直达深链（如 /rhythm、/money、/health/coach）
      */
     fun notifyReminder(
         context: Context,
@@ -104,6 +138,8 @@ object NotificationHelper {
         isQuiet: Boolean,
         source: String = "",
         sourceConfig: CachedSourceConfig? = null,
+        domain: String = "",
+        deepLink: String = "",
     ) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -113,17 +149,27 @@ object NotificationHelper {
         }
         val settings = SettingsManager.get(context)
         val decision = NotificationDecisionEngine(settings).decide(sourceConfig, priority, isQuiet, source)
-        ensureChannel(context, decision.channelId, decision.importance)
+        val resolvedChannel = when {
+            decision.channelId == CHANNEL_URGENT || decision.channelId == CHANNEL_SILENT -> decision.channelId
+            deepLink.contains("report") || title.contains("今日总览") || title.contains("睡前") -> CHANNEL_SAILTICK_DIGEST
+            domain == "health" -> CHANNEL_SAILTICK_HEALTH
+            domain == "rhythm" -> CHANNEL_SAILTICK_RHYTHM
+            domain == "finance" -> CHANNEL_SAILTICK_FINANCE
+            else -> decision.channelId
+        }
+        ensureChannel(context, resolvedChannel, decision.importance)
         if (!decision.shouldNotify && !decision.useAlarm) {
             return
         }
         val notification = buildReminderNotification(
             context,
-            decision.channelId,
+            resolvedChannel,
             reminderId,
             title,
             body,
             decision.useFullScreenIntent,
+            domain = domain,
+            deepLink = deepLink,
         )
         NotificationManagerCompat.from(context).notify(reminderId, notification)
     }
@@ -142,6 +188,10 @@ object NotificationHelper {
             CHANNEL_SILENT -> context.getString(R.string.channel_silent_name) to context.getString(
                 R.string.channel_silent_desc
             )
+            CHANNEL_SAILTICK_HEALTH -> "健康教练" to "SailTick 健康教练提问、饮食/称重提醒"
+            CHANNEL_SAILTICK_RHYTHM -> "节奏规划师" to "SailTick 日程排期、项目倒排与时间块提醒"
+            CHANNEL_SAILTICK_FINANCE -> "财务秘书" to "SailTick 账单清理、余额核对与消费提醒"
+            CHANNEL_SAILTICK_DIGEST -> "每日总览" to "SailTick 睡前今日生活总览（低打扰）"
             CHANNEL_SERVICE -> context.getString(R.string.channel_service_name) to context.getString(
                 R.string.channel_service_desc
             )
@@ -161,13 +211,17 @@ object NotificationHelper {
         title: String,
         body: String,
         useFullScreen: Boolean = false,
+        domain: String = "",
+        deepLink: String = "",
     ): Notification {
-        // 点击通知本体 = 处理（打开 App 并定位该提醒）
+        // 点击通知本体 = 处理（打开 App 并按 deepLink / domain 路由至对应业务页）
         val contentIntent = PendingIntent.getActivity(
             context,
             reminderId,
             Intent(context, MainActivity::class.java)
-                .putExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, reminderId),
+                .putExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, reminderId)
+                .putExtra(ReminderActionReceiver.EXTRA_DOMAIN, domain)
+                .putExtra(ReminderActionReceiver.EXTRA_DEEP_LINK, deepLink),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -177,7 +231,9 @@ object NotificationHelper {
                 reminderId * 8 + offset,
                 Intent(context, ReminderActionReceiver::class.java)
                     .setAction(action)
-                    .putExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, reminderId),
+                    .putExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, reminderId)
+                    .putExtra(ReminderActionReceiver.EXTRA_DOMAIN, domain)
+                    .putExtra(ReminderActionReceiver.EXTRA_DEEP_LINK, deepLink),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 

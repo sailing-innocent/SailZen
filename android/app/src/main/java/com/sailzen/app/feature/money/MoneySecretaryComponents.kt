@@ -54,8 +54,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sailzen.app.core.network.dto.AccountDto
+import com.sailzen.app.core.network.dto.DomainSummaryDto
 import com.sailzen.app.core.network.dto.FinanceOverviewDto
 import com.sailzen.app.core.network.dto.HygieneProposalDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
+import com.sailzen.app.core.network.dto.TickTicketDto
 import java.math.BigDecimal
 
 private val PositiveDeltaColor = Color(0xFF2E7D32)
@@ -74,6 +77,8 @@ fun SailTickSecretaryCard(
     overview: FinanceOverviewDto?,
     pendingProposals: List<HygieneProposalDto>,
     autoProposals: List<HygieneProposalDto>,
+    domainSummary: DomainSummaryDto? = null,
+    ticketBusyId: Int? = null,
     hygieneExpanded: Boolean,
     hygieneTab: Int,
     hygieneBusyId: Int?,
@@ -81,10 +86,13 @@ fun SailTickSecretaryCard(
     chatInput: String,
     chatBusy: Boolean,
     chatReply: String?,
+    chatHistory: List<QuickChatHistoryItemDto> = emptyList(),
     analyzingImage: Boolean,
     onChatInputChange: (String) -> Unit,
     onSendChat: () -> Unit,
     onClearChatReply: () -> Unit,
+    onReplyTicket: (Int, String) -> Unit = { _, _ -> },
+    onSnoozeTicket: (Int) -> Unit = {},
     onPickGallery: () -> Unit,
     onTakePhoto: () -> Unit,
     onOpenReconcile: () -> Unit,
@@ -237,8 +245,100 @@ fun SailTickSecretaryCard(
                 }
             }
 
+            // 分域待回票据（仅财务秘书域） + 昨夜财务日报摘录
+            val financeTickets = domainSummary?.pendingTickets.orEmpty()
+            if (financeTickets.isNotEmpty()) {
+                financeTickets.take(2).forEach { ticket ->
+                    val qrs = remember(ticket.id, ticket.meta) { ticket.quickReplies() }
+                    val tBusy = ticketBusyId == ticket.id
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = "财务秘书确认 · ${ticket.title}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            if (ticket.body.isNotBlank()) {
+                                Text(text = ticket.body, style = MaterialTheme.typography.bodySmall)
+                            }
+                            if (qrs.isNotEmpty()) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    qrs.forEach { qr ->
+                                        AssistChip(
+                                            onClick = { if (!tBusy) onReplyTicket(ticket.id, qr) },
+                                            enabled = !tBusy,
+                                            label = { Text(qr) },
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                            ) {
+                                TextButton(
+                                    onClick = { onSnoozeTicket(ticket.id) },
+                                    enabled = !tBusy,
+                                ) {
+                                    Text("延后 24h")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            val financeReportSummary = domainSummary?.reportSectionSummary().orEmpty()
+            if (financeReportSummary.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "昨夜财务摘录：$financeReportSummary",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    )
+                }
+            }
+
+            // 历史对话（多端共享 owner:finance）
+            if (chatHistory.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    chatHistory.takeLast(4).forEach { msg ->
+                        val isUser = msg.role == "user"
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isUser) {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = (if (isUser) "我：" else "秘书：") + msg.content,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
             // 快脑回复气泡
-            if (!chatReply.isNullOrBlank()) {
+            if (!chatReply.isNullOrBlank() && chatHistory.isEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surface,

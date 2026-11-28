@@ -42,12 +42,42 @@ import {
 } from 'lucide-react'
 
 const DOMAIN_LABEL: Record<string, string> = {
-  sailtick: 'AI 教练',
-  rhythm: '节奏',
-  health: '健康',
-  finance: '财务',
+  sailtick: '生活总管',
+  rhythm: '节奏规划师',
+  health: '健康教练',
+  finance: '财务秘书',
+  general: '生活总管',
   system: '系统',
   manual: '提醒',
+}
+
+const PERSONA_LABEL: Record<string, string> = {
+  health_coach: '健康教练',
+  rhythm_planner: '节奏规划师',
+  finance_secretary: '财务秘书',
+  chief_steward: '生活总管',
+}
+
+const DOMAIN_FILTER_OPTIONS = [
+  { key: 'all', label: '全部' },
+  { key: 'rhythm', label: '规划' },
+  { key: 'health', label: '健康' },
+  { key: 'finance', label: '财务' },
+  { key: 'general', label: '总管' },
+] as const
+
+function resolveItemDomain(item: InboxItem): string {
+  const td = (item.target_domain || '').toLowerCase()
+  if (td && ['health', 'rhythm', 'finance', 'general'].includes(td)) return td
+  const sd = (item.source_domain || '').toLowerCase()
+  if (['health', 'rhythm', 'finance', 'general'].includes(sd)) return sd
+  return 'general'
+}
+
+function resolvePersonaBadge(item: InboxItem): string {
+  if (item.persona && PERSONA_LABEL[item.persona]) return PERSONA_LABEL[item.persona]
+  const dom = resolveItemDomain(item)
+  return DOMAIN_LABEL[dom] || DOMAIN_LABEL[item.source_domain] || item.source_domain
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -86,6 +116,7 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
 
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'active' | 'history'>('active')
+  const [domainFilter, setDomainFilter] = useState<string>('all')
   const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({})
   const [busyId, setBusyId] = useState<number | null>(null)
 
@@ -94,6 +125,9 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
     const act: InboxItem[] = []
     const hist: InboxItem[] = []
     for (const item of all) {
+      if (domainFilter !== 'all' && resolveItemDomain(item) !== domainFilter) {
+        continue
+      }
       if (INBOX_ACTIVE_STATUSES.has(item.status)) {
         act.push(item)
       } else {
@@ -101,7 +135,7 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
       }
     }
     return { activeItems: act, historyItems: hist.slice(0, 40) }
-  }, [itemsById])
+  }, [itemsById, domainFilter])
 
   const handleReply = async (item: InboxItem, explicit?: string) => {
     const text = (explicit ?? replyDrafts[item.id] ?? '').trim()
@@ -126,13 +160,16 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
 
   const jumpToTarget = (item: InboxItem) => {
     const rawLink = typeof item.action_schema?.deep_link === 'string' ? item.action_schema.deep_link : ''
-    let target = '/health'
-    if (rawLink.startsWith('/health/coach') || item.source_domain === 'sailtick') {
-      target = '/tick'
-    } else if (rawLink.startsWith('/rhythm') || item.source_domain === 'rhythm') {
+    const dom = resolveItemDomain(item)
+    let target = '/tick'
+    if (rawLink.startsWith('/money') || dom === 'finance') {
+      target = '/money'
+    } else if (rawLink.startsWith('/rhythm') || dom === 'rhythm') {
       target = '/rhythm'
-    } else if (rawLink.startsWith('/health')) {
+    } else if (rawLink.startsWith('/health/coach') || rawLink.startsWith('/health') || dom === 'health') {
       target = '/health'
+    } else if (rawLink.startsWith('/tick')) {
+      target = '/tick'
     }
     setOpen(false)
     navigate(target)
@@ -229,6 +266,19 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
               已处理 / 自动消解 ({historyItems.length})
             </Button>
           </div>
+          <div className="flex flex-wrap gap-1 pt-1.5">
+            {DOMAIN_FILTER_OPTIONS.map((opt) => (
+              <Button
+                key={opt.key}
+                size="sm"
+                variant={domainFilter === opt.key ? 'secondary' : 'ghost'}
+                className="h-6 px-2 text-[11px]"
+                onClick={() => setDomainFilter(opt.key)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
@@ -264,7 +314,7 @@ export const GlobalInboxDrawerButton: React.FC<{ compact?: boolean }> = ({ compa
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <Badge variant="outline" className="text-[10px]">
-                        {DOMAIN_LABEL[item.source_domain] || item.source_domain}
+                        {resolvePersonaBadge(item)}
                       </Badge>
                       <Badge
                         variant={isActive ? 'secondary' : 'outline'}

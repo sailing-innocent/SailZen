@@ -203,6 +203,8 @@ fun PlanScreen(
                     state = state,
                     onQuickChat = { viewModel.sendQuickChat(it) },
                     onDismissChatReply = { viewModel.clearChatReply() },
+                    onReplyDomainTicket = { id, text -> viewModel.replyDomainTicket(id, text) },
+                    onSnoozeDomainTicket = { id -> viewModel.snoozeDomainTicket(id) },
                     onAcceptHint = { viewModel.acceptHint(it) },
                     onRejectHint = { viewModel.rejectHint(it) },
                     onConfirmInbox = { viewModel.transit(it, AffairActions.CONFIRM) },

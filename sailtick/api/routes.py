@@ -104,11 +104,25 @@ def create_app(daemon: Any) -> Litestar:
 
     @get("/memory")
     async def query_memory(
-        memory_type: Optional[str] = None, key_prefix: Optional[str] = None, limit: int = 50
+        memory_type: Optional[str] = None,
+        key_prefix: Optional[str] = None,
+        domain: Optional[str] = None,
+        limit: int = 50,
     ) -> List[Dict[str, Any]]:
         if memory_type:
-            return await daemon.memory.list(memory_type, key_prefix=key_prefix)
+            return await daemon.memory.list(memory_type, key_prefix=key_prefix, domain=domain)
         return await daemon.memory.list_episodes(limit=limit)
+
+    @get("/memory/search")
+    async def search_memory(
+        q: str = "",
+        domain: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """SQLite FTS5 毫秒级检索记忆/食物/知识。"""
+        if not q.strip():
+            return []
+        return await daemon.memory.search(q, domain=domain, limit=limit)
 
     @get("/profile")
     async def list_profile() -> List[Dict[str, Any]]:
@@ -210,6 +224,15 @@ def create_app(daemon: Any) -> Litestar:
         brief = await daemon.db.get_runtime_state("expert_brief")
         return brief or {}
 
+    @get("/expert/brief/{domain:str}")
+    async def expert_brief_by_domain(domain: str) -> Dict[str, Any]:
+        """获取单域物化热视图（global_core | health | rhythm | finance）。"""
+        if hasattr(daemon.db, "get_domain_brief"):
+            item = await daemon.db.get_domain_brief(domain)
+            if item:
+                return item
+        return {}
+
     @get("/modeling/latest")
     async def modeling_latest() -> Dict[str, Any]:
         snap = await daemon.db.get_latest_model_snapshot()
@@ -240,7 +263,7 @@ def create_app(daemon: Any) -> Litestar:
 
     @post("/chat/quick")
     async def quick_chat(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """白天快速反应对话入口（转达专家结论 + 灵活调计划 + 一句话设提醒）。"""
+        """白天快速反应对话入口（支持 domain/persona 分域裁剪与跨端会话共享）。"""
         body = data or {}
         text = str(body.get("text") or body.get("message") or "").strip()
         channel = str(body.get("channel") or "api")
@@ -248,6 +271,9 @@ def create_app(daemon: Any) -> Litestar:
         session_id = body.get("session_id")
         target_type = str(body.get("target_type") or "private")
         target_id = body.get("target_id")
+        domain = str(body.get("domain") or "")
+        surface = str(body.get("surface") or "")
+        context_hints = body.get("context_hints") if isinstance(body.get("context_hints"), dict) else None
         return await daemon.quick_agent.handle_message(
             text=text,
             channel=channel,
@@ -255,7 +281,22 @@ def create_app(daemon: Any) -> Litestar:
             session_id=str(session_id) if session_id else None,
             target_type=target_type,
             target_id=str(target_id) if target_id else None,
+            domain=domain,
+            surface=surface,
+            context_hints=context_hints,
         )
+
+    @get("/chat/quick/history")
+    async def quick_chat_history(
+        domain: str = "general",
+        user_id: str = "owner",
+        session_id: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """拉取某业务域的跨端持久化快反对话历史。"""
+        dom = daemon.quick_agent._resolve_domain(domain=domain)
+        sess_key = session_id or f"{user_id or 'owner'}:{dom}"
+        return await daemon.db.list_quick_chat_history(sess_key, limit=max(1, min(limit, 100)))
 
     @get("/nudges")
     async def list_nudges(limit: int = 30) -> List[Dict[str, Any]]:
@@ -289,6 +330,7 @@ def create_app(daemon: Any) -> Litestar:
             list_plans,
             active_plan,
             query_memory,
+            search_memory,
             list_profile,
             cost,
             schedules,
@@ -300,12 +342,14 @@ def create_app(daemon: Any) -> Litestar:
             list_traces,
             get_trace,
             expert_brief,
+            expert_brief_by_domain,
             modeling_latest,
             modeling_history,
             list_foods,
             list_knowledge,
             run_nightly,
             quick_chat,
+            quick_chat_history,
             list_nudges,
             onebot_webhook,
         ],

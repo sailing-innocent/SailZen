@@ -8,12 +8,15 @@ import com.sailzen.app.core.data.OperationResult
 import com.sailzen.app.core.money.MoneyRepository
 import com.sailzen.app.core.network.dto.AccountDto
 import com.sailzen.app.core.network.dto.AccountReconcileRequestDto
+import com.sailzen.app.core.network.dto.DomainSummaryDto
 import com.sailzen.app.core.network.dto.FinanceOverviewDto
 import com.sailzen.app.core.network.dto.HygieneProposalDto
 import com.sailzen.app.core.network.dto.HygieneScanRequestDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
 import com.sailzen.app.core.network.dto.IntakeEntryDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
+import com.sailzen.app.core.network.dto.TickTicketDto
 import com.sailzen.app.core.network.dto.TransactionDto
 import com.sailzen.app.core.network.dto.TransactionStatsDto
 import com.sailzen.app.core.network.dto.TransactionUpsertRequest
@@ -108,6 +111,9 @@ class MoneyViewModel(
         val chatInput: String = "",
         val chatBusy: Boolean = false,
         val chatReply: String? = null,
+        val chatHistory: List<QuickChatHistoryItemDto> = emptyList(),
+        val domainSummary: DomainSummaryDto? = null,
+        val ticketBusyId: Int? = null,
         val reconcileOpen: Boolean = false,
         val reconcileAccId: Int = -1,
         val reconcileActualBalance: String = "",
@@ -130,6 +136,7 @@ class MoneyViewModel(
     private var refreshJob: Job? = null
     private var listJob: Job? = null
     private var statsJob: Job? = null
+    private var extrasJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -420,6 +427,22 @@ class MoneyViewModel(
                     message = it.message ?: failureMsg?.let { msg -> "加载失败：$msg" },
                 )
             }
+            // 异步加载财务秘书分域票据/日报摘录与跨端共享对话历史，绝不阻塞主账本刷新
+            if (configured) {
+                extrasJob?.cancel()
+                extrasJob = viewModelScope.launch {
+                    val domainSum = runCatching { tickRepo().loadDomainSummary("finance") }.getOrNull()
+                    val chatHist = runCatching { tickRepo().loadQuickChatHistory("finance", 10) }.getOrDefault(emptyList())
+                    if (domainSum != null || chatHist.isNotEmpty()) {
+                        _uiState.update {
+                            it.copy(
+                                domainSummary = domainSum ?: it.domainSummary,
+                                chatHistory = if (chatHist.isNotEmpty()) chatHist else it.chatHistory,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -691,8 +714,23 @@ class MoneyViewModel(
         val text = (overrideText ?: _uiState.value.chatInput).trim()
         if (text.isEmpty() || _uiState.value.chatBusy) return
         viewModelScope.launch {
-            _uiState.update { it.copy(chatBusy = true) }
-            val result = tickRepo().quickChat(text = text, channel = "android")
+            _uiState.update {
+                it.copy(
+                    chatBusy = true,
+                    chatHistory = (it.chatHistory + QuickChatHistoryItemDto(
+                        role = "user",
+                        content = text,
+                        domain = "finance",
+                        surface = "android_money",
+                    )).takeLast(12),
+                )
+            }
+            val result = tickRepo().quickChat(
+                text = text,
+                channel = "android",
+                domain = "finance",
+                surface = "android_money",
+            )
             result.fold(
                 onSuccess = { res ->
                     _uiState.update {
@@ -700,6 +738,11 @@ class MoneyViewModel(
                             chatBusy = false,
                             chatInput = if (overrideText == null) "" else it.chatInput,
                             chatReply = res.reply,
+                            chatHistory = (it.chatHistory + QuickChatHistoryItemDto(
+                                role = "assistant",
+                                content = res.reply,
+                                domain = res.domain,
+                            )).takeLast(12),
                             message = if (res.financeUpdated) "账单已同步更新" else it.message,
                         )
                     }
@@ -716,6 +759,37 @@ class MoneyViewModel(
                     }
                 },
             )
+        }
+    }
+
+    fun replyFinanceTicket(ticketId: Int, reply: String) {
+        val trimmed = reply.trim()
+        if (trimmed.isEmpty() || _uiState.value.ticketBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(ticketBusyId = ticketId) }
+            val res = tickRepo().replyTicket(ticketId, trimmed)
+            _uiState.update {
+                it.copy(
+                    ticketBusyId = null,
+                    message = if (res != null) "已回复财务秘书，多端同步关闭" else "回复失败，请检查网络",
+                )
+            }
+            if (res != null) refresh()
+        }
+    }
+
+    fun snoozeFinanceTicket(ticketId: Int) {
+        if (_uiState.value.ticketBusyId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(ticketBusyId = ticketId) }
+            val res = tickRepo().snoozeTicket(ticketId, 24)
+            _uiState.update {
+                it.copy(
+                    ticketBusyId = null,
+                    message = if (res != null) "已暂缓 24 小时" else "操作失败，请检查网络",
+                )
+            }
+            if (res != null) refresh()
         }
     }
 
@@ -892,6 +966,7 @@ class MoneyViewModel(
                 note = note.ifBlank { "账单/小票/账户余额截图识图" },
                 sourceChannel = "android",
                 useOcrAssist = "auto",
+                domainHint = "finance",
             )
             result.fold(
                 onSuccess = { draft ->

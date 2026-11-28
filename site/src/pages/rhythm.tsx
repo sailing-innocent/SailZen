@@ -20,12 +20,10 @@ import {
 } from '@/components/ui/dialog'
 import { useRhythmStore } from '@lib/store/rhythm'
 import { TimelineView } from '@components/rhythm/timeline_view'
-import { api_quick_chat, api_send_coach_message } from '@lib/api/tick'
+import { DomainAssistantBar } from '@components/tick/DomainAssistantBar'
 import {
   ChevronLeft,
   ChevronRight,
-  Sparkles,
-  Send,
   Target,
   Check,
   Plus,
@@ -55,12 +53,6 @@ const RhythmPage = () => {
   const deleteAffair = useRhythmStore((s) => s.deleteAffair)
   const checkin = useRhythmStore((s) => s.checkin)
 
-  // SailTick 快反协商框状态
-  const [chatInput, setChatInput] = useState('')
-  const [chatBusy, setChatBusy] = useState(false)
-  const [chatReply, setChatReply] = useState<string | null>(null)
-  const [chatNote, setChatNote] = useState<string | null>(null)
-
   // 极简新建项目
   const [projOpen, setProjOpen] = useState(false)
   const [projTitle, setProjTitle] = useState('')
@@ -82,38 +74,6 @@ const RhythmPage = () => {
     const d = new Date(`${selectedDate}T00:00:00`)
     d.setDate(d.getDate() + delta)
     setSelectedDate(d)
-  }
-
-  const sendToSailTick = async (rawText?: string) => {
-    const text = (rawText ?? chatInput).trim()
-    if (!text || chatBusy) return
-    setChatBusy(true)
-    setChatNote(null)
-    try {
-      const res = await api_quick_chat(text, { channel: 'web_rhythm', session_id: 'web:rhythm' })
-      setChatReply(res.reply)
-      setChatInput('')
-      if (res.rhythm_updated) {
-        setChatNote('SailTick 已直接更新日程画布 ✓')
-        await fetchDashboard()
-      }
-    } catch {
-      // 若同机 SailTick daemon 离线，降级写入异步消息队列由下次 Tick 吸收
-      try {
-        await api_send_coach_message({
-          content: `[日程协商] ${text}`,
-          category: 'daily_info',
-          source_channel: 'web',
-          auto_log_diet: false,
-        })
-        setChatReply('SailTick 实时快脑暂未在线，已将你的想法写入异步消息箱，下次 Tick 唤醒时会自动吸收并重排日程。')
-        setChatInput('')
-      } catch (e) {
-        setChatNote(`发送失败：${e instanceof Error ? e.message : String(e)}`)
-      }
-    } finally {
-      setChatBusy(false)
-    }
   }
 
   const handleCreateProject = async () => {
@@ -195,51 +155,18 @@ const RhythmPage = () => {
           </div>
         )}
 
-        {/* SailTick 即时协商条（应对所有临时加会/疲惫减负/新增项目） */}
-        <Card className="border-primary/20">
-          <CardContent className="pt-4 space-y-2.5">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span>跟 SailTick 说一声，直接调整日程或项目</span>
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="例如：下午 2-4 点临时加会帮我重排 / 新建项目：下月底上线 v2 / 今天好累减负"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendToSailTick()}
-                disabled={chatBusy}
-              />
-              <Button onClick={() => sendToSailTick()} disabled={chatBusy || !chatInput.trim()}>
-                <Send className="h-4 w-4 mr-1" />
-                {chatBusy ? '协商中' : '发送'}
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {QUICK_PROMPTS.map((p) => (
-                <Button
-                  key={p}
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="h-7 text-xs"
-                  disabled={chatBusy}
-                  onClick={() => sendToSailTick(p)}
-                >
-                  {p}
-                </Button>
-              ))}
-            </div>
-            {chatReply && (
-              <div className="rounded-md bg-muted/60 p-3 text-sm whitespace-pre-wrap">
-                {chatReply}
-                {chatNote && (
-                  <div className="text-xs text-primary mt-1 font-medium">{chatNote}</div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* 节奏规划师分域待确认票据 + 日报日程摘录 + 多端共享 owner:rhythm 协商对话 */}
+        <DomainAssistantBar
+          domain="rhythm"
+          surface="web_rhythm"
+          title="与节奏规划师即时协商（日程重排 · 项目倒排）"
+          placeholder="例如：下午 2-4 点临时加会帮我重排 / 新建项目：下月底上线 v2 / 今天好累减负"
+          quickPrompts={QUICK_PROMPTS}
+          contextHints={{ selected_date: selectedDate }}
+          onDataChanged={() => {
+            void fetchDashboard()
+          }}
+        />
 
         {/* 主画布：左可视化时间线 + 右项目倒排与焦点待办 */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">

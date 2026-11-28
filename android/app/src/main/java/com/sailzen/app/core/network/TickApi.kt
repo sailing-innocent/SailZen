@@ -1,10 +1,12 @@
 package com.sailzen.app.core.network
 
 import com.sailzen.app.core.network.dto.DailyReportDto
+import com.sailzen.app.core.network.dto.DomainSummaryDto
 import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeCommitResponse
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryResponseDto
 import com.sailzen.app.core.network.dto.QuickChatRequest
 import com.sailzen.app.core.network.dto.QuickChatResponse
 import com.sailzen.app.core.network.dto.TickMessageCreateRequest
@@ -31,6 +33,7 @@ interface TickApi {
     @GET("api/v1/tick/tickets")
     suspend fun listTickets(
         @Query("status") status: String? = null,
+        @Query("domain") domain: String? = null,
         @Query("limit") limit: Int = 50,
     ): List<TickTicketDto>
 
@@ -75,6 +78,17 @@ interface TickApi {
     @GET("api/v1/tick/health-summary")
     suspend fun healthCoachSummary(): HealthCoachSummaryDto
 
+    @GET("api/v1/tick/domain-summary")
+    suspend fun domainSummary(
+        @Query("domain") domain: String,
+    ): DomainSummaryDto
+
+    @GET("api/v1/tick/quick-chat/history")
+    suspend fun quickChatHistory(
+        @Query("domain") domain: String = "general",
+        @Query("limit") limit: Int = 12,
+    ): QuickChatHistoryResponseDto
+
     @Multipart
     @POST("api/v1/tick/intake/analyze")
     suspend fun analyzeImageIntake(
@@ -83,6 +97,7 @@ interface TickApi {
         @Part("source_channel") sourceChannel: RequestBody,
         @Part("use_ocr_assist") useOcrAssist: RequestBody,
         @Part("ticket_id") ticketId: RequestBody? = null,
+        @Part("domain_hint") domainHint: RequestBody? = null,
     ): ImageIntakeDraftDto
 
     @GET("api/v1/tick/intake/drafts")

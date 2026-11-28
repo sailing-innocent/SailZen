@@ -11,10 +11,12 @@ import com.sailzen.app.core.data.SettingsManager
 import com.sailzen.app.core.network.ApiClient
 import com.sailzen.app.core.network.TickApi
 import com.sailzen.app.core.network.dto.DailyReportDto
+import com.sailzen.app.core.network.dto.DomainSummaryDto
 import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeCommitResponse
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
 import com.sailzen.app.core.network.dto.QuickChatRequest
 import com.sailzen.app.core.network.dto.TickMessageCreateRequest
 import com.sailzen.app.core.network.dto.TickMessageDto
@@ -37,6 +39,9 @@ data class QuickChatResult(
     val financeUpdated: Boolean = false,
     val fallbackAsync: Boolean = false,
     val source: String = "",
+    val domain: String = "general",
+    val persona: String = "chief_steward",
+    val routedDomain: String? = null,
 )
 
 /**
@@ -77,6 +82,29 @@ open class TickRepository protected constructor(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "loadCoachSummary failed: ${e.message}")
             null
+        }
+    }
+
+    open suspend fun loadDomainSummary(domain: String): DomainSummaryDto? {
+        val client = api() ?: return null
+        return try {
+            client.domainSummary(domain)
+        } catch (e: Exception) {
+            Log.w(TAG, "loadDomainSummary($domain) failed: ${e.message}")
+            null
+        }
+    }
+
+    open suspend fun loadQuickChatHistory(
+        domain: String,
+        limit: Int = 12,
+    ): List<QuickChatHistoryItemDto> {
+        val client = api() ?: return emptyList()
+        return try {
+            client.quickChatHistory(domain = domain, limit = limit).items
+        } catch (e: Exception) {
+            Log.w(TAG, "loadQuickChatHistory($domain) failed: ${e.message}")
+            emptyList()
         }
     }
 
@@ -155,7 +183,9 @@ open class TickRepository protected constructor(private val context: Context) {
     open suspend fun quickChat(
         text: String,
         channel: String = "android",
-        sessionId: String = "android:owner",
+        sessionId: String? = null,
+        domain: String = "general",
+        surface: String = "android",
     ): Result<QuickChatResult> {
         val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
         val trimmed = text.trim()
@@ -166,6 +196,8 @@ open class TickRepository protected constructor(private val context: Context) {
                     text = trimmed,
                     channel = channel,
                     sessionId = sessionId,
+                    domain = domain,
+                    surface = surface,
                 ),
             )
             if (res.rhythmUpdated) {
@@ -182,6 +214,9 @@ open class TickRepository protected constructor(private val context: Context) {
                     financeUpdated = res.financeUpdated,
                     fallbackAsync = false,
                     source = res.source,
+                    domain = res.domain,
+                    persona = res.persona,
+                    routedDomain = res.routedDomain,
                 ),
             )
         } catch (e: Exception) {
@@ -190,7 +225,9 @@ open class TickRepository protected constructor(private val context: Context) {
                 client.sendMessage(
                     TickMessageCreateRequest(
                         direction = "user_to_agent",
-                        category = "daily_info",
+                        category = if (domain == "health") "diet" else "daily_info",
+                        domain = domain,
+                        surface = surface,
                         content = "[快捷协商] $trimmed",
                         sourceChannel = channel,
                         autoLogDiet = false,
@@ -204,6 +241,7 @@ open class TickRepository protected constructor(private val context: Context) {
                         financeUpdated = false,
                         fallbackAsync = true,
                         source = "async_inbox",
+                        domain = domain,
                     ),
                 )
             } catch (fallbackErr: Exception) {
@@ -266,6 +304,7 @@ open class TickRepository protected constructor(private val context: Context) {
         sourceChannel: String = "android",
         ticketId: Int? = null,
         useOcrAssist: String = "auto",
+        domainHint: String? = null,
     ): Result<ImageIntakeDraftDto> {
         val client = api() ?: return Result.failure(IllegalStateException("尚未配置服务器地址"))
         return runCatching {
@@ -278,6 +317,7 @@ open class TickRepository protected constructor(private val context: Context) {
                 sourceChannel = sourceChannel.toRequestBody(textPlain),
                 useOcrAssist = useOcrAssist.toRequestBody(textPlain),
                 ticketId = ticketId?.toString()?.toRequestBody(textPlain),
+                domainHint = domainHint?.takeIf { it.isNotBlank() }?.toRequestBody(textPlain),
             )
         }.onFailure { e ->
             Log.w(TAG, "analyzeImageIntake failed: ${e.message}")

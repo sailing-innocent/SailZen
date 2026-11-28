@@ -207,12 +207,14 @@ fun MoneyScreen(
                     }
                 }
 
-                // 0. SailTick 开销秘书卡片（真实零食/覆盖率、一句话快记、拍小票、智能对账、清理队列）
+                // 0. SailTick 开销秘书卡片（真实零食/覆盖率、分域待回票据、一句话快记、拍小票、智能对账、清理队列）
                 item(key = "sailtick_secretary") {
                     SailTickSecretaryCard(
                         overview = state.overview,
                         pendingProposals = state.pendingProposals,
                         autoProposals = state.autoProposals,
+                        domainSummary = state.domainSummary,
+                        ticketBusyId = state.ticketBusyId,
                         hygieneExpanded = state.hygieneExpanded,
                         hygieneTab = state.hygieneTab,
                         hygieneBusyId = state.hygieneBusyId,
@@ -220,10 +222,13 @@ fun MoneyScreen(
                         chatInput = state.chatInput,
                         chatBusy = state.chatBusy,
                         chatReply = state.chatReply,
+                        chatHistory = state.chatHistory,
                         analyzingImage = state.analyzingImage,
                         onChatInputChange = viewModel::setChatInput,
                         onSendChat = { viewModel.sendFinanceQuickChat() },
                         onClearChatReply = viewModel::clearChatReply,
+                        onReplyTicket = viewModel::replyFinanceTicket,
+                        onSnoozeTicket = viewModel::snoozeFinanceTicket,
                         onPickGallery = { launchGallery() },
                         onTakePhoto = { launchCamera() },
                         onOpenReconcile = { viewModel.openReconcileDialog() },

@@ -45,6 +45,14 @@ class SailTickTicket(ORMBase):
     tick_id = Column(String, default="", index=True)
     # question | task | approval | info
     type = Column(String, default="question", index=True)
+    # 业务域分流：health | rhythm | finance | general
+    domain = Column(String(32), default="general", index=True)
+    # 交互角色：health_coach | rhythm_planner | finance_secretary | chief_steward
+    persona = Column(String(32), default="")
+    # 目标终端过滤列表：["android", "web", "vscode"]（空表示全端）
+    target_clients = Column(JSONB, default=list)
+    # 精确落地页深链（如 /plan?ticket=12 / /health/coach?ticket=12 / /money?ticket=12）
+    deep_link = Column(String(128), default="")
     # 话题标识，用于防重复轰炸与冷却控制（如 profile_wake_time / diet_lunch / weight_checkin）
     topic = Column(String, default="", index=True)
     title = Column(String, nullable=False)
@@ -81,6 +89,7 @@ class SailTickTicket(ORMBase):
         # SCAN 同步用：pending 按期待回复时间排序
         Index("ix_tick_tickets_status_expected", "status", "expected_reply_by"),
         Index("ix_tick_tickets_status_updated", "status", "updated_at"),
+        Index("ix_tick_tickets_domain_status", "domain", "status"),
     )
 
 
@@ -96,6 +105,10 @@ class SailTickMessage(ORMBase):
     direction = Column(String, default="user_to_agent", index=True)
     # diet | weight | daily_info | mood | exercise | general
     category = Column(String, default="diet", index=True)
+    # 业务域：health | rhythm | finance | general
+    domain = Column(String(32), default="general", index=True)
+    # 来源页面：android_health | android_plan | android_money | web_rhythm | vscode_workbench
+    surface = Column(String(32), default="")
     content = Column(String, nullable=False)
     # 结构化元信息（如 meal_type, htime, linked_diet_id, extracted_calories 等）
     meta = Column(JSONB, default=dict)
@@ -128,6 +141,8 @@ class SailTickDailyReport(ORMBase):
     summary = Column(String, default="")
     # 完整 Markdown 日报正文
     body_markdown = Column(String, default="")
+    # 分域结构化分节：{"health": {...}, "rhythm": {...}, "finance": {...}, "chief": {...}}
+    sections = Column(JSONB, default=dict)
     # 结构化快照：最新体重、7日均值、环比变化、目标差距等
     weight_snapshot = Column(JSONB, default=dict)
     # 当日餐饮整合摘要：已记录餐次、条目摘要、结构亮点

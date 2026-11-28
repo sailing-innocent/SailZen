@@ -21,7 +21,7 @@ import threading
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from sail_server.application.dto.inbox import (
@@ -59,8 +59,98 @@ TERMINAL_STATUSES = {
 }
 
 VALID_PRIORITIES = {"low", "normal", "high", "urgent"}
+VALID_TARGET_DOMAINS = {"health", "rhythm", "finance", "general", "system"}
 
 _SEQ_LOCK = threading.Lock()
+
+
+def resolve_domain_routing(
+    *,
+    domain: str = "",
+    source_domain: str = "",
+    topic: str = "",
+    title: str = "",
+    body: str = "",
+    item_kind: str = "",
+    ticket_type: str = "",
+    ticket_id: Optional[int] = None,
+    report_date: str = "",
+    explicit_persona: str = "",
+    explicit_clients: Optional[List[str]] = None,
+    explicit_deep_link: str = "",
+) -> Dict[str, Any]:
+    """统一业务域、交互角色、目标终端与精确落地页深链推导器（彻底告别写死 /health/coach）。"""
+    dom = (domain or "").strip().lower()
+    if dom not in ("health", "rhythm", "finance", "general", "system"):
+        if dom in ("diet", "weight", "sleep", "exercise", "mood"):
+            dom = "health"
+        elif dom in ("plan", "schedule", "project", "task", "work"):
+            dom = "rhythm"
+        elif dom in ("money", "bill", "budget", "account"):
+            dom = "finance"
+        else:
+            dom = ""
+
+    if not dom:
+        if item_kind == "report" or topic == "daily_report":
+            dom = "general"
+        elif source_domain in ("health", "rhythm", "finance"):
+            dom = source_domain
+        else:
+            t_low = (topic or "").strip().lower()
+            combined = f"{t_low} {title} {body[:120]}".lower()
+            if t_low.startswith(("diet", "weight", "sleep", "exercise", "mood", "health", "canteen", "dinner", "breakfast", "lunch", "gym", "height")):
+                dom = "health"
+            elif t_low.startswith(("rhythm", "project", "schedule", "focus", "wake", "spare", "meeting", "affair", "timeline", "task")):
+                dom = "rhythm"
+            elif t_low.startswith(("finance", "bill", "budget", "money", "account", "reconcile", "hygiene")):
+                dom = "finance"
+            elif any(k in combined for k in ("体重", "称重", "午饭", "晚饭", "早饭", "食堂", "饮食", "热量", "运动", "健身", "睡眠", "熬夜", "减脂", "聚餐")):
+                dom = "health"
+            elif any(k in combined for k in ("账单", "消费", "余额", "平账", "支出", "预算", "记账", "打标", "微信余额", "支付宝")):
+                dom = "finance"
+            elif any(k in combined for k in ("项目", "日程", "时间线", "里程碑", "待办", "排期", "开会", "专注", "工作时段", "下班", "起床", "作息", "ddl")):
+                dom = "rhythm"
+            elif source_domain == "system":
+                dom = "system"
+            else:
+                dom = "general"
+
+    persona = (explicit_persona or "").strip() or {
+        "health": "health_coach",
+        "rhythm": "rhythm_planner",
+        "finance": "finance_secretary",
+        "system": "system",
+    }.get(dom, "chief_steward")
+
+    if isinstance(explicit_clients, list) and explicit_clients:
+        clients = [str(c) for c in explicit_clients if str(c).strip()]
+    elif ticket_type == "approval" or item_kind == "approval":
+        clients = ["web", "vscode", "android"]
+    elif dom == "rhythm":
+        clients = ["android", "web", "vscode"]
+    else:
+        clients = ["android", "web"]
+
+    deep_link = (explicit_deep_link or "").strip()
+    if not deep_link:
+        if item_kind == "report" or topic == "daily_report":
+            deep_link = f"/inbox/report/{report_date}" if report_date else "/tick"
+        elif dom == "health":
+            deep_link = f"/health/coach?ticket={ticket_id}" if ticket_id else "/health/coach"
+        elif dom == "rhythm":
+            deep_link = f"/rhythm?ticket={ticket_id}" if ticket_id else "/rhythm"
+        elif dom == "finance":
+            deep_link = f"/money?ticket={ticket_id}" if ticket_id else "/money"
+        else:
+            deep_link = f"/tick?ticket={ticket_id}" if ticket_id else "/tick"
+
+    return {
+        "target_domain": dom,
+        "persona": persona,
+        "target_clients": clients,
+        "deep_link": deep_link,
+    }
 
 
 class InboxError(Exception):
@@ -101,11 +191,24 @@ def next_sync_seq(db: Session) -> int:
 
 
 def _to_item_response(item: UserInboxItem) -> InboxItemResponse:
+    src = item.source_domain or "system"
+    tdom = getattr(item, "target_domain", None) or (
+        src if src in ("health", "rhythm", "finance") else "general"
+    )
+    pers = getattr(item, "persona", None) or {
+        "health": "health_coach",
+        "rhythm": "rhythm_planner",
+        "finance": "finance_secretary",
+    }.get(tdom, "chief_steward")
+    tclients = getattr(item, "target_clients", None)
     return InboxItemResponse(
         id=item.id,
         user_id=item.user_id or 1,
         sync_seq=int(item.sync_seq or 0),
-        source_domain=item.source_domain or "system",
+        source_domain=src,
+        target_domain=tdom,
+        persona=pers,
+        target_clients=list(tclients) if isinstance(tclients, list) else [],
         item_kind=item.item_kind or "notice",
         topic=item.topic or "",
         dedup_key=item.dedup_key or "",
@@ -184,12 +287,15 @@ def _broadcast_upserted(
         else:
             should_notify = not is_user_in_quiet_hours(db, item.user_id or 1)
     dto = _to_item_response(item).model_dump(mode="json")
+    raw_clients = getattr(item, "target_clients", None)
+    client_types = [str(c) for c in raw_clients if str(c).strip()] if isinstance(raw_clients, list) and raw_clients else None
     hub.fire_and_forget(
         hub.broadcast_inbox_upserted(
             user_id=item.user_id or 1,
             item=dto,
             should_notify=should_notify,
             exclude_device_id=exclude_device_id,
+            client_types=client_types,
         )
     )
 
@@ -371,12 +477,35 @@ def create_or_upsert_inbox_item_impl(
             .first()
         )
 
+    routing = resolve_domain_routing(
+        domain=req.target_domain,
+        source_domain=req.source_domain,
+        topic=req.topic,
+        title=req.title,
+        body=req.body,
+        item_kind=req.item_kind,
+        ticket_id=req.ticket_id,
+        explicit_persona=req.persona,
+        explicit_clients=req.target_clients or None,
+        explicit_deep_link=str(schema.get("deep_link") or ""),
+    )
+    resolved_target_domain = routing["target_domain"]
+    resolved_persona = routing["persona"]
+    resolved_target_clients = routing["target_clients"]
+    if not schema.get("deep_link"):
+        schema["deep_link"] = routing["deep_link"]
+    schema.setdefault("target_domain", resolved_target_domain)
+    schema.setdefault("persona", resolved_persona)
+
     seq = next_sync_seq(db)
     if existing is not None:
         existing.title = req.title
         existing.body = req.body or existing.body or ""
         existing.priority = req.priority or existing.priority
         existing.topic = req.topic or existing.topic or ""
+        existing.target_domain = resolved_target_domain
+        existing.persona = resolved_persona
+        existing.target_clients = resolved_target_clients
         if req.reminder_id is not None:
             existing.reminder_id = req.reminder_id
         if req.ticket_id is not None:
@@ -397,6 +526,9 @@ def create_or_upsert_inbox_item_impl(
             user_id=user_id,
             sync_seq=seq,
             source_domain=req.source_domain or "system",
+            target_domain=resolved_target_domain,
+            persona=resolved_persona,
+            target_clients=resolved_target_clients,
             item_kind=req.item_kind or "notice",
             topic=req.topic or "",
             dedup_key=req.dedup_key or "",
@@ -455,11 +587,27 @@ def project_ticket_to_inbox(
         day_str = (ticket.created_at.date() if ticket.created_at else date.today()).isoformat()
         dedup_key = f"sailtick:{topic}:{day_str}" if topic else f"tick_ticket:{ticket.id}"
 
+        routing = resolve_domain_routing(
+            domain=getattr(ticket, "domain", None) or str(meta.get("domain") or ""),
+            source_domain="sailtick",
+            topic=topic,
+            title=ticket.title or "",
+            body=ticket.body or "",
+            item_kind=item_kind,
+            ticket_type=ticket.type or "question",
+            ticket_id=ticket.id,
+            explicit_persona=getattr(ticket, "persona", None) or str(meta.get("persona") or ""),
+            explicit_clients=getattr(ticket, "target_clients", None) if isinstance(getattr(ticket, "target_clients", None), list) else None,
+            explicit_deep_link=getattr(ticket, "deep_link", None) or "",
+        )
+
         action_schema: Dict[str, Any] = {
             "quick_replies": meta.get("quick_replies", []) if isinstance(meta.get("quick_replies"), list) else [],
             "allow_text_reply": item_kind in ("question", "action_reminder", "approval"),
-            "allow_image_reply": item_kind in ("question", "action_reminder"),
-            "deep_link": "/health/coach",
+            "allow_image_reply": item_kind in ("question", "action_reminder") and routing["target_domain"] in ("health", "finance"),
+            "deep_link": routing["deep_link"],
+            "target_domain": routing["target_domain"],
+            "persona": routing["persona"],
             "ticket_id": ticket.id,
             "ticket_type": ticket.type or "question",
             "topic": topic,
@@ -484,6 +632,9 @@ def project_ticket_to_inbox(
             user_id=user_id,
             req=InboxCreateRequest(
                 source_domain="sailtick",
+                target_domain=routing["target_domain"],
+                persona=routing["persona"],
+                target_clients=routing["target_clients"],
                 item_kind=item_kind,
                 topic=topic,
                 dedup_key=dedup_key,
@@ -533,6 +684,9 @@ def project_daily_report_to_inbox(
             user_id=1,
             req=InboxCreateRequest(
                 source_domain="sailtick",
+                target_domain="general",
+                persona="chief_steward",
+                target_clients=["android", "web"],
                 item_kind="report",
                 topic="daily_report",
                 dedup_key=dedup_key,
@@ -544,7 +698,9 @@ def project_daily_report_to_inbox(
                 priority="normal",
                 status=STATUS_DELIVERED,
                 action_schema={
-                    "deep_link": "/health/coach",
+                    "deep_link": f"/inbox/report/{report.report_date}",
+                    "target_domain": "general",
+                    "persona": "chief_steward",
                     "report_date": report.report_date,
                     "report_id": report.id,
                     "kind": "daily_report",
@@ -621,11 +777,22 @@ def project_reminder_to_inbox(
             dedup_key = f"reminder:{rem.id}"
             topic = rem_type
 
+        rem_routing = resolve_domain_routing(
+            domain=str(payload.get("domain") or ""),
+            source_domain=source_domain,
+            topic=topic,
+            title=rem.title or "",
+            body=rem.body or "",
+            item_kind="report" if rem_type == "tick.daily_report" else "action_reminder",
+            report_date=str(payload.get("report_date") or ""),
+            explicit_deep_link=str(payload.get("deep_link") or ""),
+        )
         action_schema: Dict[str, Any] = {
             **payload,
             "reminder_type": rem.type,
-            "deep_link": payload.get("deep_link")
-            or ("/health/coach" if rem_type.startswith("tick.") else "/health" if "health" in rem_type or "meal" in rem_type or "weight" in rem_type else "/rhythm"),
+            "target_domain": rem_routing["target_domain"],
+            "persona": rem_routing["persona"],
+            "deep_link": rem_routing["deep_link"],
         }
 
         item = create_or_upsert_inbox_item_impl(
@@ -633,6 +800,9 @@ def project_reminder_to_inbox(
             user_id=user_id,
             req=InboxCreateRequest(
                 source_domain=source_domain,
+                target_domain=rem_routing["target_domain"],
+                persona=rem_routing["persona"],
+                target_clients=rem_routing["target_clients"],
                 item_kind="report" if rem_type == "tick.daily_report" else "action_reminder",
                 topic=topic,
                 dedup_key=dedup_key,
@@ -724,7 +894,12 @@ def list_inbox_impl(
     elif tab == "history":
         q = q.filter(UserInboxItem.status.in_(sorted(TERMINAL_STATUSES)))
     if source_domain:
-        q = q.filter(UserInboxItem.source_domain == source_domain)
+        q = q.filter(
+            or_(
+                UserInboxItem.target_domain == source_domain,
+                UserInboxItem.source_domain == source_domain,
+            )
+        )
     if item_kind:
         q = q.filter(UserInboxItem.item_kind == item_kind)
 

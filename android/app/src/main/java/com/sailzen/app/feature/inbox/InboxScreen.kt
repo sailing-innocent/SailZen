@@ -63,12 +63,23 @@ fun InboxScreen(
     highlightReminderId: Int,
     onOpenSettings: () -> Unit,
     onOpenHealthCoach: () -> Unit = {},
+    onNavigateDomain: (domain: String, deepLink: String) -> Unit = { _, _ -> onOpenHealthCoach() },
     viewModel: InboxViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedDomain by remember { mutableStateOf("all") }
     var snoozeTarget by remember { mutableStateOf<CachedInboxItem?>(null) }
     val listState = rememberLazyListState()
+
+    val filteredPending = remember(state.pending, selectedDomain) {
+        if (selectedDomain == "all") state.pending
+        else state.pending.filter { resolveInboxDomain(it) == selectedDomain }
+    }
+    val filteredHistory = remember(state.history, selectedDomain) {
+        if (selectedDomain == "all") state.history
+        else state.history.filter { resolveInboxDomain(it) == selectedDomain }
+    }
 
     // 通知"处理"跳入：滚动到对应收件箱卡片（兼容 reminderId 或 inboxItemId）
     LaunchedEffect(highlightReminderId, state.pending) {
@@ -113,7 +124,7 @@ fun InboxScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("${stringResource(R.string.inbox_tab_pending)} (${state.pending.size})") },
+                    text = { Text("${stringResource(R.string.inbox_tab_pending)} (${filteredPending.size})") },
                 )
                 Tab(
                     selected = selectedTab == 1,
@@ -121,18 +132,39 @@ fun InboxScreen(
                     text = { Text(stringResource(R.string.inbox_tab_history)) },
                 )
             }
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                listOf(
+                    "all" to "全部",
+                    "rhythm" to "规划",
+                    "health" to "健康",
+                    "finance" to "财务",
+                    "general" to "总管",
+                ).forEach { (key, label) ->
+                    androidx.compose.material3.FilterChip(
+                        selected = selectedDomain == key,
+                        onClick = { selectedDomain = key },
+                        label = { Text(label) },
+                    )
+                }
+            }
             if (selectedTab == 0) {
                 PendingInboxList(
-                    pending = state.pending,
+                    pending = filteredPending,
                     listState = listState,
                     onReply = { item, text -> viewModel.reply(item.id, text) },
                     onResolve = { viewModel.resolve(it.id) },
                     onSnooze = { snoozeTarget = it },
                     onDismiss = { viewModel.dismiss(it.id) },
-                    onOpenHealthCoach = onOpenHealthCoach,
+                    onNavigateDomain = onNavigateDomain,
                 )
             } else {
-                HistoryInboxList(history = state.history)
+                HistoryInboxList(history = filteredHistory)
             }
         }
     }
@@ -188,12 +220,33 @@ private fun allowsTextReply(item: CachedInboxItem): Boolean {
     }.getOrDefault(false)
 }
 
-private fun domainLabel(domain: String): String = when (domain) {
-    "sailtick" -> "AI 教练"
-    "rhythm" -> "节奏"
-    "health" -> "健康"
-    "finance" -> "财务"
-    else -> "系统"
+private fun resolveInboxDomain(item: CachedInboxItem): String {
+    val td = item.targetDomain.lowercase()
+    if (td in setOf("health", "rhythm", "finance", "general")) return td
+    val sd = item.sourceDomain.lowercase()
+    if (sd in setOf("health", "rhythm", "finance", "general")) return sd
+    return "general"
+}
+
+private fun extractDeepLink(actionSchemaJson: String): String = runCatching {
+    val obj = ApiClient.json.parseToJsonElement(actionSchemaJson).jsonObject
+    obj["deep_link"]?.jsonPrimitive?.content.orEmpty()
+}.getOrDefault("")
+
+private fun personaOrDomainLabel(item: CachedInboxItem): String = when (item.persona) {
+    "health_coach" -> "健康教练"
+    "rhythm_planner" -> "节奏规划师"
+    "finance_secretary" -> "财务秘书"
+    "chief_steward" -> "生活总管"
+    else -> when (resolveInboxDomain(item)) {
+        "rhythm" -> "节奏规划师"
+        "health" -> "健康教练"
+        "finance" -> "财务秘书"
+        else -> when (item.sourceDomain) {
+            "sailtick" -> "生活总管"
+            else -> "系统"
+        }
+    }
 }
 
 private fun statusLabel(status: String): String = when (status) {
@@ -214,7 +267,7 @@ private fun PendingInboxList(
     onResolve: (CachedInboxItem) -> Unit,
     onSnooze: (CachedInboxItem) -> Unit,
     onDismiss: (CachedInboxItem) -> Unit,
-    onOpenHealthCoach: () -> Unit,
+    onNavigateDomain: (String, String) -> Unit,
 ) {
     if (pending.isEmpty()) {
         EmptyText(stringResource(R.string.inbox_empty_pending))
@@ -228,7 +281,7 @@ private fun PendingInboxList(
                 onResolve = { onResolve(item) },
                 onSnooze = { onSnooze(item) },
                 onDismiss = { onDismiss(item) },
-                onOpenHealthCoach = onOpenHealthCoach,
+                onNavigateDomain = onNavigateDomain,
             )
         }
     }
@@ -241,13 +294,19 @@ private fun InboxItemCard(
     onResolve: () -> Unit,
     onSnooze: () -> Unit,
     onDismiss: () -> Unit,
-    onOpenHealthCoach: () -> Unit,
+    onNavigateDomain: (String, String) -> Unit,
 ) {
     val quickReplies = remember(item.id, item.actionSchemaJson) {
         extractQuickReplies(item.actionSchemaJson)
     }
     val canReply = remember(item.id, item.itemKind, item.actionSchemaJson) {
         allowsTextReply(item)
+    }
+    val deepLink = remember(item.id, item.actionSchemaJson) {
+        extractDeepLink(item.actionSchemaJson)
+    }
+    val domain = remember(item.id, item.targetDomain, item.sourceDomain) {
+        resolveInboxDomain(item)
     }
     val isDailyReport = item.itemKind == "report" || item.topic == "daily_report"
     var replyDraft by remember(item.id) { mutableStateOf("") }
@@ -272,7 +331,7 @@ private fun InboxItemCard(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "${domainLabel(item.sourceDomain)} · ${statusLabel(item.status)} · ${item.updatedAt}",
+                text = "${personaOrDomainLabel(item)} · ${statusLabel(item.status)} · ${item.updatedAt}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -317,12 +376,19 @@ private fun InboxItemCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                if (isDailyReport) {
+                val jumpLabel = when {
+                    isDailyReport -> "查看总览"
+                    domain == "rhythm" -> "去规划页"
+                    domain == "finance" -> "去记账页"
+                    domain == "health" -> "去健康教练"
+                    else -> ""
+                }
+                if (jumpLabel.isNotBlank()) {
                     TextButton(onClick = {
-                        onResolve()
-                        onOpenHealthCoach()
+                        if (isDailyReport) onResolve()
+                        onNavigateDomain(domain, deepLink)
                     }) {
-                        Text("查看完整日报")
+                        Text(jumpLabel)
                     }
                 }
                 TextButton(onClick = onResolve) {
@@ -371,7 +437,7 @@ private fun HistoryInboxList(history: List<CachedInboxItem>) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(text = item.title, style = MaterialTheme.typography.titleSmall)
                             Text(
-                                text = "${domainLabel(item.sourceDomain)} · ${item.updatedAt}",
+                                text = "${personaOrDomainLabel(item)} · ${item.updatedAt}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

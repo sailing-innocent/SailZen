@@ -41,8 +41,14 @@ class UserInboxItem(ORMBase):
     user_id = Column(Integer, nullable=False, default=1, index=True)
     # 每次状态/内容变更严格递增，支持多端 since_seq 增量对账与终态撤回
     sync_seq = Column(BigInteger, nullable=False, default=0, index=True)
-    # 来源域：sailtick | rhythm | health | finance | system | manual
+    # 来源域（生产方）：sailtick | rhythm | health | finance | system | manual
     source_domain = Column(String(32), nullable=False, default="system", index=True)
+    # 目标业务域（展示与分流归属）：health | rhythm | finance | general | system
+    target_domain = Column(String(32), nullable=False, default="", index=True)
+    # 交互角色：health_coach | rhythm_planner | finance_secretary | chief_steward | system
+    persona = Column(String(32), nullable=False, default="")
+    # 允许推送/展示的终端列表：["android", "web", "vscode"]（空表示全端）
+    target_clients = Column(JSONB, default=list)
     # 条目类型：question | action_reminder | report | approval | notice
     item_kind = Column(String(32), nullable=False, default="notice", index=True)
     # 语义话题键（如 diet_lunch / weight_checkin / daily_report）
@@ -96,6 +102,7 @@ class UserInboxItem(ORMBase):
         Index("ix_inbox_user_seq", "user_id", "sync_seq"),
         Index("ix_inbox_user_status_updated", "user_id", "status", "updated_at"),
         Index("ix_inbox_user_dedup_status", "user_id", "dedup_key", "status"),
+        Index("ix_inbox_user_target_domain", "user_id", "target_domain", "status"),
         Index("ix_inbox_ref", "ref_type", "ref_id"),
     )
 

@@ -15,6 +15,7 @@ import {
   BlockStatus,
   ContentTopicDTO,
   ProjectArchetype,
+  TicketDTO,
   TimeBlockDTO,
   WorkbenchProjectItemDTO,
   WorkDTO,
@@ -610,6 +611,78 @@ export function registerWorkbenchCommands(
         if (!chosen) return;
         try {
           await state.apiClient.setBlockStatus(blk.id, chosen.status);
+          await state.refreshServerData();
+        } catch (err) {
+          vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+        }
+      }
+    ),
+    vscode.commands.registerCommand(
+      "sailzen.interactTicket",
+      async (item?: RhythmTreeItem) => {
+        const ticket = item?.payload as TicketDTO | undefined;
+        if (!ticket || typeof ticket !== "object" || !("id" in ticket)) return;
+        if (state.privacyGuard.isWorkOfflineActive()) {
+          vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks SailTick actions.");
+          return;
+        }
+
+        const quickReplies = Array.isArray(ticket.meta?.quick_replies)
+          ? (ticket.meta?.quick_replies as unknown[])
+              .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+          : [];
+
+        type TicketActionPick = vscode.QuickPickItem & {
+          action: "quick_reply" | "custom_reply" | "snooze_1h" | "snooze_24h";
+          replyText?: string;
+        };
+
+        const picks: TicketActionPick[] = [
+          ...quickReplies.map((qr) => ({
+            label: `$(reply) ${qr}`,
+            description: "Quick reply",
+            action: "quick_reply" as const,
+            replyText: qr,
+          })),
+          {
+            label: "$(edit) 自由输入回复...",
+            description: ticket.body ? ticket.body.slice(0, 80) : "",
+            action: "custom_reply" as const,
+          },
+          {
+            label: "$(clock) 延后 1 小时",
+            action: "snooze_1h" as const,
+          },
+          {
+            label: "$(bell-slash) 延后 24 小时",
+            action: "snooze_24h" as const,
+          },
+        ];
+
+        const chosen = await vscode.window.showQuickPick<TicketActionPick>(picks, {
+          placeHolder: `${ticket.title}${ticket.body ? " — " + ticket.body.slice(0, 60) : ""}`,
+        });
+        if (!chosen) return;
+
+        try {
+          if (chosen.action === "quick_reply" && chosen.replyText) {
+            await state.apiClient.replyTicket(ticket.id, chosen.replyText);
+            vscode.window.setStatusBarMessage(`Replied to SailTick #${ticket.id}`, 2500);
+          } else if (chosen.action === "custom_reply") {
+            const input = await vscode.window.showInputBox({
+              prompt: `Reply to "${ticket.title}"`,
+              placeHolder: "输入你的回复...",
+            });
+            if (!input?.trim()) return;
+            await state.apiClient.replyTicket(ticket.id, input.trim());
+            vscode.window.setStatusBarMessage(`Replied to SailTick #${ticket.id}`, 2500);
+          } else if (chosen.action === "snooze_1h") {
+            await state.apiClient.snoozeTicket(ticket.id, 1);
+            vscode.window.setStatusBarMessage(`Snoozed SailTick #${ticket.id} for 1h`, 2500);
+          } else if (chosen.action === "snooze_24h") {
+            await state.apiClient.snoozeTicket(ticket.id, 24);
+            vscode.window.setStatusBarMessage(`Snoozed SailTick #${ticket.id} for 24h`, 2500);
+          }
           await state.refreshServerData();
         } catch (err) {
           vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));

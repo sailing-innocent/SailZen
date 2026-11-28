@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import retrofit2.HttpException
 
 /**
  * 提醒核心协调者：
@@ -218,7 +220,20 @@ class ReminderRepository private constructor(private val context: Context) {
         // 已投递：取消该提醒的本地兜底闹钟
         AlarmScheduler.cancel(context, dto.id)
         val sourceConfig = getSourceConfig(dto.source) ?: defaultSourceConfig(dto.source)
-        notifyFor(dto.id, dto.title, dto.body, dto.priority, dto.source, sourceConfig)
+        val payloadDomain = (dto.payload["target_domain"] as? JsonPrimitive)?.content
+            ?: (dto.payload["domain"] as? JsonPrimitive)?.content
+            ?: ""
+        val payloadDeepLink = (dto.payload["deep_link"] as? JsonPrimitive)?.content.orEmpty()
+        notifyFor(
+            dto.id,
+            dto.title,
+            dto.body,
+            dto.priority,
+            dto.source,
+            sourceConfig,
+            domain = payloadDomain,
+            deepLink = payloadDeepLink,
+        )
         // 投递确认（失败不阻塞：服务端由轮询 /pending 兜回）
         try {
             apiOrNull()?.ack(
@@ -240,6 +255,8 @@ class ReminderRepository private constructor(private val context: Context) {
         priority: String,
         source: String,
         sourceConfig: CachedSourceConfig? = null,
+        domain: String = "",
+        deepLink: String = "",
     ) {
         val quiet = priority != "urgent" && settings.isQuietNow()
         NotificationHelper.notifyReminder(
@@ -251,6 +268,8 @@ class ReminderRepository private constructor(private val context: Context) {
             quiet,
             source,
             sourceConfig,
+            domain = domain,
+            deepLink = deepLink,
         )
     }
 
@@ -265,6 +284,14 @@ class ReminderRepository private constructor(private val context: Context) {
             try {
                 api.feedback(reminderId, FeedbackRequest(action, option, nowIso()))
                 delivered = true
+            } catch (e: HttpException) {
+                if (e.code() in 400..499) {
+                    // 终态冲突(409)或记录不存在(404)：不再入离线重试队列，避免 4xx 风暴
+                    Log.i(TAG, "feedback($reminderId) terminal HTTP ${e.code()}, dropping retry")
+                    delivered = true
+                } else {
+                    Log.w(TAG, "feedback HTTP ${e.code()}, queue offline: ${e.message}")
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "feedback failed, queue offline: ${e.message}")
             }
@@ -327,9 +354,22 @@ class ReminderRepository private constructor(private val context: Context) {
                 )
                 db.feedbackDao().delete(item.autoId)
                 flushed++
+            } catch (e: HttpException) {
+                if (e.code() in 400..499 || item.retryCount >= 5) {
+                    Log.i(TAG, "drop pending feedback ${item.autoId} on HTTP ${e.code()} (retries=${item.retryCount})")
+                    db.feedbackDao().delete(item.autoId)
+                } else {
+                    Log.w(TAG, "flush feedback ${item.autoId} HTTP ${e.code()}: ${e.message}")
+                    db.feedbackDao().bumpRetry(item.autoId)
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "flush feedback ${item.autoId} failed: ${e.message}")
-                db.feedbackDao().bumpRetry(item.autoId)
+                if (item.retryCount >= 8) {
+                    Log.w(TAG, "drop expired pending feedback ${item.autoId} after ${item.retryCount} retries")
+                    db.feedbackDao().delete(item.autoId)
+                } else {
+                    Log.w(TAG, "flush feedback ${item.autoId} failed: ${e.message}")
+                    db.feedbackDao().bumpRetry(item.autoId)
+                }
             }
         }
         return flushed

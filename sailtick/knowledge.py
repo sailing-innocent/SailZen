@@ -459,14 +459,21 @@ NIGHTLY_CURRICULUM: List[Dict[str, Any]] = [
     },
 ]
 
-# 从自然语言中抽取食物候选的常见噪音词过滤
+# 从自然语言中抽取食物候选的常见噪音词过滤（含 Round 2 扩充的泛类别停用词）
 _FOOD_STOPWORDS = {
     "今天", "昨天", "中午", "晚上", "早上", "早餐", "午餐", "晚餐", "早饭", "午饭", "晚饭",
     "吃了", "喝了", "食堂", "外卖", "美团", "饿了么", "超市", "便利店", "餐饮", "食品",
     "消费", "支出", "微信", "支付宝", "付款", "订单", "一点", "半碗", "一份", "一个",
     "一杯", "少糖", "无糖", "去冰", "少油", "聚餐", "应酬", "零食", "加餐", "夜宵",
     "没有", "没喝", "今天吃", "识图记录", "菜单", "推荐",
+    # 泛类大词（拒绝进入食物单品营养库）
+    "主食", "蔬菜", "青菜", "水果", "饮品", "饮料", "甜饮", "甜饮为主", "家常菜", "肉类",
+    "海鲜", "碳水", "蛋白", "蛋白质", "汤品", "小菜", "配菜", "正餐", "轻食", "快餐",
+    "甜品", "点心", "面包", "糕点", "坚果", "奶制品", "豆制品", "杂粮", "炒菜", "凉菜",
+    "热菜", "素菜", "荤菜", "清淡饮食", "正常饮食", "随便吃", "其他", "未知",
 }
+
+_FOOD_NOISE_PHRASE_RE = re.compile(r"(?:为主|大约|左右|一整条|一整份|含糖.*饮品|软质|硬质|之类的|等)$|^(?:约|大概|一整|半个|一些|少量|较多|主要)")
 
 
 class WebSearcher:
@@ -734,12 +741,18 @@ class HealthKnowledgeManager:
 
     @staticmethod
     def _clean_food_token(raw: str) -> str:
-        s = re.sub(r"[\d.]+(?:g|kg|ml|kcal|大卡|千卡|元|块|份|碗|个|杯|斤|两)", "", str(raw or ""))
+        s = re.sub(r"[\d.]+(?:g|kg|ml|kcal|大卡|千卡|元|块|份|碗|个|杯|斤|两|条|片|盒|瓶)", "", str(raw or ""))
         s = re.sub(r"[，。、；：！？（）()\[\]【】+/\\\-|~`@#￥$%^&*=_\"' ]+", "", s)
-        s = s.strip()
-        if len(s) < 2 or len(s) > 14:
+        s = re.sub(r"^(?:约|大概|大约|一整|半个|一些|少量|较多)", "", s).strip()
+        # 拒绝过短或整句描述（正常单品食物名通常 2~9 字）
+        if len(s) < 2 or len(s) > 9:
             return ""
         if s in _FOOD_STOPWORDS:
+            return ""
+        if _FOOD_NOISE_PHRASE_RE.search(s):
+            return ""
+        # 含句式动词/介词（如“的软质”“一起吃”）跳过
+        if any(w in s for w in ("的", "为主", "左右", "搭配", "一起", "然后", "或者", "因为", "所以")):
             return ""
         return s
 
@@ -832,13 +845,23 @@ class HealthKnowledgeManager:
   "notes": "减脂期食用注意点（1句话）"
 }}"""
             try:
-                resp = await self.llm.chat(prompt, expect_json=True, max_tokens=700)
+                if hasattr(self.llm, "chat_fast"):
+                    resp = await self.llm.chat_fast(prompt, expect_json=True, max_tokens=700)
+                else:
+                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=700)
                 parsed = self._parse_json_safe(resp.content)
                 if isinstance(parsed, dict) and (parsed.get("kcal_per_serving") or parsed.get("kcal_per_100g")):
                     parsed["name"] = name
                     parsed["source"] = "web_search+llm" if snippets else "llm_nutrition_ref"
                     parsed["confidence"] = 0.85 if snippets else 0.72
-                    return await self.db.upsert_food_nutrition(parsed)
+                    saved = await self.db.upsert_food_nutrition(parsed)
+                    saved["_llm_usage"] = {
+                        "prompt_tokens": int(getattr(resp, "prompt_tokens", 0) or (getattr(resp, "usage", None) or {}).get("prompt_tokens", 0) or 0),
+                        "completion_tokens": int(getattr(resp, "completion_tokens", 0) or (getattr(resp, "usage", None) or {}).get("completion_tokens", 0) or 0),
+                        "total_tokens": int(getattr(resp, "total_tokens", 0) or (getattr(resp, "usage", None) or {}).get("total_tokens", 0) or 0),
+                        "cost_usd": float(getattr(resp, "cost_usd", 0.0) or 0.0),
+                    }
+                    return saved
             except Exception as exc:
                 logger.warning("research_food LLM failed for '%s': %s", name, exc)
 
@@ -864,14 +887,64 @@ class HealthKnowledgeManager:
         self,
         deep_package: Dict[str, Any],
         max_foods: int = 5,
+        *,
+        concurrency: int = 2,
+        stage_timeout_seconds: float = 45.0,
     ) -> Dict[str, Any]:
-        """夜间批量自主发现并查证未知食物热量。"""
+        """夜间批量自主发现并查证未知食物热量（有限并发 + 阶段总超时保护）。"""
+        import asyncio
+
         candidates = await self.discover_unknown_foods(deep_package, max_candidates=max_foods)
+        if not candidates:
+            return {
+                "candidates": [],
+                "researched_count": 0,
+                "researched_names": [],
+                "timed_out": False,
+                "llm_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost_usd": 0.0},
+            }
+
+        sem = asyncio.Semaphore(max(1, int(concurrency)))
         researched: List[Dict[str, Any]] = []
-        for food_name in candidates:
-            item = await self.research_food(food_name)
-            if item:
-                researched.append(item)
+        timed_out = False
+
+        async def _worker(food_name: str) -> Optional[Dict[str, Any]]:
+            async with sem:
+                return await self.research_food(food_name)
+
+        tasks = [asyncio.create_task(_worker(fn)) for fn in candidates]
+        try:
+            done, pending = await asyncio.wait(tasks, timeout=max(5.0, float(stage_timeout_seconds)))
+            if pending:
+                timed_out = True
+                for p in pending:
+                    p.cancel()
+                logger.warning(
+                    "run_nightly_food_research hit stage timeout %.1fs (%d/%d finished)",
+                    stage_timeout_seconds,
+                    len(done),
+                    len(tasks),
+                )
+            for t in done:
+                if t.cancelled():
+                    continue
+                try:
+                    item = t.result()
+                    if item:
+                        researched.append(item)
+                except Exception as exc:
+                    logger.warning("research_food worker failed: %s", exc)
+        except Exception as exc:
+            logger.warning("run_nightly_food_research failed: %s", exc)
+
+        usage_agg = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
+        for r in researched:
+            u = r.pop("_llm_usage", None)
+            if isinstance(u, dict):
+                usage_agg["prompt_tokens"] += int(u.get("prompt_tokens", 0) or 0)
+                usage_agg["completion_tokens"] += int(u.get("completion_tokens", 0) or 0)
+                usage_agg["total_tokens"] += int(u.get("total_tokens", 0) or 0)
+                usage_agg["cost_usd"] += float(u.get("cost_usd", 0.0) or 0.0)
 
         # 清理已被处理的快脑队列项
         if researched:
@@ -884,6 +957,8 @@ class HealthKnowledgeManager:
             "candidates": candidates,
             "researched_count": len(researched),
             "researched_names": [r["name"] for r in researched],
+            "timed_out": timed_out,
+            "llm_usage": usage_agg,
         }
 
     # ── 夜间自主整理健康师专业知识卡片 ────────────────────────────────
@@ -933,7 +1008,10 @@ class HealthKnowledgeManager:
   "applicable_scenarios": {json.dumps(topic['scenarios'], ensure_ascii=False)}
 }}"""
                 try:
-                    resp = await self.llm.chat(prompt, expect_json=True, max_tokens=900)
+                    if hasattr(self.llm, "chat_fast"):
+                        resp = await self.llm.chat_fast(prompt, expect_json=True, max_tokens=900)
+                    else:
+                        resp = await self.llm.chat(prompt, expect_json=True, max_tokens=900)
                     parsed = self._parse_json_safe(resp.content)
                     if isinstance(parsed, dict) and parsed.get("summary"):
                         saved = await self.db.upsert_knowledge_item(
@@ -950,6 +1028,12 @@ class HealthKnowledgeManager:
                                 "confidence": 0.85,
                             }
                         )
+                        saved["_llm_usage"] = {
+                            "prompt_tokens": int(getattr(resp, "prompt_tokens", 0) or (getattr(resp, "usage", None) or {}).get("prompt_tokens", 0) or 0),
+                            "completion_tokens": int(getattr(resp, "completion_tokens", 0) or (getattr(resp, "usage", None) or {}).get("completion_tokens", 0) or 0),
+                            "total_tokens": int(getattr(resp, "total_tokens", 0) or (getattr(resp, "usage", None) or {}).get("total_tokens", 0) or 0),
+                            "cost_usd": float(getattr(resp, "cost_usd", 0.0) or 0.0),
+                        }
                         curated.append(saved)
                         continue
                 except Exception as exc:
@@ -971,10 +1055,20 @@ class HealthKnowledgeManager:
                 )
                 curated.append(saved)
 
+        usage_agg = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
+        for c in curated:
+            u = c.pop("_llm_usage", None)
+            if isinstance(u, dict):
+                usage_agg["prompt_tokens"] += int(u.get("prompt_tokens", 0) or 0)
+                usage_agg["completion_tokens"] += int(u.get("completion_tokens", 0) or 0)
+                usage_agg["total_tokens"] += int(u.get("total_tokens", 0) or 0)
+                usage_agg["cost_usd"] += float(u.get("cost_usd", 0.0) or 0.0)
+
         return {
             "curated_count": len(curated),
             "curated_topics": [c["topic_key"] for c in curated],
             "total_knowledge_items": len(existing) + len(curated),
+            "llm_usage": usage_agg,
         }
 
     @staticmethod

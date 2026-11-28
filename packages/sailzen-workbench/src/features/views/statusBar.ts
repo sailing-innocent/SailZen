@@ -72,6 +72,10 @@ export class WorkbenchStatusBar implements vscode.Disposable {
         const hhmm = active.start_time.slice(11, 16);
         parts.push(`${active.status === "DOING" ? "▶" : hhmm} ${label.slice(0, 22)}`);
       }
+      const pendingTickets = boot.pending_tickets?.length ?? 0;
+      if (pendingTickets > 0) {
+        parts.push(`⚡ ${pendingTickets}`);
+      }
     }
 
     this.mainItem.text = parts.join(" · ");

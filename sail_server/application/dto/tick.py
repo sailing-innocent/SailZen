@@ -14,7 +14,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 def _to_naive_local(v: Any) -> Optional[datetime]:
@@ -34,6 +34,10 @@ class TicketCreateRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     tick_id: str = Field(default="", description="创建它的 tick 实例 id")
     type: str = Field(default="question", description="question|task|approval|info")
+    domain: str = Field(default="", description="业务域：health|rhythm|finance|general（留空自动按 topic 推断）")
+    persona: str = Field(default="", description="交互角色：health_coach|rhythm_planner|finance_secretary|chief_steward")
+    target_clients: List[str] = Field(default_factory=list, description="目标终端白名单，如 ['android','web','vscode']")
+    deep_link: str = Field(default="", description="精确落地页深链")
     topic: str = Field(default="", description="话题标识，用于防重复询问与冷却控制")
     title: str = Field(description="标题")
     body: str = Field(default="", description="正文（Markdown）")
@@ -71,6 +75,10 @@ class TicketResponse(BaseModel):
     id: int
     tick_id: str
     type: str
+    domain: str = "general"
+    persona: str = ""
+    target_clients: List[str] = Field(default_factory=list)
+    deep_link: str = ""
     topic: str = ""
     title: str
     body: str
@@ -102,6 +110,8 @@ class TickMessageCreateRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     direction: str = Field(default="user_to_agent", description="user_to_agent | agent_to_user")
     category: str = Field(default="diet", description="diet | weight | daily_info | mood | exercise | general")
+    domain: str = Field(default="", description="业务域：health | rhythm | finance | general")
+    surface: str = Field(default="", description="来源页面：android_health | android_plan | web_rhythm 等")
     content: str = Field(description="自然语言消息正文")
     meta: Dict[str, Any] = Field(default_factory=dict, description="可选结构化元信息（如 meal_type / calories）")
     source_channel: str = Field(default="android", description="android | web | sailtick")
@@ -118,6 +128,8 @@ class TickMessageResponse(BaseModel):
     id: int
     direction: str
     category: str
+    domain: str = "general"
+    surface: str = ""
     content: str
     meta: Dict[str, Any] = Field(default_factory=dict)
     source_channel: str
@@ -146,6 +158,7 @@ class DailyReportUpsertRequest(BaseModel):
     title: str = Field(description="报告标题")
     summary: str = Field(default="", description="精炼摘要（推送正文与健康页首屏卡片）")
     body_markdown: str = Field(default="", description="完整 Markdown 日报")
+    sections: Dict[str, Any] = Field(default_factory=dict, description="分域结构化分节：health|rhythm|finance|chief")
     weight_snapshot: Dict[str, Any] = Field(default_factory=dict, description="体重快照与趋势")
     diet_summary: Dict[str, Any] = Field(default_factory=dict, description="当日餐饮整合摘要")
     plan_update: Dict[str, Any] = Field(default_factory=dict, description="AI 动态计划状态与调整说明")
@@ -163,6 +176,7 @@ class DailyReportResponse(BaseModel):
     title: str
     summary: str
     body_markdown: str
+    sections: Dict[str, Any] = Field(default_factory=dict)
     weight_snapshot: Dict[str, Any] = Field(default_factory=dict)
     diet_summary: Dict[str, Any] = Field(default_factory=dict)
     plan_update: Dict[str, Any] = Field(default_factory=dict)
@@ -251,12 +265,34 @@ class HealthCoachSummaryResponse(BaseModel):
     pending_intake_drafts: List[ImageIntakeDraftResponse] = Field(default_factory=list)
 
 
+class DomainSummaryResponse(BaseModel):
+    """分域 AI 交互聚合视图（供 Android/Web 各业务 Tab 按 domain 一次拉取，避免串味）。"""
+
+    domain: str
+    persona: str
+    pending_tickets: List[TicketResponse] = Field(default_factory=list)
+    pending_ticket_count: int = 0
+    latest_report_date: Optional[str] = None
+    latest_report_title: Optional[str] = None
+    report_section: Dict[str, Any] = Field(default_factory=dict)
+    today_messages: List[TickMessageResponse] = Field(default_factory=list)
+    pending_intake_drafts: List[ImageIntakeDraftResponse] = Field(default_factory=list)
+
+
 class QuickChatRequest(BaseModel):
     """白天快速反应对话请求（转发至同机 SailTick daemon /chat/quick）。"""
 
-    text: str = Field(description="用户即时消息，如早下班安排/聚餐调计划/设提醒")
-    channel: str = Field(default="api", description="qq | android | cli | api")
+    model_config = ConfigDict(populate_by_name=True)
+
+    text: str = Field(
+        validation_alias=AliasChoices("text", "message"),
+        description="用户即时消息，如早下班安排/聚餐调计划/设提醒（兼容 message 别名）",
+    )
+    channel: str = Field(default="api", description="qq | android | cli | api | web | vscode_workbench")
+    domain: str = Field(default="", description="业务域：health | rhythm | finance | general")
+    surface: str = Field(default="", description="来源页面：android_plan | android_health | android_money | web_rhythm 等")
+    context_hints: Dict[str, Any] = Field(default_factory=dict, description="可选当前页面轻量上下文")
     user_id: str = Field(default="owner", description="用户标识")
-    session_id: Optional[str] = Field(default=None, description="可选会话 ID")
+    session_id: Optional[str] = Field(default=None, description="可选会话 ID（留空按 user_id:domain 跨端共享）")
     target_type: str = Field(default="private", description="private | group")
     target_id: Optional[str] = Field(default=None, description="可选回复目标 ID")

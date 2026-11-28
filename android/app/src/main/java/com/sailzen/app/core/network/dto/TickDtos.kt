@@ -22,6 +22,10 @@ data class TickTicketDto(
     @SerialName("tick_id") val tickId: String = "",
     val type: String = "question",
     val topic: String = "",
+    val domain: String = "general",
+    val persona: String = "chief_steward",
+    @SerialName("target_clients") val targetClients: List<String> = emptyList(),
+    @SerialName("deep_link") val deepLink: String = "",
     val title: String,
     val body: String = "",
     val meta: JsonObject = JsonObject(emptyMap()),
@@ -63,6 +67,8 @@ data class TicketSnoozeRequest(
 data class TickMessageCreateRequest(
     val direction: String = "user_to_agent",
     val category: String = "diet",
+    val domain: String = "health",
+    val surface: String = "android",
     val content: String,
     val meta: Map<String, JsonElement> = emptyMap(),
     @SerialName("source_channel") val sourceChannel: String = "android",
@@ -74,6 +80,8 @@ data class TickMessageDto(
     val id: Int,
     val direction: String = "user_to_agent",
     val category: String = "diet",
+    val domain: String = "general",
+    val surface: String = "",
     val content: String,
     val meta: JsonObject = JsonObject(emptyMap()),
     @SerialName("source_channel") val sourceChannel: String = "android",
@@ -91,6 +99,7 @@ data class DailyReportDto(
     val title: String,
     val summary: String = "",
     @SerialName("body_markdown") val bodyMarkdown: String = "",
+    val sections: JsonObject = JsonObject(emptyMap()),
     @SerialName("weight_snapshot") val weightSnapshot: JsonObject = JsonObject(emptyMap()),
     @SerialName("diet_summary") val dietSummary: JsonObject = JsonObject(emptyMap()),
     @SerialName("plan_update") val planUpdate: JsonObject = JsonObject(emptyMap()),
@@ -98,7 +107,17 @@ data class DailyReportDto(
     val pushed: Boolean = false,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("updated_at") val updatedAt: String = "",
-)
+) {
+    fun sectionSummary(domain: String): String {
+        val sec = sections[domain] as? JsonObject ?: return ""
+        return (sec["summary"] as? JsonPrimitive)?.content.orEmpty()
+    }
+
+    fun sectionTitle(domain: String): String {
+        val sec = sections[domain] as? JsonObject ?: return ""
+        return (sec["title"] as? JsonPrimitive)?.content.orEmpty()
+    }
+}
 
 @Serializable
 data class IntakeEntryDto(
@@ -170,11 +189,47 @@ data class HealthCoachSummaryDto(
 )
 
 @Serializable
+data class DomainSummaryDto(
+    val domain: String = "general",
+    val persona: String = "chief_steward",
+    @SerialName("pending_tickets") val pendingTickets: List<TickTicketDto> = emptyList(),
+    @SerialName("pending_ticket_count") val pendingTicketCount: Int = 0,
+    @SerialName("latest_report_date") val latestReportDate: String? = null,
+    @SerialName("latest_report_section") val latestReportSection: JsonObject? = null,
+    @SerialName("today_messages") val todayMessages: List<TickMessageDto> = emptyList(),
+    @SerialName("pending_intake_drafts") val pendingIntakeDrafts: List<ImageIntakeDraftDto> = emptyList(),
+) {
+    fun reportSectionSummary(): String =
+        (latestReportSection?.get("summary") as? JsonPrimitive)?.content.orEmpty()
+
+    fun reportSectionTitle(): String =
+        (latestReportSection?.get("title") as? JsonPrimitive)?.content.orEmpty()
+}
+
+@Serializable
+data class QuickChatHistoryItemDto(
+    val id: String = "",
+    val role: String = "assistant",
+    val content: String = "",
+    val domain: String = "general",
+    val surface: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+)
+
+@Serializable
+data class QuickChatHistoryResponseDto(
+    val domain: String = "general",
+    val items: List<QuickChatHistoryItemDto> = emptyList(),
+)
+
+@Serializable
 data class QuickChatRequest(
     val text: String,
     val channel: String = "android",
     @SerialName("user_id") val userId: String = "owner",
-    @SerialName("session_id") val sessionId: String? = "android:owner",
+    @SerialName("session_id") val sessionId: String? = null,
+    val domain: String = "general",
+    val surface: String = "android",
 )
 
 @Serializable
@@ -184,5 +239,8 @@ data class QuickChatResponse(
     @SerialName("finance_updated") val financeUpdated: Boolean = false,
     val source: String = "",
     @SerialName("session_id") val sessionId: String? = null,
+    val domain: String = "general",
+    val persona: String = "chief_steward",
+    @SerialName("routed_domain") val routedDomain: String? = null,
     @SerialName("latency_ms") val latencyMs: Double = 0.0,
 )

@@ -111,7 +111,14 @@ def get_workbench_bootstrap_impl(
 
     pending_tickets = []
     try:
-        pending_tickets = list_tickets_impl(db, status=STATUS_PENDING, limit=20)
+        all_pending = list_tickets_impl(db, status=STATUS_PENDING, limit=40)
+        # 工作台仅承接节奏规划（rhythm）与审批类（approval）票据，过滤健康/财务日常打扰
+        pending_tickets = [
+            t
+            for t in all_pending
+            if (t.domain == "rhythm" or t.type == "approval")
+            or ("vscode" in (t.target_clients or []))
+        ][:20]
     except Exception as exc:
         logger.warning("Workbench bootstrap failed loading tickets: %s", exc)
         degraded.append("tickets")

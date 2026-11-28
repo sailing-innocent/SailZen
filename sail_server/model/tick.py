@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from sail_server.application.dto.tick import (
     DailyReportResponse,
     DailyReportUpsertRequest,
+    DomainSummaryResponse,
     HealthCoachSummaryResponse,
     TickMessageCreateRequest,
     TickMessageResponse,
@@ -74,10 +75,15 @@ def _get_or_404(db: Session, ticket_id: int) -> SailTickTicket:
 
 
 def _to_response(t: SailTickTicket) -> TicketResponse:
+    tclients = getattr(t, "target_clients", None)
     return TicketResponse(
         id=t.id,
         tick_id=t.tick_id or "",
         type=t.type or "question",
+        domain=getattr(t, "domain", None) or "general",
+        persona=getattr(t, "persona", None) or "",
+        target_clients=list(tclients) if isinstance(tclients, list) else [],
+        deep_link=getattr(t, "deep_link", None) or "",
         topic=getattr(t, "topic", None) or "",
         title=t.title,
         body=t.body or "",
@@ -198,6 +204,9 @@ def _push_if_needed(db: Session, t: SailTickTicket) -> Optional[int]:
             "ticket_id": t.id,
             "ticket_type": t.type,
             "topic": getattr(t, "topic", "") or "",
+            "domain": getattr(t, "domain", None) or "general",
+            "persona": getattr(t, "persona", None) or "",
+            "deep_link": getattr(t, "deep_link", None) or "",
         },
         expire_minutes=1440,
     )
@@ -207,19 +216,38 @@ def _push_if_needed(db: Session, t: SailTickTicket) -> Optional[int]:
 
 
 def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
-    """创建票据。"""
+    """创建票据并自动补齐 domain / persona / target_clients / deep_link 分流元数据。"""
     if req.type not in VALID_TYPES:
         raise TicketBadRequestError(f"invalid type: {req.type!r}")
     if req.priority not in VALID_PRIORITY:
         raise TicketBadRequestError(f"invalid priority: {req.priority!r}")
 
+    from sail_server.model.inbox import resolve_domain_routing
+
+    meta_in = dict(req.meta or {})
+    pre_routing = resolve_domain_routing(
+        domain=req.domain or str(meta_in.get("domain") or ""),
+        source_domain="sailtick",
+        topic=req.topic or "",
+        title=req.title,
+        body=req.body or "",
+        ticket_type=req.type,
+        explicit_persona=req.persona or str(meta_in.get("persona") or ""),
+        explicit_clients=req.target_clients or None,
+        explicit_deep_link=req.deep_link or "",
+    )
+
     t = SailTickTicket(
         tick_id=req.tick_id,
         type=req.type,
+        domain=pre_routing["target_domain"],
+        persona=pre_routing["persona"],
+        target_clients=pre_routing["target_clients"],
+        deep_link=req.deep_link or "",
         topic=req.topic or "",
         title=req.title,
         body=req.body,
-        meta=req.meta or {},
+        meta=meta_in,
         priority=req.priority,
         channel=req.channel,
         expected_reply_by=req.expected_reply_by,
@@ -229,6 +257,19 @@ def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
     )
     db.add(t)
     db.flush()
+    if not t.deep_link:
+        final_routing = resolve_domain_routing(
+            domain=t.domain,
+            source_domain="sailtick",
+            topic=t.topic or "",
+            title=t.title,
+            body=t.body or "",
+            ticket_type=t.type,
+            ticket_id=t.id,
+            explicit_persona=t.persona,
+            explicit_clients=t.target_clients,
+        )
+        t.deep_link = final_routing["deep_link"]
     db.commit()
     db.refresh(t)
     rem_id = _push_if_needed(db, t)
@@ -242,7 +283,14 @@ def create_ticket_impl(db: Session, req: TicketCreateRequest) -> TicketResponse:
         db.refresh(t)
     except Exception as exc:
         logger.debug("[tick] project_ticket_to_inbox skipped: %s", exc)
-    logger.info("[tick] ticket %s created: type=%s topic=%s priority=%s", t.id, t.type, t.topic, t.priority)
+    logger.info(
+        "[tick] ticket %s created: type=%s domain=%s topic=%s priority=%s",
+        t.id,
+        t.type,
+        t.domain,
+        t.topic,
+        t.priority,
+    )
     return _to_response(t)
 
 
@@ -255,9 +303,10 @@ def list_tickets_impl(
     status: Optional[str] = None,
     channel: Optional[str] = None,
     type_: Optional[str] = None,
+    domain: Optional[str] = None,
     limit: int = 100,
 ) -> List[TicketResponse]:
-    """列出票据，默认按期待回复时间升序（最急最前）。"""
+    """列出票据，默认按期待回复时间升序（最急最前）；支持按 domain 分域过滤。"""
     q = db.query(SailTickTicket)
     if status:
         q = q.filter(SailTickTicket.status == status)
@@ -265,6 +314,8 @@ def list_tickets_impl(
         q = q.filter(SailTickTicket.channel == channel)
     if type_:
         q = q.filter(SailTickTicket.type == type_)
+    if domain:
+        q = q.filter(SailTickTicket.domain == domain)
     rows = (
         q.order_by(SailTickTicket.expected_reply_by.asc().nullslast(), SailTickTicket.id.desc())
         .limit(limit)
@@ -406,6 +457,8 @@ def _to_message_response(m: SailTickMessage) -> TickMessageResponse:
         id=m.id,
         direction=m.direction or "user_to_agent",
         category=m.category or "diet",
+        domain=getattr(m, "domain", None) or "general",
+        surface=getattr(m, "surface", None) or "",
         content=m.content,
         meta=m.meta if isinstance(m.meta, dict) else {},
         source_channel=m.source_channel or "android",
@@ -462,9 +515,22 @@ def create_message_impl(
         except Exception as exc:
             logger.warning("[tick] auto_log_diet failed (non-fatal): %s", exc)
 
+    msg_domain = (req.domain or "").strip().lower()
+    if msg_domain not in ("health", "rhythm", "finance", "general"):
+        if req.category in ("diet", "weight", "mood", "exercise"):
+            msg_domain = "health"
+        elif "[日程" in content or "rhythm" in (req.surface or "").lower():
+            msg_domain = "rhythm"
+        elif "[财务" in content or "money" in (req.surface or "").lower():
+            msg_domain = "finance"
+        else:
+            msg_domain = "general"
+
     msg = SailTickMessage(
         direction=req.direction,
         category=req.category,
+        domain=msg_domain,
+        surface=req.surface or "",
         content=content,
         meta=meta,
         source_channel=req.source_channel or "android",
@@ -573,6 +639,7 @@ def ingest_messages_impl(
 
 
 def _to_report_response(r: SailTickDailyReport) -> DailyReportResponse:
+    raw_sections = getattr(r, "sections", None)
     return DailyReportResponse(
         id=r.id,
         report_date=r.report_date,
@@ -580,6 +647,7 @@ def _to_report_response(r: SailTickDailyReport) -> DailyReportResponse:
         title=r.title,
         summary=r.summary or "",
         body_markdown=r.body_markdown or "",
+        sections=raw_sections if isinstance(raw_sections, dict) else {},
         weight_snapshot=r.weight_snapshot if isinstance(r.weight_snapshot, dict) else {},
         diet_summary=r.diet_summary if isinstance(r.diet_summary, dict) else {},
         plan_update=r.plan_update if isinstance(r.plan_update, dict) else {},
@@ -612,6 +680,7 @@ def upsert_daily_report_impl(
             title=req.title,
             summary=req.summary or "",
             body_markdown=req.body_markdown or "",
+            sections=req.sections or {},
             weight_snapshot=req.weight_snapshot or {},
             diet_summary=req.diet_summary or {},
             plan_update=req.plan_update or {},
@@ -626,6 +695,8 @@ def upsert_daily_report_impl(
         rep.title = req.title
         rep.summary = req.summary or ""
         rep.body_markdown = req.body_markdown or ""
+        if req.sections:
+            rep.sections = req.sections
         rep.weight_snapshot = req.weight_snapshot or {}
         rep.diet_summary = req.diet_summary or {}
         rep.plan_update = req.plan_update or {}
@@ -699,8 +770,12 @@ def get_daily_report_by_date_impl(
     return _to_report_response(row) if row else None
 
 
+HEALTH_INTAKE_SCENES = {"diet", "canteen_menu", "sleep", "exercise", "weight", "selfie_status", "general"}
+FINANCE_INTAKE_SCENES = {"receipt", "bill_screenshot", "account_balance"}
+
+
 def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
-    """聚合健康页所需的 AI 教练动态计划、最新睡前日报、待回复提问与今日主动记录。"""
+    """聚合健康页所需的 AI 教练动态计划、最新日报、仅健康域待回复提问与健康识图草稿。"""
     from sail_server.model.health import (
         get_active_weight_plan_impl,
         get_weight_plan_progress_impl,
@@ -709,19 +784,26 @@ def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
     active_plan = get_active_weight_plan_impl(db)
     plan_progress = get_weight_plan_progress_impl(db) if active_plan else None
     latest_report = get_latest_daily_report_impl(db)
-    pending_tickets = list_tickets_impl(db, status=STATUS_PENDING, limit=10)
+    # 严格过滤：健康 Tab 仅展示 domain='health' 的票据，杜绝日程/财务票据串味
+    pending_tickets = list_tickets_impl(db, status=STATUS_PENDING, domain="health", limit=10)
 
     today_start = datetime.combine(date.today(), datetime.min.time())
-    today_messages = list_messages_impl(
+    all_today_msgs = list_messages_impl(
         db,
         direction="user_to_agent",
         since=today_start,
         limit=30,
     )
+    today_messages = [
+        m
+        for m in all_today_msgs
+        if m.domain == "health" or m.category in ("diet", "weight", "exercise", "mood")
+    ]
 
     from sail_server.model.tick_intake import list_image_intake_drafts_impl
 
-    pending_drafts = list_image_intake_drafts_impl(db, status="pending_confirm", limit=5)
+    all_drafts = list_image_intake_drafts_impl(db, status="pending_confirm", limit=10)
+    pending_drafts = [d for d in all_drafts if (d.scene or "general") in HEALTH_INTAKE_SCENES][:5]
 
     return HealthCoachSummaryResponse(
         active_plan=active_plan.model_dump(mode="json") if active_plan else None,
@@ -729,6 +811,68 @@ def get_health_coach_summary_impl(db: Session) -> HealthCoachSummaryResponse:
         latest_report=latest_report,
         pending_tickets=pending_tickets[:5],
         pending_ticket_count=len(pending_tickets),
+        today_messages=today_messages,
+        pending_intake_drafts=pending_drafts,
+    )
+
+
+def get_domain_summary_impl(db: Session, domain: str = "health") -> DomainSummaryResponse:
+    """分域 AI 交互聚合视图（health | rhythm | finance | general）。"""
+    dom = (domain or "general").strip().lower()
+    if dom not in ("health", "rhythm", "finance", "general"):
+        dom = "general"
+    persona = {
+        "health": "health_coach",
+        "rhythm": "rhythm_planner",
+        "finance": "finance_secretary",
+    }.get(dom, "chief_steward")
+
+    pending_tickets = (
+        list_tickets_impl(db, status=STATUS_PENDING, limit=20)
+        if dom == "general"
+        else list_tickets_impl(db, status=STATUS_PENDING, domain=dom, limit=15)
+    )
+    latest_report = get_latest_daily_report_impl(db)
+    report_section: Dict[str, Any] = {}
+    if latest_report is not None:
+        sec_key = "chief" if dom == "general" else dom
+        raw_sec = (latest_report.sections or {}).get(sec_key)
+        if isinstance(raw_sec, dict) and raw_sec:
+            report_section = raw_sec
+        else:
+            report_section = {
+                "summary": latest_report.summary,
+                "highlights": latest_report.tomorrow_focus[:3],
+            }
+
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    all_today_msgs = list_messages_impl(db, direction="user_to_agent", since=today_start, limit=30)
+    today_messages = (
+        all_today_msgs
+        if dom == "general"
+        else [m for m in all_today_msgs if m.domain == dom]
+    )
+
+    from sail_server.model.tick_intake import list_image_intake_drafts_impl
+
+    all_drafts = list_image_intake_drafts_impl(db, status="pending_confirm", limit=10)
+    if dom == "health":
+        pending_drafts = [d for d in all_drafts if (d.scene or "general") in HEALTH_INTAKE_SCENES][:5]
+    elif dom == "finance":
+        pending_drafts = [d for d in all_drafts if (d.scene or "") in FINANCE_INTAKE_SCENES][:5]
+    elif dom == "general":
+        pending_drafts = all_drafts[:5]
+    else:
+        pending_drafts = []
+
+    return DomainSummaryResponse(
+        domain=dom,
+        persona=persona,
+        pending_tickets=pending_tickets[:8],
+        pending_ticket_count=len(pending_tickets),
+        latest_report_date=latest_report.report_date if latest_report else None,
+        latest_report_title=latest_report.title if latest_report else None,
+        report_section=report_section,
         today_messages=today_messages,
         pending_intake_drafts=pending_drafts,
     )

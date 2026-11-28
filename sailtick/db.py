@@ -93,21 +93,31 @@ class DBHandoff(TickBase):
 
 
 class DBMemory(TickBase):
-    """记忆（episodic/semantic/procedural）。"""
+    """记忆（episodic/semantic/procedural），冷热双字段：summary(进Prompt) + value(原始证据)。"""
 
     __tablename__ = "st_memories"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
     memory_type: Mapped[str] = mapped_column(nullable=False)
+    domain: Mapped[str] = mapped_column(default="general")  # health|rhythm|finance|general
     key: Mapped[str] = mapped_column(nullable=False)
-    value: Mapped[str] = mapped_column(nullable=False)  # JSON
+    summary: Mapped[str] = mapped_column(default="")  # <=100字极简索引，专供 Prompt 注入
+    value: Mapped[str] = mapped_column(nullable=False)  # 完整原始证据 JSON
+    confidence: Mapped[float] = mapped_column(default=0.8)
+    salience: Mapped[float] = mapped_column(default=0.5)  # 0.0~1.0 重要性权重
+    hit_count: Mapped[int] = mapped_column(default=0)
+    status: Mapped[str] = mapped_column(default="active")  # active|superseded|archived
+    superseded_by: Mapped[Optional[str]] = mapped_column(nullable=True)
     ttl_seconds: Mapped[Optional[int]] = mapped_column(nullable=True)
     expires_at: Mapped[Optional[str]] = mapped_column(nullable=True)
     created_at: Mapped[str] = mapped_column(default=_now_iso)
+    updated_at: Mapped[str] = mapped_column(default=_now_iso)
+    last_used_at: Mapped[Optional[str]] = mapped_column(nullable=True)
 
     __table_args__ = (
         Index("idx_mem_type_key", "memory_type", "key"),
         Index("idx_mem_expires", "expires_at"),
+        Index("idx_mem_domain_status", "memory_type", "domain", "status"),
     )
 
 
@@ -138,17 +148,23 @@ class DBPlan(TickBase):
 
 
 class DBEpisode(TickBase):
-    """Tick 事件流。"""
+    """Tick 事件流（原始观察事实，超 30 天压缩冷归档）。"""
 
     __tablename__ = "st_episodes"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
     tick_id: Mapped[Optional[str]] = mapped_column(nullable=True)
     kind: Mapped[str] = mapped_column(nullable=False)  # scan|plan|work|handoff|note
+    domain: Mapped[str] = mapped_column(default="general")
+    tick_date: Mapped[str] = mapped_column(default="")
     content: Mapped[str] = mapped_column(nullable=False)
+    compressed_at: Mapped[Optional[str]] = mapped_column(nullable=True)
     created_at: Mapped[str] = mapped_column(default=_now_iso)
 
-    __table_args__ = (Index("idx_episodes_tick", "tick_id"),)
+    __table_args__ = (
+        Index("idx_episodes_tick", "tick_id"),
+        Index("idx_episodes_created", "created_at"),
+    )
 
 
 class DBSchedule(TickBase):
@@ -328,20 +344,59 @@ class DBKnowledgeItem(TickBase):
 
 
 class DBQuickChatMessage(TickBase):
-    """白天快速对话短期上下文与动作审计（st_quick_chats）。"""
+    """白天快速对话原始记录与动作审计（st_quick_chats，支持分域会话与夜间提炼）。"""
 
     __tablename__ = "st_quick_chats"
 
     id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
     session_key: Mapped[str] = mapped_column(nullable=False)
-    channel: Mapped[str] = mapped_column(default="api")  # qq|api|cli|web
+    channel: Mapped[str] = mapped_column(default="api")  # qq|api|cli|web|android|vscode_workbench
+    domain: Mapped[str] = mapped_column(default="general")  # health|rhythm|finance|general
+    surface: Mapped[str] = mapped_column(default="")  # android_plan|android_health|web_rhythm|...
     user_id: Mapped[str] = mapped_column(default="")
     role: Mapped[str] = mapped_column(nullable=False)    # user|assistant
     content: Mapped[str] = mapped_column(nullable=False)
     actions_json: Mapped[str] = mapped_column(default="[]")
+    prompt_tokens: Mapped[int] = mapped_column(default=0)
+    completion_tokens: Mapped[int] = mapped_column(default=0)
+    consolidated_at: Mapped[Optional[str]] = mapped_column(nullable=True)
     created_at: Mapped[str] = mapped_column(default=_now_iso)
 
-    __table_args__ = (Index("idx_quick_chats_session", "session_key", "created_at"),)
+    __table_args__ = (
+        Index("idx_quick_chats_session", "session_key", "created_at"),
+        Index("idx_quick_chats_domain", "user_id", "domain", "created_at"),
+    )
+
+
+class DBDomainBrief(TickBase):
+    """分域物化热视图（global_core / health / rhythm / finance），毫秒读取与极简 Prompt 注入。"""
+
+    __tablename__ = "st_domain_briefs"
+
+    domain: Mapped[str] = mapped_column(primary_key=True)  # global_core|health|rhythm|finance
+    compact_text: Mapped[str] = mapped_column(default="")  # <=450字极简 Prompt 文本
+    payload_json: Mapped[str] = mapped_column(default="{}")  # 结构化指标 JSON
+    source_date: Mapped[str] = mapped_column(default="")
+    updated_at: Mapped[str] = mapped_column(default=_now_iso)
+
+
+class DBRawSnapshot(TickBase):
+    """原始数据包冷归档指针（大 JSON 压缩落盘 data/sailtick/snapshots/*.json.gz）。"""
+
+    __tablename__ = "st_raw_snapshots"
+
+    id: Mapped[str] = mapped_column(primary_key=True, default=_new_id)
+    tick_id: Mapped[str] = mapped_column(default="")
+    slot: Mapped[str] = mapped_column(default="")
+    tick_date: Mapped[str] = mapped_column(default="")
+    kind: Mapped[str] = mapped_column(default="scan_7d")  # scan_7d|deep_90d
+    file_path: Mapped[str] = mapped_column(nullable=False)
+    sha256: Mapped[str] = mapped_column(default="")
+    size_bytes: Mapped[int] = mapped_column(default=0)
+    metrics_json: Mapped[str] = mapped_column(default="{}")
+    created_at: Mapped[str] = mapped_column(default=_now_iso)
+
+    __table_args__ = (Index("idx_raw_snapshots_date", "tick_date", "kind"),)
 
 
 class DBScheduledNudge(TickBase):
@@ -395,11 +450,74 @@ class TickDatabase:
 
         async with self._engine.begin() as conn:
             await conn.run_sync(TickBase.metadata.create_all)
+            await conn.run_sync(self._ensure_incremental_schema)
+
+        self._fts_available = False
+        async with self._engine.begin() as conn:
+            try:
+                await conn.execute(
+                    text(
+                        "CREATE VIRTUAL TABLE IF NOT EXISTS st_memory_fts USING fts5("
+                        "entity_type UNINDEXED, entity_id UNINDEXED, domain UNINDEXED, "
+                        "title, content, tokenize='unicode61')"
+                    )
+                )
+                self._fts_available = True
+            except Exception as exc:
+                logger.warning("SQLite FTS5 unavailable, using LIKE fallback: %s", exc)
 
         self._session_factory = async_sessionmaker(
             self._engine, class_=AsyncSession, expire_on_commit=False
         )
-        logger.info("SailTick DB connected: %s", self.db_path)
+        logger.info("SailTick DB connected: %s (fts5=%s)", self.db_path, self._fts_available)
+
+    @staticmethod
+    def _ensure_incremental_schema(sync_conn: Any) -> None:
+        """幂等补齐存量 sailtick.db 的新增列与索引（兼容生产旧库平滑升级）。"""
+        alter_specs = {
+            "st_memories": [
+                ("domain", "TEXT DEFAULT 'general'"),
+                ("summary", "TEXT DEFAULT ''"),
+                ("confidence", "REAL DEFAULT 0.8"),
+                ("salience", "REAL DEFAULT 0.5"),
+                ("hit_count", "INTEGER DEFAULT 0"),
+                ("status", "TEXT DEFAULT 'active'"),
+                ("superseded_by", "TEXT"),
+                ("updated_at", "TEXT DEFAULT ''"),
+                ("last_used_at", "TEXT"),
+            ],
+            "st_episodes": [
+                ("domain", "TEXT DEFAULT 'general'"),
+                ("tick_date", "TEXT DEFAULT ''"),
+                ("compressed_at", "TEXT"),
+            ],
+            "st_quick_chats": [
+                ("domain", "TEXT DEFAULT 'general'"),
+                ("surface", "TEXT DEFAULT ''"),
+                ("prompt_tokens", "INTEGER DEFAULT 0"),
+                ("completion_tokens", "INTEGER DEFAULT 0"),
+                ("consolidated_at", "TEXT"),
+            ],
+        }
+        for table, cols in alter_specs.items():
+            res = sync_conn.execute(text(f"PRAGMA table_info({table})"))
+            existing = {row[1] for row in res.fetchall()}
+            if not existing:
+                continue
+            for col_name, col_ddl in cols:
+                if col_name not in existing:
+                    sync_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_ddl}"))
+
+        index_ddls = [
+            "CREATE INDEX IF NOT EXISTS idx_mem_domain_status ON st_memories (memory_type, domain, status)",
+            "CREATE INDEX IF NOT EXISTS idx_episodes_created ON st_episodes (created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_quick_chats_domain ON st_quick_chats (user_id, domain, created_at)",
+        ]
+        for ddl in index_ddls:
+            try:
+                sync_conn.execute(text(ddl))
+            except Exception:
+                pass
 
     async def close(self) -> None:
         if self._engine:
@@ -569,25 +687,128 @@ class TickDatabase:
         value: Any,
         ttl_seconds: Optional[int] = None,
         expires_at: Optional[str] = None,
+        *,
+        domain: str = "general",
+        summary: str = "",
+        confidence: float = 0.8,
+        salience: float = 0.5,
     ) -> dict:
+        now = _now_iso()
         async with self.session() as s:
             row = DBMemory(
                 memory_type=memory_type,
+                domain=domain or "general",
                 key=key,
+                summary=(summary or "")[:200],
                 value=_json.dumps(value, ensure_ascii=False, default=str),
+                confidence=float(confidence),
+                salience=float(salience),
+                status="active",
                 ttl_seconds=ttl_seconds,
                 expires_at=expires_at,
+                created_at=now,
+                updated_at=now,
             )
             s.add(row)
             await s.commit()
-            return {"id": row.id, "memory_type": memory_type, "key": key}
+            row_id = row.id
+        await self.sync_fts_entry(
+            "memory", row_id, domain or "general", key, summary or str(value)[:240]
+        )
+        return {"id": row_id, "memory_type": memory_type, "domain": domain or "general", "key": key}
+
+    async def upsert_memory(
+        self,
+        memory_type: str,
+        key: str,
+        value: Any,
+        ttl_seconds: Optional[int] = None,
+        expires_at: Optional[str] = None,
+        *,
+        domain: str = "general",
+        summary: str = "",
+        confidence: float = 0.8,
+        salience: float = 0.5,
+        keep_history: bool = False,
+    ) -> dict:
+        """按 (memory_type, key) 幂等更新活跃记忆，杜绝重复追加泄漏。"""
+        now = _now_iso()
+        val_json = _json.dumps(value, ensure_ascii=False, default=str)
+        sum_clean = (summary or "")[:200]
+        dom = domain or "general"
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBMemory)
+                .where(
+                    DBMemory.memory_type == memory_type,
+                    DBMemory.key == key,
+                    DBMemory.status == "active",
+                )
+                .order_by(DBMemory.updated_at.desc(), DBMemory.created_at.desc())
+            )
+            existing_rows = list(result.scalars().all())
+            if existing_rows and not keep_history:
+                row = existing_rows[0]
+                row.domain = dom
+                row.summary = sum_clean or row.summary
+                row.value = val_json
+                row.confidence = float(confidence)
+                row.salience = max(float(salience), float(row.salience or 0.0))
+                if ttl_seconds is not None:
+                    row.ttl_seconds = ttl_seconds
+                if expires_at is not None:
+                    row.expires_at = expires_at
+                row.updated_at = now
+                # 将同 key 多余的历史活跃重复行标为 superseded
+                for dup in existing_rows[1:]:
+                    dup.status = "superseded"
+                    dup.superseded_by = row.id
+                    dup.updated_at = now
+                await s.commit()
+                row_id = row.id
+                superseded_ids = [d.id for d in existing_rows[1:]]
+            else:
+                row = DBMemory(
+                    memory_type=memory_type,
+                    domain=dom,
+                    key=key,
+                    summary=sum_clean,
+                    value=val_json,
+                    confidence=float(confidence),
+                    salience=float(salience),
+                    status="active",
+                    ttl_seconds=ttl_seconds,
+                    expires_at=expires_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+                s.add(row)
+                await s.flush()
+                superseded_ids = []
+                for old in existing_rows:
+                    old.status = "superseded"
+                    old.superseded_by = row.id
+                    old.updated_at = now
+                    superseded_ids.append(old.id)
+                await s.commit()
+                row_id = row.id
+
+        for old_id in superseded_ids:
+            await self.delete_fts_entry("memory", old_id)
+        await self.sync_fts_entry("memory", row_id, dom, key, sum_clean or str(value)[:240])
+        return {"id": row_id, "memory_type": memory_type, "domain": dom, "key": key, "summary": sum_clean}
 
     async def get_memory(self, memory_type: str, key: str) -> Optional[dict]:
         async with self.session() as s:
             result = await s.execute(
-                select(DBMemory).where(
-                    DBMemory.memory_type == memory_type, DBMemory.key == key
+                select(DBMemory)
+                .where(
+                    DBMemory.memory_type == memory_type,
+                    DBMemory.key == key,
+                    DBMemory.status == "active",
                 )
+                .order_by(DBMemory.updated_at.desc(), DBMemory.created_at.desc())
+                .limit(1)
             )
             row = result.scalar_one_or_none()
             if not row:
@@ -595,34 +816,83 @@ class TickDatabase:
             return self._memory_dict(row)
 
     async def list_memories(
-        self, memory_type: Optional[str] = None, key_prefix: Optional[str] = None, limit: int = 200
+        self,
+        memory_type: Optional[str] = None,
+        key_prefix: Optional[str] = None,
+        *,
+        domain: Optional[str] = None,
+        status: Optional[str] = "active",
+        limit: int = 200,
     ) -> List[dict]:
         async with self.session() as s:
-            stmt = select(DBMemory).order_by(DBMemory.created_at.desc()).limit(limit)
+            stmt = select(DBMemory).order_by(DBMemory.updated_at.desc(), DBMemory.created_at.desc()).limit(limit)
             if memory_type:
                 stmt = stmt.where(DBMemory.memory_type == memory_type)
+            if domain:
+                stmt = stmt.where(DBMemory.domain == domain)
+            if status:
+                stmt = stmt.where(DBMemory.status == status)
             result = await s.execute(stmt)
             rows = [self._memory_dict(r) for r in result.scalars().all()]
             if key_prefix:
                 rows = [r for r in rows if r["key"].startswith(key_prefix)]
             return rows
 
+    async def mark_memory_status(
+        self, memory_id: str, status: str, superseded_by: Optional[str] = None
+    ) -> bool:
+        async with self.session() as s:
+            row = await s.get(DBMemory, memory_id)
+            if not row:
+                return False
+            row.status = status
+            if superseded_by is not None:
+                row.superseded_by = superseded_by
+            row.updated_at = _now_iso()
+            await s.commit()
+        if status != "active":
+            await self.delete_fts_entry("memory", memory_id)
+        return True
+
+    async def touch_memory_hits(self, memory_ids: List[str]) -> None:
+        if not memory_ids:
+            return
+        now = _now_iso()
+        async with self.session() as s:
+            result = await s.execute(select(DBMemory).where(DBMemory.id.in_(memory_ids)))
+            for row in result.scalars().all():
+                row.hit_count = int(row.hit_count or 0) + 1
+                row.last_used_at = now
+            await s.commit()
+
     async def delete_memory(self, memory_id: str) -> bool:
         async with self.session() as s:
             result = await s.execute(delete(DBMemory).where(DBMemory.id == memory_id))
             await s.commit()
-            return result.rowcount > 0
+            ok = result.rowcount > 0
+        if ok:
+            await self.delete_fts_entry("memory", memory_id)
+        return ok
 
     async def cleanup_expired_memories(self) -> int:
         now = _now_iso()
         async with self.session() as s:
+            expired_res = await s.execute(
+                select(DBMemory.id).where(
+                    DBMemory.expires_at.isnot(None), DBMemory.expires_at < now
+                )
+            )
+            expired_ids = [r[0] for r in expired_res.all()]
             result = await s.execute(
                 delete(DBMemory).where(
                     DBMemory.expires_at.isnot(None), DBMemory.expires_at < now
                 )
             )
             await s.commit()
-            return result.rowcount or 0
+            count = result.rowcount or 0
+        for mid in expired_ids:
+            await self.delete_fts_entry("memory", mid)
+        return count
 
     @staticmethod
     def _memory_dict(row: DBMemory) -> dict:
@@ -633,11 +903,341 @@ class TickDatabase:
         return {
             "id": row.id,
             "memory_type": row.memory_type,
+            "domain": getattr(row, "domain", None) or "general",
             "key": row.key,
+            "summary": getattr(row, "summary", None) or "",
             "value": value,
+            "confidence": float(getattr(row, "confidence", 0.8) or 0.8),
+            "salience": float(getattr(row, "salience", 0.5) or 0.5),
+            "hit_count": int(getattr(row, "hit_count", 0) or 0),
+            "status": getattr(row, "status", None) or "active",
+            "superseded_by": getattr(row, "superseded_by", None),
             "expires_at": row.expires_at,
             "created_at": row.created_at,
+            "updated_at": getattr(row, "updated_at", None) or row.created_at,
+            "last_used_at": getattr(row, "last_used_at", None),
         }
+
+    # ── SQLite FTS5 毫秒快查索引 ──────────────────────────────────────
+
+    @staticmethod
+    def _tokenize_for_fts(raw: str) -> str:
+        """为中文增加 2-gram 切词以配合 FTS5 unicode61 高命中检索。"""
+        import re as _re
+
+        s = (raw or "").strip().lower()
+        if not s:
+            return ""
+        tokens: List[str] = []
+        # 保留原始完整词与英文/数字词
+        for m in _re.findall(r"[a-z0-9_]+|[\u4e00-\u9fff]+", s):
+            tokens.append(m)
+            if len(m) >= 2 and "\u4e00" <= m[0] <= "\u9fff":
+                for i in range(len(m) - 1):
+                    tokens.append(m[i : i + 2])
+        return " ".join(tokens)
+
+    async def sync_fts_entry(
+        self, entity_type: str, entity_id: str, domain: str, title: str, content: str
+    ) -> None:
+        if not getattr(self, "_fts_available", False) or self._engine is None:
+            return
+        try:
+            idx_title = self._tokenize_for_fts(title)
+            idx_content = self._tokenize_for_fts(content)
+            async with self.session() as s:
+                await s.execute(
+                    text("DELETE FROM st_memory_fts WHERE entity_type = :et AND entity_id = :eid"),
+                    {"et": entity_type, "eid": str(entity_id)},
+                )
+                await s.execute(
+                    text(
+                        "INSERT INTO st_memory_fts (entity_type, entity_id, domain, title, content) "
+                        "VALUES (:et, :eid, :dom, :t, :c)"
+                    ),
+                    {
+                        "et": entity_type,
+                        "eid": str(entity_id),
+                        "dom": domain or "general",
+                        "t": idx_title,
+                        "c": idx_content,
+                    },
+                )
+                await s.commit()
+        except Exception as exc:
+            logger.debug("sync_fts_entry skipped: %s", exc)
+
+    async def delete_fts_entry(self, entity_type: str, entity_id: str) -> None:
+        if not getattr(self, "_fts_available", False) or self._engine is None:
+            return
+        try:
+            async with self.session() as s:
+                await s.execute(
+                    text("DELETE FROM st_memory_fts WHERE entity_type = :et AND entity_id = :eid"),
+                    {"et": entity_type, "eid": str(entity_id)},
+                )
+                await s.commit()
+        except Exception as exc:
+            logger.debug("delete_fts_entry skipped: %s", exc)
+
+    async def search_fts(
+        self,
+        query: str,
+        *,
+        domain: Optional[str] = None,
+        entity_types: Optional[List[str]] = None,
+        limit: int = 10,
+    ) -> List[dict]:
+        """毫秒级全文快查（优先 FTS5 BM25，不可用或零命中时降级 LIKE）。"""
+        import re as _re
+
+        q = (query or "").strip()
+        if not q:
+            return []
+
+        raw_terms = _re.findall(r"[a-zA-Z0-9_]{2,}|[\u4e00-\u9fff]{2,}", q.lower())
+        search_tokens: List[str] = []
+        for term in raw_terms:
+            if "\u4e00" <= term[0] <= "\u9fff" and len(term) > 2:
+                search_tokens.extend(term[i : i + 2] for i in range(len(term) - 1))
+            else:
+                search_tokens.append(term)
+        search_tokens = list(dict.fromkeys(search_tokens))[:12]
+        if not search_tokens:
+            search_tokens = [q.lower()]
+
+        hits: List[dict] = []
+        if getattr(self, "_fts_available", False) and self._engine is not None:
+            fts_query = " OR ".join(f'"{t.replace(chr(34), "")}"' for t in search_tokens if t)
+            if fts_query:
+                try:
+                    where_parts = ["st_memory_fts MATCH :q"]
+                    params: Dict[str, Any] = {"q": fts_query, "lim": max(1, min(limit, 50))}
+                    if domain:
+                        where_parts.append("(domain = :dom OR domain = 'general')")
+                        params["dom"] = domain
+                    if entity_types:
+                        et_ph = ", ".join(f":et{i}" for i in range(len(entity_types)))
+                        where_parts.append(f"entity_type IN ({et_ph})")
+                        for i, et in enumerate(entity_types):
+                            params[f"et{i}"] = et
+                    sql = (
+                        "SELECT entity_type, entity_id, domain, bm25(st_memory_fts) AS rank "
+                        "FROM st_memory_fts WHERE "
+                        + " AND ".join(where_parts)
+                        + " ORDER BY rank ASC LIMIT :lim"
+                    )
+                    async with self.session() as s:
+                        res = await s.execute(text(sql), params)
+                        for row in res.fetchall():
+                            hits.append(
+                                {
+                                    "entity_type": row[0],
+                                    "entity_id": row[1],
+                                    "domain": row[2],
+                                    "score": round(-float(row[3] or 0.0), 4),
+                                }
+                            )
+                except Exception as exc:
+                    logger.debug("search_fts MATCH fallback: %s", exc)
+
+        # 回填实体精简内容
+        if hits:
+            return await self._hydrate_fts_hits(hits)
+
+        # 降级：直接查活跃 st_memories
+        if not entity_types or "memory" in entity_types:
+            mems = await self.list_memories(domain=domain, status="active", limit=100)
+            out = []
+            for m in mems:
+                hay = f"{m['key']} {m.get('summary', '')} {str(m.get('value', ''))[:200]}".lower()
+                if any(t in hay for t in search_tokens):
+                    out.append(
+                        {
+                            "entity_type": "memory",
+                            "entity_id": m["id"],
+                            "domain": m["domain"],
+                            "title": m["key"],
+                            "summary": m.get("summary") or str(m.get("value"))[:120],
+                            "memory_type": m["memory_type"],
+                            "score": 0.5,
+                        }
+                    )
+                    if len(out) >= limit:
+                        break
+            return out
+        return []
+
+    async def _hydrate_fts_hits(self, hits: List[dict]) -> List[dict]:
+        mem_ids = [h["entity_id"] for h in hits if h["entity_type"] == "memory"]
+        food_ids = [h["entity_id"] for h in hits if h["entity_type"] == "food"]
+        kn_ids = [h["entity_id"] for h in hits if h["entity_type"] == "knowledge"]
+        mem_map: Dict[str, dict] = {}
+        food_map: Dict[str, dict] = {}
+        kn_map: Dict[str, dict] = {}
+        async with self.session() as s:
+            if mem_ids:
+                res = await s.execute(
+                    select(DBMemory).where(DBMemory.id.in_(mem_ids), DBMemory.status == "active")
+                )
+                for r in res.scalars().all():
+                    mem_map[r.id] = self._memory_dict(r)
+            if food_ids:
+                res = await s.execute(select(DBFoodNutrition).where(DBFoodNutrition.id.in_(food_ids)))
+                for r in res.scalars().all():
+                    food_map[r.id] = self._food_dict(r)
+            if kn_ids:
+                res = await s.execute(select(DBKnowledgeItem).where(DBKnowledgeItem.id.in_(kn_ids)))
+                for r in res.scalars().all():
+                    kn_map[r.id] = self._knowledge_dict(r)
+
+        hydrated: List[dict] = []
+        for h in hits:
+            et, eid = h["entity_type"], h["entity_id"]
+            if et == "memory" and eid in mem_map:
+                m = mem_map[eid]
+                hydrated.append(
+                    {
+                        **h,
+                        "title": m["key"],
+                        "summary": m["summary"] or str(m["value"])[:120],
+                        "memory_type": m["memory_type"],
+                        "item": m,
+                    }
+                )
+            elif et == "food" and eid in food_map:
+                f = food_map[eid]
+                hydrated.append(
+                    {
+                        **h,
+                        "title": f["name"],
+                        "summary": f"{f['name']}({f.get('serving_desc')}): {f.get('kcal_per_serving')}kcal",
+                        "item": f,
+                    }
+                )
+            elif et == "knowledge" and eid in kn_map:
+                k = kn_map[eid]
+                hydrated.append(
+                    {
+                        **h,
+                        "title": k["title"],
+                        "summary": k["summary"],
+                        "item": k,
+                    }
+                )
+        return hydrated
+
+    # ── Domain Briefs (分域物化热视图) ────────────────────────────────
+
+    async def upsert_domain_brief(
+        self, domain: str, compact_text: str, payload: Dict[str, Any], source_date: str = ""
+    ) -> dict:
+        now = _now_iso()
+        async with self.session() as s:
+            row = await s.get(DBDomainBrief, domain)
+            if row is None:
+                row = DBDomainBrief(domain=domain)
+                s.add(row)
+            row.compact_text = (compact_text or "")[:1200]
+            row.payload_json = _json.dumps(payload or {}, ensure_ascii=False, default=str)
+            row.source_date = source_date or now[:10]
+            row.updated_at = now
+            await s.commit()
+            return self._domain_brief_dict(row)
+
+    async def get_domain_brief(self, domain: str) -> Optional[dict]:
+        async with self.session() as s:
+            row = await s.get(DBDomainBrief, domain)
+            return self._domain_brief_dict(row) if row else None
+
+    async def list_domain_briefs(self) -> Dict[str, dict]:
+        async with self.session() as s:
+            res = await s.execute(select(DBDomainBrief))
+            return {r.domain: self._domain_brief_dict(r) for r in res.scalars().all()}
+
+    @staticmethod
+    def _domain_brief_dict(row: DBDomainBrief) -> dict:
+        try:
+            payload = _json.loads(row.payload_json or "{}")
+        except (_json.JSONDecodeError, TypeError):
+            payload = {}
+        return {
+            "domain": row.domain,
+            "compact_text": row.compact_text,
+            "payload": payload,
+            "source_date": row.source_date,
+            "updated_at": row.updated_at,
+        }
+
+    # ── Raw Snapshots (原始数据包冷快照指针) ──────────────────────────
+
+    async def save_raw_snapshot(
+        self,
+        *,
+        tick_id: str,
+        slot: str,
+        tick_date: str,
+        kind: str,
+        file_path: str,
+        sha256: str,
+        size_bytes: int,
+        metrics: Optional[Dict[str, Any]] = None,
+    ) -> dict:
+        async with self.session() as s:
+            row = DBRawSnapshot(
+                tick_id=tick_id or "",
+                slot=slot or "",
+                tick_date=tick_date or "",
+                kind=kind or "scan_7d",
+                file_path=file_path,
+                sha256=sha256,
+                size_bytes=int(size_bytes),
+                metrics_json=_json.dumps(metrics or {}, ensure_ascii=False, default=str),
+            )
+            s.add(row)
+            await s.commit()
+            return {"id": row.id, "file_path": file_path, "size_bytes": int(size_bytes)}
+
+    async def list_raw_snapshots(self, limit: int = 30, kind: Optional[str] = None) -> List[dict]:
+        async with self.session() as s:
+            stmt = select(DBRawSnapshot).order_by(DBRawSnapshot.created_at.desc()).limit(limit)
+            if kind:
+                stmt = stmt.where(DBRawSnapshot.kind == kind)
+            res = await s.execute(stmt)
+            out = []
+            for r in res.scalars().all():
+                try:
+                    metrics = _json.loads(r.metrics_json or "{}")
+                except Exception:
+                    metrics = {}
+                out.append(
+                    {
+                        "id": r.id,
+                        "tick_id": r.tick_id,
+                        "slot": r.slot,
+                        "tick_date": r.tick_date,
+                        "kind": r.kind,
+                        "file_path": r.file_path,
+                        "sha256": r.sha256,
+                        "size_bytes": r.size_bytes,
+                        "metrics": metrics,
+                        "created_at": r.created_at,
+                    }
+                )
+            return out
+
+    async def prune_raw_snapshots_before(self, cutoff_date: str) -> List[str]:
+        """删除早于 cutoff_date 的快照指针并返回对应文件路径供磁盘清理。"""
+        async with self.session() as s:
+            res = await s.execute(
+                select(DBRawSnapshot).where(DBRawSnapshot.tick_date < cutoff_date)
+            )
+            rows = list(res.scalars().all())
+            paths = [r.file_path for r in rows]
+            if rows:
+                await s.execute(delete(DBRawSnapshot).where(DBRawSnapshot.tick_date < cutoff_date))
+                await s.commit()
+            return paths
 
     # ── Profile ───────────────────────────────────────────────────────
 
@@ -735,16 +1335,28 @@ class TickDatabase:
 
     # ── Episodes ──────────────────────────────────────────────────────
 
-    async def create_episode(self, tick_id: Optional[str], kind: str, content: Any) -> dict:
+    async def create_episode(
+        self,
+        tick_id: Optional[str],
+        kind: str,
+        content: Any,
+        *,
+        domain: str = "general",
+        tick_date: str = "",
+    ) -> dict:
+        now = _now_iso()
         async with self.session() as s:
             row = DBEpisode(
                 tick_id=tick_id,
                 kind=kind,
+                domain=domain or "general",
+                tick_date=tick_date or now[:10],
                 content=_json.dumps(content, ensure_ascii=False, default=str),
+                created_at=now,
             )
             s.add(row)
             await s.commit()
-            return {"id": row.id, "tick_id": tick_id, "kind": kind}
+            return {"id": row.id, "tick_id": tick_id, "kind": kind, "domain": domain or "general"}
 
     async def list_episodes(
         self, tick_id: Optional[str] = None, limit: int = 100
@@ -765,11 +1377,50 @@ class TickDatabase:
                         "id": row.id,
                         "tick_id": row.tick_id,
                         "kind": row.kind,
+                        "domain": getattr(row, "domain", None) or "general",
+                        "tick_date": getattr(row, "tick_date", None) or "",
+                        "content": content,
+                        "compressed_at": getattr(row, "compressed_at", None),
+                        "created_at": row.created_at,
+                    }
+                )
+            return out
+
+    async def list_episodes_before(self, cutoff_iso: str, limit: int = 500) -> List[dict]:
+        async with self.session() as s:
+            stmt = (
+                select(DBEpisode)
+                .where(DBEpisode.created_at < cutoff_iso)
+                .order_by(DBEpisode.created_at.asc())
+                .limit(limit)
+            )
+            res = await s.execute(stmt)
+            out = []
+            for row in res.scalars().all():
+                try:
+                    content = _json.loads(row.content)
+                except Exception:
+                    content = row.content
+                out.append(
+                    {
+                        "id": row.id,
+                        "tick_id": row.tick_id,
+                        "kind": row.kind,
+                        "domain": getattr(row, "domain", None) or "general",
+                        "tick_date": getattr(row, "tick_date", None) or "",
                         "content": content,
                         "created_at": row.created_at,
                     }
                 )
             return out
+
+    async def delete_episodes_by_ids(self, episode_ids: List[str]) -> int:
+        if not episode_ids:
+            return 0
+        async with self.session() as s:
+            res = await s.execute(delete(DBEpisode).where(DBEpisode.id.in_(episode_ids)))
+            await s.commit()
+            return res.rowcount or 0
 
     # ── Schedules ─────────────────────────────────────────────────────
 
@@ -1146,7 +1797,15 @@ class TickDatabase:
                 row.confidence = float(item["confidence"])
             row.updated_at = _now_iso()
             await s.commit()
-            return self._food_dict(row)
+            out = self._food_dict(row)
+        await self.sync_fts_entry(
+            "food",
+            out["id"],
+            "health",
+            out["name"],
+            " ".join([out["name"], *(out.get("aliases") or []), out.get("lighter_swap", "")]),
+        )
+        return out
 
     async def list_food_nutrition(self, limit: int = 200, query: Optional[str] = None) -> List[dict]:
         async with self.session() as s:
@@ -1218,7 +1877,15 @@ class TickDatabase:
             row.confidence = float(item.get("confidence", 0.85))
             row.updated_at = _now_iso()
             await s.commit()
-            return self._knowledge_dict(row)
+            out = self._knowledge_dict(row)
+        await self.sync_fts_entry(
+            "knowledge",
+            out["id"],
+            "health",
+            out["title"],
+            " ".join([out["title"], out.get("summary", ""), *(out.get("applicable_scenarios") or [])]),
+        )
+        return out
 
     async def list_knowledge_items(
         self, domain: Optional[str] = None, limit: int = 100
@@ -1253,7 +1920,7 @@ class TickDatabase:
             "updated_at": row.updated_at,
         }
 
-    # ── Quick Chat History (快反对话短期上下文) ────────────────────────
+    # ── Quick Chat History (快反对话原始上下文与分域查询) ────────────────
 
     async def append_quick_chat(
         self,
@@ -1263,15 +1930,24 @@ class TickDatabase:
         channel: str = "api",
         user_id: str = "",
         actions: Optional[List[Dict[str, Any]]] = None,
+        *,
+        domain: str = "general",
+        surface: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
     ) -> dict:
         async with self.session() as s:
             row = DBQuickChatMessage(
                 session_key=session_key,
                 channel=channel,
+                domain=domain or "general",
+                surface=surface or "",
                 user_id=str(user_id or ""),
                 role=role,
                 content=content,
                 actions_json=_json.dumps(actions or [], ensure_ascii=False, default=str),
+                prompt_tokens=int(prompt_tokens or 0),
+                completion_tokens=int(completion_tokens or 0),
             )
             s.add(row)
             await s.commit()
@@ -1279,20 +1955,30 @@ class TickDatabase:
                 "id": row.id,
                 "session_key": row.session_key,
                 "channel": row.channel,
+                "domain": row.domain,
+                "surface": row.surface,
                 "user_id": row.user_id,
                 "role": row.role,
                 "content": row.content,
                 "actions": actions or [],
+                "prompt_tokens": row.prompt_tokens,
+                "completion_tokens": row.completion_tokens,
                 "created_at": row.created_at,
             }
 
-    async def list_quick_chat_history(self, session_key: str, limit: int = 10) -> List[dict]:
+    async def list_quick_chat_history(
+        self,
+        session_key: str,
+        limit: int = 10,
+        *,
+        domain: Optional[str] = None,
+    ) -> List[dict]:
         async with self.session() as s:
+            stmt = select(DBQuickChatMessage).where(DBQuickChatMessage.session_key == session_key)
+            if domain:
+                stmt = stmt.where(DBQuickChatMessage.domain == domain)
             result = await s.execute(
-                select(DBQuickChatMessage)
-                .where(DBQuickChatMessage.session_key == session_key)
-                .order_by(DBQuickChatMessage.created_at.desc())
-                .limit(limit)
+                stmt.order_by(DBQuickChatMessage.created_at.desc()).limit(limit)
             )
             rows = list(result.scalars().all())
             rows.reverse()
@@ -1307,7 +1993,39 @@ class TickDatabase:
                         "id": r.id,
                         "session_key": r.session_key,
                         "channel": r.channel,
+                        "domain": getattr(r, "domain", None) or "general",
+                        "surface": getattr(r, "surface", None) or "",
                         "user_id": r.user_id,
+                        "role": r.role,
+                        "content": r.content,
+                        "actions": actions,
+                        "prompt_tokens": int(getattr(r, "prompt_tokens", 0) or 0),
+                        "completion_tokens": int(getattr(r, "completion_tokens", 0) or 0),
+                        "created_at": r.created_at,
+                    }
+                )
+            return out
+
+    async def list_unconsolidated_quick_chats(self, limit: int = 100) -> List[dict]:
+        async with self.session() as s:
+            result = await s.execute(
+                select(DBQuickChatMessage)
+                .where(DBQuickChatMessage.consolidated_at.is_(None))
+                .order_by(DBQuickChatMessage.created_at.asc())
+                .limit(limit)
+            )
+            out = []
+            for r in result.scalars().all():
+                try:
+                    actions = _json.loads(r.actions_json or "[]")
+                except Exception:
+                    actions = []
+                out.append(
+                    {
+                        "id": r.id,
+                        "session_key": r.session_key,
+                        "domain": getattr(r, "domain", None) or "general",
+                        "surface": getattr(r, "surface", None) or "",
                         "role": r.role,
                         "content": r.content,
                         "actions": actions,
@@ -1315,6 +2033,18 @@ class TickDatabase:
                     }
                 )
             return out
+
+    async def mark_quick_chats_consolidated(self, chat_ids: List[str]) -> int:
+        if not chat_ids:
+            return 0
+        now = _now_iso()
+        async with self.session() as s:
+            res = await s.execute(select(DBQuickChatMessage).where(DBQuickChatMessage.id.in_(chat_ids)))
+            rows = list(res.scalars().all())
+            for r in rows:
+                r.consolidated_at = now
+            await s.commit()
+            return len(rows)
 
     # ── Scheduled Nudges (本地提醒队列，支持 QQ Bot 到点推送) ──────────
 
@@ -1461,6 +2191,8 @@ class TickDatabase:
                 "st_knowledge_items",
                 "st_quick_chats",
                 "st_scheduled_nudges",
+                "st_domain_briefs",
+                "st_raw_snapshots",
             ):
                 result = await s.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 stats[table] = int(result.scalar() or 0)

@@ -11,12 +11,17 @@ const TICK_API_BASE = `${API_BASE}/tick`
 export type TicketType = 'question' | 'task' | 'approval' | 'info'
 export type TicketStatus = 'pending' | 'replied' | 'resolved' | 'expired' | 'snoozed'
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type TickDomain = 'health' | 'rhythm' | 'finance' | 'general'
 
 export interface TickTicket {
   id: number
   tick_id: string
   type: TicketType
   topic?: string
+  domain?: TickDomain
+  persona?: string
+  target_clients?: string[]
+  deep_link?: string
   title: string
   body: string
   meta?: Record<string, unknown>
@@ -39,6 +44,8 @@ export interface TickMessage {
   id: number
   direction: 'user_to_agent' | 'agent_to_user'
   category: TickMessageCategory
+  domain?: TickDomain
+  surface?: string
   content: string
   meta: Record<string, unknown>
   source_channel: string
@@ -48,6 +55,15 @@ export interface TickMessage {
   ingested_at: string | null
 }
 
+export interface DailyReportSection {
+  title?: string
+  summary?: string
+  body_markdown?: string
+  highlights?: string[]
+  tomorrow_focus?: string[]
+  [key: string]: unknown
+}
+
 export interface DailyReport {
   id: number
   report_date: string
@@ -55,6 +71,7 @@ export interface DailyReport {
   title: string
   summary: string
   body_markdown: string
+  sections?: Record<string, DailyReportSection>
   weight_snapshot: Record<string, unknown>
   diet_summary: Record<string, unknown>
   plan_update: Record<string, unknown>
@@ -150,6 +167,39 @@ export interface HealthCoachSummary {
   pending_intake_drafts?: ImageIntakeDraft[]
 }
 
+export interface DomainSummary {
+  domain: TickDomain
+  persona: string
+  pending_tickets: TickTicket[]
+  pending_ticket_count: number
+  latest_report_date: string | null
+  latest_report_section: DailyReportSection | null
+  today_messages: TickMessage[]
+  pending_intake_drafts: ImageIntakeDraft[]
+}
+
+export interface QuickChatHistoryItem {
+  id?: string
+  user_id?: string
+  channel?: string
+  domain?: TickDomain
+  surface?: string
+  role: 'user' | 'assistant'
+  content: string
+  actions?: Array<Record<string, unknown>>
+  created_at?: string
+}
+
+export interface MemorySearchHit {
+  entity_type: string
+  entity_id: string
+  domain: string
+  title: string
+  summary: string
+  memory_type?: string
+  score: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${SERVER_URL}/${TICK_API_BASE}${path}`, {
     ...init,
@@ -170,12 +220,14 @@ export const api_list_tickets = (params?: {
   status?: TicketStatus
   channel?: string
   type?: TicketType
+  domain?: TickDomain | string
   limit?: number
 }): Promise<TickTicket[]> => {
   const search = new URLSearchParams()
   if (params?.status) search.set('status', params.status)
   if (params?.channel) search.set('channel', params.channel)
   if (params?.type) search.set('type', params.type)
+  if (params?.domain && params.domain !== 'all') search.set('domain', params.domain)
   if (params?.limit) search.set('limit', String(params.limit))
   const qs = search.toString()
   return request<TickTicket[]>(`/tickets${qs ? `?${qs}` : ''}`)
@@ -258,6 +310,9 @@ export const api_get_latest_daily_report = (): Promise<DailyReport | null> =>
 export const api_get_health_coach_summary = (): Promise<HealthCoachSummary> =>
   request<HealthCoachSummary>('/health-summary')
 
+export const api_get_domain_summary = (domain: TickDomain): Promise<DomainSummary> =>
+  request<DomainSummary>(`/domain-summary?domain=${encodeURIComponent(domain)}`)
+
 // ── 通用图片识图与二段式确认落库 ──────────────────────────────────────────
 
 /** 构造可供 <img> 直接访问的媒体 URL（带可选 token 参数）。 */
@@ -279,6 +334,7 @@ export const api_analyze_image_intake = async (
     ticketId?: number | null
     sourceChannel?: string
     useOcrAssist?: 'auto' | 'true' | 'false'
+    domainHint?: TickDomain
   },
 ): Promise<ImageIntakeDraft> => {
   const form = new FormData()
@@ -287,6 +343,7 @@ export const api_analyze_image_intake = async (
   form.append('source_channel', options?.sourceChannel ?? 'web')
   if (options?.ticketId != null) form.append('ticket_id', String(options.ticketId))
   if (options?.useOcrAssist) form.append('use_ocr_assist', options.useOcrAssist)
+  if (options?.domainHint) form.append('domain_hint', options.domainHint)
 
   const response = await fetch(`${SERVER_URL}/${TICK_API_BASE}/intake/analyze`, {
     method: 'POST',
@@ -351,21 +408,60 @@ export interface QuickChatResponse {
   expert_brief_date?: string | null
   source: string
   session_id?: string
+  domain?: TickDomain
+  persona?: string
+  routed_domain?: TickDomain | null
   latency_ms?: number
 }
 
 export const api_quick_chat = (
   text: string,
-  options?: { channel?: string; session_id?: string },
-): Promise<QuickChatResponse> =>
-  request<QuickChatResponse>('/quick-chat', {
+  options?: {
+    channel?: string
+    session_id?: string
+    domain?: TickDomain
+    surface?: string
+    context_hints?: Record<string, unknown>
+  },
+): Promise<QuickChatResponse> => {
+  const payload: Record<string, unknown> = {
+    text,
+    channel: options?.channel ?? 'web',
+    domain: options?.domain ?? 'general',
+    surface: options?.surface ?? 'web',
+  }
+  if (options?.session_id) payload.session_id = options.session_id
+  if (options?.context_hints) payload.context_hints = options.context_hints
+  return request<QuickChatResponse>('/quick-chat', {
     method: 'POST',
-    body: JSON.stringify({
-      text,
-      channel: options?.channel ?? 'web',
-      session_id: options?.session_id ?? 'web:owner',
-    }),
+    body: JSON.stringify(payload),
   })
+}
+
+export const api_get_quick_chat_history = async (
+  domain: TickDomain,
+  limit = 16,
+): Promise<QuickChatHistoryItem[]> => {
+  const res = await request<{ items?: QuickChatHistoryItem[] } | QuickChatHistoryItem[]>(
+    `/quick-chat/history?domain=${encodeURIComponent(domain)}&limit=${limit}`,
+  )
+  if (Array.isArray(res)) return res
+  return Array.isArray(res?.items) ? res.items : []
+}
+
+export const api_search_memory = async (
+  q: string,
+  domain?: TickDomain | string,
+  limit = 10,
+): Promise<MemorySearchHit[]> => {
+  const qs = new URLSearchParams({ q, limit: String(limit) })
+  if (domain && domain !== 'all') qs.set('domain', domain)
+  const res = await request<{ items?: MemorySearchHit[] } | MemorySearchHit[]>(
+    `/memory/search?${qs.toString()}`,
+  )
+  if (Array.isArray(res)) return res
+  return Array.isArray(res?.items) ? res.items : []
+}
 
 export const api_get_expert_brief = (): Promise<Record<string, unknown>> =>
   request<Record<string, unknown>>('/expert-brief')

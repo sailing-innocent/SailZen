@@ -112,17 +112,25 @@ class TicketInbox:
         push: str = "auto",
         topic: str = "",
         meta: Optional[Dict[str, Any]] = None,
+        domain: str = "",
+        persona: str = "",
+        target_clients: Optional[List[str]] = None,
+        deep_link: str = "",
     ) -> Dict[str, Any]:
-        """创建票据。expected_reply_by 默认按类型宽松设置；显式传递 push/topic/meta。"""
+        """创建票据。expected_reply_by 默认按类型宽松设置；显式传递 domain/persona/target_clients/push/topic/meta。"""
         hours = expected_reply_hours
         if hours is None:
             hours = DEFAULT_REPLY_HOURS.get(ticket_type, 48)
         expected_by = (
             (self._clock() + timedelta(hours=hours)).isoformat() if hours > 0 else None
         )
-        payload = {
+        payload: Dict[str, Any] = {
             "tick_id": tick_id,
             "type": ticket_type,
+            "domain": domain or "",
+            "persona": persona or "",
+            "target_clients": list(target_clients) if target_clients is not None else [],
+            "deep_link": deep_link or "",
             "topic": topic or "",
             "title": title,
             "body": body,

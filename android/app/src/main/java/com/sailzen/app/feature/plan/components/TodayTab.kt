@@ -20,6 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +28,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import com.sailzen.app.R
 import com.sailzen.app.core.network.dto.CheckinTodayItemDto
 import com.sailzen.app.core.network.dto.HealthSignalItemDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
+import com.sailzen.app.core.network.dto.TickTicketDto
 import com.sailzen.app.core.network.dto.TimeBlockDto
 import com.sailzen.app.feature.plan.PlanViewModel
 
@@ -63,6 +67,8 @@ fun TodayTab(
     state: PlanViewModel.UiState,
     onQuickChat: (String) -> Unit,
     onDismissChatReply: () -> Unit,
+    onReplyDomainTicket: (Int, String) -> Unit = { _, _ -> },
+    onSnoozeDomainTicket: (Int) -> Unit = {},
     onAcceptHint: (Int) -> Unit,
     onRejectHint: (Int) -> Unit,
     onConfirmInbox: (Int) -> Unit,
@@ -99,11 +105,54 @@ fun TodayTab(
             }
         }
 
-        // ---------------- SailTick 随身协商卡（移动端核心入口） ----------------
+        // ---------------- 节奏规划师待确认票据（仅本域） ----------------
+        val rhythmTickets = state.domainSummary?.pendingTickets.orEmpty()
+        if (rhythmTickets.isNotEmpty()) {
+            items(rhythmTickets.take(2), key = { "rticket-${it.id}" }) { ticket ->
+                RhythmDomainTicketCard(
+                    ticket = ticket,
+                    busy = state.ticketBusyId == ticket.id,
+                    onReply = { reply -> onReplyDomainTicket(ticket.id, reply) },
+                    onSnooze = { onSnoozeDomainTicket(ticket.id) },
+                )
+            }
+        }
+
+        // ---------------- 昨夜睡前日报·日程摘录 ----------------
+        val rhythmReportSummary = state.domainSummary?.reportSectionSummary().orEmpty()
+        if (rhythmReportSummary.isNotBlank()) {
+            item(key = "rhythm-report-section") {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.38f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = "节奏规划师 · 日报摘录（${state.domainSummary?.latestReportDate.orEmpty()}）",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = rhythmReportSummary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+
+        // ---------------- SailTick 随身协商卡（移动端核心入口，多端共享 owner:rhythm） ----------------
         item {
             SailTickNegotiationCard(
                 busy = state.chatBusy,
                 reply = state.chatReply,
+                history = state.chatHistory,
                 isAsyncFallback = state.chatIsAsyncFallback,
                 onSend = onQuickChat,
                 onDismissReply = onDismissChatReply,
@@ -193,9 +242,84 @@ fun TodayTab(
 }
 
 @Composable
+private fun RhythmDomainTicketCard(
+    ticket: TickTicketDto,
+    busy: Boolean,
+    onReply: (String) -> Unit,
+    onSnooze: () -> Unit,
+) {
+    var draft by remember(ticket.id) { mutableStateOf("") }
+    val quickReplies = remember(ticket.id, ticket.meta) { ticket.quickReplies() }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = "节奏规划师提问 · ${ticket.title}",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (ticket.body.isNotBlank()) {
+                Text(text = ticket.body, style = MaterialTheme.typography.bodySmall)
+            }
+            if (quickReplies.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    quickReplies.forEach { qr ->
+                        AssistChip(
+                            onClick = { if (!busy) onReply(qr) },
+                            enabled = !busy,
+                            label = { Text(qr) },
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    placeholder = { Text("简短回复一句…", style = MaterialTheme.typography.bodySmall) },
+                    singleLine = true,
+                    enabled = !busy,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    enabled = !busy && draft.isNotBlank(),
+                    onClick = {
+                        onReply(draft)
+                        draft = ""
+                    },
+                ) {
+                    Text("回复")
+                }
+                OutlinedButton(enabled = !busy, onClick = onSnooze) {
+                    Text("延后")
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SailTickNegotiationCard(
     busy: Boolean,
     reply: String?,
+    history: List<QuickChatHistoryItemDto> = emptyList(),
     isAsyncFallback: Boolean,
     onSend: (String) -> Unit,
     onDismissReply: () -> Unit,
@@ -223,10 +347,33 @@ private fun SailTickNegotiationCard(
                     modifier = Modifier.size(18.dp),
                 )
                 Text(
-                    "与 SailTick 协商今天",
+                    "与节奏规划师协商（多端共享会话）",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
+            }
+
+            if (history.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    history.takeLast(4).forEach { msg ->
+                        val isUser = msg.role == "user"
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isUser) {
+                                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = (if (isUser) "我：" else "规划师：") + msg.content,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                }
             }
 
             Row(

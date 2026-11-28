@@ -30,6 +30,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sailtick.config import SailTickConfig
+from sailtick.context_budget import persona_for_domain
 from sailtick.db import TickDatabase
 from sailtick.finance_client import FinanceClient
 from sailtick.inbox import TicketInbox
@@ -226,6 +227,38 @@ class QuickCoachAgent:
             web_search_timeout=config.nightly.web_search_timeout,
         )
 
+    @staticmethod
+    def _resolve_domain(domain: str = "", surface: str = "", channel: str = "") -> str:
+        d = (domain or "").strip().lower()
+        if d in ("health", "rhythm", "finance", "general"):
+            return d
+        hint = f"{surface} {channel}".lower()
+        if any(k in hint for k in ("rhythm", "plan", "vscode", "workbench")):
+            return "rhythm"
+        if any(k in hint for k in ("finance", "money", "bill")):
+            return "finance"
+        if any(k in hint for k in ("health", "coach", "diet", "weight")):
+            return "health"
+        return "general"
+
+    @staticmethod
+    def _detect_routed_domain(actions: List[Dict[str, Any]], primary_domain: str) -> Optional[str]:
+        """若用户在某域入口触发了跨域动作，返回实际落库域供前端展示柔和徽章提示。"""
+        for act in actions:
+            if not isinstance(act, dict) or not act.get("ok"):
+                continue
+            k = str(act.get("kind") or "")
+            target = None
+            if k.startswith("finance_"):
+                target = "finance"
+            elif k.startswith("rhythm_") or k in ("create_reminder", "update_reminder", "cancel_reminder"):
+                target = "rhythm"
+            elif k in ("log_diet", "log_weight", "enqueue_food_research"):
+                target = "health"
+            if target and primary_domain != "general" and target != primary_domain:
+                return target
+        return None
+
     async def handle_message(
         self,
         text: str,
@@ -234,21 +267,29 @@ class QuickCoachAgent:
         session_id: Optional[str] = None,
         target_type: str = "private",
         target_id: Optional[str] = None,
+        domain: str = "",
+        surface: str = "",
+        context_hints: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """处理一条用户即时消息，返回快速回复与已执行动作摘要。"""
+        """处理一条用户即时消息，按 domain/persona 裁剪上下文与工具，返回快速回复与动作摘要。"""
         t0 = time.perf_counter()
+        resolved_domain = self._resolve_domain(domain=domain, surface=surface, channel=channel)
+        persona = persona_for_domain(resolved_domain)
         clean_text = (text or "").strip()
         if not clean_text:
             return {
                 "reply": "发一句想问的事或提醒就行，比如「今天能早下班怎么安排」或「下班前提醒我买洗衣液」。",
                 "actions": [],
                 "reminders_created": [],
+                "domain": resolved_domain,
+                "persona": persona,
                 "source": "empty",
                 "latency_ms": 0.0,
             }
 
         await self.knowledge.ensure_seeded()
-        sess_key = session_id or f"{channel}:{user_id or 'owner'}"
+        # 跨端同域连续会话：默认 session_key = "{user_id}:{domain}"
+        sess_key = session_id or f"{user_id or 'owner'}:{resolved_domain}"
         reply_target_id = str(target_id or user_id or self.config.qq_bot.primary_user_id or "")
 
         # 1. 优先处理零延迟斜杠快捷指令（/brief /predict /food /remind /help）
@@ -257,42 +298,85 @@ class QuickCoachAgent:
             latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
             return {
                 **cmd_res,
+                "domain": resolved_domain,
+                "persona": persona,
                 "session_id": sess_key,
                 "latency_ms": latency_ms,
             }
 
-        # 2. 装载专家简报 + 实时 Rhythm 日程/项目 + 当前待触发提醒 + 食物热量 + 知识 + 短期对话上下文
+        # 2. 按域懒加载上下文（优先读 st_domain_briefs + FTS5，避免每次全量拉三域 API）
         now = self._clock()
         tracer = TickTraceRecorder(
             slot="quick_chat",
             tick_date=now.strftime("%Y-%m-%d"),
             mode="live",
-            trigger_source=f"quick_chat:{channel}",
+            trigger_source=f"quick_chat:{surface or channel}",
             tick_id=f"qc-{now.strftime('%Y%m%d%H%M%S')}",
             clock=self._clock,
         )
-        tracer.meta = {"session_id": sess_key, "channel": channel, "user_id": str(user_id or "owner")}
+        tracer.meta = {
+            "session_id": sess_key,
+            "channel": channel,
+            "surface": surface,
+            "domain": resolved_domain,
+            "persona": persona,
+            "user_id": str(user_id or "owner"),
+        }
 
-        with tracer.span("context", "load_quick_context", input_summary=clean_text[:200]) as ctx_sp:
+        wants_rhythm = resolved_domain in ("rhythm", "general") or any(
+            k in clean_text for k in ("日程", "时间线", "加会", "开会", "项目", "待办", "任务", "排期", "下班", "提醒")
+        )
+        wants_finance = resolved_domain in ("finance", "general") or any(
+            k in clean_text for k in ("元", "块", "花了", "余额", "账单", "记账", "支付宝", "微信", "开销", "消费", "盒马", "打标")
+        )
+        wants_health = resolved_domain in ("health", "general") or any(
+            k in clean_text for k in ("热量", "大卡", "体重", "吃", "午饭", "晚饭", "早饭", "聚餐", "运动", "睡", "零食", "奶茶", "咖啡")
+        )
+
+        with tracer.span("context", "load_quick_context", input_summary=f"[{resolved_domain}] {clean_text[:180]}") as ctx_sp:
             brief = await self.db.get_runtime_state("expert_brief")
+            domain_briefs = (
+                await self.db.list_domain_briefs()
+                if hasattr(self.db, "list_domain_briefs")
+                else {}
+            )
             profile_dict = await self.memory.all_profile()
-            matched_foods = await self.knowledge.lookup_foods_in_text(clean_text, limit=4)
-            matched_knowledge = await self.knowledge.retrieve_knowledge(clean_text, limit=3)
+            fts_memories = (
+                await self.memory.search(clean_text, domain=resolved_domain, entity_types=["memory"], limit=3)
+                if hasattr(self.memory, "search")
+                else []
+            )
+            matched_foods = (
+                await self.knowledge.lookup_foods_in_text(clean_text, limit=4)
+                if wants_health
+                else []
+            )
+            matched_knowledge = (
+                await self.knowledge.retrieve_knowledge(clean_text, limit=3)
+                if wants_health
+                else []
+            )
             history = await self.db.list_quick_chat_history(
                 sess_key, limit=max(2, self.config.quick_chat.history_turns)
             )
-            rhythm_dash = await self._load_live_rhythm()
-            finance_overview = await self._load_live_finance()
-            pending_reminders = await self._load_pending_reminders()
+            rhythm_dash = await self._load_live_rhythm() if wants_rhythm else None
+            finance_overview = await self._load_live_finance() if wants_finance else None
+            pending_reminders = (
+                await self._load_pending_reminders()
+                if (wants_rhythm or "提醒" in clean_text)
+                else []
+            )
             ctx_sp.set_output(
-                f"history={len(history)} pending_reminders={len(pending_reminders)} "
-                f"rhythm={'ok' if rhythm_dash else 'none'} finance={'ok' if finance_overview else 'none'} foods={len(matched_foods)}"
+                f"domain={resolved_domain} history={len(history)} fts={len(fts_memories)} "
+                f"rhythm={'ok' if rhythm_dash else 'skip'} finance={'ok' if finance_overview else 'skip'} foods={len(matched_foods)}"
             )
 
         # 3. 决策回复与动作（优先快模型，无 LLM 时自动规则兜底）
         plan_source = "rule_fallback"
         reply_text = ""
         raw_actions: List[Dict[str, Any]] = []
+        p_tokens_used = 0
+        c_tokens_used = 0
 
         llm_ready = bool(
             self.llm is not None
@@ -300,11 +384,13 @@ class QuickCoachAgent:
             and self.llm.config.providers
         )
         if llm_ready:
-            with tracer.span("llm", "fast_llm_chat", input_summary=clean_text[:300]) as llm_sp:
+            with tracer.span("llm", "fast_llm_chat", input_summary=f"[{resolved_domain}] {clean_text[:280]}") as llm_sp:
                 try:
                     llm_out, llm_meta = await self._ask_fast_llm(
                         clean_text=clean_text,
                         brief=brief,
+                        domain_briefs=domain_briefs,
+                        fts_memories=fts_memories,
                         profile_dict=profile_dict,
                         matched_foods=matched_foods,
                         matched_knowledge=matched_knowledge,
@@ -312,12 +398,18 @@ class QuickCoachAgent:
                         finance_overview=finance_overview,
                         pending_reminders=pending_reminders,
                         history=history,
+                        domain=resolved_domain,
+                        surface=surface,
+                        context_hints=context_hints,
                     )
                     if llm_meta:
+                        p_tokens_used = int(llm_meta.get("prompt_tokens", 0) or 0)
+                        c_tokens_used = int(llm_meta.get("completion_tokens", 0) or 0)
+                        t_tokens_used = int(llm_meta.get("total_tokens", 0) or (p_tokens_used + c_tokens_used))
                         tracer.add_llm_usage(
-                            prompt_tokens=llm_meta.get("prompt_tokens", 0),
-                            completion_tokens=llm_meta.get("completion_tokens", 0),
-                            total_tokens=llm_meta.get("total_tokens", 0),
+                            prompt_tokens=p_tokens_used,
+                            completion_tokens=c_tokens_used,
+                            total_tokens=t_tokens_used,
                             cost_usd=llm_meta.get("cost_usd", 0.0),
                         )
                         llm_sp.set_payload(llm_meta)
@@ -325,7 +417,7 @@ class QuickCoachAgent:
                         reply_text = str(llm_out["reply"]).strip()
                         raw_actions = list(llm_out.get("actions") or [])
                         plan_source = "fast_llm"
-                        llm_sp.set_output(f"reply_len={len(reply_text)} raw_actions={len(raw_actions)}")
+                        llm_sp.set_output(f"tokens={p_tokens_used}+{c_tokens_used} reply_len={len(reply_text)} raw_actions={len(raw_actions)}")
                     else:
                         llm_sp.mark_status("skipped", "empty or unparseable JSON reply")
                 except Exception as exc:
@@ -392,9 +484,17 @@ class QuickCoachAgent:
                 else:
                     act_sp.mark_status("skipped", "unsupported or disabled action")
 
-        # 5. 保存短期对话历史（供下轮追问）+ 持久化全链路 AI Trace
+        routed_domain = self._detect_routed_domain(executed_actions, resolved_domain)
+
+        # 5. 保存原始对话历史（带 domain/surface/tokens，供跨端续聊与夜间提炼）+ 持久化 AI Trace
         await self.db.append_quick_chat(
-            sess_key, "user", clean_text, channel=channel, user_id=str(user_id or "")
+            sess_key,
+            "user",
+            clean_text,
+            channel=channel,
+            user_id=str(user_id or ""),
+            domain=resolved_domain,
+            surface=surface,
         )
         await self.db.append_quick_chat(
             sess_key,
@@ -403,11 +503,15 @@ class QuickCoachAgent:
             channel=channel,
             user_id=str(user_id or ""),
             actions=executed_actions,
+            domain=resolved_domain,
+            surface=surface,
+            prompt_tokens=p_tokens_used,
+            completion_tokens=c_tokens_used,
         )
 
         trace_dict = tracer.finish(
             status="completed",
-            summary=f"[{channel}] {clean_text[:80]} -> {len(executed_actions)} actions ({plan_source})",
+            summary=f"[{resolved_domain}/{surface or channel}] {clean_text[:72]} -> {len(executed_actions)} actions ({plan_source})",
         )
         await self._persist_trace(trace_dict)
 
@@ -418,6 +522,9 @@ class QuickCoachAgent:
             "reminders_created": reminders_created,
             "rhythm_updated": rhythm_updated,
             "finance_updated": finance_updated,
+            "domain": resolved_domain,
+            "persona": persona,
+            "routed_domain": routed_domain,
             "expert_brief_date": (brief or {}).get("snapshot_date") if isinstance(brief, dict) else None,
             "foods_matched": [f["name"] for f in matched_foods],
             "source": plan_source,
@@ -840,99 +947,113 @@ class QuickCoachAgent:
         finance_overview: Optional[Dict[str, Any]],
         pending_reminders: List[Dict[str, Any]],
         history: List[Dict[str, Any]],
+        *,
+        domain: str = "general",
+        surface: str = "",
+        domain_briefs: Optional[Dict[str, dict]] = None,
+        fts_memories: Optional[List[dict]] = None,
+        context_hints: Optional[Dict[str, Any]] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
         now = self._clock()
         today_str = now.strftime("%Y-%m-%d")
         offwork = self._resolve_offwork_time(profile_dict)
-        brief_text = NightlySelfMaintenance.format_brief_for_prompt(brief)
-        playbooks = (brief or {}).get("flexible_playbooks") if isinstance(brief, dict) else {}
-        playbook_text = "\n".join(f"- {k}: {v}" for k, v in (playbooks or {}).items()) or "(默认温和策略)"
-        rhythm_text = self._format_live_rhythm_for_prompt(rhythm_dash)
-        finance_text = self._format_live_finance_for_prompt(finance_overview)
-        pending_rem_text = self._format_pending_reminders_for_prompt(pending_reminders)
 
-        food_text = "\n".join(
-            f"- {f['name']}({f.get('serving_desc')}): 约{f.get('kcal_per_serving')}kcal "
-            f"(P:{f.get('protein_g')}g C:{f.get('carbs_g')}g F:{f.get('fat_g')}g) | 建议: {f.get('lighter_swap')}"
-            for f in matched_foods
-        ) or "(无命中)"
+        # 按 domain 拼接极简分域热简报（大幅压降快脑输入 token）
+        target_brief_domains = [domain] if domain in ("health", "rhythm", "finance") else ["health", "rhythm", "finance"]
+        brief_text = NightlySelfMaintenance.format_domain_briefs_for_prompt(
+            domain_briefs or {}, target_brief_domains
+        )
+        if not brief_text:
+            brief_text = NightlySelfMaintenance.format_brief_for_prompt(brief)[:900]
 
-        kn_text = "\n".join(
-            f"- [{k.get('domain')}] {k.get('title')}: {k.get('summary')} 要点: {'; '.join((k.get('key_points') or [])[:3])}"
-            for k in matched_knowledge
-        ) or "(无)"
+        fts_text = "\n".join(
+            f"- [{m.get('domain', 'general')}] {m.get('title', '')}: {m.get('summary', '')}"
+            for m in (fts_memories or [])[:3]
+        )
 
-        system_prompt = f"""你是 SailTick Personal Agent 的「白天快速反应助手」（常驻 Android / Web / QQ 快捷对话端）。
-你统一协助用户处理**日程与项目突发变动（Rhythm）**、**健康减重日常（饮食/运动/体重）**以及**日常开销秘书（记账/余额核对/账单体检）**。
-你有权直接调用 Rhythm API、Finance API、提醒工具与画像更新工具——让用户用自然语言一句话就能搞定，绝不让用户去填复杂表单。
+        persona_intro = {
+            "health": "你是 SailTick 的「健康教练」（常驻健康页快脑）。专注体重趋势、饮食热量、聚餐控损、运动与睡眠恢复，温和不苛责。",
+            "rhythm": "你是 SailTick 的「节奏规划师」（常驻规划页与 VSCode 工作台快脑）。专注今日/明日可视化时间线重排、临时会议占位、项目倒排与待办提醒，不主动谈无关饮食热量。",
+            "finance": "你是 SailTick 的「财务秘书」（常驻记账页快脑）。专注一句话记账、混合小票拆分、账户余额无感核对、账单体检与零食预算洞察。",
+        }.get(
+            domain,
+            "你是 SailTick Personal Agent 的「生活总管快脑」，统筹健康、节奏日程与日常开销，温和口语化且直接可执行。",
+        )
 
-当前时间：{now.strftime('%Y-%m-%d %H:%M')}（星期{'一二三四五六日'[now.weekday()]}）
-画像记录的常规下班时间：{offwork}（⚠️ 硬规则：若用户本轮原话已明确给出时间，如「今天7点下班」「19:00下班」，**必须严格以用户原话为准**；仅当用户未提具体时刻时才用常规值并提前 {self.config.quick_chat.offwork_lead_minutes} 分钟）
+        context_sections: List[str] = [
+            f"{persona_intro}",
+            f"当前时间：{now.strftime('%Y-%m-%d %H:%M')}（星期{'一二三四五六日'[now.weekday()]}） | 入口：{surface or domain} | 常规下班：{offwork}（若用户原话给出具体时刻须以原话为准）",
+            f"【专家热简报】\n{brief_text}",
+        ]
+        if fts_text:
+            context_sections.append(f"【命中长期记忆】\n{fts_text}")
+        if context_hints:
+            context_sections.append(f"【当前页面上下文】\n{json.dumps(context_hints, ensure_ascii=False)[:300]}")
+        if pending_reminders:
+            context_sections.append(
+                f"【当前已生效的待触发提醒（严禁重复创建）】\n{self._format_pending_reminders_for_prompt(pending_reminders)}"
+            )
+        if rhythm_dash is not None:
+            context_sections.append(f"【今日实时日程与活跃项目】\n{self._format_live_rhythm_for_prompt(rhythm_dash)}")
+        if finance_overview is not None:
+            context_sections.append(f"【实时财务开销与活跃账户】\n{self._format_live_finance_for_prompt(finance_overview)}")
+        if matched_foods:
+            food_text = "\n".join(
+                f"- {f['name']}({f.get('serving_desc')}): 约{f.get('kcal_per_serving')}kcal "
+                f"(P:{f.get('protein_g')}g C:{f.get('carbs_g')}g F:{f.get('fat_g')}g) | {f.get('lighter_swap')}"
+                for f in matched_foods
+            )
+            context_sections.append(f"【命中食物热量库】\n{food_text}")
+        if matched_knowledge:
+            kn_text = "\n".join(
+                f"- [{k.get('domain')}] {k.get('title')}: {k.get('summary')}"
+                for k in matched_knowledge[:2]
+            )
+            context_sections.append(f"【命中专业知识】\n{kn_text}")
 
-【当前已生效的待触发提醒（严禁重复创建）】
-{pending_rem_text}
+        # 按 domain 裁剪 Action Schema 子集（同时允许跨域动作，避免死板拒答）
+        action_templates: Dict[str, str] = {
+            "create_reminder": f'{{"kind": "create_reminder", "title": "买洗衣液", "body": "下班顺路买", "trigger_time": "{today_str}T18:40:00", "priority": "normal"}}',
+            "update_reminder": f'{{"kind": "update_reminder", "server_reminder_id": 418, "match_title": "原提醒", "title": "新标题", "trigger_time": "{today_str}T18:40:00"}}',
+            "cancel_reminder": '{"kind": "cancel_reminder", "server_reminder_id": 418, "match_title": "原提醒"}',
+            "update_profile": '{"kind": "update_profile", "key": "offwork_time", "value": "19:00"}',
+            "rhythm_occupancy": f'{{"kind": "rhythm_occupancy", "date": "{today_str}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "临时评审会"}}',
+            "rhythm_sync_timeline": f'{{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus|light|career|meal|habit|rest|micro_rest|sleep|commute|work_window|fixed|buffer|occupied", "affair_id": null, "note": ""}}]}}',
+            "rhythm_upsert_affair": '{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "est_minutes": 60}',
+            "rhythm_block_status": '{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}',
+            "rhythm_transit_affair": '{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate"}',
+            "finance_log_tx": '{"kind": "finance_log_tx", "amount": 128.0, "description": "盒马采购", "direction": "expense|income", "tags": "日用消耗,零食", "account_hint": "支付宝", "items": []}',
+            "finance_reconcile_account": '{"kind": "finance_reconcile_account", "account_hint": "支付宝余额宝", "actual_balance": 2950.3, "force_adjust": false}',
+            "finance_run_hygiene": '{"kind": "finance_run_hygiene", "days": 30, "auto_apply_safe": true}',
+            "finance_batch_tag": '{"kind": "finance_batch_tag", "updates": [{"id": 123, "tags": "交通"}]}',
+            "plan_adjust_signal": '{"kind": "plan_adjust_signal", "scene": "unexpected_meeting|early_offwork|social_dining|low_energy|other", "summary": "一句话变动"}',
+            "log_diet": '{"kind": "log_diet", "meal_type": "breakfast|lunch|dinner|snack", "description": "饮食内容", "calories": 500}',
+            "log_weight": '{"kind": "log_weight", "weight_kg": 73.6}',
+            "enqueue_food_research": '{"kind": "enqueue_food_research", "foods": ["未知食物名"]}',
+        }
+        domain_action_keys = {
+            "health": ["log_diet", "log_weight", "enqueue_food_research", "plan_adjust_signal", "update_profile", "create_reminder"],
+            "rhythm": ["rhythm_occupancy", "rhythm_sync_timeline", "rhythm_upsert_affair", "rhythm_block_status", "rhythm_transit_affair", "create_reminder", "update_reminder", "cancel_reminder", "update_profile", "plan_adjust_signal"],
+            "finance": ["finance_log_tx", "finance_reconcile_account", "finance_run_hygiene", "finance_batch_tag", "create_reminder", "update_profile"],
+        }.get(domain, list(action_templates.keys()))
+        # 若跨领域关键词触发了额外实时数据，动态补齐对应工具模板
+        if finance_overview is not None and "finance_log_tx" not in domain_action_keys:
+            domain_action_keys = [*domain_action_keys, "finance_log_tx", "finance_reconcile_account"]
+        if rhythm_dash is not None and "rhythm_sync_timeline" not in domain_action_keys:
+            domain_action_keys = [*domain_action_keys, "rhythm_occupancy", "rhythm_sync_timeline"]
 
-【SailTick 夜间专家简报（健康 + 节奏 + 财务）】
-{brief_text}
-
-【今日实时可视化日程与活跃项目】
-{rhythm_text}
-
-【实时财务开销与活跃账户】
-{finance_text}
-
-【专家应急预案】
-{playbook_text}
-
-【命中的食物热量库】
-{food_text}
-
-【命中的专业健康师知识】
-{kn_text}
-
-回复与行动硬原则：
-1. 适合快速阅读：温和、口语化、有同理心、不苛责（3-6 行，必要时短要点）。
-2. **⚠️ 严禁复读重放历史动作（最重要！）**：
-   - `actions` **只能包含针对用户本轮最新消息中「新增、修改或取消」的意图**！
-   - 若对话历史已有 `[系统回执-该轮已执行]` 或上方「当前已生效的待触发提醒 / 活跃项目」里已经存在，就算你在 `reply` 里口头总结确认，**也绝对不要**再次输出 `create_reminder` 或 `rhythm_upsert_affair`！
-   - 当用户只是在聊策略、原则、阶段目标、闲聊或确认时，`actions` 必须为 `[]`（最多加一条 `plan_adjust_signal` 记录偏好）。
-3. **提醒的增/改/删闭环**：
-   - 新建提醒才用 `create_reminder`（精确本地 ISO `YYYY-MM-DDTHH:MM:00`）；
-   - 要修改已有提醒的时间/内容时，**必须用 `update_reminder`**（填 `server_reminder_id` 或 `match_title`），严禁新建第二条造成双倍提醒；
-   - 要取消/完结已有提醒时，用 `cancel_reminder`。
-4. **用户纠正长期作息或习惯**：立即调用 `update_profile` 落库（如 `key="offwork_time", value="19:00"`、`key="work_schedule", value="..."`），并顺手把当天受影响的已有提醒用 `update_reminder` 改期，不要把纯作息规律重复建多条事务。
-5. **日程突发变动（加会/请假/早下班/太累了/想重排）**：调用 `rhythm_occupancy` 和/或 `rhythm_sync_timeline` 重排今日剩余可视化时间线，附带 `plan_adjust_signal` 同步给慢脑。
-6. **新增项目或任务 / 反馈完成**：口述新目标用 `rhythm_upsert_affair`（先核对上方列表是否已存在，已存在传 `affair_id` 更新），反馈完成用 `rhythm_block_status` 或 `rhythm_transit_affair`。
-7. **食物热量/体重/饮食**：命中食物库直接答；未命中先估算并输出 `enqueue_food_research`；报体重/饮食直接落库。
-8. **日常记账/余额核对/账单体检**：
-   - 用户口述花钱/收入（支持混合拆分，如「盒马花了128，零食42日用86，支付宝」）→ 调用 `finance_log_tx`（填写 `items` 明细数组以便同时精准追踪零食占比）；
-   - 用户报某账户当前真实余额（如「微信现在剩 320.5」「支付宝余额对齐到 2950」）→ 调用 `finance_reconcile_account`（差额 ≤30 元自动无感平账，大额进入待排查清单）；
-   - 用户让扫描清理账单或补标签 → 调用 `finance_run_hygiene`。
-
-严格只输出 JSON：
+        actions_block = ",\n    ".join(action_templates[k] for k in domain_action_keys if k in action_templates)
+        rules_block = f"""回复与行动原则：
+1. 温和、口语化、简洁易读（3-6 行）；严禁复读重放历史 `[系统回执-该轮已执行]` 动作，只针对本轮最新新增/修改/取消意图输出 `actions`；纯讨论/确认时输出 `"actions": []`。
+2. 改已有提醒用 `update_reminder`，取消用 `cancel_reminder`，改作息用 `update_profile`。
+3. 严格只输出 JSON：
 {{
   "reply": "直接发给用户的回复文本",
   "actions": [
-    {{"kind": "create_reminder", "title": "买洗衣液", "body": "下班顺路买洗衣液", "trigger_time": "{today_str}T18:40:00", "priority": "normal"}},
-    {{"kind": "update_reminder", "server_reminder_id": 418, "match_title": "买7号电池和洗衣液", "title": "下班路上买7号电池和洗衣液", "trigger_time": "{today_str}T18:40:00"}},
-    {{"kind": "cancel_reminder", "server_reminder_id": 418, "match_title": "买7号电池和洗衣液"}},
-    {{"kind": "update_profile", "key": "offwork_time", "value": "19:00"}},
-    {{"kind": "rhythm_occupancy", "date": "{today_str}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "临时评审会"}},
-    {{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "一句温和排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus|light|career|meal|habit|rest|micro_rest|sleep|commute|work_window|fixed|buffer|occupied", "affair_id": null, "note": ""}}]}},
-    {{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": ""}},
-    {{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}},
-    {{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate", "defer_to": "2026-11-26T09:00:00"}},
-    {{"kind": "finance_log_tx", "amount": 128.0, "description": "盒马采购", "direction": "expense|income", "tags": "日用消耗,零食", "account_hint": "支付宝", "items": [{{"name": "零食", "amount": "42.00", "tag": "零食", "is_snack": true}}, {{"name": "日用品", "amount": "86.00", "tag": "日用消耗", "is_snack": false}}]}},
-    {{"kind": "finance_reconcile_account", "account_hint": "支付宝余额宝", "actual_balance": 2950.3, "force_adjust": false, "note": "口头核对"}},
-    {{"kind": "finance_run_hygiene", "days": 30, "auto_apply_safe": true}},
-    {{"kind": "finance_batch_tag", "updates": [{{"id": 123, "tags": "交通"}}]}},
-    {{"kind": "plan_adjust_signal", "scene": "unexpected_meeting|early_offwork|social_dining|low_energy|other", "summary": "一句话记录今日变动"}},
-    {{"kind": "log_diet", "meal_type": "breakfast|lunch|dinner|snack", "description": "饮食内容", "calories": 500}},
-    {{"kind": "log_weight", "weight_kg": 73.6}},
-    {{"kind": "enqueue_food_research", "foods": ["未知食物名"]}}
+    {actions_block}
   ]
-}}
-不需要动作时 actions 输出 []。"""
+}}"""
+        system_prompt = "\n\n".join([*context_sections, rules_block])
 
         hist_msgs = self._format_history_for_llm(history)
         if hasattr(self.llm, "chat_fast"):
@@ -951,12 +1072,18 @@ class QuickCoachAgent:
             )
         raw_content = getattr(resp, "content", "") or ""
         parsed = HealthKnowledgeManager._parse_json_safe(raw_content)
+        usage = getattr(resp, "usage", None) or {}
+        p_tok = int(usage.get("prompt_tokens", 0) or getattr(resp, "prompt_tokens", 0) or 0)
+        c_tok = int(usage.get("completion_tokens", 0) or getattr(resp, "completion_tokens", 0) or 0)
+        t_tok = int(usage.get("total_tokens", 0) or getattr(resp, "total_tokens", 0) or (p_tok + c_tok))
         llm_meta: Dict[str, Any] = {
             "provider": getattr(resp, "provider", ""),
             "model": getattr(resp, "model", ""),
-            "prompt_tokens": int(getattr(resp, "prompt_tokens", 0) or 0),
-            "completion_tokens": int(getattr(resp, "completion_tokens", 0) or 0),
-            "total_tokens": int(getattr(resp, "total_tokens", 0) or 0),
+            "domain": domain,
+            "prompt_chars": len(system_prompt),
+            "prompt_tokens": p_tok,
+            "completion_tokens": c_tok,
+            "total_tokens": t_tok,
             "cost_usd": float(getattr(resp, "cost_usd", 0.0) or 0.0),
             "history_turns": len(hist_msgs),
             "raw_response": raw_content[:4000],

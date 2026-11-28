@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ImageIntakePanel } from '@components/tick/ImageIntakePanel'
+import { DomainAssistantBar } from '@components/tick/DomainAssistantBar'
 import {
   api_get_finance_overview,
   api_list_hygiene_proposals,
@@ -35,7 +36,12 @@ import {
   api_revert_hygiene_proposal,
   api_reconcile_account_balance,
 } from '@lib/api/money'
-import { api_quick_chat, api_send_coach_message } from '@lib/api/tick'
+import {
+  api_get_quick_chat_history,
+  api_quick_chat,
+  api_send_coach_message,
+  type QuickChatHistoryItem,
+} from '@lib/api/tick'
 import type { FinanceOverview, HygieneProposal } from '@lib/data/money'
 import {
   Camera,
@@ -71,10 +77,10 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
   const [scanning, setScanning] = useState(false)
   const [scanBanner, setScanBanner] = useState<string | null>(null)
 
-  // SailTick 即时协商条
+  // SailTick 即时协商条（多端共享 owner:finance）
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
-  const [chatReply, setChatReply] = useState<string | null>(null)
+  const [chatHistory, setChatHistory] = useState<QuickChatHistoryItem[]>([])
   const [chatNote, setChatNote] = useState<string | null>(null)
 
   // 展开面板开关
@@ -95,14 +101,16 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
   const refreshAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [ov, pend, autoApplied] = await Promise.all([
+      const [ov, pend, autoApplied, hist] = await Promise.all([
         api_get_finance_overview(),
         api_list_hygiene_proposals({ status: 'pending', limit: 30 }),
         api_list_hygiene_proposals({ status: 'applied', autonomy_level: 'auto_applied', limit: 20 }),
+        api_get_quick_chat_history('finance', 10).catch(() => [] as QuickChatHistoryItem[]),
       ])
       setOverview(ov)
       setPendingProposals(pend)
       setAutoProposals(autoApplied)
+      setChatHistory(hist)
       if (!reconcileAccId && ov.account_health.length > 0) {
         setReconcileAccId(String(ov.account_health[0].id))
       }
@@ -122,10 +130,15 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
     if (!text || chatBusy) return
     setChatBusy(true)
     setChatNote(null)
+    setChatHistory((prev) => [...prev, { role: 'user', content: text, domain: 'finance', surface: 'web_money' }])
+    setChatInput('')
     try {
-      const res = await api_quick_chat(text, { channel: 'web_money', session_id: 'web:money' })
-      setChatReply(res.reply)
-      setChatInput('')
+      const res = await api_quick_chat(text, {
+        channel: 'web_money',
+        domain: 'finance',
+        surface: 'web_money',
+      })
+      setChatHistory((prev) => [...prev, { role: 'assistant', content: res.reply, domain: res.domain ?? 'finance' }])
       if (res.finance_updated) {
         setChatNote('SailTick 已同步更新账单数据 ✓')
         await refreshAll()
@@ -139,8 +152,13 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
           source_channel: 'web',
           auto_log_diet: false,
         })
-        setChatReply('SailTick 快脑暂未在线，已将你的账单说明写入异步消息箱，下次 Tick 唤醒时会自动吸收处理。')
-        setChatInput('')
+        setChatHistory((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'SailTick 快脑暂未在线，已将你的账单说明写入异步消息箱，下次 Tick 唤醒时会自动吸收处理。',
+          },
+        ])
       } catch (e) {
         setChatNote(`发送失败：${e instanceof Error ? e.message : String(e)}`)
       }
@@ -372,10 +390,25 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
             ))}
           </div>
 
-          {chatReply && (
-            <div className="rounded-md border bg-background/80 p-2.5 text-xs whitespace-pre-wrap leading-relaxed">
-              {chatReply}
-              {chatNote && <div className="mt-1 text-[11px] text-emerald-600 font-medium">{chatNote}</div>}
+          {chatHistory.length > 0 && (
+            <div className="max-h-40 overflow-y-auto space-y-1.5 rounded-md border bg-muted/25 p-2">
+              {chatHistory.slice(-6).map((m, idx) => (
+                <div
+                  key={m.id ?? `${m.role}-${idx}`}
+                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-md px-2.5 py-1.5 text-xs whitespace-pre-wrap leading-relaxed ${
+                      m.role === 'user'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background border text-foreground'
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {chatNote && <div className="text-[11px] text-emerald-600 font-medium">{chatNote}</div>}
             </div>
           )}
 
@@ -448,9 +481,21 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
         </CardContent>
       </Card>
 
+      {/* 2.5 财务秘书分域待回票据 + 睡前财务摘录 */}
+      <DomainAssistantBar
+        domain="finance"
+        surface="web_money"
+        showQuickChat={false}
+        onDataChanged={() => {
+          void refreshAll()
+          onDataChanged?.()
+        }}
+      />
+
       {/* 3. 小票 / 账单截图 OCR 识图面板（可折叠） */}
       {showOcr && (
         <ImageIntakePanel
+          domainHint="finance"
           onCommitted={() => {
             void refreshAll()
             onDataChanged?.()

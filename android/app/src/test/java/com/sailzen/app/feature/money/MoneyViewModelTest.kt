@@ -214,10 +214,16 @@ class MoneyViewModelTest {
         }
         val chatInputs = mutableListOf<String>()
 
+        override suspend fun loadDomainSummary(domain: String) = null
+
+        override suspend fun loadQuickChatHistory(domain: String, limit: Int) = emptyList<com.sailzen.app.core.network.dto.QuickChatHistoryItemDto>()
+
         override suspend fun quickChat(
             text: String,
             channel: String,
-            sessionId: String,
+            sessionId: String?,
+            domain: String,
+            surface: String,
         ): Result<QuickChatResult> {
             chatInputs += text
             return quickChatHandler(text)
@@ -226,7 +232,7 @@ class MoneyViewModelTest {
 
     private fun newVm(
         repository: FakeMoneyRepository,
-        tickRepository: FakeTickRepository? = null,
+        tickRepository: FakeTickRepository = FakeTickRepository(FakeApplication()),
     ): MoneyViewModel =
         MoneyViewModel(FakeApplication(), repository, tickRepository).also(vms::add)
 

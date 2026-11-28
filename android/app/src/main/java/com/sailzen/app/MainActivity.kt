@@ -46,6 +46,9 @@ class MainActivity : ComponentActivity() {
     /** 通知跳入的 reminder_id（-1 表示无） */
     private val reminderIdState = mutableIntStateOf(-1)
 
+    /** 通知跳入的目标深链与域（用于直达规划/健康/记账 Tab） */
+    private val deepLinkTargetState = mutableStateOf<Pair<String, String>?>(null)
+
     /** 事务通知跳入目标 */
     private val affairIdState = mutableIntStateOf(-1)
 
@@ -80,11 +83,28 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // 通知跳入：导航到 Inbox 并高亮该提醒
+                // 通知跳入：优先按 deepLink / domain 路由至对应业务 Tab，未携带深链时落 Inbox 高亮
                 val highlightId by reminderIdState
-                LaunchedEffect(highlightId) {
-                    if (highlightId > 0) {
+                val deepLinkTarget by deepLinkTargetState
+                LaunchedEffect(highlightId, deepLinkTarget) {
+                    val dl = deepLinkTarget
+                    if (dl != null) {
+                        val (domain, deepLink) = dl
+                        val route = when {
+                            deepLink.startsWith("/money") || domain == "finance" -> Routes.MONEY
+                            deepLink.startsWith("/rhythm") || domain == "rhythm" -> Routes.PLAN
+                            deepLink.startsWith("/health/coach") || domain == "health" -> Routes.HEALTH_COACH
+                            deepLink.startsWith("/health") -> Routes.HEALTH
+                            else -> Routes.inbox(if (highlightId > 0) highlightId else -1)
+                        }
+                        navController.navigate(route) {
+                            launchSingleTop = true
+                        }
+                        deepLinkTargetState.value = null
+                        reminderIdState.intValue = -1
+                    } else if (highlightId > 0) {
                         navController.navigate(Routes.inbox(highlightId))
+                        reminderIdState.intValue = -1
                     }
                 }
 
@@ -279,6 +299,11 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         val reminderId = intent?.getIntExtra(ReminderActionReceiver.EXTRA_REMINDER_ID, -1) ?: -1
+        val deepLink = intent?.getStringExtra(ReminderActionReceiver.EXTRA_DEEP_LINK).orEmpty()
+        val domain = intent?.getStringExtra(ReminderActionReceiver.EXTRA_DOMAIN).orEmpty()
+        if (deepLink.isNotBlank() || domain in setOf("health", "rhythm", "finance")) {
+            deepLinkTargetState.value = domain to deepLink
+        }
         if (reminderId > 0) {
             reminderIdState.intValue = reminderId
         }

@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 from sail_server.application.dto.tick import (
     DailyReportResponse,
     DailyReportUpsertRequest,
+    DomainSummaryResponse,
     HealthCoachSummaryResponse,
     ImageIntakeCommitRequest,
     ImageIntakeCommitResponse,
@@ -59,6 +60,7 @@ from sail_server.model.tick import (
     create_ticket_impl,
     expire_overdue_impl,
     get_daily_report_by_date_impl,
+    get_domain_summary_impl,
     get_health_coach_summary_impl,
     get_latest_daily_report_impl,
     get_ticket_impl,
@@ -120,13 +122,16 @@ class TicketController(Controller):
         status: Optional[str] = None,
         channel: Optional[str] = None,
         type: Optional[str] = None,
+        domain: Optional[str] = None,
         limit: int = 100,
     ) -> List[TicketResponse]:
-        """列出票据，默认按期待回复时间升序（最急最前）。"""
+        """列出票据，默认按期待回复时间升序（最急最前）；支持按 domain 过滤。"""
         _check_auth(request)
         db = next(router_dependency)
         with _map_errors():
-            return list_tickets_impl(db, status=status, channel=channel, type_=type, limit=limit)
+            return list_tickets_impl(
+                db, status=status, channel=channel, type_=type, domain=domain, limit=limit
+            )
 
     @post("/tickets")
     async def create_ticket(
@@ -338,11 +343,24 @@ class TicketController(Controller):
         request: Request,
         router_dependency: Generator[Session, None, None],
     ) -> HealthCoachSummaryResponse:
-        """聚合健康页展示所需的 AI 动态计划、最新日报、待回复提问与今日主动记录。"""
+        """聚合健康页展示所需的 AI 动态计划、最新日报、仅健康域待回复提问与今日主动记录。"""
         _check_auth(request)
         db = next(router_dependency)
         with _map_errors():
             return get_health_coach_summary_impl(db)
+
+    @get("/domain-summary")
+    async def get_domain_summary(
+        self,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+        domain: str = "health",
+    ) -> DomainSummaryResponse:
+        """按业务域聚合待回复票据、日报对应分节、今日消息与本域识图草稿（health|rhythm|finance|general）。"""
+        _check_auth(request)
+        db = next(router_dependency)
+        with _map_errors():
+            return get_domain_summary_impl(db, domain=domain)
 
     # ── 通用图片识图与二段式确认落库 ──────────────────────────────────────────
 
@@ -373,6 +391,7 @@ class TicketController(Controller):
         note = str(form.get("note") or "")
         source_channel = str(form.get("source_channel") or "web")
         use_ocr_assist = str(form.get("use_ocr_assist") or "auto")
+        domain_hint = str(form.get("domain_hint") or "auto")
         raw_ticket_id = form.get("ticket_id")
         ticket_id: Optional[int] = None
         if raw_ticket_id not in (None, ""):
@@ -390,6 +409,7 @@ class TicketController(Controller):
                 source_channel=source_channel,
                 ticket_id=ticket_id,
                 use_ocr_assist=use_ocr_assist,
+                domain_hint=domain_hint,
             )
 
     @get("/intake/drafts")
@@ -512,6 +532,61 @@ class TicketController(Controller):
                 status_code=503,
                 detail=f"SailTick quick-chat unavailable: {exc}",
             ) from exc
+
+    @get("/quick-chat/history")
+    async def quick_chat_history_proxy(
+        self,
+        request: Request,
+        domain: str = "general",
+        user_id: str = "owner",
+        session_id: Optional[str] = None,
+        limit: int = 20,
+    ) -> list:
+        """拉取某业务域的跨端持久化快反对话历史（daemon 离线时优雅返回 []）。"""
+        _check_auth(request)
+        import httpx
+
+        url = f"{self._sailtick_api_base()}/chat/quick/history"
+        params = {"domain": domain, "user_id": user_id, "limit": limit}
+        if session_id:
+            params["session_id"] = session_id
+        try:
+            async with httpx.AsyncClient(timeout=8.0, trust_env=False) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                return data if isinstance(data, list) else []
+        except Exception as exc:
+            logger.debug("[tick] proxy GET /chat/quick/history skipped: %s", exc)
+            return []
+
+    @get("/memory/search")
+    async def memory_search_proxy(
+        self,
+        request: Request,
+        q: str = "",
+        domain: Optional[str] = None,
+        limit: int = 10,
+    ) -> list:
+        """透传 SailTick FTS5 记忆/知识毫秒快查（daemon 离线时返回 []）。"""
+        _check_auth(request)
+        if not q.strip():
+            return []
+        import httpx
+
+        url = f"{self._sailtick_api_base()}/memory/search"
+        params = {"q": q, "limit": limit}
+        if domain:
+            params["domain"] = domain
+        try:
+            async with httpx.AsyncClient(timeout=8.0, trust_env=False) as client:
+                resp = await client.get(url, params=params)
+                resp.raise_for_status()
+                data = resp.json()
+                return data if isinstance(data, list) else []
+        except Exception as exc:
+            logger.debug("[tick] proxy GET /memory/search skipped: %s", exc)
+            return []
 
     # ── 本地 Vault 日记双向轻量桥接（Phase 2 The Bridge） ──────────────────
 

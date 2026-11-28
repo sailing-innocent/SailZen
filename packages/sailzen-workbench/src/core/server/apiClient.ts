@@ -202,12 +202,44 @@ export class SailZenApiClient {
     );
   }
 
-  async sendQuickChat(message: string, sourceFsPath?: string): Promise<QuickChatResponseDTO> {
-    this.privacyGuard.assertCloudUploadAllowed("quickChat", sourceFsPath);
+  async sendQuickChat(
+    text: string,
+    opts?: {
+      sourceFsPath?: string;
+      domain?: "health" | "rhythm" | "finance" | "general";
+      contextHints?: Record<string, unknown>;
+    }
+  ): Promise<QuickChatResponseDTO> {
+    this.privacyGuard.assertCloudUploadAllowed("quickChat", opts?.sourceFsPath);
     return this.request<QuickChatResponseDTO>("POST", "/tick/quick-chat", {
-      message,
+      text,
       channel: "vscode_workbench",
+      domain: opts?.domain || "rhythm",
+      surface: "vscode_workbench",
+      context_hints: opts?.contextHints || {},
     });
+  }
+
+  async getQuickChatHistory(
+    domain: "health" | "rhythm" | "finance" | "general" = "rhythm",
+    limit = 12
+  ): Promise<Array<{ role: string; content: string; created_at?: string }>> {
+    this.privacyGuard.assertCloudUploadAllowed("getQuickChatHistory");
+    const res = await this.request<{ items?: Array<{ role: string; content: string; created_at?: string }> }>(
+      "GET",
+      `/tick/quick-chat/history?domain=${encodeURIComponent(domain)}&limit=${limit}`
+    );
+    return Array.isArray(res?.items) ? res.items : [];
+  }
+
+  async replyTicket(ticketId: number, reply: string): Promise<unknown> {
+    this.privacyGuard.assertCloudUploadAllowed("replyTicket");
+    return this.request<unknown>("POST", `/tick/tickets/${ticketId}/reply`, { reply });
+  }
+
+  async snoozeTicket(ticketId: number, hours = 1): Promise<unknown> {
+    this.privacyGuard.assertCloudUploadAllowed("snoozeTicket");
+    return this.request<unknown>("POST", `/tick/tickets/${ticketId}/snooze`, { hours });
   }
 
   // --------------------------------------------------------------------------

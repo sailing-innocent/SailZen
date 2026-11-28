@@ -39,6 +39,19 @@ class LLMResponse:
     reasoning_content: str = ""
     cost_usd: float = 0.0
 
+    @property
+    def prompt_tokens(self) -> int:
+        return int((self.usage or {}).get("prompt_tokens", 0) or 0)
+
+    @property
+    def completion_tokens(self) -> int:
+        return int((self.usage or {}).get("completion_tokens", 0) or 0)
+
+    @property
+    def total_tokens(self) -> int:
+        u = self.usage or {}
+        return int(u.get("total_tokens", 0) or (self.prompt_tokens + self.completion_tokens))
+
 
 class BudgetExceededError(RuntimeError):
     """当次调用会超出本 Tick token 预算。"""
@@ -110,6 +123,73 @@ class LLMGateway:
             kwargs.setdefault("expect_json", True)
 
         return await self._chat_messages(messages, provider, **kwargs)
+
+    def resolve_slot_route(
+        self,
+        slot: str,
+        *,
+        escalate: bool = False,
+        daily_tokens_so_far: int = 0,
+    ) -> tuple[str, Optional[str], str]:
+        """根据 Slot 配置、异常升级信号与每日软预算闸门决定路由 (provider, model_override, reason)。"""
+        soft_cap = int(getattr(self.config, "daily_soft_cap", 40_000) or 40_000)
+        slot_models = getattr(self.config, "slot_models", None) or {}
+        target = str(slot_models.get(slot, "default") or "default").strip()
+
+        def _fast_route() -> tuple[str, Optional[str]]:
+            prov = getattr(self.config, "fast_provider", "") or self.config.default
+            if prov not in self.config.providers and self.config.providers:
+                prov = next(iter(self.config.providers.keys()))
+            fm = getattr(self.config, "fast_model", "") or ""
+            if not fm and prov in self.config.providers:
+                configured = (self.config.providers[prov].model or "").lower()
+                if "reasoner" in configured or "deepseek-r1" in configured:
+                    fm = "deepseek-chat"
+            return prov, (fm or None)
+
+        # 超出每日软预算上限：白天轻量窗口强制降档至 fast 模型控本
+        if daily_tokens_so_far >= soft_cap and slot in ("morning_checkin", "midday_checkin", "evening_review"):
+            prov, fm = _fast_route()
+            return prov, fm, f"daily_soft_cap_degraded({daily_tokens_so_far}>={soft_cap})"
+
+        # 检测到红线/复杂冲突：允许轻量窗口升级至默认深度模型
+        if escalate and target == "fast" and daily_tokens_so_far < soft_cap:
+            return self.config.default, None, "escalated_to_default"
+
+        if target == "fast":
+            prov, fm = _fast_route()
+            return prov, fm, "slot_fast"
+        if target == "default":
+            return self.config.default, None, "slot_default"
+        return self.config.default, target, f"slot_explicit:{target}"
+
+    async def chat_for_slot(
+        self,
+        slot: str,
+        prompt: str,
+        *,
+        escalate: bool = False,
+        daily_tokens_so_far: int = 0,
+        expect_json: bool = True,
+        max_tokens: int = 6000,
+        **kwargs: Any,
+    ) -> LLMResponse:
+        """按 Slot 模型分层路由调用 LLM（支持异常升档与每日软预算降档）。"""
+        prov, model_override, route_reason = self.resolve_slot_route(
+            slot, escalate=escalate, daily_tokens_so_far=daily_tokens_so_far
+        )
+        logger.debug("LLM slot route: slot=%s -> %s/%s (%s)", slot, prov, model_override or "default", route_reason)
+        if model_override:
+            kwargs["model_override"] = model_override
+            if "chat" in model_override.lower():
+                max_tokens = min(max_tokens, 2400)
+        return await self.chat(
+            prompt,
+            provider=prov,
+            expect_json=expect_json,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
 
     async def chat_fast(
         self,

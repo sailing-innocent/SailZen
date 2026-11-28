@@ -32,6 +32,9 @@ export interface InboxItem {
   user_id: number
   sync_seq: number
   source_domain: string
+  target_domain?: string
+  persona?: string
+  target_clients?: string[]
   item_kind: string
   topic: string
   dedup_key: string
@@ -100,8 +103,10 @@ export async function api_sync_inbox(sinceSeq = 0, limit = 200): Promise<InboxSy
 export async function api_list_inbox(
   tab: 'active' | 'history' | 'all' = 'active',
   limit = 100,
+  domain?: string,
 ): Promise<InboxItem[]> {
   const qs = new URLSearchParams({ tab, limit: String(limit) })
+  if (domain && domain !== 'all') qs.set('domain', domain)
   const resp = await fetch(`${INBOX_API_BASE}/?${qs.toString()}`, {
     headers: authHeaders(),
   })

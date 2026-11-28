@@ -73,8 +73,9 @@ from sailzen_orm.tick import SailTickIntakeDraft, SailTickTicket
 logger = logging.getLogger(__name__)
 
 MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MiB 原始上传上限
-MAX_IMAGE_LONG_EDGE = 1600  # 压缩保存与送模的最大边长
-JPEG_QUALITY = 85
+MAX_IMAGE_LONG_EDGE = 1280  # 常规压缩最大边长（B3 降延迟，长截图/账单放宽至 1600）
+MAX_IMAGE_LONG_EDGE_HIGH = 1600
+JPEG_QUALITY = 84
 
 VALID_SCENES = {
     "diet",
@@ -504,9 +505,11 @@ async def analyze_image_intake_impl(
     source_channel: str = "android",
     ticket_id: Optional[int] = None,
     use_ocr_assist: str = "auto",
+    domain_hint: str = "auto",
 ) -> ImageIntakeDraftResponse:
-    """上传图片 → 压缩留存 → DeepSeek Vision（按需叠加 OCR）→ 生成待确认草稿。"""
+    """上传图片 → 压缩留存 → DeepSeek Vision（按需分级清晰度与 OCR）→ 生成待确认草稿。"""
     now = datetime.now()
+    dom_hint = (domain_hint or "auto").strip().lower()
 
     # 若指定关联票据，校验存在并提取上下文供识图提示参考
     ticket_ctx = ""
@@ -514,17 +517,23 @@ async def analyze_image_intake_impl(
         ticket = db.get(SailTickTicket, ticket_id)
         if not ticket:
             raise TicketNotFoundError(f"ticket {ticket_id} not found")
-        ticket_ctx = f"\n【关联教练提问】标题：{ticket.title}\n正文：{(ticket.body or '')[:300]}"
+        ticket_ctx = f"\n【关联提问】标题：{ticket.title}\n正文：{(ticket.body or '')[:300]}"
 
     media_key, media_mime, stored_bytes, media_size, width, height = _compress_and_store_image(
         file_bytes, original_filename=filename
     )
 
-    # 判断是否启用 DeepSeek 专用 OCR 工具辅助（显式开启或超长密字竖图）
+    # 判断是否启用 DeepSeek 专用 OCR 工具辅助（显式开启、财务长截图或超长密字竖图）
     ocr_mode = (use_ocr_assist or "auto").strip().lower()
     aspect = max(width, height) / max(1, min(width, height))
     should_run_ocr = ocr_mode in ("true", "1", "yes", "force") or (
         ocr_mode == "auto" and aspect >= 2.4
+    )
+    # B3 分级清晰度：常规食物/体重拍照用 detail="auto" 提速，仅账单/小票/长截图/显式 OCR 用 "high"
+    vision_detail = (
+        "high"
+        if (should_run_ocr or dom_hint == "finance" or aspect >= 2.0)
+        else "auto"
     )
 
     ocr_text = ""
@@ -547,6 +556,12 @@ async def analyze_image_intake_impl(
         f"当前时间：{now.strftime('%Y-%m-%d %H:%M')}（{weekdays[now.weekday()]}）",
         f"默认餐次参考：{_infer_meal_type_by_hour(now)}",
     ]
+    if dom_hint in ("health", "finance"):
+        prompt_lines.append(
+            "【入口场景提示】用户从"
+            + ("财务/记账页" if dom_hint == "finance" else "健康页")
+            + "上传此图，请优先按对应业务域精准识别。"
+        )
     if note and note.strip():
         prompt_lines.append(f"【用户备注】{note.strip()}")
     if ticket_ctx:
@@ -563,7 +578,7 @@ async def analyze_image_intake_impl(
             mime_type=media_mime,
             prompt="\n\n".join(prompt_lines),
             system=INTAKE_SYSTEM_PROMPT,
-            detail="high",
+            detail=vision_detail,
             expect_json=True,
         )
     except DeepSeekVisionError as exc:

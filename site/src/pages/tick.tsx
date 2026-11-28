@@ -28,15 +28,35 @@ import {
   api_list_daily_reports,
   api_list_intake_drafts,
   api_quick_chat,
+  api_get_quick_chat_history,
+  api_search_memory,
   type DailyReport,
   type ImageIntakeDraft,
+  type MemorySearchHit,
+  type QuickChatHistoryItem,
+  type TickDomain,
   type TickTicket,
   type TicketPriority,
 } from '@lib/api/tick'
 import { format, isPast } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera, Sparkles, Calendar } from 'lucide-react'
+import { MessageCircle, Scale, Check, Clock, BellOff, Send, Moon, Camera, Sparkles, Calendar, Search } from 'lucide-react'
 import { useUserInboxStore } from '@lib/store/user'
+
+const TICK_DOMAIN_TABS: Array<{ key: 'all' | TickDomain; label: string }> = [
+  { key: 'all', label: '全部' },
+  { key: 'health', label: '健康教练' },
+  { key: 'rhythm', label: '节奏规划师' },
+  { key: 'finance', label: '财务秘书' },
+  { key: 'general', label: '生活总管' },
+]
+
+const DOMAIN_BADGE_LABEL: Record<string, string> = {
+  health: '健康',
+  rhythm: '规划',
+  finance: '财务',
+  general: '总管',
+}
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   low: '低',
@@ -80,7 +100,12 @@ const TickPage: React.FC = () => {
   const [dietMsg, setDietMsg] = useState<string | null>(null)
   const [quickInput, setQuickInput] = useState('')
   const [quickBusy, setQuickBusy] = useState(false)
-  const [quickReply, setQuickReply] = useState<string | null>(null)
+  const [quickHistory, setQuickHistory] = useState<QuickChatHistoryItem[]>([])
+  const [ticketDomainFilter, setTicketDomainFilter] = useState<'all' | TickDomain>('all')
+  const [memQuery, setMemQuery] = useState('')
+  const [memBusy, setMemBusy] = useState(false)
+  const [memHits, setMemHits] = useState<MemorySearchHit[]>([])
+  const [memSearched, setMemSearched] = useState(false)
   const [reports, setReports] = useState<DailyReport[]>([])
   const [pendingDrafts, setPendingDrafts] = useState<ImageIntakeDraft[]>([])
   const [linkedTicket, setLinkedTicket] = useState<{ id: number; title: string } | null>(null)
@@ -96,18 +121,20 @@ const TickPage: React.FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const [p, h, reps, drafts] = await Promise.all([
+      const [p, h, reps, drafts, qHist] = await Promise.all([
         api_list_tickets({ limit: 100 }),
         api_list_tickets({ status: 'replied', limit: 20 }),
         api_list_daily_reports(7).catch(() => [] as DailyReport[]),
         api_list_intake_drafts({ status: 'pending_confirm', limit: 5 }).catch(
           () => [] as ImageIntakeDraft[],
         ),
+        api_get_quick_chat_history('general', 12).catch(() => [] as QuickChatHistoryItem[]),
       ])
       setPending(p.filter((t) => t.status === 'pending' || t.status === 'snoozed'))
       setHistory(h)
       setReports(reps)
       setPendingDrafts(drafts)
+      setQuickHistory(qHist)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -175,16 +202,47 @@ const TickPage: React.FC = () => {
     const text = (override ?? quickInput).trim()
     if (!text || quickBusy) return
     setQuickBusy(true)
+    setQuickHistory((prev) => [...prev, { role: 'user', content: text, domain: 'general', surface: 'web_tick' }])
+    setQuickInput('')
     try {
-      const res = await api_quick_chat(text, { channel: 'web_tick', session_id: 'web:tick' })
-      setQuickReply(res.reply)
-      setQuickInput('')
+      const res = await api_quick_chat(text, {
+        channel: 'web_tick',
+        domain: 'general',
+        surface: 'web_tick',
+      })
+      setQuickHistory((prev) => [...prev, { role: 'assistant', content: res.reply, domain: res.domain ?? 'general' }])
     } catch (e) {
-      setQuickReply(`快反助手暂不可用：${e instanceof Error ? e.message : String(e)}`)
+      setQuickHistory((prev) => [
+        ...prev,
+        { role: 'assistant', content: `快反助手暂不可用：${e instanceof Error ? e.message : String(e)}` },
+      ])
     } finally {
       setQuickBusy(false)
     }
   }
+
+  const runMemorySearch = async () => {
+    const q = memQuery.trim()
+    if (!q || memBusy) return
+    setMemBusy(true)
+    setMemSearched(true)
+    try {
+      const hits = await api_search_memory(q, ticketDomainFilter === 'all' ? undefined : ticketDomainFilter, 8)
+      setMemHits(hits)
+    } catch {
+      setMemHits([])
+    } finally {
+      setMemBusy(false)
+    }
+  }
+
+  const filteredPending = useMemo(
+    () =>
+      ticketDomainFilter === 'all'
+        ? pending
+        : pending.filter((t) => (t.domain || 'general') === ticketDomainFilter),
+    [pending, ticketDomainFilter],
+  )
 
   return (
     <PageLayout>
@@ -242,9 +300,71 @@ const TickPage: React.FC = () => {
                 </Button>
               ))}
             </div>
-            {quickReply && (
-              <div className="rounded-md bg-muted/60 p-3 text-sm whitespace-pre-wrap">
-                {quickReply}
+            {quickHistory.length > 0 && (
+              <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-md border bg-muted/25 p-2.5">
+                {quickHistory.slice(-8).map((m, idx) => (
+                  <div
+                    key={m.id ?? `${m.role}-${idx}`}
+                    className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[88%] rounded-md px-2.5 py-1.5 text-xs whitespace-pre-wrap leading-relaxed ${
+                        m.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-background border text-foreground'
+                      }`}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* FTS5 长期记忆与知识毫秒检索 */}
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Search className="h-4 w-4 text-primary" />
+              长期记忆与知识快查（FTS5）
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="检索已沉淀的长期规律、食物热量或偏好（如：食堂、聚餐、下班）"
+                value={memQuery}
+                onChange={(e) => setMemQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void runMemorySearch()}
+                disabled={memBusy}
+              />
+              <Button
+                variant="outline"
+                onClick={() => void runMemorySearch()}
+                disabled={memBusy || !memQuery.trim()}
+              >
+                {memBusy ? '检索中' : '检索'}
+              </Button>
+            </div>
+            {memSearched && (
+              <div className="space-y-1.5">
+                {memHits.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">未命中相关记忆条目。</p>
+                ) : (
+                  memHits.map((h) => (
+                    <div key={`${h.entity_type}-${h.entity_id}`} className="rounded border bg-muted/30 px-2.5 py-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{h.title}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {DOMAIN_BADGE_LABEL[h.domain] ?? h.domain} · {h.entity_type}
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground mt-0.5">{h.summary}</p>
+                    </div>
+                  ))
+                )}
               </div>
             )}
           </CardContent>
@@ -353,7 +473,7 @@ const TickPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 最新睡前日报 */}
+        {/* 最新睡前日报（支持分域结构化展示） */}
         {reports.length > 0 && (
           <Card className="mb-4">
             <CardHeader className="pb-2">
@@ -365,8 +485,28 @@ const TickPage: React.FC = () => {
                 <Badge variant="secondary">{reports[0].report_date}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-2">
+            <CardContent className="text-sm space-y-2.5">
               <p className="text-foreground/90">{reports[0].summary}</p>
+              {reports[0].sections && Object.keys(reports[0].sections).length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(['health', 'rhythm', 'finance', 'chief'] as const).map((secKey) => {
+                    const sec = reports[0].sections?.[secKey]
+                    if (!sec || !sec.summary) return null
+                    const labelMap: Record<string, string> = {
+                      health: '健康教练',
+                      rhythm: '节奏规划师',
+                      finance: '财务秘书',
+                      chief: '生活总管',
+                    }
+                    return (
+                      <div key={secKey} className="rounded-md border bg-muted/30 p-2 text-xs space-y-1">
+                        <div className="font-medium text-foreground">{labelMap[secKey]}</div>
+                        <div className="text-muted-foreground leading-relaxed">{sec.summary}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               {reports[0].body_markdown && (
                 <pre className="whitespace-pre-wrap text-xs bg-muted/40 rounded p-2.5 font-sans">
                   {reports[0].body_markdown}
@@ -376,19 +516,39 @@ const TickPage: React.FC = () => {
           </Card>
         )}
 
-        {/* 待回票据 */}
-        <h2 className="text-sm font-semibold mb-2 text-muted-foreground">
-          待回票据（{pending.length}）
-        </h2>
+        {/* 待回票据（按业务域过滤） */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">
+            待回票据（{filteredPending.length} / {pending.length}）
+          </h2>
+          <div className="flex flex-wrap gap-1">
+            {TICK_DOMAIN_TABS.map((tab) => (
+              <Button
+                key={tab.key}
+                size="sm"
+                variant={ticketDomainFilter === tab.key ? 'default' : 'outline'}
+                className="h-6 px-2 text-xs"
+                onClick={() => setTicketDomainFilter(tab.key)}
+              >
+                {tab.label}
+              </Button>
+            ))}
+          </div>
+        </div>
         <div className="space-y-3 mb-6">
-          {pending.map((t) => (
+          {filteredPending.map((t) => (
             <Card key={t.id}>
               <CardContent className="pt-4">
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="font-medium leading-snug">{t.title}</div>
-                  <Badge variant={PRIORITY_VARIANT[t.priority]}>
-                    {PRIORITY_LABEL[t.priority]}
-                  </Badge>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Badge variant="outline" className="text-[11px]">
+                      {DOMAIN_BADGE_LABEL[t.domain || 'general'] ?? t.domain}
+                    </Badge>
+                    <Badge variant={PRIORITY_VARIANT[t.priority]}>
+                      {PRIORITY_LABEL[t.priority]}
+                    </Badge>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                   <Badge variant="outline">{TYPE_LABEL[t.type] ?? t.type}</Badge>

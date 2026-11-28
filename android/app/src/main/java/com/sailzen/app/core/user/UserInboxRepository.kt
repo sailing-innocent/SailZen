@@ -55,6 +55,8 @@ class UserInboxRepository private constructor(private val context: Context) {
             id = id,
             syncSeq = syncSeq,
             sourceDomain = sourceDomain,
+            targetDomain = targetDomain.ifBlank { sourceDomain },
+            persona = persona.ifBlank { "chief_steward" },
             itemKind = itemKind,
             topic = topic,
             refType = refType,
@@ -243,9 +245,11 @@ class UserInboxRepository private constructor(private val context: Context) {
             markLinkedReminderResolvedLocally(dto.reminderId, dto.status)
             return
         }
-        // 若不挂 reminder_id（非 legacy reminder 路径），由此处兜底系统通知
+        // 若不挂 reminder_id（非 legacy reminder 路径），由此处兜底系统通知（按域分渠道 + 深链路由）
         if (shouldNotify && dto.reminderId == null) {
             val quiet = dto.priority != "urgent" && settings.isQuietNow()
+            val deepLink = (dto.actionSchema["deep_link"] as? JsonPrimitive)?.content.orEmpty()
+            val targetDomain = dto.targetDomain.ifBlank { dto.sourceDomain }
             NotificationHelper.notifyReminder(
                 context = context,
                 reminderId = INBOX_NOTIFY_ID_OFFSET + dto.id,
@@ -254,6 +258,8 @@ class UserInboxRepository private constructor(private val context: Context) {
                 priority = dto.priority,
                 isQuiet = quiet,
                 source = dto.sourceDomain,
+                domain = targetDomain,
+                deepLink = deepLink,
             )
         }
     }

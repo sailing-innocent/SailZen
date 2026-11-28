@@ -194,6 +194,11 @@
         "title": "SailZen: Set Rhythm Block Status"
       },
       {
+        "command": "sailzen.interactTicket",
+        "title": "SailZen: Respond to SailTick Ticket",
+        "icon": "$(comment-discussion)"
+      },
+      {
         "command": "sailzen.syncJournalRhythm",
         "title": "SailZen: Pull Today's Rhythm into Journal"
       },
@@ -348,6 +353,11 @@
         {
           "command": "sailzen.blockSetStatus",
           "when": "view == sailzen.rhythmView && viewItem == rhythmBlock",
+          "group": "inline"
+        },
+        {
+          "command": "sailzen.interactTicket",
+          "when": "view == sailzen.rhythmView && viewItem == rhythmTicket",
           "group": "inline"
         },
         {

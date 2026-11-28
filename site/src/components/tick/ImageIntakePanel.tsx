@@ -74,6 +74,8 @@ export interface ImageIntakePanelProps {
   /** 外部直接触发传图文件（如点击票据卡片的相机按钮选中图片后传入） */
   externalFileRequest?: { file: File; ticketId: number; ticketTitle: string } | null
   onConsumeExternalFile?: () => void
+  /** 当前业务域提示（finance 优先高细度 OCR，health 优先标准压缩降本） */
+  domainHint?: 'health' | 'rhythm' | 'finance' | 'general'
 }
 
 function asStr(v: unknown): string {
@@ -92,6 +94,7 @@ export const ImageIntakePanel: React.FC<ImageIntakePanelProps> = ({
   onCommitted,
   externalFileRequest,
   onConsumeExternalFile,
+  domainHint,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [note, setNote] = useState('')
@@ -129,6 +132,7 @@ export const ImageIntakePanel: React.FC<ImageIntakePanelProps> = ({
           ticketId: overrideTicketId !== undefined ? overrideTicketId : linkedTicket?.id ?? null,
           sourceChannel: 'web',
           useOcrAssist: forceOcr ? 'true' : 'auto',
+          domainHint,
         })
         setActiveDraft(draft)
         setEntries(draft.entries ?? [])
@@ -141,7 +145,7 @@ export const ImageIntakePanel: React.FC<ImageIntakePanelProps> = ({
         setAnalyzing(false)
       }
     },
-    [note, linkedTicket, forceOcr],
+    [note, linkedTicket, forceOcr, domainHint],
   )
 
   // 响应从 Ticket 卡片触发的「传图回复」

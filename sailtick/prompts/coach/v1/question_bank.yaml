@@ -1,7 +1,8 @@
-# SailTick 渐进式问卷题库 v2（健康 + 节奏/项目统筹）
-# 原则: bootstrap 保持最小假设，每 Tick 最多问 1 题，健康与节奏共享配额，绝不轰炸。
+# SailTick 渐进式问卷题库 v3（显式标注 domain 以支持四角色分流）
+# 原则: bootstrap 保持最小假设，每 Tick 最多问 1 题，三域共享配额，绝不轰炸。
 
 - id: current_weight
+  domain: health
   question: 你现在的体重是多少？（直接回复数字 kg 即可）
   why: 建立健康基线，所有趋势分析的前提
   timing: [morning_checkin]
@@ -9,6 +10,7 @@
   target_profile_key: weight_current
 
 - id: rhythm_key_projects
+  domain: rhythm
   question: 最近 1-3 个月里，你最想重点推进的 1-2 个重要项目或目标是什么？大概期望什么时候完成？
   why: 明确核心主线后，SailTick 可以直接帮你倒排节奏并融入每日轻松可执行的日程画布，无需你手调权重
   timing: [evening_review, midday_checkin]
@@ -16,6 +18,7 @@
   target_profile_key: key_projects_overview
 
 - id: wake_time
+  domain: rhythm
   question: 平时工作日大概几点起床、几点下班、几点睡觉？
   why: 确定日程画布与安静时段边界，避免在不合适的时间排深度任务或发提醒
   timing: [morning_checkin]
@@ -23,6 +26,7 @@
   target_profile_key: schedule_workday
 
 - id: focus_window_preference
+  domain: rhythm
   question: 你平时一天里哪个时段头脑最清醒、最适合做重要深度工作？哪个时段最容易被开会或杂事打断？
   why: 把核心项目排进你的真实黄金时段，易打断时段只放轻量杂事或留白
   timing: [midday_checkin, evening_review]
@@ -30,6 +34,7 @@
   target_profile_key: focus_window_preference
 
 - id: height
+  domain: health
   question: 身高是多少？（cm）
   why: 计算 BMI 区间，判断 70kg 目标的合理节奏
   timing: [morning_checkin]
@@ -37,6 +42,7 @@
   target_profile_key: height_cm
 
 - id: canteen
+  domain: health
   question: 工作日午饭一般怎么吃？食堂/外卖/自己带？
   why: 估计午餐摄入结构与干预空间（食堂油水通常不可控，先从可控项入手）
   timing: [midday_checkin]
@@ -44,6 +50,7 @@
   target_profile_key: lunch_source
 
 - id: dinner_habit
+  domain: health
   question: 晚饭通常几点吃、吃什么类型？
   why: 晚饭是减肥干预主战场，需要知道现状再谈调整
   timing: [evening_review]
@@ -51,6 +58,7 @@
   target_profile_key: dinner_habit
 
 - id: gym_access
+  domain: health
   question: 附近有健身房或方便的运动场所吗？之前有规律运动的习惯吗？
   why: 运动建议必须匹配可达资源，否则计划必然落空
   timing: [evening_review]
@@ -58,6 +66,7 @@
   target_profile_key: exercise_access
 
 - id: spare_time_preference
+  domain: rhythm
   question: 下班后和周末，你通常愿意留出多少时间推进个人项目/学习，还是更希望以运动和彻底放松为主？
   why: 防止 AI 在下班后塞太多任务导致疲惫弃用，找到可持续的生活工作平衡
   timing: [evening_review]
@@ -65,6 +74,7 @@
   target_profile_key: spare_time_preference
 
 - id: social_frequency
+  domain: health
   question: 应酬/聚餐大概一周几次？通常在周几？
   why: 应酬是热量与晚间日程的双重变量；知道后可在对应日提前留出宽松缓冲
   timing: [midday_checkin, evening_review]
@@ -72,6 +82,7 @@
   target_profile_key: social_frequency
 
 - id: stress_source
+  domain: general
   question: 最近主要的压力来源是什么？（工作节奏/项目期限/睡眠/其他）
   why: 压力优先于热量与满负荷工作；高压期主动减负
   timing: [evening_review]
@@ -79,6 +90,7 @@
   target_profile_key: stress_source
 
 - id: sleep_quality
+  domain: health
   question: 最近睡眠怎么样？几点睡、几点起、睡够了吗？
   why: 睡眠是健康和白天专注力的地基，先修睡眠再谈加量
   timing: [morning_checkin]
@@ -86,6 +98,7 @@
   target_profile_key: sleep_quality
 
 - id: weight_record_method
+  domain: health
   question: 家里有体重秤吗？晨起空腹称重方便吗？
   why: 决定"每日称重"任务的可执行性与提醒时段
   timing: [morning_checkin]

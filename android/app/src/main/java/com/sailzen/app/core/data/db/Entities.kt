@@ -31,6 +31,8 @@ data class CachedInboxItem(
     @PrimaryKey val id: Int,
     val syncSeq: Long,
     val sourceDomain: String,
+    val targetDomain: String = "general",
+    val persona: String = "chief_steward",
     val itemKind: String,
     val topic: String,
     val refType: String,

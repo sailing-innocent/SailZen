@@ -9,6 +9,7 @@ import com.sailzen.app.core.network.dto.HealthCoachSummaryDto
 import com.sailzen.app.core.network.dto.ImageIntakeCommitRequest
 import com.sailzen.app.core.network.dto.ImageIntakeDraftDto
 import com.sailzen.app.core.network.dto.IntakeEntryDto
+import com.sailzen.app.core.network.dto.QuickChatHistoryItemDto
 import com.sailzen.app.core.tick.SharedImageInbox
 import com.sailzen.app.core.tick.TickRepository
 import com.sailzen.app.core.user.UserInboxRepository
@@ -37,6 +38,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
         val sending: Boolean = false,
         val quickChatBusy: Boolean = false,
         val quickChatReply: String? = null,
+        val quickChatHistory: List<QuickChatHistoryItemDto> = emptyList(),
         val quickChatAsyncFallback: Boolean = false,
         val analyzingImage: Boolean = false,
         val committingDraft: Boolean = false,
@@ -82,6 +84,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
             _uiState.update { it.copy(loading = true) }
             val sum = repo.loadCoachSummary()
             val reps = repo.loadDailyReports(14)
+            val hist = repo.loadQuickChatHistory("health", 10)
             _uiState.update { prev ->
                 val activeDate = prev.selectedReportDate?.takeIf { d -> reps.any { it.reportDate == d } }
                     ?: reps.firstOrNull()?.reportDate
@@ -90,6 +93,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                     summary = sum,
                     reports = reps,
                     selectedReportDate = activeDate,
+                    quickChatHistory = if (hist.isNotEmpty()) hist else prev.quickChatHistory,
                     loading = false,
                 )
             }
@@ -133,6 +137,7 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
                 sourceChannel = sourceChannel,
                 ticketId = ticketId,
                 useOcrAssist = if (forceOcr) "true" else "auto",
+                domainHint = if (sourceChannel == "android_share") null else "health",
             )
             analyzeResult.fold(
                 onSuccess = { draft ->
@@ -379,13 +384,33 @@ class HealthCoachViewModel(application: Application) : AndroidViewModel(applicat
         val trimmed = text.trim()
         if (trimmed.isEmpty() || _uiState.value.quickChatBusy) return
         viewModelScope.launch {
-            _uiState.update { it.copy(quickChatBusy = true) }
-            repo.quickChat(trimmed).fold(
+            _uiState.update {
+                it.copy(
+                    quickChatBusy = true,
+                    quickChatHistory = (it.quickChatHistory + QuickChatHistoryItemDto(
+                        role = "user",
+                        content = trimmed,
+                        domain = "health",
+                        surface = "android_health",
+                    )).takeLast(12),
+                )
+            }
+            repo.quickChat(
+                text = trimmed,
+                channel = "android",
+                domain = "health",
+                surface = "android_health",
+            ).fold(
                 onSuccess = { res ->
                     _uiState.update {
                         it.copy(
                             quickChatBusy = false,
                             quickChatReply = res.reply,
+                            quickChatHistory = (it.quickChatHistory + QuickChatHistoryItemDto(
+                                role = "assistant",
+                                content = res.reply,
+                                domain = res.domain,
+                            )).takeLast(12),
                             quickChatAsyncFallback = res.fallbackAsync,
                             feedbackMessage = if (res.rhythmUpdated) "已同步更新今日日程" else null,
                         )

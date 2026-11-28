@@ -49,19 +49,31 @@ class LLMProviderConfig:
 
 @dataclass
 class LLMConfig:
-    """LLM 网关配置 + 成本护栏。"""
+    """LLM 网关配置 + 成本护栏与 Slot 模型分层路由。"""
 
     providers: Dict[str, LLMProviderConfig] = field(default_factory=dict)
     default: str = "deepseek"
     fast_provider: str = ""  # 白天快速响应模型 provider（留空则沿用 default）
     fast_model: str = ""     # 白天快速响应模型名（如 deepseek-chat；留空则自动将 reasoner 降档为 chat）
+    # Slot 级模型路由：值可为 "fast" | "default" | 具体模型名（如 "deepseek-chat"）
+    slot_models: Dict[str, str] = field(
+        default_factory=lambda: {
+            "morning_checkin": "fast",
+            "midday_checkin": "fast",
+            "evening_review": "default",
+            "pre_sleep_report": "default",
+            "nightly_maintenance": "default",
+        }
+    )
     per_tick_token_cap: int = 200_000
     daily_token_cap: int = 1_000_000
+    daily_soft_cap: int = 40_000       # 超出软上限后，剩余白天 Slot 自动降档至 fast 模型
+    daily_research_cap: int = 80_000   # 超出后暂停夜间非核心外部调研
 
 
 @dataclass
 class NightlyMaintenanceConfig:
-    """夜间深度自维护配置（长周期分析 + 数学建模 + 自主食物/知识沉淀 + 历史账单慢迭代）。"""
+    """夜间深度自维护配置（长周期分析 + 数学建模 + 自主食物/知识沉淀 + 历史账单慢迭代 + 记忆压实）。"""
 
     enabled: bool = True
     deep_window_days: int = 90             # 长周期体重与交易分析窗口（天）
@@ -72,6 +84,14 @@ class NightlyMaintenanceConfig:
     max_foods_per_night: int = 5           # 单次夜间最多深度调研食物数
     max_knowledge_per_night: int = 2       # 单次夜间最多整理知识卡片数
     web_search_timeout: float = 8.0        # 单次网络搜索超时（秒）
+    food_research_concurrency: int = 2     # 食物调研并发数上限
+    food_research_timeout_seconds: float = 45.0  # 食物调研阶段总超时上限（秒）
+    # 夜间记忆压实与冷归档
+    enable_memory_compaction: bool = True
+    episode_retention_days: int = 30
+    snapshot_retention_days: int = 30
+    max_active_semantic_per_domain: int = 15
+    max_active_procedural_per_domain: int = 10
     # Finance 2.0 夜间渐进式历史清理（蚂蚁搬家式慢迭代 + 水位限流）
     enable_finance_backfill: bool = True
     finance_backfill_pending_cap: int = 5            # 待审队列 >= 该水位时暂停深挖历史，绝不堆负担
@@ -468,8 +488,22 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
             default=llm_raw.get("default", "deepseek"),
             fast_provider=llm_raw.get("fast_provider", ""),
             fast_model=llm_raw.get("fast_model", ""),
+            slot_models={
+                "morning_checkin": "fast",
+                "midday_checkin": "fast",
+                "evening_review": "default",
+                "pre_sleep_report": "default",
+                "nightly_maintenance": "default",
+                **(
+                    {str(k): str(v) for k, v in llm_raw.get("slot_models", {}).items()}
+                    if isinstance(llm_raw.get("slot_models"), dict)
+                    else {}
+                ),
+            },
             per_tick_token_cap=llm_raw.get("per_tick_token_cap", 200_000),
             daily_token_cap=llm_raw.get("daily_token_cap", 1_000_000),
+            daily_soft_cap=int(llm_raw.get("daily_soft_cap", 40_000)),
+            daily_research_cap=int(llm_raw.get("daily_research_cap", 80_000)),
         ),
         sail_server=SailServerConfig(
             api_base=server_raw.get("api_base", "http://127.0.0.1:1974/api/v1"),
@@ -517,6 +551,13 @@ def load_config(path: Optional[str] = None) -> SailTickConfig:
             max_foods_per_night=int(nightly_raw.get("max_foods_per_night", 5)),
             max_knowledge_per_night=int(nightly_raw.get("max_knowledge_per_night", 2)),
             web_search_timeout=float(nightly_raw.get("web_search_timeout", 8.0)),
+            food_research_concurrency=int(nightly_raw.get("food_research_concurrency", 2)),
+            food_research_timeout_seconds=float(nightly_raw.get("food_research_timeout_seconds", 45.0)),
+            enable_memory_compaction=bool(nightly_raw.get("enable_memory_compaction", True)),
+            episode_retention_days=int(nightly_raw.get("episode_retention_days", 30)),
+            snapshot_retention_days=int(nightly_raw.get("snapshot_retention_days", 30)),
+            max_active_semantic_per_domain=int(nightly_raw.get("max_active_semantic_per_domain", 15)),
+            max_active_procedural_per_domain=int(nightly_raw.get("max_active_procedural_per_domain", 10)),
             enable_finance_backfill=nightly_raw.get("enable_finance_backfill", True),
             finance_backfill_pending_cap=int(nightly_raw.get("finance_backfill_pending_cap", 5)),
             finance_backfill_max_new_reviews_per_night=int(

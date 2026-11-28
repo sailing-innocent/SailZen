@@ -166,9 +166,15 @@ export class RhythmTreeDataProvider implements vscode.TreeDataProvider<RhythmTre
           vscode.TreeItemCollapsibleState.None,
           t
         );
-        item.description = t.priority;
-        item.tooltip = t.body;
+        item.contextValue = "rhythmTicket";
+        item.description = t.domain ? `${t.domain} · ${t.priority}` : t.priority;
+        item.tooltip = t.body || t.title;
         item.iconPath = new vscode.ThemeIcon("comment-discussion");
+        item.command = {
+          command: "sailzen.interactTicket",
+          title: "Respond to SailTick Ticket",
+          arguments: [item],
+        };
         return item;
       });
     }

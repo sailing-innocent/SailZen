@@ -72,6 +72,10 @@ class NotificationEngine:
         topic: str = "",
         meta: Optional[Dict[str, Any]] = None,
         force_push: bool = False,
+        domain: str = "",
+        persona: str = "",
+        target_clients: Optional[list] = None,
+        deep_link: str = "",
     ) -> Dict[str, Any]:
         """发出一条通知。返回处置结果。
 
@@ -136,6 +140,14 @@ class NotificationEngine:
                 create_kwargs["topic"] = topic
             if accepts_var_kw or "meta" in sig.parameters:
                 create_kwargs["meta"] = meta or {}
+            if domain and (accepts_var_kw or "domain" in sig.parameters):
+                create_kwargs["domain"] = domain
+            if persona and (accepts_var_kw or "persona" in sig.parameters):
+                create_kwargs["persona"] = persona
+            if target_clients is not None and (accepts_var_kw or "target_clients" in sig.parameters):
+                create_kwargs["target_clients"] = target_clients
+            if deep_link and (accepts_var_kw or "deep_link" in sig.parameters):
+                create_kwargs["deep_link"] = deep_link
 
             ticket = await self.inbox.create_ticket(**create_kwargs)
             result["ticket_id"] = ticket.get("id")
