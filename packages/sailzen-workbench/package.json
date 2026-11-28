@@ -2,7 +2,7 @@
   "name": "sailzen-workbench",
   "displayName": "SailZen Workbench",
   "description": "SailZen 3.0 Work & Creation Workbench — fast dot-hierarchy notes, Rhythm v2 + SailTick, Content 2.0, and multi-machine project workflows.",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": "SailingInnocent",
   "license": "MIT",
   "repository": {
