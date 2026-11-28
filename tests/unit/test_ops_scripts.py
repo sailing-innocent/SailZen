@@ -323,6 +323,7 @@ def test_deploy_cloud_remote_site_build_sets_ci_and_site_filter(monkeypatch, tmp
     assert len(captured) == 1
     assert "export CI=true" in captured[0]
     assert "--filter=sail-site" in captured[0]
+    assert "--no-frozen-lockfile" in captured[0]
 
 def test_check_llm_keys_masking_and_placeholder_detection():
     from scripts.ops.check_llm_keys import is_placeholder_key, mask_api_key

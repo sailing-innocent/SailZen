@@ -141,10 +141,12 @@ def _deploy_site(cfg: OpsConfig, *, site_build_mode: str, dry_run: bool) -> bool
         # 若云端 SITE_DIST 就是 site/dist 或指向 site/dist 的软链，直接 build-site 即可；
         # 否则将构建产物同步到 OPS_REMOTE_SITE_DIST 并保留 .prev 供回滚。
         # 注意：非交互 SSH 无 TTY，必须设置 CI=true 防止 pnpm 报 ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY；
-        # 且云端仅构建 site/，使用 --filter=sail-site 避免编译 VSCode 插件原生依赖（keytar/better-sqlite3 等）。
+        # 且 CI=true 时 pnpm 默认强制 --frozen-lockfile，而本仓 pnpm-lock.yaml 在 .gitignore 中由云端自维护，
+        # 因此回退分支必须显式带 --no-frozen-lockfile（否则 catalogs/依赖变更时回退也会报 LOCKFILE_CONFIG_MISMATCH）；
+        # 同时限定 --filter=sail-site 避免在云端安装/编译非前端包。
         build_cmd = (
             f"set -e; export CI=true; cd {repo}; "
-            f"({pnpm_bin} install --filter=sail-site --frozen-lockfile || {pnpm_bin} install --filter=sail-site); "
+            f"({pnpm_bin} install --filter=sail-site --frozen-lockfile || {pnpm_bin} install --filter=sail-site --no-frozen-lockfile); "
             f"{pnpm_bin} build-site; "
             f"SRC_REAL=$(readlink -f {repo}/site/dist); "
             f"DST_REAL=$(readlink -f {remote_dist} 2>/dev/null || echo {remote_dist}); "
