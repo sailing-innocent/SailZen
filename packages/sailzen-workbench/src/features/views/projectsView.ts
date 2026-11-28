@@ -208,12 +208,42 @@ export class ProjectsTreeDataProvider implements vscode.TreeDataProvider<Project
       return boot.topics.map((topic) => this.buildTopicItem(topic));
     }
 
-    // Section: Works
+    // Section: Works (Pinned + Original + Active Reading, capped to stay clean, plus QuickPick search!)
     if (element.kind === "section" && element.payload === "works") {
-      const sorted = [...this.state.works].sort(
-        (a, b) => workStatusWeight(a) - workStatusWeight(b) || a.title.localeCompare(b.title)
+      const searchItem = new ProjectTreeItem(
+        `Search All Works (${this.state.works.length})...`,
+        "info"
       );
-      return sorted.map((w) => this.buildWorkItem(w));
+      searchItem.iconPath = new vscode.ThemeIcon("search");
+      searchItem.command = { command: "sailzen.searchLibrary", title: "Search Library" };
+
+      const sorted = [...this.state.works].sort((a, b) => {
+        const aPin = this.state.registry.isWorkPinned(a.id) ? 0 : 1;
+        const bPin = this.state.registry.isWorkPinned(b.id) ? 0 : 1;
+        if (aPin !== bPin) return aPin - bPin;
+        return workStatusWeight(a) - workStatusWeight(b) || a.title.localeCompare(b.title);
+      });
+
+      const MAX_VISIBLE = 12;
+      const visible = sorted.filter(
+        (w, i) =>
+          this.state.registry.isWorkPinned(w.id) ||
+          w.is_original ||
+          w.reading_status === "reading" ||
+          i < MAX_VISIBLE
+      );
+      const shown = visible.slice(0, 20);
+      const out: ProjectTreeItem[] = [searchItem, ...shown.map((w) => this.buildWorkItem(w))];
+      if (this.state.works.length > shown.length) {
+        const more = new ProjectTreeItem(
+          `+${this.state.works.length - shown.length} more — click Search above`,
+          "info"
+        );
+        more.iconPath = new vscode.ThemeIcon("ellipsis");
+        more.command = { command: "sailzen.searchLibrary", title: "Search Library" };
+        out.push(more);
+      }
+      return out;
     }
 
     // Project children
@@ -417,9 +447,10 @@ export class ProjectsTreeDataProvider implements vscode.TreeDataProvider<Project
 
   private buildWorkItem(work: WorkDTO): ProjectTreeItem {
     const pct = work.progress_pct != null ? `${Math.round(work.progress_pct)}%` : "";
-    const tag = work.is_original ? "✍ " : "";
+    const pinned = this.state.registry.isWorkPinned(work.id);
+    const prefix = `${pinned ? "📌 " : ""}${work.is_original ? "✍ " : ""}`;
     const item = new ProjectTreeItem(
-      `${tag}${work.title}`,
+      `${prefix}${work.title}`,
       "work",
       vscode.TreeItemCollapsibleState.Collapsed,
       work
@@ -428,12 +459,14 @@ export class ProjectsTreeDataProvider implements vscode.TreeDataProvider<Project
     item.tooltip = [
       work.title,
       work.author ? `Author: ${work.author}` : "",
-      `Type: ${work.work_type} | Status: ${work.reading_status}`,
+      `Type: ${work.work_type} | Status: ${work.reading_status}${pinned ? " | Pinned" : ""}`,
       work.vault_slug ? `Vault slug: read.${work.vault_slug}` : "",
     ]
       .filter(Boolean)
       .join("\n");
-    item.iconPath = new vscode.ThemeIcon(work.is_original ? "edit" : "book");
+    item.iconPath = new vscode.ThemeIcon(
+      pinned ? "pinned" : work.is_original ? "edit" : "book"
+    );
     return item;
   }
 

@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
+import { SailZenVfsUri } from "../../core/server/virtualFs";
 import { extractWikilinks, parseNoteContent } from "../../core/vault/noteModel";
 import { WorkbenchState } from "../../core/workbenchState";
 
@@ -179,8 +180,38 @@ export class SailZenEditorProviders {
           if (!hit) return undefined;
 
           const target = index.getNote(hit.target);
+          const cloudNoteItem = !this.state.privacyGuard.isWorkOfflineActive()
+            ? this.state.findNoteItem(hit.target) ||
+              (hit.alias ? this.state.findNoteItem(hit.alias) : undefined)
+            : undefined;
           const md = new vscode.MarkdownString();
-          md.isTrusted = false;
+          md.isTrusted = true;
+
+          if (!target && cloudNoteItem) {
+            const niTitle = cloudNoteItem.title || cloudNoteItem.slug || `NoteItem #${cloudNoteItem.id}`;
+            md.appendMarkdown(`### 📖 ${niTitle} *(${cloudNoteItem.category})*\n`);
+            md.appendMarkdown(`Cloud Story Bible · \`${cloudNoteItem.setting_file}\`\n\n`);
+            try {
+              const contentRes = await this.state.apiClient.getNoteItemContent(cloudNoteItem.id);
+              const excerpt = (contentRes.content || "")
+                .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "")
+                .trim()
+                .split(/\r?\n/)
+                .slice(0, 10)
+                .join("\n")
+                .slice(0, 500);
+              if (excerpt) {
+                md.appendMarkdown(`---\n\n${excerpt}\n\n`);
+              }
+            } catch {
+              // ignore fetch failure
+            }
+            const openArgs = encodeURIComponent(
+              JSON.stringify([SailZenVfsUri.noteItem(cloudNoteItem.id, niTitle)])
+            );
+            md.appendMarkdown(`[Open Full Story Bible Card](command:sailzen.openVirtualUri?${openArgs})`);
+            return new vscode.Hover(md);
+          }
 
           if (!target) {
             md.appendMarkdown(`**${hit.target}** *(note does not exist yet — Ctrl+Click to create)*`);
@@ -206,6 +237,15 @@ export class SailZenEditorProviders {
             }
           } catch {
             // ignore preview read error
+          }
+          if (cloudNoteItem) {
+            const niTitle = cloudNoteItem.title || cloudNoteItem.slug || `NoteItem #${cloudNoteItem.id}`;
+            const openArgs = encodeURIComponent(
+              JSON.stringify([SailZenVfsUri.noteItem(cloudNoteItem.id, niTitle)])
+            );
+            md.appendMarkdown(
+              `\n\n---\n\n📖 Linked Cloud Story Bible: [${niTitle} (${cloudNoteItem.category})](command:sailzen.openVirtualUri?${openArgs})`
+            );
           }
           return new vscode.Hover(md);
         },

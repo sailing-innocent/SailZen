@@ -10,6 +10,7 @@ import {
 import { PrivacyGuard } from "./machine/privacyGuard";
 import { SailZenApiClient, ServerOfflineError } from "./server/apiClient";
 import {
+  NoteItemDTO,
   WorkbenchBootstrapDTO,
   WorkbenchProjectItemDTO,
   WorkDTO,
@@ -28,6 +29,7 @@ export class WorkbenchState implements vscode.Disposable {
   private _activeVaultRole: VaultRole = "private";
   private _bootstrap: WorkbenchBootstrapDTO | null = null;
   private _works: WorkDTO[] = [];
+  private _noteItems: NoteItemDTO[] = [];
   private _activeProject: WorkbenchProjectItemDTO | null = null;
   private _online = false;
   private _lastServerError: string | null = null;
@@ -69,6 +71,28 @@ export class WorkbenchState implements vscode.Disposable {
 
   get works(): WorkDTO[] {
     return this._works;
+  }
+
+  get noteItems(): NoteItemDTO[] {
+    return this._noteItems;
+  }
+
+  /** Find a cached cloud Story Bible NoteItem matching title or slug (case-insensitive). */
+  findNoteItem(target: string): NoteItemDTO | undefined {
+    const q = target.trim().toLowerCase();
+    if (!q) return undefined;
+    const lastSeg = q.includes(".") ? q.split(".").pop() || q : q;
+    return this._noteItems.find((ni) => {
+      const t = (ni.title || "").trim().toLowerCase();
+      const s = (ni.slug || "").trim().toLowerCase();
+      return t === q || s === q || t === lastSeg || s === lastSeg;
+    });
+  }
+
+  async togglePinWork(workId: number): Promise<boolean> {
+    const pinned = await this.registry.togglePinnedWork(workId);
+    this._onDidContextChange.fire();
+    return pinned;
   }
 
   get activeProject(): WorkbenchProjectItemDTO | null {
@@ -266,12 +290,14 @@ export class WorkbenchState implements vscode.Disposable {
 
     try {
       const today = formatIsoDate(new Date());
-      const [data, works] = await Promise.all([
+      const [data, works, noteList] = await Promise.all([
         this.apiClient.bootstrap(today),
-        this.apiClient.listWorks({ limit: 80 }).catch(() => [] as WorkDTO[]),
+        this.apiClient.listWorks({ limit: 150 }).catch(() => [] as WorkDTO[]),
+        this.apiClient.listNoteItems({ limit: 150 }).catch(() => ({ notes: [] as NoteItemDTO[], total: 0 })),
       ]);
       this._bootstrap = data;
       this._works = works;
+      this._noteItems = noteList.notes || [];
       this._online = true;
       this._lastServerError = null;
       this.resolveActiveProject();

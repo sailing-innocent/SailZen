@@ -2,7 +2,7 @@
   "name": "sailzen-workbench",
   "displayName": "SailZen Workbench",
   "description": "SailZen 3.0 Work & Creation Workbench — fast dot-hierarchy notes, Rhythm v2 + SailTick, Content 2.0, and multi-machine project workflows.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "SailingInnocent",
   "license": "MIT",
   "private": false,
@@ -188,6 +188,46 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "sailzen.writeContextPackFile",
+        "title": "SailZen: Write AI Context Pack (.sailzen/context-pack.md)",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "sailzen.searchLibrary",
+        "title": "SailZen: Search Cloud Library (Works & Chapters)",
+        "icon": "$(search)"
+      },
+      {
+        "command": "sailzen.togglePinWork",
+        "title": "SailZen: Pin / Unpin Work",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "sailzen.syncChapterToCloud",
+        "title": "SailZen: Novel — Sync Current Chapter to Cloud",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "sailzen.reviewNoteItemDiff",
+        "title": "SailZen: Novel/AI — Diff Local Note vs Cloud NoteItem",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "sailzen.copySemanticCodeLink",
+        "title": "SailZen: Copy Cross-Machine Code Link (repo://)",
+        "icon": "$(link)"
+      },
+      {
+        "command": "sailzen.logToTodayJournal",
+        "title": "SailZen: Log Code Context to Today's Journal",
+        "icon": "$(notebook)"
+      },
+      {
+        "command": "sailzen.insertPaperReference",
+        "title": "SailZen: Research — Insert Paper / Book Reference",
+        "icon": "$(references)"
+      },
+      {
         "command": "sailzen.openMachineConfig",
         "title": "SailZen: Open Machine Config (~/.sailzen/machine.json)",
         "icon": "$(gear)"
@@ -213,6 +253,11 @@
           "command": "sailzen.bindProjectToCurrentFolder",
           "when": "view == sailzen.projectsView",
           "group": "navigation@1"
+        },
+        {
+          "command": "sailzen.searchLibrary",
+          "when": "view == sailzen.projectsView",
+          "group": "navigation@2"
         },
         {
           "command": "sailzen.syncVaultContent",
@@ -257,9 +302,14 @@
           "group": "sailzen@1"
         },
         {
+          "command": "sailzen.togglePinWork",
+          "when": "view == sailzen.projectsView && viewItem == contentWork",
+          "group": "inline@1"
+        },
+        {
           "command": "sailzen.syncWorkToVault",
           "when": "view == sailzen.projectsView && viewItem == contentWork",
-          "group": "inline"
+          "group": "inline@2"
         },
         {
           "command": "sailzen.pushTopicTask",
@@ -322,19 +372,39 @@
           "command": "sailzen.syncJournalRhythm",
           "when": "editorLangId == markdown",
           "group": "sailzen@5"
+        },
+        {
+          "command": "sailzen.syncChapterToCloud",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@6"
+        },
+        {
+          "command": "sailzen.insertPaperReference",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@7"
+        },
+        {
+          "command": "sailzen.copySemanticCodeLink",
+          "when": "editorLangId != markdown",
+          "group": "sailzen@1"
+        },
+        {
+          "command": "sailzen.logToTodayJournal",
+          "when": "editorLangId != markdown",
+          "group": "sailzen@2"
         }
       ]
     },
     "keybindings": [
       {
         "command": "sailzen.lookupNote",
-        "key": "ctrl+alt+l",
-        "mac": "cmd+alt+l"
+        "key": "ctrl+l",
+        "mac": "cmd+l"
       },
       {
         "command": "sailzen.gotoToday",
-        "key": "ctrl+alt+i",
-        "mac": "cmd+alt+i"
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
       },
       {
         "command": "sailzen.copyNoteLink",
@@ -350,8 +420,8 @@
       },
       {
         "command": "sailzen.goUpHierarchy",
-        "key": "ctrl+alt+up",
-        "mac": "cmd+alt+up",
+        "key": "ctrl+shift+up",
+        "mac": "cmd+shift+up",
         "when": "editorFocus && editorLangId == markdown"
       }
     ],

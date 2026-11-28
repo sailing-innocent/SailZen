@@ -6,6 +6,7 @@ import {
   runFullVaultContentSync,
   writeWorkClipsToVault,
 } from "../../core/server/fencedSync";
+import { SailZenVfsUri } from "../../core/server/virtualFs";
 import {
   BlockStatus,
   ContentTopicDTO,
@@ -22,6 +23,18 @@ import {
 import { ProjectTreeItem } from "../views/projectsView";
 import { RhythmTreeItem } from "../views/rhythmView";
 import { VaultTreeItem } from "../views/vaultTreeView";
+import {
+  buildFallbackContextPack,
+  enrichContextPackWithLocalContext,
+} from "../workflows/contextPacker";
+import {
+  parseChapterMarkdown,
+  upsertChapterSyncFrontmatter,
+} from "../workflows/novelWorkflow";
+import {
+  appendRecordEntry,
+  buildSemanticRepoLink,
+} from "../workflows/projectWorkflow";
 
 interface LookupQuickPickItem extends vscode.QuickPickItem {
   fname: string;
@@ -795,27 +808,72 @@ export function registerWorkbenchCommands(
     )
   );
 
-  // 26. Copy AI Project Context Pack
+  // 26. Copy AI Project Context Pack (with graceful fallback + local Vault/file enrichment)
+  const buildEnrichedContextPack = async (
+    proj: WorkbenchProjectItemDTO
+  ): Promise<{ title: string; slug: string; markdown: string }> => {
+    let baseMarkdown: string;
+    try {
+      const pack = await state.apiClient.getContextPack(proj.progress.affair_id);
+      baseMarkdown = pack.markdown;
+    } catch {
+      baseMarkdown = buildFallbackContextPack(proj);
+    }
+
+    let activeFileSemanticLink: string | undefined;
+    const editor = vscode.window.activeTextEditor;
+    if (editor && editor.document.uri.scheme === "file") {
+      const localRoot = state.registry.resolveProjectPath(proj.workbench.slug);
+      if (localRoot) {
+        try {
+          const line = editor.selection.active.line + 1;
+          activeFileSemanticLink = buildSemanticRepoLink({
+            projectSlug: proj.workbench.slug,
+            repoRoot: localRoot,
+            fileFsPath: editor.document.uri.fsPath,
+            line,
+          }).markdown;
+        } catch {
+          // Active file is outside this project repo
+        }
+      }
+    }
+
+    const markdown = enrichContextPackWithLocalContext(baseMarkdown, {
+      machineId: state.registry.current.machineId,
+      activeFileSemanticLink,
+      vaultNamespace: proj.workbench.vault_namespace || undefined,
+      vaultIndex: state.vaultIndex,
+    });
+    return { title: proj.progress.title, slug: proj.workbench.slug, markdown };
+  };
+
+  const pickProjectForContext = async (
+    item?: ProjectTreeItem
+  ): Promise<WorkbenchProjectItemDTO | undefined> => {
+    const fromItem = item?.payload as WorkbenchProjectItemDTO | undefined;
+    if (fromItem && "progress" in fromItem) return fromItem;
+    if (state.activeProject) return state.activeProject;
+    const all = state.bootstrapData?.projects || [];
+    const pick = await vscode.window.showQuickPick(
+      all.map((p) => ({ label: p.progress.title, description: p.workbench.slug, proj: p })),
+      { placeHolder: "Select project to generate AI Context Pack" }
+    );
+    return pick?.proj;
+  };
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "sailzen.copyContextPack",
       async (item?: ProjectTreeItem) => {
-        let proj = item?.payload as WorkbenchProjectItemDTO | undefined;
-        if (!proj || !("progress" in proj)) {
-          proj = state.activeProject ?? undefined;
+        if (state.privacyGuard.isWorkOfflineActive()) {
+          vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks AI Context Pack.");
+          return;
         }
-        if (!proj) {
-          const all = state.bootstrapData?.projects || [];
-          const pick = await vscode.window.showQuickPick(
-            all.map((p) => ({ label: p.progress.title, description: p.workbench.slug, proj: p })),
-            { placeHolder: "Select project to generate AI Context Pack" }
-          );
-          proj = pick?.proj;
-        }
+        const proj = await pickProjectForContext(item);
         if (!proj) return;
-
         try {
-          const pack = await state.apiClient.getContextPack(proj.progress.affair_id);
+          const pack = await buildEnrichedContextPack(proj);
           await vscode.env.clipboard.writeText(pack.markdown);
           vscode.window.showInformationMessage(
             `Copied AI Context Pack for "${pack.title}" (${pack.markdown.length} chars) to clipboard.`
@@ -824,10 +882,422 @@ export function registerWorkbenchCommands(
           vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
         }
       }
+    ),
+    vscode.commands.registerCommand(
+      "sailzen.writeContextPackFile",
+      async (item?: ProjectTreeItem) => {
+        if (state.privacyGuard.isWorkOfflineActive()) {
+          vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks AI Context Pack.");
+          return;
+        }
+        const folder = vscode.workspace.workspaceFolders?.[0];
+        if (!folder) {
+          vscode.window.showWarningMessage("SailZen: Open a workspace folder first.");
+          return;
+        }
+        const proj = await pickProjectForContext(item);
+        if (!proj) return;
+        try {
+          const pack = await buildEnrichedContextPack(proj);
+          const outDir = path.join(folder.uri.fsPath, ".sailzen");
+          await fs.promises.mkdir(outDir, { recursive: true });
+          const outPath = path.join(outDir, "context-pack.md");
+          await fs.promises.writeFile(outPath, pack.markdown, "utf8");
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(outPath));
+          await vscode.window.showTextDocument(doc, { preview: true });
+          vscode.window.showInformationMessage(`Wrote AI Context Pack to ${outPath}`);
+        } catch (err) {
+          vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+        }
+      }
     )
   );
 
-  // 27. Open ~/.sailzen/machine.json
+  // 27. Library UX: Pin / Unpin Work & QuickPick Search All Works
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "sailzen.togglePinWork",
+      async (item?: ProjectTreeItem) => {
+        const work = item?.payload as WorkDTO | undefined;
+        if (!work?.id) return;
+        const pinned = await state.togglePinWork(work.id);
+        vscode.window.setStatusBarMessage(
+          pinned ? `Pinned "${work.title}"` : `Unpinned "${work.title}"`,
+          2500
+        );
+      }
+    ),
+    vscode.commands.registerCommand("sailzen.searchLibrary", async () => {
+      if (state.privacyGuard.isWorkOfflineActive()) {
+        vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks cloud library.");
+        return;
+      }
+      if (state.works.length === 0) {
+        await state.refreshServerData();
+      }
+      if (state.works.length === 0) {
+        vscode.window.showInformationMessage("SailZen: No works loaded from server.");
+        return;
+      }
+
+      const workPick = await vscode.window.showQuickPick(
+        state.works.map((w) => {
+          const pin = state.registry.isWorkPinned(w.id) ? "📌 " : "";
+          const orig = w.is_original ? "✍ " : "";
+          return {
+            label: `${pin}${orig}${w.title}`,
+            description: `${w.pillar} · ${w.reading_status}${w.progress_pct != null ? ` · ${Math.round(w.progress_pct)}%` : ""}`,
+            detail: w.author || w.work_type,
+            work: w,
+          };
+        }),
+        { placeHolder: `Search ${state.works.length} cloud works by title, author, or pillar...`, matchOnDescription: true, matchOnDetail: true }
+      );
+      if (!workPick) return;
+      const work = workPick.work;
+      const isPinned = state.registry.isWorkPinned(work.id);
+
+      const action = await vscode.window.showQuickPick(
+        [
+          { label: "$(list-tree) Open Chapter (Virtual)", id: "chapter" },
+          { label: "$(quote) Open Clips & Highlights (Virtual)", id: "clips" },
+          { label: "$(desktop-download) Export Reading Card & Clips to Vault", id: "export" },
+          { label: isPinned ? "$(pinned) Unpin from Library" : "$(pin) Pin to Top of Library", id: "pin" },
+        ],
+        { placeHolder: `Action for "${work.title}"` }
+      );
+      if (!action) return;
+
+      if (action.id === "pin") {
+        await state.togglePinWork(work.id);
+      } else if (action.id === "clips") {
+        await vscode.commands.executeCommand(
+          "sailzen.openVirtualUri",
+          SailZenVfsUri.clips(work.id, work.vault_slug || work.slug)
+        );
+      } else if (action.id === "export") {
+        await vscode.commands.executeCommand(
+          "sailzen.syncWorkToVault",
+          new ProjectTreeItem(work.title, "work", vscode.TreeItemCollapsibleState.None, work)
+        );
+      } else if (action.id === "chapter") {
+        try {
+          const editions = await state.apiClient.getEditionsByWork(work.id);
+          if (editions.length === 0) {
+            vscode.window.showInformationMessage("No editions found for this work.");
+            return;
+          }
+          const canonical = editions.find((e) => e.canonical) || editions[0];
+          const toc = await state.apiClient.getEditionToc(canonical.id);
+          const allChapters = [
+            ...toc.volumes.flatMap((v) =>
+              v.chapters.map((c) => ({ ch: c, vol: [v.label, v.title].filter(Boolean).join(" ") }))
+            ),
+            ...toc.ungrouped_chapters.map((c) => ({ ch: c, vol: "" })),
+          ];
+          const chPick = await vscode.window.showQuickPick(
+            allChapters.map(({ ch, vol }) => ({
+              label: [ch.label, ch.title].filter(Boolean).join(" ") || `Chapter ${ch.sort_index + 1}`,
+              description: vol || (ch.char_count ? `${ch.char_count} chars` : ""),
+              ch,
+            })),
+            { placeHolder: `Select chapter in "${work.title}" (${allChapters.length} chapters)` }
+          );
+          if (!chPick) return;
+          await vscode.commands.executeCommand(
+            "sailzen.openVirtualUri",
+            SailZenVfsUri.chapter(work.id, chPick.ch.id, chPick.label)
+          );
+        } catch (err) {
+          vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })
+  );
+
+  // 28. Novel Workflow: Sync Local Chapter Markdown -> Cloud DocumentNode
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sailzen.syncChapterToCloud", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== "markdown") {
+        vscode.window.showWarningMessage("SailZen: Open a Markdown chapter file first.");
+        return;
+      }
+      const fsPath = editor.document.uri.fsPath;
+      try {
+        state.privacyGuard.assertCloudUploadAllowed("syncChapterToCloud", fsPath);
+      } catch (err) {
+        vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+        return;
+      }
+
+      const raw = editor.document.getText();
+      const parsed = parseChapterMarkdown(fsPath, raw);
+
+      let workId = parsed.workId ?? state.activeProject?.workbench.original_work_id ?? undefined;
+      let editionId = parsed.editionId;
+
+      if (!workId) {
+        if (state.works.length === 0) await state.refreshServerData();
+        const originals = state.works.filter((w) => w.is_original);
+        const candidates = originals.length > 0 ? originals : state.works;
+        if (candidates.length === 0) {
+          vscode.window.showWarningMessage("SailZen: No works available on server.");
+          return;
+        }
+        const pick = await vscode.window.showQuickPick(
+          candidates.map((w) => ({
+            label: `${w.is_original ? "✍ " : ""}${w.title}`,
+            description: `${w.work_type} · ${w.slug}`,
+            work: w,
+          })),
+          { placeHolder: "Select target Work to sync this chapter to" }
+        );
+        if (!pick) return;
+        workId = pick.work.id;
+      }
+
+      if (!editionId) {
+        try {
+          const editions = await state.apiClient.getEditionsByWork(workId);
+          if (editions.length === 0) {
+            vscode.window.showWarningMessage(`Work #${workId} has no editions on server.`);
+            return;
+          }
+          editionId = (editions.find((e) => e.canonical) || editions[0]).id;
+        } catch (err) {
+          vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+          return;
+        }
+      }
+
+      try {
+        const res = await state.apiClient.syncEditionChapter(
+          editionId,
+          {
+            node_id: parsed.nodeId,
+            source_slug: parsed.sourceSlug,
+            label: parsed.label || undefined,
+            title: parsed.title,
+            content: parsed.body,
+          },
+          fsPath
+        );
+
+        // Record sync IDs cleanly in frontmatter on first sync or node_id change
+        if (
+          parsed.workId !== workId ||
+          parsed.editionId !== editionId ||
+          parsed.nodeId !== res.node.id
+        ) {
+          const updatedText = upsertChapterSyncFrontmatter(raw, {
+            workId,
+            editionId,
+            nodeId: res.node.id,
+            sourceSlug: parsed.sourceSlug,
+          });
+          const fullRange = new vscode.Range(
+            editor.document.positionAt(0),
+            editor.document.positionAt(raw.length)
+          );
+          await editor.edit((eb) => eb.replace(fullRange, updatedText));
+          await editor.document.save();
+        }
+
+        vscode.window.showInformationMessage(
+          `Synced chapter "${parsed.title}" (${res.action}, node #${res.node.id}, ${parsed.wordCount} words | edition total: ${res.edition_word_count} words).`
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+      }
+    })
+  );
+
+  // 29. Novel/AI Workflow: Diff Local Note vs Cloud NoteItem (AI Draft Review)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sailzen.reviewNoteItemDiff", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.scheme !== "file") {
+        vscode.window.showWarningMessage("SailZen: Open a local Markdown note to compare against a cloud NoteItem.");
+        return;
+      }
+      if (state.privacyGuard.isWorkOfflineActive()) {
+        vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks cloud NoteItem diff.");
+        return;
+      }
+      if (state.noteItems.length === 0) {
+        await state.refreshServerData();
+      }
+      if (state.noteItems.length === 0) {
+        vscode.window.showInformationMessage("SailZen: No cloud NoteItems found on server.");
+        return;
+      }
+
+      const pick = await vscode.window.showQuickPick(
+        state.noteItems.map((ni) => ({
+          label: ni.title || ni.slug || `NoteItem #${ni.id}`,
+          description: ni.category,
+          detail: ni.setting_file,
+          ni,
+        })),
+        { placeHolder: "Select cloud Story Bible / AI NoteItem to diff with current file" }
+      );
+      if (!pick) return;
+
+      const title = pick.ni.title || pick.ni.slug || `NoteItem-${pick.ni.id}`;
+      const cloudUri = SailZenVfsUri.noteItem(pick.ni.id, title);
+      await vscode.commands.executeCommand(
+        "vscode.diff",
+        editor.document.uri,
+        cloudUri,
+        `Local ↔ Cloud NoteItem (${title})`
+      );
+    })
+  );
+
+  // 30. Game / Research / Engineering Workflow: Copy Cross-Machine Semantic repo:// Link
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sailzen.copySemanticCodeLink", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.scheme !== "file") {
+        vscode.window.showWarningMessage("SailZen: Open a local source file first.");
+        return;
+      }
+      const fsPath = editor.document.uri.fsPath;
+      let slug = state.registry.findProjectSlugForFolder(fsPath);
+      if (!slug && state.activeProject) {
+        slug = state.activeProject.workbench.slug;
+      }
+      if (!slug) {
+        const ans = await vscode.window.showWarningMessage(
+          "This folder is not bound to a SailZen project on this machine yet. Bind it now?",
+          "Bind Project"
+        );
+        if (ans === "Bind Project") {
+          await vscode.commands.executeCommand("sailzen.bindProjectToCurrentFolder");
+        }
+        return;
+      }
+      const repoRoot = state.registry.resolveProjectPath(slug);
+      if (!repoRoot) {
+        vscode.window.showWarningMessage(`SailZen: Local path for "${slug}" not found in machine.json.`);
+        return;
+      }
+      try {
+        const line = editor.selection.active.line + 1;
+        const link = buildSemanticRepoLink({
+          projectSlug: slug,
+          repoRoot,
+          fileFsPath: fsPath,
+          line,
+        });
+        await vscode.env.clipboard.writeText(link.markdown);
+        vscode.window.setStatusBarMessage(`Copied semantic link ${link.markdown}`, 3000);
+      } catch (err) {
+        vscode.window.showErrorMessage(err instanceof Error ? err.message : String(err));
+      }
+    })
+  );
+
+  // 31. Game / Research / Engineering Workflow: Log Current Code Context to Today's Journal
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sailzen.logToTodayJournal", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.uri.scheme !== "file") {
+        vscode.window.showWarningMessage("SailZen: Open a file first.");
+        return;
+      }
+      const fsPath = editor.document.uri.fsPath;
+      const line = editor.selection.active.line + 1;
+      const selected = editor.document.getText(editor.selection).trim();
+
+      let refPart = `\`${path.basename(fsPath)}:L${line}\``;
+      const slug = state.registry.findProjectSlugForFolder(fsPath);
+      if (slug) {
+        const repoRoot = state.registry.resolveProjectPath(slug);
+        if (repoRoot) {
+          try {
+            refPart = buildSemanticRepoLink({
+              projectSlug: slug,
+              repoRoot,
+              fileFsPath: fsPath,
+              line,
+            }).markdown;
+          } catch {
+            // fallback to basename
+          }
+        }
+      }
+
+      const noteText = await vscode.window.showInputBox({
+        prompt: "Engineering / Experiment / Dev log entry (appended to Today's Journal ## Record)",
+        value: selected ? selected.split(/\r?\n/)[0].slice(0, 100) : "",
+        placeHolder: "What did you discover, fix, or decide?",
+      });
+      if (!noteText?.trim()) return;
+
+      const journalEditor = await state.openDailyJournal(new Date());
+      if (!journalEditor) return;
+      const original = journalEditor.document.getText();
+      const updated = appendRecordEntry(original, `${refPart} — ${noteText.trim()}`);
+      const fullRange = new vscode.Range(
+        journalEditor.document.positionAt(0),
+        journalEditor.document.positionAt(original.length)
+      );
+      await journalEditor.edit((eb) => eb.replace(fullRange, updated));
+      await journalEditor.document.save();
+      vscode.window.setStatusBarMessage("Appended dev log entry to Today's Journal", 2500);
+    })
+  );
+
+  // 32. Research Workflow: Insert Cloud Paper / Book Reference into Active Markdown
+  context.subscriptions.push(
+    vscode.commands.registerCommand("sailzen.insertPaperReference", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showWarningMessage("SailZen: Open a Markdown note first.");
+        return;
+      }
+      if (state.privacyGuard.isWorkOfflineActive()) {
+        vscode.window.showWarningMessage("SailZen: Work Vault offline mode blocks cloud library.");
+        return;
+      }
+      if (state.works.length === 0) await state.refreshServerData();
+      if (state.works.length === 0) {
+        vscode.window.showInformationMessage("SailZen: No cloud works available.");
+        return;
+      }
+
+      const activeTopicId = state.activeProject?.workbench.topic_id;
+      const sorted = [...state.works].sort((a, b) => {
+        const aHit = activeTopicId && a.topic_ids?.includes(activeTopicId) ? 0 : 1;
+        const bHit = activeTopicId && b.topic_ids?.includes(activeTopicId) ? 0 : 1;
+        if (aHit !== bHit) return aHit - bHit;
+        return a.title.localeCompare(b.title);
+      });
+
+      const pick = await vscode.window.showQuickPick(
+        sorted.map((w) => ({
+          label: `${activeTopicId && w.topic_ids?.includes(activeTopicId) ? "★ " : ""}${w.title}`,
+          description: `${w.pillar} · ${w.work_type}`,
+          detail: w.author || w.source_url || "",
+          work: w,
+        })),
+        { placeHolder: "Select paper / book to cite in current note", matchOnDescription: true, matchOnDetail: true }
+      );
+      if (!pick) return;
+      const w = pick.work;
+      const refMd = w.vault_slug
+        ? `[[${w.title}|read.${w.vault_slug}]]`
+        : w.source_url
+        ? `[${w.title}](${w.source_url})`
+        : `**${w.title}**${w.author ? ` (${w.author})` : ""}`;
+
+      await editor.edit((eb) => eb.insert(editor.selection.active, refMd));
+    })
+  );
+
+  // 33. Open ~/.sailzen/machine.json
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.openMachineConfig", async () => {
       await state.registry.ensureConfigFileExists();

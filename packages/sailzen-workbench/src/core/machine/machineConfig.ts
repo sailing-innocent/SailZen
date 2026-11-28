@@ -26,6 +26,8 @@ export interface MachineConfig {
   };
   /** Semantic project slug -> local directory path on THIS machine only */
   projectPaths: Record<string, string>;
+  /** Pinned Content 2.0 work IDs shown at top of Projects & Content view */
+  pinnedWorkIds?: number[];
 }
 
 export interface ProjectSemanticManifest {
@@ -86,6 +88,7 @@ export function createDefaultMachineConfig(): MachineConfig {
     activeVault: "private",
     vaults: {},
     projectPaths: {},
+    pinnedWorkIds: [],
   };
 }
 
@@ -136,6 +139,9 @@ export class MachineRegistry {
               : undefined,
           },
           projectPaths: { ...(parsed.projectPaths || {}) },
+          pinnedWorkIds: Array.isArray(parsed.pinnedWorkIds)
+            ? parsed.pinnedWorkIds.filter((n): n is number => typeof n === "number")
+            : [],
         };
       }
     } catch {
@@ -226,6 +232,25 @@ export class MachineRegistry {
     const cleanSlug = slug.trim().toLowerCase();
     this.config.projectPaths[cleanSlug] = localDir;
     await this.save();
+  }
+
+  isWorkPinned(workId: number): boolean {
+    return (this.config.pinnedWorkIds || []).includes(workId);
+  }
+
+  async togglePinnedWork(workId: number): Promise<boolean> {
+    const set = new Set(this.config.pinnedWorkIds || []);
+    let pinned: boolean;
+    if (set.has(workId)) {
+      set.delete(workId);
+      pinned = false;
+    } else {
+      set.add(workId);
+      pinned = true;
+    }
+    this.config.pinnedWorkIds = Array.from(set);
+    await this.save();
+    return pinned;
   }
 
   resolveProjectPath(slug: string): string | undefined {
