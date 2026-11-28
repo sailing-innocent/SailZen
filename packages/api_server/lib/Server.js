@@ -1,0 +1,77 @@
+import { error2PlainObject, StatusCodes, stringifyQueryParams, } from "@saili/common-all";
+import { findInParent, } from "@saili/common-server";
+import cors from "cors";
+import express from "express";
+import asyncHandler from "express-async-handler";
+import fs from "fs-extra";
+import morgan from "morgan";
+import path from "path";
+import { getLogger } from "./core";
+import { baseRouter } from "./routes";
+import { getDirname } from "./utils";
+const __dirname = getDirname(import.meta.url);
+export function appModule({ logPath, nextServerUrl, nextStaticRoot, }) {
+    const ctx = "appModule:start";
+    const logger = getLogger();
+    const app = express();
+    const corsOptions = {
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        credentials: true, // If you need to send cookies or auth headers
+    };
+    app.use(cors(corsOptions));
+    app.use(express.json({ limit: "500mb" }));
+    app.use(express.urlencoded({ extended: true }));
+    if (logPath !== "stdout") {
+        const accessLogStream = fs.createWriteStream(logPath, { flags: "a" });
+        app.use(morgan(":method :url :status :response-time ms - :res[content-length] - :req[content-length]", {
+            stream: accessLogStream,
+        }));
+    }
+    logger.info({ ctx, dirPath: __dirname });
+    const staticDir = path.join(__dirname, "static");
+    app.use(express.static(staticDir));
+    if (nextStaticRoot) {
+        logger.info({ ctx, msg: "nextStaticRoot:add", nextStaticRoot });
+        app.use(express.static(nextStaticRoot));
+    }
+    if (nextServerUrl) {
+        logger.info({ ctx, msg: "adding nextServerUrl", nextServerUrl });
+        app.use("/vscode", (req, res) => {
+            const redirectUrl = nextServerUrl +
+                "/vscode" +
+                req.path.replace(/.html/, "") +
+                "?" +
+                stringifyQueryParams(req.query);
+            logger.info({ ctx, msg: "redirecting", redirectUrl });
+            return res.redirect(redirectUrl);
+        });
+    }
+    app.get("/health", async (_req, res) => {
+        return res.json({ ok: 1 });
+    });
+    app.get("/version", 
+    // @ts-ignore
+    asyncHandler(async (_req, res) => {
+        const pkg = findInParent(__dirname, "package.json");
+        if (!pkg) {
+            throw Error("no pkg found");
+        }
+        const version = fs.readJSONSync(path.join(pkg, "package.json")).version;
+        return res.json({ version });
+    }));
+    app.use("/api", baseRouter);
+    // The error handler must be before any other error middleware and after all controllers
+    app.use((err, _req, res, _next) => {
+        const flattenedError = error2PlainObject(err);
+        logger.error({
+            ctx: "appModule:ErrorHandler",
+            error: flattenedError,
+            nextStaticRoot,
+        });
+        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(flattenedError);
+    });
+    return app;
+}
+//# sourceMappingURL=Server.js.map

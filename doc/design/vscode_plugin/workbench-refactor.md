@@ -45,13 +45,14 @@
 - `PUT /api/v1/workbench/project/{venture_id}`：标准化读写 `RhythmAffair.kind_meta.workbench`。
 - `GET /api/v1/workbench/context-pack/{venture_id}`：聚合项目倒排、里程碑、近期时间块、关联 Topic 作品与 `NoteItem` 摘要，生成供本地 IDE Agent 使用的精简 Markdown 上下文包。
 - `PUT /api/v1/text/edition/{edition_id}/chapter-sync`：原创作品单章幂等创建/更新 `DocumentNode` 并重算字数统计。
+- `GET /api/v1/workbench/release/latest` · `/latest.vsix` · `/download/{filename}`：VS Code 插件 VSIX OTA 分发接口（存储于 `<SERVER_DATA_DIR>/vscode_releases/`，支持 SHA-256 校验与多台无 JS 开发环境的轻量笔记本一键自更新）。
 
 ---
 
-## 4. 分阶段路线
+## 4. 分阶段路线（全部落地）
 
-- **Phase 0**：脚手架 + 后端 Workbench API + `machine.json` / `PrivacyGuard`。
-- **Phase 1 (MVP)**：极速 8,500+ 篇笔记引擎 + Tree/Lookup/Wikilink/原子改链/Calendar/双库隐私 + Today & Rhythm + SailTick 快聊 + 日记半自动同步。
-- **Phase 2**：多机器代码仓自动绑定 + `Projects & Content` 面板 + `sailzen://` Virtual FS + 围栏双向同步。
-- **Phase 3**：四大创作与工程场景工作流 + `repo://` 语义源码互链 + AI Context Pack + 章节回写与 Diff 审阅。
-- **Phase 4**：旧 Dendron 8 包归档至 `archive/dendron_legacy/`，清理 workspace 与文档。
+- [x] **Phase 0**：脚手架 + 后端 Workbench API + `machine.json` / `PrivacyGuard`。
+- [x] **Phase 1 (MVP)**：极速 8,500+ 篇笔记引擎 + Tree/Lookup/Wikilink/原子重命名与批量重命名/删除/Calendar/双库隐私 + Today & Rhythm + SailTick 快聊 + 日记半自动同步。
+- [x] **Phase 2**：多机器代码仓自动绑定 + `Projects & Content` 面板 + `sailzen://` Virtual FS + 围栏双向同步。
+- [x] **Phase 3**：四大创作与工程场景工作流 + `repo://` 语义源码互链 + AI Context Pack + 章节回写与 Diff 审阅 + Pin 常用/可搜索图书馆 + Dendron 原生快捷键恢复。
+- [x] **Phase 4**：云端 VSIX OTA 发布（`scripts/ops/publish_vscode_vsix.py` + 扩展内置 `sailzen.checkForUpdate` 一键自更新）；旧 Dendron 8 包已完整归档至 `archive/dendron_legacy/`，完成 `pnpm-workspace.yaml` 与文档收口。

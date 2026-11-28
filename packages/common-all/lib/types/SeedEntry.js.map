@@ -1,0 +1,1 @@
+{"version":3,"file":"SeedEntry.js","sourceRoot":"","sources":["../../src/types/SeedEntry.ts"],"names":[],"mappings":"","sourcesContent":["import { SeedSite } from \"./seed\";\r\n\r\nexport type SeedEntry = {\r\n  /**\r\n   * Specific branch to pull from\r\n   */\r\n  branch?: string;\r\n  /**\r\n   * When in this seed, what url to use\r\n   */\r\n  site?: SeedSite;\r\n};\r\n"]}

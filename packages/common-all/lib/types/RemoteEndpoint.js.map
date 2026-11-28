@@ -1,0 +1,1 @@
+{"version":3,"file":"RemoteEndpoint.js","sourceRoot":"","sources":["../../src/types/RemoteEndpoint.ts"],"names":[],"mappings":"","sourcesContent":["export type RemoteEndpoint = {\r\n  type: \"git\";\r\n  url: string;\r\n};\r\n"]}

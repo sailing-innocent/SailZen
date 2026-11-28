@@ -304,3 +304,13 @@ export interface ChapterSyncResponseDTO {
   edition_char_count: number;
   edition_word_count: number;
 }
+
+export interface WorkbenchReleaseInfoDTO {
+  version: string;
+  file_name: string;
+  size: number;
+  sha256: string;
+  release_notes: string;
+  published_at: string;
+  download_path: string;
+}

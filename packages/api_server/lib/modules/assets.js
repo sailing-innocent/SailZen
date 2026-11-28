@@ -1,0 +1,88 @@
+import { SailError, ERROR_STATUS, getStage, ThemeTarget, } from "@saili/common-all";
+import { WorkspaceUtils } from "@saili/engine-server";
+import { getWSEngine, getDirname } from "../utils";
+import fs from "fs-extra";
+import path from "path";
+import { getLogger } from "../core";
+const __dirname = getDirname(import.meta.url);
+export class AssetsController {
+    static singleton;
+    static instance() {
+        if (!AssetsController.singleton) {
+            AssetsController.singleton = new AssetsController();
+        }
+        return AssetsController.singleton;
+    }
+    async get({ fpath, ws }) {
+        const engine = await getWSEngine({ ws });
+        const { wsRoot, vaults } = engine;
+        if (!WorkspaceUtils.isPathInWorkspace({ wsRoot, vaults, fpath })) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.INVALID_CONFIG,
+                    message: `fpath ${fpath} not inside a vault. wsRoot: ${wsRoot}, vaults: ${vaults
+                        .map((v) => v.fsPath)
+                        .join(", ")}`,
+                }),
+            };
+        }
+        if (!fs.existsSync(fpath)) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.DOES_NOT_EXIST,
+                    message: `fpath ${fpath} does not exist`,
+                }),
+            };
+        }
+        return {
+            data: fpath,
+            error: null,
+        };
+    }
+    async getTheme({ themeTarget, themeType, }) {
+        const ctx = "Assets:getTheme";
+        const stage = getStage();
+        const logger = getLogger();
+        logger.info({ ctx, themeTarget, themeType, stage });
+        let root;
+        if (stage !== "prod") {
+            // lib/modules/
+            root = path.join(__dirname, "..", "..", "assets");
+        }
+        else {
+            root = __dirname;
+        }
+        const getPathForTarget = ({ themeTarget, }) => {
+            const themeDir = path.join(root, "static", "themes");
+            if (themeTarget === ThemeTarget.PRISM) {
+                return path.join(themeDir, "prism");
+            }
+            return SailError.createFromStatus({
+                status: ERROR_STATUS.INVALID_CONFIG,
+                message: `target ${themeTarget} not valid`,
+            });
+        };
+        const getFileForType = ({ themeType, targetRoot, }) => {
+            return path.join(targetRoot, `${themeType.toLowerCase()}.css`);
+        };
+        const targetRoot = getPathForTarget({ themeTarget });
+        if (targetRoot instanceof SailError) {
+            return { error: targetRoot };
+        }
+        const pathForTarget = getFileForType({ themeType, targetRoot });
+        logger.info({ ctx, pathForTarget });
+        if (!fs.existsSync(pathForTarget)) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.DOES_NOT_EXIST,
+                    message: `no file at ${pathForTarget}`,
+                }),
+            };
+        }
+        return {
+            data: pathForTarget,
+            error: null,
+        };
+    }
+}
+//# sourceMappingURL=assets.js.map

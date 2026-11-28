@@ -1,0 +1,63 @@
+import { SailError, ErrorFactory, NoteDictsUtils, TreeUtils, URI, VaultUtils, } from "@saili/common-all";
+import path from "path";
+import { getAllFiles } from "./files";
+import { vault2Path } from "./files";
+/**
+ * Validate correctness of engine notes compared with filesystem.
+ * Currently supports parent/children relationship between notes
+ */
+export class StateValidator {
+    static validateEngineState(engine) {
+        return Promise.all(engine.vaults.map(async (vault) => {
+            const rootNote = (await engine.findNotesMeta({ fname: "root", vault }))[0];
+            try {
+                if (rootNote) {
+                    const engineNotes = await engine.findNotes({ excludeStub: true });
+                    const engineTreeNode = TreeUtils.createTreeFromEngine(NoteDictsUtils.createNotePropsByIdDict(engineNotes), rootNote.id);
+                    const vpath = vault2Path({ vault, wsRoot: engine.wsRoot });
+                    const out = await getAllFiles({
+                        root: URI.file(vpath),
+                        include: ["*.md"],
+                    });
+                    if (out.error) {
+                        return { error: out.error };
+                    }
+                    if (out.data) {
+                        const allFnames = out.data.map((filePath) => path.parse(filePath).name);
+                        const fileTreeNode = TreeUtils.createTreeFromFileNames(allFnames, "root");
+                        const resp = TreeUtils.validateTreeNodes(fileTreeNode, engineTreeNode);
+                        if (resp.error) {
+                            return {
+                                error: new SailError({
+                                    message: `Vault "${VaultUtils.getName(vault)}" mismatch. ${resp.error.message}`,
+                                }),
+                            };
+                        }
+                        return { data: undefined };
+                    }
+                    else {
+                        return {
+                            error: new SailError({
+                                message: `No files found from vault "${VaultUtils.getName(vault)}"`,
+                            }),
+                        };
+                    }
+                }
+                else {
+                    return {
+                        error: new SailError({
+                            message: `Root file from vault "${VaultUtils.getName(vault)}" is missing.`,
+                        }),
+                    };
+                }
+            }
+            catch (error) {
+                const sailError = ErrorFactory.wrapIfNeeded(error);
+                return {
+                    error: sailError,
+                };
+            }
+        }));
+    }
+}
+//# sourceMappingURL=StateValidator.js.map

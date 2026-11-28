@@ -1,0 +1,12 @@
+import type { Plugin } from "unified";
+import { ExtendedImage } from "../types";
+import { html } from "mdast-builder";
+export declare const EXTENDED_IMAGE_REGEX: RegExp;
+export declare const EXTENDED_IMAGE_REGEX_LOOSE: RegExp;
+export declare const matchExtendedImage: (text: string, matchLoose?: boolean) => string | undefined;
+type PluginOpts = {};
+declare const plugin: Plugin<[PluginOpts?]>;
+export declare function extendedImage2htmlRaw(node: ExtendedImage, _opts?: PluginOpts): string;
+export declare function extendedImage2html(node: ExtendedImage, opts?: PluginOpts): ReturnType<typeof html>;
+export { plugin as extendedImage };
+export { PluginOpts as ExtendedImageOpts };

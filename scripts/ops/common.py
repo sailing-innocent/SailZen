@@ -280,6 +280,18 @@ class OpsConfig:
         return f"{self.remote_data_dir}/app_releases"
 
     @property
+    def remote_vscode_releases_dir(self) -> str:
+        explicit = self.get_ops("OPS_REMOTE_VSCODE_RELEASES_DIR", "")
+        if explicit:
+            return explicit.rstrip("/")
+        raw = self.prod_vars.get("VSCODE_RELEASES_PATH", "").strip()
+        if raw:
+            if raw.startswith("/"):
+                return raw.rstrip("/")
+            return f"{self.remote_repo.rstrip('/')}/{raw.lstrip('./').rstrip('/')}"
+        return f"{self.remote_data_dir}/vscode_releases"
+
+    @property
     def remote_server_service(self) -> str:
         return self.get_ops("OPS_REMOTE_SERVER_SERVICE", "sailzen-server.service")
 

@@ -1,0 +1,13 @@
+import { TopLevelSailConfig } from "../../types/configs/sailConfig";
+import { SailConfigEntry, SailConfigEntryCollection } from "../../types/configs/base";
+import { SailGlobalConfig } from "../../types/configs/global/global";
+export declare const ENABLE_MERMAID: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_PRETTY_REFS: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_KATEX: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_FM_TITLE: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_NOTE_TITLE_FOR_LINK: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_FRONTMATTER_TAGS: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_HASHES_FOR_FM_TAGS: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_CHILD_LINKS: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const ENABLE_BACK_LINKS: (namespace: TopLevelSailConfig) => SailConfigEntry;
+export declare const GLOBAL: SailConfigEntryCollection<SailGlobalConfig>;

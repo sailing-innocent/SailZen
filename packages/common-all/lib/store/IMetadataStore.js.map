@@ -1,0 +1,1 @@
+{"version":3,"file":"IMetadataStore.js","sourceRoot":"","sources":["../../src/store/IMetadataStore.ts"],"names":[],"mappings":"","sourcesContent":["import { NotePropsMeta } from \"../types\";\r\nimport { IDataStore } from \"./IDataStore\";\r\n\r\nexport type INoteMetadataStore = IDataStore<string, NotePropsMeta>;\r\n"]}

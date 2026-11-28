@@ -21,6 +21,7 @@ import {
   WorkbenchContextPackDTO,
   WorkbenchProjectItemDTO,
   WorkbenchProjectMetaDTO,
+  WorkbenchReleaseInfoDTO,
   WorkDTO,
 } from "./types";
 
@@ -298,5 +299,40 @@ export class SailZenApiClient {
       `/text/edition/${editionId}/chapter-sync`,
       req
     );
+  }
+
+  // --------------------------------------------------------------------------
+  // VS Code Extension OTA Release (/api/v1/workbench/release/*)
+  // --------------------------------------------------------------------------
+
+  async getLatestWorkbenchRelease(): Promise<WorkbenchReleaseInfoDTO> {
+    return this.request<WorkbenchReleaseInfoDTO>("GET", "/workbench/release/latest");
+  }
+
+  /** Download raw binary (e.g. .vsix) from server path (relative to host or /api/v1). */
+  async downloadBinary(pathOrUrl: string): Promise<Buffer> {
+    const url = pathOrUrl.startsWith("http")
+      ? pathOrUrl
+      : pathOrUrl.startsWith("/")
+      ? `${this.getBaseUrl()}${pathOrUrl}`
+      : `${this.getBaseUrl()}/api/v1/${pathOrUrl}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(this.timeoutMs, 60000));
+    try {
+      const headers: Record<string, string> = {};
+      const token = this.registry.current.apiToken?.trim();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const resp = await fetch(url, { method: "GET", headers, signal: controller.signal });
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} GET ${pathOrUrl}`);
+      }
+      const arr = await resp.arrayBuffer();
+      return Buffer.from(arr);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

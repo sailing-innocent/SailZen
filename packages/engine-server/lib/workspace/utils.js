@@ -1,0 +1,283 @@
+import { CONSTANTS, SailError, ERROR_STATUS, genHash, isNotUndefined, VaultUtils, WorkspaceType, } from "@saili/common-all";
+import { assignJSONWithComment, FileUtils, findDownTo, findUpTo, GitUtils, readJSONWithComments, readJSONWithCommentsSync, uniqueOutermostFolders, writeJSONWithComments, } from "@saili/common-server";
+import fs from "fs-extra";
+import _ from "lodash";
+import path from "path";
+import { SiteUtils } from "../topics/site";
+import { SyncActionStatus, } from "./workspaceServiceInterface";
+export class WorkspaceUtils {
+    static isWorkspaceConfig(val) {
+        if (_.isNull(val)) {
+            return false;
+        }
+        return true;
+    }
+    static async getCodeWorkspaceSettings(wsRoot) {
+        const wsConfigPath = path.join(wsRoot, CONSTANTS.SAIL_WS_NAME);
+        let wsConfig;
+        try {
+            wsConfig = await readJSONWithComments(wsConfigPath);
+        }
+        catch (err) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.DOES_NOT_EXIST,
+                    message: `Missing code-workspace file ${wsConfigPath}`,
+                    payload: err,
+                }),
+            };
+        }
+        if (!this.isWorkspaceConfig(wsConfig)) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.INVALID_CONFIG,
+                    message: `Bad code-workspace file ${wsConfigPath}`,
+                }),
+            };
+        }
+        else {
+            return {
+                data: wsConfig,
+            };
+        }
+    }
+    static getCodeWorkspaceSettingsSync(wsRoot) {
+        const wsConfigPath = path.join(wsRoot, CONSTANTS.SAIL_WS_NAME);
+        try {
+            const wsConfig = readJSONWithCommentsSync(wsConfigPath);
+            if (!this.isWorkspaceConfig(wsConfig)) {
+                return {
+                    error: SailError.createFromStatus({
+                        status: ERROR_STATUS.INVALID_CONFIG,
+                        message: `Bad code-workspace file ${wsConfigPath}`,
+                    }),
+                };
+            }
+            else {
+                return {
+                    data: wsConfig,
+                };
+            }
+        }
+        catch (err) {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.INVALID_CONFIG,
+                    message: `Missing code-workspace file ${wsConfigPath}`,
+                }),
+            };
+        }
+    }
+    /** Finds the workspace type using the VSCode plugin workspace variables. */
+    static async getWorkspaceType({ workspaceFolders, workspaceFile, }) {
+        if (!_.isUndefined(workspaceFile) &&
+            path.basename(workspaceFile.fsPath) === CONSTANTS.SAIL_WS_NAME) {
+            return WorkspaceType.CODE;
+        }
+        if (!_.isUndefined(workspaceFolders)) {
+            const rootFolder = await this.findWSRootsInWorkspaceFolders(workspaceFolders);
+            if (!_.isEmpty(rootFolder))
+                return WorkspaceType.NATIVE;
+        }
+        return WorkspaceType.NONE;
+    }
+    /** Finds the workspace type by analyzing the given directory. Use if plugin is not available.
+     * @returns WorkspaceType
+     */
+    static async getWorkspaceTypeFromDir(dir) {
+        if (fs.pathExistsSync(path.join(dir, CONSTANTS.SAIL_WS_NAME))) {
+            return WorkspaceType.CODE;
+        }
+        const wsRoot = await findDownTo({
+            base: dir,
+            fname: CONSTANTS.SAIL_CONFIG_FILE,
+            returnDirPath: true,
+        });
+        if (!wsRoot)
+            return WorkspaceType.NONE;
+        if (fs.pathExistsSync(path.join(wsRoot, CONSTANTS.SAIL_CONFIG_FILE))) {
+            return WorkspaceType.NATIVE;
+        }
+        return WorkspaceType.NONE;
+    }
+    static async updateCodeWorkspaceSettings({ wsRoot, updateCb, }) {
+        const maybeSettings = WorkspaceUtils.getCodeWorkspaceSettingsSync(wsRoot);
+        if (maybeSettings.error) {
+            throw SailError.createFromStatus({
+                status: ERROR_STATUS.INVALID_STATE,
+                message: "no workspace file found",
+            });
+        }
+        const settings = updateCb(maybeSettings.data);
+        await this.writeCodeWorkspaceSettings({ wsRoot, settings });
+        return settings;
+    }
+    static async writeCodeWorkspaceSettings({ settings, wsRoot, }) {
+        return writeJSONWithComments(path.join(wsRoot, "sail.code-workspace"), settings);
+    }
+    /**
+     * Find wsRoot if exists
+     * @returns
+     */
+    static findWSRoot() {
+        const cwd = process.cwd();
+        const configPath = findUpTo({
+            base: cwd,
+            fname: "sail.yml",
+            maxLvl: 3,
+            returnDirPath: true,
+        });
+        return configPath;
+    }
+    static async findWSRootsInWorkspaceFolders(workspaceFolders) {
+        const folders = uniqueOutermostFolders(workspaceFolders.map((folder) => folder.uri.fsPath));
+        const sailWorkspaceFolders = await Promise.all(folders.map((folder) => findDownTo({
+            base: folder,
+            fname: CONSTANTS.SAIL_CONFIG_FILE,
+            returnDirPath: true,
+        })));
+        return sailWorkspaceFolders.filter(isNotUndefined);
+    }
+    /**
+     * Check if a file is a sail note (vs a regular file or something else entirely)
+     */
+    static async isSailNote({ wsRoot, vaults, fpath, }) {
+        // check if we have markdown file
+        if (!fpath.endsWith(".md")) {
+            return false;
+        }
+        // if markdown file, check if it is in a sail vault
+        if (!WorkspaceUtils.isPathInWorkspace({ wsRoot, vaults, fpath })) {
+            return false;
+        }
+        // if markdown file, does it have frontmatter? check for `---` at beginning of file
+        return ((await FileUtils.matchFilePrefix({ fpath, prefix: "---" })).data || false);
+    }
+    static isNativeWorkspace(workspace) {
+        return workspace.type === WorkspaceType.NATIVE;
+    }
+    /**
+     * Check if path is in workspace
+     * @returns
+     */
+    static isPathInWorkspace({ wsRoot, vaults, fpath, }) {
+        try {
+            VaultUtils.getVaultByFilePath({
+                vaults,
+                wsRoot,
+                fsPath: fpath,
+            });
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    /**
+     * Return true if contents of note is different from engine
+     * @param param0
+     * @returns
+     */
+    static noteContentChanged({ content, note, }) {
+        const noteHash = genHash(content);
+        if (_.isUndefined(note.contentHash)) {
+            return true;
+        }
+        return noteHash !== note.contentHash;
+    }
+    /**
+     * Generate url for given note or return `undefined` if no url is specified
+     * @param opts
+     *
+     */
+    static getNoteUrl(opts) {
+        const { config, note, anchor, vault } = opts;
+        /**
+         * set to true if index node, don't append id at the end
+         */
+        const { url: root, index } = SiteUtils.getSiteUrlRootForVault({
+            vault,
+            config,
+        });
+        if (!root) {
+            throw new SailError({ message: "no urlRoot set" });
+        }
+        // if we have a note, see if we are at index
+        const isIndex = _.isUndefined(note)
+            ? false
+            : SiteUtils.isIndexNote({
+                indexNote: index,
+                note,
+            });
+        const pathValue = note.id;
+        const siteUrlPath = SiteUtils.getSiteUrlPathForNote({
+            addPrefix: true,
+            pathValue,
+            config,
+            pathAnchor: anchor,
+        });
+        const link = isIndex ? root : [root, siteUrlPath].join("");
+        return link;
+    }
+    /**
+     * @param results
+     * @returns number of repos that has Sync Action Status done.
+     */
+    static getCountForStatusDone(results) {
+        return this.count(results, SyncActionStatus.DONE);
+    }
+    static count(results, status) {
+        return results.filter((result) => result.status === status).length;
+    }
+    /**
+     *
+     * @param results
+     * @param status
+     * @returns name of all the repos with status same as @param status.
+     */
+    static getFilteredRepoNames(results, status) {
+        const matchingResults = results.filter((result) => result.status === status);
+        if (matchingResults.length === 0)
+            return [];
+        return matchingResults.map((result) => {
+            // Display the vault names for info/error messages
+            if (result.vaults.length === 1) {
+                return VaultUtils.getName(result.vaults[0]);
+            }
+            // But if there's more than one vault in the repo, then use the repo path which is easier to interpret
+            return result.repo;
+        });
+    }
+    static async addVaultToWorkspace({ vault, wsRoot, }) {
+        const resp = await WorkspaceUtils.getCodeWorkspaceSettings(wsRoot);
+        if (resp.error) {
+            // If there is no workspace file, just skip updating it. The workspace
+            // file is optional with self contained vaults.
+            return;
+        }
+        let wsSettings = resp.data;
+        if (!_.find(wsSettings.folders, (ent) => ent.path === VaultUtils.getRelPath(vault))) {
+            const vault2Folder = VaultUtils.toWorkspaceFolder(vault);
+            const folders = [vault2Folder].concat(wsSettings.folders);
+            wsSettings = assignJSONWithComment({ folders }, wsSettings);
+            await WorkspaceUtils.writeCodeWorkspaceSettings({
+                settings: wsSettings,
+                wsRoot,
+            });
+        }
+        // check for .gitignore
+        await GitUtils.addToGitignore({
+            addPath: vault.fsPath,
+            root: wsRoot,
+            noCreateIfMissing: true,
+        });
+        const vaultDir = path.join(wsRoot, vault.fsPath);
+        fs.ensureDir(vaultDir);
+        await GitUtils.addToGitignore({
+            addPath: ".sail.cache.*",
+            root: vaultDir,
+        });
+        return;
+    }
+}
+//# sourceMappingURL=utils.js.map

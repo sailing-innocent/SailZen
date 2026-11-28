@@ -36,6 +36,8 @@ def test_core_routers_mounted(monkeypatch):
         "/api/v1/reminder/pending",
         "/api/v1/tick/tickets",
         "/api/v1/workbench/bootstrap",
+        "/api/v1/workbench/release/latest",
+        "/api/v1/workbench/release/latest.vsix",
         "/api/v1/life/weather",
         "/api/v1/necessity/residence",
         "/api/v1/text/work",

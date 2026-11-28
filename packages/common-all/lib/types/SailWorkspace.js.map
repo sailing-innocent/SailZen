@@ -1,0 +1,1 @@
+{"version":3,"file":"SailWorkspace.js","sourceRoot":"","sources":["../../src/types/SailWorkspace.ts"],"names":[],"mappings":"","sourcesContent":["import { DVault } from \"./DVault\";\nimport { RemoteEndpoint } from \"./RemoteEndpoint\";\n\nexport type SailWorkspace = {\n  name: string;\n  vaults: DVault[];\n  remote: RemoteEndpoint;\n};\n"]}

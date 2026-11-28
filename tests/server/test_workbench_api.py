@@ -176,3 +176,46 @@ def test_edition_chapter_sync_idempotent_upsert(db):
     assert r2.node.id == r1.node.id
     assert r2.node.title == "启程（修订版）"
     assert r2.edition_char_count == len("星光照亮了整个港口，远方的引擎已经点火。")
+
+
+def test_workbench_vsix_ota_release_manifest_and_publish_helpers(tmp_path):
+    from sail_server.controller.workbench import _load_latest_vsix_release
+    from scripts.ops.publish_vscode_vsix import (
+        build_vsix_manifest,
+        compute_next_semver,
+        compute_sha256,
+        read_workbench_version,
+        write_workbench_version,
+    )
+
+    # 1. Semver helper & package.json round-trip
+    pkg_json = tmp_path / "package.json"
+    pkg_json.write_text('{\n  "name": "sailzen-workbench",\n  "version": "0.3.0"\n}\n', encoding="utf-8")
+    assert read_workbench_version(pkg_json) == "0.3.0"
+    assert compute_next_semver("0.3.0", bump="patch") == "0.3.1"
+    assert compute_next_semver("0.3.0", bump="minor") == "0.4.0"
+    assert compute_next_semver("0.3.0", bump="major") == "1.0.0"
+    assert compute_next_semver("0.3.0", explicit_version="0.5.2") == "0.5.2"
+    write_workbench_version("0.3.1", pkg_json)
+    assert read_workbench_version(pkg_json) == "0.3.1"
+
+    # 2. Server VSIX release manifest loader
+    releases_dir = tmp_path / "vscode_releases"
+    releases_dir.mkdir()
+    vsix_file = releases_dir / "sailzen-workbench-0.3.1.vsix"
+    vsix_file.write_bytes(b"PK\x03\x04mock-vsix")
+    sha = compute_sha256(vsix_file)
+    manifest = build_vsix_manifest(
+        version="0.3.1",
+        vsix_path=vsix_file,
+        sha256=sha,
+        release_notes="Add OTA self-update",
+    )
+    import json
+    (releases_dir / "latest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    info, resolved_path = _load_latest_vsix_release(releases_dir)
+    assert info.version == "0.3.1"
+    assert info.sha256 == sha
+    assert info.download_path.endswith("/workbench/release/download/sailzen-workbench-0.3.1.vsix")
+    assert resolved_path == vsix_file.resolve()

@@ -27,7 +27,7 @@ SailZen 是面向个人的知识管理与生产力系统，最终产品形态运
 | **后端与数据服务** | `sail_server/` + `packages/py/sailzen-orm/` | ✅ 活跃核心：REST/WS API、定时任务、静态托管 `site_dist` | Python >=3.13, Litestar, SQLAlchemy 2.0, psycopg3 | 云端 PostgreSQL（本地开发可切换 SQLite） |
 | **Web 管理台** | `site/` | ✅ 活跃核心：桌面端深度管理/复盘/配置面板，构建后由 `sail_server` 托管 | React 19, TypeScript, Vite, Tailwind CSS 4, Zustand | 调 `sail_server` API |
 | **Android App** | `android/` | ✅ 活跃核心：手机随身哨兵（系统通知提醒、3秒采集、健康/节奏打卡） | Kotlin, Jetpack Compose, Room, Retrofit, OkHttp WS | 调云端 `sail_server` REST + WS |
-| **VSCode 笔记插件** | `packages/vscode_plugin/` 及 `packages/*` | ✅ 维护中：基于开源 Dendron 改造，专注层级 Markdown 笔记，通过 Git 同步（与后端结构化数据尚未完全打通，仅有 CLI/部分桥接尝试） | TypeScript, Node.js, pnpm workspace, VSCode API ^1.107 | 本地 Markdown Vault + Git |
+| **VSCode 工作台插件** | `packages/sailzen-workbench/` | ✅ 活跃核心：轻量化工作与创作工作台（极速点层级 Markdown + Rhythm v2/SailTick + Content 2.0 虚拟图书馆/围栏同步 + 多机器语义绑定 + 云端 VSIX OTA 自更新） | TypeScript, Node.js, esbuild, VSCode API ^1.95 | 本地 Markdown Vault (Git) + `~/.sailzen/machine.json` + 云端 `sail_server` |
 | **SailTick 守护进程** | `sailtick/` | 🔄 活跃开发：SailZen 3.0 首个 24/7 Tick 驱动常驻 AI 教练，同机部署于云端 `:9070` | Python, APScheduler, DeepSeek/Moonshot | 独立 SQLite（`data/sailtick/db/sailtick.db`）+ `sail_server` 票据表 |
 | **命令行工具** | `packages/py/sailzen-cli/` | ✅ 活跃：供人工与 Agent 调用的独立 CLI（`sailzen`），通过 HTTP API 与服务端交互 | Python, Click (`uv tool`) | 无状态客户端 |
 
@@ -37,7 +37,7 @@ SailZen 是面向个人的知识管理与生产力系统，最终产品形态运
 
 - **飞书（Lark）机器人支线**（`sail_bot/`、`bot.py`、`bot_watcher.py`、`bot.example.yaml`、`sail/feishu_card_kit/`、`doc/design/lark_bot/`）：**已停止使用**，其触达与交互生态位已由 **Android App + Reminder WebSocket 通道** 替代。
 - **旧版 Autonomous Agent**（`archive/autonomous_agent/`、`scripts/agent-daemon.service`、`doc/design/agent-system/autonomous-agent.md`、`doc/design/agent-system/shadow-agent-v1-deprecated.md`）：**已归档**，已被 `sailtick/` 取代。
-- **旧版 Dendron Webview**（`packages/dendron_plugin_views/`）：已被 `packages/sail_plugin_views/` 替代。
+- **旧版 Dendron 衍生多包体系**（`archive/dendron_legacy/`：含原 `vscode_plugin` / `engine-server` / `api_server` / `unified` / `common-all` / `common-server` / `sail_plugin_views` / `dendron_plugin_views`）：**已归档**，已被轻量化单扩展 `packages/sailzen-workbench/` 彻底替代。
 
 ---
 
@@ -199,30 +199,19 @@ uv run scripts/db_sync.py pull
 uv run scripts/db_sync.py export-sqlite --env prod
 ```
 
-### Web 前端 (`site/`) & VSCode 插件 (`packages/*`)
-
-VSCode 插件依赖构建顺序：`common-all` → `common-server` / `unified` → `engine-server` → `api_server` → `sail_plugin_views` → `vscode_plugin`。
+### Web 前端 (`site/`) & VSCode 工作台插件 (`packages/sailzen-workbench/`)
 
 ```powershell
 # Web 前端本地开发与生产构建（输出到 site/dist）
 pnpm run dev:site
 pnpm run build-site
 
-# VSCode 插件构建与打包
-pnpm run build-plugin
-pnpm run package-plugin
-
-# Plugin Views
-pnpm run views:dev
-pnpm run views:build
-pnpm run views:copy
-
-# TypeScript 单元测试
-pnpm test
-pnpm run test:vscode-plugin
-
-# 版本号同步（更新 packages/* 与 site/package.json）
-pnpm run version:patch
+# VSCode 工作台插件构建、测试、打包与云端 OTA 发布
+pnpm run build-workbench
+pnpm run test:workbench
+pnpm run package-workbench
+uv run python scripts/ops/publish_vscode_vsix.py --dry-run
+uv run python scripts/ops/publish_vscode_vsix.py -m "版本更新说明"
 ```
 
 ### Android App (`android/`)

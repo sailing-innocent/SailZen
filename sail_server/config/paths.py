@@ -84,6 +84,11 @@ APP_RELEASES_DIR: Path = Path(
     os.environ.get("APP_RELEASES_PATH", str(SERVER_DATA_DIR / "app_releases"))
 ).resolve()
 
+# VS Code 插件 VSIX 发布包存储目录
+VSCODE_RELEASES_DIR: Path = Path(
+    os.environ.get("VSCODE_RELEASES_PATH", str(SERVER_DATA_DIR / "vscode_releases"))
+).resolve()
+
 # SailTick 图片识图媒体存储目录
 TICK_MEDIA_DIR: Path = Path(
     os.environ.get("TICK_MEDIA_PATH", str(SERVER_DATA_DIR / "tick_media"))
@@ -102,6 +107,15 @@ def get_app_releases_dir() -> Path:
         return Path(explicit).resolve()
     base = Path(os.environ.get("SERVER_DATA_DIR", str(SERVER_DATA_DIR))).resolve()
     return (base / "app_releases").resolve()
+
+
+def get_vscode_releases_dir() -> Path:
+    """动态解析 VS Code 插件 VSIX 发布包存储目录（支持运行期环境变量覆写）。"""
+    explicit = os.environ.get("VSCODE_RELEASES_PATH", "").strip()
+    if explicit:
+        return Path(explicit).resolve()
+    base = Path(os.environ.get("SERVER_DATA_DIR", str(SERVER_DATA_DIR))).resolve()
+    return (base / "vscode_releases").resolve()
 
 
 def get_tick_media_dir() -> Path:

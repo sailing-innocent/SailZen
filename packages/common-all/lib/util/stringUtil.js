@@ -1,0 +1,28 @@
+import levenshtein from "fast-levenshtein";
+import { CONSTANTS } from "../constants";
+/**
+ * Returns levenshtein distance between the two strings, the higher the number
+ * the further apart the strings are. 0 signals that the strings are equal. */
+export function levenshteinDistance(s1, s2) {
+    return levenshtein.get(s1, s2);
+}
+export function parseSailURI(linkString) {
+    if (linkString.startsWith(CONSTANTS.SRC_DELIMITER)) {
+        return {
+            link: linkString.replace(CONSTANTS.SRC_DELIMITER, "http://175.27.233.235:4399/content?content="),
+        };
+    }
+    if (linkString.startsWith(CONSTANTS.SAIL_DELIMETER)) {
+        const [vaultName, link] = linkString
+            .split(CONSTANTS.SAIL_DELIMETER)[1]
+            .split("/");
+        return {
+            vaultName,
+            link,
+        };
+    }
+    return {
+        link: linkString,
+    };
+}
+//# sourceMappingURL=stringUtil.js.map

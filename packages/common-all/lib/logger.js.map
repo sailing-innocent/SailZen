@@ -1,0 +1,1 @@
+{"version":3,"file":"logger.js","sourceRoot":"","sources":["../src/logger.ts"],"names":[],"mappings":"","sourcesContent":["export type DLogger = {\r\n  name?: string;\r\n  level: any;\r\n  debug: (msg: any) => void;\r\n  info: (msg: any) => void;\r\n  error: (msg: any) => void;\r\n};\r\n"]}

@@ -1,0 +1,1 @@
+{"version":3,"file":"constants.js","sourceRoot":"","sources":["../../src/seed/constants.ts"],"names":[],"mappings":"AAAA,MAAM,CAAC,MAAM,sBAAsB,GAAG,OAAO,CAAC","sourcesContent":["export const DEFAULT_SEED_PUBLISHER = \"local\";\r\n"]}

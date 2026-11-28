@@ -1,0 +1,177 @@
+import { containsNonSailUri, SailError, getTextRange, isNotUndefined, position2VSCodeRange, VaultUtils, } from "@saili/common-all";
+import _ from "lodash";
+import { AnchorUtils } from "../remark";
+import { isBeginBlockAnchorId, isEndBlockAnchorId } from "../remark/noteRefs";
+import { decorateTaskNote } from "./taskNotes";
+import { DECORATION_TYPES } from "./utils";
+const RE_ALIAS = /(?<beforeAlias>\[\[)(?<alias>[^|]+)\|/;
+export const decorateWikilink = async (opts) => {
+    const { node: wikiLink, engine, note, noteText, config } = opts;
+    const { position } = wikiLink;
+    const fname = wikiLink.value;
+    const vaultName = wikiLink.data.vaultName;
+    // DEBUG: Log parsed wikilink data
+    // console.log("[decorateWikilink] Parsed wikilink", {
+    //   fname,
+    //   alias: wikiLink.data.alias,
+    //   vaultName,
+    //   anchorHeader: wikiLink.data.anchorHeader,
+    //   rawNode: JSON.stringify(wikiLink),
+    // });
+    const { type, errors } = await linkedNoteType({
+        fname,
+        anchorStart: wikiLink.data.anchorHeader,
+        vaultName,
+        note,
+        engine,
+        vaults: config.workspace?.vaults ?? [],
+    });
+    const wikilinkRange = position2VSCodeRange(position);
+    const decorations = [];
+    // Highlight the alias part
+    const linkText = getTextRange(noteText, wikilinkRange);
+    const aliasMatch = linkText.match(RE_ALIAS);
+    if (aliasMatch &&
+        aliasMatch.groups?.beforeAlias &&
+        aliasMatch.groups?.alias) {
+        const { beforeAlias, alias } = aliasMatch.groups;
+        decorations.push({
+            type: DECORATION_TYPES.alias,
+            range: {
+                start: {
+                    line: wikilinkRange.start.line,
+                    character: wikilinkRange.start.character + beforeAlias.length,
+                },
+                end: {
+                    line: wikilinkRange.start.line,
+                    character: wikilinkRange.start.character + beforeAlias.length + alias.length,
+                },
+            },
+        });
+    }
+    // Wikilinks to a part of a task are not tasks themselves, so skip links like [[task.thing#part]]. Also skip broken wikilinks, they have no notes.
+    if (!wikiLink.data.anchorHeader && type !== DECORATION_TYPES.brokenWikilink) {
+        const taskDecoration = await decorateTaskNote({
+            range: wikilinkRange,
+            fname,
+            vaultName,
+            engine,
+            config,
+        });
+        if (taskDecoration)
+            decorations.push(taskDecoration);
+    }
+    // Highlight the wikilink itself
+    decorations.push({
+        type,
+        range: wikilinkRange,
+        data: {
+            link: wikiLink,
+        },
+    });
+    return { decorations, errors };
+};
+function checkIfAnchorIsValid({ anchor, allAnchors, }) {
+    // if there's no anchor, there's nothing that could be invalid
+    if (!anchor)
+        return true;
+    // if it's a ^begin or ^end, it's valid;
+    if (anchor && isBeginBlockAnchorId(anchor.slice(1)))
+        return true;
+    if (anchor && isEndBlockAnchorId(anchor.slice(1)))
+        return true;
+    // wildcard header anchor or line anchor. These are hard to check, so let's just say they exist.
+    if (anchor && /^[*L]/.test(anchor))
+        return true;
+    // otherwise, check that the anchor actually exists inside the note
+    return allAnchors.includes(anchor.toLowerCase());
+}
+export async function linkedNoteType({ fname, anchorStart, anchorEnd, vaultName, note, engine, vaults, }) {
+    const ctx = "linkedNoteType";
+    const vault = vaultName
+        ? VaultUtils.getVaultByName({ vname: vaultName, vaults })
+        : undefined;
+    // Vault specified, but can't find it.
+    if (vaultName && !vault) {
+        return {
+            type: DECORATION_TYPES.brokenWikilink,
+            errors: [],
+        };
+    }
+    let matchingNotes;
+    // Same-file links have `fname` undefined or empty string
+    if (!fname && note) {
+        matchingNotes = note ? [note] : [];
+    }
+    else if (fname) {
+        try {
+            matchingNotes = await engine.findNotesMeta({ fname, vault });
+            // DEBUG: Log findNotesMeta result
+            // console.log("[linkedNoteType] findNotesMeta result", {
+            //   fname,
+            //   vault: vault?.fsPath,
+            //   matchingNotesCount: matchingNotes?.length ?? 0,
+            //   matchingNotes: matchingNotes?.map(n => ({ id: n.id, fname: n.fname })),
+            // });
+        }
+        catch (err) {
+            return {
+                type: DECORATION_TYPES.brokenWikilink,
+                errors: [
+                    new SailError({
+                        message: "error when looking for note",
+                        payload: {
+                            ctx,
+                            fname,
+                            vaultName,
+                            err,
+                        },
+                    }),
+                ],
+            };
+        }
+    }
+    else {
+        matchingNotes = [note];
+    }
+    // Checking web URLs is not feasible, and checking wildcard references would be hard.
+    // Let's just highlight them as existing for now.
+    if (fname && (containsNonSailUri(fname) || fname.endsWith("*")))
+        return { type: DECORATION_TYPES.wikiLink, errors: [] };
+    // It's hard to check the anchors for non-note files because we don't parse
+    // them ahead of time. If we can find the file, just say the link is good
+    // without checking anchors.
+    // TODO: Re-enable check once we can refactor out common-server dependency:
+    // if (fname && matchingNotes.length === 0) {
+    // const nonNoteFile = await findNonNoteFile({
+    //   fpath: fname,
+    //   vaults: engine.vaults,
+    //   wsRoot: engine.wsRoot,
+    // });
+    // if (nonNoteFile) return { type: DECORATION_TYPES.wikiLink, errors: [] };
+    // return { type: DECORATION_TYPES.wikiLink, errors: [] };
+    // }
+    // For regular notes, we can efficiently check the anchors.
+    if (anchorStart || anchorEnd) {
+        const allAnchors = _.flatMap(matchingNotes, (note) => Object.values(note.anchors))
+            .filter(isNotUndefined)
+            .map(AnchorUtils.anchor2string);
+        if (!checkIfAnchorIsValid({ anchor: anchorStart, allAnchors }))
+            return { type: DECORATION_TYPES.brokenWikilink, errors: [] };
+        if (!checkIfAnchorIsValid({ anchor: anchorEnd, allAnchors }))
+            return { type: DECORATION_TYPES.brokenWikilink, errors: [] };
+    }
+    if (matchingNotes.length > 0) {
+        // There are no anchors specified in the link, but we did find matching notes
+        // console.log("[linkedNoteType] VALID: Found matching notes", { fname, count: matchingNotes.length });
+        return {
+            type: DECORATION_TYPES.wikiLink,
+            errors: [],
+            noteMeta: matchingNotes[0],
+        };
+    }
+    // No matching notes, and not a non-note file or web URL. This is just a broken link then.
+    // console.log("[linkedNoteType] BROKEN: No matching notes found", { fname });
+    return { type: DECORATION_TYPES.brokenWikilink, errors: [] };
+}
+//# sourceMappingURL=wikilinks.js.map

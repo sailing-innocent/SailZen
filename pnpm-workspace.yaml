@@ -1,47 +1,31 @@
 packages:
-  - packages/*
+  - packages/sailzen-workbench
   - site
 
 allowBuilds:
   '@parcel/watcher': true
-  '@prisma/client': true
-  '@prisma/engines': true
   '@vscode/vsce-sign': true
-  better-sqlite3: true
   esbuild: true
   keytar: true
-  prisma: true
   unrs-resolver: true
 
 catalog:
   '@types/jest': ^30.0.0
-  '@types/lodash': ^4.17.24
   '@types/node': ^25.9.3
   '@types/react': ^19.2.17
   '@types/react-dom': ^19.2.3
-  better-sqlite3: ^12.5.0
   esbuild: ^0.28.1
   jest: ^30.4.2
   jest-config: ^30.4.2
-  lodash: ^4.18.1
   react: ^19.2.7
   react-dom: ^19.2.7
   ts-jest: ^29.4.11
   typescript: ^6.0.3
   typescript-eslint: ^8.61.0
 
-ignoredBuiltDependencies:
-  - sqlite3
-
 onlyBuiltDependencies:
   - '@parcel/watcher'
-  - '@prisma/client'
-  - '@prisma/engines'
   - '@vscode/vsce-sign'
-  - better-sqlite3
   - esbuild
   - keytar
-  - nx
-  - prisma
-  - sqlite3
   - unrs-resolver

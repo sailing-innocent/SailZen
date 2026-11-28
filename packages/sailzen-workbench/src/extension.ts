@@ -48,6 +48,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // 5. Kick off warm cache load + incremental disk sync + async server bootstrap
   await state.initialize();
+
+  // 6. Non-blocking OTA update check shortly after startup (skipped in Work Offline mode)
+  const checkOnStartup = vscode.workspace
+    .getConfiguration("sailzen")
+    .get<boolean>("updater.checkOnStartup", true);
+  if (checkOnStartup) {
+    const otaTimer = setTimeout(() => {
+      void vscode.commands.executeCommand("sailzen.checkForUpdate", { silent: true });
+    }, 4500);
+    context.subscriptions.push({ dispose: () => clearTimeout(otaTimer) });
+  }
 }
 
 export function deactivate(): void {

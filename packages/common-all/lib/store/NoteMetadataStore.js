@@ -1,0 +1,111 @@
+import _ from "lodash";
+import { ERROR_STATUS, ERROR_SEVERITY } from "../constants";
+import { SailError } from "../error";
+import { NoteFnameDictUtils } from "../noteDictsUtils";
+import { cleanName, isNotUndefined } from "../utils";
+import { VaultUtils } from "../vault";
+export class NoteMetadataStore {
+    /**
+     * Map of noteId -> noteProp metadata
+     */
+    _noteMetadataById;
+    /**
+     * Map of noteFname -> list of noteIds. Since fname is not unique across vaults, there can be multiple ids with the same fname
+     */
+    _noteIdsByFname;
+    constructor() {
+        this._noteMetadataById = {};
+        this._noteIdsByFname = {};
+    }
+    dispose() {
+        this._noteMetadataById = {};
+        this._noteIdsByFname = {};
+    }
+    /**
+     * See {@link IDataStore.get}
+     */
+    async get(key) {
+        const maybeNote = this._noteMetadataById[key];
+        if (maybeNote) {
+            return { data: _.cloneDeep(maybeNote) };
+        }
+        else {
+            return {
+                error: SailError.createFromStatus({
+                    status: ERROR_STATUS.CONTENT_NOT_FOUND,
+                    message: `NoteProps metadata not found for key ${key}.`,
+                    severity: ERROR_SEVERITY.MINOR,
+                }),
+            };
+        }
+    }
+    /**
+     * See {@link IDataStore.find}
+     */
+    async find(opts) {
+        const { fname, vault, excludeStub } = opts;
+        if (!fname && !vault && _.isUndefined(excludeStub)) {
+            return { data: [] };
+        }
+        let noteMetadata;
+        if (fname) {
+            const cleanedFname = cleanName(fname);
+            const ids = this._noteIdsByFname[cleanedFname];
+            if (!ids) {
+                return { data: [] };
+            }
+            noteMetadata = ids
+                .map((id) => this._noteMetadataById[id])
+                .filter(isNotUndefined);
+        }
+        else {
+            noteMetadata = _.values(this._noteMetadataById);
+        }
+        if (vault) {
+            noteMetadata = noteMetadata.filter((note) => VaultUtils.isEqualV2(note.vault, vault));
+        }
+        if (excludeStub) {
+            noteMetadata = noteMetadata.filter((note) => note.stub !== true);
+        }
+        return { data: _.cloneDeep(noteMetadata) };
+    }
+    /**
+     * See {@link IDataStore.write}
+     *
+     * Add note to _noteMetadataById and _noteIdsByFname.
+     * If note id already exists, check to see if it corresponds to same note by fname.
+     * If fname match, then we only need to update _noteMetadataById. If fname doesn't match, remove old id from _noteIdsByFname first before updating both.
+     *
+     * Otherwise, if note id doesn't exist, add to both dictionaries
+     */
+    async write(key, data) {
+        const maybeNote = this._noteMetadataById[data.id];
+        if (maybeNote) {
+            if (cleanName(maybeNote.fname) === cleanName(data.fname)) {
+                this._noteMetadataById[data.id] = data;
+                return { data: key };
+            }
+            else {
+                // Remove old fname from fname dict
+                NoteFnameDictUtils.delete(maybeNote, this._noteIdsByFname);
+            }
+        }
+        this._noteMetadataById[data.id] = data;
+        NoteFnameDictUtils.add(data, this._noteIdsByFname);
+        return { data: key };
+    }
+    /**
+     * See {@link IDataStore.delete}
+     *
+     * Remove note from both _noteMetadataById and _noteIdsByFname.
+     */
+    async delete(key) {
+        const maybeNote = this._noteMetadataById[key];
+        if (maybeNote) {
+            NoteFnameDictUtils.delete(maybeNote, this._noteIdsByFname);
+        }
+        delete this._noteMetadataById[key];
+        return { data: key };
+    }
+}
+//# sourceMappingURL=NoteMetadataStore.js.map

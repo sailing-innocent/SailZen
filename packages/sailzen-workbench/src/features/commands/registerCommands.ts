@@ -6,6 +6,10 @@ import {
   runFullVaultContentSync,
   writeWorkClipsToVault,
 } from "../../core/server/fencedSync";
+import {
+  checkForWorkbenchUpdate,
+  downloadAndVerifyVsix,
+} from "../../core/server/updater";
 import { SailZenVfsUri } from "../../core/server/virtualFs";
 import {
   BlockStatus,
@@ -1297,7 +1301,83 @@ export function registerWorkbenchCommands(
     })
   );
 
-  // 33. Open ~/.sailzen/machine.json
+  // 33. OTA Self-Update: Check & Install Latest VSIX directly from cloud sail_server
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "sailzen.checkForUpdate",
+      async (opts?: { silent?: boolean }) => {
+        const silent = Boolean(opts?.silent);
+        if (state.privacyGuard.isWorkOfflineActive()) {
+          if (!silent) {
+            vscode.window.showWarningMessage(
+              "SailZen: Work Vault offline mode disables cloud OTA update checks."
+            );
+          }
+          return;
+        }
+
+        state.reloadConfig();
+        const currentVersion = String(context.extension.packageJSON?.version || "0.0.0");
+
+        try {
+          const check = await checkForWorkbenchUpdate(state.apiClient, currentVersion);
+          if (!check.hasUpdate) {
+            if (!silent) {
+              vscode.window.showInformationMessage(
+                `SailZen Workbench v${currentVersion} is already up to date (cloud latest: v${check.release.version}).`
+              );
+            }
+            return;
+          }
+
+          const notesSuffix = check.release.release_notes
+            ? ` — ${check.release.release_notes}`
+            : "";
+          const choice = await vscode.window.showInformationMessage(
+            `SailZen Workbench v${check.release.version} is available (current v${currentVersion})${notesSuffix}`,
+            "Update & Reload",
+            "Later"
+          );
+          if (choice !== "Update & Reload") return;
+
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `SailZen: Downloading & installing v${check.release.version}...`,
+              cancellable: false,
+            },
+            async () => {
+              const tmpVsix = await downloadAndVerifyVsix(state.apiClient, check.release);
+              try {
+                await vscode.commands.executeCommand(
+                  "workbench.extensions.installExtension",
+                  vscode.Uri.file(tmpVsix)
+                );
+              } finally {
+                await fs.promises.unlink(tmpVsix).catch(() => {});
+              }
+            }
+          );
+
+          const reload = await vscode.window.showInformationMessage(
+            `SailZen Workbench v${check.release.version} installed! Reload VS Code to activate?`,
+            "Reload Now",
+            "Later"
+          );
+          if (reload === "Reload Now") {
+            await vscode.commands.executeCommand("workbench.action.reloadWindow");
+          }
+        } catch (err) {
+          if (!silent) {
+            const msg = err instanceof Error ? err.message : String(err);
+            vscode.window.showWarningMessage(`SailZen OTA update check failed: ${msg}`);
+          }
+        }
+      }
+    )
+  );
+
+  // 34. Open ~/.sailzen/machine.json
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.openMachineConfig", async () => {
       await state.registry.ensureConfigFileExists();

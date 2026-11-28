@@ -237,6 +237,11 @@
         "icon": "$(gear)"
       },
       {
+        "command": "sailzen.checkForUpdate",
+        "title": "SailZen: Check for Workbench Update (OTA)",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "sailzen.showDiagnostics",
         "title": "SailZen: Workbench Diagnostics"
       }
@@ -456,6 +461,11 @@
           "type": "number",
           "default": 5,
           "description": "Rhythm 与项目面板后台自动刷新间隔（分钟），0 表示仅手动刷新。"
+        },
+        "sailzen.updater.checkOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "启动时静默检查云端 SailZen Workbench 最新 VSIX 版本（工作库离线模式自动跳过）。"
         }
       }
     }
