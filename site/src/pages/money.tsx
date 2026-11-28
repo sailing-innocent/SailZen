@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import PageLayout from '@components/page_layout'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -15,6 +15,7 @@ const MoneyPage = () => {
   const isTagsLoaded = useFinanceTagsStore((state) => state.isLoaded)
   const fetchAccounts = useAccountsStore((state) => state.fetchAccounts)
   const fetchTransactionsPaginated = useTransactionsStore((state) => state.fetchTransactionsPaginated)
+  const [secretaryRefreshKey, setSecretaryRefreshKey] = useState(0)
 
   // 在页面加载时获取标签（只加载一次）
   useEffect(() => {
@@ -32,13 +33,20 @@ const MoneyPage = () => {
     }
   }, [fetchAccounts, fetchTransactionsPaginated])
 
+  const handleAccountStateChanged = useCallback(() => {
+    setSecretaryRefreshKey((k) => k + 1)
+  }, [])
+
   return (
     <>
       <PageLayout>
         <div className="text-xl md:text-2xl font-bold px-2 md:px-0 mb-2">财务管理</div>
 
         {/* SailTick 日常开销秘书顶部工作台（即时记账/对账 + 小票识图 + 分级自治清理队列） */}
-        <SailTickSecretaryPanel onDataChanged={handleSecretaryDataChanged} />
+        <SailTickSecretaryPanel
+          onDataChanged={handleSecretaryDataChanged}
+          refreshSignal={secretaryRefreshKey}
+        />
 
         {/* 移动端使用垂直布局，桌面端使用水平布局 */}
         <div
@@ -50,16 +58,16 @@ const MoneyPage = () => {
           {/* 账户表格 */}
           <div
             className={`
-            ${isMobile ? 'w-full order-2' : 'w-[30%] min-w-[300px]'}
+            ${isMobile ? 'w-full order-2' : 'w-[36%] min-w-[380px]'}
           `}
           >
-            <AccountsDataTable />
+            <AccountsDataTable onAccountStateChanged={handleAccountStateChanged} />
           </div>
 
           {/* 交易表格 */}
           <div
             className={`
-            ${isMobile ? 'w-full order-1' : 'w-[70%]'}
+            ${isMobile ? 'w-full order-1' : 'w-[64%]'}
           `}
           >
             <TransactionsDataTable />

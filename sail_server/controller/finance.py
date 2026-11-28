@@ -39,6 +39,7 @@ from sail_server.model.finance.account import (
     read_account_impl,
     read_accounts_impl,
     create_account_impl,
+    update_account_impl,
     update_account_balance_impl,
     recalc_account_balance_impl,
     fix_account_balance_impl,
@@ -164,6 +165,27 @@ class AccountController(Controller):
         if account is None:
             return None
 
+        return AccountResponse.model_validate(account)
+
+    @put("/{account_id:int}")
+    async def update_account(
+        self,
+        account_id: int,
+        data: AccountUpdateRequest,
+        request: Request,
+        router_dependency: Generator[Session, None, None],
+    ) -> AccountResponse:
+        """
+        Update account metadata or archive state (0=active, 1=archived).
+        """
+        db = next(router_dependency)
+        try:
+            account = update_account_impl(db, account_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if account is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+        logger.info(f"Update account {account_id}: name={account.name}, state={account.state}")
         return AccountResponse.model_validate(account)
 
     @get("/update_balance/{account_id:int}")

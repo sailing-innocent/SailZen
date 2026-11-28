@@ -65,10 +65,12 @@ const QUICK_FINANCE_PROMPTS = [
 
 export interface SailTickSecretaryPanelProps {
   onDataChanged?: () => void
+  refreshSignal?: number
 }
 
 export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
   onDataChanged,
+  refreshSignal = 0,
 }) => {
   const [overview, setOverview] = useState<FinanceOverview | null>(null)
   const [pendingProposals, setPendingProposals] = useState<HygieneProposal[]>([])
@@ -123,7 +125,7 @@ export const SailTickSecretaryPanel: React.FC<SailTickSecretaryPanelProps> = ({
 
   useEffect(() => {
     void refreshAll()
-  }, [refreshAll])
+  }, [refreshAll, refreshSignal])
 
   const sendToSailTick = async (rawText?: string) => {
     const text = (rawText ?? chatInput).trim()

@@ -28,6 +28,7 @@ import {
 import {
   api_get_accounts,
   api_create_account,
+  api_update_account,
   api_update_account_balance,
   api_recalc_account_balance,
   api_fix_account_balance,
@@ -54,6 +55,23 @@ import {
   type BatchLinkResult,
 } from '@lib/api/money'
 
+/** 活跃账户(state=0)靠前，封存账户(state!=0)靠后；组内按余额降序、ID 升序 */
+export const sortAccountsForDisplay = (accounts: AccountData[]): AccountData[] => {
+  return [...accounts].sort((a, b) => {
+    const aArchived = a.state !== 0 ? 1 : 0
+    const bArchived = b.state !== 0 ? 1 : 0
+    if (aArchived !== bArchived) {
+      return aArchived - bArchived
+    }
+    const balA = Number.isFinite(parseFloat(a.balance)) ? parseFloat(a.balance) : 0
+    const balB = Number.isFinite(parseFloat(b.balance)) ? parseFloat(b.balance) : 0
+    if (balB !== balA) {
+      return balB - balA
+    }
+    return a.id - b.id
+  })
+}
+
 export interface AccountsState {
   accounts: AccountData[]
   isLoading: boolean
@@ -61,6 +79,7 @@ export interface AccountsState {
   fetchAccounts: () => void
   updateAccount: (id: number, refresh: boolean) => void
   fixAccount: (id: number, newBalance: string) => void
+  setAccountState: (id: number, state: number) => Promise<AccountData>
   createAccount: (name: string) => void
 }
 
@@ -83,14 +102,7 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
     set({ isLoading: true })
     try {
       const accounts = await api_get_accounts()
-
-      accounts
-        .sort( // sort by balance descending
-          (a: AccountData, b: AccountData) => parseFloat(b.balance) - parseFloat(a.balance))
-
-      // set the state with fetched accounts
-      set({ accounts: accounts, isLoading: false })
-
+      set({ accounts: sortAccountsForDisplay(accounts), isLoading: false })
     } catch (error) {
       set({ isLoading: false })
       throw error
@@ -101,13 +113,13 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
     const new_account = await update_func(id)
     set((state: AccountsState): AccountsState => {
       const index = state.accounts.findIndex((account: AccountData) => account.id === new_account.id)
-      const newState: AccountsState = {
-        ...state,
-        accounts: [...state.accounts],
-      }
       if (index !== -1) {
-        newState.accounts[index] = new_account
-        return newState // trigger re-render
+        const nextAccounts = [...state.accounts]
+        nextAccounts[index] = new_account
+        return {
+          ...state,
+          accounts: sortAccountsForDisplay(nextAccounts),
+        }
       } else {
         console.log('Account not found')
         return state
@@ -118,25 +130,44 @@ export const useAccountsStore: UseBoundStore<StoreApi<AccountsState>> = create<A
     const new_account = await api_fix_account_balance(id, newBalance)
     set((state: AccountsState): AccountsState => {
       const index = state.accounts.findIndex((account: AccountData) => account.id === new_account.id)
-      const newState: AccountsState = {
-        ...state,
-        accounts: [...state.accounts],
-      }
       if (index !== -1) {
-        newState.accounts[index] = new_account
-        return newState // trigger re-render
+        const nextAccounts = [...state.accounts]
+        nextAccounts[index] = new_account
+        return {
+          ...state,
+          accounts: sortAccountsForDisplay(nextAccounts),
+        }
       } else {
         console.log('Account not found')
         return state
       }
     })
   },
+  setAccountState: async (id: number, nextState: number): Promise<AccountData> => {
+    const updated = await api_update_account(id, { state: nextState })
+    set((state: AccountsState): AccountsState => {
+      const index = state.accounts.findIndex((account: AccountData) => account.id === updated.id)
+      if (index !== -1) {
+        const nextAccounts = [...state.accounts]
+        nextAccounts[index] = updated
+        return {
+          ...state,
+          accounts: sortAccountsForDisplay(nextAccounts),
+        }
+      }
+      return {
+        ...state,
+        accounts: sortAccountsForDisplay([...state.accounts, updated]),
+      }
+    })
+    return updated
+  },
   createAccount: async (name: string) => {
     const new_account = await api_create_account({ name: name })
     set((state: AccountsState): AccountsState => {
       return {
         ...state,
-        accounts: [...state.accounts, new_account],
+        accounts: sortAccountsForDisplay([...state.accounts, new_account]),
       }
     })
   },

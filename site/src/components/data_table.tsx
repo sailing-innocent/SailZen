@@ -27,6 +27,7 @@ interface DataTableProps<TData, TValue> {
   pagination: PaginationState,
   setPagination: OnChangeFn<PaginationState>,
   keepPaginationOnDataChange?: boolean
+  getRowClassName?: (row: TData) => string
 }
 
 // 性能优化：缓存 row model 获取函数，这些是纯函数不需要每次重新创建
@@ -35,7 +36,7 @@ const paginationRowModel = getPaginationRowModel()
 const sortedRowModel = getSortedRowModel()
 const filteredRowModel = getFilteredRowModel()
 
-export function DataTable<TData, TValue>({ columns, data, pagination, setPagination, keepPaginationOnDataChange = false }: DataTableProps<TData, TValue>) {
+export function DataTable<TData, TValue>({ columns, data, pagination, setPagination, keepPaginationOnDataChange = false, getRowClassName }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const isMobile = useIsMobile()
@@ -69,11 +70,11 @@ export function DataTable<TData, TValue>({ columns, data, pagination, setPaginat
 
   return (
     <div className="w-full">
-      {/* 表格容器 - 移动端可横向滚动 */}
+      {/* 表格容器 - 移动端及窄容器可横向滚动 */}
       <div
         className={`
-        rounded-md border
-        ${isMobile ? 'overflow-x-auto max-w-[calc(100vw-2rem)]' : 'overflow-hidden'}
+        rounded-md border overflow-x-auto
+        ${isMobile ? 'max-w-[calc(100vw-2rem)]' : ''}
       `}
       >
         <Table>
@@ -93,7 +94,11 @@ export function DataTable<TData, TValue>({ columns, data, pagination, setPaginat
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                  className={getRowClassName ? getRowClassName(row.original) : undefined}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className={isMobile ? 'text-xs px-2 py-3' : ''}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

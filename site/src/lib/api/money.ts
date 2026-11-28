@@ -10,6 +10,7 @@ import {
   type TransactionData,
   type AccountData,
   type AccountCreateProps,
+  type AccountUpdateProps,
   type TransactionResponse,
   type TransactionDataStats,
   type TransactionDataStatsRequest,
@@ -74,6 +75,21 @@ const api_create_account = async (account: AccountCreateProps): Promise<AccountD
 
 const api_get_accounts = async (): Promise<AccountData[]> => {
   const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/account/`)
+  return response.json()
+}
+
+const api_update_account = async (id: number, payload: AccountUpdateProps): Promise<AccountData> => {
+  const response = await fetch(`${SERVER_URL}/${FINANCE_API_BASE}/account/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: 'Failed to update account' }))
+    throw new Error(err.detail || 'Failed to update account')
+  }
   return response.json()
 }
 
@@ -671,6 +687,7 @@ export {
   api_get_account,
   api_create_account,
   api_get_accounts,
+  api_update_account,
   api_update_account_balance,
   api_recalc_account_balance,
   api_fix_account_balance,

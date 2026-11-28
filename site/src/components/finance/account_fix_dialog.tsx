@@ -44,7 +44,7 @@ const AccountFixDialog = (props: FixAccountDialogProps) => {
               <SelectLabel>Accounts</SelectLabel>
               {props.accounts.map((account) => (
                 <SelectItem key={account.id} value={account.id.toString()}>
-                  {account.name}
+                  {account.name}{account.state !== 0 ? '（已封存）' : ''}
                 </SelectItem>
               ))}
             </SelectGroup>

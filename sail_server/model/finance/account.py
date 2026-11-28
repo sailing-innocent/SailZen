@@ -10,6 +10,7 @@ from typing import List, Optional
 from sailzen_orm.finance import Account, FinanceBalanceCheckpoint, FinanceHygieneProposal
 from sail_server.application.dto.finance import (
     AccountData,
+    AccountUpdateRequest,
     AccountReconcileRequest,
     BalanceCheckpointResponse,
     TransactionData,
@@ -93,6 +94,37 @@ def read_account_impl(db, account_id: int):
     account = db.query(Account).filter(Account.id == account_id).first()
     res = read_from_account(account)
     return res
+
+
+def update_account_impl(
+    db, account_id: int, update: AccountUpdateRequest
+) -> Optional[AccountData]:
+    """更新账户基础信息或归档状态（state: 0=活跃, 1=已封存）。"""
+    account = db.query(Account).filter(Account.id == account_id).first()
+    if account is None:
+        return None
+
+    if update.name is not None:
+        name = update.name.strip()
+        if not name:
+            raise ValueError("Account name cannot be empty.")
+        if len(name) > 100:
+            raise ValueError("Account name is too long.")
+        account.name = name
+
+    if update.description is not None:
+        account.description = update.description
+
+    if update.state is not None:
+        state_val = int(update.state)
+        if state_val not in (0, 1):
+            raise ValueError("Account state must be 0 (active) or 1 (archived).")
+        account.state = state_val
+
+    account.mtime = datetime.now()
+    db.commit()
+    db.refresh(account)
+    return read_from_account(account)
 
 
 def delete_account_impl(db, account_id: int = None):

@@ -80,6 +80,12 @@ export interface AccountCreateProps {
   name: string
 }
 
+export interface AccountUpdateProps {
+  name?: string
+  description?: string
+  state?: number // 0: 活跃, 1: 已封存/归档
+}
+
 export interface AccountOption extends AccountCreateProps {
   id: number
   state?: number
