@@ -95,4 +95,20 @@ describe("MachineRegistry & PrivacyGuard", () => {
     );
     expect(reg.findProjectSlugForFolder(otherRepo)).toBe("novel-alpha");
   });
+
+  it("respects serverUrl precedence: machine.json > VS Code settings fallback > localhost default", () => {
+    const reg = new MachineRegistry(configPath);
+    // No machine.json -> uses VS Code fallback
+    const fromFallback = reg.load({ serverUrl: "https://cloud.sailzen.example" });
+    expect(fromFallback.serverUrl).toBe("https://cloud.sailzen.example");
+
+    // Explicit machine.json serverUrl overrides fallback
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ version: 1, machineId: "pc", role: "dev", serverUrl: "https://prod.example", vaults: {}, projectPaths: {} }),
+      "utf8"
+    );
+    const fromFile = reg.load({ serverUrl: "https://cloud.sailzen.example" });
+    expect(fromFile.serverUrl).toBe("https://prod.example");
+  });
 });

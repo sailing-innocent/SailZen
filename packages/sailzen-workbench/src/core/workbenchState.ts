@@ -94,8 +94,8 @@ export class WorkbenchState implements vscode.Disposable {
     return this._treeProjectFilter;
   }
 
-  /** Fast startup: load config, resolve vault (warm cache first), then background refresh server. */
-  async initialize(): Promise<void> {
+  /** Reload ~/.sailzen/machine.json merged with VS Code configuration. */
+  reloadConfig(): void {
     const cfg = vscode.workspace.getConfiguration("sailzen");
     this.registry.load({
       serverUrl: cfg.get<string>("server.baseUrl"),
@@ -103,13 +103,20 @@ export class WorkbenchState implements vscode.Disposable {
       privateVaultPath: cfg.get<string>("vault.privatePath"),
       workVaultPath: cfg.get<string>("vault.workPath"),
     });
+  }
+
+  /** Fast startup: load config, resolve vault (warm cache first), then background refresh server. */
+  async initialize(): Promise<void> {
+    this.reloadConfig();
 
     await this.detectAndLoadVault();
 
     // Refresh Rhythm/Projects asynchronously without blocking extension startup
     void this.refreshServerData();
 
-    const intervalMins = cfg.get<number>("rhythm.autoRefreshMinutes", 5);
+    const intervalMins = vscode.workspace
+      .getConfiguration("sailzen")
+      .get<number>("rhythm.autoRefreshMinutes", 5);
     if (intervalMins > 0) {
       this.refreshTimer = setInterval(() => {
         void this.refreshServerData();
@@ -248,6 +255,7 @@ export class WorkbenchState implements vscode.Disposable {
   }
 
   async refreshServerData(): Promise<void> {
+    this.reloadConfig();
     if (this.privacyGuard.isWorkOfflineActive()) {
       this._online = false;
       this._lastServerError = "Work Vault offline isolation active";

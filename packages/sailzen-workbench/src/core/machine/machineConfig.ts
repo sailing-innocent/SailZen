@@ -109,10 +109,12 @@ export class MachineRegistry {
     workVaultPath?: string;
   }): MachineConfig {
     let loaded = createDefaultMachineConfig();
+    let hasFileServerUrl = false;
     try {
       if (fs.existsSync(this.configPath)) {
         const raw = fs.readFileSync(this.configPath, "utf8");
         const parsed = JSON.parse(raw) as Partial<MachineConfig>;
+        hasFileServerUrl = Boolean(parsed.serverUrl && parsed.serverUrl.trim());
         loaded = {
           ...loaded,
           ...parsed,
@@ -140,8 +142,11 @@ export class MachineRegistry {
       // Malformed config file: fall back safely
     }
 
-    if (!loaded.serverUrl && fallback?.serverUrl) {
-      loaded.serverUrl = fallback.serverUrl;
+    if (!hasFileServerUrl && fallback?.serverUrl && fallback.serverUrl.trim()) {
+      loaded.serverUrl = fallback.serverUrl.trim();
+    }
+    if (!loaded.serverUrl) {
+      loaded.serverUrl = "http://localhost:1974";
     }
     if (!loaded.apiToken && fallback?.apiToken) {
       loaded.apiToken = fallback.apiToken;
