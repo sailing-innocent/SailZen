@@ -2,7 +2,7 @@
   "name": "sailzen-workbench",
   "displayName": "SailZen Workbench",
   "description": "SailZen 3.0 Work & Creation Workbench — fast dot-hierarchy notes, Rhythm v2 + SailTick, Content 2.0, and multi-machine project workflows.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "SailingInnocent",
   "license": "MIT",
   "repository": {
@@ -30,17 +30,39 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "markdown.markdownItPlugins": true,
+    "markdown.previewStyles": [
+      "./media/markdown-preview.css"
+    ],
     "viewsContainers": {
       "activitybar": [
         {
           "id": "sailzen-workbench",
-          "title": "SailZen",
+          "title": "SailZen Vault",
           "icon": "media/icons/sailzen.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "sailzen-cloud",
+          "title": "SailZen Cloud",
+          "icon": "media/icons/sailzen-cloud.svg"
         }
       ]
     },
     "views": {
       "sailzen-workbench": [
+        {
+          "id": "sailzen.vaultTreeView",
+          "name": "Vault Tree"
+        },
+        {
+          "id": "sailzen.calendarView",
+          "name": "Calendar",
+          "type": "webview"
+        }
+      ],
+      "sailzen-cloud": [
         {
           "id": "sailzen.rhythmView",
           "name": "Today & Rhythm"
@@ -53,15 +75,6 @@
         {
           "id": "sailzen.projectsView",
           "name": "Projects & Content"
-        },
-        {
-          "id": "sailzen.vaultTreeView",
-          "name": "Vault Tree"
-        },
-        {
-          "id": "sailzen.calendarView",
-          "name": "Calendar",
-          "type": "webview"
         }
       ]
     },
@@ -117,8 +130,45 @@
         "icon": "$(copy)"
       },
       {
+        "command": "sailzen.copyNoteRef",
+        "title": "SailZen: Copy Note Embed Ref (![[fname]])",
+        "icon": "$(references)"
+      },
+      {
+        "command": "sailzen.followLinkAtCursor",
+        "title": "SailZen: Follow / Create Link at Cursor",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "sailzen.showBacklinks",
+        "title": "SailZen: Show Backlinks to Current Note",
+        "icon": "$(references)"
+      },
+      {
         "command": "sailzen.goUpHierarchy",
         "title": "SailZen: Go Up Hierarchy"
+      },
+      {
+        "command": "sailzen.goDownHierarchy",
+        "title": "SailZen: Go Down Hierarchy (Child Note)"
+      },
+      {
+        "command": "sailzen.goNextSibling",
+        "title": "SailZen: Go to Next Sibling Note"
+      },
+      {
+        "command": "sailzen.goPrevSibling",
+        "title": "SailZen: Go to Previous Sibling Note"
+      },
+      {
+        "command": "sailzen.revealActiveNoteInTree",
+        "title": "SailZen: Reveal Active Note in Vault Tree",
+        "icon": "$(target)"
+      },
+      {
+        "command": "sailzen.openCloudSidebar",
+        "title": "SailZen: Open Cloud Sidebar (Rhythm / SailTick / Projects)",
+        "icon": "$(cloud)"
       },
       {
         "command": "sailzen.reloadVault",
@@ -279,14 +329,19 @@
           "group": "navigation@1"
         },
         {
-          "command": "sailzen.toggleTreeProjectFilter",
+          "command": "sailzen.revealActiveNoteInTree",
           "when": "view == sailzen.vaultTreeView",
           "group": "navigation@2"
         },
         {
-          "command": "sailzen.reloadVault",
+          "command": "sailzen.toggleTreeProjectFilter",
           "when": "view == sailzen.vaultTreeView",
           "group": "navigation@3"
+        },
+        {
+          "command": "sailzen.reloadVault",
+          "when": "view == sailzen.vaultTreeView",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -358,39 +413,59 @@
       ],
       "editor/context": [
         {
-          "command": "sailzen.copyNoteLink",
+          "command": "sailzen.followLinkAtCursor",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@0"
+        },
+        {
+          "command": "sailzen.showBacklinks",
           "when": "editorLangId == markdown",
           "group": "sailzen@1"
         },
         {
-          "command": "sailzen.renameNote",
+          "command": "sailzen.revealActiveNoteInTree",
           "when": "editorLangId == markdown",
           "group": "sailzen@2"
         },
         {
-          "command": "sailzen.deleteNote",
+          "command": "sailzen.copyNoteLink",
           "when": "editorLangId == markdown",
           "group": "sailzen@3"
         },
         {
-          "command": "sailzen.pushSelectionToRhythm",
-          "when": "editorHasSelection",
+          "command": "sailzen.copyNoteRef",
+          "when": "editorLangId == markdown",
           "group": "sailzen@4"
         },
         {
-          "command": "sailzen.syncJournalRhythm",
+          "command": "sailzen.renameNote",
           "when": "editorLangId == markdown",
           "group": "sailzen@5"
         },
         {
-          "command": "sailzen.syncChapterToCloud",
+          "command": "sailzen.deleteNote",
           "when": "editorLangId == markdown",
           "group": "sailzen@6"
         },
         {
+          "command": "sailzen.pushSelectionToRhythm",
+          "when": "editorHasSelection",
+          "group": "sailzen@7"
+        },
+        {
+          "command": "sailzen.syncJournalRhythm",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@8"
+        },
+        {
+          "command": "sailzen.syncChapterToCloud",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@9"
+        },
+        {
           "command": "sailzen.insertPaperReference",
           "when": "editorLangId == markdown",
-          "group": "sailzen@7"
+          "group": "sailzen@10"
         },
         {
           "command": "sailzen.copySemanticCodeLink",
@@ -419,19 +494,61 @@
         "command": "sailzen.copyNoteLink",
         "key": "ctrl+shift+c",
         "mac": "cmd+shift+c",
-        "when": "editorFocus && editorLangId == markdown"
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
+      },
+      {
+        "command": "sailzen.copyNoteRef",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
       },
       {
         "command": "sailzen.deleteNote",
         "key": "ctrl+shift+d",
         "mac": "cmd+shift+d",
-        "when": "editorFocus && editorLangId == markdown"
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
       },
       {
         "command": "sailzen.goUpHierarchy",
         "key": "ctrl+shift+up",
         "mac": "cmd+shift+up",
-        "when": "editorFocus && editorLangId == markdown"
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
+      },
+      {
+        "command": "sailzen.goDownHierarchy",
+        "key": "ctrl+shift+down",
+        "mac": "cmd+shift+down",
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
+      },
+      {
+        "command": "sailzen.goNextSibling",
+        "key": "ctrl+shift+]",
+        "mac": "cmd+shift+]",
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
+      },
+      {
+        "command": "sailzen.goPrevSibling",
+        "key": "ctrl+shift+[",
+        "mac": "cmd+shift+[",
+        "when": "(editorFocus && editorLangId == markdown) || markdownPreviewFocus || activeCustomEditorId == 'vscode.markdown.editor' || activeCustomEditorId == 'vscode.markdown.preview.editor'"
+      },
+      {
+        "command": "sailzen.followLinkAtCursor",
+        "key": "ctrl+k g",
+        "mac": "cmd+k g",
+        "when": "editorTextFocus && editorLangId == markdown"
+      },
+      {
+        "command": "sailzen.followLinkAtCursor",
+        "key": "alt+enter",
+        "mac": "alt+enter",
+        "when": "editorTextFocus && editorLangId == markdown"
+      },
+      {
+        "command": "markdown.showSource",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "markdownPreviewFocus"
       }
     ],
     "configuration": {
@@ -456,6 +573,21 @@
           "type": "string",
           "default": "",
           "description": "工作 Vault 根目录（强制离线，禁止向个人云端上报）。"
+        },
+        "sailzen.vaultTree.autoReveal": {
+          "type": "boolean",
+          "default": true,
+          "description": "聚焦 Markdown 笔记或原生预览页时，自动在 Vault Tree 中定位并展开该笔记以查看关联页。"
+        },
+        "sailzen.editor.decorateWikilinks": {
+          "type": "boolean",
+          "default": true,
+          "description": "在原生 Markdown 编辑器中高亮 [[wikilink]]、![[embed]] 与 repo:// 双向链接。"
+        },
+        "sailzen.editor.showBacklinksCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "在原生 Markdown 编辑器顶部显示反向链接计数 CodeLens（点击可查看所有反向链接）。"
         },
         "sailzen.rhythm.autoRefreshMinutes": {
           "type": "number",

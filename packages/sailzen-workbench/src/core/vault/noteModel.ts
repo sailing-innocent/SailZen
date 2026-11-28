@@ -13,6 +13,22 @@ export interface WikilinkOccurrence {
   targetEnd: number;
 }
 
+export interface ParsedWikilinkInner {
+  target: string;
+  alias?: string;
+  anchor?: string;
+  /** Offset of `target` within `inner` */
+  targetOffsetInInner: number;
+}
+
+export interface HeadingInfo {
+  level: number;
+  text: string;
+  slug: string;
+  /** 0-based line number in the full raw markdown document */
+  line: number;
+}
+
 export interface NoteFrontmatter {
   id: string;
   title: string;
@@ -79,6 +95,167 @@ function normalizeStringList(val: unknown): string[] {
     return [val.trim()];
   }
   return [];
+}
+
+/**
+ * GitHub / VS Code native Markdown Preview compatible heading slugifier.
+ * Preserves Unicode letters/digits (including CJK) and converts whitespace to hyphens.
+ */
+export function slugifyHeading(heading: string): string {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+    .replace(/\s+/g, "-");
+}
+
+/**
+ * Parse the inner text of `[[...]]` or `![[...]]`:
+ * supports `target`, `alias|target`, `target#anchor`, `alias|target#anchor`,
+ * `#local-heading`, `alias|#local-heading`, and `dendron://vault/target` / `sail://vault/target`.
+ */
+export function parseWikilinkInner(inner: string): ParsedWikilinkInner | null {
+  if (!inner || !inner.trim() || inner.includes("[")) return null;
+
+  const pipeIdx = inner.indexOf("|");
+  let alias: string | undefined;
+  let targetPart: string;
+  let targetPartStart: number;
+
+  if (pipeIdx !== -1) {
+    alias = inner.slice(0, pipeIdx).trim() || undefined;
+    targetPart = inner.slice(pipeIdx + 1);
+    targetPartStart = pipeIdx + 1;
+  } else {
+    targetPart = inner;
+    targetPartStart = 0;
+  }
+
+  const leadingWs = targetPart.length - targetPart.trimStart().length;
+  targetPartStart += leadingWs;
+  targetPart = targetPart.trim();
+  if (!targetPart) return null;
+
+  const hashIdx = targetPart.indexOf("#");
+  let target: string;
+  let anchor: string | undefined;
+  if (hashIdx !== -1) {
+    target = targetPart.slice(0, hashIdx).trim();
+    anchor = targetPart.slice(hashIdx + 1).trim() || undefined;
+  } else {
+    target = targetPart;
+  }
+
+  let targetOffsetInInner = targetPartStart;
+  const vaultPrefixMatch = target.match(/^(?:dendron|sail):\/\/[^/]+\//i);
+  if (vaultPrefixMatch) {
+    targetOffsetInInner += vaultPrefixMatch[0].length;
+    target = target.slice(vaultPrefixMatch[0].length);
+  }
+
+  if (!target && !anchor) return null;
+
+  return {
+    target,
+    alias,
+    anchor,
+    targetOffsetInInner,
+  };
+}
+
+/**
+ * Extract Markdown ATX headings (`#` .. `######`) while skipping YAML frontmatter and fenced code blocks.
+ */
+export function extractHeadings(rawMarkdown: string): HeadingInfo[] {
+  const lines = rawMarkdown.split(/\r?\n/);
+  const headings: HeadingInfo[] = [];
+  let i = 0;
+
+  // Skip leading YAML frontmatter if present
+  if (lines.length > 0 && lines[0].trim() === "---") {
+    for (let j = 1; j < lines.length; j++) {
+      if (lines[j].trim() === "---") {
+        i = j + 1;
+        break;
+      }
+    }
+  }
+
+  let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
+
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trimStart();
+    const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const ch = fenceMatch[1][0];
+      const len = fenceMatch[1].length;
+      if (!inFence) {
+        inFence = true;
+        fenceChar = ch;
+        fenceLen = len;
+      } else if (ch === fenceChar && len >= fenceLen) {
+        inFence = false;
+      }
+      continue;
+    }
+    if (inFence) continue;
+
+    const hMatch = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+    if (hMatch) {
+      const text = hMatch[2].trim();
+      headings.push({
+        level: hMatch[1].length,
+        text,
+        slug: slugifyHeading(text),
+        line: i,
+      });
+    }
+  }
+
+  return headings;
+}
+
+/** Find 0-based line number for a heading anchor in raw markdown. */
+export function findHeadingLine(rawMarkdown: string, anchor: string): number | undefined {
+  const qRaw = anchor.trim().toLowerCase();
+  const qSlug = slugifyHeading(anchor);
+  if (!qRaw && !qSlug) return undefined;
+
+  const headings = extractHeadings(rawMarkdown);
+  const exact = headings.find(
+    (h) => h.slug === qSlug || h.text.toLowerCase() === qRaw
+  );
+  if (exact) return exact.line;
+
+  const partial = headings.find(
+    (h) => h.slug.includes(qSlug) || h.text.toLowerCase().includes(qRaw)
+  );
+  return partial?.line;
+}
+
+/** Extract a specific heading section from markdown body (until next heading of same or higher level). */
+export function extractHeadingSection(body: string, anchor: string): string | undefined {
+  const headings = extractHeadings(body);
+  const qRaw = anchor.trim().toLowerCase();
+  const qSlug = slugifyHeading(anchor);
+  const idx = headings.findIndex(
+    (h) => h.slug === qSlug || h.text.toLowerCase() === qRaw || h.text.toLowerCase().includes(qRaw)
+  );
+  if (idx === -1) return undefined;
+
+  const start = headings[idx];
+  const lines = body.split(/\r?\n/);
+  let endLine = lines.length;
+  for (let i = idx + 1; i < headings.length; i++) {
+    if (headings[i].level <= start.level) {
+      endLine = headings[i].line;
+      break;
+    }
+  }
+  return lines.slice(start.line, endLine).join("\n").trim();
 }
 
 /**
@@ -164,57 +341,20 @@ export function extractWikilinks(
       if (closeIdx !== -1 && (newlineIdx === -1 || closeIdx < newlineIdx)) {
         const inner = content.slice(i + 2, closeIdx);
         const innerStart = i + 2;
-        if (inner.trim().length > 0 && !inner.includes("[")) {
-          const pipeIdx = inner.indexOf("|");
-          let alias: string | undefined;
-          let targetPart: string;
-          let targetPartStart: number;
-
-          if (pipeIdx !== -1) {
-            alias = inner.slice(0, pipeIdx).trim();
-            targetPart = inner.slice(pipeIdx + 1);
-            targetPartStart = innerStart + pipeIdx + 1;
-          } else {
-            targetPart = inner;
-            targetPartStart = innerStart;
-          }
-
-          // Trim leading whitespace on targetPart while tracking offset
-          const leadingWs = targetPart.length - targetPart.trimStart().length;
-          targetPartStart += leadingWs;
-          targetPart = targetPart.trim();
-
-          const hashIdx = targetPart.indexOf("#");
-          let target: string;
-          let anchor: string | undefined;
-          if (hashIdx !== -1) {
-            target = targetPart.slice(0, hashIdx).trim();
-            anchor = targetPart.slice(hashIdx + 1).trim();
-          } else {
-            target = targetPart;
-          }
-
-          // Strip optional vault prefix like dendron://vault/fname
-          let targetStartOffset = targetPartStart;
-          const vaultPrefixMatch = target.match(/^(?:dendron|sail):\/\/[^/]+\//i);
-          if (vaultPrefixMatch) {
-            targetStartOffset += vaultPrefixMatch[0].length;
-            target = target.slice(vaultPrefixMatch[0].length);
-          }
-
-          if (target.length > 0) {
-            results.push({
-              raw: content.slice(start, closeIdx + 2),
-              target,
-              alias,
-              anchor,
-              isEmbed,
-              start: baseOffset + start,
-              end: baseOffset + closeIdx + 2,
-              targetStart: baseOffset + targetStartOffset,
-              targetEnd: baseOffset + targetStartOffset + target.length,
-            });
-          }
+        const parsed = parseWikilinkInner(inner);
+        if (parsed) {
+          const targetStartOffset = innerStart + parsed.targetOffsetInInner;
+          results.push({
+            raw: content.slice(start, closeIdx + 2),
+            target: parsed.target,
+            alias: parsed.alias,
+            anchor: parsed.anchor,
+            isEmbed,
+            start: baseOffset + start,
+            end: baseOffset + closeIdx + 2,
+            targetStart: baseOffset + targetStartOffset,
+            targetEnd: baseOffset + targetStartOffset + parsed.target.length,
+          });
         }
         i = closeIdx + 2;
         continue;
@@ -294,7 +434,7 @@ export function buildNoteRecord(
   const uniqueLinks = Array.from(
     new Set(
       parsed.links
-        .filter((l) => !l.isEmbed)
+        .filter((l) => l.target.length > 0)
         .map((l) => l.target.toLowerCase())
     )
   );

@@ -24,9 +24,10 @@ import {
   formatRhythmSnapshotMarkdown,
   injectRhythmFencedSection,
 } from "../editor/journalBridge";
+import { SailZenEditorProviders } from "../editor/wikilinkProvider";
 import { ProjectTreeItem } from "../views/projectsView";
 import { RhythmTreeItem } from "../views/rhythmView";
-import { VaultTreeItem } from "../views/vaultTreeView";
+import { VaultTreeItem, VaultTreeLinkageController } from "../views/vaultTreeView";
 import {
   buildFallbackContextPack,
   enrichContextPackWithLocalContext,
@@ -46,18 +47,7 @@ interface LookupQuickPickItem extends vscode.QuickPickItem {
 }
 
 function getActiveNoteFname(state: WorkbenchState): string | undefined {
-  const editor = vscode.window.activeTextEditor;
-  const index = state.vaultIndex;
-  if (!editor || !index) return undefined;
-  const fsPath = editor.document.uri.fsPath;
-  if (
-    path.dirname(path.resolve(fsPath)).toLowerCase() !==
-    path.resolve(index.notesDir).toLowerCase()
-  ) {
-    return undefined;
-  }
-  const base = path.basename(fsPath);
-  return base.toLowerCase().endsWith(".md") ? base.slice(0, -3) : undefined;
+  return state.resolveActiveVaultNoteFname();
 }
 
 function resolveTargetFname(state: WorkbenchState, item?: VaultTreeItem): string | undefined {
@@ -67,9 +57,15 @@ function resolveTargetFname(state: WorkbenchState, item?: VaultTreeItem): string
   return getActiveNoteFname(state);
 }
 
+export interface RegisterCommandsDeps {
+  editorProviders?: SailZenEditorProviders;
+  vaultTreeLinkage?: VaultTreeLinkageController;
+}
+
 export function registerWorkbenchCommands(
   context: vscode.ExtensionContext,
-  state: WorkbenchState
+  state: WorkbenchState,
+  deps?: RegisterCommandsDeps
 ): void {
   // 1. Lookup / Create Note (fast dot-hierarchy QuickPick)
   context.subscriptions.push(
@@ -355,7 +351,7 @@ export function registerWorkbenchCommands(
     })
   );
 
-  // 8. Quick Copy Note Wikilink (Ctrl+Shift+C — Editor & TreeView)
+  // 8. Quick Copy Note Wikilink (Ctrl+Shift+C — Editor, Preview & TreeView)
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.copyNoteLink", async (item?: VaultTreeItem) => {
       const fname = resolveTargetFname(state, item);
@@ -367,16 +363,139 @@ export function registerWorkbenchCommands(
       const link = note && note.title ? `[[${note.title}|${fname}]]` : `[[${fname}]]`;
       await vscode.env.clipboard.writeText(link);
       vscode.window.setStatusBarMessage(`Copied ${link}`, 2500);
+    }),
+    vscode.commands.registerCommand("sailzen.copyNoteRef", async (item?: VaultTreeItem) => {
+      const fname = resolveTargetFname(state, item);
+      if (!fname) {
+        vscode.window.showWarningMessage("SailZen: Open or select a vault markdown note first.");
+        return;
+      }
+      const ref = `![[${fname}]]`;
+      await vscode.env.clipboard.writeText(ref);
+      vscode.window.setStatusBarMessage(`Copied ${ref}`, 2500);
+    }),
+    vscode.commands.registerCommand("sailzen.followLinkAtCursor", async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== "markdown") {
+        vscode.window.showWarningMessage("SailZen: Focus a Markdown editor on a [[wikilink]] or repo:// link.");
+        return;
+      }
+      const jumped = deps?.editorProviders
+        ? await deps.editorProviders.followLinkAtCursor(editor)
+        : false;
+      if (!jumped) {
+        vscode.window.setStatusBarMessage("SailZen: No [[wikilink]] or repo:// link at cursor", 2200);
+      }
+    }),
+    vscode.commands.registerCommand("sailzen.showBacklinks", async (explicitFname?: string) => {
+      const index = state.vaultIndex;
+      const fname =
+        typeof explicitFname === "string" && explicitFname.trim()
+          ? explicitFname.trim()
+          : getActiveNoteFname(state);
+      if (!index || !fname) {
+        vscode.window.showWarningMessage("SailZen: Open a vault markdown note to view backlinks.");
+        return;
+      }
+      const refs = index
+        .getReferencingNotes(fname)
+        .filter((r) => r.fname.toLowerCase() !== fname.toLowerCase())
+        .sort((a, b) => (b.updated || b.mtimeMs) - (a.updated || a.mtimeMs));
+
+      if (refs.length === 0) {
+        vscode.window.showInformationMessage(`SailZen: No notes link to "${fname}" yet.`);
+        return;
+      }
+
+      const pick = await vscode.window.showQuickPick(
+        refs.map((r) => ({
+          label: `$(markdown) ${r.fname}`,
+          description: r.title !== r.fname ? r.title : "",
+          detail: r.tags.length > 0 ? r.tags.map((t) => `#${t}`).join(" ") : undefined,
+          note: r,
+        })),
+        {
+          placeHolder: `${refs.length} backlink(s) referencing "${fname}"`,
+          matchOnDescription: true,
+        }
+      );
+      if (!pick) return;
+      await state.openOrCreateNote(pick.note.fname);
     })
   );
 
-  // 9. Go Up Hierarchy
+  // 9. Dot-Hierarchy Navigation (Up / Down / Next Sibling / Prev Sibling) & Sidebar Linkage
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.goUpHierarchy", async () => {
       const fname = getActiveNoteFname(state);
       if (!fname || !fname.includes(".")) return;
       const parent = fname.split(".").slice(0, -1).join(".");
       await state.openOrCreateNote(parent);
+    }),
+    vscode.commands.registerCommand("sailzen.goDownHierarchy", async () => {
+      const index = state.vaultIndex;
+      const fname = getActiveNoteFname(state);
+      if (!index || !fname) return;
+      const children = index.getChildren(fname);
+      if (children.length === 0) {
+        vscode.window.setStatusBarMessage(`SailZen: "${fname}" has no child notes`, 2200);
+        return;
+      }
+      if (children.length === 1 && children[0].note) {
+        await state.openOrCreateNote(children[0].note.fname);
+        return;
+      }
+      const pick = await vscode.window.showQuickPick(
+        children.map((c) => ({
+          label: `${c.note ? "$(markdown)" : "$(folder)"} ${c.segment}`,
+          description: c.note?.title && c.note.title !== c.segment ? c.note.title : c.fname,
+          detail: c.note ? undefined : "Virtual hierarchy node — select to create note",
+          fname: c.fname,
+        })),
+        { placeHolder: `Children of "${fname}" (${children.length})` }
+      );
+      if (pick) {
+        await state.openOrCreateNote(pick.fname);
+      }
+    }),
+    vscode.commands.registerCommand("sailzen.goNextSibling", async () => {
+      const index = state.vaultIndex;
+      const fname = getActiveNoteFname(state);
+      if (!index || !fname) return;
+      const next = index.getAdjacentSiblingNote(fname, 1);
+      if (next) {
+        await state.openOrCreateNote(next.fname);
+      } else {
+        vscode.window.setStatusBarMessage(`SailZen: No other sibling notes for "${fname}"`, 2000);
+      }
+    }),
+    vscode.commands.registerCommand("sailzen.goPrevSibling", async () => {
+      const index = state.vaultIndex;
+      const fname = getActiveNoteFname(state);
+      if (!index || !fname) return;
+      const prev = index.getAdjacentSiblingNote(fname, -1);
+      if (prev) {
+        await state.openOrCreateNote(prev.fname);
+      } else {
+        vscode.window.setStatusBarMessage(`SailZen: No other sibling notes for "${fname}"`, 2000);
+      }
+    }),
+    vscode.commands.registerCommand("sailzen.revealActiveNoteInTree", async () => {
+      const revealed = deps?.vaultTreeLinkage
+        ? await deps.vaultTreeLinkage.revealActiveNote({ focus: true, force: true })
+        : false;
+      if (!revealed) {
+        vscode.window.showInformationMessage(
+          "SailZen: Focus a markdown note inside the active vault to reveal it in Vault Tree."
+        );
+      }
+    }),
+    vscode.commands.registerCommand("sailzen.openCloudSidebar", async () => {
+      try {
+        await vscode.commands.executeCommand("workbench.view.extension.sailzen-cloud");
+      } catch {
+        await vscode.commands.executeCommand("sailzen.rhythmView.focus");
+      }
     })
   );
 
@@ -499,11 +618,11 @@ export function registerWorkbenchCommands(
     )
   );
 
-  // 16. Pull Today's Rhythm into Current Journal (Fenced, non-destructive!)
+  // 16. Pull Today's Rhythm into Current Journal (Fenced, non-destructive; supports native vscode.markdown.editor!)
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.syncJournalRhythm", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== "markdown") {
+      const doc = await state.resolveActiveMarkdownDocument();
+      if (!doc) {
         vscode.window.showWarningMessage("SailZen: Open a Markdown journal note first.");
         return;
       }
@@ -519,14 +638,17 @@ export function registerWorkbenchCommands(
       }
 
       const fenced = formatRhythmSnapshotMarkdown(boot);
-      const original = editor.document.getText();
+      const original = doc.getText();
       const updated = injectRhythmFencedSection(original, fenced);
 
-      const fullRange = new vscode.Range(
-        editor.document.positionAt(0),
-        editor.document.positionAt(original.length)
+      const wsEdit = new vscode.WorkspaceEdit();
+      wsEdit.replace(
+        doc.uri,
+        new vscode.Range(doc.positionAt(0), doc.positionAt(original.length)),
+        updated
       );
-      await editor.edit((eb) => eb.replace(fullRange, updated));
+      await vscode.workspace.applyEdit(wsEdit);
+      await doc.save();
       vscode.window.setStatusBarMessage("Synced today's Rhythm into journal fence", 2500);
     })
   );
@@ -777,8 +899,9 @@ export function registerWorkbenchCommands(
           const res = await writeWorkClipsToVault(index.notesDir, exp);
           await index.upsertFile(res.cardPath);
           await index.upsertFile(res.clipsPath);
-          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(res.cardPath));
-          await vscode.window.showTextDocument(doc, { preview: false });
+          await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(res.cardPath), {
+            preview: false,
+          });
           vscode.window.showInformationMessage(
             `Exported "${work.title}" (${res.cardAction} reading card + clips, handwritten notes preserved).`
           );
@@ -1019,15 +1142,15 @@ export function registerWorkbenchCommands(
     })
   );
 
-  // 28. Novel Workflow: Sync Local Chapter Markdown -> Cloud DocumentNode
+  // 28. Novel Workflow: Sync Local Chapter Markdown -> Cloud DocumentNode (supports native vscode.markdown.editor!)
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.syncChapterToCloud", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.languageId !== "markdown") {
+      const doc = await state.resolveActiveMarkdownDocument();
+      if (!doc || doc.uri.scheme !== "file") {
         vscode.window.showWarningMessage("SailZen: Open a Markdown chapter file first.");
         return;
       }
-      const fsPath = editor.document.uri.fsPath;
+      const fsPath = doc.uri.fsPath;
       try {
         state.privacyGuard.assertCloudUploadAllowed("syncChapterToCloud", fsPath);
       } catch (err) {
@@ -1035,7 +1158,7 @@ export function registerWorkbenchCommands(
         return;
       }
 
-      const raw = editor.document.getText();
+      const raw = doc.getText();
       const parsed = parseChapterMarkdown(fsPath, raw);
 
       let workId = parsed.workId ?? state.activeProject?.workbench.original_work_id ?? undefined;
@@ -1100,12 +1223,14 @@ export function registerWorkbenchCommands(
             nodeId: res.node.id,
             sourceSlug: parsed.sourceSlug,
           });
-          const fullRange = new vscode.Range(
-            editor.document.positionAt(0),
-            editor.document.positionAt(raw.length)
+          const wsEdit = new vscode.WorkspaceEdit();
+          wsEdit.replace(
+            doc.uri,
+            new vscode.Range(doc.positionAt(0), doc.positionAt(raw.length)),
+            updatedText
           );
-          await editor.edit((eb) => eb.replace(fullRange, updatedText));
-          await editor.document.save();
+          await vscode.workspace.applyEdit(wsEdit);
+          await doc.save();
         }
 
         vscode.window.showInformationMessage(
@@ -1120,8 +1245,8 @@ export function registerWorkbenchCommands(
   // 29. Novel/AI Workflow: Diff Local Note vs Cloud NoteItem (AI Draft Review)
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.reviewNoteItemDiff", async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor || editor.document.uri.scheme !== "file") {
+      const localUri = state.resolveActiveFileUri();
+      if (!localUri || localUri.scheme !== "file") {
         vscode.window.showWarningMessage("SailZen: Open a local Markdown note to compare against a cloud NoteItem.");
         return;
       }
@@ -1152,7 +1277,7 @@ export function registerWorkbenchCommands(
       const cloudUri = SailZenVfsUri.noteItem(pick.ni.id, title);
       await vscode.commands.executeCommand(
         "vscode.diff",
-        editor.document.uri,
+        localUri,
         cloudUri,
         `Local ↔ Cloud NoteItem (${title})`
       );
@@ -1240,16 +1365,18 @@ export function registerWorkbenchCommands(
       });
       if (!noteText?.trim()) return;
 
-      const journalEditor = await state.openDailyJournal(new Date());
-      if (!journalEditor) return;
-      const original = journalEditor.document.getText();
+      const journalDoc = await state.openDailyJournal(new Date());
+      if (!journalDoc) return;
+      const original = journalDoc.getText();
       const updated = appendRecordEntry(original, `${refPart} — ${noteText.trim()}`);
-      const fullRange = new vscode.Range(
-        journalEditor.document.positionAt(0),
-        journalEditor.document.positionAt(original.length)
+      const wsEdit = new vscode.WorkspaceEdit();
+      wsEdit.replace(
+        journalDoc.uri,
+        new vscode.Range(journalDoc.positionAt(0), journalDoc.positionAt(original.length)),
+        updated
       );
-      await journalEditor.edit((eb) => eb.replace(fullRange, updated));
-      await journalEditor.document.save();
+      await vscode.workspace.applyEdit(wsEdit);
+      await journalDoc.save();
       vscode.window.setStatusBarMessage("Appended dev log entry to Today's Journal", 2500);
     })
   );

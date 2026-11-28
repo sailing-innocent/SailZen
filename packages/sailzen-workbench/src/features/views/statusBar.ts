@@ -26,8 +26,14 @@ export class WorkbenchStatusBar implements vscode.Disposable {
       this.state.onDidServerDataChange(() => this.update()),
       this.state.onDidVaultChange(() => this.update()),
       vscode.window.onDidChangeActiveTextEditor(() => this.updateWordCount()),
+      vscode.window.tabGroups.onDidChangeTabs(() => this.updateWordCount()),
+      vscode.window.tabGroups.onDidChangeTabGroups(() => this.updateWordCount()),
       vscode.workspace.onDidChangeTextDocument((e) => {
-        if (vscode.window.activeTextEditor?.document === e.document) {
+        const activeUri = this.state.resolveActiveFileUri();
+        if (
+          vscode.window.activeTextEditor?.document === e.document ||
+          (activeUri && activeUri.fsPath.toLowerCase() === e.document.uri.fsPath.toLowerCase())
+        ) {
           this.updateWordCount();
         }
       })
@@ -78,12 +84,24 @@ export class WorkbenchStatusBar implements vscode.Disposable {
   }
 
   private updateWordCount(): void {
+    let doc: vscode.TextDocument | undefined;
     const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.languageId !== "markdown") {
+    if (editor && editor.document.languageId === "markdown") {
+      doc = editor.document;
+    } else {
+      // Support VS Code's native custom Markdown Editor (`vscode.markdown.editor`)
+      const activeUri = this.state.resolveActiveFileUri();
+      if (activeUri && activeUri.fsPath.toLowerCase().endsWith(".md")) {
+        doc = vscode.workspace.textDocuments.find(
+          (d) => d.uri.fsPath.toLowerCase() === activeUri.fsPath.toLowerCase()
+        );
+      }
+    }
+    if (!doc) {
       this.wordCountItem.hide();
       return;
     }
-    const text = editor.document.getText();
+    const text = doc.getText();
     // Strip YAML frontmatter from word count
     const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
     const words = countMixedWords(body);

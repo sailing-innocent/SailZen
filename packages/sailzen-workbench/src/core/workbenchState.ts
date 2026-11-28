@@ -15,7 +15,7 @@ import {
   WorkbenchProjectItemDTO,
   WorkDTO,
 } from "./server/types";
-import { serializeNewNote } from "./vault/noteModel";
+import { findHeadingLine, serializeNewNote, slugifyHeading } from "./vault/noteModel";
 import { buildDailyJournalContent, formatIsoDate } from "./vault/templateEngine";
 import { RefactorPlan, VaultIndex } from "./vault/vaultIndex";
 
@@ -34,6 +34,7 @@ export class WorkbenchState implements vscode.Disposable {
   private _online = false;
   private _lastServerError: string | null = null;
   private _treeProjectFilter = false;
+  private _lastActiveVaultNoteFname: string | null = null;
 
   private watcher: vscode.FileSystemWatcher | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
@@ -109,6 +110,139 @@ export class WorkbenchState implements vscode.Disposable {
 
   get treeProjectFilter(): boolean {
     return this._treeProjectFilter;
+  }
+
+  get lastActiveVaultNoteFname(): string | null {
+    return this._lastActiveVaultNoteFname;
+  }
+
+  setLastActiveVaultNoteFname(fname: string | null): void {
+    this._lastActiveVaultNoteFname = fname;
+  }
+
+  /** Convert an absolute filesystem path to a vault note fname if it lives inside active notesDir. */
+  getNoteFnameForPath(fsPath: string): string | undefined {
+    const index = this._vaultIndex;
+    if (!index || !fsPath) return undefined;
+    if (
+      path.dirname(path.resolve(fsPath)).toLowerCase() !==
+      path.resolve(index.notesDir).toLowerCase()
+    ) {
+      return undefined;
+    }
+    const base = path.basename(fsPath);
+    return base.toLowerCase().endsWith(".md") ? base.slice(0, -3) : undefined;
+  }
+
+  /**
+   * Resolve the URI of the currently focused file across Text Editor AND VS Code's native
+   * custom Markdown editors (`vscode.markdown.editor`, `vscode.markdown.preview.editor`).
+   */
+  resolveActiveFileUri(): vscode.Uri | undefined {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.uri.scheme === "file") {
+      return activeEditor.document.uri;
+    }
+
+    const activeTab = vscode.window.tabGroups.activeTabGroup?.activeTab;
+    if (activeTab?.input instanceof vscode.TabInputCustom) {
+      if (activeTab.input.uri.scheme === "file") {
+        return activeTab.input.uri;
+      }
+    }
+    if (activeTab?.input instanceof vscode.TabInputText) {
+      if (activeTab.input.uri.scheme === "file") {
+        return activeTab.input.uri;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Resolve the backing `vscode.TextDocument` of the currently focused Markdown note,
+   * whether opened in Text Editor or VS Code's native `vscode.markdown.editor` / `vscode.markdown.preview.editor`.
+   */
+  async resolveActiveMarkdownDocument(): Promise<vscode.TextDocument | undefined> {
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.languageId === "markdown") {
+      return activeEditor.document;
+    }
+
+    const uri = this.resolveActiveFileUri();
+    if (uri && uri.fsPath.toLowerCase().endsWith(".md")) {
+      const openDoc = vscode.workspace.textDocuments.find(
+        (d) => d.uri.fsPath.toLowerCase() === uri.fsPath.toLowerCase()
+      );
+      if (openDoc) return openDoc;
+      try {
+        return await vscode.workspace.openTextDocument(uri);
+      } catch {
+        return undefined;
+      }
+    }
+
+    const fname = this.resolveActiveVaultNoteFname();
+    const note = fname ? this._vaultIndex?.getNote(fname) : undefined;
+    if (note) {
+      try {
+        return await vscode.workspace.openTextDocument(vscode.Uri.file(note.fsPath));
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolve the currently focused vault note fname across Text Editor, native
+   * `vscode.markdown.editor`, `vscode.markdown.preview.editor`, and classic Markdown Preview tabs.
+   */
+  resolveActiveVaultNoteFname(): string | undefined {
+    const index = this._vaultIndex;
+    if (!index) return undefined;
+
+    // 1. Active text editor or native custom editor (vscode.markdown.editor / vscode.markdown.preview.editor)
+    const activeUri = this.resolveActiveFileUri();
+    if (activeUri) {
+      const fromUri = this.getNoteFnameForPath(activeUri.fsPath);
+      if (fromUri) {
+        this._lastActiveVaultNoteFname = fromUri;
+        return fromUri;
+      }
+    }
+
+    // 2. Classic Markdown Preview webview tab (e.g. "Preview foo.bar.md")
+    const activeTab = vscode.window.tabGroups.activeTabGroup?.activeTab;
+    if (activeTab?.label) {
+      const previewMatch = activeTab.label.match(/^Preview\s+(.+?)\.md$/i);
+      if (previewMatch) {
+        const candidate = previewMatch[1].trim();
+        const hit = index.getNote(candidate);
+        if (hit) {
+          this._lastActiveVaultNoteFname = hit.fname;
+          return hit.fname;
+        }
+      }
+    }
+
+    // 3. Visible markdown editor in the same window (e.g. Preview to the Side)
+    for (const ed of vscode.window.visibleTextEditors) {
+      if (ed.document.uri.scheme === "file") {
+        const fromVisible = this.getNoteFnameForPath(ed.document.uri.fsPath);
+        if (fromVisible) {
+          this._lastActiveVaultNoteFname = fromVisible;
+          return fromVisible;
+        }
+      }
+    }
+
+    // 4. Fallback to last active vault note if it still exists in the vault
+    if (this._lastActiveVaultNoteFname && index.getNote(this._lastActiveVaultNoteFname)) {
+      return this._lastActiveVaultNoteFname;
+    }
+
+    return undefined;
   }
 
   toggleTreeProjectFilter(): boolean {
@@ -350,11 +484,15 @@ export class WorkbenchState implements vscode.Disposable {
     return null;
   }
 
-  /** Open an existing note or create a new Dendron-compatible note file in the active vault. */
+  /**
+   * Open an existing note or create a new Dendron-compatible note file in the active vault.
+   * Uses `vscode.open` so VS Code respects the user's preferred native Markdown editor
+   * (`vscode.markdown.editor`, `vscode.markdown.preview.editor`, or standard Text Editor).
+   */
   async openOrCreateNote(
     fname: string,
     opts?: { anchor?: string; viewColumn?: vscode.ViewColumn; initialBody?: string; title?: string }
-  ): Promise<vscode.TextEditor | undefined> {
+  ): Promise<vscode.TextDocument | undefined> {
     if (!this._vaultIndex) {
       vscode.window.showWarningMessage("SailZen: No active vault found. Configure ~/.sailzen/machine.json first.");
       return undefined;
@@ -381,37 +519,39 @@ export class WorkbenchState implements vscode.Disposable {
       this._onDidVaultChange.fire();
     }
 
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-    const editor = await vscode.window.showTextDocument(doc, {
+    const baseUri = vscode.Uri.file(targetPath);
+    const openUri = opts?.anchor
+      ? baseUri.with({ fragment: slugifyHeading(opts.anchor) })
+      : baseUri;
+
+    await vscode.commands.executeCommand("vscode.open", openUri, {
       viewColumn: opts?.viewColumn,
       preview: false,
     });
 
-    if (opts?.anchor) {
-      const headingSlug = opts.anchor.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-");
-      for (let line = 0; line < doc.lineCount; line++) {
-        const text = doc.lineAt(line).text;
-        if (/^#{1,6}\s+/.test(text)) {
-          const slug = text
-            .replace(/^#{1,6}\s+/, "")
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-");
-          if (slug === headingSlug || text.toLowerCase().includes(opts.anchor.toLowerCase())) {
-            const pos = new vscode.Position(line, 0);
-            editor.selection = new vscode.Selection(pos, pos);
-            editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
-            break;
-          }
-        }
+    this._lastActiveVaultNoteFname = note?.fname ?? cleanFname;
+
+    // If VS Code opened it in a plain TextEditor and an anchor was requested, scroll to the heading line
+    const activeEditor = vscode.window.activeTextEditor;
+    if (
+      opts?.anchor &&
+      activeEditor &&
+      activeEditor.document.uri.fsPath.toLowerCase() === targetPath.toLowerCase()
+    ) {
+      const targetLine = findHeadingLine(activeEditor.document.getText(), opts.anchor);
+      if (targetLine !== undefined) {
+        const pos = new vscode.Position(targetLine, 0);
+        activeEditor.selection = new vscode.Selection(pos, pos);
+        activeEditor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
       }
+      return activeEditor.document;
     }
 
-    return editor;
+    return vscode.workspace.openTextDocument(baseUri);
   }
 
-  /** Open or create daily journal for a given date (defaults to today). */
-  async openDailyJournal(date: Date = new Date()): Promise<vscode.TextEditor | undefined> {
+  /** Open or create daily journal for a given date (defaults to today), respecting native Markdown editor. */
+  async openDailyJournal(date: Date = new Date()): Promise<vscode.TextDocument | undefined> {
     if (!this._vaultIndex) {
       vscode.window.showWarningMessage("SailZen: No active vault configured.");
       return undefined;
@@ -423,8 +563,10 @@ export class WorkbenchState implements vscode.Disposable {
       await this._vaultIndex.upsertFile(targetPath);
       this._onDidVaultChange.fire();
     }
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-    return vscode.window.showTextDocument(doc, { preview: false });
+    const uri = vscode.Uri.file(targetPath);
+    await vscode.commands.executeCommand("vscode.open", uri, { preview: false });
+    this._lastActiveVaultNoteFname = fname;
+    return vscode.workspace.openTextDocument(uri);
   }
 
   /**
@@ -478,13 +620,14 @@ export class WorkbenchState implements vscode.Disposable {
     if (!note) return false;
 
     const uri = vscode.Uri.file(note.fsPath);
-    // Close matching open tab(s) cleanly before trashing
+    // Close matching open tab(s) across both Text Editor and Custom Markdown Editor tabs before trashing
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
-        if (
-          tab.input instanceof vscode.TabInputText &&
-          tab.input.uri.fsPath.toLowerCase() === note.fsPath.toLowerCase()
-        ) {
+        const tabUri =
+          tab.input instanceof vscode.TabInputText || tab.input instanceof vscode.TabInputCustom
+            ? tab.input.uri
+            : undefined;
+        if (tabUri && tabUri.fsPath.toLowerCase() === note.fsPath.toLowerCase()) {
           await vscode.window.tabGroups.close(tab);
         }
       }

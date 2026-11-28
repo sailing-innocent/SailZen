@@ -307,6 +307,79 @@ export class VaultIndex {
     return items;
   }
 
+  /**
+   * Look up a hierarchy node (real note or virtual stub) by dot-separated fname.
+   * Uses the exact same canonical casing as `getChildren`.
+   */
+  getHierarchyNode(fname: string): HierarchyChildItem | undefined {
+    const key = fname.trim().toLowerCase();
+    if (!key) return undefined;
+    const note = this.notes.get(key);
+    const canonical = note ? note.fname : this.canonicalPrefix.get(key);
+    if (!note && !canonical) return undefined;
+    const actualFname = canonical ?? note!.fname;
+    const parts = actualFname.split(".");
+    const segment = parts[parts.length - 1];
+    const grandchildren = this.childrenMap.get(key);
+    return {
+      fname: actualFname,
+      segment,
+      note,
+      hasChildren: Boolean(grandchildren && grandchildren.size > 0),
+    };
+  }
+
+  /** Check whether `fname` appears inside a tree rooted at `rootNamespace` ("" means full vault). */
+  isUnderNamespace(fname: string, rootNamespace = ""): boolean {
+    const fnLower = fname.trim().toLowerCase();
+    if (!fnLower) return false;
+    const nsLower = rootNamespace.trim().toLowerCase();
+    if (!nsLower) return true;
+    return fnLower.startsWith(`${nsLower}.`);
+  }
+
+  /**
+   * Return the parent dot-hierarchy prefix for `fname` relative to `rootNamespace`.
+   * Returns `undefined` when `fname` is a top-level item in that tree view.
+   */
+  getParentFname(fname: string, rootNamespace = ""): string | undefined {
+    const clean = fname.trim();
+    const lastDot = clean.lastIndexOf(".");
+    if (lastDot === -1) return undefined;
+
+    const parent = clean.slice(0, lastDot);
+    const nsLower = rootNamespace.trim().toLowerCase();
+    if (nsLower && parent.toLowerCase() === nsLower) {
+      return undefined;
+    }
+    return parent;
+  }
+
+  /** Resolve parent `HierarchyChildItem` for VS Code `TreeDataProvider.getParent()`. */
+  getParentHierarchyNode(fname: string, rootNamespace = ""): HierarchyChildItem | undefined {
+    if (!this.isUnderNamespace(fname, rootNamespace)) return undefined;
+    const parentFname = this.getParentFname(fname, rootNamespace);
+    if (!parentFname) return undefined;
+    return this.getHierarchyNode(parentFname);
+  }
+
+  /** Return all sorted siblings sharing the same parent prefix as `fname`. */
+  getSiblings(fname: string): HierarchyChildItem[] {
+    const parent = this.getParentFname(fname, "") ?? "";
+    return this.getChildren(parent);
+  }
+
+  /** Find next (+1) or previous (-1) real sibling note in hierarchy sort order (wraps around). */
+  getAdjacentSiblingNote(fname: string, delta: 1 | -1): NoteRecord | undefined {
+    const siblings = this.getSiblings(fname).filter((s) => Boolean(s.note));
+    if (siblings.length <= 1) return undefined;
+    const key = fname.toLowerCase();
+    const idx = siblings.findIndex((s) => s.fname.toLowerCase() === key);
+    if (idx === -1) return siblings[0].note;
+    const nextIdx = (idx + delta + siblings.length) % siblings.length;
+    return siblings[nextIdx].note;
+  }
+
   /** Return all existing daily journal day numbers for a given (year, month 1..12). */
   getDailyJournalDays(year: number, month: number): Map<number, NoteRecord> {
     const prefix = `journal.daily.${year}.${String(month).padStart(2, "0")}.`;

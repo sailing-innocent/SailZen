@@ -1,0 +1,80 @@
+/* SailZen Workbench — Native VS Code Markdown Preview Styles */
+
+a.sailzen-wikilink {
+  color: var(--vscode-textLink-foreground, #3794ff);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 45%, transparent);
+  padding: 0 2px;
+  border-radius: 2px;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+a.sailzen-wikilink:hover {
+  background-color: color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 14%, transparent);
+  border-bottom-color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground, #3794ff));
+}
+
+a.sailzen-wikilink.sailzen-wikilink-missing {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  border-bottom: 1px dashed var(--vscode-editorWarning-foreground, #cca700);
+  opacity: 0.9;
+}
+
+a.sailzen-wikilink.sailzen-wikilink-anchor::before {
+  content: "§ ";
+  opacity: 0.7;
+  font-size: 0.9em;
+}
+
+a.sailzen-repolink {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  background-color: color-mix(in srgb, var(--vscode-textCodeBlock-background, rgba(128, 128, 128, 0.15)) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 30%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  text-decoration: none;
+}
+
+a.sailzen-repolink:hover {
+  background-color: color-mix(in srgb, var(--vscode-textLink-foreground, #3794ff) 16%, transparent);
+}
+
+.sailzen-embed {
+  margin: 0.85em 0;
+  border-left: 3px solid var(--vscode-textLink-foreground, #3794ff);
+  background-color: color-mix(in srgb, var(--vscode-editorWidget-background, rgba(128, 128, 128, 0.08)) 65%, transparent);
+  border-radius: 0 6px 6px 0;
+  overflow: hidden;
+}
+
+.sailzen-embed-header {
+  padding: 5px 12px;
+  font-size: 0.85em;
+  font-weight: 600;
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border, rgba(128, 128, 128, 0.25)) 70%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sailzen-embed-fname {
+  opacity: 0.65;
+  font-weight: 400;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.9em;
+}
+
+.sailzen-embed-body {
+  padding: 8px 14px;
+}
+
+.sailzen-embed-body > :first-child {
+  margin-top: 0;
+}
+
+.sailzen-embed-body > :last-child {
+  margin-bottom: 0;
+}
