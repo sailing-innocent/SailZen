@@ -1388,12 +1388,14 @@ export function registerWorkbenchCommands(
     })
   );
 
-  // 28. Workbench Diagnostics
+  // 35. Workbench Diagnostics
   context.subscriptions.push(
     vscode.commands.registerCommand("sailzen.showDiagnostics", async () => {
       const stats = state.vaultIndex?.stats;
+      const extVersion = String(context.extension.packageJSON?.version || "unknown");
       const lines = [
         `# SailZen Workbench Diagnostics`,
+        `- Extension Version: v${extVersion}`,
         `- Machine ID: ${state.registry.current.machineId}`,
         `- Config Path: ${state.registry.configPath}`,
         `- Active Vault Role: ${state.activeVaultRole}`,

@@ -31,7 +31,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tempfile
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -163,6 +163,25 @@ def _build_vsix(*, version: str, skip_tests: bool = False) -> Path:
     return candidates[0]
 
 
+def _ssh_with_retry(cfg: OpsConfig, command: str, *, timeout: int = 30, retries: int = 3) -> None:
+    """对瞬态 SSH 断连（exit=255 / sshd MaxStartups 限流）自动退避重试。"""
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, retries + 1):
+        try:
+            run_ssh_command(cfg, command, timeout=timeout)
+            return
+        except Exception as exc:
+            last_exc = exc
+            if "exit=255" in str(exc) and attempt < retries:
+                wait_s = attempt * 2.0
+                print(f"[SSH] 连接被远端关闭（第 {attempt}/{retries} 次），{wait_s:.0f}s 后重试...")
+                time.sleep(wait_s)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+
+
 def _upload_vsix_and_manifest(
     cfg: OpsConfig,
     *,
@@ -187,42 +206,42 @@ def _upload_vsix_and_manifest(
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return
 
-    run_ssh_command(cfg, f"mkdir -p {shlex.quote(remote_dir)}", timeout=30)
+    # 1. 确保目录存在（1 次 SSH）
+    _ssh_with_retry(cfg, f"mkdir -p {shlex.quote(remote_dir)}", timeout=30)
 
+    # 2. SCP 上传 VSIX 到 .part 临时文件（1 次 SCP，带 exit=255 重试）
     print(f"[SCP] 上传 VSIX -> {remote_part}")
-    scp_upload(cfg, vsix_path, remote_part, timeout=180)
-    run_ssh_command(
-        cfg,
-        f"chmod 644 {shlex.quote(remote_part)} && mv -f {shlex.quote(remote_part)} {shlex.quote(remote_final)}",
-        timeout=30,
-    )
+    for attempt in range(1, 4):
+        try:
+            scp_upload(cfg, vsix_path, remote_part, timeout=180)
+            break
+        except Exception as exc:
+            if "exit=255" in str(exc) and attempt < 3:
+                wait_s = attempt * 2.0
+                print(f"[SCP] 连接被远端关闭（第 {attempt}/3 次），{wait_s:.0f}s 后重试...")
+                time.sleep(wait_s)
+                continue
+            raise
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", encoding="utf-8", delete=False
-    ) as tf:
-        json.dump(manifest, tf, ensure_ascii=False, indent=2)
-        tf.write("\n")
-        tmp_local_json = Path(tf.name)
+    # 3. 单次 SSH 原子提交 VSIX + 写入 latest.json + 清理旧包（将总 SSH 次数由 6 次降为 3 次，避免触发 sshd 并发限流）
+    import base64
 
-    try:
-        print(f"[SCP] 上传元数据 -> {remote_manifest_tmp}")
-        scp_upload(cfg, tmp_local_json, remote_manifest_tmp, timeout=60)
-        run_ssh_command(
-            cfg,
-            f"chmod 644 {shlex.quote(remote_manifest_tmp)} && mv -f {shlex.quote(remote_manifest_tmp)} {shlex.quote(remote_manifest_final)}",
-            timeout=30,
-        )
-    finally:
-        tmp_local_json.unlink(missing_ok=True)
-
+    manifest_b64 = base64.b64encode(
+        (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    ).decode("ascii")
     keep_n = max(1, keep)
-    prune_cmd = (
-        f"cd {shlex.quote(remote_dir)} && "
+    finalize_cmd = (
+        f"set -e; "
+        f"chmod 644 {shlex.quote(remote_part)} && "
+        f"mv -f {shlex.quote(remote_part)} {shlex.quote(remote_final)} && "
+        f"printf %s {shlex.quote(manifest_b64)} | base64 -d > {shlex.quote(remote_manifest_tmp)} && "
+        f"chmod 644 {shlex.quote(remote_manifest_tmp)} && "
+        f"mv -f {shlex.quote(remote_manifest_tmp)} {shlex.quote(remote_manifest_final)} && "
+        f"(cd {shlex.quote(remote_dir)} && "
         f"ls -1t *.vsix 2>/dev/null | tail -n +{keep_n + 1} | "
-        f"grep -vxF {shlex.quote(vsix_path.name)} | "
-        "xargs -r rm -f"
+        f"grep -vxF {shlex.quote(vsix_path.name)} | xargs -r rm -f || true)"
     )
-    run_ssh_command(cfg, prune_cmd, check=False, timeout=30)
+    _ssh_with_retry(cfg, finalize_cmd, timeout=30)
     print(f"[OK] VSIX 与 latest.json 已原子发布至云端（保留最近 {keep_n} 个历史包）")
 
 
