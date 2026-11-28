@@ -5,6 +5,10 @@
   "version": "0.3.0",
   "publisher": "SailingInnocent",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sailzen/sailzen"
+  },
   "private": false,
   "engines": {
     "vscode": "^1.95.0",
