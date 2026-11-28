@@ -27,17 +27,17 @@ ALTER TABLE user_inbox_items ADD COLUMN IF NOT EXISTS target_clients JSONB DEFAU
 CREATE INDEX IF NOT EXISTS ix_inbox_user_target_domain
     ON user_inbox_items (user_id, target_domain, status);
 
--- 5. 存量历史票据按 topic 幂等回填（仅更新仍为空或默认 general 的记录）
+-- 5. 存量历史票据按 topic 幂等回填（使用 PG 原生 starts_with）
 UPDATE sail_tick_tickets
 SET domain = 'health', persona = 'health_coach',
     target_clients = '["android","web"]'::jsonb,
     deep_link = '/health/coach?ticket=' || id
 WHERE (domain IS NULL OR domain = '' OR domain = 'general')
   AND (
-      lower(coalesce(topic, '')) LIKE 'diet%'
-      OR lower(coalesce(topic, '')) LIKE 'weight%'
-      OR lower(coalesce(topic, '')) LIKE 'sleep%'
-      OR lower(coalesce(topic, '')) LIKE 'exercise%'
+      starts_with(lower(coalesce(topic, '')), 'diet')
+      OR starts_with(lower(coalesce(topic, '')), 'weight')
+      OR starts_with(lower(coalesce(topic, '')), 'sleep')
+      OR starts_with(lower(coalesce(topic, '')), 'exercise')
       OR lower(coalesce(topic, '')) IN ('canteen', 'lunch_source', 'dinner_habit', 'gym_access', 'height', 'current_weight', 'morning_weight')
   );
 
@@ -47,10 +47,10 @@ SET domain = 'rhythm', persona = 'rhythm_planner',
     deep_link = '/plan?ticket=' || id
 WHERE (domain IS NULL OR domain = '' OR domain = 'general')
   AND (
-      lower(coalesce(topic, '')) LIKE 'rhythm%'
-      OR lower(coalesce(topic, '')) LIKE 'project%'
-      OR lower(coalesce(topic, '')) LIKE 'schedule%'
-      OR lower(coalesce(topic, '')) LIKE 'focus%'
+      starts_with(lower(coalesce(topic, '')), 'rhythm')
+      OR starts_with(lower(coalesce(topic, '')), 'project')
+      OR starts_with(lower(coalesce(topic, '')), 'schedule')
+      OR starts_with(lower(coalesce(topic, '')), 'focus')
       OR lower(coalesce(topic, '')) IN ('wake_time', 'profile_wake_time', 'spare_time_preference')
   );
 
@@ -60,10 +60,10 @@ SET domain = 'finance', persona = 'finance_secretary',
     deep_link = '/money?ticket=' || id
 WHERE (domain IS NULL OR domain = '' OR domain = 'general')
   AND (
-      lower(coalesce(topic, '')) LIKE 'finance%'
-      OR lower(coalesce(topic, '')) LIKE 'bill%'
-      OR lower(coalesce(topic, '')) LIKE 'budget%'
-      OR lower(coalesce(topic, '')) LIKE 'reconcile%'
+      starts_with(lower(coalesce(topic, '')), 'finance')
+      OR starts_with(lower(coalesce(topic, '')), 'bill')
+      OR starts_with(lower(coalesce(topic, '')), 'budget')
+      OR starts_with(lower(coalesce(topic, '')), 'reconcile')
   );
 
 -- 6. 同步回填 user_inbox_items 的 target_domain 与 persona
