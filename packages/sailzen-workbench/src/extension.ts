@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import {
+  SAILZEN_VFS_SCHEME,
+  SailZenVirtualDocumentProvider,
+} from "./core/server/virtualFs";
 import { WorkbenchState } from "./core/workbenchState";
 import { registerWorkbenchCommands } from "./features/commands/registerCommands";
 import { SailZenEditorProviders } from "./features/editor/wikilinkProvider";
@@ -14,7 +18,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const state = new WorkbenchState(output);
   context.subscriptions.push(output, state);
 
-  // 1. Register native TreeViews & minimal Webviews immediately (zero cold-start block)
+  // 1. Register sailzen:// Virtual FS (read-only cloud books/papers/clips/NoteItems/Topics)
+  const vfsProvider = new SailZenVirtualDocumentProvider(state);
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(SAILZEN_VFS_SCHEME, vfsProvider)
+  );
+
+  // 2. Register native TreeViews & minimal Webviews immediately (zero cold-start block)
   const rhythmProvider = new RhythmTreeDataProvider(state);
   const projectsProvider = new ProjectsTreeDataProvider(state);
   const vaultTreeProvider = new VaultTreeDataProvider(state);
@@ -30,13 +40,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     new WorkbenchStatusBar(state)
   );
 
-  // 2. Register Editor Providers ([[wikilink]] completion/jump/hover + repo:// links)
+  // 3. Register Editor Providers ([[wikilink]] completion/jump/hover + repo:// links)
   new SailZenEditorProviders(state).register(context);
 
-  // 3. Register Workbench Commands
+  // 4. Register Workbench Commands
   registerWorkbenchCommands(context, state);
 
-  // 4. Kick off warm cache load + incremental disk sync + async server bootstrap
+  // 5. Kick off warm cache load + incremental disk sync + async server bootstrap
   await state.initialize();
 }
 

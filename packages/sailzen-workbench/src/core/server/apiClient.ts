@@ -3,12 +3,25 @@ import { PrivacyGuard } from "../machine/privacyGuard";
 import {
   AffairDTO,
   BlockStatus,
+  ChapterSyncRequestDTO,
+  ChapterSyncResponseDTO,
+  ContentTopicDetailDTO,
+  DocumentNodeDTO,
+  EditionDTO,
+  EditionTocDTO,
+  NoteItemContentDTO,
+  NoteItemListDTO,
   QuickChatResponseDTO,
   TimeBlockDTO,
+  TopicRhythmTaskSummaryDTO,
+  VaultNoteIndexItemDTO,
+  VaultNoteIndexSyncResponseDTO,
+  WorkClipsExportDTO,
   WorkbenchBootstrapDTO,
   WorkbenchContextPackDTO,
   WorkbenchProjectItemDTO,
   WorkbenchProjectMetaDTO,
+  WorkDTO,
 } from "./types";
 
 export class ServerOfflineError extends Error {
@@ -22,7 +35,7 @@ export class SailZenApiClient {
   constructor(
     private readonly registry: MachineRegistry,
     private readonly privacyGuard: PrivacyGuard,
-    private readonly timeoutMs = 8000
+    private readonly timeoutMs = 15000
   ) {}
 
   private getBaseUrl(): string {
@@ -65,7 +78,10 @@ export class SailZenApiClient {
       }
       return (await resp.json()) as T;
     } catch (err) {
-      if (err instanceof Error && (err.name === "AbortError" || err.message.includes("fetch failed"))) {
+      if (
+        err instanceof Error &&
+        (err.name === "AbortError" || err.message.includes("fetch failed"))
+      ) {
         throw new ServerOfflineError(`Cannot reach sail_server at ${this.getBaseUrl()}`);
       }
       throw err;
@@ -83,10 +99,63 @@ export class SailZenApiClient {
     }
   }
 
-  /** Single-RTT bootstrap for Today & Rhythm + Projects & Content + Pending Tickets. */
+  // --------------------------------------------------------------------------
+  // Workbench & Rhythm v2
+  // --------------------------------------------------------------------------
+
   async bootstrap(isoDate?: string): Promise<WorkbenchBootstrapDTO> {
     const qs = isoDate ? `?date=${encodeURIComponent(isoDate)}` : "";
-    return this.request<WorkbenchBootstrapDTO>("GET", `/workbench/bootstrap${qs}`);
+    try {
+      return await this.request<WorkbenchBootstrapDTO>("GET", `/workbench/bootstrap${qs}`);
+    } catch (err) {
+      // Graceful fallback for servers that haven't deployed /api/v1/workbench/bootstrap yet
+      if (err instanceof Error && err.message.startsWith("HTTP 404 ")) {
+        const [dash, topics, tickets] = await Promise.all([
+          this.request<{
+            date: string;
+            timeline: WorkbenchBootstrapDTO["timeline"];
+            projects: WorkbenchBootstrapDTO["projects"][number]["progress"][];
+            focus_affairs: WorkbenchBootstrapDTO["focus_affairs"];
+            overdue_affairs: WorkbenchBootstrapDTO["overdue_affairs"];
+            degraded?: string[];
+          }>("GET", `/rhythm/dashboard${qs}`),
+          this.request<WorkbenchBootstrapDTO["topics"]>("GET", "/text/topic").catch(() => []),
+          this.request<WorkbenchBootstrapDTO["pending_tickets"]>(
+            "GET",
+            "/tick/tickets?status=pending&limit=20"
+          ).catch(() => []),
+        ]);
+        return {
+          date: dash.date,
+          timeline: dash.timeline,
+          projects: (dash.projects || []).map((p) => {
+            const slug =
+              p.title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || `venture-${p.affair_id}`;
+            const linkedTopic = topics.find((t) => t.rhythm_venture_id === p.affair_id);
+            return {
+              progress: p,
+              workbench: {
+                slug,
+                archetype: "general",
+                vault_namespace: "",
+                repo_hints: [],
+                topic_id: linkedTopic?.id ?? null,
+                original_work_id: null,
+              },
+            };
+          }),
+          focus_affairs: dash.focus_affairs || [],
+          overdue_affairs: dash.overdue_affairs || [],
+          topics,
+          pending_tickets: tickets,
+          degraded: [...(dash.degraded || []), "workbench_bootstrap_fallback"],
+        };
+      }
+      throw err;
+    }
   }
 
   async setBlockStatus(blockId: number, status: BlockStatus): Promise<TimeBlockDTO> {
@@ -137,5 +206,97 @@ export class SailZenApiClient {
       message,
       channel: "vscode_workbench",
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // Content 2.0 (Works, TOC, Chapters, Topics, NoteItems, Clips, Vault Sync)
+  // --------------------------------------------------------------------------
+
+  async listWorks(params?: {
+    pillar?: string;
+    reading_status?: string;
+    topic_id?: number;
+    limit?: number;
+  }): Promise<WorkDTO[]> {
+    const search = new URLSearchParams();
+    if (params?.pillar) search.set("pillar", params.pillar);
+    if (params?.reading_status) search.set("reading_status", params.reading_status);
+    if (params?.topic_id !== undefined) search.set("topic_id", String(params.topic_id));
+    search.set("limit", String(params?.limit ?? 50));
+    const qs = search.toString();
+    return this.request<WorkDTO[]>("GET", `/text/work${qs ? `?${qs}` : ""}`);
+  }
+
+  async getEditionsByWork(workId: number): Promise<EditionDTO[]> {
+    return this.request<EditionDTO[]>("GET", `/text/edition/work/${workId}`);
+  }
+
+  async getEditionToc(editionId: number): Promise<EditionTocDTO> {
+    return this.request<EditionTocDTO>("GET", `/text/edition/${editionId}/toc`);
+  }
+
+  async getDocumentNode(nodeId: number): Promise<DocumentNodeDTO> {
+    return this.request<DocumentNodeDTO>("GET", `/text/node/${nodeId}?include_content=true`);
+  }
+
+  async getTopicDetail(topicId: number): Promise<ContentTopicDetailDTO> {
+    return this.request<ContentTopicDetailDTO>("GET", `/text/topic/${topicId}/detail`);
+  }
+
+  async pushTopicRhythmTask(
+    topicId: number,
+    req: { title: string; description?: string; work_id?: number; est_minutes?: number }
+  ): Promise<TopicRhythmTaskSummaryDTO> {
+    this.privacyGuard.assertCloudUploadAllowed("pushTopicRhythmTask");
+    return this.request<TopicRhythmTaskSummaryDTO>(
+      "POST",
+      `/text/topic/${topicId}/push-rhythm-task`,
+      req
+    );
+  }
+
+  async listNoteItems(params?: {
+    work_id?: number;
+    category?: string;
+    limit?: number;
+  }): Promise<NoteItemListDTO> {
+    const search = new URLSearchParams();
+    if (params?.work_id !== undefined) search.set("work_id", String(params.work_id));
+    if (params?.category) search.set("category", params.category);
+    search.set("limit", String(params?.limit ?? 100));
+    return this.request<NoteItemListDTO>("GET", `/text/note?${search.toString()}`);
+  }
+
+  async getNoteItemContent(noteId: number): Promise<NoteItemContentDTO> {
+    return this.request<NoteItemContentDTO>("GET", `/text/note/${noteId}/content`);
+  }
+
+  async exportWorkClips(workId: number): Promise<WorkClipsExportDTO> {
+    return this.request<WorkClipsExportDTO>("GET", `/text/work/${workId}/export-clips`);
+  }
+
+  async syncVaultNoteIndex(
+    items: VaultNoteIndexItemDTO[],
+    sourceVault = "local",
+    vaultRootPath?: string
+  ): Promise<VaultNoteIndexSyncResponseDTO> {
+    this.privacyGuard.assertCloudUploadAllowed("syncVaultNoteIndex", vaultRootPath);
+    return this.request<VaultNoteIndexSyncResponseDTO>("POST", "/text/vault/index/sync", {
+      items,
+      source_vault: sourceVault,
+    });
+  }
+
+  async syncEditionChapter(
+    editionId: number,
+    req: ChapterSyncRequestDTO,
+    sourceFsPath?: string
+  ): Promise<ChapterSyncResponseDTO> {
+    this.privacyGuard.assertCloudUploadAllowed("syncEditionChapter", sourceFsPath);
+    return this.request<ChapterSyncResponseDTO>(
+      "PUT",
+      `/text/edition/${editionId}/chapter-sync`,
+      req
+    );
   }
 }

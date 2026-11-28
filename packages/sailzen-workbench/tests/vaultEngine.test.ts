@@ -182,4 +182,33 @@ describe("VaultIndex: indexing, cache, search, and atomic rename/refactor", () =
 
     idx.dispose();
   });
+
+  it("supports literal and regex batch rename with collision guard and cross-vault link rewrite", async () => {
+    const idx = new VaultIndex(tmpDir);
+    await idx.syncFromDisk(false);
+
+    const plan = await idx.planBatchRename("^project\\.alpha(.*)$", "work.beta$1", {
+      useRegex: true,
+    });
+    expect(plan.fileRenames).toHaveLength(2);
+    expect(plan.textEdits.length).toBeGreaterThanOrEqual(3);
+
+    await idx.applyRefactorPlanToDisk(plan);
+
+    expect(fs.existsSync(path.join(tmpDir, "work.beta.md"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "work.beta.design.md"))).toBe(true);
+    const journal = fs.readFileSync(
+      path.join(tmpDir, "journal.daily.2026.11.27.md"),
+      "utf8"
+    );
+    expect(journal).toContain("[[Design Doc|work.beta.design#Arch]]");
+    expect(journal).toContain("[[work.beta]]");
+
+    // Collision detection: mapping two files to the same name throws cleanly
+    await expect(
+      idx.planBatchRename("^work\\.beta.*$", "work.same", { useRegex: true })
+    ).rejects.toThrow(/collision/i);
+
+    idx.dispose();
+  });
 });

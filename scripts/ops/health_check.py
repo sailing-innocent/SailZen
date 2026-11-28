@@ -62,6 +62,7 @@ CORE_READONLY_ENDPOINTS: List[Tuple[str, str]] = [
     ("Life/Weather", "/life/weather"),
     ("Necessity/Residence", "/necessity/residence"),
     ("Text/Work", "/text/work"),
+    ("Workbench/Bootstrap", "/workbench/bootstrap"),
 ]
 
 

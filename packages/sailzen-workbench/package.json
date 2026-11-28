@@ -2,7 +2,7 @@
   "name": "sailzen-workbench",
   "displayName": "SailZen Workbench",
   "description": "SailZen 3.0 Work & Creation Workbench — fast dot-hierarchy notes, Rhythm v2 + SailTick, Content 2.0, and multi-machine project workflows.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "SailingInnocent",
   "license": "MIT",
   "private": false,
@@ -68,6 +68,11 @@
         "icon": "$(search)"
       },
       {
+        "command": "sailzen.openProjectNote",
+        "title": "SailZen: Lookup Note in Active Project",
+        "icon": "$(folder-library)"
+      },
+      {
         "command": "sailzen.gotoToday",
         "title": "SailZen: Open Today's Journal",
         "icon": "$(calendar)"
@@ -78,16 +83,34 @@
         "icon": "$(new-file)"
       },
       {
+        "command": "sailzen.createChildNote",
+        "title": "SailZen: Create Child Note",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "sailzen.deleteNote",
+        "title": "SailZen: Delete Note (Move to Trash)",
+        "icon": "$(trash)"
+      },
+      {
         "command": "sailzen.renameNote",
-        "title": "SailZen: Rename Note (Update Links)"
+        "title": "SailZen: Rename Note (Update Links)",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "sailzen.batchRenameNote",
+        "title": "SailZen: Batch Rename Notes (Update Links)",
+        "icon": "$(replace-all)"
       },
       {
         "command": "sailzen.refactorHierarchy",
-        "title": "SailZen: Refactor Hierarchy (Update Links)"
+        "title": "SailZen: Refactor Hierarchy (Update Links)",
+        "icon": "$(list-tree)"
       },
       {
         "command": "sailzen.copyNoteLink",
-        "title": "SailZen: Copy Note Wikilink"
+        "title": "SailZen: Copy Note Wikilink",
+        "icon": "$(copy)"
       },
       {
         "command": "sailzen.goUpHierarchy",
@@ -140,6 +163,26 @@
         "icon": "$(link)"
       },
       {
+        "command": "sailzen.configureProjectMeta",
+        "title": "SailZen: Configure Venture Semantic Metadata",
+        "icon": "$(settings)"
+      },
+      {
+        "command": "sailzen.syncVaultContent",
+        "title": "SailZen: Sync Vault ↔ Content 2.0 (Fenced)",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "sailzen.syncWorkToVault",
+        "title": "SailZen: Export Work Reading Card & Clips to Vault",
+        "icon": "$(desktop-download)"
+      },
+      {
+        "command": "sailzen.pushTopicTask",
+        "title": "SailZen: Push Topic Task to Rhythm",
+        "icon": "$(tasklist)"
+      },
+      {
         "command": "sailzen.copyContextPack",
         "title": "SailZen: Copy AI Project Context Pack",
         "icon": "$(sparkle)"
@@ -172,6 +215,11 @@
           "group": "navigation@1"
         },
         {
+          "command": "sailzen.syncVaultContent",
+          "when": "view == sailzen.projectsView",
+          "group": "navigation@3"
+        },
+        {
           "command": "sailzen.lookupNote",
           "when": "view == sailzen.vaultTreeView",
           "group": "navigation@1"
@@ -201,24 +249,79 @@
         {
           "command": "sailzen.copyContextPack",
           "when": "view == sailzen.projectsView && viewItem == ventureProject",
+          "group": "inline@1"
+        },
+        {
+          "command": "sailzen.configureProjectMeta",
+          "when": "view == sailzen.projectsView && viewItem == ventureProject",
+          "group": "sailzen@1"
+        },
+        {
+          "command": "sailzen.syncWorkToVault",
+          "when": "view == sailzen.projectsView && viewItem == contentWork",
           "group": "inline"
+        },
+        {
+          "command": "sailzen.pushTopicTask",
+          "when": "view == sailzen.projectsView && viewItem == contentTopic",
+          "group": "inline"
+        },
+        {
+          "command": "sailzen.createChildNote",
+          "when": "view == sailzen.vaultTreeView && (viewItem == vaultNote || viewItem == vaultStub)",
+          "group": "inline@1"
+        },
+        {
+          "command": "sailzen.copyNoteLink",
+          "when": "view == sailzen.vaultTreeView && viewItem == vaultNote",
+          "group": "sailzen@1"
+        },
+        {
+          "command": "sailzen.renameNote",
+          "when": "view == sailzen.vaultTreeView && viewItem == vaultNote",
+          "group": "sailzen@2"
+        },
+        {
+          "command": "sailzen.refactorHierarchy",
+          "when": "view == sailzen.vaultTreeView && (viewItem == vaultNote || viewItem == vaultStub)",
+          "group": "sailzen@3"
+        },
+        {
+          "command": "sailzen.batchRenameNote",
+          "when": "view == sailzen.vaultTreeView && (viewItem == vaultNote || viewItem == vaultStub)",
+          "group": "sailzen@4"
+        },
+        {
+          "command": "sailzen.deleteNote",
+          "when": "view == sailzen.vaultTreeView && viewItem == vaultNote",
+          "group": "sailzen@9"
         }
       ],
       "editor/context": [
         {
-          "command": "sailzen.pushSelectionToRhythm",
-          "when": "editorHasSelection",
+          "command": "sailzen.copyNoteLink",
+          "when": "editorLangId == markdown",
           "group": "sailzen@1"
         },
         {
-          "command": "sailzen.syncJournalRhythm",
+          "command": "sailzen.renameNote",
           "when": "editorLangId == markdown",
           "group": "sailzen@2"
         },
         {
-          "command": "sailzen.copyNoteLink",
+          "command": "sailzen.deleteNote",
           "when": "editorLangId == markdown",
           "group": "sailzen@3"
+        },
+        {
+          "command": "sailzen.pushSelectionToRhythm",
+          "when": "editorHasSelection",
+          "group": "sailzen@4"
+        },
+        {
+          "command": "sailzen.syncJournalRhythm",
+          "when": "editorLangId == markdown",
+          "group": "sailzen@5"
         }
       ]
     },
@@ -232,6 +335,18 @@
         "command": "sailzen.gotoToday",
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i"
+      },
+      {
+        "command": "sailzen.copyNoteLink",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "editorFocus && editorLangId == markdown"
+      },
+      {
+        "command": "sailzen.deleteNote",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "editorFocus && editorLangId == markdown"
       },
       {
         "command": "sailzen.goUpHierarchy",

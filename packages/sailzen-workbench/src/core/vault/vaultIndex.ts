@@ -450,6 +450,65 @@ export class VaultIndex {
     return this.buildLinkEditsForRenames(fileRenames, renameMap);
   }
 
+  /**
+   * Plan an atomic batch rename across all notes matching a literal substring or RegExp pattern,
+   * automatically computing every cross-vault wikilink edit.
+   */
+  async planBatchRename(
+    pattern: string,
+    replacement: string,
+    opts?: { useRegex?: boolean; namespacePrefix?: string }
+  ): Promise<RefactorPlan> {
+    if (!pattern) {
+      throw new Error("Search pattern cannot be empty.");
+    }
+    const regex = opts?.useRegex ? new RegExp(pattern, "g") : null;
+    const ns = opts?.namespacePrefix?.trim().toLowerCase();
+
+    const matched: Array<{ note: NoteRecord; targetFname: string }> = [];
+    for (const note of this.notes.values()) {
+      if (ns && !note.fname.toLowerCase().startsWith(ns)) continue;
+      const nextFname = regex
+        ? note.fname.replace(regex, replacement)
+        : note.fname.split(pattern).join(replacement);
+      if (nextFname !== note.fname) {
+        if (!nextFname.trim()) {
+          throw new Error(`Replacement produced empty filename for "${note.fname}"`);
+        }
+        matched.push({ note, targetFname: nextFname.trim() });
+      }
+    }
+
+    if (matched.length === 0) {
+      return { fileRenames: [], textEdits: [], affectedReferencingFiles: 0 };
+    }
+
+    const oldKeys = new Set(matched.map((m) => m.note.fname.toLowerCase()));
+    const newKeys = new Set<string>();
+    const fileRenames: FileRenameOp[] = [];
+    const renameMap = new Map<string, string>();
+
+    for (const { note, targetFname } of matched) {
+      const targetLower = targetFname.toLowerCase();
+      if (newKeys.has(targetLower)) {
+        throw new Error(`Batch rename collision: multiple notes map to "${targetFname}"`);
+      }
+      if (this.getNote(targetFname) && !oldKeys.has(targetLower)) {
+        throw new Error(`Target note already exists: "${targetFname}"`);
+      }
+      newKeys.add(targetLower);
+      fileRenames.push({
+        oldFname: note.fname,
+        newFname: targetFname,
+        oldFsPath: note.fsPath,
+        newFsPath: path.join(this.notesDir, `${targetFname}.md`),
+      });
+      renameMap.set(note.fname.toLowerCase(), targetFname);
+    }
+
+    return this.buildLinkEditsForRenames(fileRenames, renameMap);
+  }
+
   /** Apply a RefactorPlan directly to disk (used in CLI/tests; VS Code uses WorkspaceEdit). */
   async applyRefactorPlanToDisk(plan: RefactorPlan): Promise<void> {
     // 1. Group edits by fsPath and apply in reverse offset order

@@ -9,7 +9,11 @@ import {
 } from "./machine/machineConfig";
 import { PrivacyGuard } from "./machine/privacyGuard";
 import { SailZenApiClient, ServerOfflineError } from "./server/apiClient";
-import { WorkbenchBootstrapDTO, WorkbenchProjectItemDTO } from "./server/types";
+import {
+  WorkbenchBootstrapDTO,
+  WorkbenchProjectItemDTO,
+  WorkDTO,
+} from "./server/types";
 import { serializeNewNote } from "./vault/noteModel";
 import { buildDailyJournalContent, formatIsoDate } from "./vault/templateEngine";
 import { RefactorPlan, VaultIndex } from "./vault/vaultIndex";
@@ -23,6 +27,7 @@ export class WorkbenchState implements vscode.Disposable {
   private _activeVaultRoot: string | null = null;
   private _activeVaultRole: VaultRole = "private";
   private _bootstrap: WorkbenchBootstrapDTO | null = null;
+  private _works: WorkDTO[] = [];
   private _activeProject: WorkbenchProjectItemDTO | null = null;
   private _online = false;
   private _lastServerError: string | null = null;
@@ -60,6 +65,10 @@ export class WorkbenchState implements vscode.Disposable {
 
   get bootstrapData(): WorkbenchBootstrapDTO | null {
     return this._bootstrap;
+  }
+
+  get works(): WorkDTO[] {
+    return this._works;
   }
 
   get activeProject(): WorkbenchProjectItemDTO | null {
@@ -249,8 +258,12 @@ export class WorkbenchState implements vscode.Disposable {
 
     try {
       const today = formatIsoDate(new Date());
-      const data = await this.apiClient.bootstrap(today);
+      const [data, works] = await Promise.all([
+        this.apiClient.bootstrap(today),
+        this.apiClient.listWorks({ limit: 80 }).catch(() => [] as WorkDTO[]),
+      ]);
       this._bootstrap = data;
+      this._works = works;
       this._online = true;
       this._lastServerError = null;
       this.resolveActiveProject();
@@ -422,6 +435,31 @@ export class WorkbenchState implements vscode.Disposable {
       await this.reloadVaultFull();
     }
     return applied;
+  }
+
+  /** Delete a note safely to OS Trash and remove it from the in-memory index. */
+  async deleteNoteToTrash(fname: string): Promise<boolean> {
+    if (!this._vaultIndex) return false;
+    const note = this._vaultIndex.getNote(fname);
+    if (!note) return false;
+
+    const uri = vscode.Uri.file(note.fsPath);
+    // Close matching open tab(s) cleanly before trashing
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (
+          tab.input instanceof vscode.TabInputText &&
+          tab.input.uri.fsPath.toLowerCase() === note.fsPath.toLowerCase()
+        ) {
+          await vscode.window.tabGroups.close(tab);
+        }
+      }
+    }
+
+    await vscode.workspace.fs.delete(uri, { useTrash: true });
+    this._vaultIndex.removeFile(note.fsPath);
+    this._onDidVaultChange.fire();
+    return true;
   }
 
   private disposeVaultWatcher(): void {
