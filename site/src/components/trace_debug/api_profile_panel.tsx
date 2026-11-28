@@ -41,7 +41,7 @@ interface ApiProfilePanelProps {
 
 const ApiProfilePanel: React.FC<ApiProfilePanelProps> = ({ windowHours, refreshNonce }) => {
   const [profile, setProfile] = useState<ApiProfile | null>(null)
-  const [endpointMode, setEndpointMode] = useState<'slow' | 'hot'>('slow')
+  const [endpointMode, setEndpointMode] = useState<'slow' | 'hot' | 'error'>('slow')
   const [includeSelf, setIncludeSelf] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -66,7 +66,9 @@ const ApiProfilePanel: React.FC<ApiProfilePanelProps> = ({ windowHours, refreshN
   const endpoints =
     endpointMode === 'slow'
       ? profile?.top_slow_endpoints ?? []
-      : profile?.top_called_endpoints ?? []
+      : endpointMode === 'hot'
+        ? profile?.top_called_endpoints ?? []
+        : profile?.top_error_endpoints ?? []
 
   return (
     <div className="space-y-4">
@@ -238,6 +240,14 @@ const ApiProfilePanel: React.FC<ApiProfilePanelProps> = ({ windowHours, refreshN
               onClick={() => setEndpointMode('hot')}
             >
               最高频端点
+            </Button>
+            <Button
+              size="sm"
+              variant={endpointMode === 'error' ? 'destructive' : 'outline'}
+              className="h-7 text-xs"
+              onClick={() => setEndpointMode('error')}
+            >
+              错误热点 ({profile?.top_error_endpoints?.length ?? 0})
             </Button>
           </div>
         </CardHeader>

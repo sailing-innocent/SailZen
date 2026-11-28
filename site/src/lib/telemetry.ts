@@ -53,6 +53,10 @@ export function installGlobalErrorTelemetry(): () => void {
   errorListenersInstalled = true
 
   const onError = (ev: ErrorEvent) => {
+    const stack =
+      ev.error instanceof Error && typeof ev.error.stack === 'string'
+        ? ev.error.stack.slice(0, 600)
+        : undefined
     trackClientEvent({
       category: 'client_error',
       module: 'web',
@@ -62,6 +66,7 @@ export function installGlobalErrorTelemetry(): () => void {
         filename: ev.filename,
         lineno: ev.lineno,
         colno: ev.colno,
+        ...(stack ? { stack } : {}),
       },
     })
   }
@@ -71,6 +76,10 @@ export function installGlobalErrorTelemetry(): () => void {
       ev.reason instanceof Error
         ? `${ev.reason.name}: ${ev.reason.message}`
         : String(ev.reason ?? 'Unhandled Rejection')
+    const stack =
+      ev.reason instanceof Error && typeof ev.reason.stack === 'string'
+        ? ev.reason.stack.slice(0, 600)
+        : undefined
     trackClientEvent({
       category: 'client_error',
       module: 'web',
@@ -78,6 +87,7 @@ export function installGlobalErrorTelemetry(): () => void {
       detail: {
         path: window.location.pathname,
         type: 'unhandledrejection',
+        ...(stack ? { stack } : {}),
       },
     })
   }

@@ -156,18 +156,19 @@ export interface RhythmDayViewData {
   date: string
   day_id: number
   plan_version: number
+  ai_rationale?: string
   blocks: TimeBlockData[]
-  domain_minutes: DomainMinutesData
-  energy_consumed: number
-  energy_budget: number
-  energy_available: number
-  buffer_total_minutes: number
-  buffer_free_minutes: number
+  domain_minutes?: DomainMinutesData
+  energy_consumed?: number
+  energy_budget?: number
+  energy_available?: number
+  buffer_total_minutes?: number
+  buffer_free_minutes?: number
   checkins: CheckinTodayData | null
-  health_signals: HealthSignalItemData[]
-  insights: string[]
-  warnings: string[]
-  note: string | null
+  health_signals?: HealthSignalItemData[]
+  insights?: string[]
+  warnings?: string[]
+  note?: string | null
 }
 
 export interface HealthCheckinRequestData {
@@ -224,8 +225,9 @@ export interface ReviewData {
 // ============================================================================
 
 function blockStatusToState(status: string): number {
-  if (status === 'done') return 2
-  if (status === 'skipped' || status === 'cancelled') return 3
+  const s = (status || '').toLowerCase()
+  if (s === 'done') return 2
+  if (s === 'skipped' || s === 'cancelled' || s === 'canceled') return 3
   return 1
 }
 
@@ -238,18 +240,20 @@ function deriveRhythm(date: string): string {
 export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
   const planned_affairs: RhythmAffairBriefData[] = []
   const completed_affairs: RhythmAffairBriefData[] = []
+  const blocks = Array.isArray(raw.blocks) ? raw.blocks : []
 
-  for (const b of raw.blocks) {
+  for (const b of blocks) {
     if (!b.affair_id) continue
+    const statusLower = (b.status || '').toLowerCase()
     const affair: RhythmAffairBriefData = {
       id: b.id,
       name: b.affair_title || '未命名',
       state: blockStatusToState(b.status),
-      energy_cost: b.energy_cost,
+      energy_cost: typeof b.energy_cost === 'number' ? b.energy_cost : 0,
       planned_minutes: 0,
       health_constraint: '',
     }
-    if (b.status === 'done' || b.status === 'skipped') {
+    if (statusLower === 'done' || statusLower === 'skipped') {
       completed_affairs.push(affair)
     } else {
       planned_affairs.push(affair)
@@ -264,8 +268,9 @@ export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
     weight_value: null,
     exercise_count: 0,
   }
-  for (const s of raw.health_signals) {
-    const v = s.value_json
+  const healthSignals = Array.isArray(raw.health_signals) ? raw.health_signals : []
+  for (const s of healthSignals) {
+    const v = s?.value_json ?? {}
     if (s.signal_type === 'sleep') {
       health.sleep_hours = typeof v.hours === 'number' ? v.hours : null
       health.sleep_quality = typeof v.quality === 'number' ? v.quality : null
@@ -280,13 +285,16 @@ export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
     }
   }
 
-  const insights: InsightData[] = raw.insights.map((text) => ({
+  const rawInsights = Array.isArray(raw.insights) ? raw.insights : []
+  const rawWarnings = Array.isArray(raw.warnings) ? raw.warnings : []
+
+  const insights: InsightData[] = rawInsights.map((text) => ({
     type: 'info',
     severity: 'info',
     title: text,
     message: '',
   }))
-  raw.warnings.forEach((text) =>
+  rawWarnings.forEach((text) =>
     insights.push({
       type: 'warning',
       severity: 'warning',
@@ -296,16 +304,20 @@ export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
   )
 
   const rhythm = deriveRhythm(raw.date)
+  const energyBudgetVal = typeof raw.energy_budget === 'number' ? raw.energy_budget : 100
+  const energyAvailableVal =
+    typeof raw.energy_available === 'number' ? raw.energy_available : energyBudgetVal
+  const energyConsumedVal = typeof raw.energy_consumed === 'number' ? raw.energy_consumed : 0
   const energyBudget: EnergyBudgetData = {
     date: raw.date,
     day_id: raw.day_id,
     rhythm,
-    base_energy: raw.energy_budget,
+    base_energy: energyBudgetVal,
     health_multiplier: 100,
-    energy_budget: raw.energy_budget,
-    energy_planned: raw.energy_budget - raw.energy_available,
-    energy_actual: raw.energy_consumed,
-    warning_messages: raw.warnings,
+    energy_budget: energyBudgetVal,
+    energy_planned: energyBudgetVal - energyAvailableVal,
+    energy_actual: energyConsumedVal,
+    warning_messages: rawWarnings,
   }
 
   return {
@@ -318,7 +330,7 @@ export function transformRhythmDayView(raw: RhythmDayViewData): DayViewData {
     completed_affairs,
     challenge_checkins: {},
     insights,
-    note: raw.note,
+    note: raw.note ?? raw.ai_rationale ?? null,
   }
 }
 

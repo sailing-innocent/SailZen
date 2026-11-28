@@ -43,4 +43,49 @@ describe('api_get_day_view URL 构造', () => {
     expect(url.startsWith('http://same-origin/api/v1/rhythm/timeline/day-view?')).toBe(true)
     expect(url).toContain('date=2026-09-13')
   })
+
+  test('Rhythm v2 返回缺失 warnings/energy_budget/note 字段时不抛 forEach 异常', async () => {
+    jest.resetModules()
+    delete process.env.SERVER_URL
+    g['window'] = { location: { origin: 'http://same-origin' } }
+
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        date: '2026-11-28',
+        day_id: 42,
+        plan_version: 2,
+        ai_rationale: '温和恢复日',
+        blocks: [
+          {
+            id: 1,
+            day_id: 42,
+            affair_id: 10,
+            affair_title: '核心任务',
+            block_type: 'focus',
+            start_time: '2026-11-28T10:00:00',
+            end_time: '2026-11-28T11:00:00',
+            status: 'DONE',
+            pinned: false,
+            plan_version: 2,
+            ref: {},
+          },
+        ],
+        domain_minutes: { life: 60, work: 60, career: 0 },
+        checkins: null,
+        health_signals: [],
+        insights: ['睡眠充足'],
+      }),
+    })
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    const { api_get_day_view } = await import('./pems')
+    const view = await api_get_day_view('2026-11-28')
+
+    expect(view.date).toBe('2026-11-28')
+    expect(view.completed_affairs).toHaveLength(1)
+    expect(view.insights).toHaveLength(1)
+    expect(view.energy_budget.warning_messages).toEqual([])
+    expect(view.note).toBe('温和恢复日')
+  })
 })

@@ -18,6 +18,7 @@ from litestar import Litestar, Router, get, Request
 from litestar.response import Redirect, Response
 from litestar.openapi import OpenAPIConfig
 from litestar.config.cors import CORSConfig
+from litestar.config.compression import CompressionConfig
 from litestar.logging import LoggingConfig
 
 import argparse
@@ -153,6 +154,7 @@ class SailServer:
         logging_config = None
 
         cors_config = CORSConfig(allow_origins=["*"], allow_methods=["*"])
+        compression_config = CompressionConfig(backend="gzip", minimum_size=1024)
 
         # Configure OpenAPI documentation
         openapi_config = OpenAPIConfig(
@@ -174,6 +176,7 @@ class SailServer:
                 debug=self.debug,
                 logging_config=logging_config,
                 cors_config=cors_config,
+                compression_config=compression_config,
                 exception_handlers=exception_handlers,
                 on_startup=[self.on_startup],
                 on_shutdown=[self.on_shutdown],

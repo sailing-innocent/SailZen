@@ -164,12 +164,17 @@ def logging_middleware_factory(app: ASGIApp) -> ASGIApp:
                 resp_len = _content_length(response_headers)
                 if resp_len is not None and resp_len > _MAX_CAPTURE_BYTES:
                     response_truncated = True
-                if not _should_capture_body(_content_type(response_headers)):
-                    response_body = "[binary body skipped]".encode()
+                if _get_header({"headers": response_headers}, b"content-encoding") is not None:
+                    response_body = b"[compressed body skipped]"
+                elif not _should_capture_body(_content_type(response_headers)):
+                    response_body = b"[binary body skipped]"
             elif message["type"] == "http.response.body":
                 chunk = message.get("body", b"")
                 response_bytes += len(chunk)
-                if isinstance(response_body, bytes) and response_body != b"[binary body skipped]":
+                if isinstance(response_body, bytes) and response_body not in (
+                    b"[binary body skipped]",
+                    b"[compressed body skipped]",
+                ):
                     if response_truncated or len(response_body) + len(chunk) > _MAX_CAPTURE_BYTES:
                         response_truncated = True
                     else:

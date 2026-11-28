@@ -61,8 +61,16 @@ def _is_binary_download(endpoint: str) -> bool:
     low = (endpoint or "").lower()
     return (
         "/app/release/download/" in low
+        or low.endswith("/app/release/latest.apk")
+        or "/workbench/release/download/" in low
+        or low.endswith("/workbench/release/latest.vsix")
         or (("/file_storage/" in low or "/file-storage/" in low) and "/download" in low)
     )
+
+
+def _is_fixed_latest_artifact(endpoint: str) -> bool:
+    low = (endpoint or "").lower()
+    return low.endswith("/app/release/latest.apk") or low.endswith("/workbench/release/latest.vsix")
 
 
 def analyze_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
@@ -74,11 +82,12 @@ def analyze_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
 
     top_slow = api_data.get("top_slow_endpoints") or []
     top_called = api_data.get("top_called_endpoints") or []
+    top_error = api_data.get("top_error_endpoints") or []
     by_mod = api_data.get("by_module") or []
 
     # 合并去重所有可见端点
     ep_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
-    for ep in top_slow + top_called:
+    for ep in top_slow + top_called + top_error:
         key = (ep.get("method", "GET"), ep.get("endpoint", ""))
         ep_map[key] = ep
     all_eps = list(ep_map.values())
@@ -138,7 +147,10 @@ def analyze_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             )
     for e in all_eps:
         ep_path = e.get("endpoint", "")
-        if ".apk" in ep_path.lower() or ".zip" in ep_path.lower():
+        low_path = ep_path.lower()
+        if not _is_fixed_latest_artifact(ep_path) and (
+            ".apk" in low_path or ".vsix" in low_path or ".zip" in low_path
+        ):
             instrument_warnings.append(
                 f"检测到未归一化的文件名路径桶: {ep_path}（建议在 normalize_api_path 中归一为 {{filename}}）"
             )
@@ -476,7 +488,11 @@ def compare_snapshots(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str
 
     def _index_eps(api_dict: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         out: Dict[str, Dict[str, Any]] = {}
-        for ep in (api_dict.get("top_slow_endpoints") or []) + (api_dict.get("top_called_endpoints") or []):
+        for ep in (
+            (api_dict.get("top_slow_endpoints") or [])
+            + (api_dict.get("top_called_endpoints") or [])
+            + (api_dict.get("top_error_endpoints") or [])
+        ):
             out[f"{ep.get('method')} {ep.get('endpoint')}"] = ep
         return out
 

@@ -56,9 +56,16 @@ def test_normalize_api_path_and_client_inference():
         "app_release",
         "/api/v1/app/release/download/{filename}",
     )
+    assert normalize_api_path(
+        "/api/v1/workbench/release/download/sailzen-workbench-0.3.2.vsix"
+    ) == (
+        "workbench",
+        "/api/v1/workbench/release/download/{filename}",
+    )
     assert infer_client_source([(b"user-agent", b"okhttp/4.12.0")]) == "android"
     assert infer_client_source([(b"user-agent", b"python-httpx/0.27")]) == "sailtick"
     assert infer_client_source([(b"x-sailzen-client", b"web")]) == "web"
+    assert infer_client_source([(b"x-sailzen-client", b"vscode")]) == "vscode"
 
 
 def test_ai_trace_ingest_query_detail_and_stats(db):
@@ -260,12 +267,82 @@ def test_weighted_quantile_resists_binary_download_outlier(db):
         bytes_out=13_000_000,
         headers=[(b"user-agent", b"okhttp/4.12")],
     )
+    collector.record_request(
+        method="GET",
+        path="/api/v1/app/release/latest.apk",
+        status_code=200,
+        duration_ms=26000.0,
+        bytes_out=13_000_000,
+        headers=[(b"user-agent", b"okhttp/4.12")],
+    )
+    collector.record_request(
+        method="GET",
+        path="/api/v1/workbench/release/download/sailzen-workbench-0.3.2.vsix",
+        status_code=200,
+        duration_ms=1200.0,
+        bytes_out=250_000,
+        headers=[(b"x-sailzen-client", b"vscode")],
+    )
 
     prof = get_api_profile_impl(db, window_hours=24)
-    assert prof.total_requests == 101
+    assert prof.total_requests == 103
     assert prof.p50_ms == 5.0
     assert prof.p95_ms == 5.0
-    assert prof.max_ms == 25000.0
+    assert prof.max_ms == 26000.0
     # 二进制下载不触发常规 api_slow 误报
     assert prof.slow_requests_count == 0
     collector.reset_for_tests()
+
+
+def test_top_error_endpoints_surfaces_hidden_4xx(db):
+    """低频且极快但 100% 返回 400 的端点必须出现在 top_error_endpoints 中。"""
+    collector = get_telemetry_collector()
+    collector.reset_for_tests()
+
+    # 制造 20 个更高频、更慢的 200 端点，试图把错误端点挤出 top_slow / top_called
+    for i in range(20):
+        for _ in range(5):
+            collector.record_request(
+                method="GET",
+                path=f"/api/v1/health/metric-{i}",
+                status_code=200,
+                duration_ms=30.0 + i,
+                bytes_out=256,
+                headers=[(b"x-sailzen-client", b"web")],
+            )
+
+    # 低频且极快（3ms）但 100% 失败的 ai-sync 端点
+    for _ in range(3):
+        collector.record_request(
+            method="POST",
+            path="/api/v1/rhythm/timeline/ai-sync",
+            status_code=400,
+            duration_ms=3.0,
+            bytes_out=120,
+            headers=[(b"x-sailzen-client", b"sailtick")],
+        )
+
+    prof = get_api_profile_impl(db, window_hours=24)
+    err_eps = [e.endpoint for e in prof.top_error_endpoints]
+    assert "/api/v1/rhythm/timeline/ai-sync" in err_eps
+    top_err = prof.top_error_endpoints[0]
+    assert top_err.err_4xx == 3
+    assert top_err.error_rate == 1.0
+    collector.reset_for_tests()
+
+
+def test_ai_timeline_block_type_alias_coercion():
+    """LLM 输出 routine/exercise/未知 block_type 时应容错映射，不再触发 400 Bad Request。"""
+    from sail_server.application.dto.rhythm import AITimelineBlockInput, BlockType
+
+    b_routine = AITimelineBlockInput(title="午饭", start="12:00", end="13:00", block_type="routine")
+    assert b_routine.block_type == BlockType.HABIT
+
+    b_dining = AITimelineBlockInput(title="晚饭", start="18:30", end="19:15", block_type="Dining")
+    assert b_dining.block_type == BlockType.MEAL
+
+    b_unknown = AITimelineBlockInput(title="杂项", start="20:00", end="20:30", block_type="non_existent_kind")
+    assert b_unknown.block_type == BlockType.LIGHT
+
+    b_exact = AITimelineBlockInput(title="推进", start="10:00", end="11:30", block_type="focus")
+    assert b_exact.block_type == BlockType.FOCUS

@@ -610,6 +610,43 @@ class BlockMoveRequest(BaseModel):
     _naive_dt = field_validator("start_time", "end_time", mode="before")(_to_naive_local)
 
 
+_AI_BLOCK_TYPE_ALIASES: Dict[str, BlockType] = {
+    "routine": BlockType.HABIT,
+    "daily": BlockType.HABIT,
+    "daily_routine": BlockType.HABIT,
+    "exercise": BlockType.HABIT,
+    "workout": BlockType.HABIT,
+    "walk": BlockType.HABIT,
+    "sport": BlockType.HABIT,
+    "health": BlockType.HABIT,
+    "dining": BlockType.MEAL,
+    "food": BlockType.MEAL,
+    "lunch": BlockType.MEAL,
+    "dinner": BlockType.MEAL,
+    "breakfast": BlockType.MEAL,
+    "eat": BlockType.MEAL,
+    "work": BlockType.WORK_WINDOW,
+    "deep_work": BlockType.FOCUS,
+    "study": BlockType.FOCUS,
+    "learning": BlockType.FOCUS,
+    "project": BlockType.FOCUS,
+    "break": BlockType.MICRO_REST,
+    "nap": BlockType.REST,
+    "relax": BlockType.REST,
+    "wind_down": BlockType.REST,
+    "bedtime": BlockType.SLEEP,
+    "meeting": BlockType.OCCUPIED,
+    "travel": BlockType.OCCUPIED,
+    "event": BlockType.FIXED,
+    "chore": BlockType.LIGHT,
+    "errand": BlockType.LIGHT,
+    "admin": BlockType.LIGHT,
+    "flex": BlockType.BUFFER,
+    "flexible": BlockType.BUFFER,
+    "free": BlockType.BUFFER,
+}
+
+
 class AITimelineBlockInput(BaseModel):
     """SailTick AI 编排输出的单个时间块。"""
 
@@ -620,6 +657,21 @@ class AITimelineBlockInput(BaseModel):
     affair_id: Optional[int] = Field(default=None, description="关联的事务/项目 ID（可选）")
     pinned: bool = Field(default=False, description="是否刚性固定")
     note: str = Field(default="", description="一句轻量提示/备用方案")
+
+    @field_validator("block_type", mode="before")
+    @classmethod
+    def _coerce_ai_block_type(cls, v: Any) -> BlockType:
+        if isinstance(v, BlockType):
+            return v
+        if v is None:
+            return BlockType.FOCUS
+        norm = str(v).strip().lower().replace("-", "_").replace(" ", "_")
+        if not norm:
+            return BlockType.FOCUS
+        try:
+            return BlockType(norm)
+        except ValueError:
+            return _AI_BLOCK_TYPE_ALIASES.get(norm, BlockType.LIGHT)
 
 
 class AITimelineSyncRequest(BaseModel):

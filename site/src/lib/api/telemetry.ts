@@ -165,6 +165,7 @@ export interface ApiProfile {
   by_client: Record<string, number>
   top_slow_endpoints: EndpointApiMetric[]
   top_called_endpoints: EndpointApiMetric[]
+  top_error_endpoints?: EndpointApiMetric[]
   recent_notable: NotableEventItem[]
 }
 

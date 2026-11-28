@@ -918,7 +918,7 @@ class QuickCoachAgent:
     {{"kind": "cancel_reminder", "server_reminder_id": 418, "match_title": "买7号电池和洗衣液"}},
     {{"kind": "update_profile", "key": "offwork_time", "value": "19:00"}},
     {{"kind": "rhythm_occupancy", "date": "{today_str}", "occupancy_type": "meeting|leave|travel|appointment", "start": "14:00", "end": "16:00", "label": "临时评审会"}},
-    {{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "一句温和排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus", "affair_id": null, "note": ""}}]}},
+    {{"kind": "rhythm_sync_timeline", "date": "{today_str}", "rationale": "一句温和排程说明", "blocks": [{{"title": "核心推进", "start": "16:15", "end": "17:30", "block_type": "focus|light|career|meal|habit|rest|micro_rest|sleep|commute|work_window|fixed|buffer|occupied", "affair_id": null, "note": ""}}]}},
     {{"kind": "rhythm_upsert_affair", "title": "项目或任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "target_date": "2026-12-15", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": ""}},
     {{"kind": "rhythm_block_status", "block_id": 12, "status": "DONE|SKIPPED|DOING"}},
     {{"kind": "rhythm_transit_affair", "affair_id": 5, "action": "finish|defer|pause|resume|graduate", "defer_to": "2026-11-26T09:00:00"}},

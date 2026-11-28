@@ -48,6 +48,7 @@ export class SailZenApiClient {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Accept: "application/json",
+      "X-SailZen-Client": "vscode",
     };
     const token = this.registry.current.apiToken?.trim();
     if (token) {
@@ -320,7 +321,9 @@ export class SailZenApiClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.max(this.timeoutMs, 60000));
     try {
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {
+        "X-SailZen-Client": "vscode",
+      };
       const token = this.registry.current.apiToken?.trim();
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;

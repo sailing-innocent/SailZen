@@ -1093,7 +1093,7 @@ class TickEngine:
     {{"kind": "diet_log", "meal_type": "lunch", "description": "食堂鸡胸肉+米饭半碗", "calories": 550}},
     {{"kind": "plan_update", "plan_version": "v1.1", "target_weight": "70.0", "phase_name": "稳态适应期", "phase_rationale": "原因", "focus_notes": "关注点", "tolerance_kg": 0.7, "ai_summary": "健康页一句话评语", "daily_targets": {{"{tick.get('tick_date')}": 74.5}}, "content": "完整计划 Markdown"}},
     {{"kind": "daily_report", "report_date": "{tick.get('tick_date')}", "title": "{tick.get('tick_date')} 睡前健康与节奏日报", "summary": "1-2句睡前摘要", "body_markdown": "完整日报 Markdown", "weight_snapshot": {{}}, "diet_summary": {{}}, "plan_update": {{}}, "tomorrow_focus": ["建议1", "建议2"], "push": true}},
-    {{"kind": "rhythm_sync_timeline", "date": "{tick.get('tick_date')}", "rationale": "一句温和说明为何这样排布今天/明天", "blocks": [{{"title": "项目核心推进", "start": "10:00", "end": "11:30", "block_type": "focus", "affair_id": 12, "note": "先完成最小原型"}}]}},
+    {{"kind": "rhythm_sync_timeline", "date": "{tick.get('tick_date')}", "rationale": "一句温和说明为何这样排布今天/明天", "blocks": [{{"title": "项目核心推进", "start": "10:00", "end": "11:30", "block_type": "focus|light|career|meal|habit|rest|micro_rest|sleep|commute|work_window|fixed|buffer|occupied", "affair_id": 12, "note": "先完成最小原型"}}]}},
     {{"kind": "rhythm_upsert_affair", "id": null, "title": "项目/任务名", "kind_name": "venture|task_oneoff|habit|fixed_plan", "domain": "work|career|life", "urgency_ddl": "2026-12-15T00:00:00", "est_minutes": 60, "description": "简短说明", "milestones": ["里程碑1"]}},
     {{"kind": "rhythm_transit_affair", "affair_id": 12, "action": "finish|start|defer|pause|resume|graduate|cancel", "defer_to": "2026-11-28T09:00:00"}},
     {{"kind": "rhythm_milestone_done", "milestone_id": 34}},

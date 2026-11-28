@@ -42,7 +42,7 @@ _UUID_RE = re.compile(
 _HEX32_RE = re.compile(r"/[0-9a-fA-F]{24,64}(?=/|$)")
 _INT_ID_RE = re.compile(r"/\d+(?=/|$)")
 _DATE_RE = re.compile(r"/\d{4}-\d{2}-\d{2}(?=/|$)")
-_RELEASE_DOWNLOAD_RE = re.compile(r"^(/api/v\d+/app/release/download/)[^/]+$")
+_RELEASE_DOWNLOAD_RE = re.compile(r"^(/api/v\d+/(?:app|workbench)/release/download/)[^/]+$")
 
 
 def is_binary_download_endpoint(endpoint: str) -> bool:
@@ -50,6 +50,9 @@ def is_binary_download_endpoint(endpoint: str) -> bool:
     lower = (endpoint or "").lower()
     return (
         "/app/release/download/" in lower
+        or lower.endswith("/app/release/latest.apk")
+        or "/workbench/release/download/" in lower
+        or lower.endswith("/workbench/release/latest.vsix")
         or (("/file_storage/" in lower or "/file-storage/" in lower) and "/download" in lower)
     )
 
@@ -67,6 +70,9 @@ KNOWN_MODULES = {
     "reminder": "reminder",
     "history": "history",
     "app": "app_release",
+    "workbench": "workbench",
+    "user": "user",
+    "inbox": "inbox",
     "telemetry": "telemetry",
 }
 

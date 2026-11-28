@@ -576,6 +576,11 @@ def get_api_profile_impl(
 
     top_slow = sorted(endpoints, key=lambda e: (e.p95_ms, e.max_ms), reverse=True)[:15]
     top_called = sorted(endpoints, key=lambda e: e.req_count, reverse=True)[:15]
+    top_error = sorted(
+        [e for e in endpoints if (e.err_4xx + e.err_5xx) > 0],
+        key=lambda e: (e.err_5xx, e.err_4xx, e.error_rate, e.req_count),
+        reverse=True,
+    )[:15]
 
     # 慢请求与 5xx 离散事件（DB + 内存实时合并）
     notable_items: List[NotableEventItem] = []
@@ -653,6 +658,7 @@ def get_api_profile_impl(
         by_client=dict(by_client),
         top_slow_endpoints=top_slow,
         top_called_endpoints=top_called,
+        top_error_endpoints=top_error,
         recent_notable=notable_items[:50],
     )
 

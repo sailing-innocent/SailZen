@@ -224,6 +224,7 @@ class ApiProfileResponse(BaseModel):
     by_client: Dict[str, int] = Field(default_factory=dict)
     top_slow_endpoints: List[EndpointApiMetric] = Field(default_factory=list)
     top_called_endpoints: List[EndpointApiMetric] = Field(default_factory=list)
+    top_error_endpoints: List[EndpointApiMetric] = Field(default_factory=list)
     recent_notable: List[NotableEventItem] = Field(default_factory=list)
 
 
